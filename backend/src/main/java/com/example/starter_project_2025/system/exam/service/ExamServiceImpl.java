@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.example.starter_project_2025.base.crud.CrudAction;
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
@@ -21,7 +22,6 @@ import com.example.starter_project_2025.system.exam.mapper.ExamMapper;
 import com.example.starter_project_2025.system.question.domain.Question;
 import com.example.starter_project_2025.system.question.domain.QuestionRepository;
 
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -48,6 +48,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		return new String[]{"title"};
 	}
 
+	// ===== Create: Gắn câu hỏi nếu request có questionIds =====
 	@Override
 	protected void beforeCreate(Exam exam, ExamDTO request, ValidationContext context) {
 		if (request.getQuestionIds() != null) {
@@ -55,6 +56,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		}
 	}
 
+	// ===== Update: Thay danh sách câu hỏi khi request gửi questionIds =====
 	@Override
 	protected void beforeUpdate(Exam exam, ExamDTO request, ValidationContext context) {
 		if (request.getQuestionIds() != null) {
@@ -62,6 +64,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		}
 	}
 
+	// ===== POST /api/exams/{id}/questions =====
 	public ExamDTO addQuestions(Long examId, List<Long> questionIds) {
 		checkPermission(CrudAction.UPDATE);
 		ValidationContext context = new ValidationContext();
@@ -73,6 +76,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		return examMapper.toResponse(examRepository.save(exam));
 	}
 
+	// ===== DELETE /api/exams/{id}/questions/{questionId} =====
 	public ExamDTO removeQuestion(Long examId, Long questionId) {
 		checkPermission(CrudAction.UPDATE);
 		Exam exam = findExam(examId);

@@ -19,6 +19,15 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.annotation.Order;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
 
 @Slf4j
 @Order(2)
@@ -60,6 +69,7 @@ public class RoleDataInitializer implements CommandLineRunner {
                 "EXAM_CREATE", "EXAM_READ", "EXAM_UPDATE", "EXAM_DELETE",
                 "QUESTION_READ"
             )
+
         );
 
         log.info("Ensured roles and permission mappings: ADMIN, STUDENT, TEACHER.");

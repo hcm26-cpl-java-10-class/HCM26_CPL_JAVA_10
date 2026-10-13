@@ -8,10 +8,12 @@ import { Unauthorized } from "@/pages/error/Unauthorized";
 import { Dashboard } from "@/pages/management/dashboard";
 import ExamManagementPage from "@/pages/management/exam";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
+import StudentExamList from "@/pages/student/StudentExamList";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
+
 
 export interface RouteConfig {
   path: string;
@@ -31,6 +33,7 @@ export const routes: RouteConfig[] = [
     isModuleDriven: true,
   },
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
+  { path: "/student/exams", component: StudentExamList, isModuleDriven: true }, // Route lịch thi mới cho Student
   { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
   ...buildEntityRoutes(),
 
@@ -39,6 +42,7 @@ export const routes: RouteConfig[] = [
   { path: "/logout", component: Logout, isPublic: true },
   { path: "/register", component: RegisterPage, isPublic: true },
   { path: "/forgot-password", component: ForgotPasswordPage, isPublic: true },
+  { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true },
   { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true,},
   { path: "/unauthorized", component: Unauthorized, isPublic: true },
 ];
