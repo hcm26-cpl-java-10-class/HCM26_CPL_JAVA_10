@@ -21,3 +21,6 @@ frontend/dist/
 
 # === Docker .env (secrets) ===
 docker/.env
+
+# === Docs / Notes ===
+*.docx
