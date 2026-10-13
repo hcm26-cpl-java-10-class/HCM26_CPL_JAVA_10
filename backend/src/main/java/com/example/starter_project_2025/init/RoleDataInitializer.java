@@ -1,22 +1,24 @@
 package com.example.starter_project_2025.init;
 
-import com.example.starter_project_2025.system.rbac.permission.Permission;
-import com.example.starter_project_2025.system.rbac.permission.PermissionRepository;
-import com.example.starter_project_2025.system.rbac.role.Role;
-import com.example.starter_project_2025.system.rbac.role.RoleRepository;
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
-import lombok.extern.slf4j.Slf4j;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
+import com.example.starter_project_2025.system.rbac.permission.Permission;
+import com.example.starter_project_2025.system.rbac.permission.PermissionRepository;
+import com.example.starter_project_2025.system.rbac.role.Role;
+import com.example.starter_project_2025.system.rbac.role.RoleRepository;
+
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Order(2)
@@ -51,8 +53,13 @@ public class RoleDataInitializer implements CommandLineRunner {
 
         upsertRole(
                 TEACHER_ROLE,
-                "Teacher with book management permissions",
-                findPermissions("MENU_READ", "BOOK_CREATE", "BOOK_READ", "BOOK_UPDATE", "BOOK_DELETE")
+            "Teacher with book and exam management permissions",
+            findPermissions(
+                "MENU_READ",
+                "BOOK_CREATE", "BOOK_READ", "BOOK_UPDATE", "BOOK_DELETE",
+                "EXAM_CREATE", "EXAM_READ", "EXAM_UPDATE", "EXAM_DELETE",
+                "QUESTION_READ"
+            )
         );
 
         log.info("Ensured roles and permission mappings: ADMIN, STUDENT, TEACHER.");
