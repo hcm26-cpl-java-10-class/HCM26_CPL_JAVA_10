@@ -10,3 +10,4 @@ export * from "./features/rbac/role.api";
 export * from "./features/rbac/user.api";
 export * from "./features/demo/enrollment.api";
 export * from "./features/demo/schedule_version.api";
+export * from "./features/demo/subject.api";
