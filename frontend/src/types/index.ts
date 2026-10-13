@@ -18,9 +18,6 @@ export * from "./features/menu/module_group";
 export * from "./features/rbac/permission";
 export * from "./features/rbac/role";
 export * from "./features/rbac/user";
-<<<<<<< Updated upstream
 export * from "./features/demo/session";
-=======
 export * from "./features/schedule";
 
->>>>>>> Stashed changes
