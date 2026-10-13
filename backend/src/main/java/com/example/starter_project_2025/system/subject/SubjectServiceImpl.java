@@ -1,4 +1,4 @@
-package com.example.starter_project_2025.system.demo.subject;
+package com.example.starter_project_2025.system.subject;
 
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
@@ -33,13 +33,34 @@ public class SubjectServiceImpl
 
     @Override
     protected String[] searchableFields() {
-        return new String[]{"code", "name"};
+        return new String[]{"code", "name", "description", "technicalGroup"};
     }
 
     @Override
-    protected void beforeCreate(Subject entity, SubjectDTO request, ValidationContext ctx) {
-        if (subjectRepository.existsByCode(entity.getCode())) {
-            ctx.add("code", "Subject code already exists");
+    protected void beforeCreate(Subject subject, SubjectDTO request, ValidationContext ctx) {
+        if (request.getCode() == null || request.getCode().trim().isEmpty()) {
+            ctx.add("code", "Mã môn học không được để trống");
+        } else {
+            request.setCode(request.getCode().trim().toUpperCase());
+        }
+
+        if (request.getName() == null || request.getName().trim().isEmpty()) {
+            ctx.add("name", "Tên môn học không được để trống");
+        }
+
+        if (request.getVersion() == null || request.getVersion().trim().isEmpty()) {
+            request.setVersion("1.0");
+        }
+
+        if (request.getStatus() == null) {
+            request.setStatus(SubjectStatus.ACTIVE);
+        }
+    }
+
+    @Override
+    protected void beforeUpdate(Subject subject, SubjectDTO request, ValidationContext ctx) {
+        if (request.getCode() != null) {
+            request.setCode(request.getCode().trim().toUpperCase());
         }
     }
 }

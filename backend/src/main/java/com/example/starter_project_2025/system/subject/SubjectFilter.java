@@ -1,4 +1,4 @@
-package com.example.starter_project_2025.system.demo.subject;
+package com.example.starter_project_2025.system.subject;
 
 import com.example.starter_project_2025.base.crud.dto.BaseFilter;
 import com.example.starter_project_2025.base.crud.spec.FilterField;
@@ -20,6 +20,12 @@ public class SubjectFilter extends BaseFilter {
     @FilterField(entityField = "name", operator = FilterOperator.LIKE)
     String name;
 
-    @FilterField(entityField = "credits", operator = FilterOperator.EQUAL)
-    Integer credits;
+    @FilterField(entityField = "version", operator = FilterOperator.EQUAL)
+    String version;
+
+    @FilterField(entityField = "technicalGroup", operator = FilterOperator.LIKE)
+    String technicalGroup;
+
+    @FilterField(entityField = "status", operator = FilterOperator.EQUAL)
+    SubjectStatus status;
 }
