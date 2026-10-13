@@ -8,4 +8,8 @@ export * from "./features/menu/module_group.api";
 export * from "./features/rbac/permission.api";
 export * from "./features/rbac/role.api";
 export * from "./features/rbac/user.api";
+<<<<<<< Updated upstream
 export * from "./features/demo/enrollment.api";
+=======
+export * from "./features/schedule.api";
+>>>>>>> Stashed changes

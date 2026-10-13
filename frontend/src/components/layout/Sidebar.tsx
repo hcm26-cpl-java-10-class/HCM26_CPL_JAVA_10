@@ -10,6 +10,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { authApi } from "@/api/features/auth.api";
 import { useActiveModuleGroups } from "@/hooks/useSidebarMenus";
 import { iconMap } from "@/components/datatable/iconMap";
+import { injectScheduleMenu } from "@/utils/schedule-menu.utils";
 
 export function SidebarMenu() {
     const location = useLocation();
@@ -25,7 +26,7 @@ export function SidebarMenu() {
             return iconMap[key];
         };
 
-        return moduleGroups
+        return injectScheduleMenu(moduleGroups)
             .map((group) => ({
                 id: group.id ?? group.name ?? "group",
                 name: group.name ?? "Menu",
