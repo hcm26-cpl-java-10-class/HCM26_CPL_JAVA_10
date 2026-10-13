@@ -9,22 +9,24 @@ import { useDispatch } from "react-redux";
 import { setLogin } from "@/store/slices/auth/authSlice";
 import { authApi } from "@/api/features/auth.api";
 import axios from "axios";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, GraduationCap, LoaderCircle } from "lucide-react";
 import { getHomePathByRole } from "@/utils/rbac.utils";
 
 const URL_LOGIN_WITH_GOOGLE =
     import.meta.env.VITE_API_URL_FOR_GOOGLE || "http://localhost:8080/oauth2/authorization/google";
 
+const LOGIN_ERROR_MESSAGE = "Không thể đăng nhập. Vui lòng kiểm tra thông tin và thử lại.";
+
 const getOAuthErrorMessage = (errorParam: string | null): string => {
     switch (errorParam) {
         case "google_auth_failed":
-            return "Google sign-in failed. Please try again.";
+            return "Đăng nhập bằng Google không thành công. Vui lòng thử lại.";
         case "google_token_missing":
-            return "Google sign-in did not return an access token.";
+            return "Không nhận được thông tin xác thực từ Google.";
         case "google_token_invalid":
-            return "Google sign-in returned an invalid token.";
+            return "Thông tin xác thực từ Google không hợp lệ.";
         case "true":
-            return "Unable to complete sign-in. Please try again.";
+            return "Không thể hoàn tất đăng nhập. Vui lòng thử lại.";
         default:
             return "";
     }
@@ -35,6 +37,8 @@ export const Login: React.FC = () => {
     const [password, setPassword] = useState("");
     const [isRememberedMe, setIsRememberedMe] = useState<boolean>(false);
     const [error, setError] = useState("");
+    const [identifierError, setIdentifierError] = useState("");
+    const [passwordError, setPasswordError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const navigate = useNavigate();
@@ -48,173 +52,258 @@ export const Login: React.FC = () => {
         }
     }, [searchParams]);
 
+    const validateFields = () => {
+        const nextIdentifierError = email.trim() ? "" : "Vui lòng nhập username hoặc email.";
+        const nextPasswordError = password.trim() ? "" : "Vui lòng nhập mật khẩu.";
+        setIdentifierError(nextIdentifierError);
+        setPasswordError(nextPasswordError);
+        return !nextIdentifierError && !nextPasswordError;
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
+        if (!validateFields()) return;
+
         setIsLoading(true);
-        const cleanEmail = email.trim();
-        const cleanPassword = password.trim();
         try {
-            const res = await authApi.login({ email: cleanEmail, password: cleanPassword, isRememberedMe });
+            const res = await authApi.login({
+                email: email.trim(),
+                password: password.trim(),
+                isRememberedMe,
+            });
             dispatch(setLogin(res));
             navigate(getHomePathByRole(res.role), { replace: true });
         } catch (err) {
-            if (axios.isAxiosError(err)) {
-                const backendMsg = err.response?.data?.message;
-
-                setError(backendMsg || "Invalid email or password");
-            } else if (err instanceof Error) {
-                setError(err.message);
-            } else {
-                setError("An unexpected error occurred!");
+            if (!axios.isAxiosError(err) && !(err instanceof Error)) {
+                console.error("Unexpected login error", err);
             }
+            setError(LOGIN_ERROR_MESSAGE);
         } finally {
             setIsLoading(false);
         }
     };
 
-    const handleIsRememberMe = (checked: boolean) => {
-        setIsRememberedMe(checked);
-    };
-
-    const handleGoogleLogin = async () => {
+    const handleGoogleLogin = () => {
         setIsLoading(true);
         setError("");
         window.location.href = URL_LOGIN_WITH_GOOGLE;
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-50 px-4 py-10 text-slate-900 sm:px-6 lg:px-8">
+            <div className="pointer-events-none absolute -left-32 -top-32 h-80 w-80 rounded-full bg-indigo-200/50 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-40 -right-24 h-96 w-96 rounded-full bg-sky-200/50 blur-3xl" />
+
             <motion.div
-                initial={{ opacity: 0, y: 30 }}
+                initial={{ opacity: 0, y: 18 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 1.0, ease: "easeOut" }}
-                className="max-w-md w-full border rounded-xl shadow-lg p-8 bg-card text-card-foreground"
+                transition={{ duration: 0.45, ease: "easeOut" }}
+                className="relative grid w-full max-w-5xl overflow-hidden rounded-3xl border border-white/70 bg-white shadow-2xl shadow-indigo-950/10 lg:min-h-[640px] lg:grid-cols-[1fr_0.9fr]"
             >
-                <div className="space-y-2 text-center mb-8">
-                    <h2 className="text-3xl font-bold tracking-tight">Welcome back!</h2>
-                </div>
+                <section className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-indigo-950 via-indigo-900 to-blue-800 p-10 text-white lg:flex xl:p-14">
+                    <div className="pointer-events-none absolute -right-24 top-20 h-72 w-72 rounded-full border border-white/10" />
+                    <div className="pointer-events-none absolute -right-12 top-32 h-48 w-48 rounded-full border border-white/10" />
+                    <div className="pointer-events-none absolute -bottom-32 -left-20 h-72 w-72 rounded-full bg-blue-400/10 blur-2xl" />
 
-                {error && (
-                    <div className="mb-6 p-3 bg-destructive/15 border border-destructive/30 text-destructive text-sm rounded-md">
-                        {error}
-                    </div>
-                )}
-
-                <form onSubmit={handleSubmit} className="space-y-5">
-                    <div className="space-y-2">
-                        <label
-                            htmlFor="email"
-                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                        >
-                            Email
-                        </label>
-                        <Input
-                            type="email"
-                            id="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            required
-                            placeholder="admin@example.com"
-                            className="bg-background"
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                            <label htmlFor="password" className="text-sm font-medium leading-none">
-                                Password
-                            </label>
+                    <div className="relative flex items-center gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/20">
+                            <GraduationCap className="h-7 w-7" aria-hidden="true" />
                         </div>
-                        <div className="flex justify-items-center">
-                            <Input
-                                type={showPassword ? "text" : "password"}
-                                id="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
-                                placeholder="••••••••"
-                                className="bg-background "
-                            />
-                            <Button
-                                type="button"
-                                onClick={() => setShowPassword((prev) => !prev)}
-                                style={{ marginLeft: "10px" }}
+                        <div>
+                            <p className="text-lg font-bold tracking-wide">TOMS Academy</p>
+                            <p className="text-xs text-indigo-200">Learning management system</p>
+                        </div>
+                    </div>
+
+                    <div className="relative max-w-md">
+                        <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-indigo-200">
+                            Chào mừng trở lại
+                        </p>
+                        <h1 className="text-4xl font-bold leading-tight xl:text-5xl">
+                            Học tập và phát triển cùng TOMS.
+                        </h1>
+                        <p className="mt-6 text-base leading-7 text-indigo-100/80">
+                            Đăng nhập để tiếp tục hành trình học tập, giảng dạy và kết nối với cộng đồng của bạn.
+                        </p>
+                        <div className="mt-10 flex items-center gap-3 text-sm text-indigo-100/80">
+                            <span className="h-px w-10 bg-indigo-300/60" />
+                            Một nền tảng, nhiều cơ hội
+                        </div>
+                    </div>
+
+                    <p className="relative text-xs text-indigo-200/70">© TOMS Academy</p>
+                </section>
+
+                <section className="flex items-center justify-center px-6 py-10 sm:px-10 lg:px-12">
+                    <div className="w-full max-w-md">
+                        <div className="mb-8 text-center lg:text-left">
+                            <div className="mb-6 flex items-center justify-center gap-3 lg:hidden">
+                                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/20">
+                                    <GraduationCap className="h-6 w-6" aria-hidden="true" />
+                                </span>
+                                <span className="text-lg font-bold text-indigo-950">TOMS Academy</span>
+                            </div>
+                            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-indigo-600">
+                                Tài khoản của bạn
+                            </p>
+                            <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">Đăng nhập</h2>
+                            <p className="mt-2 text-sm text-slate-500">
+                                Nhập thông tin để truy cập vào tài khoản TOMS Academy.
+                            </p>
+                        </div>
+
+                        {error && (
+                            <div
+                                role="alert"
+                                className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
                             >
-                                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                            </Button>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                        <Checkbox id="remember" onCheckedChange={(checked: boolean) => handleIsRememberMe(checked)} />
-                        <label htmlFor="remember" className="text-sm font-medium leading-none cursor-pointer">
-                            Remember me
-                        </label>
-                    </div>
-
-                    <Button type="submit" className="w-full" disabled={isLoading}>
-                        {isLoading ? (
-                            <span className="flex items-center gap-2">
-                                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                                    <circle
-                                        className="opacity-25"
-                                        cx="12"
-                                        cy="12"
-                                        r="10"
-                                        stroke="currentColor"
-                                        strokeWidth="4"
-                                        fill="none"
-                                    />
-                                    <path
-                                        className="opacity-75"
-                                        fill="currentColor"
-                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                    />
-                                </svg>
-                                Processing...
-                            </span>
-                        ) : (
-                            "Login"
+                                {error}
+                            </div>
                         )}
-                    </Button>
-                </form>
 
-                <Button disabled={isLoading} onClick={handleGoogleLogin} variant="outline" className="w-full mt-3">
-                    <FcGoogle className="mr-2 h-4 w-4" /> Continue with Google
-                </Button>
+                        <form onSubmit={handleSubmit} noValidate className="space-y-5">
+                            <div className="space-y-2">
+                                <label htmlFor="email" className="text-sm font-semibold text-slate-700">
+                                    Username hoặc Email
+                                </label>
+                                <Input
+                                    type="text"
+                                    id="email"
+                                    autoComplete="username"
+                                    value={email}
+                                    onChange={(e) => {
+                                        setEmail(e.target.value);
+                                        if (identifierError) setIdentifierError("");
+                                        if (error) setError("");
+                                    }}
+                                    onBlur={() =>
+                                        setIdentifierError(email.trim() ? "" : "Vui lòng nhập username hoặc email.")
+                                    }
+                                    aria-invalid={Boolean(identifierError)}
+                                    aria-describedby={identifierError ? "identifier-error" : undefined}
+                                    disabled={isLoading}
+                                    placeholder="Nhập username hoặc email"
+                                    className="h-12 rounded-xl border-slate-200 bg-white px-4 placeholder:text-slate-400 focus-visible:border-indigo-500 focus-visible:ring-indigo-500/20"
+                                />
+                                {identifierError && (
+                                    <p id="identifier-error" className="text-sm text-red-600">
+                                        {identifierError}
+                                    </p>
+                                )}
+                            </div>
 
-                <div className="mt-4 text-center">
-                    <p className="text-sm text-muted-foreground">
-                        Don't have an account yet?{" "}
+                            <div className="space-y-2">
+                                <label htmlFor="password" className="text-sm font-semibold text-slate-700">
+                                    Mật khẩu
+                                </label>
+                                <div className="relative">
+                                    <Input
+                                        type={showPassword ? "text" : "password"}
+                                        id="password"
+                                        autoComplete="current-password"
+                                        value={password}
+                                        onChange={(e) => {
+                                            setPassword(e.target.value);
+                                            if (passwordError) setPasswordError("");
+                                            if (error) setError("");
+                                        }}
+                                        onBlur={() =>
+                                            setPasswordError(password.trim() ? "" : "Vui lòng nhập mật khẩu.")
+                                        }
+                                        aria-invalid={Boolean(passwordError)}
+                                        aria-describedby={passwordError ? "password-error" : undefined}
+                                        disabled={isLoading}
+                                        placeholder="Nhập mật khẩu"
+                                        className="h-12 rounded-xl border-slate-200 bg-white px-4 pr-12 placeholder:text-slate-400 focus-visible:border-indigo-500 focus-visible:ring-indigo-500/20"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword((prev) => !prev)}
+                                        disabled={isLoading}
+                                        aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                                        aria-pressed={showPassword}
+                                        className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-400 transition-colors hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 disabled:cursor-not-allowed"
+                                    >
+                                        {showPassword ? (
+                                            <EyeOff className="h-5 w-5" aria-hidden="true" />
+                                        ) : (
+                                            <Eye className="h-5 w-5" aria-hidden="true" />
+                                        )}
+                                    </button>
+                                </div>
+                                {passwordError && (
+                                    <p id="password-error" className="text-sm text-red-600">
+                                        {passwordError}
+                                    </p>
+                                )}
+                            </div>
+
+                            <div className="flex items-center justify-between gap-3">
+                                <label htmlFor="remember" className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+                                    <Checkbox
+                                        id="remember"
+                                        checked={isRememberedMe}
+                                        disabled={isLoading}
+                                        onCheckedChange={(checked) => setIsRememberedMe(checked === true)}
+                                    />
+                                    Ghi nhớ đăng nhập
+                                </label>
+                                <button
+                                    type="button"
+                                    onClick={() => navigate("/forgot-password")}
+                                    className="text-sm font-semibold text-indigo-600 transition-colors hover:text-indigo-800"
+                                >
+                                    Quên mật khẩu?
+                                </button>
+                            </div>
+
+                            <Button
+                                type="submit"
+                                className="h-12 w-full rounded-xl bg-indigo-600 text-base font-semibold text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-700"
+                                disabled={isLoading}
+                            >
+                                {isLoading ? (
+                                    <>
+                                        <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
+                                        Đang đăng nhập...
+                                    </>
+                                ) : (
+                                    "Đăng nhập"
+                                )}
+                            </Button>
+                        </form>
+
+                        <div className="my-6 flex items-center gap-4">
+                            <span className="h-px flex-1 bg-slate-200" />
+                            <span className="text-xs font-medium uppercase tracking-wider text-slate-400">Hoặc</span>
+                            <span className="h-px flex-1 bg-slate-200" />
+                        </div>
+
                         <Button
-                            variant="link"
-                            className="p-0 h-auto font-semibold text-primary"
-                            onClick={() => navigate("/register")}
+                            type="button"
+                            disabled={isLoading}
+                            onClick={handleGoogleLogin}
+                            variant="outline"
+                            className="h-12 w-full rounded-xl border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50"
                         >
-                            Register now
+                            <FcGoogle className="h-5 w-5" aria-hidden="true" />
+                            Đăng nhập bằng Google
                         </Button>
-                    </p>
-                </div>
 
-                <div className="mt-8 pt-6 border-t border-dashed">
-                    <p className="text-xs font-semibold uppercase text-muted-foreground mb-3">(Test Only):</p>
-                    <div className="space-y-2 text-sm bg-muted/50 p-3 rounded-lg border">
-                        <p className="flex justify-between">
-                            <span className="text-muted-foreground font-mono text-[11px]">ADMIN:</span>
-                            <span className="font-medium">admin@example.com / password123</span>
-                        </p>
-                        <p className="flex justify-between">
-                            <span className="text-muted-foreground font-mono text-[11px]">STUDENT:</span>
-                            <span className="font-medium">student@example.com / password123</span>
-                        </p>
-                        <p className="flex justify-between">
-                            <span className="text-muted-foreground font-mono text-[11px]">TEACHER:</span>
-                            <span className="font-medium">teacher@example.com / password123</span>
+                        <p className="mt-7 text-center text-sm text-slate-500">
+                            Chưa có tài khoản?{" "}
+                            <button
+                                type="button"
+                                onClick={() => navigate("/register")}
+                                className="font-semibold text-indigo-600 transition-colors hover:text-indigo-800"
+                            >
+                                Đăng ký ngay
+                            </button>
                         </p>
                     </div>
-                </div>
+                </section>
             </motion.div>
-        </div>
+        </main>
     );
 };
