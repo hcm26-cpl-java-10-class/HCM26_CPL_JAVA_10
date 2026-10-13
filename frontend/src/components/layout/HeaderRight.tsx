@@ -1,4 +1,5 @@
 import ToggleTheme from "@/components/ToggleTheme";
+import ProfileButton from "@/components/layout/ProfileButton";
 import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge.tsx";
 import type { RootState } from "@/store/store";
@@ -42,6 +43,7 @@ export default function HeaderRight() {
   if (!role) {
     return (
       <div className="flex items-center gap-3">
+        <ProfileButton />
         <ToggleTheme />
       </div>
     );
@@ -56,6 +58,8 @@ export default function HeaderRight() {
         >
           {formatRoleLabel(currentRole)}
         </Badge>
+
+        <ProfileButton />
 
         <ToggleTheme />
       </div>
@@ -137,6 +141,8 @@ export default function HeaderRight() {
           Preview
         </Badge>
       )}
+
+      <ProfileButton />
 
       <ToggleTheme />
     </div >

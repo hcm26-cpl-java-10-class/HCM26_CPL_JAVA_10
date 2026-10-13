@@ -11,6 +11,7 @@ import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
+import ProfilePage from "@/pages/profile/ProfilePage";
 
 export interface RouteConfig {
   path: string;
@@ -30,6 +31,7 @@ export const routes: RouteConfig[] = [
   },
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
   { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
+  { path: "/profile", component: ProfilePage },
   ...buildEntityRoutes(),
 
   { path: "/not-found-page", component: NotFoundPage, isPublic: true },
@@ -37,6 +39,6 @@ export const routes: RouteConfig[] = [
   { path: "/logout", component: Logout, isPublic: true },
   { path: "/register", component: RegisterPage, isPublic: true },
   { path: "/forgot-password", component: ForgotPasswordPage, isPublic: true },
-  { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true,},
+  { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true, },
   { path: "/unauthorized", component: Unauthorized, isPublic: true },
 ];
