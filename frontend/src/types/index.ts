@@ -9,6 +9,7 @@ export * from "./common/registry";
 // Feature-specific types
 export * from "./features/auth";
 export * from "./features/demo/book";
+export * from "./features/demo/course";
 export * from "./features/demo/student_score";
 export * from "./features/demo/topic_mark_gradebook";
 export * from "./features/menu/module";
