@@ -1,4 +1,4 @@
-package com.example.starter_project_2025.system.demo.session;
+package com.example.starter_project_2025.system.schedule;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.base.dataio.exporter.annotation.ExportEntity;
@@ -10,6 +10,8 @@ import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+import lombok.experimental.SuperBuilder;
+
 import java.time.LocalDateTime;
 
 @Entity
@@ -21,11 +23,11 @@ import java.time.LocalDateTime;
 @Table(name = "sessions")
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ImportEntity("session")
-@ExportEntity(fileName = "class_sessions", sheetName = "Class Sessions")
+@ExportEntity(fileName = "sessions", sheetName = "Sessions")
 @ResourcePermission("SESSION")
 @ResourceMenu(
         title = "Class Schedules",
-        group = "Training Operations",
+        group = "Training Management",
         icon = "calendar",
         url = "/sessions",
         order = 3,
@@ -33,24 +35,29 @@ import java.time.LocalDateTime;
 )
 public class Session extends BaseEntity {
 
-    @Column(name = "class_id", nullable = false)
-    @ImportField(name = "Class ID", required = true)
-    @ExportField(name = "Class ID")
-    Long classId;
+    @Column(name = "class_code", nullable = false, length = 60)
+    @ImportField(name = "Class Code", required = true)
+    @ExportField(name = "Class Code")
+    String classCode;
 
-    @Column(name = "topic_id", nullable = false)
-    @ImportField(name = "Topic ID", required = true)
-    @ExportField(name = "Topic ID")
-    Long topicId;
+    @Column(name = "topic_name", length = 120)
+    @ImportField(name = "Topic Name")
+    @ExportField(name = "Topic Name")
+    String topicName;
 
     @Column(name = "trainer_id", nullable = false)
     @ImportField(name = "Trainer ID", required = true)
     @ExportField(name = "Trainer ID")
     Long trainerId;
 
+    @Column(name = "trainer_name", nullable = false, length = 100)
+    @ImportField(name = "Trainer Name", required = true)
+    @ExportField(name = "Trainer Name")
+    String trainerName;
+
     @Column(nullable = false, length = 150)
-    @ImportField(name = "Session Title", required = true)
-    @ExportField(name = "Session Title")
+    @ImportField(name = "Title", required = true)
+    @ExportField(name = "Title")
     String title;
 
     @Column(name = "start_time", nullable = false)
@@ -63,27 +70,32 @@ public class Session extends BaseEntity {
     @ExportField(name = "End Time")
     LocalDateTime endTime;
 
-    @Column(length = 150)
-    @ImportField(name = "Location / Room")
-    @ExportField(name = "Location / Room")
-    String location;
+    @Column(length = 80)
+    @ImportField(name = "Room")
+    @ExportField(name = "Room")
+    String room;
+
+    @Column(name = "meeting_link", length = 255)
+    @ImportField(name = "Meeting Link")
+    @ExportField(name = "Meeting Link")
+    String meetingLink;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
+    @Builder.Default
     @ExportField(name = "Status")
-    SessionStatus status;
+    SessionStatus status = SessionStatus.SCHEDULED;
 
     @Column(columnDefinition = "TEXT")
-    @ExportField(name = "Note")
-    String note;
+    @ExportField(name = "Notes")
+    String notes;
 
-    @Column(name = "cancel_reason", length = 255)
-    @ExportField(name = "Cancel Reason")
-    String cancelReason;
+    @Builder.Default
+    @Column(name = "is_overridden")
+    @ExportField(name = "Is Overridden")
+    Boolean isOverridden = false;
 
-    public enum SessionStatus {
-        SCHEDULED,
-        COMPLETED,
-        CANCELLED
-    }
+    @Column(name = "override_reason", length = 255)
+    @ExportField(name = "Override Reason")
+    String overrideReason;
 }

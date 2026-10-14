@@ -1,28 +1,22 @@
-package com.example.starter_project_2025.system.demo.session;
+package com.example.starter_project_2025.system.schedule;
 
 import com.example.starter_project_2025.base.crud.controller.BaseCrudDataIoController;
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.service.BaseCrudService;
-import com.example.starter_project_2025.system.demo.session.SessionService;
+import com.example.starter_project_2025.system.schedule.dto.ConflictCheckResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/sessions")
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-@Tag(name = "Class Schedule & Session", description = "APIs for managing class training sessions")
+@Tag(name = "Schedule / Session", description = "APIs for managing class schedules and conflict detection (FR-CAL-03)")
 public class SessionController
         extends BaseCrudDataIoController<Session, Long, SessionDTO, SessionFilter> {
 
@@ -44,12 +38,12 @@ public class SessionController
         return Session.class;
     }
 
-    @PatchMapping("/{id}/cancel")
-    @Operation(summary = "Cancel a scheduled session with a reason")
-    public ResponseEntity<SessionDTO> cancelSession(
-            @PathVariable Long id,
-            @Valid @RequestBody SessionCancelDTO cancelDTO) {
-        SessionDTO updatedSession = sessionService.cancelSession(id, cancelDTO);
-        return ResponseEntity.ok(updatedSession);
+    @PostMapping("/check-conflict")
+    @Operation(summary = "Check schedule conflict before saving (FR-CAL-03)")
+    public ResponseEntity<ConflictCheckResponse> checkConflict(
+            @RequestBody SessionDTO request,
+            @RequestParam(required = false) Long excludeId
+    ) {
+        return ResponseEntity.ok(sessionService.checkConflict(request, excludeId));
     }
 }

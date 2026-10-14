@@ -4,27 +4,27 @@ import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/hooks/usePermissions";
 import { formatRoleLabel } from "@/utils/rbac.utils";
 import { motion } from "motion/react";
-import { ArrowRight, BookOpen, ClipboardCheck, GraduationCap, PenSquare } from "lucide-react";
+import { ArrowRight, BookOpen, ClipboardCheck, PenSquare } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const teacherCapabilities = [
   {
-    key: "COURSE_CREATE",
-    label: "Create a course",
-    description: "Publish a course for students to discover and enroll in.",
+    key: "BOOK_CREATE",
+    label: "Tao sach moi",
+    description: "Them dau sach moi cho lop hoc.",
     icon: PenSquare,
   },
   {
-    key: "COURSE_UPDATE",
-    label: "Manage your catalog",
-    description: "Update course details, descriptions, and thumbnails.",
+    key: "BOOK_UPDATE",
+    label: "Chinh sua noi dung",
+    description: "Cap nhat ten va mo ta sach khi can.",
     icon: ClipboardCheck,
   },
   {
-    key: "COURSE_READ",
-    label: "Preview courses",
-    description: "Review the courses available in the learning catalog.",
-    icon: GraduationCap,
+    key: "BOOK_READ",
+    label: "Xem danh sach",
+    description: "Theo doi tat ca dau sach hien co.",
+    icon: BookOpen,
   },
 ];
 
@@ -46,7 +46,7 @@ export default function TeacherLandingPage() {
             {formatRoleLabel(activeRole ?? "TEACHER")}
           </Badge>
           <Badge variant="secondary" className="bg-white/80 text-slate-700">
-            Course management
+            Book management
           </Badge>
         </div>
 
@@ -54,19 +54,14 @@ export default function TeacherLandingPage() {
           Xin chao {displayName}
         </h1>
         <p className="mt-3 max-w-2xl text-sm text-slate-700 sm:text-base">
-          Create and manage courses for students. Published courses appear in the student course catalog.
+          Day la trang dieu huong cho TEACHER. Ban co the quan ly sach va cap nhat noi dung hoc tap cho hoc vien.
         </p>
 
         <div className="mt-6">
           <Button asChild className="bg-slate-900 text-white hover:bg-slate-800">
-            <Link to="/courses">
-              Manage courses
-              <ArrowRight className="ml-2 size-4" />
-            </Link>
-          </Button>
-          <Button asChild variant="outline" className="ml-3 border-slate-300 bg-white/80">
             <Link to="/books">
-              <BookOpen className="mr-2 size-4" /> Manage books
+              Mo trang quan ly books
+              <ArrowRight className="ml-2 size-4" />
             </Link>
           </Button>
         </div>

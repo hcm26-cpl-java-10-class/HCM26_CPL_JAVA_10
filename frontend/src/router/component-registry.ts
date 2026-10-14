@@ -37,6 +37,6 @@ export const routes: RouteConfig[] = [
   { path: "/logout", component: Logout, isPublic: true },
   { path: "/register", component: RegisterPage, isPublic: true },
   { path: "/forgot-password", component: ForgotPasswordPage, isPublic: true },
-  { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true,},
+  { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true },
   { path: "/unauthorized", component: Unauthorized, isPublic: true },
 ];

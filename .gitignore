@@ -1,6 +1,8 @@
  === IDE ===
 .idea/
 *.iml
+*.iws
+*.ipr
 .vscode/
 
 # === OS ===
@@ -14,6 +16,7 @@ backend/*.war
 
 # === Backend .env (secrets) ===
 backend/.env
+frontend/.env
 
 # === Frontend (Node) ===
 frontend/node_modules/

@@ -1,4 +1,4 @@
-package com.example.starter_project_2025.system.demo.session;
+package com.example.starter_project_2025.system.schedule;
 
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.mapper.BaseMapperConfig;
@@ -11,7 +11,4 @@ public interface SessionMapper extends BaseCrudMapper<Session, SessionDTO> {
     @Override
     @IgnoreAuditFields
     Session toEntity(SessionDTO dto);
-
-    // Khai báo rõ ràng method ánh xạ sang DTO
-    SessionDTO toDto(Session entity);
 }

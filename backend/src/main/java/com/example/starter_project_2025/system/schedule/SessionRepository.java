@@ -1,0 +1,32 @@
+package com.example.starter_project_2025.system.schedule;
+
+import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+public interface SessionRepository extends BaseCrudRepository<Session, Long> {
+
+    @Query("""
+        SELECT s FROM Session s
+        WHERE s.isActive = true
+          AND s.status != com.example.starter_project_2025.system.schedule.SessionStatus.CANCELLED
+          AND (:excludeId IS NULL OR s.id != :excludeId)
+          AND s.startTime < :endTime AND s.endTime > :startTime
+          AND (
+               s.trainerId = :trainerId
+               OR (:room IS NOT NULL AND :room != '' AND s.room = :room)
+               OR (:meetingLink IS NOT NULL AND :meetingLink != '' AND s.meetingLink = :meetingLink)
+          )
+    """)
+    List<Session> findConflictingSessions(
+            @Param("trainerId") Long trainerId,
+            @Param("room") String room,
+            @Param("meetingLink") String meetingLink,
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime,
+            @Param("excludeId") Long excludeId
+    );
+}

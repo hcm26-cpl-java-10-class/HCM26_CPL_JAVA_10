@@ -9,7 +9,7 @@ export type FieldType =
   | "boolean"
   | "relation"
   | "dynamic"
-    |"datetime";
+  | "datetime";
 
 export type DynamicValueFieldType = Exclude<
   FieldType,
