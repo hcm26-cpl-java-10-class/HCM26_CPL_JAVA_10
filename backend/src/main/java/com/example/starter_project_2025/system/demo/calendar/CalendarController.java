@@ -16,6 +16,8 @@ import java.util.List;
 @Tag(name = "Training calendars", description = "One calendar per class; class dates use Asia/Ho_Chi_Minh local time")
 public class CalendarController extends BaseCrudController<Long, CalendarDTO, CalendarFilter> {
     private final CalendarService service;
+
+
     @Override protected BaseCrudService<Long, CalendarDTO, CalendarFilter> getService() { return service; }
 
     @GetMapping("/{id}/events")
