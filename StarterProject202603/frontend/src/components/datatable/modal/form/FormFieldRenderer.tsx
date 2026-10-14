@@ -20,6 +20,8 @@ interface FormFieldRendererProps {
   errorClass: string;
   fieldErrors?: string[];
   relationOptions?: Record<string, any[]>;
+  relationLoading?: Record<string, boolean>;
+  relationErrors?: Record<string, string>;
   onChange: (name: string, value: any) => void;
 }
 
@@ -32,6 +34,8 @@ export function FormFieldRenderer({
   errorClass,
   fieldErrors,
   relationOptions = {},
+  relationLoading = {},
+  relationErrors = {},
   onChange,
 }: FormFieldRendererProps) {
   switch (field.type) {
@@ -135,10 +139,19 @@ export function FormFieldRenderer({
           <Select
             value={value?.toString() || ""}
             onValueChange={(val) => onChange(field.name, val)}
+            disabled={
+              relationLoading[field.name] ||
+              !!relationErrors[field.name] ||
+              items.length === 0
+            }
           >
             <SelectTrigger className={errorClass}>
               <SelectValue
-                placeholder={`Select ${field.label.toLowerCase()}...`}
+                placeholder={
+                  relationLoading[field.name]
+                    ? `Loading ${field.label.toLowerCase()}...`
+                    : `Select ${field.label.toLowerCase()}...`
+                }
               />
             </SelectTrigger>
             <SelectContent>
@@ -152,6 +165,21 @@ export function FormFieldRenderer({
               ))}
             </SelectContent>
           </Select>
+          {relationLoading[field.name] ? (
+            <p className="text-sm text-muted-foreground" role="status">
+              Loading {field.label.toLowerCase()}...
+            </p>
+          ) : relationErrors[field.name] ? (
+            <p className="text-sm text-destructive" role="alert">
+              Unable to load {field.label.toLowerCase()}: {relationErrors[field.name]}
+            </p>
+          ) : items.length === 0 ? (
+            <p className="text-sm text-muted-foreground" role="status">
+              {field.label.toLowerCase() === "subject"
+                ? "Không có môn học"
+                : `No ${field.label.toLowerCase()} available.`}
+            </p>
+          ) : null}
           <FieldError errors={fieldErrors} />
         </div>
       );

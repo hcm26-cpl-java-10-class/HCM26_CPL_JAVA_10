@@ -91,6 +91,8 @@ interface FormModalProps {
   title?: string;
   isSubmitting?: boolean;
   relationOptions?: Record<string, any[]>;
+  relationLoading?: Record<string, boolean>;
+  relationErrors?: Record<string, string>;
   fieldErrors?: Record<string, string[]>;
 }
 
@@ -103,6 +105,8 @@ export function FormModal({
   title = "Form",
   isSubmitting = false,
   relationOptions = {},
+  relationLoading = {},
+  relationErrors = {},
   fieldErrors = {},
 }: FormModalProps) {
   const [form, setForm] = useState<Record<string, any>>({});
@@ -172,6 +176,8 @@ export function FormModal({
       }
       fieldErrors={fieldErrors[field.name]}
       relationOptions={relationOptions}
+      relationLoading={relationLoading}
+      relationErrors={relationErrors}
       onChange={updateField}
     />
   );
@@ -199,9 +205,9 @@ export function FormModal({
       >
         <SheetHeader className="border-b">
           <SheetTitle>{resolvedTitle}</SheetTitle>
-          {activeLayout?.description ? (
-            <SheetDescription>{activeLayout.description}</SheetDescription>
-          ) : null}
+          <SheetDescription>
+            {activeLayout?.description ?? "Complete the fields below and save your changes."}
+          </SheetDescription>
         </SheetHeader>
 
         <div className="grid content-start auto-rows-min flex-1 gap-4 overflow-y-auto px-4 py-3">

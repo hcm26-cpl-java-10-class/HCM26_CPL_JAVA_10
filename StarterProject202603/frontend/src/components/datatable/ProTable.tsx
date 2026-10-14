@@ -568,6 +568,8 @@ export function ProTable<TData = any>({
                     title={table.editingRow ? "Edit" : "Create"}
                     isSubmitting={table.isSubmitting}
                     relationOptions={table.relationOptions}
+                    relationLoading={table.relationLoading}
+                    relationErrors={table.relationErrors}
                     fieldErrors={table.fieldErrors}
                     onSubmit={(data) => {
                         if (table.editingRow) {

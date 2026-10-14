@@ -150,6 +150,21 @@ const formatEntityLabel = (entityName: string) =>
     .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
     .join(" ");
 
+const getRelationQueryError = (error: unknown, field: FieldSchema) => {
+  if (axios.isAxiosError(error)) {
+    const message = error.response?.data?.message;
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+  }
+
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return `Unable to load ${field.label.toLowerCase()} options.`;
+};
+
 export function useProTable(api: any, schema: EntitySchema, options: UseProTableOptions = {}) {
   const qc = useQueryClient();
   const { hasPermission } = usePermissions();
@@ -256,7 +271,7 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
         });
         return res.content;
       },
-      enabled: permission.canRead,
+      enabled: permission.canRead || permission.canCreate,
       staleTime: 5 * 60 * 1000,
     })),
   });
@@ -292,6 +307,25 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
 
     return map;
   }, [relationFields, relationQueries, hasAuditUserFields, auditUsersQuery.data, schema.fields]);
+
+  const relationLoading = useMemo(() => {
+    const map: Record<string, boolean> = {};
+    relationFields.forEach((field, index) => {
+      map[field.name] = relationQueries[index]?.isLoading ?? false;
+    });
+    return map;
+  }, [relationFields, relationQueries]);
+
+  const relationErrors = useMemo(() => {
+    const map: Record<string, string> = {};
+    relationFields.forEach((field, index) => {
+      const error = relationQueries[index]?.error;
+      if (error) {
+        map[field.name] = getRelationQueryError(error, field);
+      }
+    });
+    return map;
+  }, [relationFields, relationQueries]);
 
   const queryKey = [
     schema.entityName,
@@ -764,6 +798,8 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
     fieldErrors,
     setFieldErrors,
     relationOptions,
+    relationLoading,
+    relationErrors,
     permission,
   };
 }
