@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/hooks/usePermissions";
 import { formatRoleLabel } from "@/utils/rbac.utils";
 import { motion } from "motion/react";
-import { ArrowRight, BookOpen, ClipboardCheck, PenSquare } from "lucide-react";
+import { ArrowRight, BookOpen, ClipboardCheck, PenSquare, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const teacherCapabilities = [
@@ -50,20 +50,28 @@ export default function TeacherLandingPage() {
           </Badge>
         </div>
 
-        <h1 className="mt-4 text-3xl font-bold text-slate-900 sm:text-4xl">
-          Xin chao {displayName}
-        </h1>
+        <h1 className="mt-4 text-3xl font-bold text-slate-900 sm:text-4xl">Xin chao {displayName}</h1>
         <p className="mt-3 max-w-2xl text-sm text-slate-700 sm:text-base">
           Day la trang dieu huong cho TEACHER. Ban co the quan ly sach va cap nhat noi dung hoc tap cho hoc vien.
         </p>
 
         <div className="mt-6">
-          <Button asChild className="bg-slate-900 text-white hover:bg-slate-800">
-            <Link to="/books">
-              Mo trang quan ly books
-              <ArrowRight className="ml-2 size-4" />
-            </Link>
-          </Button>
+          <div className="flex flex-wrap gap-3">
+            <Button asChild className="bg-slate-900 text-white hover:bg-slate-800">
+              <Link to="/books">
+                Mo trang quan ly books
+                <ArrowRight className="ml-2 size-4" />
+              </Link>
+            </Button>
+
+            <Button asChild variant="outline">
+              <Link to="/exams">
+                <Plus className="mr-2" />
+                Tao de thi
+                <ArrowRight className="ml-2 size-4" />
+              </Link>
+            </Button>
+          </div>
         </div>
       </motion.section>
 
