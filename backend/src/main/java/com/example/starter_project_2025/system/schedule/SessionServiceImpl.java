@@ -44,6 +44,9 @@ public class SessionServiceImpl
 
     @Override
     protected void beforeCreate(Session entity, SessionDTO request, ValidationContext ctx) {
+        if (entity.getStatus() == null) {
+            entity.setStatus(request.getStatus() != null ? request.getStatus() : SessionStatus.SCHEDULED);
+        }
         validateSession(entity, request, ctx, null);
     }
 
