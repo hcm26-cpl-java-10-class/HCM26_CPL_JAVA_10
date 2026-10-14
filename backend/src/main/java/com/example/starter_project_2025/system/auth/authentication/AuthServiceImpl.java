@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.auth.authentication;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.security.UserDetailsServiceImpl;
 import com.example.starter_project_2025.security.UserPrincipal;
+import com.example.starter_project_2025.system.auth.authentication.dto.request.ChangePasswordRequest;
 import com.example.starter_project_2025.system.auth.authentication.dto.request.LoginRequest;
 import com.example.starter_project_2025.system.auth.authentication.dto.request.RegisterRequest;
 import com.example.starter_project_2025.system.auth.authentication.dto.request.ResetPasswordRequest;
@@ -176,6 +177,27 @@ public class AuthServiceImpl implements AuthService {
         refreshTokenService.revokeAllRefreshTokens(user.getId());
 
         oneTimeTokenService.markUsed(resetToken);
+    }
+
+    @Override
+    @Transactional
+    public void changePassword(Long userId, ChangePasswordRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BadRequestException("User not found"));
+
+        if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
+            throw new BadRequestException("Current password is incorrect");
+        }
+
+        if (passwordEncoder.matches(request.newPassword(), user.getPasswordHash())) {
+            throw new BadRequestException("New password must be different from the current password");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(user);
+
+        // Force re-login on every device
+        refreshTokenService.revokeAllRefreshTokens(user.getId());
     }
 
     private User createGoogleUser(String email, String firstName, String lastName) {

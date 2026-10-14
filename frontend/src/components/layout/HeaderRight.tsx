@@ -12,6 +12,8 @@ import {
   uniqueRoles,
 } from "@/utils/rbac.utils";
 import { useNavigate } from "react-router-dom";
+import ChangePasswordDialog from "@/components/auth/ChangePasswordDialog";
+import ProfileLink from "@/components/layout/ProfileLink";
 
 export default function HeaderRight() {
   const { role, roles } = useSelector((state: RootState) => state.auth);
@@ -42,6 +44,8 @@ export default function HeaderRight() {
   if (!role) {
     return (
       <div className="flex items-center gap-3">
+        <ProfileLink />
+        <ChangePasswordDialog />
         <ToggleTheme />
       </div>
     );
@@ -57,6 +61,8 @@ export default function HeaderRight() {
           {formatRoleLabel(currentRole)}
         </Badge>
 
+        <ProfileLink />
+        <ChangePasswordDialog />
         <ToggleTheme />
       </div>
     );
@@ -138,7 +144,9 @@ export default function HeaderRight() {
         </Badge>
       )}
 
-      <ToggleTheme />
+      <ProfileLink />
+        <ChangePasswordDialog />
+        <ToggleTheme />
     </div >
   );
 }

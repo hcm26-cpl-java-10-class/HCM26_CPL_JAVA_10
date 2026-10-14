@@ -1,5 +1,6 @@
 import { Logout } from "@/components/auth/Logout";
 import { OAuth2RedirectHandler } from "@/components/auth/OAuth2RedirectHandler";
+import ProfilePage from "@/pages/profile/ProfilePage";
 import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage";
 import { Login } from "@/pages/auth/Login";
 import RegisterPage from "@/pages/auth/RegisterPage";
@@ -28,6 +29,7 @@ export const routes: RouteConfig[] = [
     requiredPermission: "STUDENT_SCORE_READ",
     isModuleDriven: true,
   },
+  { path: "/profile", component: ProfilePage },
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
   { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
   ...buildEntityRoutes(),

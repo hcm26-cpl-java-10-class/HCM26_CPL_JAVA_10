@@ -1,4 +1,4 @@
- === IDE ===
+# === IDE ===
 .idea/
 *.iml
 .vscode/
@@ -21,6 +21,3 @@ frontend/dist/
 
 # === Docker .env (secrets) ===
 docker/.env
-
-
-/backend.zip

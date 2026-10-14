@@ -146,11 +146,21 @@ export const Login: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="flex items-center space-x-2">
-                        <Checkbox id="remember" onCheckedChange={(checked: boolean) => handleIsRememberMe(checked)} />
-                        <label htmlFor="remember" className="text-sm font-medium leading-none cursor-pointer">
-                            Remember me
-                        </label>
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                            <Checkbox id="remember" onCheckedChange={(checked: boolean) => handleIsRememberMe(checked)} />
+                            <label htmlFor="remember" className="text-sm font-medium leading-none cursor-pointer">
+                                Remember me
+                            </label>
+                        </div>
+                        <Button
+                            type="button"
+                            variant="link"
+                            className="p-0 h-auto text-sm"
+                            onClick={() => navigate("/forgot-password")}
+                        >
+                            Forgot password?
+                        </Button>
                     </div>
 
                     <Button type="submit" className="w-full" disabled={isLoading}>

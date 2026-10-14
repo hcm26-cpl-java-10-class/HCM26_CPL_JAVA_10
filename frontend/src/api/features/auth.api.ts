@@ -8,6 +8,14 @@ import {
     type RegisterRequest,
 } from "../../types/features/auth";
 
+export interface Profile {
+    email: string;
+    firstName: string;
+    lastName: string | null;
+    roles: string[];
+    createdAt: string;
+}
+
 interface BackendAuthenticationResponse {
     accessToken: string;
     email: string;
@@ -90,5 +98,19 @@ export const authApi = {
             token: data.token,
             newPassword: data.newPassword,
         });
+    },
+
+    changePassword: async (data: { currentPassword: string; newPassword: string }): Promise<void> => {
+        await axiosInstance.patch("/account/change-password", data);
+    },
+
+    getProfile: async (): Promise<Profile> => {
+        const response = await axiosInstance.get<Profile>("/account/profile");
+        return response.data;
+    },
+
+    updateProfile: async (data: { firstName: string; lastName: string }): Promise<Profile> => {
+        const response = await axiosInstance.patch<Profile>("/account/profile", data);
+        return response.data;
     },
 };
