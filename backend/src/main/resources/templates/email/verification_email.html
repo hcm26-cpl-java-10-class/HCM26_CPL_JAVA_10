@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Account Verification</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6;">
+<h2>Hello <span th:text="${username}">User</span>,</h2>
+<p>Thank you for registering an account with us.</p>
+<p>Please click the button below to verify your account:</p>
+<a th:href="${verificationLink}"
+   style="display:inline-block; background-color:#4CAF50; color:white; padding:10px 20px;
+              text-decoration:none; border-radius:5px;">Verify Account</a>
+<p>If you did not register this account, please ignore this email.</p>
+<br>
+<p>Best regards,<br>The Support Team</p>
+</body>
+</html>

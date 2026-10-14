@@ -1,0 +1,29 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+
+# Env
+.env
+*.env.local
+docker/.env
+backend/.env
+frontend/.env
+
+# Build
+target/
+dist/
+build/
+node_modules/
+
+# Maven
+.mvn/wrapper/maven-wrapper.jar
+
+# Logs
+*.log
