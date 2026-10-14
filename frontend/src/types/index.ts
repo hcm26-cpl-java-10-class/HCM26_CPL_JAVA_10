@@ -18,6 +18,4 @@ export * from "./features/menu/module_group";
 export * from "./features/rbac/permission";
 export * from "./features/rbac/role";
 export * from "./features/rbac/user";
-export * from "./features/demo/session";
-export * from "./features/schedule";
-
+export * from "./features/schedule/session";

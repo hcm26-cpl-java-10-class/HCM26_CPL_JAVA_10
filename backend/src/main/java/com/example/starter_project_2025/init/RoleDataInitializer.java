@@ -45,6 +45,7 @@ public class RoleDataInitializer implements CommandLineRunner {
 
         upsertRole(
                 STUDENT_ROLE,
+<<<<<<< HEAD
                 "Student with read-only access to books and courses",
                 findPermissions(
                         "MENU_READ",
@@ -53,10 +54,15 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "ENROLLMENT_READ",
                         "ENROLLMENT_CREATE"
                 )
+=======
+                "Student with read-only access to books",
+                findPermissions("MENU_READ", "BOOK_READ")
+>>>>>>> master
         );
 
         upsertRole(
                 TEACHER_ROLE,
+<<<<<<< HEAD
                 "Teacher with book and course management permissions",
                 findPermissions(
                         "MENU_READ",
@@ -69,6 +75,10 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "COURSE_UPDATE",
                         "COURSE_DELETE"
                 )
+=======
+                "Teacher with book and session management permissions",
+                findPermissions("MENU_READ", "BOOK_CREATE", "BOOK_READ", "BOOK_UPDATE", "BOOK_DELETE", "SESSION_CREATE", "SESSION_READ", "SESSION_UPDATE", "SESSION_DELETE")
+>>>>>>> master
         );
 
         log.info("Ensured roles and permission mappings: ADMIN, STUDENT, TEACHER.");

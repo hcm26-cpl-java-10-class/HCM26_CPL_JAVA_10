@@ -1,23 +1,29 @@
-# === IDE ===
-.idea/
-*.iml
-.vscode/
-
-# === OS ===
+# OS
 .DS_Store
 Thumbs.db
 
-# === Backend (Java/Maven) ===
-backend/target/
-backend/*.jar
-backend/*.war
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
 
-# === Backend .env (secrets) ===
-backend/.env
-
-# === Frontend (Node) ===
-frontend/node_modules/
-frontend/dist/
-
-# === Docker .env (secrets) ===
+# Env
+.env
+*.env.local
 docker/.env
+backend/.env
+frontend/.env
+
+# Build
+target/
+dist/
+build/
+node_modules/
+
+# Maven
+.mvn/wrapper/maven-wrapper.jar
+
+# Logs
+*.log
