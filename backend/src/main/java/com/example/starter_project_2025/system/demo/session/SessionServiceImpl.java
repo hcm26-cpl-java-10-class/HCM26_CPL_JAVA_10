@@ -1,103 +1,104 @@
 package com.example.starter_project_2025.system.demo.session;
 
+import com.example.starter_project_2025.base.crud.CrudAction;
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
-import com.example.starter_project_2025.system.demo.session.SessionService;
-import lombok.AccessLevel;
+import com.example.starter_project_2025.exception.*;
+import com.example.starter_project_2025.system.demo.calendar.*;
+import com.example.starter_project_2025.system.demo.calendar_version.CalendarVersion;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.time.LocalDateTime;
 
 @Service
 @Transactional
 @RequiredArgsConstructor
-@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-public class SessionServiceImpl
-        extends BaseCrudServiceImpl<Session, Long, SessionDTO, SessionFilter>
+public class SessionServiceImpl extends BaseCrudServiceImpl<Session, Long, SessionDTO, SessionFilter>
         implements SessionService {
+    private final SessionMapper sessionMapper;
+    private final SessionRepository sessionRepository;
+    private final CalendarLock locks;
+    private final CalendarRules rules;
+    private final EntityManager entityManager;
 
-    SessionMapper sessionMapper;
-    SessionRepository sessionRepository;
-
-    @Override
-    protected BaseCrudRepository<Session, Long> getRepository() {
-        return sessionRepository;
-    }
-
-    @Override
-    protected BaseCrudMapper<Session, SessionDTO> getMapper() {
-        return sessionMapper;
-    }
-
-    @Override
-    protected String[] searchableFields() {
-        // Cho phép tìm kiếm nhanh theo tiêu đề hoặc phòng học
-        return new String[]{"title", "location"};
-    }
+    @Override protected BaseCrudRepository<Session, Long> getRepository() { return sessionRepository; }
+    @Override protected BaseCrudMapper<Session, SessionDTO> getMapper() { return sessionMapper; }
+    @Override protected String[] searchableFields() { return new String[]{"title", "location"}; }
 
     @Override
     protected void beforeCreate(Session session, SessionDTO request, ValidationContext ctx) {
-        // 1. Kiểm tra thời gian: end_time phải sau start_time (BR-02, FR-CAL-01)
-        validateSessionTime(request.getStartTime(), request.getEndTime(), ctx);
-
-        // 2. Mặc định trạng thái khi tạo mới là SCHEDULED
+        CalendarVersion version = locks.version(request.getCalendarVersionId());
+        rules.requireDraft(version);
+        session.setClassId(version.getCalendar().getClassId());
         session.setStatus(Session.SessionStatus.SCHEDULED);
+        validateTime(version.getCalendar(), session.getStartTime(), session.getEndTime(), ctx);
+    }
+
+    @Override
+    public SessionDTO update(Long id, SessionDTO request) {
+        checkPermission(CrudAction.UPDATE);
+        rules.requireDraft(locks.session(id));
+        refreshSession(id);
+        return super.update(id, request);
     }
 
     @Override
     protected void beforeUpdate(Session session, SessionDTO request, ValidationContext ctx) {
-        // Không cho phép sửa nếu buổi học đã hoàn thành hoặc đã bị hủy
-        if (session.getStatus() == Session.SessionStatus.COMPLETED) {
-            ctx.add("status", "Cannot update a completed session");
-            return;
+        if (request.getCalendarVersionId() != null
+                && !request.getCalendarVersionId().equals(session.getCalendarVersionId())) {
+            ctx.add("calendarVersionId", "A session cannot be moved to another version");
         }
-
-        if (session.getStatus() == Session.SessionStatus.CANCELLED) {
-            ctx.add("status", "Cannot update a cancelled session");
-            return;
+        if (session.getStatus() != Session.SessionStatus.SCHEDULED) {
+            throw new ConflictException("Cannot update a completed or cancelled session");
         }
-
-        // Lấy thời gian mới (nếu request truyền lên) hoặc giữ nguyên thời gian cũ
-        LocalDateTime newStart = request.getStartTime() != null ? request.getStartTime() : session.getStartTime();
-        LocalDateTime newEnd = request.getEndTime() != null ? request.getEndTime() : session.getEndTime();
-
-        validateSessionTime(newStart, newEnd, ctx);
+        LocalDateTime start = request.getStartTime() != null ? request.getStartTime() : session.getStartTime();
+        LocalDateTime end = request.getEndTime() != null ? request.getEndTime() : session.getEndTime();
+        validateTime(session.getCalendarVersion().getCalendar(), start, end, ctx);
     }
 
     @Override
-    public SessionDTO cancelSession(Long id, SessionCancelDTO cancelDTO) {
-        // Lấy session từ DB
-        Session session = sessionRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Session not found with id: " + id));
-
-        // Kiểm tra điều kiện nghiệp vụ: Không hủy buổi học đã hoàn thành
-        if (session.getStatus() == Session.SessionStatus.COMPLETED) {
-            throw new IllegalStateException("Cannot cancel an already completed session");
+    public void delete(Long id) {
+        checkPermission(CrudAction.DELETE);
+        rules.requireDraft(locks.session(id));
+        Session session = refreshSession(id);
+        if (session.getStatus() != Session.SessionStatus.SCHEDULED) {
+            throw new ConflictException("Cannot delete a completed or cancelled session");
         }
-
-        if (session.getStatus() == Session.SessionStatus.CANCELLED) {
-            throw new IllegalStateException("Session is already cancelled");
-        }
-
-        // Cập nhật trạng thái và lý do hủy (Soft cancel theo BR-03)
-        session.setStatus(Session.SessionStatus.CANCELLED);
-        session.setCancelReason(cancelDTO.getCancelReason());
-
-        Session updatedSession = sessionRepository.save(session);
-        return sessionMapper.toDto(updatedSession);
+        super.delete(id);
     }
 
-    /**
-     * Validate nghiệp vụ thời gian: End Time phải lớn hơn Start Time
-     */
-    private void validateSessionTime(LocalDateTime start, LocalDateTime end, ValidationContext ctx) {
-        if (start != null && end != null && !end.isAfter(start)) {
-            ctx.add("endTime", "End time must be after start time");
+    @Override
+    public SessionDTO cancelSession(Long id, SessionCancelDTO request) {
+        checkPermission(CrudAction.UPDATE);
+        CalendarVersion version = locks.session(id);
+        if (version.getPublishedAt() != null && version.getStatus() != CalendarVersion.Status.ACTIVE) {
+            throw new ConflictException("Cannot cancel a session in an inactive published version");
         }
+        Session session = refreshSession(id);
+        if (session.getStatus() != Session.SessionStatus.SCHEDULED) {
+            throw new ConflictException("Only scheduled sessions can be cancelled");
+        }
+        if (request.getCancelReason() == null || request.getCancelReason().isBlank()
+                || request.getCancelReason().length() > 255) {
+            throw new BadRequestException("Cancel reason is required and must not exceed 255 characters");
+        }
+        session.setStatus(Session.SessionStatus.CANCELLED);
+        session.setCancelReason(request.getCancelReason());
+        return sessionMapper.toResponse(session);
+    }
+
+    private Session refreshSession(Long id) {
+        Session session = sessionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Session not found: " + id));
+        entityManager.refresh(session);
+        return session;
+    }
+
+    private void validateTime(TrainingCalendar calendar, LocalDateTime start, LocalDateTime end, ValidationContext ctx) {
+        rules.session(start, end, calendar.getClassStartDate(), calendar.getClassEndDate(), "", ctx);
     }
 }

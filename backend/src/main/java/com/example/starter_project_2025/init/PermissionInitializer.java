@@ -39,6 +39,14 @@ public class PermissionInitializer implements CommandLineRunner {
                 generatePermissions(clazz);
             }
         }
+        if (!permissionRepository.existsByName("CALENDAR_VERSION_ACTIVATE")) {
+            permissionRepository.save(Permission.builder()
+                    .name("CALENDAR_VERSION_ACTIVATE")
+                    .resource("CALENDAR_VERSION")
+                    .action("ACTIVATE")
+                    .description("Activate a calendar version")
+                    .build());
+        }
     }
 
     private void generatePermissions(Class<?> entityClass) {

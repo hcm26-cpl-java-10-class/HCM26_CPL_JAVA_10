@@ -1,0 +1,2232 @@
+{
+  "info": {
+    "name": "Calendar + Calendar Version - API tests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Vietnamese guide: docs/CALENDAR_POSTMAN_GUIDE.vi.md. Run folders 01-07 in order. The last folder reproduces known HTTP 405/500 defects. Login initializes unique class IDs. Creates and publishes test schedules; published records remain until the in-memory database restarts."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "adminEmail",
+      "value": "admin@example.com",
+      "type": "string"
+    },
+    {
+      "key": "adminPassword",
+      "value": "password123",
+      "type": "string"
+    },
+    {
+      "key": "studentEmail",
+      "value": "student@example.com",
+      "type": "string"
+    },
+    {
+      "key": "studentPassword",
+      "value": "password123",
+      "type": "string"
+    },
+    {
+      "key": "missingId",
+      "value": "9223372036854775807",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "studentToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "classId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "calendarId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "versionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "sessionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cloneVersionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cloneSessionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cleanupClassId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cleanupCalendarId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cleanupVersionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cleanupSessionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "publishedAt",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Login and authorization",
+      "item": [
+        {
+          "name": "01 Admin login + initialize test IDs",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const seed = Date.now();",
+                  "pm.collectionVariables.set(\"classId\", seed);",
+                  "pm.collectionVariables.set(\"cleanupClassId\", seed + 1);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.collectionVariables.set(\"accessToken\", data.accessToken);",
+                  "pm.test(\"Response data\", function () { pm.expect(typeof data.accessToken === \"string\").to.eql(true); });",
+                  "pm.test(\"Admin can activate\", function () { pm.expect(data.permissions.includes(\"CALENDAR_VERSION_ACTIVATE\")).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 No JWT -> 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendars",
+            "description": "Expected HTTP 401. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 401\", function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Student login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{studentEmail}}\",\n  \"password\": \"{{studentPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.collectionVariables.set(\"studentToken\", data.accessToken);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Student cannot read calendars -> 403",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendars",
+            "description": "Expected HTTP 403. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{studentToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Student cannot read calendar-versions -> 403",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendar-versions",
+            "description": "Expected HTTP 403. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{studentToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Student cannot read sessions -> 403",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/sessions",
+            "description": "Expected HTTP 403. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{studentToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 - Calendar CRUD and validation",
+      "item": [
+        {
+          "name": "Create calendar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/calendars",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"classId\": {{classId}},\n  \"name\": \"Postman Java\",\n  \"description\": \"Calendar test\",\n  \"classStartDate\": \"2026-10-01\",\n  \"classEndDate\": \"2026-10-31\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.collectionVariables.set(\"calendarId\", data.id);",
+                  "pm.test(\"Response data\", function () { pm.expect(data.activeVersionId == null).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List calendars - filter/search/pagination",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendars?classId={{classId}}&search=Postman&page=0&size=10&sort=id,desc",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Response data\", function () { pm.expect(data.totalElements === 1).to.eql(true); });",
+                  "pm.test(\"Response data\", function () { pm.expect(data.content[0].id === Number(pm.collectionVariables.get(\"calendarId\"))).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get calendar",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendars/{{calendarId}}",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update calendar + ignore managed activeVersionId",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/calendars/{{calendarId}}",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Java updated\",\n  \"activeVersionId\": 999\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Response data\", function () { pm.expect(data.name === \"Postman Java updated\" && data.activeVersionId == null).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "No active version -> empty events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendars/{{calendarId}}/events",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Response data\", function () { pm.expect(data.length === 0).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Duplicate class calendar -> 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/calendars",
+            "description": "Expected HTTP 409. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"classId\": {{classId}},\n  \"name\": \"Postman Java\",\n  \"description\": \"Calendar test\",\n  \"classStartDate\": \"2026-10-01\",\n  \"classEndDate\": \"2026-10-31\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Missing required fields -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/calendars",
+            "description": "Expected HTTP 400. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "End date before start -> 400",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/calendars/{{calendarId}}",
+            "description": "Expected HTTP 400. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"classEndDate\": \"2026-09-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cannot change classId -> 400",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/calendars/{{calendarId}}",
+            "description": "Expected HTTP 400. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"classId\": {{cleanupClassId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Missing calendar -> 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendars/{{missingId}}",
+            "description": "Expected HTTP 404. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 - Draft version and sessions",
+      "item": [
+        {
+          "name": "Create draft version",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/calendar-versions",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"calendarId\": {{calendarId}},\n  \"name\": \"Version 1\",\n  \"description\": \"Initial schedule\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.collectionVariables.set(\"versionId\", data.id);",
+                  "pm.test(\"Response data\", function () { pm.expect(data.status === \"DRAFT\" && data.versionNumber === 1).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List versions - filter/search/pagination",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendar-versions?calendarId={{calendarId}}&search=Version&page=0&size=10&sort=versionNumber,desc",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Response data\", function () { pm.expect(data.totalElements === 1).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get version",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendar-versions/{{versionId}}",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update draft; managed fields ignored",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/calendar-versions/{{versionId}}",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Version 1 updated\",\n  \"status\": \"ACTIVE\",\n  \"versionNumber\": 999\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Response data\", function () { pm.expect(data.status === \"DRAFT\" && data.versionNumber === 1).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cannot activate empty version -> 400",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendar-versions/{{versionId}}/activate",
+            "description": "Expected HTTP 400. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Version missing fields -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/calendar-versions",
+            "description": "Expected HTTP 400. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Version references missing calendar -> 404",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/calendar-versions",
+            "description": "Expected HTTP 404. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"calendarId\": {{missingId}},\n  \"name\": \"Orphan\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create session in draft",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sessions",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"calendarVersionId\": {{versionId}},\n  \"topicId\": 3,\n  \"trainerId\": 5,\n  \"title\": \"Spring Boot\",\n  \"startTime\": \"2026-10-20T08:00:00\",\n  \"endTime\": \"2026-10-20T11:00:00\",\n  \"location\": \"Room A\",\n  \"note\": \"Postman session\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.collectionVariables.set(\"sessionId\", data.id);",
+                  "pm.test(\"Response data\", function () { pm.expect(data.classId === Number(pm.collectionVariables.get(\"classId\")) && data.status === \"SCHEDULED\").to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List sessions for version",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/sessions?calendarVersionId={{versionId}}&page=0&size=10&sort=startTime,asc",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Response data\", function () { pm.expect(data.totalElements === 1).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get session",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/sessions/{{sessionId}}",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update draft session",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sessions/{{sessionId}}",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"location\": \"Room B\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Response data\", function () { pm.expect(data.location === \"Room B\").to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Session missing version -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sessions",
+            "description": "Expected HTTP 400. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"topicId\": 3,\n  \"trainerId\": 5,\n  \"title\": \"Spring Boot\",\n  \"startTime\": \"2026-10-20T08:00:00\",\n  \"endTime\": \"2026-10-20T11:00:00\",\n  \"location\": \"Room A\",\n  \"note\": \"Postman session\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Session outside class dates -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sessions",
+            "description": "Expected HTTP 400. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"calendarVersionId\": {{versionId}},\n  \"topicId\": 3,\n  \"trainerId\": 5,\n  \"title\": \"Spring Boot\",\n  \"startTime\": \"2026-09-30T08:00:00\",\n  \"endTime\": \"2026-10-20T11:00:00\",\n  \"location\": \"Room A\",\n  \"note\": \"Postman session\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Session end equals start -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sessions",
+            "description": "Expected HTTP 400. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"calendarVersionId\": {{versionId}},\n  \"topicId\": 3,\n  \"trainerId\": 5,\n  \"title\": \"Spring Boot\",\n  \"startTime\": \"2026-10-20T08:00:00\",\n  \"endTime\": \"2026-10-20T08:00:00\",\n  \"location\": \"Room A\",\n  \"note\": \"Postman session\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cannot shorten dates across sessions -> 400",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/calendars/{{calendarId}}",
+            "description": "Expected HTTP 400. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"classEndDate\": \"2026-10-15\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Calendar with version cannot be deleted -> 409",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendars/{{calendarId}}",
+            "description": "Expected HTTP 409. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 - Activate and active events",
+      "item": [
+        {
+          "name": "Activate version 1",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendar-versions/{{versionId}}/activate",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Response data\", function () { pm.expect(data.status === \"ACTIVE\" && data.publishedAt != null).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read persisted publication time",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendar-versions/{{versionId}}",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.collectionVariables.set(\"publishedAt\", data.publishedAt);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Activate again - idempotent",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendar-versions/{{versionId}}/activate",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Response data\", function () { pm.expect(data.publishedAt === pm.collectionVariables.get(\"publishedAt\")).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Calendar points to active version",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendars/{{calendarId}}",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Response data\", function () { pm.expect(data.activeVersionId === Number(pm.collectionVariables.get(\"versionId\"))).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Events from active version",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendars/{{calendarId}}/events",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Response data\", function () { pm.expect(data.length === 1 && data[0].id === Number(pm.collectionVariables.get(\"sessionId\"))).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Overlap query includes session",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendars/{{calendarId}}/events?from=2026-10-20T09:00:00&to=2026-10-20T10:00:00",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Response data\", function () { pm.expect(data.length === 1).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Exclusive time boundary excludes session",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendars/{{calendarId}}/events?from=2026-10-20T11:00:00",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Response data\", function () { pm.expect(data.length === 0).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invalid event range -> 400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendars/{{calendarId}}/events?from=2026-10-20T11:00:00&to=2026-10-20T08:00:00",
+            "description": "Expected HTTP 400. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Published version cannot be updated -> 409",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/calendar-versions/{{versionId}}",
+            "description": "Expected HTTP 409. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Forbidden\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Published version cannot be deleted -> 409",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendar-versions/{{versionId}}",
+            "description": "Expected HTTP 409. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cannot add session to published version -> 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sessions",
+            "description": "Expected HTTP 409. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"calendarVersionId\": {{versionId}},\n  \"topicId\": 3,\n  \"trainerId\": 5,\n  \"title\": \"Spring Boot\",\n  \"startTime\": \"2026-10-20T08:00:00\",\n  \"endTime\": \"2026-10-20T11:00:00\",\n  \"location\": \"Room A\",\n  \"note\": \"Postman session\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cannot edit published session -> 409",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sessions/{{sessionId}}",
+            "description": "Expected HTTP 409. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Forbidden\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cannot delete published session -> 409",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/sessions/{{sessionId}}",
+            "description": "Expected HTTP 409. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 - Clone, replace and cancel",
+      "item": [
+        {
+          "name": "Clone version 1 -> 201",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendar-versions/{{versionId}}/clone",
+            "description": "Expected HTTP 201. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.collectionVariables.set(\"cloneVersionId\", data.id);",
+                  "pm.test(\"Response data\", function () { pm.expect(data.status === \"DRAFT\" && data.versionNumber === 2 && data.publishedAt == null).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read cloned session with new ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/sessions?calendarVersionId={{cloneVersionId}}",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.collectionVariables.set(\"cloneSessionId\", data.content[0].id);",
+                  "pm.test(\"Response data\", function () { pm.expect(data.totalElements === 1 && data.content[0].id !== Number(pm.collectionVariables.get(\"sessionId\"))).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Edit cloned session",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sessions/{{cloneSessionId}}",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Spring Boot version 2\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Original session unaffected",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/sessions/{{sessionId}}",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Response data\", function () { pm.expect(data.title === \"Spring Boot\").to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Activate cloned version",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendar-versions/{{cloneVersionId}}/activate",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Response data\", function () { pm.expect(data.status === \"ACTIVE\").to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Previous version becomes INACTIVE",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendar-versions/{{versionId}}",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Response data\", function () { pm.expect(data.status === \"INACTIVE\").to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Events now belong to cloned version",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendars/{{calendarId}}/events",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Response data\", function () { pm.expect(data.length === 1 && data[0].calendarVersionId === Number(pm.collectionVariables.get(\"cloneVersionId\"))).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cannot cancel historical session -> 409",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sessions/{{sessionId}}/cancel",
+            "description": "Expected HTTP 409. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cancelReason\": \"Trainer unavailable\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancel requires reason -> 400",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sessions/{{cloneSessionId}}/cancel",
+            "description": "Expected HTTP 400. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cancelReason\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancel active session",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sessions/{{cloneSessionId}}/cancel",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cancelReason\": \"Trainer unavailable\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Response data\", function () { pm.expect(data.status === \"CANCELLED\" && data.cancelReason === \"Trainer unavailable\").to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancelled event remains visible",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendars/{{calendarId}}/events",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Response data\", function () { pm.expect(data.length === 1 && data[0].status === \"CANCELLED\").to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cannot cancel twice -> 409",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sessions/{{cloneSessionId}}/cancel",
+            "description": "Expected HTTP 409. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cancelReason\": \"Again\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 - Successful deletion on separate draft data",
+      "item": [
+        {
+          "name": "Create disposable calendar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/calendars",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"classId\": {{cleanupClassId}},\n  \"name\": \"Postman Java\",\n  \"description\": \"Calendar test\",\n  \"classStartDate\": \"2026-10-01\",\n  \"classEndDate\": \"2026-10-31\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.collectionVariables.set(\"cleanupCalendarId\", data.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create disposable draft",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/calendar-versions",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"calendarId\": {{cleanupCalendarId}},\n  \"name\": \"Disposable\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.collectionVariables.set(\"cleanupVersionId\", data.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create disposable session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sessions",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"calendarVersionId\": {{cleanupVersionId}},\n  \"topicId\": 3,\n  \"trainerId\": 5,\n  \"title\": \"Spring Boot\",\n  \"startTime\": \"2026-10-20T08:00:00\",\n  \"endTime\": \"2026-10-20T11:00:00\",\n  \"location\": \"Room A\",\n  \"note\": \"Postman session\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.collectionVariables.set(\"cleanupSessionId\", data.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete draft session -> 204",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/sessions/{{cleanupSessionId}}",
+            "description": "Expected HTTP 204. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Deleted session -> 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/sessions/{{cleanupSessionId}}",
+            "description": "Expected HTTP 404. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create child for cascade test",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sessions",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"calendarVersionId\": {{cleanupVersionId}},\n  \"topicId\": 3,\n  \"trainerId\": 5,\n  \"title\": \"Spring Boot\",\n  \"startTime\": \"2026-10-20T08:00:00\",\n  \"endTime\": \"2026-10-20T11:00:00\",\n  \"location\": \"Room A\",\n  \"note\": \"Postman session\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.collectionVariables.set(\"cleanupSessionId\", data.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete draft version -> 204",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendar-versions/{{cleanupVersionId}}",
+            "description": "Expected HTTP 204. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Deleted version -> 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendar-versions/{{cleanupVersionId}}",
+            "description": "Expected HTTP 404. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cascade deleted child -> 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/sessions/{{cleanupSessionId}}",
+            "description": "Expected HTTP 404. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Next version number is not reused",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/calendar-versions",
+            "description": "Expected HTTP 200. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"calendarId\": {{cleanupCalendarId}},\n  \"name\": \"Next draft\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "const data = pm.response.json();",
+                  "pm.collectionVariables.set(\"cleanupVersionId\", data.id);",
+                  "pm.test(\"Response data\", function () { pm.expect(data.versionNumber === 2).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete last draft -> 204",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendar-versions/{{cleanupVersionId}}",
+            "description": "Expected HTTP 204. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete empty calendar -> 204",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendars/{{cleanupCalendarId}}",
+            "description": "Expected HTTP 204. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Deleted calendar -> 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendars/{{cleanupCalendarId}}",
+            "description": "Expected HTTP 404. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07 - Known defect - expected 405, currently 500",
+      "item": [
+        {
+          "name": "Unsupported POST /calendars/import -> expected 405",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendars/import",
+            "description": "Expected HTTP 405. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 405\", function () { pm.response.to.have.status(405); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unsupported POST /calendar-versions/import -> expected 405",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/calendar-versions/import",
+            "description": "Expected HTTP 405. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 405\", function () { pm.response.to.have.status(405); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unsupported POST /sessions/import -> expected 405",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/sessions/import",
+            "description": "Expected HTTP 405. Run requests in collection order. See ../CALENDAR_POSTMAN_GUIDE.vi.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 405\", function () { pm.response.to.have.status(405); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

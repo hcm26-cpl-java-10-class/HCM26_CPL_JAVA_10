@@ -10,6 +10,9 @@ import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+import lombok.experimental.SuperBuilder;
+import com.example.starter_project_2025.system.demo.calendar_version.CalendarVersion;
+import org.hibernate.annotations.Check;
 import java.time.LocalDateTime;
 
 @Entity
@@ -18,9 +21,9 @@ import java.time.LocalDateTime;
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "sessions")
+@Table(name = "sessions", indexes = @Index(name = "idx_session_version_time", columnList = "calendar_version_id,start_time"))
+@Check(constraints = "end_time > start_time")
 @FieldDefaults(level = AccessLevel.PRIVATE)
-@ImportEntity("session")
 @ExportEntity(fileName = "class_sessions", sheetName = "Class Sessions")
 @ResourcePermission("SESSION")
 @ResourceMenu(
@@ -32,6 +35,15 @@ import java.time.LocalDateTime;
         permission = "SESSION_READ"
 )
 public class Session extends BaseEntity {
+
+    @Column(name = "calendar_version_id", nullable = false, updatable = false)
+    @ExportField(name = "Calendar Version ID")
+    Long calendarVersionId;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "calendar_version_id", insertable = false, updatable = false,
+            foreignKey = @ForeignKey(name = "fk_session_calendar_version"))
+    CalendarVersion calendarVersion;
 
     @Column(name = "class_id", nullable = false)
     @ImportField(name = "Class ID", required = true)

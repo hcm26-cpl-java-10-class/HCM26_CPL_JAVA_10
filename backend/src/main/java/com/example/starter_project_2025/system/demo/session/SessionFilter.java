@@ -22,6 +22,9 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class SessionFilter extends BaseFilter {
 
+    @FilterField
+    Long calendarVersionId;
+
     @FilterField(entityField = "classId", operator = FilterOperator.EQUAL)
     Long classId;
 

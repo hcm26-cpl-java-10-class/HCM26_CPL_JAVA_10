@@ -24,6 +24,15 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler({ConflictException.class, org.springframework.dao.DataIntegrityViolationException.class,
+            org.springframework.dao.PessimisticLockingFailureException.class})
+    public ResponseEntity<ErrorResponse> handleConflict(RuntimeException ex) {
+        String message = ex instanceof ConflictException ? ex.getMessage()
+                : "The operation conflicts with existing data or another update";
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(
+                new ErrorResponse(409, message, LocalDateTime.now()));
+    }
+
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleResourceNotFoundException(ResourceNotFoundException ex) {
         log.warn("[404] ResourceNotFound: {}", ex.getMessage());

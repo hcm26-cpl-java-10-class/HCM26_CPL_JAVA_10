@@ -1,0 +1,674 @@
+{
+  "runner": "Node HTTP runner executing the collection request definitions and its pm.test scripts with a minimal pm adapter; not Postman/Newman",
+  "summary": {
+    "requests": 73,
+    "passed": 70,
+    "failed": 3,
+    "assertions": 101
+  },
+  "results": [
+    {
+      "folder": "01 - Login and authorization",
+      "name": "01 Admin login + initialize test IDs",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/auth/login",
+      "status": 200,
+      "assertions": 3,
+      "failures": []
+    },
+    {
+      "folder": "01 - Login and authorization",
+      "name": "02 No JWT -> 401",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/calendars",
+      "status": 401,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "01 - Login and authorization",
+      "name": "03 Student login",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/auth/login",
+      "status": 200,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "01 - Login and authorization",
+      "name": "Student cannot read calendars -> 403",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/calendars",
+      "status": 403,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "01 - Login and authorization",
+      "name": "Student cannot read calendar-versions -> 403",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/calendar-versions",
+      "status": 403,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "01 - Login and authorization",
+      "name": "Student cannot read sessions -> 403",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/sessions",
+      "status": 403,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "02 - Calendar CRUD and validation",
+      "name": "Create calendar",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/calendars",
+      "status": 200,
+      "assertions": 2,
+      "failures": []
+    },
+    {
+      "folder": "02 - Calendar CRUD and validation",
+      "name": "List calendars - filter/search/pagination",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/calendars?classId={{classId}}&search=Postman&page=0&size=10&sort=id,desc",
+      "status": 200,
+      "assertions": 3,
+      "failures": []
+    },
+    {
+      "folder": "02 - Calendar CRUD and validation",
+      "name": "Get calendar",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/calendars/{{calendarId}}",
+      "status": 200,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "02 - Calendar CRUD and validation",
+      "name": "Update calendar + ignore managed activeVersionId",
+      "method": "PUT",
+      "url": "{{baseUrl}}/api/calendars/{{calendarId}}",
+      "status": 200,
+      "assertions": 2,
+      "failures": []
+    },
+    {
+      "folder": "02 - Calendar CRUD and validation",
+      "name": "No active version -> empty events",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/calendars/{{calendarId}}/events",
+      "status": 200,
+      "assertions": 2,
+      "failures": []
+    },
+    {
+      "folder": "02 - Calendar CRUD and validation",
+      "name": "Duplicate class calendar -> 409",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/calendars",
+      "status": 409,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "02 - Calendar CRUD and validation",
+      "name": "Missing required fields -> 400",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/calendars",
+      "status": 400,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "02 - Calendar CRUD and validation",
+      "name": "End date before start -> 400",
+      "method": "PUT",
+      "url": "{{baseUrl}}/api/calendars/{{calendarId}}",
+      "status": 400,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "02 - Calendar CRUD and validation",
+      "name": "Cannot change classId -> 400",
+      "method": "PUT",
+      "url": "{{baseUrl}}/api/calendars/{{calendarId}}",
+      "status": 400,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "02 - Calendar CRUD and validation",
+      "name": "Missing calendar -> 404",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/calendars/{{missingId}}",
+      "status": 404,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "03 - Draft version and sessions",
+      "name": "Create draft version",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/calendar-versions",
+      "status": 200,
+      "assertions": 2,
+      "failures": []
+    },
+    {
+      "folder": "03 - Draft version and sessions",
+      "name": "List versions - filter/search/pagination",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/calendar-versions?calendarId={{calendarId}}&search=Version&page=0&size=10&sort=versionNumber,desc",
+      "status": 200,
+      "assertions": 2,
+      "failures": []
+    },
+    {
+      "folder": "03 - Draft version and sessions",
+      "name": "Get version",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/calendar-versions/{{versionId}}",
+      "status": 200,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "03 - Draft version and sessions",
+      "name": "Update draft; managed fields ignored",
+      "method": "PUT",
+      "url": "{{baseUrl}}/api/calendar-versions/{{versionId}}",
+      "status": 200,
+      "assertions": 2,
+      "failures": []
+    },
+    {
+      "folder": "03 - Draft version and sessions",
+      "name": "Cannot activate empty version -> 400",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/calendar-versions/{{versionId}}/activate",
+      "status": 400,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "03 - Draft version and sessions",
+      "name": "Version missing fields -> 400",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/calendar-versions",
+      "status": 400,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "03 - Draft version and sessions",
+      "name": "Version references missing calendar -> 404",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/calendar-versions",
+      "status": 404,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "03 - Draft version and sessions",
+      "name": "Create session in draft",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/sessions",
+      "status": 200,
+      "assertions": 2,
+      "failures": []
+    },
+    {
+      "folder": "03 - Draft version and sessions",
+      "name": "List sessions for version",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/sessions?calendarVersionId={{versionId}}&page=0&size=10&sort=startTime,asc",
+      "status": 200,
+      "assertions": 2,
+      "failures": []
+    },
+    {
+      "folder": "03 - Draft version and sessions",
+      "name": "Get session",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/sessions/{{sessionId}}",
+      "status": 200,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "03 - Draft version and sessions",
+      "name": "Update draft session",
+      "method": "PUT",
+      "url": "{{baseUrl}}/api/sessions/{{sessionId}}",
+      "status": 200,
+      "assertions": 2,
+      "failures": []
+    },
+    {
+      "folder": "03 - Draft version and sessions",
+      "name": "Session missing version -> 400",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/sessions",
+      "status": 400,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "03 - Draft version and sessions",
+      "name": "Session outside class dates -> 400",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/sessions",
+      "status": 400,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "03 - Draft version and sessions",
+      "name": "Session end equals start -> 400",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/sessions",
+      "status": 400,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "03 - Draft version and sessions",
+      "name": "Cannot shorten dates across sessions -> 400",
+      "method": "PUT",
+      "url": "{{baseUrl}}/api/calendars/{{calendarId}}",
+      "status": 400,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "03 - Draft version and sessions",
+      "name": "Calendar with version cannot be deleted -> 409",
+      "method": "DELETE",
+      "url": "{{baseUrl}}/api/calendars/{{calendarId}}",
+      "status": 409,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "04 - Activate and active events",
+      "name": "Activate version 1",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/calendar-versions/{{versionId}}/activate",
+      "status": 200,
+      "assertions": 2,
+      "failures": []
+    },
+    {
+      "folder": "04 - Activate and active events",
+      "name": "Read persisted publication time",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/calendar-versions/{{versionId}}",
+      "status": 200,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "04 - Activate and active events",
+      "name": "Activate again - idempotent",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/calendar-versions/{{versionId}}/activate",
+      "status": 200,
+      "assertions": 2,
+      "failures": []
+    },
+    {
+      "folder": "04 - Activate and active events",
+      "name": "Calendar points to active version",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/calendars/{{calendarId}}",
+      "status": 200,
+      "assertions": 2,
+      "failures": []
+    },
+    {
+      "folder": "04 - Activate and active events",
+      "name": "Events from active version",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/calendars/{{calendarId}}/events",
+      "status": 200,
+      "assertions": 2,
+      "failures": []
+    },
+    {
+      "folder": "04 - Activate and active events",
+      "name": "Overlap query includes session",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/calendars/{{calendarId}}/events?from=2026-10-20T09:00:00&to=2026-10-20T10:00:00",
+      "status": 200,
+      "assertions": 2,
+      "failures": []
+    },
+    {
+      "folder": "04 - Activate and active events",
+      "name": "Exclusive time boundary excludes session",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/calendars/{{calendarId}}/events?from=2026-10-20T11:00:00",
+      "status": 200,
+      "assertions": 2,
+      "failures": []
+    },
+    {
+      "folder": "04 - Activate and active events",
+      "name": "Invalid event range -> 400",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/calendars/{{calendarId}}/events?from=2026-10-20T11:00:00&to=2026-10-20T08:00:00",
+      "status": 400,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "04 - Activate and active events",
+      "name": "Published version cannot be updated -> 409",
+      "method": "PUT",
+      "url": "{{baseUrl}}/api/calendar-versions/{{versionId}}",
+      "status": 409,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "04 - Activate and active events",
+      "name": "Published version cannot be deleted -> 409",
+      "method": "DELETE",
+      "url": "{{baseUrl}}/api/calendar-versions/{{versionId}}",
+      "status": 409,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "04 - Activate and active events",
+      "name": "Cannot add session to published version -> 409",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/sessions",
+      "status": 409,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "04 - Activate and active events",
+      "name": "Cannot edit published session -> 409",
+      "method": "PUT",
+      "url": "{{baseUrl}}/api/sessions/{{sessionId}}",
+      "status": 409,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "04 - Activate and active events",
+      "name": "Cannot delete published session -> 409",
+      "method": "DELETE",
+      "url": "{{baseUrl}}/api/sessions/{{sessionId}}",
+      "status": 409,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "05 - Clone, replace and cancel",
+      "name": "Clone version 1 -> 201",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/calendar-versions/{{versionId}}/clone",
+      "status": 201,
+      "assertions": 2,
+      "failures": []
+    },
+    {
+      "folder": "05 - Clone, replace and cancel",
+      "name": "Read cloned session with new ID",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/sessions?calendarVersionId={{cloneVersionId}}",
+      "status": 200,
+      "assertions": 2,
+      "failures": []
+    },
+    {
+      "folder": "05 - Clone, replace and cancel",
+      "name": "Edit cloned session",
+      "method": "PUT",
+      "url": "{{baseUrl}}/api/sessions/{{cloneSessionId}}",
+      "status": 200,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "05 - Clone, replace and cancel",
+      "name": "Original session unaffected",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/sessions/{{sessionId}}",
+      "status": 200,
+      "assertions": 2,
+      "failures": []
+    },
+    {
+      "folder": "05 - Clone, replace and cancel",
+      "name": "Activate cloned version",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/calendar-versions/{{cloneVersionId}}/activate",
+      "status": 200,
+      "assertions": 2,
+      "failures": []
+    },
+    {
+      "folder": "05 - Clone, replace and cancel",
+      "name": "Previous version becomes INACTIVE",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/calendar-versions/{{versionId}}",
+      "status": 200,
+      "assertions": 2,
+      "failures": []
+    },
+    {
+      "folder": "05 - Clone, replace and cancel",
+      "name": "Events now belong to cloned version",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/calendars/{{calendarId}}/events",
+      "status": 200,
+      "assertions": 2,
+      "failures": []
+    },
+    {
+      "folder": "05 - Clone, replace and cancel",
+      "name": "Cannot cancel historical session -> 409",
+      "method": "PATCH",
+      "url": "{{baseUrl}}/api/sessions/{{sessionId}}/cancel",
+      "status": 409,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "05 - Clone, replace and cancel",
+      "name": "Cancel requires reason -> 400",
+      "method": "PATCH",
+      "url": "{{baseUrl}}/api/sessions/{{cloneSessionId}}/cancel",
+      "status": 400,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "05 - Clone, replace and cancel",
+      "name": "Cancel active session",
+      "method": "PATCH",
+      "url": "{{baseUrl}}/api/sessions/{{cloneSessionId}}/cancel",
+      "status": 200,
+      "assertions": 2,
+      "failures": []
+    },
+    {
+      "folder": "05 - Clone, replace and cancel",
+      "name": "Cancelled event remains visible",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/calendars/{{calendarId}}/events",
+      "status": 200,
+      "assertions": 2,
+      "failures": []
+    },
+    {
+      "folder": "05 - Clone, replace and cancel",
+      "name": "Cannot cancel twice -> 409",
+      "method": "PATCH",
+      "url": "{{baseUrl}}/api/sessions/{{cloneSessionId}}/cancel",
+      "status": 409,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "06 - Successful deletion on separate draft data",
+      "name": "Create disposable calendar",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/calendars",
+      "status": 200,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "06 - Successful deletion on separate draft data",
+      "name": "Create disposable draft",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/calendar-versions",
+      "status": 200,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "06 - Successful deletion on separate draft data",
+      "name": "Create disposable session",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/sessions",
+      "status": 200,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "06 - Successful deletion on separate draft data",
+      "name": "Delete draft session -> 204",
+      "method": "DELETE",
+      "url": "{{baseUrl}}/api/sessions/{{cleanupSessionId}}",
+      "status": 204,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "06 - Successful deletion on separate draft data",
+      "name": "Deleted session -> 404",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/sessions/{{cleanupSessionId}}",
+      "status": 404,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "06 - Successful deletion on separate draft data",
+      "name": "Create child for cascade test",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/sessions",
+      "status": 200,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "06 - Successful deletion on separate draft data",
+      "name": "Delete draft version -> 204",
+      "method": "DELETE",
+      "url": "{{baseUrl}}/api/calendar-versions/{{cleanupVersionId}}",
+      "status": 204,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "06 - Successful deletion on separate draft data",
+      "name": "Deleted version -> 404",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/calendar-versions/{{cleanupVersionId}}",
+      "status": 404,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "06 - Successful deletion on separate draft data",
+      "name": "Cascade deleted child -> 404",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/sessions/{{cleanupSessionId}}",
+      "status": 404,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "06 - Successful deletion on separate draft data",
+      "name": "Next version number is not reused",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/calendar-versions",
+      "status": 200,
+      "assertions": 2,
+      "failures": []
+    },
+    {
+      "folder": "06 - Successful deletion on separate draft data",
+      "name": "Delete last draft -> 204",
+      "method": "DELETE",
+      "url": "{{baseUrl}}/api/calendar-versions/{{cleanupVersionId}}",
+      "status": 204,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "06 - Successful deletion on separate draft data",
+      "name": "Delete empty calendar -> 204",
+      "method": "DELETE",
+      "url": "{{baseUrl}}/api/calendars/{{cleanupCalendarId}}",
+      "status": 204,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "06 - Successful deletion on separate draft data",
+      "name": "Deleted calendar -> 404",
+      "method": "GET",
+      "url": "{{baseUrl}}/api/calendars/{{cleanupCalendarId}}",
+      "status": 404,
+      "assertions": 1,
+      "failures": []
+    },
+    {
+      "folder": "07 - Known defect - expected 405, currently 500",
+      "name": "Unsupported POST /calendars/import -> expected 405",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/calendars/import",
+      "status": 500,
+      "assertions": 1,
+      "failures": [
+        "HTTP 405: Expected values to be strictly equal:\n\n500 !== 405\n"
+      ]
+    },
+    {
+      "folder": "07 - Known defect - expected 405, currently 500",
+      "name": "Unsupported POST /calendar-versions/import -> expected 405",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/calendar-versions/import",
+      "status": 500,
+      "assertions": 1,
+      "failures": [
+        "HTTP 405: Expected values to be strictly equal:\n\n500 !== 405\n"
+      ]
+    },
+    {
+      "folder": "07 - Known defect - expected 405, currently 500",
+      "name": "Unsupported POST /sessions/import -> expected 405",
+      "method": "POST",
+      "url": "{{baseUrl}}/api/sessions/import",
+      "status": 500,
+      "assertions": 1,
+      "failures": [
+        "HTTP 405: Expected values to be strictly equal:\n\n500 !== 405\n"
+      ]
+    }
+  ]
+}
