@@ -41,6 +41,16 @@ public class ExamController extends BaseCrudController<Long, ExamDTO, ExamFilter
         return ResponseEntity.ok(service.addQuestions(id, req.questionIds()));
     }
 
+    @PutMapping("/{id}/questions")
+    public ResponseEntity<ExamDTO> updateQuestions(
+            @PathVariable Long id,
+            @Valid @RequestBody AddQuestionsRequest req) {
+
+        return ResponseEntity.ok(
+                service.updateQuestions(id, req.questionIds())
+        );
+    }
+
     @DeleteMapping("/{id}/questions/{questionId}")
     public ResponseEntity<ExamDTO> removeQuestion(@PathVariable Long id,
                                                   @PathVariable Long questionId) {

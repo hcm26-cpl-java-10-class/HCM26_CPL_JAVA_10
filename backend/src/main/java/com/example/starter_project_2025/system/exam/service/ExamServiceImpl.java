@@ -76,6 +76,21 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		return examMapper.toResponse(examRepository.save(exam));
 	}
 
+	public ExamDTO updateQuestions(Long examId, List<Long> questionIds) {
+		checkPermission(CrudAction.UPDATE);
+
+		Exam exam = findExam(examId);
+		ValidationContext context = new ValidationContext();
+
+		Set<Question> questions = resolveQuestions(questionIds, context);
+		context.throwIfErrors();
+
+		exam.setQuestions(questions);
+
+		Exam saved = examRepository.save(exam);
+		return examMapper.toResponse(saved);
+	}
+
 	// ===== DELETE /api/exams/{id}/questions/{questionId} =====
 	public ExamDTO removeQuestion(Long examId, Long questionId) {
 		checkPermission(CrudAction.UPDATE);

@@ -23,13 +23,4 @@ public class QuestionController extends BaseCrudController<Long, QuestionDTO, Qu
     @Override
     protected BaseCrudService<Long, QuestionDTO, QuestionFilter> getService() { return service; }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<QuestionDTO> updateQuestion(
-            @PathVariable Long id,
-            @Valid @RequestBody QuestionDTO dto) {
-
-        QuestionDTO updated = service.update(id, dto);
-
-        return ResponseEntity.ok(updated);
-    }
 }
