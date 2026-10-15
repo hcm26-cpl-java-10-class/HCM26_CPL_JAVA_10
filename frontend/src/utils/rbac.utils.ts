@@ -137,6 +137,10 @@ export const resolveEffectivePermissions = (
       "BOOK_READ",
       "BOOK_UPDATE",
       "BOOK_DELETE",
+      "EXAM_CREATE",
+      "EXAM_READ",
+      "EXAM_UPDATE",
+      "EXAM_DELETE",
     ]);
 
     return uniquePermissions(
