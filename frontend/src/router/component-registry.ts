@@ -33,7 +33,7 @@ export const routes: RouteConfig[] = [
     isModuleDriven: true,
   },
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
-  { path: "/student/exams", component: StudentExamList, isModuleDriven: true }, // Route lịch thi mới cho Student
+  { path: "/student/exams", component: StudentExamList,requiredPermission: "EXAM_READ", isModuleDriven: true },
   { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
   ...buildEntityRoutes(),
 
