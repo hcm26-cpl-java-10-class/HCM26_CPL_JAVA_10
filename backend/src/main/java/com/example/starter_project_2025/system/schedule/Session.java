@@ -11,6 +11,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
+import com.example.starter_project_2025.system.schedule.calendar.CalendarVersion;
 
 import java.time.LocalDateTime;
 
@@ -98,4 +99,10 @@ public class Session extends BaseEntity {
     @Column(name = "override_reason", length = 255)
     @ExportField(name = "Override Reason")
     String overrideReason;
+
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "calendar_version_id", nullable = false)
+    CalendarVersion calendarVersion;
+
 }

@@ -72,7 +72,7 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "SESSION_CREATE",
                         "SESSION_READ",
                         "SESSION_UPDATE",
-                        "SESSION_DELETE"
+                        "SESSION_DELETE",
                         "COURSE_DELETE",
                         "LESSON_CREATE",
                         "LESSON_READ",
