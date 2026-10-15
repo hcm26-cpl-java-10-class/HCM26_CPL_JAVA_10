@@ -4,6 +4,7 @@ import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -20,6 +21,7 @@ public class CourseServiceImpl
 
     CourseMapper courseMapper;
     CourseRepository courseRepository;
+    UserRepository userRepository;
 
     @Override
     protected BaseCrudRepository<Course, Long> getRepository() {
@@ -41,6 +43,7 @@ public class CourseServiceImpl
         if (courseRepository.existsByName(request.getName())) {
             ctx.add("name", "Course name already exists");
         }
+        resolveInstructor(course, request);
     }
 
     @Override
@@ -49,6 +52,27 @@ public class CourseServiceImpl
                 !request.getName().equals(course.getName()) &&
                 courseRepository.existsByName(request.getName())) {
             ctx.add("name", "Course name already exists");
+        }
+        resolveInstructor(course, request);
+    }
+
+    /**
+     * Nếu instructorId được cung cấp, tìm user và tự động fill:
+     * - course.instructorUser = user
+     * - course.instructor = user.fullName (nếu instructor string không được set thủ công)
+     */
+    private void resolveInstructor(Course course, CourseDTO request) {
+        if (request.getInstructorId() != null) {
+            userRepository.findById(request.getInstructorId()).ifPresent(user -> {
+                course.setInstructorUser(user);
+                // Auto-fill instructor name from user if not manually provided
+                if (request.getInstructor() == null || request.getInstructor().isBlank()) {
+                    course.setInstructor(user.getFullName());
+                }
+            });
+        } else {
+            // Clear instructor user if no instructorId provided
+            course.setInstructorUser(null);
         }
     }
 }

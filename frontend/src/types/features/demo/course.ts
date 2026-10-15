@@ -5,6 +5,7 @@ export interface CourseDTO extends BaseDTO {
   description?: string;
   thumbnailUrl?: string;
   instructor?: string;
+  instructorId?: number;
 }
 
 export interface CourseFilter extends BaseFilter {}

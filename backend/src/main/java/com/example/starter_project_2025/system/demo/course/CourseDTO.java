@@ -27,4 +27,6 @@ public class CourseDTO extends BaseDTO {
 
     @Size(max = 100, message = "Instructor must not exceed 100 characters")
     String instructor;
+
+    Long instructorId;
 }

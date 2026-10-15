@@ -1,4 +1,5 @@
 import { courseApi, enrollmentApi } from "@/api";
+import { userApi } from "@/api";
 import { AutoCrudPage } from "@/pages/management/AutoCrudPage";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +28,19 @@ const courseSchema: EntitySchema = {
       label: "Instructor",
       type: "text",
       sortable: true,
+      editable: false,
+    },
+    {
+      name: "instructorId",
+      label: "Instructor (User)",
+      type: "relation",
+      sortable: false,
+      visible: false,
+      relation: {
+        api: userApi,
+        valueField: "id",
+        labelField: "email",
+      },
     },
     {
       name: "description",
