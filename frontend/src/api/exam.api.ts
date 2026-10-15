@@ -18,7 +18,8 @@ export interface PageResponse<T> {
 }
 
 export const getStudentExams = async (page = 0, size = 10) => {
-    const response = await api.get<PageResponse<Exam>>('/api/exams', {
+    // Sửa '/api/exams' thành '/exams' để không bị lặp chữ /api
+    const response = await api.get<PageResponse<Exam>>('/exams', {
         params: { page, size }
     });
     return response.data;
