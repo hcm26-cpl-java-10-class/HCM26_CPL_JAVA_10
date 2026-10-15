@@ -1,7 +1,6 @@
 package com.example.starter_project_2025.system.demo.category;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
-import com.example.starter_project_2025.base.dataio.exporter.annotation.ExportEntity;
 import com.example.starter_project_2025.base.dataio.exporter.annotation.ExportField;
 import com.example.starter_project_2025.base.dataio.importer.annotation.ImportField;
 import com.example.starter_project_2025.base.dataio.template.annotation.ImportEntity;
@@ -25,20 +24,19 @@ import lombok.experimental.SuperBuilder;
 @AllArgsConstructor
 @Table(name = "categories")
 @FieldDefaults(level = AccessLevel.PRIVATE)
-@ImportEntity("category")
-@ExportEntity(fileName = "categories", sheetName = "Categories")
 @ResourcePermission("CATEGORY")
+@ImportEntity("category")
 @ResourceMenu(
         title = "Categories",
-        group = "Category Management",
-        icon = "folder",
+        group = "Course Management",
+        icon = "folder-tree",
         url = "/categories",
-        order = 1,
+        order = 2,
         permission = "CATEGORY_READ"
 )
 public class Category extends BaseEntity {
 
-    @Column(unique = true, nullable = false, length = 100)
+    @Column(nullable = false, length = 150)
     @ImportField(name = "Name", required = true)
     @ExportField(name = "Name")
     String name;
@@ -48,7 +46,7 @@ public class Category extends BaseEntity {
     @ExportField(name = "Code")
     String code;
 
-    @Column(length = 255)
+    @Column(length = 500)
     @ImportField(name = "Description")
     @ExportField(name = "Description")
     String description;

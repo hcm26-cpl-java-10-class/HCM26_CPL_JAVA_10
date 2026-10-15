@@ -7,5 +7,5 @@ import java.util.List;
 public interface CategoryService
         extends BaseCrudService<Long, CategoryDTO, CategoryFilter> {
 
-    List<CategoryTreeDTO> getTree(boolean activeOnly);
+    List<CategoryTreeDTO> getTree(boolean onlyActive);
 }

@@ -4,19 +4,21 @@ export interface CategoryDTO extends BaseDTO {
   name?: string;
   code?: string;
   description?: string;
-  /** null / undefined = root category */
   parentId?: number | null;
   parentName?: string;
 }
 
-export interface CategoryFilter extends BaseFilter {}
+export interface CategoryFilter extends BaseFilter {
+  parentId?: number;
+  code?: string;
+}
 
-export interface CategoryTreeNode {
+export interface CategoryTreeDTO {
   id: number;
   name: string;
   code: string;
   description?: string;
-  isActive: boolean;
+  isActive?: boolean;
   parentId?: number | null;
-  children: CategoryTreeNode[];
+  children: CategoryTreeDTO[];
 }

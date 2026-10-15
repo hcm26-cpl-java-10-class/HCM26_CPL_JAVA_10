@@ -8,11 +8,9 @@ export * from "./common/registry";
 
 // Feature-specific types
 export * from "./features/auth";
-export * from "./features/category";
 export * from "./features/demo/book";
 export * from "./features/demo/course";
 export * from "./features/demo/enrollment";
-export * from "./features/demo/progress";
 export * from "./features/demo/student_score";
 export * from "./features/demo/topic_mark_gradebook";
 export * from "./features/menu/module";
@@ -20,3 +18,4 @@ export * from "./features/menu/module_group";
 export * from "./features/rbac/permission";
 export * from "./features/rbac/role";
 export * from "./features/rbac/user";
+export * from "./features/demo/category";

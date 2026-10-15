@@ -100,8 +100,6 @@ export interface RelationConfig {
   labelField: string;
 
   multiple?: boolean;
-
-  clearable?: boolean;
 }
 
 export interface DynamicFieldBuilderOptions {

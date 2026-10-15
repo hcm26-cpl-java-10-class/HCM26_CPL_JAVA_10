@@ -8,11 +8,11 @@ import java.util.Optional;
 @Repository
 public interface CategoryRepository extends BaseCrudRepository<Category, Long> {
 
-    boolean existsByNameIgnoreCase(String name);
-
     boolean existsByCodeIgnoreCase(String code);
 
-    boolean existsByParent_Id(Long parentId);
+    boolean existsByCodeIgnoreCaseAndIdNot(String code, Long id);
+
+    boolean existsByParentId(Long parentId);
 
     Optional<Category> findByCodeIgnoreCase(String code);
 }

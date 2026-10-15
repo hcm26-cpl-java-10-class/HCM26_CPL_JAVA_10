@@ -11,9 +11,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Seeds sample course categories (idempotent: matched by code, never overwrites existing rows).
- */
+/** Seed danh mục mẫu (idempotent: khớp theo code). */
 @Slf4j
 @Order(12)
 @Component
@@ -26,52 +24,33 @@ public class CategoryDataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
+        Category programming = upsert("PROGRAMMING", "Programming", "Software development courses", null);
+        upsert("WEB_DEV", "Web Development", "Frontend, backend and full-stack web", programming);
+        upsert("MOBILE_DEV", "Mobile Development", "Android, iOS and cross-platform apps", programming);
+        upsert("JAVA", "Java", "Java language and the Spring ecosystem", programming);
 
-        // ---- Roots ----
-        Category programming = seed("PROGRAMMING", "Programming", "Software development courses", null);
-        Category design = seed("DESIGN", "Design", "Design and creative courses", null);
-        Category business = seed("BUSINESS", "Business", "Business and management courses", null);
-        Category language = seed("LANGUAGE", "Language", "Foreign language courses", null);
-        Category dataAi = seed("DATA_AI", "Data & AI", "Data analysis and artificial intelligence", null);
+        Category data = upsert("DATA_AI", "Data & AI", "Data analysis and artificial intelligence", null);
+        upsert("MACHINE_LEARNING", "Machine Learning", "Classical ML and deep learning", data);
+        upsert("DATA_ANALYSIS", "Data Analysis", "SQL, statistics and visualization", data);
 
-        // ---- Programming ----
-        seed("WEB_DEV", "Web Development", "HTML, CSS, JavaScript, React and more", programming);
-        seed("MOBILE_DEV", "Mobile Development", "Android, iOS and cross-platform apps", programming);
-        seed("JAVA", "Java", "Java core and Spring Boot", programming);
-        seed("PYTHON", "Python", "Python programming and scripting", programming);
-        seed("DATABASE", "Database", "SQL, database design and administration", programming);
+        Category design = upsert("DESIGN", "Design", "Visual and product design", null);
+        upsert("UI_UX", "UI/UX Design", "User interface and experience design", design);
 
-        // ---- Design ----
-        seed("UI_UX", "UI/UX Design", "User interface and user experience design", design);
-        seed("GRAPHIC_DESIGN", "Graphic Design", "Photoshop, Illustrator and visual design", design);
-        seed("VIDEO_EDITING", "Video Editing", "Video production and editing", design);
+        Category business = upsert("BUSINESS", "Business", "Business and soft skills", null);
+        upsert("MARKETING", "Marketing", "Digital marketing and branding", business);
 
-        // ---- Business ----
-        seed("MARKETING", "Marketing", "Digital marketing and branding", business);
-        seed("MANAGEMENT", "Management", "Leadership and project management", business);
-        seed("FINANCE", "Finance", "Accounting and personal finance", business);
+        upsert("LANGUAGE", "Languages", "Foreign language learning", null);
 
-        // ---- Language ----
-        seed("ENGLISH", "English", "English communication and exam preparation", language);
-        seed("JAPANESE", "Japanese", "Japanese language and JLPT", language);
-        seed("KOREAN", "Korean", "Korean language and TOPIK", language);
-
-        // ---- Data & AI ----
-        seed("DATA_ANALYSIS", "Data Analysis", "Excel, Power BI and data visualization", dataAi);
-        seed("MACHINE_LEARNING", "Machine Learning", "Machine learning and deep learning", dataAi);
-
-        log.info("Ensured sample course categories.");
+        log.info("Ensured sample categories.");
     }
 
-    private Category seed(String code, String name, String description, Category parent) {
-
-        return categoryRepository.findByCodeIgnoreCase(code).orElseGet(() ->
-                categoryRepository.save(Category.builder()
-                        .code(code)
-                        .name(name)
-                        .description(description)
-                        .parent(parent)
-                        .isActive(true)
-                        .build()));
+    private Category upsert(String code, String name, String description, Category parent) {
+        Category category = categoryRepository.findByCodeIgnoreCase(code).orElseGet(Category::new);
+        category.setCode(code);
+        category.setName(name);
+        category.setDescription(description);
+        category.setParent(parent);
+        category.setIsActive(true);
+        return categoryRepository.save(category);
     }
 }

@@ -40,7 +40,8 @@ public class RoleDataInitializer implements CommandLineRunner {
         upsertRole(
                 ADMIN_ROLE,
                 "Administrator with full system access",
-                allPermissions);
+                allPermissions
+        );
 
         upsertRole(
                 STUDENT_ROLE,
@@ -50,10 +51,9 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "BOOK_READ",
                         "COURSE_READ",
                         "ENROLLMENT_READ",
-                        "ENROLLMENT_CREATE",
-                        "CATEGORY_READ",
-                        "LESSON_PROGRESS_READ",
-                        "LESSON_PROGRESS_UPDATE"));
+                        "ENROLLMENT_CREATE"
+                )
+        );
 
 
         upsertRole(
