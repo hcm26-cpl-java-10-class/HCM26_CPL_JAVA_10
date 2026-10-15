@@ -18,4 +18,8 @@ public class QuestionFilter extends BaseFilter {
 
     @FilterField(entityField = "topic")
     private String topic;
+
+    public void setTopic(String topic) {
+        this.topic = (topic == null || topic.isBlank()) ? null : topic.trim().toLowerCase();
+    }
 }

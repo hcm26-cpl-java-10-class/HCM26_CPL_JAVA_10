@@ -14,8 +14,12 @@ import java.util.Set;
 @Component
 public class QuestionValidator {
 
-    // ===== P1 =====
     public void validateForCreate(QuestionDTO r, ValidationContext ctx) {
+        if (r.getType() == QuestionType.ESSAY) {
+            rejectOptionsForEssay(r.getOptions(), ctx);
+            return;
+        }
+
         if (r.getOptions() == null) {
             ctx.add("options", "Cần cung cấp danh sách đáp án");
             return;
@@ -23,13 +27,17 @@ public class QuestionValidator {
         validateOptions(r.getType(), r.getOptions(), ctx);
     }
 
-    // ===== P3 =====
     public void validateForUpdate(Question existing, QuestionDTO r, ValidationContext ctx) {
         QuestionType type = r.getType() != null ? r.getType() : existing.getType();
         List<OptionDTO> options = r.getOptions();
 
+        if (type == QuestionType.ESSAY) {
+            rejectOptionsForEssay(options, ctx);
+            return;
+        }
+
         if (options == null) {
-            if (r.getType() == null) return;   // không đổi loại, không đổi đáp án
+            if (r.getType() == null) return;
             options = existing.getOptions().stream().map(o -> {
                 OptionDTO d = new OptionDTO();
                 d.setContent(o.getContent());
@@ -40,7 +48,12 @@ public class QuestionValidator {
         validateOptions(type, options, ctx);
     }
 
-    // ===== Dùng chung =====
+    private void rejectOptionsForEssay(List<OptionDTO> options, ValidationContext ctx) {
+        if (options != null && !options.isEmpty()) {
+            ctx.add("options", "Câu tự luận không có đáp án, không gửi danh sách đáp án");
+        }
+    }
+
     private void validateOptions(QuestionType type, List<OptionDTO> options, ValidationContext ctx) {
         if (options.size() < 2 || options.size() > 6) {
             ctx.add("options", "Số đáp án phải từ 2 đến 6");
