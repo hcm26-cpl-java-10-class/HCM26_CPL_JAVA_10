@@ -39,7 +39,8 @@ public class QuestionServiceImpl
 
     @Override
     protected void beforeUpdate(Question entity, QuestionDTO request, ValidationContext ctx) {
-        validator.validateForUpdate(entity, request, ctx);
+        boolean inUse = examRepository.existsByQuestions_Id(entity.getId());
+        validator.validateForUpdate(entity, request, inUse, ctx);
     }
 
 

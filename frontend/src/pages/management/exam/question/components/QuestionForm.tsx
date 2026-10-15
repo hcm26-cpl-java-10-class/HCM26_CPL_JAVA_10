@@ -119,6 +119,7 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel }:
                 <div className="grid gap-2">
                     <Label>Type</Label>
                     <Select
+                        key={form.type}
                         value={form.type}
                         onValueChange={(value) =>
                             setForm((prev) => ({
@@ -144,6 +145,7 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel }:
                 <div className="grid gap-2">
                     <Label>Difficulty</Label>
                     <Select
+                        key={form.difficulty}
                         value={form.difficulty}
                         onValueChange={(value) =>
                             setForm((prev) => ({ ...prev, difficulty: value as QuestionDifficulty }))

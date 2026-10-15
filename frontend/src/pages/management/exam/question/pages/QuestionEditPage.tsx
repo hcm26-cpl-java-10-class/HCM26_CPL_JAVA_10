@@ -8,7 +8,9 @@ import { toast } from "sonner";
 import { initialQuestionForm, QuestionForm, type QuestionFormValues } from "../components/QuestionForm";
 
 function getErrorMessage(error: any, fallback: string): string {
-    return error?.response?.data?.message || fallback;
+    const data = error?.response?.data;
+    const firstFieldError = data?.errors ? (Object.values(data.errors).flat()[0] as string | undefined) : undefined;
+    return firstFieldError || data?.message || fallback;
 }
 
 export function QuestionEditPage() {

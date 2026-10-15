@@ -7,6 +7,11 @@ import com.example.starter_project_2025.system.question.domain.QuestionType;
 import com.example.starter_project_2025.system.question.dto.QuestionDTO;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 @Component
 public class QuestionMapper implements BaseCrudMapper<Question, QuestionDTO> {
 
@@ -60,14 +65,22 @@ public class QuestionMapper implements BaseCrudMapper<Question, QuestionDTO> {
         if (q.getType() == QuestionType.ESSAY) {
             q.getOptions().clear();
         } else if (d.getOptions() != null) {
-            q.getOptions().clear();               // orphanRemoval sẽ xóa đáp án cũ
+            Map<Long, QuestionOption> existing = new HashMap<>();
+            q.getOptions().forEach(o -> existing.put(o.getId(), o));
+
+            List<QuestionOption> kept = new ArrayList<>();
             for (QuestionDTO.OptionDTO od : d.getOptions()) {
-                QuestionOption o = new QuestionOption();
+                QuestionOption o = od.getId() == null ? null : existing.get(od.getId());
+                if (o == null) {
+                    o = new QuestionOption();
+                    o.setQuestion(q);
+                    q.getOptions().add(o);
+                }
                 o.setContent(od.getContent().trim());
                 o.setCorrect(od.isCorrect());
-                o.setQuestion(q);
-                q.getOptions().add(o);
+                kept.add(o);
             }
+            q.getOptions().removeIf(o -> kept.stream().noneMatch(k -> k == o)); // orphanRemoval xóa đáp án không còn
         }
     }
 }

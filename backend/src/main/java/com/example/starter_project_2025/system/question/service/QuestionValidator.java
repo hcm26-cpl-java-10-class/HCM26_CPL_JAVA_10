@@ -2,13 +2,16 @@ package com.example.starter_project_2025.system.question.service;
 
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.system.question.domain.Question;
+import com.example.starter_project_2025.system.question.domain.QuestionOption;
 import com.example.starter_project_2025.system.question.domain.QuestionType;
 import com.example.starter_project_2025.system.question.dto.QuestionDTO;
 import com.example.starter_project_2025.system.question.dto.QuestionDTO.OptionDTO;
 import org.springframework.stereotype.Component;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Component
@@ -27,13 +30,29 @@ public class QuestionValidator {
         validateOptions(r.getType(), r.getOptions(), ctx);
     }
 
-    public void validateForUpdate(Question existing, QuestionDTO r, ValidationContext ctx) {
+    public void validateForUpdate(Question existing, QuestionDTO r, boolean inUse, ValidationContext ctx) {
         QuestionType type = r.getType() != null ? r.getType() : existing.getType();
         List<OptionDTO> options = r.getOptions();
+
+        if (inUse) {
+            if (r.getType() != null && r.getType() != existing.getType()) {
+                ctx.add("type", "Câu hỏi đang nằm trong đề thi, không thể đổi loại câu hỏi");
+            }
+            if (r.getPoints() != null && r.getPoints() != existing.getPoints()) {
+                ctx.add("points", "Câu hỏi đang nằm trong đề thi, không thể đổi điểm");
+            }
+        }
 
         if (type == QuestionType.ESSAY) {
             rejectOptionsForEssay(options, ctx);
             return;
+        }
+
+        if (options != null) {
+            validateOptionIds(existing, options, ctx);
+            if (inUse && optionsChanged(existing, options)) {
+                ctx.add("options", "Câu hỏi đang nằm trong đề thi, không thể sửa đáp án");
+            }
         }
 
         if (options == null) {
@@ -46,6 +65,33 @@ public class QuestionValidator {
             }).toList();
         }
         validateOptions(type, options, ctx);
+    }
+
+    private void validateOptionIds(Question existing, List<OptionDTO> options, ValidationContext ctx) {
+        Set<Long> valid = new HashSet<>();
+        existing.getOptions().forEach(o -> valid.add(o.getId()));
+        Set<Long> used = new HashSet<>();
+        for (OptionDTO o : options) {
+            if (o.getId() == null) continue;
+            if (!valid.contains(o.getId())) {
+                ctx.add("options", "Đáp án " + o.getId() + " không thuộc câu hỏi này");
+            } else if (!used.add(o.getId())) {
+                ctx.add("options", "Đáp án " + o.getId() + " bị lặp");
+            }
+        }
+    }
+
+    private boolean optionsChanged(Question existing, List<OptionDTO> options) {
+        if (options.size() != existing.getOptions().size()) return true;
+        Map<Long, QuestionOption> byId = new HashMap<>();
+        existing.getOptions().forEach(o -> byId.put(o.getId(), o));
+        for (OptionDTO d : options) {
+            QuestionOption o = d.getId() == null ? null : byId.get(d.getId());
+            if (o == null) return true;
+            String content = d.getContent() == null ? "" : d.getContent().trim();
+            if (!content.equals(o.getContent()) || d.isCorrect() != o.isCorrect()) return true;
+        }
+        return false;
     }
 
     private void rejectOptionsForEssay(List<OptionDTO> options, ValidationContext ctx) {
