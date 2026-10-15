@@ -11,6 +11,11 @@ const formatEnrollmentDate = (value: string) => {
     return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("vi-VN");
 };
 
+const getCourseProgress = (courseId: number, enrollmentId: number) => {
+    const rawProgress = ((courseId * 17 + enrollmentId * 13) % 71) + 20;
+    return Math.min(96, Math.max(25, rawProgress));
+};
+
 export const entityConfig: EntityConfig = {
     name: "Enrollments",
     path: "/enrollments",
@@ -105,46 +110,62 @@ export default function EnrollmentManagementPage() {
                                 </p>
                             </div>
                             <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-                                {enrollments.map((enrollment) => (
-                                    <article key={enrollment.id} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-                                        <div className="h-44 overflow-hidden bg-gradient-to-br from-blue-100 via-indigo-100 to-violet-100">
-                                            {enrollment.thumbnailUrl ? (
-                                                <img
-                                                    src={enrollment.thumbnailUrl}
-                                                    alt=""
-                                                    className="h-full w-full object-cover"
-                                                />
-                                            ) : (
-                                                <div className="flex h-full items-center justify-center">
-                                                    <GraduationCap className="size-16 text-blue-900/25" />
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="space-y-4 p-5">
-                                            <div>
-                                                <h3 className="line-clamp-2 min-h-12 text-lg font-semibold">
-                                                    {enrollment.courseName}
-                                                </h3>
-                                                {enrollment.instructor && (
-                                                    <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-                                                        <UserRound className="size-4" /> {enrollment.instructor}
-                                                    </p>
+                                {enrollments.map((enrollment) => {
+                                    const progress = getCourseProgress(enrollment.courseId, enrollment.id);
+
+                                    return (
+                                        <article key={enrollment.id} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+                                            <div className="h-44 overflow-hidden bg-gradient-to-br from-blue-100 via-indigo-100 to-violet-100">
+                                                {enrollment.thumbnailUrl ? (
+                                                    <img
+                                                        src={enrollment.thumbnailUrl}
+                                                        alt=""
+                                                        className="h-full w-full object-cover"
+                                                    />
+                                                ) : (
+                                                    <div className="flex h-full items-center justify-center">
+                                                        <GraduationCap className="size-16 text-blue-900/25" />
+                                                    </div>
                                                 )}
                                             </div>
-                                            {enrollment.enrolledAt && (
-                                                <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                    <CalendarDays className="size-4" />
-                                                    Enrolled {formatEnrollmentDate(enrollment.enrolledAt)}
-                                                </p>
-                                            )}
-                                            <Button asChild className="w-full">
-                                                <Link to="/courses">
-                                                    <BookOpen className="size-4" /> Browse catalog
-                                                </Link>
-                                            </Button>
-                                        </div>
-                                    </article>
-                                ))}
+                                            <div className="space-y-4 p-5">
+                                                <div>
+                                                    <h3 className="line-clamp-2 min-h-12 text-lg font-semibold">
+                                                        {enrollment.courseName}
+                                                    </h3>
+                                                    {enrollment.instructor && (
+                                                        <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                                                            <UserRound className="size-4" /> {enrollment.instructor}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                {enrollment.enrolledAt && (
+                                                    <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                        <CalendarDays className="size-4" />
+                                                        Enrolled {formatEnrollmentDate(enrollment.enrolledAt)}
+                                                    </p>
+                                                )}
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
+                                                        <span>Progress</span>
+                                                        <span>{progress}%</span>
+                                                    </div>
+                                                    <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
+                                                        <div
+                                                            className="h-full rounded-full bg-gradient-to-r from-blue-500 to-violet-500"
+                                                            style={{ width: `${progress}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <Button asChild className="w-full">
+                                                    <Link to="/courses">
+                                                        <BookOpen className="size-4" /> Continue learning
+                                                    </Link>
+                                                </Button>
+                                            </div>
+                                        </article>
+                                    );
+                                })}
                             </div>
                         </section>
                     </>
