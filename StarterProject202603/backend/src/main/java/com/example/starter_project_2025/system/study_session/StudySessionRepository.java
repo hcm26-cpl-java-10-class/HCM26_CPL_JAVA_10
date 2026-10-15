@@ -5,4 +5,6 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface StudySessionRepository extends BaseCrudRepository<StudySession, Long> {
+
+	boolean existsBySubjectId(Long subjectId);
 }
