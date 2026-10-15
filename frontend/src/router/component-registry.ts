@@ -12,6 +12,8 @@ import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 
+import WeeklyCalendarPage from "@/pages/management/calendar/WeeklyCalendarPage";
+
 export interface RouteConfig {
   path: string;
   component: ComponentType<any>;
@@ -21,6 +23,14 @@ export interface RouteConfig {
 }
 
 export const routes: RouteConfig[] = [
+
+  {
+  path: "/calendar/preview",
+  component: WeeklyCalendarPage,
+  requiredPermission: "SESSION_READ",
+  isModuleDriven: false,
+},
+
   { path: "/dashboard", component: Dashboard, isModuleDriven: true },
   {
     path: "/topic-marks/gradebook-demo",
