@@ -1,26 +1,26 @@
-# CLASS DIAGRAM - IDENTITY & ACCESS MANAGEMENT 
-
-Sơ đồ Lớp hệ thống Quản lý Người dùng, Phòng ban và Phân quyền 
-
 ```mermaid
 classDiagram
     %% ==========================================
-    %% 1. ENTITIES LAYER (DOMAINS / DATABASE)
+    %% 1. ENTITIES LAYER (USER & IAM SCOPE ONLY)
     %% ==========================================
     class User {
         -id: UUID
         -username: String
         -email: String
+        -employeeCode: String
+        -fullName: String
         -passwordHash: String
-        -departmentId: UUID
+        -primaryDepartmentId: UUID
         -status: UserStatus
+        -lastLoginAt: Instant
         -createdAt: Instant
         -updatedAt: Instant
         -deletedAt: Instant
-        +lock(reason)
-        +unlock()
-        +changePassword(hash)
-        +isLocked(): bool
+        +activate()
+        +suspend(reason: String)
+        +deactivate()
+        +changePassword(hash: String)
+        +isActive(): bool
     }
 
     class Department {
@@ -28,9 +28,16 @@ classDiagram
         -code: String
         -name: String
         -parentDepartmentId: UUID
-        -status: String
+        -status: CommonStatus
         +getParent(): Department
-        +getChildren(): List~Department~
+        +getChildren(): Department[]
+    }
+
+    class UserDepartment {
+        -id: UUID
+        -userId: UUID
+        -departmentId: UUID
+        -assignedAt: Instant
     }
 
     class UserRole {
@@ -41,15 +48,18 @@ classDiagram
         -scopeId: UUID
         -effectiveFrom: Date
         -effectiveTo: Date
-        +isEffective(at): bool
+        +isEffective(at: Date): bool
     }
 
     class Role {
         -id: UUID
         -code: String
         -name: String
-        +addPermission(p)
-        +removePermission(p)
+        -description: String
+        -isSystem: Boolean
+        -status: CommonStatus
+        +addPermission(p: Permission)
+        +removePermission(p: Permission)
     }
 
     class UserPermission {
@@ -59,24 +69,24 @@ classDiagram
         -isGranted: Boolean
     }
 
+    class RolePermission {
+        -id: UUID
+        -roleId: UUID
+        -permissionId: UUID
+    }
+
     class Permission {
         -id: UUID
         -code: String
+        -resource: String
+        -action: CrudAction
         -description: String
-        -moduleId: UUID
-    }
-
-    class Module {
-        -id: UUID
-        -code: String
-        -name: String
-        -route: String
-        -icon: String
-        -orderNo: Integer
+        -active: Boolean
     }
 
     class AuthSession {
         -id: UUID
+        -userId: UUID
         -tokenHash: String
         -issuedAt: Instant
         -expiresAt: Instant
@@ -87,6 +97,7 @@ classDiagram
 
     class PasswordResetToken {
         -id: UUID
+        -userId: UUID
         -tokenHash: String
         -expiresAt: Instant
         -usedAt: Instant
@@ -107,9 +118,25 @@ classDiagram
 
     class UserStatus {
         <<enumeration>>
+        INVITED
         ACTIVE
-        LOCKED
+        SUSPENDED
+        DEACTIVATED
+    }
+
+    class CommonStatus {
+        <<enumeration>>
+        ACTIVE
         INACTIVE
+    }
+
+    class CrudAction {
+        <<enumeration>>
+        VIEW
+        CREATE
+        UPDATE
+        DELETE
+        APPROVE
     }
 
     %% ==========================================
@@ -117,46 +144,49 @@ classDiagram
     %% ==========================================
     class DepartmentService {
         +createDepartment(dto): Department
-        +getDepartmentTree(): List~DepartmentDTO~
-        +assignUserDepartment(userId, deptId): bool
+        +getDepartmentTree(): DepartmentDTO[]
+        +assignUserDepartments(userId, deptIds): bool
     }
 
     class AuthorizationService {
         +hasPermission(user, code): bool
         +canAccessScope(user, type, id): bool
-        +getEffectiveRoles(user): List
-        +getUserAccessibleModules(user): List~Module~
+        +getEffectiveRoles(user): Role[]
     }
 
     %% ==========================================
     %% 3. ENTITY RELATIONSHIPS
     %% ==========================================
-    Department "0..1" <-- "0..*" Department : parent / children
-    User "0..*" -- "1" Department : belongs to
+    Department "0..*" --> "0..1" Department : parent
+
+    User "0..*" --> "0..1" Department : primary department
+    User "1" --> "0..*" UserDepartment : assigns
+    UserDepartment "0..*" --> "1" Department : belongs to
     
-    User "1" -- "0..*" UserRole
-    UserRole "0..*" -- "1" Role
+    User "1" --> "0..*" UserRole : has
+    UserRole "0..*" --> "1" Role : assigned
     
-    User "1" -- "0..*" UserPermission : direct permissions
-    UserPermission "0..*" -- "1" Permission
+    User "1" --> "0..*" UserPermission : direct permissions
+    UserPermission "0..*" --> "1" Permission : grants
     
-    Role "0..*" -- "0..*" Permission : RolePermission
-    Permission "0..*" -- "1" Module : maps to UI route
+    Role "1" --> "0..*" RolePermission : has
+    RolePermission "0..*" --> "1" Permission : grants
     
-    User "1" -- "0..*" AuthSession
-    User "1" -- "0..*" PasswordResetToken
-    User "1" -- "0..*" AuditLog : actor
+    User "1" --> "0..*" AuthSession : owns
+    User "1" --> "0..*" PasswordResetToken : owns
+    User "1" --> "0..*" AuditLog : actor
     User --> UserStatus
+    Department --> CommonStatus
+    Role --> CommonStatus
+    Permission --> CrudAction
 
     %% ==========================================
     %% 4. SERVICE DEPENDENCY RELATIONSHIPS
     %% ==========================================
     DepartmentService ..> Department : manages
-    DepartmentService ..> User : assigns department
+    DepartmentService ..> UserDepartment : assigns
     
-    AuthorizationService ..> User : checks perms for
+    AuthorizationService ..> User : checks perms
     AuthorizationService ..> UserRole : reads roles
-    AuthorizationService ..> UserPermission : reads direct perms
-    AuthorizationService ..> Permission : validates codes
-    AuthorizationService ..> Module : gets UI routes
-```
+    AuthorizationService ..> UserPermission : reads perms
+    AuthorizationService ..> Permission : validates
