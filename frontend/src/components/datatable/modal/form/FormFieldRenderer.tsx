@@ -134,7 +134,9 @@ export function FormFieldRenderer({
           <Label htmlFor={field.name}>{field.label}</Label>
           <Select
             value={value?.toString() || ""}
-            onValueChange={(val) => onChange(field.name, val)}
+            onValueChange={(val) =>
+              onChange(field.name, val === "__none__" ? null : val)
+            }
           >
             <SelectTrigger className={errorClass}>
               <SelectValue
@@ -142,6 +144,9 @@ export function FormFieldRenderer({
               />
             </SelectTrigger>
             <SelectContent>
+              {rel.clearable && (
+                <SelectItem value="__none__">— None —</SelectItem>
+              )}
               {items.map((item) => (
                 <SelectItem
                   key={item[rel.valueField]}
