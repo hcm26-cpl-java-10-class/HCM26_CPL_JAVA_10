@@ -5,4 +5,6 @@ import com.example.starter_project_2025.system.schedule.dto.ConflictCheckRespons
 
 public interface SessionService extends BaseCrudService<Long, SessionDTO, SessionFilter> {
     ConflictCheckResponse checkConflict(SessionDTO request, Long excludeId);
+
+    SessionDTO changeStatus(Long id, SessionStatus status);
 }

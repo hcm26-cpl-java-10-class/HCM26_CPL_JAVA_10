@@ -1,9 +1,11 @@
 package com.example.starter_project_2025.system.schedule;
 
+import com.example.starter_project_2025.base.crud.CrudAction;
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.schedule.dto.ConflictCheckResponse;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -139,6 +141,20 @@ public class SessionServiceImpl
                 .message(cause)
                 .conflictingSessions(conflicts.stream().map(sessionMapper::toResponse).toList())
                 .build();
+    }
+
+    @Override
+    public SessionDTO changeStatus(Long id, SessionStatus status) {
+
+        checkPermission(CrudAction.UPDATE);
+
+        Session session = sessionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Session not found: " + id));
+
+        session.setStatus(status);
+
+        Session saved = sessionRepository.save(session);
+        return sessionMapper.toResponse(saved);
     }
 
     private String buildConflictDescription(SessionDTO request, Session conflict) {
