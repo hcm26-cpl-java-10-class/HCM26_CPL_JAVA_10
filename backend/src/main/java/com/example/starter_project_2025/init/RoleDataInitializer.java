@@ -19,15 +19,6 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.CommandLineRunner;
-import org.springframework.core.annotation.Order;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
 
 @Slf4j
 @Order(2)
@@ -58,7 +49,7 @@ public class RoleDataInitializer implements CommandLineRunner {
         upsertRole(
                 STUDENT_ROLE,
                 "Student with read-only access to books",
-                findPermissions("MENU_READ", "BOOK_READ","EXAM_TAKE")
+                findPermissions("MENU_READ", "BOOK_READ", "EXAM_TAKE")
         );
 
         upsertRole(
@@ -68,7 +59,8 @@ public class RoleDataInitializer implements CommandLineRunner {
                 "MENU_READ",
                 "BOOK_CREATE", "BOOK_READ", "BOOK_UPDATE", "BOOK_DELETE",
                 "EXAM_CREATE", "EXAM_READ", "EXAM_UPDATE", "EXAM_DELETE",
-                "QUESTION_CREATE", "QUESTION_READ", "QUESTION_UPDATE", "QUESTION_DELETE"
+                "QUESTION_CREATE", "QUESTION_READ", "QUESTION_UPDATE", "QUESTION_DELETE",
+                "INVITATION_CREATE", "INVITATION_READ", "INVITATION_UPDATE", "INVITATION_DELETE"
             )
 
         );
