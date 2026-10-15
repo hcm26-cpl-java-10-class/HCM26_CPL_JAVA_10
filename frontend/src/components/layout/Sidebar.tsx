@@ -1,7 +1,5 @@
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, useSidebar } from "@/components/ui/sidebar";
-
 import { NavMain } from "@/components/layout/NavMain";
-
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { Button } from "@/components/ui/button";
 import { LogOutIcon } from "lucide-react";
@@ -31,6 +29,18 @@ export function SidebarMenu() {
                 name: group.name ?? "Menu",
                 items: group.modules
                     .filter((module) => !!module.url)
+                    // Temporarily hide standalone "Modules" navigation item under "System Management"
+                    .filter((module) => {
+                        const isUnderSystemManagement =
+                            (group.name || "").toLowerCase().includes("system");
+                        const isModulesMenu =
+                            module.url === "/menus" || (module.title || "").toLowerCase() === "modules";
+
+                        if (isUnderSystemManagement && isModulesMenu) {
+                            return false;
+                        }
+                        return true;
+                    })
                     .map((module) => ({
                         title: module.title ?? "Untitled",
                         url: module.url ?? "#",
