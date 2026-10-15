@@ -1,8 +1,10 @@
-package com.example.starter_project_2025.system.schedule;
+package com.example.starter_project_2025.system.schedule.session.dto;
 
 import com.example.starter_project_2025.base.crud.dto.BaseDTO;
 import com.example.starter_project_2025.base.crud.dto.OnCreate;
+import com.example.starter_project_2025.system.schedule.session.SessionStatus;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -19,18 +21,22 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class SessionDTO extends BaseDTO {
 
-    @NotBlank(groups = OnCreate.class, message = "Class code is required")
-    @Size(max = 60, message = "Class code must not exceed 60 characters")
+    @NotNull(groups = OnCreate.class, message = "Calendar version ID is required")
+    Long calendarVersionId;
+
+    @NotNull(groups = OnCreate.class, message = "Topic ID is required")
+    Long topicId;
+
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     String classCode;
 
-    @Size(max = 120, message = "Topic name must not exceed 120 characters")
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     String topicName;
 
     @NotNull(groups = OnCreate.class, message = "Trainer ID is required")
     Long trainerId;
 
-    @NotBlank(groups = OnCreate.class, message = "Trainer name is required")
-    @Size(max = 100, message = "Trainer name must not exceed 100 characters")
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     String trainerName;
 
     @NotBlank(groups = OnCreate.class, message = "Title is required")
@@ -51,14 +57,9 @@ public class SessionDTO extends BaseDTO {
     @Size(max = 255, message = "Meeting link must not exceed 255 characters")
     String meetingLink;
 
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     SessionStatus status;
 
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     String notes;
-
-    Boolean isOverridden;
-
-    String overrideReason;
-
-    // Field hỗ trợ request override từ Client (BR-10)
-    Boolean forceOverride;
 }
