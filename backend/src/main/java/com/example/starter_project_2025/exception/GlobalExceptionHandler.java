@@ -139,4 +139,22 @@ public class GlobalExceptionHandler {
                 LocalDateTime.now());
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
+
+    @ExceptionHandler(com.example.starter_project_2025.system.external_api.exception.ExternalApiException.class)
+    public ResponseEntity<ErrorResponse> handleExternalApiException(
+            com.example.starter_project_2025.system.external_api.exception.ExternalApiException ex) {
+        log.error("[ExternalAPI] {}", ex.getMessage());
+
+        int status = ex.getStatusCode() > 0 ? ex.getStatusCode() : HttpStatus.SERVICE_UNAVAILABLE.value();
+        HttpStatus httpStatus = HttpStatus.resolve(status);
+        if (httpStatus == null) {
+            httpStatus = HttpStatus.SERVICE_UNAVAILABLE;
+        }
+
+        ErrorResponse error = new ErrorResponse(
+                httpStatus.value(),
+                ex.getMessage(),
+                LocalDateTime.now());
+        return new ResponseEntity<>(error, httpStatus);
+    }
 }
