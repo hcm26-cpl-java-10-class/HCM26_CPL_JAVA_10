@@ -40,8 +40,7 @@ public class RoleDataInitializer implements CommandLineRunner {
         upsertRole(
                 ADMIN_ROLE,
                 "Administrator with full system access",
-                allPermissions
-        );
+                allPermissions);
 
         upsertRole(
                 STUDENT_ROLE,
@@ -52,9 +51,9 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "COURSE_READ",
                         "ENROLLMENT_READ",
                         "ENROLLMENT_CREATE",
-                        "CATEGORY_READ"
-                )
-        );
+                        "CATEGORY_READ",
+                        "LESSON_PROGRESS_READ",
+                        "LESSON_PROGRESS_UPDATE"));
 
         upsertRole(
                 TEACHER_ROLE,
@@ -72,9 +71,7 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "CATEGORY_CREATE",
                         "CATEGORY_READ",
                         "CATEGORY_UPDATE",
-                        "CATEGORY_DELETE"
-                )
-        );
+                        "CATEGORY_DELETE"));
 
         log.info("Ensured roles and permission mappings: ADMIN, STUDENT, TEACHER.");
     }
