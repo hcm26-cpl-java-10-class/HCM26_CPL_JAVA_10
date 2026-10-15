@@ -88,6 +88,7 @@ function StudentCourseCatalog() {
   });
   const enrollments = enrollmentsQuery.data ?? [];
   const enrolledCourseIds = new Set(enrollments.map((enrollment) => enrollment.courseId));
+  const enrollmentByCourseId = new Map(enrollments.map((enrollment) => [enrollment.courseId, enrollment]));
 
   const enrollMutation = useMutation({
     mutationFn: enrollmentApi.enroll,
@@ -100,6 +101,20 @@ function StudentCourseCatalog() {
     },
     onError: (error: Error) => {
       toast.error(error.message || "Could not enroll in this course.");
+    },
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: enrollmentApi.cancel,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["my-enrollments"] }),
+        queryClient.invalidateQueries({ queryKey: ["course-catalog"] }),
+      ]);
+      toast.success("Your enrollment has been canceled.");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Could not cancel this enrollment.");
     },
   });
 
@@ -180,6 +195,7 @@ function StudentCourseCatalog() {
             <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
               {courses.map((course) => {
                 const isEnrolled = course.id !== undefined && enrolledCourseIds.has(course.id);
+                const enrollment = course.id !== undefined ? enrollmentByCourseId.get(course.id) : undefined;
 
                 return (
                   <article key={course.id} className="group overflow-hidden rounded-2xl border bg-card shadow-sm transition-shadow hover:shadow-lg">
@@ -211,10 +227,25 @@ function StudentCourseCatalog() {
                       <p className="line-clamp-3 min-h-[3.75rem] text-sm leading-5 text-muted-foreground">
                         {course.description || "Start learning with this instructor-led course."}
                       </p>
-                      {isEnrolled ? (
-                        <Button className="w-full" variant="secondary" disabled>
-                          <CheckCircle2 className="size-4" /> Enrolled
-                        </Button>
+                      {isEnrolled && enrollment ? (
+                        <div className="flex gap-2">
+                          <Button className="flex-1" variant="secondary" disabled>
+                            <CheckCircle2 className="size-4" /> Enrolled
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="border-destructive/30 text-destructive hover:bg-destructive/5"
+                            disabled={cancelMutation.isPending || course.id === undefined}
+                            onClick={() => {
+                              if (course.id !== undefined) {
+                                cancelMutation.mutate(enrollment.id);
+                              }
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
                       ) : (
                         <Button
                           className="w-full"
