@@ -47,8 +47,7 @@ public class QuestionServiceImpl
     protected void beforeDelete(Question entity) {
         if (examRepository.existsByQuestions_Id(entity.getId())) {
             ValidationContext ctx = new ValidationContext();
-            ctx.add("question", "Câu hỏi đang được dùng trong đề thi, không thể xóa. "
-                    + "Hãy lưu trữ câu hỏi bằng cách đặt isActive = false");
+            ctx.add("question", "Câu hỏi đang được dùng trong đề thi, không thể xóa. ");
             ctx.throwIfErrors();
         }
     }
