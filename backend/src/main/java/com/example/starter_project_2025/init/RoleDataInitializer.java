@@ -55,9 +55,10 @@ public class RoleDataInitializer implements CommandLineRunner {
                 )
         );
 
+
         upsertRole(
                 TEACHER_ROLE,
-                "Teacher with book and course management permissions",
+                "Teacher with book, course and section management permissions",
                 findPermissions(
                         "MENU_READ",
                         "BOOK_CREATE",
@@ -68,11 +69,18 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "COURSE_READ",
                         "COURSE_UPDATE",
                         "COURSE_DELETE",
-                        "COURSE_DELETE",
-                        "CATEGORY_READ"
+                        "CATEGORY_CREATE",
+                        "CATEGORY_READ",
+                        "CATEGORY_UPDATE",
+                        "CATEGORY_DELETE",
+
+                        // Course - Section CRUD - GR1
+                        "SECTION_CREATE",
+                        "SECTION_READ",
+                        "SECTION_UPDATE",
+                        "SECTION_DELETE"
                 )
         );
-
         log.info("Ensured roles and permission mappings: ADMIN, STUDENT, TEACHER.");
     }
 
