@@ -1,5 +1,4 @@
 export * from "./features/auth.api";
-export * from "./features/category.api";
 export * from "./features/demo/book.api";
 export * from "./features/demo/course.api";
 export * from "./features/demo/student_score.api";
