@@ -24,7 +24,7 @@ import java.util.List;
         group = "Student",
         icon = "calendar",
         order = 2,
-        permission = "BOOK_READ"
+        permission = "EXAM_READ"
 )
 public class ExamController extends BaseCrudController<Long, ExamDTO, ExamFilter> {
 

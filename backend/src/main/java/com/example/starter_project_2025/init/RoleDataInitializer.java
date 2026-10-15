@@ -48,8 +48,6 @@ public class RoleDataInitializer implements CommandLineRunner {
 
         upsertRole(
                 STUDENT_ROLE,
-                "Student with read-only access to books",
-                findPermissions("MENU_READ", "BOOK_READ", "EXAM_TAKE")
                 "Student with read-only access to books and courses",
                 findPermissions(
                         "MENU_READ",
@@ -57,28 +55,33 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "COURSE_READ",
                         "ENROLLMENT_READ",
                         "ENROLLMENT_CREATE",
-                        "LESSON_READ"
+                        "LESSON_READ",
+                        "EXAM_READ",
+                        "EXAM_TAKE"
                 )
         );
 
         upsertRole(
                 TEACHER_ROLE,
-            "Teacher with book and exam management permissions",
-            findPermissions(
-                "MENU_READ",
-                "BOOK_CREATE", "BOOK_READ", "BOOK_UPDATE", "BOOK_DELETE",
-                "EXAM_CREATE", "EXAM_READ", "EXAM_UPDATE", "EXAM_DELETE",
-                "QUESTION_CREATE", "QUESTION_READ", "QUESTION_UPDATE", "QUESTION_DELETE",
-                "INVITATION_CREATE", "INVITATION_READ", "INVITATION_UPDATE", "INVITATION_DELETE"
-            )
-
-                "Teacher with book and course management permissions",
+                "Teacher with book, course, and exam management permissions",
                 findPermissions(
                         "MENU_READ",
                         "BOOK_CREATE",
                         "BOOK_READ",
                         "BOOK_UPDATE",
                         "BOOK_DELETE",
+                        "EXAM_CREATE",
+                        "EXAM_READ",
+                        "EXAM_UPDATE",
+                        "EXAM_DELETE",
+                        "QUESTION_CREATE",
+                        "QUESTION_READ",
+                        "QUESTION_UPDATE",
+                        "QUESTION_DELETE",
+                        "INVITATION_CREATE",
+                        "INVITATION_READ",
+                        "INVITATION_UPDATE",
+                        "INVITATION_DELETE",
                         "COURSE_CREATE",
                         "COURSE_READ",
                         "COURSE_UPDATE",

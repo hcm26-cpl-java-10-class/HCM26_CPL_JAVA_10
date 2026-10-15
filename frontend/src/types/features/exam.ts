@@ -1,4 +1,4 @@
-export type QuestionType = "SINGLE_CHOICE" | "MULTI_CHOICE";
+export type QuestionType = "SINGLE_CHOICE" | "MULTI_CHOICE" | "ESSAY";
 export type QuestionDifficulty = "EASY" | "MEDIUM" | "HARD";
 
 export interface QuestionOptionDTO {
