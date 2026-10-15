@@ -36,4 +36,13 @@ public class Question extends BaseEntity {
 
     @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<QuestionOption> options = new ArrayList<>();
+
+    @PrePersist
+    @PreUpdate
+    private void normalizeTopic() {
+        if (topic != null) {
+            topic = topic.trim().toLowerCase();
+            if (topic.isEmpty()) topic = null;
+        }
+    }
 }

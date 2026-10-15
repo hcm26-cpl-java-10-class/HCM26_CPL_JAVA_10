@@ -29,28 +29,26 @@ public class QuestionServiceImpl
     @Override
     protected BaseCrudMapper<Question, QuestionDTO> getMapper() { return mapper; }
 
-    // ===== P5: các trường string được tìm bằng ?search= =====
     @Override
     protected String[] searchableFields() { return new String[]{"content", "topic"}; }
 
-    // ===== P1 =====
     @Override
     protected void beforeCreate(Question entity, QuestionDTO request, ValidationContext ctx) {
         validator.validateForCreate(request, ctx);
     }
 
-    // ===== P3 =====
     @Override
     protected void beforeUpdate(Question entity, QuestionDTO request, ValidationContext ctx) {
         validator.validateForUpdate(entity, request, ctx);
     }
 
-    // ===== P4 =====
+
     @Override
     protected void beforeDelete(Question entity) {
         if (examRepository.existsByQuestions_Id(entity.getId())) {
             ValidationContext ctx = new ValidationContext();
-            ctx.add("question", "Câu hỏi đang được dùng trong đề thi, không thể xóa");
+            ctx.add("question", "Câu hỏi đang được dùng trong đề thi, không thể xóa. "
+                    + "Hãy lưu trữ câu hỏi bằng cách đặt isActive = false");
             ctx.throwIfErrors();
         }
     }
