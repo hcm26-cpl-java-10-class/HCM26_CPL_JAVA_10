@@ -20,16 +20,18 @@ export interface RouteConfig {
   isModuleDriven?: boolean;
 }
 
+export const ROLE_HOME_PATHS = ["/dashboard", "/student", "/teacher"] as const;
+
 export const routes: RouteConfig[] = [
-  { path: "/dashboard", component: Dashboard, isModuleDriven: true },
+  { path: "/dashboard", component: Dashboard },
+  { path: "/student", component: StudentLandingPage },
+  { path: "/teacher", component: TeacherLandingPage },
   {
     path: "/topic-marks/gradebook-demo",
     component: TopicMarkGradebookDemoPage,
     requiredPermission: "STUDENT_SCORE_READ",
     isModuleDriven: true,
   },
-  { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
-  { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
   ...buildEntityRoutes(),
 
   { path: "/not-found-page", component: NotFoundPage, isPublic: true },

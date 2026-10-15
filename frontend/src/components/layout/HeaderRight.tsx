@@ -1,5 +1,5 @@
 import ToggleTheme from "@/components/ToggleTheme";
-import { useEffect, useRef, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge.tsx";
 import type { RootState } from "@/store/store";
 import { useSelector } from "react-redux";
@@ -64,9 +64,12 @@ export default function HeaderRight() {
 
   const switchRole = (nextRole: string) => {
     const normalizedRole = normalizeRole(nextRole);
-    setViewRole(normalizedRole === primaryRole ? null : normalizedRole);
+    const homePath = getHomePathByRole(normalizedRole);
     setOpen(false);
-    navigate(getHomePathByRole(normalizedRole));
+    startTransition(() => {
+      navigate(homePath, { replace: true });
+      setViewRole(normalizedRole === primaryRole ? null : normalizedRole);
+    });
   };
 
   return (
