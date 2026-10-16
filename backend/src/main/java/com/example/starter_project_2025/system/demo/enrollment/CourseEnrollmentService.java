@@ -1,7 +1,9 @@
 package com.example.starter_project_2025.system.demo.enrollment;
 
 import com.example.starter_project_2025.system.demo.course.Course;
+import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.system.demo.course.CourseRepository;
+import com.example.starter_project_2025.system.demo.course.CourseStatus;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +29,10 @@ public class CourseEnrollmentService {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() ->
                         new RuntimeException("Course not found"));
+
+        if (course.getStatus() != CourseStatus.PUBLISHED || !Boolean.TRUE.equals(course.getIsActive())) {
+            throw new BadRequestException("This course is not available for enrollment");
+        }
 
         if (enrollmentRepository.existsByUser_IdAndCourse_Id(
                 userId, courseId)) {

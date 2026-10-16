@@ -33,4 +33,8 @@ public class CourseDTO extends BaseDTO {
     Long categoryId;
 
     String categoryName;
+
+    CourseStatus status;
+
+    CourseLevel level;
 }
