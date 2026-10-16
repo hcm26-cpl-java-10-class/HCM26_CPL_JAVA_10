@@ -40,6 +40,10 @@ function formatTime(value: string) {
 export default function WeeklyCalendarPage() {
   const [weekStart, setWeekStart] = useState(getCurrentWeekStart);
 
+  const [statusFilter, setStatusFilter] = useState<
+    CalendarSessionStatus | "ALL"
+  >("ALL");
+
   const nextWeekStart = weekStart.add(7, "day");
 
   const weeklySessions = calendarSessionsMock
@@ -47,11 +51,16 @@ export default function WeeklyCalendarPage() {
       const sessionStart = Date.parse(session.startTime);
       const sessionEnd = Date.parse(session.endTime);
 
-      return (
+      const matchesWeek =
         sessionStart < nextWeekStart.valueOf() &&
-        sessionEnd > weekStart.valueOf()
-      );
+        sessionEnd > weekStart.valueOf();
+
+      const matchesStatus =
+        statusFilter === "ALL" || session.status === statusFilter;
+
+      return matchesWeek && matchesStatus;
     })
+
     .sort(
       (left, right) => Date.parse(left.startTime) - Date.parse(right.startTime),
     );
@@ -100,6 +109,31 @@ export default function WeeklyCalendarPage() {
 
         <p className="text-sm text-muted-foreground">
           Dữ liệu mẫu — thời gian hiển thị theo múi giờ Việt Nam.
+          <div className="flex flex-wrap items-center gap-2">
+            <label htmlFor="calendar-status" className="text-sm font-medium">
+              Trạng thái
+            </label>
+
+            <select
+              id="calendar-status"
+              value={statusFilter}
+              onChange={(event) => {
+                setStatusFilter(
+                  event.target.value as CalendarSessionStatus | "ALL",
+                );
+              }}
+              className="rounded-md border bg-background px-3 py-2 text-sm"
+            >
+              <option value="ALL">Tất cả trạng thái</option>
+              <option value="SCHEDULED">{statusLabels.SCHEDULED}</option>
+              <option value="COMPLETED">{statusLabels.COMPLETED}</option>
+              <option value="CANCELLED">{statusLabels.CANCELLED}</option>
+            </select>
+
+            <p className="text-sm text-muted-foreground" aria-live="polite">
+              Hiển thị {weeklySessions.length} buổi học
+            </p>
+          </div>
         </p>
 
         <div className="overflow-x-auto rounded-md border">
@@ -117,15 +151,17 @@ export default function WeeklyCalendarPage() {
 
             <tbody>
               {weeklySessions.length === 0 && (
-  <tr>
-    <td
-      colSpan={6}
-      className="p-6 text-center text-muted-foreground"
-    >
-      Không có buổi học trong tuần này.
-    </td>
-  </tr>
-)}
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="p-6 text-center text-muted-foreground"
+                  >
+                    {statusFilter === "ALL"
+                      ? "Không có buổi học trong tuần này."
+                      : "Không có buổi học phù hợp với trạng thái đã chọn trong tuần này."}
+                  </td>
+                </tr>
+              )}
 
               {weeklySessions.map((session) => (
                 <tr key={session.id} className="border-t">
