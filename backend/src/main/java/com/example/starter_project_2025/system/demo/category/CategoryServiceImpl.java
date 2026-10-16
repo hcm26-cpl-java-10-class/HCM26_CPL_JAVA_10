@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.demo.category;
 
+import com.example.starter_project_2025.system.demo.course.CourseRepository;
 import com.example.starter_project_2025.base.crud.CrudAction;
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
@@ -29,6 +30,7 @@ public class CategoryServiceImpl
 
     CategoryMapper categoryMapper;
     CategoryRepository categoryRepository;
+    CourseRepository courseRepository;
 
     @Override
     protected BaseCrudRepository<Category, Long> getRepository() {
@@ -67,6 +69,10 @@ public class CategoryServiceImpl
         if (categoryRepository.existsByParentId(category.getId())) {
             throw new BadRequestException(
                     "Cannot delete category '" + category.getName() + "' because it has sub-categories");
+        }
+        if (courseRepository.existsByCategoryId(category.getId())) {
+            throw new BadRequestException(
+                    "Cannot delete category '" + category.getName() + "' because it is used by courses");
         }
     }
 

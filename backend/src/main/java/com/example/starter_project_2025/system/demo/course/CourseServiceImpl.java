@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.demo.course;
 
+import com.example.starter_project_2025.system.demo.category.CategoryRepository;
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
@@ -22,6 +23,7 @@ public class CourseServiceImpl
     CourseMapper courseMapper;
     CourseRepository courseRepository;
     UserRepository userRepository;
+    CategoryRepository categoryRepository;
 
     @Override
     protected BaseCrudRepository<Course, Long> getRepository() {
@@ -44,6 +46,7 @@ public class CourseServiceImpl
             ctx.add("name", "Course name already exists");
         }
         resolveInstructor(course, request);
+        resolveCategory(course, request, ctx);
     }
 
     @Override
@@ -54,6 +57,7 @@ public class CourseServiceImpl
             ctx.add("name", "Course name already exists");
         }
         resolveInstructor(course, request);
+        resolveCategory(course, request, ctx);
     }
 
     /**
@@ -74,5 +78,18 @@ public class CourseServiceImpl
             // Clear instructor user if no instructorId provided
             course.setInstructorUser(null);
         }
+    }
+
+    /** categoryId lấy từ request; null = không thuộc danh mục nào. */
+    private void resolveCategory(Course course, CourseDTO request, ValidationContext ctx) {
+        Long categoryId = request.getCategoryId();
+        if (categoryId == null) {
+            course.setCategory(null);
+            return;
+        }
+        categoryRepository.findById(categoryId).ifPresentOrElse(
+                course::setCategory,
+                () -> ctx.add("categoryId", "Category not found")
+        );
     }
 }

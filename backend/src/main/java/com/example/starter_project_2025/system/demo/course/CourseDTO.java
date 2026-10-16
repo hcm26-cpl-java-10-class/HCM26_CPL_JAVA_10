@@ -29,4 +29,8 @@ public class CourseDTO extends BaseDTO {
     String instructor;
 
     Long instructorId;
+
+    Long categoryId;
+
+    String categoryName;
 }
