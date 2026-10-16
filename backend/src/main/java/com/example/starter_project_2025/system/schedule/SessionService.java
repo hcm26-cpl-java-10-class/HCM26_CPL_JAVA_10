@@ -16,4 +16,5 @@ public interface SessionService extends BaseCrudService<Long, SessionDTO, Sessio
      * @return buổi học sau khi hủy
      */
     SessionDTO cancel(Long id, SessionCancelRequest request, Long expectedVersion);
+    SessionDTO changeStatus(Long id, SessionStatus status);
 }
