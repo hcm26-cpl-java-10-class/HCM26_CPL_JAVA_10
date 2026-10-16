@@ -10,6 +10,8 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(
         name = "course_enrollments",
@@ -44,4 +46,10 @@ public class CourseEnrollment extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "course_id", nullable = false)
     Course course;
+
+    @Column(name = "last_lesson_id")
+    Long lastLessonId;
+
+    @Column(name = "last_accessed_at")
+    LocalDateTime lastAccessedAt;
 }
