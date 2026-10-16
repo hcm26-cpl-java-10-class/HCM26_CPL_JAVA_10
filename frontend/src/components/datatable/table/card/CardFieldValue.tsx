@@ -84,17 +84,19 @@ export function CardFieldValue({
 
     if (multiple && Array.isArray(value)) {
       const matched = value
-        .map((v: any) =>
-          options.find((opt) => opt[valueField]?.toString() === v?.toString())
-        )
-        .filter(Boolean);
+          .map((v: any) =>
+              typeof v === "object" && v !== null
+                  ? v
+                  : options.find((opt) => opt[valueField]?.toString() === v?.toString())
+          )
+          .filter(Boolean);
       return (
-        <BadgeList
-          items={matched}
-          labelField={labelField}
-          valueField={valueField}
-          maxVisible={MAX_CARD_BADGES}
-        />
+          <BadgeList
+              items={matched}
+              labelField={labelField}
+              valueField={valueField}
+              maxVisible={MAX_CARD_BADGES}
+          />
       );
     }
 

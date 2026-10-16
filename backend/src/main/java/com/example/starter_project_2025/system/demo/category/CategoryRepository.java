@@ -15,4 +15,6 @@ public interface CategoryRepository extends BaseCrudRepository<Category, Long> {
     boolean existsByParentId(Long parentId);
 
     Optional<Category> findByCodeIgnoreCase(String code);
+
+    boolean existsByName(String name);
 }

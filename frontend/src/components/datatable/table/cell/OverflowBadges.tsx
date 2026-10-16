@@ -124,7 +124,7 @@ export function OverflowBadges({
             <Badge
               key={m[valueField]}
               variant="secondary"
-              className="text-xs shrink-0"
+              className="text-xs shrink-0 first:pl-0"   // <-- thêm first:pl-0
             >
               {m[labelField]}
             </Badge>

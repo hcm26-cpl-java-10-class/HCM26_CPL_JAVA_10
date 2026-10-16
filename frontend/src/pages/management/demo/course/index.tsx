@@ -1,4 +1,4 @@
-import { courseApi, enrollmentApi } from "@/api";
+import {categoryApi, courseApi, enrollmentApi} from "@/api";
 import { userApi } from "@/api";
 import { AutoCrudPage } from "@/pages/management/AutoCrudPage";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -53,6 +53,19 @@ const courseSchema: EntitySchema = {
       label: "Thumbnail URL",
       type: "text",
       sortable: false,
+    },
+    {
+      name: "categoryIds",
+      label: "Categories",
+      type: "relation",
+      relation: {
+        api: categoryApi,
+        valueField: "id",
+        labelField: "name",
+        multiple: true,
+      },
+      filterable: true,
+      filterType: "select",
     },
     ...(auditableFieldsSchema as FieldSchema[]),
   ],
@@ -227,6 +240,13 @@ function StudentCourseCatalog() {
                       <p className="line-clamp-3 min-h-[3.75rem] text-sm leading-5 text-muted-foreground">
                         {course.description || "Start learning with this instructor-led course."}
                       </p>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {(course.categories || []).map((c) => (
+                            <Badge key={c.id} className="bg-blue-50 text-blue-700">
+                              {c.name}
+                            </Badge>
+                        ))}
+                      </div>
                       {isEnrolled && enrollment ? (
                         <div className="flex gap-2">
                           <Button className="flex-1" variant="secondary" disabled>

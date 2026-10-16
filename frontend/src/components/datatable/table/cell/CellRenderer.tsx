@@ -94,22 +94,24 @@ export function CellRenderer({
 
     if (multiple && Array.isArray(value)) {
       const matched = value
-        .map((v: any) =>
-          options.find((opt) => opt[valueField]?.toString() === v?.toString())
-        )
-        .filter(Boolean);
+          .map((v: any) =>
+              typeof v === "object" && v !== null
+                  ? v
+                  : options.find((opt) => opt[valueField]?.toString() === v?.toString())
+          )
+          .filter(Boolean);
       return (
-        <TableCell>
-          {matched.length > 0 ? (
-            <OverflowBadges
-              items={matched}
-              labelField={labelField}
-              valueField={valueField}
-            />
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          )}
-        </TableCell>
+          <TableCell>
+            {matched.length > 0 ? (
+                <OverflowBadges
+                    items={matched}
+                    labelField={labelField}
+                    valueField={valueField}
+                />
+            ) : (
+                <span className="text-muted-foreground">—</span>
+            )}
+          </TableCell>
       );
     }
 

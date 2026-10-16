@@ -4,12 +4,18 @@ import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.system.demo.category.Category;
+import com.example.starter_project_2025.system.demo.category.CategoryRepository;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.HashSet;
+import java.util.List;
 
 @Service
 @Transactional
@@ -22,6 +28,9 @@ public class CourseServiceImpl
     CourseMapper courseMapper;
     CourseRepository courseRepository;
     UserRepository userRepository;
+
+    @Autowired
+    CategoryRepository categoryRepository;
 
     @Override
     protected BaseCrudRepository<Course, Long> getRepository() {
@@ -40,20 +49,27 @@ public class CourseServiceImpl
 
     @Override
     protected void beforeCreate(Course course, CourseDTO request, ValidationContext ctx) {
-        if (courseRepository.existsByName(request.getName())) {
-            ctx.add("name", "Course name already exists");
+        // existing checks...
+        if (request.getCategoryIds() != null && !request.getCategoryIds().isEmpty()) {
+            List<Category> cats = categoryRepository.findAllById(request.getCategoryIds());
+            if (cats.size() != request.getCategoryIds().size()) {
+                ctx.add("categoryIds", "Some categories not found");
+            } else {
+                course.setCategories(new HashSet<>(cats));
+            }
         }
-        resolveInstructor(course, request);
     }
-
     @Override
     protected void beforeUpdate(Course course, CourseDTO request, ValidationContext ctx) {
-        if (request.getName() != null &&
-                !request.getName().equals(course.getName()) &&
-                courseRepository.existsByName(request.getName())) {
-            ctx.add("name", "Course name already exists");
+        // if categoryIds provided, update relations
+        if (request.getCategoryIds() != null) {
+            List<Category> cats = categoryRepository.findAllById(request.getCategoryIds());
+            if (cats.size() != request.getCategoryIds().size()) {
+                ctx.add("categoryIds", "Some categories not found");
+            } else {
+                course.setCategories(new HashSet<>(cats));
+            }
         }
-        resolveInstructor(course, request);
     }
 
     /**

@@ -6,6 +6,8 @@ export interface CourseDTO extends BaseDTO {
   thumbnailUrl?: string;
   instructor?: string;
   instructorId?: number;
+  categoryIds?: number[];
+  categories?: { id: number; name: string }[];
 }
 
 export interface CourseFilter extends BaseFilter {}

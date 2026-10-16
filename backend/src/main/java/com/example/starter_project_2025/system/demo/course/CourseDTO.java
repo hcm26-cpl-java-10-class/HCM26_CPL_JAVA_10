@@ -2,10 +2,13 @@ package com.example.starter_project_2025.system.demo.course;
 
 import com.example.starter_project_2025.base.crud.dto.BaseDTO;
 import com.example.starter_project_2025.base.crud.dto.OnCreate;
+import com.example.starter_project_2025.system.demo.category.CategoryDTO;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+
+import java.util.List;
 
 @Getter
 @Setter
@@ -29,4 +32,8 @@ public class CourseDTO extends BaseDTO {
     String instructor;
 
     Long instructorId;
+
+    List<Long> categoryIds;
+
+    List<CategoryDTO> categories;
 }

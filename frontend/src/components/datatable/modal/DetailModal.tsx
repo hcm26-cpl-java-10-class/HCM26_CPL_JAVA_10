@@ -84,22 +84,22 @@ export function DetailModal({
 
         if (rel.multiple && Array.isArray(value)) {
           const matched = value
-            .map((v: any) =>
-              options.find(
-                (opt) => opt[rel.valueField]?.toString() === v?.toString()
+              .map((v: any) =>
+                  typeof v === "object" && v !== null
+                      ? v
+                      : options.find((opt) => opt[rel.valueField]?.toString() === v?.toString())
               )
-            )
-            .filter(Boolean);
+              .filter(Boolean);
           return matched.length > 0 ? (
-            <div className="flex flex-wrap gap-1">
-              {matched.map((m: any) => (
-                <Badge key={m[rel.valueField]} variant="secondary" className="text-xs">
-                  {m[rel.labelField]}
-                </Badge>
-              ))}
-            </div>
+              <div className="flex flex-wrap gap-1">
+                {matched.map((m: any) => (
+                    <Badge key={m[rel.valueField]} variant="secondary" className="text-xs">
+                      {m[rel.labelField]}
+                    </Badge>
+                ))}
+              </div>
           ) : (
-            <span className="text-muted-foreground">—</span>
+              <span className="text-muted-foreground">—</span>
           );
         }
 

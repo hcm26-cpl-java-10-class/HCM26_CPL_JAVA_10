@@ -124,7 +124,17 @@ export function FormModal({
 
       editableFields.forEach((field) => {
         if (initial[field.name] !== undefined) {
-          next[field.name] = initial[field.name];
+          // Nếu là relation.multiple và initial là mảng object (API trả categories[]), chuyển thành mảng id
+          if (field.type === "relation" && field.relation?.multiple && Array.isArray(initial[field.name])) {
+            const valueFieldKey = field.relation.valueField ?? "id";
+            next[field.name] = initial[field.name].map((item: any) =>
+                typeof item === "object" && item !== null
+                    ? (item[valueFieldKey] ?? item.id)
+                    : item
+            );
+          } else {
+            next[field.name] = initial[field.name];
+          }
           return;
         }
 

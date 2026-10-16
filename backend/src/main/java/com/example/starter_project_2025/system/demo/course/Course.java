@@ -5,16 +5,15 @@ import com.example.starter_project_2025.base.dataio.importer.annotation.ImportFi
 import com.example.starter_project_2025.base.dataio.template.annotation.ImportEntity;
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Table;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.FetchType;
+import com.example.starter_project_2025.system.demo.category.Category;
+import jakarta.persistence.*;
 import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
+
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Getter
@@ -53,4 +52,12 @@ public class Course extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "instructor_id")
     User instructorUser;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "course_categories",
+            joinColumns = @JoinColumn(name = "course_id"),
+            inverseJoinColumns = @JoinColumn(name = "category_id")
+    )
+    Set<Category> categories = new HashSet<>();
 }
