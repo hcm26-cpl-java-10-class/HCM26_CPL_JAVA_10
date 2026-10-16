@@ -45,6 +45,13 @@ export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
         );
     }, [createPage, entity.name, navigate, table.permission?.keys?.create]);
 
+    const allHeaderActions = (
+        <div className="flex items-center gap-2">
+            {headerActions}
+            {entity.headerActions}
+        </div>
+    );
+
     const onEdit = useMemo(() => {
         if (!editPage) {
             return undefined;
@@ -97,7 +104,7 @@ export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
             <ProTable
                 table={table}
                 mode={browseMode ? "browse" : "default"}
-                headerActions={browseMode ? undefined : headerActions}
+                headerActions={browseMode ? undefined : allHeaderActions}
                 hideActions={browseMode}
                 onEdit={browseMode ? undefined : onEdit}
                 onView={onView}

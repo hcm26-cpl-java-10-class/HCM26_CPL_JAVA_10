@@ -19,4 +19,5 @@ export * from "./features/rbac/permission";
 export * from "./features/rbac/role";
 export * from "./features/rbac/user";
 export * from "./features/demo/session";
+export * from "./features/schedule-validation";
 export * from "./features/demo/lesson";
