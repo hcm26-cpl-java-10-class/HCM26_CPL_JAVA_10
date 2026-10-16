@@ -65,6 +65,10 @@ public class Course extends BaseEntity {
     @Column(nullable = false, length = 20)
     CourseStatus status = CourseStatus.DRAFT;
 
+    @Builder.Default
+    @Column(nullable = false)
+    Boolean isFree = true;
+
     @Enumerated(EnumType.STRING)
     @Column(length = 20)
     CourseLevel level;
