@@ -6,7 +6,7 @@ import java.util.List;
 
 /**
  * Chi tiết khóa học kèm Section/Lesson.
- * Nếu user chưa ghi danh (contentUnlocked = false) thì contentUrl và textContent của mọi Lesson là null.
+ * If content is locked, contentUrl and textContent are null for every lesson.
  */
 public record CourseDetailDTO(
         Long id,
@@ -17,6 +17,7 @@ public record CourseDetailDTO(
         Long categoryId,
         String categoryName,
         CourseLevel level,
+        boolean isFree,
         boolean enrolled,
         boolean contentUnlocked,
         int lessonCount,

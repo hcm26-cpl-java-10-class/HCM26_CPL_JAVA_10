@@ -174,7 +174,7 @@ function CourseActionCard({ course }: { course: CourseDetail }) {
 
   const enrollment = enrollmentByCourseId.get(course.id);
   // Staff (COURSE_UPDATE) xem được nội dung nhưng không ghi danh.
-  const isStaffPreview = !course.enrolled && course.contentUnlocked;
+  const isStaffPreview = !course.enrolled && !course.isFree && course.contentUnlocked;
 
   let action: React.ReactNode;
   if (course.enrolled) {
@@ -214,7 +214,7 @@ function CourseActionCard({ course }: { course: CourseDetail }) {
         disabled={enrollMutation.isPending}
         onClick={() => enrollMutation.mutate(course.id)}
       >
-        {enrollMutation.isPending ? "Enrolling..." : "Enroll for free"}
+        {enrollMutation.isPending ? "Enrolling..." : "Enroll"}
       </Button>
     );
   } else {
@@ -233,8 +233,12 @@ function CourseActionCard({ course }: { course: CourseDetail }) {
         </div>
       ) : (
         <div>
-          <p className="text-2xl font-bold">Free</p>
-          <p className="text-sm text-muted-foreground">Enroll to unlock all lesson content.</p>
+          <p className="text-2xl font-bold">{course.isFree ? "Free" : "Enrollment required"}</p>
+          <p className="text-sm text-muted-foreground">
+            {course.isFree
+              ? "Lesson content is available for free. Enroll to track your progress."
+              : "Enroll to unlock all lesson content."}
+          </p>
         </div>
       )}
 

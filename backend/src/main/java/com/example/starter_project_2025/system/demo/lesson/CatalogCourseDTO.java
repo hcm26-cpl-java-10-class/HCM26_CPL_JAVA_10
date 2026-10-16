@@ -13,6 +13,7 @@ public record CatalogCourseDTO(
         CourseLevel level,
         long lessonCount,
         long totalDuration,
+        boolean isFree,
         boolean enrolled
 ) {
 }
