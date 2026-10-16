@@ -28,22 +28,49 @@ export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
     const detailPage = entity.actionPages?.detail;
 
     const headerActions = useMemo(() => {
-        if (!createPage) {
-            return undefined;
-        }
+        const customActions = entity.headerActions?.({ table });
 
-        return (
-            <PermissionGate permission={createPage.requiredPermission || table.permission?.keys?.create}>
+        const createAction = createPage ? (
+            <PermissionGate
+                permission={
+                    createPage.requiredPermission ||
+                    table.permission?.keys?.create
+                }
+            >
                 <ActionButton
-                    onClick={() => navigate(normalizeEntityActionPath(entity.path, createPage.path))}
+                    onClick={() =>
+                        navigate(
+                            normalizeEntityActionPath(
+                                entity.path,
+                                createPage.path
+                            )
+                        )
+                    }
                     tooltip={`Create ${entity.name}`}
                     title="Create"
                     variant="default"
                     icon={<Plus size={16} />}
                 />
             </PermissionGate>
+        ) : null;
+
+        if (!customActions && !createAction) {
+            return undefined;
+        }
+
+        return (
+            <div className="flex items-center gap-2">
+                {customActions}
+                {createAction}
+            </div>
         );
-    }, [createPage, entity.name, navigate, table.permission?.keys?.create]);
+    }, [
+        createPage,
+        entity,
+        table,
+        navigate,
+        table.permission?.keys?.create,
+    ]);
 
     const onEdit = useMemo(() => {
         if (!editPage) {
