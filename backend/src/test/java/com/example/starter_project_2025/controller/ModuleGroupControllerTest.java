@@ -28,11 +28,18 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-//@WebMvcTest(ModuleGroupController.class)
-@WebMvcTest(value = ModuleGroupController.class, excludeAutoConfiguration = {
-        org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration.class,
-        org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration.class
-})
+@WebMvcTest(value = ModuleGroupController.class,
+        excludeFilters = @org.springframework.context.annotation.ComponentScan.Filter(
+                type = org.springframework.context.annotation.FilterType.ASSIGNABLE_TYPE,
+                classes = com.example.starter_project_2025.security.JwtAuthenticationFilter.class
+        ),
+        excludeAutoConfiguration = {
+                org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration.class,
+                org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration.class,
+                org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration.class,
+                org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration.class,
+                org.springframework.boot.autoconfigure.security.oauth2.resource.servlet.OAuth2ResourceServerAutoConfiguration.class
+        })
 @AutoConfigureMockMvc(addFilters = false) // Quan trọng: Dòng này sẽ tắt các Filter như JwtAuthenticationFilter
 public class ModuleGroupControllerTest {
 
@@ -62,6 +69,8 @@ public class ModuleGroupControllerTest {
         mockDto = new ModuleGroupDTO();
         mockDto.setName("System Group");
         mockDto.setDescription("Description");
+        mockDto.setIsActive(true);
+        mockDto.setDisplayOrder(0);
     }
 
     // --- 1. TEST CRUD (BaseCrudController) ---
