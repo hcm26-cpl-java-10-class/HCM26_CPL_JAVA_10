@@ -9,6 +9,12 @@ import com.example.starter_project_2025.system.rbac.role.RoleRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import com.example.starter_project_2025.exception.BadRequestException;
+import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import com.example.starter_project_2025.security.UserPrincipal;
+import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +33,7 @@ public class UserServiceImpl
     UserRepository userRepository;
     RoleRepository roleRepository;
     PasswordEncoder passwordEncoder;
+    RefreshTokenService refreshTokenService;
 
     @Override
     protected BaseCrudRepository<User, Long> getRepository() {
@@ -57,6 +64,15 @@ public class UserServiceImpl
 
     @Override
     protected void beforeUpdate(User user, UserDTO request, ValidationContext ctx) {
+
+        if (request.getStatus() != null && request.getStatus() != user.getStatus()) {
+            String error = statusChangeError(user, request.getStatus());
+            if (error != null) {
+                ctx.add("status", error);
+            } else {
+                applyStatus(user, request.getStatus(), request.getStatusReason());
+            }
+        }
 
         if (request.getEmail() != null) {
             validateEmailUnique(request.getEmail(), user.getId(), ctx);
@@ -108,28 +124,46 @@ public class UserServiceImpl
         return new HashSet<>(roleRepository.findAllById(roleIds));
     }
 
-
     @Override
-    public void lockUser(Long userId) {
+    public void changeStatus(Long userId, UserStatus target, String reason) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() ->
-                        new com.example.starter_project_2025.exception.ResourceNotFoundException(
-                                "User not found with id: " + userId
-                        ));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
 
-        user.setLocked(true);
+        if (user.getStatus() == target) {
+            return;
+        }
+
+        String error = statusChangeError(user, target);
+        if (error != null) {
+            throw new BadRequestException(error);
+        }
+
+        applyStatus(user, target, reason);
         userRepository.save(user);
     }
 
-    @Override
-    public void unlockUser(Long userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() ->
-                        new com.example.starter_project_2025.exception.ResourceNotFoundException(
-                                "User not found with id: " + userId
-                        ));
+    private String statusChangeError(User user, UserStatus target) {
+        if (target == UserStatus.INVITED) {
+            return "Status INVITED cannot be set manually";
+        }
+        if (target != UserStatus.ACTIVE && isCurrentUser(user.getId())) {
+            return "You cannot suspend or deactivate your own account";
+        }
+        return null;
+    }
 
-        user.setLocked(false);
-        userRepository.save(user);
+    private void applyStatus(User user, UserStatus target, String reason) {
+        user.setStatus(target);
+        user.setStatusReason(target == UserStatus.ACTIVE ? null : reason);
+        if (target != UserStatus.ACTIVE) {
+            refreshTokenService.revokeAllRefreshTokens(user.getId());
+        }
+    }
+
+    private boolean isCurrentUser(Long userId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null
+                && auth.getPrincipal() instanceof UserPrincipal me
+                && me.getUser().getId().equals(userId);
     }
 }

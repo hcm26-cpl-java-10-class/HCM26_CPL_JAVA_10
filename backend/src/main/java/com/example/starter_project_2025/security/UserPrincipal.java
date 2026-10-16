@@ -3,6 +3,7 @@ package com.example.starter_project_2025.security;
 import com.example.starter_project_2025.system.rbac.permission.Permission;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.user.User;
+import com.example.starter_project_2025.system.rbac.user.UserStatus;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -62,14 +63,14 @@ public class UserPrincipal implements UserDetails {
 
     @Override
     public boolean isAccountNonLocked() {
-        return !Boolean.TRUE.equals(this.getUser().getLocked());
+        return this.getUser().getStatus() != UserStatus.SUSPENDED;
     }
-
-    @Override
-    public boolean isCredentialsNonExpired() {return true;}
 
     @Override
     public boolean isEnabled() {
-        return Boolean.TRUE.equals(this.getUser().getIsActive());
+        return this.getUser().canLogin();
     }
+    @Override
+    public boolean isCredentialsNonExpired() {return true;}
+
 }

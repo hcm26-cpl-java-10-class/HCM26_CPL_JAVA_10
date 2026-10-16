@@ -5,7 +5,6 @@ import com.example.starter_project_2025.base.crud.service.BaseCrudService;
 public interface UserService
         extends BaseCrudService<Long, UserDTO, UserFilter> {
 
-    void lockUser(Long userId);
+    void changeStatus(Long userId, UserStatus target, String reason);
 
-    void unlockUser(Long userId);
 }

@@ -12,6 +12,9 @@ import java.util.stream.Collectors;
 @Mapper(componentModel = "spring", config = BaseMapperConfig.class)
 public interface UserMapper extends BaseCrudMapper<User, UserDTO> {
 
+    @Mapping(target = "status", ignore = true)
+    @Mapping(target = "statusReason", ignore = true)
+
     @Override
     @IgnoreAuditFields
     @Mapping(target = "passwordHash", ignore = true)
@@ -37,4 +40,5 @@ public interface UserMapper extends BaseCrudMapper<User, UserDTO> {
                 .map(Role::getId)
                 .collect(Collectors.toSet());
     }
+
 }

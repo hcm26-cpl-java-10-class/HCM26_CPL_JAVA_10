@@ -28,6 +28,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.security.authentication.LockedException;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -80,10 +81,8 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseGet(() -> createGoogleUser(email, firstName, lastName));
 
-        if (Boolean.TRUE.equals(user.getLocked())) {
-            throw new org.springframework.security.authentication.LockedException(
-                    "Account is locked"
-            );
+        if (user.blocksLogin()) {
+            throw new LockedException("Account is locked");
         }
 
         user = updateUserFromGoogleProfile(user, firstName, lastName);
@@ -132,12 +131,8 @@ public class AuthServiceImpl implements AuthService {
 
         User user = refreshToken.getUser();
 
-        if (Boolean.TRUE.equals(user.getLocked())) {
-            refreshTokenService.revokeAllRefreshTokens(user.getId());
-
-            throw new org.springframework.security.authentication.LockedException(
-                    "Account is locked"
-            );
+        if (user.blocksLogin()) {
+            throw new LockedException("Account is locked");
         }
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());

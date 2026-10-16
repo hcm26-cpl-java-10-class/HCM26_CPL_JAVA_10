@@ -36,4 +36,9 @@ public class UserDTO extends BaseDTO {
 
     @NotEmpty(groups = OnCreate.class, message = "At least one role is required")
     Set<Long> roleIds;
+
+    UserStatus status;
+
+    @Size(max = 255, groups = {OnCreate.class, OnUpdate.class})
+    String statusReason;
 }

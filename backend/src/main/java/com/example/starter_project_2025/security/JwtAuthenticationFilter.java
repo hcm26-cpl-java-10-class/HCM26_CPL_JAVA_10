@@ -34,6 +34,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     RefreshTokenService refreshTokenService;
     UserDetailsServiceImpl userDetailsService;
+    JwtAccessDeniedHandler accessDeniedHandler;
 
     @Override
     protected void doFilterInternal(@Nonnull HttpServletRequest request,
@@ -52,14 +53,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 UserDetails userDetails = userDetailsService.loadUserByUsername(jwt.getSubject());
 
-                if (!userDetails.isAccountNonLocked()
-                        || !userDetails.isEnabled()) {
+                if (!userDetails.isAccountNonLocked() || !userDetails.isEnabled()) {
                     SecurityContextHolder.clearContext();
-
-                    response.sendError(
-                            HttpServletResponse.SC_FORBIDDEN,
-                            "Account is locked or disabled"
-                    );
+                    accessDeniedHandler.handle(request, response,
+                            new org.springframework.security.access.AccessDeniedException("Account is locked or disabled"));
                     return;
                 }
 

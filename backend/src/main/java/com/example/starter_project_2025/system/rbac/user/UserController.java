@@ -7,11 +7,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.security.access.prepost.PreAuthorize;
 
 @RestController
@@ -40,17 +37,13 @@ public class UserController
         return User.class;
     }
 
-    @PatchMapping("/{id}/lock")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Void> lockUser(@PathVariable Long id) {
-        service.lockUser(id);
-        return ResponseEntity.noContent().build();
-    }
-
-    @PatchMapping("/{id}/unlock")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Void> unlockUser(@PathVariable Long id) {
-        service.unlockUser(id);
+    @PatchMapping("/{id}/status")
+    @PreAuthorize("hasAuthority('USER_UPDATE')")
+    public ResponseEntity<Void> changeStatus(
+            @PathVariable Long id,
+            @RequestParam UserStatus status,
+            @RequestParam(required = false) String reason) {
+        service.changeStatus(id, status, reason);
         return ResponseEntity.noContent().build();
     }
 

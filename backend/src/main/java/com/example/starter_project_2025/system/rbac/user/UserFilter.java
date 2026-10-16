@@ -10,6 +10,9 @@ import java.util.List;
 @Builder
 public class UserFilter extends BaseFilter {
 
-        @FilterField(entityField = "userRoles.role.id", operator = FilterOperator.IN)
+        @FilterField(entityField = "roles.id", operator = FilterOperator.IN)
         List<Long> roleIds;
+
+        @FilterField(entityField = "status")
+        UserStatus status;
 }

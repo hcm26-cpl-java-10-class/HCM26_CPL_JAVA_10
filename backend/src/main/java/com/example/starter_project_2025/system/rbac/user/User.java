@@ -57,8 +57,12 @@ public class User extends BaseEntity {
     String lastName;
 
     @Builder.Default
-    @Column(nullable = false)
-    Boolean locked = false;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    UserStatus status = UserStatus.ACTIVE;
+
+    @Column(length = 255)
+    String statusReason;
 
     @Builder.Default
     @ManyToMany(fetch = FetchType.LAZY)
@@ -71,5 +75,13 @@ public class User extends BaseEntity {
 
     public String getFullName() {
         return firstName + (lastName != null ? " " + lastName : "");
+    }
+
+    public boolean blocksLogin() {
+        return status == UserStatus.SUSPENDED || status == UserStatus.DEACTIVATED;
+    }
+
+    public boolean canLogin() {
+        return Boolean.TRUE.equals(getIsActive()) && status == UserStatus.ACTIVE;
     }
 }
