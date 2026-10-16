@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Download, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -9,6 +9,7 @@ import { ModuleModal } from "./components/ModuleModal";
 import { DeleteConfirmDialog } from "./components/DeleteConfirmDialog";
 import { ImportExportModal } from "./components/ImportExportModal";
 import { initialModuleGroups, initialModules } from "./mockData";
+import { moduleGroupApi } from "@/api/features/menu/module_group.api";
 import type {
     ModuleGroupItem,
     ModuleItem,
@@ -17,10 +18,11 @@ import type {
 } from "./types";
 
 export const ModuleGroupModulePage: React.FC = () => {
-    // In-memory data states
+    // Backend & In-memory data states
     const [groups, setGroups] = useState<ModuleGroupItem[]>(initialModuleGroups);
     const [modules, setModules] = useState<ModuleItem[]>(initialModules);
     const [selectedGroupId, setSelectedGroupId] = useState<string>("group-system");
+    const [isLoadingGroups, setIsLoadingGroups] = useState(false);
 
     // Modal states
     const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
@@ -42,10 +44,64 @@ export const ModuleGroupModulePage: React.FC = () => {
         item: null,
     });
 
-    // Modules filtered by selected group
+    // Load module groups from backend
+    const loadGroups = async () => {
+        setIsLoadingGroups(true);
+        try {
+            const response = await moduleGroupApi.getPage(
+                { page: 0, size: 100, sort: ["displayOrder,asc", "name,asc"] }
+            );
+            if (response && Array.isArray(response.content) && response.content.length > 0) {
+                const mapped: ModuleGroupItem[] = response.content.map((dto) => ({
+                    id: String(dto.id),
+                    name: dto.name || "",
+                    description: dto.description || "",
+                    displayOrder: dto.displayOrder ?? 0,
+                    moduleCount: 0,
+                }));
+                setGroups(mapped);
+                setSelectedGroupId((prev) => {
+                    if (!prev || !mapped.some((g) => g.id === prev)) {
+                        return mapped[0].id;
+                    }
+                    return prev;
+                });
+            }
+        } catch (error: any) {
+            console.warn("Backend not reachable or error loading groups:", error);
+            setGroups((prev) => (prev.length > 0 ? prev : initialModuleGroups));
+        } finally {
+            setIsLoadingGroups(false);
+        }
+    };
+
+    useEffect(() => {
+        loadGroups();
+    }, []);
+
+    // Modules filtered by selected group with smart matching
     const currentGroupModules = useMemo(() => {
-        return modules.filter((m) => m.groupId === selectedGroupId);
-    }, [modules, selectedGroupId]);
+        const exactMatches = modules.filter((m) => m.groupId === selectedGroupId);
+        if (exactMatches.length > 0) return exactMatches;
+
+        const activeGroup = groups.find((g) => g.id === selectedGroupId);
+        if (activeGroup) {
+            const normalizedGroupName = activeGroup.name
+                .toLowerCase()
+                .replace(/group|management/gi, "")
+                .trim();
+            const matched = modules.filter((m) => {
+                const normGroupId = m.groupId.toLowerCase().replace("group-", "").trim();
+                return (
+                    normalizedGroupName.includes(normGroupId) ||
+                    normGroupId.includes(normalizedGroupName)
+                );
+            });
+            if (matched.length > 0) return matched;
+        }
+
+        return modules;
+    }, [modules, selectedGroupId, groups]);
 
     // Group handlers
     const handleAddGroup = () => {
@@ -58,29 +114,41 @@ export const ModuleGroupModulePage: React.FC = () => {
         setIsGroupModalOpen(true);
     };
 
-    const handleSaveGroup = (data: ModuleGroupFormData) => {
-        if (editingGroup) {
-            setGroups((prev) =>
-                prev.map((g) =>
-                    g.id === editingGroup.id
-                        ? { ...g, ...data }
-                        : g
-                )
-            );
-            toast.success("Cập nhật nhóm module thành công!");
-        } else {
-            const newGroup: ModuleGroupItem = {
-                id: `group-${Date.now()}`,
-                name: data.name,
-                description: data.description,
-                displayOrder: data.displayOrder,
-                moduleCount: 0,
-            };
-            setGroups((prev) => [...prev, newGroup]);
-            setSelectedGroupId(newGroup.id);
-            toast.success("Thêm nhóm module thành công!");
+    const handleSaveGroup = async (data: ModuleGroupFormData) => {
+        try {
+            if (editingGroup) {
+                await moduleGroupApi.update(String(editingGroup.id), {
+                    id: Number(editingGroup.id),
+                    name: data.name,
+                    description: data.description,
+                    displayOrder: data.displayOrder,
+                });
+                toast.success("Cập nhật nhóm module thành công!");
+                await loadGroups();
+            } else {
+                const created = await moduleGroupApi.create({
+                    name: data.name,
+                    description: data.description,
+                    displayOrder: data.displayOrder,
+                    isActive: true,
+                });
+                toast.success("Thêm nhóm module thành công!");
+                await loadGroups();
+                if (created && created.id) {
+                    setSelectedGroupId(String(created.id));
+                }
+            }
+            setIsGroupModalOpen(false);
+            setEditingGroup(null);
+        } catch (error: any) {
+            const errMsg =
+                error.response?.data?.message ||
+                (error.response?.data?.errors
+                    ? Object.values(error.response.data.errors).flat().join(", ")
+                    : null) ||
+                "Đã có lỗi xảy ra khi lưu nhóm module.";
+            toast.error(errMsg);
         }
-        setEditingGroup(null);
     };
 
     const handleDeleteGroupRequest = (group: ModuleGroupItem) => {
@@ -132,21 +200,28 @@ export const ModuleGroupModulePage: React.FC = () => {
         });
     };
 
-    const handleConfirmDelete = () => {
+    const handleConfirmDelete = async () => {
         if (!deleteDialog.item) return;
 
         if (deleteDialog.type === "group") {
             const groupToDelete = deleteDialog.item as ModuleGroupItem;
-            setGroups((prev) => prev.filter((g) => g.id !== groupToDelete.id));
-            setModules((prev) => prev.filter((m) => m.groupId !== groupToDelete.id));
+            try {
+                await moduleGroupApi.delete(String(groupToDelete.id));
+                toast.success(`Đã xóa nhóm module "${groupToDelete.name}" thành công!`);
+                await loadGroups();
 
-            if (selectedGroupId === groupToDelete.id) {
-                const remaining = groups.filter((g) => g.id !== groupToDelete.id);
-                if (remaining.length > 0) {
-                    setSelectedGroupId(remaining[0].id);
+                if (selectedGroupId === groupToDelete.id) {
+                    const remaining = groups.filter((g) => g.id !== groupToDelete.id);
+                    if (remaining.length > 0) {
+                        setSelectedGroupId(remaining[0].id);
+                    }
                 }
+            } catch (error: any) {
+                const errMsg =
+                    error.response?.data?.message ||
+                    "Không thể xóa nhóm module vì có lỗi xảy ra.";
+                toast.error(errMsg);
             }
-            toast.success(`Đã xóa nhóm module "${groupToDelete.name}" thành công!`);
         } else {
             const moduleToDelete = deleteDialog.item as ModuleItem;
             setModules((prev) => prev.filter((m) => m.id !== moduleToDelete.id));
@@ -220,6 +295,7 @@ export const ModuleGroupModulePage: React.FC = () => {
                             onAddGroup={handleAddGroup}
                             onEditGroup={handleEditGroup}
                             onDeleteGroup={handleDeleteGroupRequest}
+                            isLoading={isLoadingGroups}
                         />
                     </div>
 
@@ -263,7 +339,7 @@ export const ModuleGroupModulePage: React.FC = () => {
                 }
                 description={
                     deleteDialog.type === "group"
-                        ? "Bạn có chắc chắn muốn xóa nhóm module này? Tất cả module thuộc nhóm cũng sẽ bị xóa."
+                        ? "Bạn có chắc chắn muốn xóa nhóm module này khỏi hệ thống? (Nhóm đang chứa module sẽ bị từ chối xóa)"
                         : "Bạn có chắc chắn muốn xóa module này khỏi hệ thống?"
                 }
                 itemName={
