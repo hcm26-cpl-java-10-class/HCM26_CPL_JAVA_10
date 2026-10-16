@@ -32,6 +32,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 	private final ExamRepository examRepository;
 	private final QuestionRepository questionRepository;
 	private final ExamMapper examMapper;
+	private final ExamConfigValidator configValidator;
 
 	@Override
 	protected BaseCrudRepository<Exam, Long> getRepository() {
@@ -48,20 +49,23 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		return new String[]{"title"};
 	}
 
-	// ===== Create: Gắn câu hỏi nếu request có questionIds =====
+	// ===== Create: Gắn câu hỏi nếu request có questionIds, rồi kiểm tra cấu hình kỳ thi =====
 	@Override
 	protected void beforeCreate(Exam exam, ExamDTO request, ValidationContext context) {
 		if (request.getQuestionIds() != null) {
 			exam.setQuestions(resolveQuestions(request.getQuestionIds(), context));
 		}
+		configValidator.validate(null, request, totalPoints(exam.getQuestions()), context);
 	}
 
-	// ===== Update: Thay danh sách câu hỏi khi request gửi questionIds =====
+	// ===== Update: Thay danh sách câu hỏi khi request gửi questionIds, rồi kiểm tra cấu hình =====
+	// Lưu ý: hook chạy TRƯỚC khi mapper áp request lên entity, nên validator tự gộp request + giá trị hiện có.
 	@Override
 	protected void beforeUpdate(Exam exam, ExamDTO request, ValidationContext context) {
 		if (request.getQuestionIds() != null) {
 			exam.setQuestions(resolveQuestions(request.getQuestionIds(), context));
 		}
+		configValidator.validate(exam, request, totalPoints(exam.getQuestions()), context);
 	}
 
 	// ===== POST /api/exams/{id}/questions =====
@@ -81,7 +85,18 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		checkPermission(CrudAction.UPDATE);
 		Exam exam = findExam(examId);
 		exam.getQuestions().removeIf(question -> question.getId().equals(questionId));
+		int remaining = totalPoints(exam.getQuestions());
+		if (exam.getPassScore() != null && remaining > 0 && exam.getPassScore() > remaining) {
+			ValidationContext context = new ValidationContext();
+			context.add("passScore", "Sau khi bỏ câu hỏi, tổng điểm (" + remaining
+					+ ") nhỏ hơn điểm đạt (" + exam.getPassScore() + "). Hãy hạ điểm đạt trước");
+			context.throwIfErrors();
+		}
 		return examMapper.toResponse(examRepository.save(exam));
+	}
+
+	private int totalPoints(Set<Question> questions) {
+		return questions == null ? 0 : questions.stream().mapToInt(Question::getPoints).sum();
 	}
 
 	private Exam findExam(Long examId) {

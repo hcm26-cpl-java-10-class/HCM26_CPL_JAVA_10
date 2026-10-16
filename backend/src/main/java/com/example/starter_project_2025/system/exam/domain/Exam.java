@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.exam.domain;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -9,29 +10,20 @@ import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import com.example.starter_project_2025.system.question.domain.Question;
 import jakarta.persistence.*;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.JoinTable;
-import jakarta.persistence.ManyToMany;
-import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
-import java.util.HashSet;
-import java.util.Set;
 
 @Entity
 @Table(name = "exam")
 @ResourcePermission("EXAM")
 @ResourceMenu(
-    title = "Exams",
-    group = "Exam Management",
-    icon = "book-open",
-    url = "/exams",
-    order = 1,
-    permission = "EXAM_READ"
+        title = "Exams",
+        group = "Exam Management",
+        icon = "book-open",
+        url = "/exams",
+        order = 1,
+        permission = "EXAM_READ"
 )
 @Getter @Setter @NoArgsConstructor
 public class Exam extends BaseEntity {
@@ -41,6 +33,31 @@ public class Exam extends BaseEntity {
 
     @Column(nullable = false)
     private int durationMinutes;
+
+    private LocalDateTime startTime;
+
+    private LocalDateTime endTime;
+
+    @Column(nullable = false)
+    private Integer maxAttempts = 1;
+
+    @Column(nullable = false)
+    private Boolean shuffleQuestions = false;
+
+    @Column(nullable = false)
+    private Boolean shuffleOptions = false;
+
+    private Integer passScore;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    private LatePolicy latePolicy = LatePolicy.NOT_ALLOWED;
+
+    private Integer latePenaltyPercent;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    private ResultVisibility resultVisibility = ResultVisibility.IMMEDIATE;
 
     @ManyToMany
     @JoinTable(name = "exam_question",

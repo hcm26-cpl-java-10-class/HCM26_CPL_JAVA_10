@@ -37,6 +37,16 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setTitle(e.getTitle());
         d.setDurationMinutes(e.getDurationMinutes());
 
+        d.setStartTime(e.getStartTime());
+        d.setEndTime(e.getEndTime());
+        d.setMaxAttempts(e.getMaxAttempts());
+        d.setShuffleQuestions(e.getShuffleQuestions());
+        d.setShuffleOptions(e.getShuffleOptions());
+        d.setPassScore(e.getPassScore());
+        d.setLatePolicy(e.getLatePolicy());
+        d.setLatePenaltyPercent(e.getLatePenaltyPercent());
+        d.setResultVisibility(e.getResultVisibility());
+
         List<Question> sorted = e.getQuestions().stream()
                 .sorted(Comparator.comparing(Question::getId)).toList();
         d.setQuestionIds(sorted.stream().map(Question::getId).toList());
@@ -54,5 +64,15 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
     private void apply(Exam e, ExamDTO d) {
         if (d.getTitle() != null) e.setTitle(d.getTitle().trim());
         if (d.getDurationMinutes() != null) e.setDurationMinutes(d.getDurationMinutes());
+
+        if (d.getStartTime() != null) e.setStartTime(d.getStartTime());
+        if (d.getEndTime() != null) e.setEndTime(d.getEndTime());
+        if (d.getMaxAttempts() != null) e.setMaxAttempts(d.getMaxAttempts());
+        if (d.getShuffleQuestions() != null) e.setShuffleQuestions(d.getShuffleQuestions());
+        if (d.getShuffleOptions() != null) e.setShuffleOptions(d.getShuffleOptions());
+        if (d.getPassScore() != null) e.setPassScore(d.getPassScore());
+        if (d.getLatePolicy() != null) e.setLatePolicy(d.getLatePolicy());
+        if (d.getLatePenaltyPercent() != null) e.setLatePenaltyPercent(d.getLatePenaltyPercent());
+        if (d.getResultVisibility() != null) e.setResultVisibility(d.getResultVisibility());
     }
 }

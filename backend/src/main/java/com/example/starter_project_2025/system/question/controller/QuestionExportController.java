@@ -7,10 +7,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/questions")
@@ -39,21 +37,6 @@ public class QuestionExportController {
         byte[] csv = exportService.downloadTemplate();
 
         return csvResponse(csv, "question-template.csv");
-    }
-
-    @PostMapping(
-            value = "/import",
-            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
-    )
-    public ResponseEntity<Map<String, Object>> importQuestions(
-            @RequestParam("file") MultipartFile file
-    ) throws IOException {
-        int imported = exportService.importCsv(file);
-
-        return ResponseEntity.ok(Map.of(
-                "message", "Questions imported successfully.",
-                "importedCount", imported
-        ));
     }
 
     private ResponseEntity<byte[]> csvResponse(
