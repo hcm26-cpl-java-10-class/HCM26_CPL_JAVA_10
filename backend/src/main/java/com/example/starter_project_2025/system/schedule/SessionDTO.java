@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.schedule;
 import com.example.starter_project_2025.base.crud.dto.BaseDTO;
 import com.example.starter_project_2025.base.crud.dto.OnCreate;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -55,10 +56,19 @@ public class SessionDTO extends BaseDTO {
 
     String notes;
 
+    @Size(max = 500, message = "Cancel reason must not exceed 500 characters")
+    String cancelReason;
+
     Boolean isOverridden;
 
     String overrideReason;
 
     // Field hỗ trợ request override từ Client (BR-10)
     Boolean forceOverride;
+
+    /**
+     * Phiên bản lạc hậu (optimistic locking) — chỉ trả về trong response, không nhận từ client.
+     */
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    Long version;
 }

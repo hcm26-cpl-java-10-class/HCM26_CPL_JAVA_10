@@ -4,7 +4,11 @@ import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.schedule.dto.ConflictCheckResponse;
+import com.example.starter_project_2025.system.schedule.dto.SessionCancelRequest;
+import com.example.starter_project_2025.system.schedule.exception.ConflictException;
+import com.example.starter_project_2025.system.schedule.exception.UnprocessableEntityException;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -26,6 +30,8 @@ public class SessionServiceImpl
     SessionRepository sessionRepository;
 
     static DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy");
+
+    static final int MAX_CANCEL_REASON_LENGTH = 500;
 
     @Override
     protected BaseCrudRepository<Session, Long> getRepository() {
@@ -170,5 +176,64 @@ public class SessionServiceImpl
                 conflict.getTitle(),
                 timeRange
         );
+    }
+
+    /**
+     * F15 — Hủy buổi học (shortcut {@code POST /api/v1/sessions/{id}/cancel}).
+     *
+     * <p>Quy tắc áp dụng:</p>
+     * <ul>
+     *     <li>Bắt buộc có {@code cancelReason} (≤ 500 ký tự) → 422 VALIDATION_FAILED (BR-SES-03).</li>
+     *     <li>Buổi học phải tồn tại → 404 SESSION_NOT_FOUND.</li>
+     *     <li>Phiên bản phải khớp (nếu client gửi If-Match/version) → 409 SESSION_VERSION_CONFLICT.</li>
+     *     <li>Chỉ chuyển được từ SCHEDULED → CANCELLED (một chiều) → 409 SESSION_INVALID_TRANSITION.</li>
+     * </ul>
+     */
+    @Override
+    public SessionDTO cancel(Long id, SessionCancelRequest request, Long expectedVersion) {
+
+        Session session = sessionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Session", "id", id));
+
+        // 1. Validate cancelReason (BR-SES-03) -> 422 VALIDATION_FAILED
+        String reason = request != null ? request.getCancelReason() : null;
+        if (reason == null || reason.isBlank()) {
+            throw UnprocessableEntityException.of(
+                    "VALIDATION_FAILED",
+                    "cancelReason",
+                    "Lý do hủy là bắt buộc khi hủy buổi học (BR-SES-03).");
+        }
+        reason = reason.trim();
+        if (reason.length() > MAX_CANCEL_REASON_LENGTH) {
+            throw UnprocessableEntityException.of(
+                    "VALIDATION_FAILED",
+                    "cancelReason",
+                    "Lý do hủy không được vượt quá " + MAX_CANCEL_REASON_LENGTH + " ký tự.");
+        }
+
+        // 2. Kiểm tra phiên bản (optimistic locking) -> 409 SESSION_VERSION_CONFLICT
+        if (expectedVersion != null && !expectedVersion.equals(session.getVersion())) {
+            throw new ConflictException(
+                    "SESSION_VERSION_CONFLICT",
+                    "Phiên bản buổi học đã thay đổi, vui lòng tải lại (currentVersion=" + session.getVersion() + ").");
+        }
+
+        // 3. Chỉ hủy được buổi đang SCHEDULED -> 409 SESSION_INVALID_TRANSITION
+        if (session.getStatus() != SessionStatus.SCHEDULED) {
+            throw new ConflictException(
+                    "SESSION_INVALID_TRANSITION",
+                    "Chỉ có thể hủy buổi học ở trạng thái SCHEDULED. Trạng thái hiện tại: " + session.getStatus() + ".");
+        }
+
+        // 4. Áp dụng chuyển trạng thái một chiều SCHEDULED -> CANCELLED
+        session.setStatus(SessionStatus.CANCELLED);
+        session.setCancelReason(reason);
+        if (request.getNotes() != null) {
+            session.setNotes(request.getNotes());
+        }
+
+        // updatedAt/updatedBy được cập nhật tự động bởi JPA auditing.
+        Session saved = sessionRepository.save(session);
+        return sessionMapper.toResponse(saved);
     }
 }
