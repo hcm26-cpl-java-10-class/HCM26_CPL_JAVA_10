@@ -52,6 +52,7 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "COURSE_READ",
                         "ENROLLMENT_READ",
                         "ENROLLMENT_CREATE",
+                        "ENROLLMENT_DELETE",
                         "LESSON_PROGRESS_READ",
                         "LESSON_PROGRESS_UPDATE"
                 )
@@ -80,7 +81,13 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "SECTION_CREATE",
                         "SECTION_READ",
                         "SECTION_UPDATE",
-                        "SECTION_DELETE"
+                        "SECTION_DELETE",
+
+                        // Lesson CRUD
+                        "LESSON_CREATE",
+                        "LESSON_READ",
+                        "LESSON_UPDATE",
+                        "LESSON_DELETE"
                 )
         );
         log.info("Ensured roles and permission mappings: ADMIN, STUDENT, TEACHER.");

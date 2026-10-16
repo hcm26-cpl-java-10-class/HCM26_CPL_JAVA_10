@@ -9,6 +9,11 @@ import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,6 +50,9 @@ public class CourseServiceImpl
         if (courseRepository.existsByName(request.getName())) {
             ctx.add("name", "Course name already exists");
         }
+        if (course.getStatus() == null) {
+            course.setStatus(CourseStatus.DRAFT);
+        }
         resolveInstructor(course, request);
         resolveCategory(course, request, ctx);
     }
@@ -56,8 +64,39 @@ public class CourseServiceImpl
                 courseRepository.existsByName(request.getName())) {
             ctx.add("name", "Course name already exists");
         }
-        resolveInstructor(course, request);
-        resolveCategory(course, request, ctx);
+        if (request.getInstructorId() != null) {
+            resolveInstructor(course, request);
+        }
+        if (request.getCategoryId() != null) {
+            resolveCategory(course, request, ctx);
+        }
+    }
+
+
+    @Override
+    public Page<CourseDTO> getAll(Pageable pageable, String search, CourseFilter filter) {
+        if (!canManageCourses()) {
+            if (filter == null) {
+                filter = new CourseFilter();
+            }
+            filter.setStatus(CourseStatus.PUBLISHED);
+        }
+        return super.getAll(pageable, search, filter);
+    }
+
+    @Override
+    public CourseDTO getById(Long id) {
+        CourseDTO course = super.getById(id);
+        if (!canManageCourses() && course.getStatus() != CourseStatus.PUBLISHED) {
+            throw new ResourceNotFoundException("Entity not found");
+        }
+        return course;
+    }
+
+    private boolean canManageCourses() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> "COURSE_UPDATE".equals(a.getAuthority()));
     }
 
     /**

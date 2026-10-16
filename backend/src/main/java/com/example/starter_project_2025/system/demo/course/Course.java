@@ -7,6 +7,8 @@ import com.example.starter_project_2025.base.dataio.template.annotation.ImportEn
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import jakarta.persistence.Column;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import jakarta.persistence.ManyToOne;
@@ -57,4 +59,13 @@ public class Course extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id")
     Category category;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    CourseStatus status = CourseStatus.DRAFT;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    CourseLevel level;
 }
