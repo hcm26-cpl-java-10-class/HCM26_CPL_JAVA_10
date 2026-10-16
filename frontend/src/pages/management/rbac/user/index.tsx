@@ -1,5 +1,9 @@
 import { userApi } from "@/api";
+import { departmentApi } from "@/api/features/rbac/department.api";
 import { roleApi } from "@/api/features/rbac/role.api";
+import { UserCreatePage } from "./pages/UserCreatePage";
+import { UserDetailPage } from "./pages/UserDetailPage";
+import { UserEditPage } from "./pages/UserEditPage";
 import {
   auditableFieldsSchema,
   type EntityConfig,
@@ -11,6 +15,18 @@ const userSchema: EntitySchema = {
   entityName: "user",
   idField: "id",
   fields: [
+    {
+      name: "username",
+      label: "Username",
+      type: "text",
+      sortable: true,
+    },
+    {
+      name: "employeeCode",
+      label: "Mã nhân viên",
+      type: "text",
+      sortable: true,
+    },
     {
       name: "email",
       label: "Email",
@@ -50,6 +66,19 @@ const userSchema: EntitySchema = {
       filterable: true,
       filterType: "select",
     },
+    {
+      name: "departmentIds",
+      label: "Phòng ban",
+      type: "relation",
+      relation: {
+        api: departmentApi,
+        valueField: "id",
+        labelField: "name",
+        multiple: true,
+      },
+      filterable: true,
+      filterType: "select",
+    },
     ...(auditableFieldsSchema as FieldSchema[]),
   ],
 };
@@ -59,4 +88,9 @@ export const entityConfig: EntityConfig = {
   path: "/users",
   api: userApi,
   schema: userSchema,
+  actionPages: {
+    create: { path: "/users/create", component: UserCreatePage },
+    edit: { path: "/users/:id/edit", component: UserEditPage },
+    detail: { path: "/users/:id/detail", component: UserDetailPage },
+  },
 };
