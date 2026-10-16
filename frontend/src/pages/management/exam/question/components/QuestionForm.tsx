@@ -84,8 +84,18 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel }:
             toast.error("Type and difficulty are required.");
             return;
         }
-        if (options.length < 2 || options.some((option) => !option.content)) {
-            toast.error("At least 2 options are required and none may be empty.");
+        if (form.type === "ESSAY") {
+            // Essay has no options: send an empty list so the backend clears any old ones
+            onSubmit({ ...form, content, topic: form.topic.trim(), options: [] });
+            return;
+        }
+        if (options.length < 2 || options.length > 6 || options.some((option) => !option.content)) {
+            toast.error("Need 2-6 options and none may be empty.");
+            return;
+        }
+        const texts = options.map((option) => option.content.toLowerCase());
+        if (new Set(texts).size !== texts.length) {
+            toast.error("Options must not be duplicated.");
             return;
         }
         const correctCount = options.filter((option) => option.correct).length;
@@ -126,9 +136,13 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel }:
                                 ...prev,
                                 type: value as QuestionType,
                                 options:
-                                    value === "SINGLE_CHOICE"
-                                        ? prev.options.map((option) => ({ ...option, correct: false }))
-                                        : prev.options,
+                                    value === "ESSAY"
+                                        ? []
+                                        : value === "SINGLE_CHOICE"
+                                            ? prev.options.map((option) => ({ ...option, correct: false }))
+                                            : prev.options.length >= 2
+                                                ? prev.options
+                                                : initialQuestionForm.options,
                             }))
                         }
                     >
@@ -138,6 +152,7 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel }:
                         <SelectContent>
                             <SelectItem value="SINGLE_CHOICE">Single choice</SelectItem>
                             <SelectItem value="MULTI_CHOICE">Multi choice</SelectItem>
+                            <SelectItem value="ESSAY">Essay</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
@@ -196,53 +211,60 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel }:
                 <Label htmlFor="question-active">Active</Label>
             </div>
 
-            <div className="grid gap-3">
-                <div className="flex items-center justify-between">
-                    <Label>Options (tick the correct answer)</Label>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                            setForm((prev) => ({
-                                ...prev,
-                                options: [...prev.options, { content: "", correct: false }],
-                            }))
-                        }
-                    >
-                        <Plus className="h-4 w-4" />
-                        Add option
-                    </Button>
-                </div>
-
-                {form.options.map((option, index) => (
-                    <div key={index} className="flex items-center gap-3">
-                        <Checkbox
-                            checked={option.correct}
-                            onCheckedChange={(checked) => toggleCorrect(index, checked === true)}
-                        />
-                        <Input
-                            value={option.content}
-                            onChange={(event) => updateOption(index, { content: event.target.value })}
-                            placeholder={`Option ${index + 1}`}
-                        />
+            {form.type === "ESSAY" ? (
+                <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
+                    Essay questions have no options; they are graded manually.
+                </p>
+            ) : (
+                <div className="grid gap-3">
+                    <div className="flex items-center justify-between">
+                        <Label>Options (tick the correct answer)</Label>
                         <Button
                             type="button"
-                            variant="ghost"
-                            size="icon"
-                            disabled={form.options.length <= 2}
+                            variant="outline"
+                            size="sm"
+                            disabled={form.options.length >= 6}
                             onClick={() =>
                                 setForm((prev) => ({
                                     ...prev,
-                                    options: prev.options.filter((_, i) => i !== index),
+                                    options: [...prev.options, { content: "", correct: false }],
                                 }))
                             }
                         >
-                            <Trash2 className="h-4 w-4" />
+                            <Plus className="h-4 w-4" />
+                            Add option
                         </Button>
                     </div>
-                ))}
-            </div>
+
+                    {form.options.map((option, index) => (
+                        <div key={index} className="flex items-center gap-3">
+                            <Checkbox
+                                checked={option.correct}
+                                onCheckedChange={(checked) => toggleCorrect(index, checked === true)}
+                            />
+                            <Input
+                                value={option.content}
+                                onChange={(event) => updateOption(index, { content: event.target.value })}
+                                placeholder={`Option ${index + 1}`}
+                            />
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                disabled={form.options.length <= 2}
+                                onClick={() =>
+                                    setForm((prev) => ({
+                                        ...prev,
+                                        options: prev.options.filter((_, i) => i !== index),
+                                    }))
+                                }
+                            >
+                                <Trash2 className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    ))}
+                </div>
+            )}
 
             <CardFooter className="px-0 pt-2 flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => navigate("/questions")} disabled={isSaving}>
