@@ -10,6 +10,7 @@ import ExamManagementPage from "@/pages/management/exam";
 import InvitationManagementPage from "@/pages/management/invitation";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
 import StudentExamList from "@/pages/student/StudentExamList";
+import StudentExamTakingPage from "@/pages/student/StudentExamTakingPage";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import type { ComponentType } from "react";
@@ -40,7 +41,8 @@ export const routes: RouteConfig[] = [
     isModuleDriven: true,
   },
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
-  { path: "/student/exams", component: StudentExamList,requiredPermission: "EXAM_READ", isModuleDriven: true },
+  { path: "/student/exams", component: StudentExamList, requiredPermission: "EXAM_READ", isModuleDriven: true },
+  { path: "/student/exams/:examId/take", component: StudentExamTakingPage, requiredPermission: "EXAM_TAKE" },
   { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
   ...buildEntityRoutes(),
 

@@ -1,4 +1,4 @@
-export type QuestionType = "SINGLE_CHOICE" | "MULTI_CHOICE";
+export type QuestionType = "SINGLE_CHOICE" | "MULTI_CHOICE" | "ESSAY";
 export type QuestionDifficulty = "EASY" | "MEDIUM" | "HARD";
 
 export interface QuestionOptionDTO {
@@ -25,11 +25,24 @@ export interface QuestionFilter {
   topic?: string;
 }
 
+export type LatePolicy = "NOT_ALLOWED" | "ALLOWED_WITH_PENALTY" | "ALLOWED";
+export type ResultVisibility = "IMMEDIATE" | "AFTER_EXAM_CLOSED" | "MANUAL_RELEASE";
+
 export interface ExamDTO {
   id?: number;
   isActive?: boolean;
   title: string;
   durationMinutes: number;
+  // Cấu hình kỳ thi (UFR-EXM-002). Dạng "YYYY-MM-DDTHH:mm[:ss]", null = không giới hạn
+  startTime?: string | null;
+  endTime?: string | null;
+  maxAttempts?: number;
+  shuffleQuestions?: boolean;
+  shuffleOptions?: boolean;
+  passScore?: number | null;
+  latePolicy?: LatePolicy;
+  latePenaltyPercent?: number | null;
+  resultVisibility?: ResultVisibility;
   questionIds?: number[];
   questions?: QuestionDTO[];
   totalPoints?: number;

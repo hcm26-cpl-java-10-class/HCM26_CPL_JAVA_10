@@ -48,7 +48,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 Jwt jwt = refreshTokenService.decodeAccessToken(token);
 
+
+
                 UserDetails userDetails = userDetailsService.loadUserByUsername(jwt.getSubject());
+
+                if (!userDetails.isAccountNonLocked()
+                        || !userDetails.isEnabled()) {
+                    SecurityContextHolder.clearContext();
+
+                    response.sendError(
+                            HttpServletResponse.SC_FORBIDDEN,
+                            "Account is locked or disabled"
+                    );
+                    return;
+                }
 
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(

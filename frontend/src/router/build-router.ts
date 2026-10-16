@@ -5,6 +5,7 @@ import { normalizeEntityActionPath } from "./entity-action.utils";
 
 type EntityModule = {
     entityConfig?: EntityConfig;
+    default?: ComponentType<any>;
 };
 
 const entityModules = import.meta.glob("../pages/management/**/index.tsx", {
@@ -87,9 +88,15 @@ export function buildEntityRoutes(): EntityRoute[] {
     const routesByPath = new Map<string, EntityRoute>();
 
     for (const entity of entities) {
+        const entityModule = Object.values(entityModules).find(
+            (moduleExports) => moduleExports.entityConfig?.path === entity.path,
+        );
+
         routesByPath.set(entity.path, {
             path: entity.path,
-            component: () => createElement(AutoCrudPage, { entity }),
+            component: entityModule?.default
+                ? entityModule.default
+                : () => createElement(AutoCrudPage, { entity }),
             isModuleDriven: true,
         });
 

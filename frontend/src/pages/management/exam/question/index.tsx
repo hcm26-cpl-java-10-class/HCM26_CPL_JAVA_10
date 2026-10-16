@@ -14,6 +14,7 @@ import { QuestionImport } from "@/components/datatable/dataio/QuestionImport";
 const typeOptions = [
   { label: "Single choice", value: "SINGLE_CHOICE" },
   { label: "Multi choice", value: "MULTI_CHOICE" },
+  { label: "Essay", value: "ESSAY" },
 ];
 
 const difficultyOptions = [
