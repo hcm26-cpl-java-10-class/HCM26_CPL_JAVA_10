@@ -105,3 +105,27 @@ export interface CourseDetail {
   totalDuration: number;
   sections: CourseDetailSection[];
 }
+
+// ---------------------------------------------------------------------------
+// M2: Publish validation & Batch Reorder
+// ---------------------------------------------------------------------------
+
+export interface PublishValidationResult {
+  valid: boolean;
+  errors: string[];
+}
+
+export interface LessonOrder {
+  lessonId: number;
+  orderIndex: number;
+}
+
+export interface SectionOrder {
+  sectionId: number;
+  orderIndex: number;
+  lessons: LessonOrder[];
+}
+
+export interface ReorderRequest {
+  sections: SectionOrder[];
+}

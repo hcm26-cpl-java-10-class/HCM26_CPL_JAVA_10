@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { CoursePublishPanel } from "../components/CoursePublishPanel.tsx";
+import { CurriculumReorderPanel } from "../components/CurriculumReorderPanel.tsx";
 import { useCourseEnrollment } from "../hooks/useCourseEnrollment.ts";
 import {
   LEVEL_BADGE_CLASS,
@@ -93,6 +95,9 @@ export function CourseDetailPage() {
 }
 
 function CourseDetailContent({ course }: { course: CourseDetail }) {
+  // Staff: contentUnlocked mà chưa enrolled (xem preview, có quyền quản lý)
+  const isStaffView = course.contentUnlocked && !course.enrolled;
+
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
       <div className="space-y-6">
@@ -141,14 +146,25 @@ function CourseDetailContent({ course }: { course: CourseDetail }) {
         </section>
 
         <Syllabus course={course} />
+
+        {/* Staff-only: kéo thả sắp xếp giáo trình */}
+        {isStaffView && course.sections.length > 0 && (
+          <CurriculumReorderPanel courseId={course.id} sections={course.sections} />
+        )}
       </div>
 
-      <aside className="lg:sticky lg:top-4 lg:self-start">
+      <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
         <CourseActionCard course={course} />
+
+        {/* Staff-only: publish panel */}
+        {isStaffView && (
+          <CoursePublishPanel courseId={course.id} />
+        )}
       </aside>
     </div>
   );
 }
+
 
 /** Nút hành động động: Ghi danh / Tiếp tục học / Xem trước (staff). */
 function CourseActionCard({ course }: { course: CourseDetail }) {
