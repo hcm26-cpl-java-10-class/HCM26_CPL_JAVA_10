@@ -1,4 +1,5 @@
 package com.example.starter_project_2025.system.demo.course;
+import com.example.starter_project_2025.system.demo.category.Category;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.base.dataio.importer.annotation.ImportField;
@@ -53,4 +54,7 @@ public class Course extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "instructor_id")
     User instructorUser;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
+    Category category;
 }

@@ -24,24 +24,29 @@ public class CategoryDataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        Category programming = upsert("PROGRAMMING", "Programming", "Software development courses", null);
-        upsert("WEB_DEV", "Web Development", "Frontend, backend and full-stack web", programming);
-        upsert("MOBILE_DEV", "Mobile Development", "Android, iOS and cross-platform apps", programming);
-        upsert("JAVA", "Java", "Java language and the Spring ecosystem", programming);
+        // Lập trình
+        Category programming = upsert("PROGRAMMING", "Lập trình & Công nghệ", "Các khóa học phát triển phần mềm và lập trình", null);
+        upsert("WEB_DEV", "Lập trình Web", "Phát triển ứng dụng Web với Frontend, Backend và Full-stack", programming);
+        upsert("MOBILE_DEV", "Lập trình Di động", "Phát triển ứng dụng Android, iOS và Đa nền tảng", programming);
+        upsert("JAVA", "Lập trình Java", "Ngôn ngữ lập trình Java và hệ sinh thái Spring Framework", programming);
 
-        Category data = upsert("DATA_AI", "Data & AI", "Data analysis and artificial intelligence", null);
-        upsert("MACHINE_LEARNING", "Machine Learning", "Classical ML and deep learning", data);
-        upsert("DATA_ANALYSIS", "Data Analysis", "SQL, statistics and visualization", data);
+        // Dữ liệu & AI
+        Category data = upsert("DATA_AI", "Dữ liệu & AI", "Phân tích dữ liệu và Trí tuệ nhân tạo", null);
+        upsert("MACHINE_LEARNING", "Học máy (Machine Learning)", "Học máy truyền thống và Học sâu (Deep Learning)", data);
+        upsert("DATA_ANALYSIS", "Phân tích dữ liệu", "Truy vấn SQL, thống kê và trực quan hóa dữ liệu", data);
 
-        Category design = upsert("DESIGN", "Design", "Visual and product design", null);
-        upsert("UI_UX", "UI/UX Design", "User interface and experience design", design);
+        // Thiết kế
+        Category design = upsert("DESIGN", "Thiết kế & Đồ họa", "Thiết kế hình ảnh và thiết kế sản phẩm", null);
+        upsert("UI_UX", "Thiết kế UI/UX", "Thiết kế giao diện và trải nghiệm người dùng", design);
 
-        Category business = upsert("BUSINESS", "Business", "Business and soft skills", null);
-        upsert("MARKETING", "Marketing", "Digital marketing and branding", business);
+        // Kinh doanh
+        Category business = upsert("BUSINESS", "Kinh doanh & Quản lý", "Kỹ năng kinh doanh, quản lý và kỹ năng mềm", null);
+        upsert("MARKETING", "Marketing & Truyền thông", "Marketing kỹ thuật số (Digital Marketing) và xây dựng thương hiệu", business);
 
-        upsert("LANGUAGE", "Languages", "Foreign language learning", null);
+        // Ngoại ngữ
+        upsert("LANGUAGE", "Ngoại ngữ", "Các khóa học luyện thi và giao tiếp ngoại ngữ", null);
 
-        log.info("Ensured sample categories.");
+        log.info("Ensured sample categories in Vietnamese.");
     }
 
     private Category upsert(String code, String name, String description, Category parent) {

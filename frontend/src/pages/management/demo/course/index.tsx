@@ -1,4 +1,4 @@
-import { courseApi, enrollmentApi } from "@/api";
+import { categoryApi, courseApi, enrollmentApi } from "@/api";
 import { userApi } from "@/api";
 import { AutoCrudPage } from "@/pages/management/AutoCrudPage";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -40,6 +40,25 @@ const courseSchema: EntitySchema = {
         api: userApi,
         valueField: "id",
         labelField: "email",
+      },
+    },
+    {
+      name: "categoryName",
+      label: "Category",
+      type: "text",
+      sortable: false,
+      editable: false,
+    },
+    {
+      name: "categoryId",
+      label: "Category",
+      type: "relation",
+      sortable: false,
+      visible: false,
+      relation: {
+        api: categoryApi,
+        valueField: "id",
+        labelField: "name",
       },
     },
     {
@@ -196,7 +215,7 @@ function StudentCourseCatalog() {
                         </div>
                       )}
                       <Badge className="absolute left-3 top-3 bg-white/95 text-slate-800 hover:bg-white">
-                        Course
+                        {course.categoryName || "Course"}
                       </Badge>
                     </div>
                     <div className="space-y-3 p-5">

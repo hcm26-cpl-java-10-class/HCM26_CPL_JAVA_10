@@ -7,4 +7,6 @@ import org.springframework.stereotype.Repository;
 public interface CourseRepository extends BaseCrudRepository<Course, Long> {
 
     boolean existsByName(String name);
+
+    boolean existsByCategoryId(Long categoryId);
 }

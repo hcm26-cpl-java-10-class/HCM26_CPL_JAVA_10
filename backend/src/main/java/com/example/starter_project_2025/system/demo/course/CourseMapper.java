@@ -12,9 +12,12 @@ public interface CourseMapper extends BaseCrudMapper<Course, CourseDTO> {
     @Override
     @IgnoreAuditFields
     @Mapping(target = "instructorUser", ignore = true)
+    @Mapping(target = "category", ignore = true)
     Course toEntity(CourseDTO dto);
 
     @Override
     @Mapping(source = "instructorUser.id", target = "instructorId")
+    @Mapping(source = "category.id", target = "categoryId")
+    @Mapping(source = "category.name", target = "categoryName")
     CourseDTO toResponse(Course entity);
 }
