@@ -53,4 +53,10 @@ public class SubjectController
     ) {
         return ResponseEntity.ok(subjectService.changeStatus(id, active));
     }
+
+    @GetMapping("/{id}/is-referenced")
+    @Operation(summary = "Kiểm tra môn học đã được tham chiếu hay chưa", description = "Kiểm tra xem môn học đã được sử dụng trong lịch học hoặc chương trình đào tạo hay chưa")
+    public ResponseEntity<Boolean> isSubjectReferenced(@PathVariable Long id) {
+        return ResponseEntity.ok(subjectService.isSubjectReferenced(id));
+    }
 }

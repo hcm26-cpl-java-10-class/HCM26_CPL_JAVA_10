@@ -20,4 +20,9 @@ export const subjectApi = Object.assign({}, base, {
     });
     return response.data;
   },
+
+  isSubjectReferenced: async (id: number | string): Promise<boolean> => {
+    const response = await axiosInstance.get<boolean>(`${path}/${id}/is-referenced`);
+    return response.data;
+  },
 });

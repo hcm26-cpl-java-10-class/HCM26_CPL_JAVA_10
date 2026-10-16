@@ -9,4 +9,6 @@ public interface SubjectService extends BaseCrudService<Long, SubjectDTO, Subjec
     List<SubjectDTO> getActiveSubjects();
 
     SubjectDTO changeStatus(Long id, Boolean isActive);
+
+    boolean isSubjectReferenced(Long id);
 }

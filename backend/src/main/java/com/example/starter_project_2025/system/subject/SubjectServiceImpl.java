@@ -4,10 +4,13 @@ import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import com.example.starter_project_2025.system.demo.session.SessionRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +26,8 @@ public class SubjectServiceImpl
 
     SubjectMapper subjectMapper;
     SubjectRepository subjectRepository;
+    SessionRepository sessionRepository;
+    JdbcOperations jdbcTemplate;
 
     @Override
     protected BaseCrudRepository<Subject, Long> getRepository() {
@@ -81,5 +86,52 @@ public class SubjectServiceImpl
         subject.setIsActive(Boolean.TRUE.equals(isActive));
         Subject saved = subjectRepository.save(subject);
         return subjectMapper.toResponse(saved);
+    }
+
+    @Override
+    protected void beforeDelete(Subject subject) {
+        if (isSubjectReferenced(subject.getId())) {
+            throw new BadRequestException(String.format(
+                    "Không thể xóa môn học [%s - v%s] vì đã được tham chiếu trong hệ thống. " +
+                    "Vui lòng chuyển trạng thái sang 'Ngừng hoạt động' (Inactive) để bảo toàn lịch sử đào tạo.",
+                    subject.getCode(), subject.getVersion()
+            ));
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isSubjectReferenced(Long id) {
+        if (id == null) {
+            return false;
+        }
+
+        // 1. Kiểm tra trong bảng sessions (Topic ID)
+        if (sessionRepository != null && sessionRepository.existsByTopicId(id)) {
+            return true;
+        }
+
+        // 2. Kiểm tra động các bảng liên kết từ các module khác (program_subjects, study_sessions, teaching_assignments)
+        String[] checkQueries = {
+                "SELECT COUNT(*) FROM program_subjects WHERE subject_id = ?",
+                "SELECT COUNT(*) FROM teaching_assignments WHERE subject_id = ?",
+                "SELECT COUNT(*) FROM study_sessions WHERE subject_id = ? OR topic_id = ?"
+        };
+
+        if (jdbcTemplate != null) {
+            for (String sql : checkQueries) {
+                try {
+                    Object[] params = sql.contains("OR") ? new Object[]{id, id} : new Object[]{id};
+                    Integer count = jdbcTemplate.queryForObject(sql, Integer.class, params);
+                    if (count != null && count > 0) {
+                        return true;
+                    }
+                } catch (Exception ignored) {
+                    // Bảng chưa tồn tại trong schema ở giai đoạn phát triển độc lập
+                }
+            }
+        }
+
+        return false;
     }
 }
