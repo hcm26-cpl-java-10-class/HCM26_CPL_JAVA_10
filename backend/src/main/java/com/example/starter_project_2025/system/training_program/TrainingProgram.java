@@ -43,12 +43,31 @@ public class TrainingProgram extends BaseEntity {
     List<ProgramSubject> subjects = new ArrayList<>();
 
     public void replaceSubjects(List<ProgramSubject> newSubjects) {
-        subjects.clear();
-        if (newSubjects != null) {
-            for (ProgramSubject item : newSubjects) {
+        if (newSubjects == null || newSubjects.isEmpty()) {
+            subjects.clear();
+            return;
+        }
+
+        // Map existing subjects by subjectId to preserve their IDs
+        java.util.Map<Long, ProgramSubject> existingMap = new java.util.HashMap<>();
+        for (ProgramSubject existing : subjects) {
+            existingMap.put(existing.getSubjectId(), existing);
+        }
+
+        List<ProgramSubject> updatedList = new ArrayList<>();
+        for (ProgramSubject item : newSubjects) {
+            ProgramSubject matched = existingMap.get(item.getSubjectId());
+            if (matched != null) {
+                matched.setOrderIndex(item.getOrderIndex());
+                updatedList.add(matched);
+                existingMap.remove(item.getSubjectId());
+            } else {
                 item.setProgram(this);
-                subjects.add(item);
+                updatedList.add(item);
             }
         }
+
+        subjects.clear();
+        subjects.addAll(updatedList);
     }
 }

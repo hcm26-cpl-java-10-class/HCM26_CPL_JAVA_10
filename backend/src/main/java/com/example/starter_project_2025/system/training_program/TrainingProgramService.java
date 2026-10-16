@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.training_program;
 
+import com.example.starter_project_2025.system.class_setup.TeachingAssignmentRepository;
+import com.example.starter_project_2025.system.class_setup.TrainingClassRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
@@ -14,6 +16,8 @@ import java.util.stream.Collectors;
 @Transactional
 public class TrainingProgramService {
     private final TrainingProgramRepository repository;
+    private final TrainingClassRepository trainingClassRepository;
+    private final TeachingAssignmentRepository teachingAssignmentRepository;
 
     @Transactional(readOnly = true)
     public Page<TrainingProgramResponse> search(String keyword, ProgramStatus status, Pageable pageable) {
@@ -52,6 +56,17 @@ public class TrainingProgramService {
             throw new IllegalStateException("Không sửa trực tiếp chương trình ACTIVE; hãy clone thành phiên bản mới.");
         }
         validateUnique(req, id);
+
+        // Bảo toàn ProgramSubject đã được phân công giảng dạy (phối hợp với Tú)
+        Set<Long> incomingSubjectIds = req.subjects() != null
+                ? req.subjects().stream().map(TrainingProgramRequest.ProgramSubjectRequest::subjectId).collect(Collectors.toSet())
+                : Collections.emptySet();
+        for (ProgramSubject oldPs : p.getSubjects()) {
+            if (!incomingSubjectIds.contains(oldPs.getSubjectId()) && teachingAssignmentRepository.existsByProgramSubjectId(oldPs.getId())) {
+                throw new IllegalStateException("Không thể bỏ môn học (subjectId: " + oldPs.getSubjectId() + ") vì môn này đã được phân công giảng dạy cho lớp học.");
+            }
+        }
+
         apply(p, req, validateSubjects(req.subjects(), false));
         return TrainingProgramResponse.from(repository.save(p));
     }
@@ -76,6 +91,9 @@ public class TrainingProgramService {
 
     public TrainingProgramResponse changeStatus(Long id, ProgramStatus status) {
         TrainingProgram p = find(id);
+        if (status == ProgramStatus.INACTIVE && trainingClassRepository.existsByProgramId(id)) {
+            throw new IllegalStateException("Không thể chuyển chương trình sang INACTIVE vì đang có lớp học sử dụng chương trình này.");
+        }
         if (status == ProgramStatus.ACTIVE) {
             if (p.getSubjects().isEmpty()) {
                 throw new IllegalArgumentException("Không thể kích hoạt chương trình chưa có môn học.");
