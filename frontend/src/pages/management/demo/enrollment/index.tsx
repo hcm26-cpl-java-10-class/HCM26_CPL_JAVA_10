@@ -5,15 +5,12 @@ import { useQuery } from "@tanstack/react-query";
 import { BookOpen, CalendarDays, GraduationCap, UserRound } from "lucide-react";
 import type { EntityConfig } from "@/types";
 import { Link } from "react-router-dom";
+import { CourseLearningPage } from "../progress/CourseLearningPage";
+import { EnrollmentProgressBar } from "../progress/EnrollmentProgressBar";
 
 const formatEnrollmentDate = (value: string) => {
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("vi-VN");
-};
-
-const getCourseProgress = (courseId: number, enrollmentId: number) => {
-    const rawProgress = ((courseId * 17 + enrollmentId * 13) % 71) + 20;
-    return Math.min(96, Math.max(25, rawProgress));
 };
 
 export const entityConfig: EntityConfig = {
@@ -31,6 +28,13 @@ export const entityConfig: EntityConfig = {
             { name: "thumbnailUrl", label: "Thumbnail", type: "text" },
             { name: "enrolledAt", label: "Enrolled At", type: "text" },
         ],
+    },
+    actionPages: {
+        detail: {
+            path: "/enrollments/:id/learn",
+            component: CourseLearningPage,
+            requiredPermission: "LESSON_PROGRESS_READ",
+        },
     },
 };
 
@@ -111,8 +115,6 @@ export default function EnrollmentManagementPage() {
                             </div>
                             <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
                                 {enrollments.map((enrollment) => {
-                                    const progress = getCourseProgress(enrollment.courseId, enrollment.id);
-
                                     return (
                                         <article key={enrollment.id} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
                                             <div className="h-44 overflow-hidden bg-gradient-to-br from-blue-100 via-indigo-100 to-violet-100">
@@ -145,20 +147,9 @@ export default function EnrollmentManagementPage() {
                                                         Enrolled {formatEnrollmentDate(enrollment.enrolledAt)}
                                                     </p>
                                                 )}
-                                                <div className="space-y-2">
-                                                    <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
-                                                        <span>Progress</span>
-                                                        <span>{progress}%</span>
-                                                    </div>
-                                                    <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
-                                                        <div
-                                                            className="h-full rounded-full bg-gradient-to-r from-blue-500 to-violet-500"
-                                                            style={{ width: `${progress}%` }}
-                                                        />
-                                                    </div>
-                                                </div>
+                                                <EnrollmentProgressBar enrollmentId={enrollment.id} />
                                                 <Button asChild className="w-full">
-                                                    <Link to="/courses">
+                                                    <Link to={`/enrollments/${enrollment.id}/learn`}>
                                                         <BookOpen className="size-4" /> Continue learning
                                                     </Link>
                                                 </Button>
