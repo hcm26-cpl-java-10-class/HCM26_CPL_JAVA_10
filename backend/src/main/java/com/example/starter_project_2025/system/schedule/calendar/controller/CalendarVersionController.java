@@ -4,6 +4,7 @@ import com.example.starter_project_2025.system.schedule.calendar.CalendarVersion
 import com.example.starter_project_2025.system.schedule.calendar.dto.CalendarVersionResponse;
 import com.example.starter_project_2025.system.schedule.calendar.dto.CreateCalendarVersionRequest;
 
+import com.example.starter_project_2025.system.schedule.calendar.dto.UpdateCalendarVersionRequest;
 import com.example.starter_project_2025.system.schedule.calendar.service.CalendarVersionService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -53,5 +54,26 @@ public class CalendarVersionController {
         return ResponseEntity.ok(
                 calendarVersionService.getVersions(calendarId, filter, pageable)
         );
+    }
+
+    @PatchMapping("/{versionId}")
+    @PreAuthorize("hasAuthority('CALENDARVERSION_UPDATE')")
+    public ResponseEntity<CalendarVersionResponse> updateVersion(
+            @PathVariable Long calendarId,
+            @PathVariable Long versionId,
+            @RequestBody UpdateCalendarVersionRequest request) {
+
+        return ResponseEntity.ok(
+                calendarVersionService.updateVersion(calendarId, versionId, request));
+    }
+
+    @DeleteMapping("/{versionId}")
+    @PreAuthorize("hasAuthority('CALENDARVERSION_DELETE')")
+    public ResponseEntity<Void> deleteVersion(
+            @PathVariable Long calendarId,
+            @PathVariable Long versionId) {
+
+        calendarVersionService.deleteVersion(calendarId, versionId);
+        return ResponseEntity.noContent().build();
     }
 }

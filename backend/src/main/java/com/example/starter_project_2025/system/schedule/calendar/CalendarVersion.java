@@ -46,4 +46,12 @@ public class CalendarVersion extends BaseEntity {
 
     @ExportField(name = "Activated By")
     Long activatedBy;
+
+    @Column(length = 255)
+    @ExportField(name = "Name")
+    String name;
+
+    @Column(length = 500)
+    @ExportField(name = "Description")
+    String description;
 }

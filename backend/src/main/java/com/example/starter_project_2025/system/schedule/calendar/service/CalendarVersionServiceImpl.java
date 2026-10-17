@@ -1,6 +1,8 @@
 
 package com.example.starter_project_2025.system.schedule.calendar.service;
 
+import com.example.starter_project_2025.exception.BadRequestException;
+import com.example.starter_project_2025.exception.ConflictException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.schedule.Session;
 import com.example.starter_project_2025.system.schedule.SessionRepository;
@@ -8,6 +10,7 @@ import com.example.starter_project_2025.system.schedule.SessionStatus;
 import com.example.starter_project_2025.system.schedule.calendar.*;
 import com.example.starter_project_2025.system.schedule.calendar.dto.CalendarVersionResponse;
 import com.example.starter_project_2025.system.schedule.calendar.dto.CreateCalendarVersionRequest;
+import com.example.starter_project_2025.system.schedule.calendar.dto.UpdateCalendarVersionRequest;
 import com.example.starter_project_2025.system.schedule.calendar.repository.CalendarRepository;
 import com.example.starter_project_2025.system.schedule.calendar.repository.CalendarVersionRepository;
 import jakarta.persistence.criteria.Predicate;
@@ -178,6 +181,86 @@ public class CalendarVersionServiceImpl implements CalendarVersionService {
 
         return calendarVersionRepository.findAll(specification, sortedPageable)
                 .map(calendarVersionMapper::toResponse);
+    }
+
+    @Override
+    @Transactional
+    public CalendarVersionResponse updateVersion(
+            Long calendarId,
+            Long versionId,
+            UpdateCalendarVersionRequest request) {
+
+        CalendarVersion version = getDraftVersionForUpdate(calendarId, versionId);
+
+        if (request == null || !request.getUnsupportedFields().isEmpty()) {
+            throw new BadRequestException(
+                    "Only name and description can be updated");
+        }
+
+        if (!request.hasUpdates()) {
+            throw new BadRequestException(
+                    "At least one of name or description must be provided");
+        }
+
+        if (request.isNameProvided()) {
+            if (!(request.getName() instanceof String name)
+                    || name.isBlank()
+                    || name.length() > 150) {
+                throw new BadRequestException(
+                        "Name must be a non-blank string of at most 150 characters");
+            }
+            version.setName(name);
+        }
+
+        if (request.isDescriptionProvided()) {
+            Object description = request.getDescription();
+
+            if (description != null
+                    && (!(description instanceof String text) || text.length() > 500)) {
+                throw new BadRequestException(
+                        "Description must be null or a string of at most 500 characters");
+            }
+
+            version.setDescription((String) description);
+        }
+
+        return calendarVersionMapper.toResponse(
+                calendarVersionRepository.save(version));
+    }
+
+    @Override
+    @Transactional
+    public void deleteVersion(Long calendarId, Long versionId) {
+        CalendarVersion version = getDraftVersionForUpdate(calendarId, versionId);
+
+        List<Session> sessions =
+                sessionRepository.findByCalendarVersion_IdAndIsActiveTrue(versionId);
+
+        for (Session session : sessions) {
+            session.setIsActive(false);
+        }
+
+        sessionRepository.saveAll(sessions);
+
+        version.setIsActive(false);
+        calendarVersionRepository.save(version);
+    }
+
+    private CalendarVersion getDraftVersionForUpdate(
+            Long calendarId,
+            Long versionId) {
+
+        CalendarVersion version = calendarVersionRepository
+                .findActiveByIdForUpdate(calendarId, versionId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Calendar Version not found: " + versionId));
+
+        if (version.getStatus() != CalendarVersionStatus.DRAFT) {
+            throw new ConflictException(
+                    "Only DRAFT calendar versions can be updated or deleted");
+        }
+
+        return version;
     }
 
 
