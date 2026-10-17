@@ -18,15 +18,23 @@ public class SessionAccessPolicy {
     private final ObjectProvider<SessionReadContextProvider> contextProviders;
 
     public Authentication requireReadPermission() {
+        return requirePermission("SESSION_READ");
+    }
+
+    public Authentication requireCreatePermission() {
+        return requirePermission("SESSION_CREATE");
+    }
+
+    private Authentication requirePermission(String permission) {
         Authentication actor = SecurityContextHolder.getContext().getAuthentication();
         if (actor == null || !actor.isAuthenticated() || actor instanceof AnonymousAuthenticationToken) {
             throw new AuthenticationCredentialsNotFoundException("Authentication is required.");
         }
 
         boolean allowed = actor.getAuthorities().stream()
-                .anyMatch(authority -> "SESSION_READ".equals(authority.getAuthority()));
+                .anyMatch(authority -> permission.equals(authority.getAuthority()));
         if (!allowed) {
-            throw new AccessDeniedException("SESSION_READ permission is required.");
+            throw new AccessDeniedException(permission + " permission is required.");
         }
         return actor;
     }

@@ -39,6 +39,8 @@ public class SessionResponse {
     String meetingLink;
     SessionStatus status;
     String notes;
+    String cancelReason;
+    Long version;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     LocalDateTime createdAt;

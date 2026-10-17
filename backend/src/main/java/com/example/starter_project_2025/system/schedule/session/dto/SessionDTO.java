@@ -62,4 +62,10 @@ public class SessionDTO extends BaseDTO {
 
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     String notes;
+
+    @Size(max = 500, message = "Cancel reason must not exceed 500 characters")
+    String cancelReason;
+
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    Long version;
 }

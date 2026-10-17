@@ -12,6 +12,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -93,4 +94,13 @@ public class Session extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     @ExportField(name = "Notes")
     String notes;
+
+    @Column(name = "cancel_reason", length = 500)
+    @ExportField(name = "Cancel Reason")
+    String cancelReason;
+
+    @Version
+    @Column(name = "version")
+    @ExportField(name = "Version")
+    Long version;
 }
