@@ -55,6 +55,9 @@ public class Exam extends BaseEntity {
 
     private Integer latePenaltyPercent;
 
+        @Column(nullable = false)
+        private Integer lateGraceMinutes = 0;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private ResultVisibility resultVisibility = ResultVisibility.IMMEDIATE;

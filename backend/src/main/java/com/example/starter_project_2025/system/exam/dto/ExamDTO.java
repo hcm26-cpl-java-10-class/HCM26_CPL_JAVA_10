@@ -51,6 +51,9 @@ public class ExamDTO extends BaseDTO {
     @Max(value = 100, groups = {OnCreate.class, OnUpdate.class}, message = "latePenaltyPercent phải từ 1 đến 100")
     private Integer latePenaltyPercent;
 
+    @Min(value = 0, groups = {OnCreate.class, OnUpdate.class}, message = "lateGraceMinutes phải >= 0")
+    private Integer lateGraceMinutes;
+
     private ResultVisibility resultVisibility;
 
     private List<Long> questionIds;

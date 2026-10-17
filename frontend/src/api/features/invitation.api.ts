@@ -2,6 +2,7 @@ import { createBaseApiService } from "@/api/base-service.api";
 import axiosInstance from "@/api/axios";
 import type {
   InvitationDTO,
+  StudentInvitationDTO,
   InvitationFilter,
   BatchInvitationRequest,
   BatchInvitationResponse,
@@ -17,6 +18,16 @@ export const invitationApi = {
 
   delete: async (id: number | string): Promise<void> => {
     return baseInvitationApi.delete(String(id));
+  },
+
+  getMyInvitations: async (): Promise<StudentInvitationDTO[]> => {
+    const response = await axiosInstance.get<StudentInvitationDTO[]>("/invitations/my");
+    return response.data;
+  },
+
+  accept: async (id: number | string): Promise<StudentInvitationDTO> => {
+    const response = await axiosInstance.post<StudentInvitationDTO>(`/invitations/${id}/accept`);
+    return response.data;
   },
 
   inviteSingle: async (data: Partial<InvitationDTO>): Promise<InvitationDTO> => {

@@ -1,9 +1,10 @@
 import {
     getMyExamAttempts,
-    getStudentExams,
     type Exam,
     type ExamAttemptSummary,
 } from '@/api/exam.api';
+import { invitationApi } from '@/api';
+import type { StudentInvitationDTO } from '@/types';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,10 +17,9 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, ArrowRight, CalendarDays, Clock3, RefreshCw } from 'lucide-react';
+import { AlertCircle, ArrowRight, CalendarDays, Clock3, Mail, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-const examsQueryKey = ['student-exams'] as const;
 const attemptsQueryKey = ['student-exam-attempts'] as const;
 
 function getAttemptStatus(attempt?: ExamAttemptSummary) {
@@ -38,20 +38,34 @@ function getAttemptStatus(attempt?: ExamAttemptSummary) {
 function ExamCard({
     exam,
     attempt,
+    invitation,
     onOpen,
-    disabled,
+    disabled: externallyDisabled,
 }: {
     exam: Exam;
     attempt?: ExamAttemptSummary;
+    invitation: StudentInvitationDTO;
     onOpen: (examId: number) => void;
     disabled: boolean;
 }) {
     const status = getAttemptStatus(attempt);
-    const buttonLabel = attempt?.status === 'IN_PROGRESS'
+    const now = Date.now();
+    const beforeOpen = exam.startTime != null && now < new Date(exam.startTime).getTime();
+    const afterClose = exam.endTime != null && now >= new Date(exam.endTime).getTime();
+    const isInProgress = attempt?.status === 'IN_PROGRESS';
+    const hasAttempts = (attempt?.attemptsUsed ?? 0) > 0;
+    const outOfAttempts = hasAttempts && (attempt?.attemptsRemaining ?? 0) <= 0 && !isInProgress;
+    const disabledBySchedule = (beforeOpen || afterClose) && !isInProgress;
+    const isDisabled = externallyDisabled || outOfAttempts || disabledBySchedule;
+    const buttonLabel = isInProgress
         ? 'Tiếp tục làm bài'
-        : attempt
-            ? 'Xem kết quả'
-            : 'Vào thi';
+        : outOfAttempts
+            ? 'Đã hết lượt'
+            : beforeOpen
+                ? 'Chưa đến giờ mở'
+                : afterClose
+                    ? 'Kỳ thi đã đóng'
+                    : 'Vào thi';
 
     return (
         <Card className="flex h-full flex-col border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
@@ -80,8 +94,19 @@ function ExamCard({
                 )}
                 {attempt?.status === 'SUBMITTED' && (
                     <p className="text-sm text-emerald-700">
-                        Điểm: {attempt.finalScore ?? 0}/{attempt.totalPoints}.
+                        Điểm cao nhất: {attempt.bestScore ?? attempt.finalScore ?? 0}/{attempt.totalPoints}.
                     </p>
+                )}
+                {hasAttempts && attempt?.status !== 'SUBMITTED' && attempt?.bestScore != null && (
+                    <p className="text-sm text-emerald-700">Điểm cao nhất: {attempt.bestScore}/{attempt.totalPoints}.</p>
+                )}
+                {attempt && (
+                    <p className="mt-2 text-sm text-slate-600">
+                        Lượt {attempt.attemptNumber} · Đã dùng {attempt.attemptsUsed}/{exam.maxAttempts ?? 1} lượt
+                    </p>
+                )}
+                {invitation.endTime && (
+                    <p className="mt-2 text-xs text-slate-500">Đóng lúc: {new Date(invitation.endTime).toLocaleString()}</p>
                 )}
                 {attempt?.status === 'IN_PROGRESS' && (
                     <p className="text-sm text-sky-700">
@@ -96,7 +121,7 @@ function ExamCard({
             </CardContent>
 
             <CardFooter className="border-t border-slate-100 pt-4">
-                <Button className="w-full bg-cyan-600 text-white hover:bg-cyan-500" disabled={disabled} onClick={() => onOpen(exam.id)}>
+                <Button className="w-full bg-cyan-600 text-white hover:bg-cyan-500" disabled={isDisabled} onClick={() => onOpen(exam.id)}>
                     {buttonLabel}
                     <ArrowRight className="size-4" />
                 </Button>
@@ -107,23 +132,38 @@ function ExamCard({
 
 export default function StudentExamList() {
     const navigate = useNavigate();
-    const examsQuery = useQuery({
-        queryKey: examsQueryKey,
-        queryFn: () => getStudentExams(),
-    });
     const attemptsQuery = useQuery({
         queryKey: attemptsQueryKey,
         queryFn: getMyExamAttempts,
     });
+    const invitationsQuery = useQuery({
+        queryKey: ['student-invitations'],
+        queryFn: invitationApi.getMyInvitations,
+    });
 
     const retry = () => {
-        void examsQuery.refetch();
         void attemptsQuery.refetch();
+        void invitationsQuery.refetch();
     };
 
-    const hasError = examsQuery.isError || attemptsQuery.isError;
-    const isLoading = examsQuery.isLoading || attemptsQuery.isLoading;
-    const exams = examsQuery.data?.content ?? [];
+    const hasError = invitationsQuery.isError || attemptsQuery.isError;
+    const isLoading = invitationsQuery.isLoading || attemptsQuery.isLoading;
+    const invitations = invitationsQuery.data ?? [];
+    const exams = invitations
+        .filter((invitation) => invitation.status === 'ACCEPTED' && invitation.isActive !== false)
+        .map((invitation): { exam: Exam; invitation: StudentInvitationDTO } => ({
+            invitation,
+            exam: {
+                id: invitation.examId,
+                title: invitation.examTitle,
+                durationMinutes: invitation.durationMinutes ?? 0,
+                totalPoints: invitation.totalPoints,
+                startTime: invitation.startTime,
+                endTime: invitation.endTime,
+                maxAttempts: invitation.maxAttempts,
+                isActive: true,
+            },
+        }));
     const attempts = attemptsQuery.data ?? [];
 
     return (
@@ -148,6 +188,9 @@ export default function StudentExamList() {
                             Tải lại
                         </Button>
                     )}
+                    <Button variant="outline" onClick={() => navigate('/student/invitations')}>
+                        <Mail className="size-4" /> Lời mời
+                    </Button>
                 </header>
 
                 {hasError && (
@@ -157,10 +200,10 @@ export default function StudentExamList() {
                     >
                         <AlertCircle className="mt-0.5 size-4 shrink-0" />
                         <p>
-                            {examsQuery.isError && attemptsQuery.isError
+                            {invitationsQuery.isError && attemptsQuery.isError
                                 ? 'Không thể tải lịch thi và trạng thái bài làm.'
-                                : examsQuery.isError
-                                    ? 'Không thể tải danh sách kỳ thi.'
+                                : invitationsQuery.isError
+                                    ? 'Không thể tải lời mời đã chấp nhận.'
                                     : 'Không thể tải trạng thái các bài thi đã làm. Tải lại để xác nhận trạng thái trước khi vào thi.'}
                         </p>
                     </div>
@@ -179,24 +222,29 @@ export default function StudentExamList() {
                             </Card>
                         ))}
                     </div>
-                ) : examsQuery.isError ? null : exams.length === 0 ? (
+                ) : invitationsQuery.isError ? null : exams.length === 0 ? (
                     <Card className="items-center border-dashed border-slate-300 bg-white py-10 text-center">
                         <CardContent className="space-y-2">
-                            <CalendarDays className="mx-auto size-8 text-slate-400" />
-                            <CardTitle className="text-slate-900">Chưa có kỳ thi khả dụng</CardTitle>
+                            <Mail className="mx-auto size-8 text-slate-400" />
+                            <CardTitle className="text-slate-900">Chưa có kỳ thi được chấp nhận</CardTitle>
                             <CardDescription>
-                                Các kỳ thi được mở sẽ xuất hiện tại đây.
+                                Chấp nhận lời mời để xem kỳ thi tại đây.
                             </CardDescription>
+                            <Button variant="outline" onClick={() => navigate('/student/invitations')}>Xem lời mời</Button>
                         </CardContent>
                     </Card>
                 ) : (
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        {exams.map((exam) => {
-                            const attempt = attempts.find((item) => item.examId === exam.id);
+                        {exams.map(({ exam, invitation }) => {
+                            const examAttempts = attempts.filter((item) => item.examId === exam.id);
+                            const attempt = examAttempts.find((item) => item.status === 'IN_PROGRESS')
+                                ?? examAttempts.reduce<ExamAttemptSummary | undefined>((latest, item) =>
+                                    !latest || item.attemptNumber > latest.attemptNumber ? item : latest, undefined);
                             return (
                                 <ExamCard
-                                    key={exam.id}
+                                    key={invitation.id}
                                     exam={exam}
+                                    invitation={invitation}
                                     attempt={attempt}
                                     disabled={attemptsQuery.isError}
                                     onOpen={(id) => navigate(`/student/exams/${id}/take`)}

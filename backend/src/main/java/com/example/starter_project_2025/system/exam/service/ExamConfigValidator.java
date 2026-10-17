@@ -25,6 +25,8 @@ public class ExamConfigValidator {
                 : (existing == null ? LatePolicy.NOT_ALLOWED : existing.getLatePolicy());
         Integer penalty = r.getLatePenaltyPercent() != null ? r.getLatePenaltyPercent()
                 : (existing == null ? null : existing.getLatePenaltyPercent());
+        Integer lateGraceMinutes = r.getLateGraceMinutes() != null ? r.getLateGraceMinutes()
+            : (existing == null ? 0 : existing.getLateGraceMinutes());
 
         if (start != null && end != null) {
             if (!start.isBefore(end)) {
@@ -52,6 +54,12 @@ public class ExamConfigValidator {
         }
         if (latePolicy == LatePolicy.ALLOWED_WITH_PENALTY && (penalty == null || penalty < 1 || penalty > 100)) {
             ctx.add("latePenaltyPercent", "Nộp muộn có trừ điểm cần phần trăm trừ từ 1 đến 100");
+        }
+        if (lateGraceMinutes == null || lateGraceMinutes < 0) {
+            ctx.add("lateGraceMinutes", "Thời gian gia hạn phải >= 0 phút");
+        }
+        if (latePolicy == LatePolicy.NOT_ALLOWED && lateGraceMinutes != null && lateGraceMinutes > 0) {
+            ctx.add("lateGraceMinutes", "Chỉ cấu hình thời gian gia hạn khi cho phép nộp muộn");
         }
     }
 }

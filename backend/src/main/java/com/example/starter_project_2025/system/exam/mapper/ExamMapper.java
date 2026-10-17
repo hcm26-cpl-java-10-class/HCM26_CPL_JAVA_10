@@ -45,6 +45,7 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setPassScore(e.getPassScore());
         d.setLatePolicy(e.getLatePolicy());
         d.setLatePenaltyPercent(e.getLatePenaltyPercent());
+        d.setLateGraceMinutes(e.getLateGraceMinutes());
         d.setResultVisibility(e.getResultVisibility());
 
         List<Question> sorted = e.getQuestions().stream()
@@ -73,6 +74,7 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         if (d.getPassScore() != null) e.setPassScore(d.getPassScore());
         if (d.getLatePolicy() != null) e.setLatePolicy(d.getLatePolicy());
         if (d.getLatePenaltyPercent() != null) e.setLatePenaltyPercent(d.getLatePenaltyPercent());
+        if (d.getLateGraceMinutes() != null) e.setLateGraceMinutes(d.getLateGraceMinutes());
         if (d.getResultVisibility() != null) e.setResultVisibility(d.getResultVisibility());
     }
 }

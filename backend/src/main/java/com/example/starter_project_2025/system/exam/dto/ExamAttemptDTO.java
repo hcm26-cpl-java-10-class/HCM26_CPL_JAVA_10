@@ -13,6 +13,7 @@ import java.util.List;
 public class ExamAttemptDTO {
     private Long id;
     private Long examId;
+    private int attemptNumber;
     private String title;
     private int durationMinutes;
     private int totalPoints;
@@ -20,8 +21,14 @@ public class ExamAttemptDTO {
     private Integer finalScore;
     private ExamAttemptStatus status;
     private Instant startedAt;
+    private Instant officialDeadlineAt;
     private Instant deadlineAt;
     private Instant submittedAt;
+    private boolean late;
+    private Integer latePenaltyPercentApplied;
+    private Integer attemptsUsed;
+    private Integer attemptsRemaining;
+    private Integer bestScore;
     private List<QuestionTakerDTO> questions;
     private List<AnswerDTO> answers;
 

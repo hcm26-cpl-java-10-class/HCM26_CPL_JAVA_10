@@ -13,6 +13,8 @@ public interface ExamAttemptRepository extends BaseCrudRepository<ExamAttempt, L
 
     Optional<ExamAttempt> findByExam_IdAndStudent_Id(Long examId, Long studentId);
 
+    List<ExamAttempt> findAllByExam_IdAndStudent_IdOrderByAttemptNumberAsc(Long examId, Long studentId);
+
     List<ExamAttempt> findAllByStudent_IdOrderByStartedAtDesc(Long studentId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

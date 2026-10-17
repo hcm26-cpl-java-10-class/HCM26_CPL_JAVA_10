@@ -11,6 +11,7 @@ import InvitationManagementPage from "@/pages/management/invitation";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
 import StudentExamList from "@/pages/student/StudentExamList";
 import StudentExamTakingPage from "@/pages/student/StudentExamTakingPage";
+import StudentInvitationsPage from "@/pages/student/StudentInvitationsPage";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import MyScoresPage from "@/pages/student/MyScoresPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
@@ -43,6 +44,7 @@ export const routes: RouteConfig[] = [
   },
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
   { path: "/student/exams", component: StudentExamList, requiredPermission: "EXAM_READ", isModuleDriven: true },
+  { path: "/student/invitations", component: StudentInvitationsPage, requiredPermission: "EXAM_TAKE" },
   { path: "/student/exams/:examId/take", component: StudentExamTakingPage, requiredPermission: "EXAM_TAKE" },
   { path: "/my-scores", component: MyScoresPage, requiredPermission: "STUDENT_SCORE_VIEW_OWN", isModuleDriven: true },
   { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },

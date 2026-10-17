@@ -54,6 +54,14 @@ public class InvitationMapper implements BaseCrudMapper<Invitation, InvitationDT
         if (entity.getExam() != null) {
             dto.setExamId(entity.getExam().getId());
             dto.setExamTitle(entity.getExam().getTitle());
+            dto.setDurationMinutes(entity.getExam().getDurationMinutes());
+            dto.setStartTime(entity.getExam().getStartTime());
+            dto.setEndTime(entity.getExam().getEndTime());
+            dto.setMaxAttempts(entity.getExam().getMaxAttempts());
+            dto.setTotalPoints(entity.getExam().getQuestions().stream()
+                    .filter(question -> Boolean.TRUE.equals(question.getIsActive()))
+                    .mapToInt(question -> question.getPoints())
+                    .sum());
         }
 
         if (entity.getUser() != null) {
