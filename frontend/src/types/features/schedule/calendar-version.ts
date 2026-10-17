@@ -13,3 +13,11 @@ export interface CalendarVersionResponse extends BaseDTO {
     activatedAt: string | null;
     activatedBy: number | null;
 }
+
+export interface CalendarSummary {
+    id: number;
+    classId: number;
+    name: string;
+    description: string | null;
+    activeVersionNumber: number | null;
+}

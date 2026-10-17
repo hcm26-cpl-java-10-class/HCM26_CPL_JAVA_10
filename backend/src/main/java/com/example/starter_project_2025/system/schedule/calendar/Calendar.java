@@ -44,4 +44,14 @@ public class Calendar extends BaseEntity {
     @ImportField(name = "Last Version")
     @ExportField(name = "Last Version")
     Integer lastIssuedVersionNumber = 0;
+
+    @Column(nullable = false, length = 150)
+    @ImportField(name = "Name", required = true)
+    @ExportField(name = "Name")
+    String name;
+
+    @Column(length = 500)
+    @ImportField(name = "Description")
+    @ExportField(name = "Description")
+    String description;
 }

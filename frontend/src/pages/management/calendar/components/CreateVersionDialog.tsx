@@ -138,8 +138,7 @@ export function CreateVersionDialog({
 
                             {!hasActiveVersion && (
                                 <span className="mt-2 block text-xs text-destructive">
-                  Unavailable because this calendar has no active version
-                  in the current mock data.
+                  Unavailable because this calendar has no active version.
                 </span>
                             )}
             </span>
