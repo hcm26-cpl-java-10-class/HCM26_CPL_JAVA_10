@@ -2,6 +2,8 @@ package com.example.starter_project_2025.system.schedule;
 
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.system.schedule.dto.SessionCancelRequest;
+import com.example.starter_project_2025.system.schedule.session.SessionService;
+import com.example.starter_project_2025.system.schedule.session.dto.SessionDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.AccessLevel;

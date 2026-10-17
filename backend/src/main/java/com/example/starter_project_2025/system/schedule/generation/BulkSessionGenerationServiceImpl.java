@@ -1,8 +1,8 @@
 package com.example.starter_project_2025.system.schedule.generation;
 
-import com.example.starter_project_2025.system.schedule.Session;
-import com.example.starter_project_2025.system.schedule.SessionRepository;
-import com.example.starter_project_2025.system.schedule.SessionStatus;
+import com.example.starter_project_2025.system.schedule.session.Session;
+import com.example.starter_project_2025.system.schedule.session.SessionRepository;
+import com.example.starter_project_2025.system.schedule.session.SessionStatus;
 import com.example.starter_project_2025.system.schedule.generation.dto.*;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
