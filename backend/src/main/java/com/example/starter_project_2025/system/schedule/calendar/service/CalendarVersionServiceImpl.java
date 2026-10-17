@@ -1,24 +1,28 @@
 
 package com.example.starter_project_2025.system.schedule.calendar.service;
 
+import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.schedule.Session;
 import com.example.starter_project_2025.system.schedule.SessionRepository;
 import com.example.starter_project_2025.system.schedule.SessionStatus;
-import com.example.starter_project_2025.system.schedule.calendar.Calendar;
-import com.example.starter_project_2025.system.schedule.calendar.CalendarVersion;
-import com.example.starter_project_2025.system.schedule.calendar.CalendarVersionCreationMode;
-import com.example.starter_project_2025.system.schedule.calendar.CalendarVersionStatus;
+import com.example.starter_project_2025.system.schedule.calendar.*;
 import com.example.starter_project_2025.system.schedule.calendar.dto.CalendarVersionResponse;
 import com.example.starter_project_2025.system.schedule.calendar.dto.CreateCalendarVersionRequest;
-import com.example.starter_project_2025.system.schedule.calendar.CalendarVersionMapper;
 import com.example.starter_project_2025.system.schedule.calendar.repository.CalendarRepository;
 import com.example.starter_project_2025.system.schedule.calendar.repository.CalendarVersionRepository;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+
 
 @Service
 @RequiredArgsConstructor
@@ -120,4 +124,61 @@ public class CalendarVersionServiceImpl implements CalendarVersionService {
         // 8. Dùng Mapper để chuyển Entity thành response DTO
         return calendarVersionMapper.toResponse(savedVersion);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<CalendarVersionResponse> getVersions(
+            Long calendarId,
+            CalendarVersionFilter filter,
+            Pageable pageable) {
+
+        calendarRepository.findById(calendarId)
+                .filter(calendar -> Boolean.TRUE.equals(calendar.getIsActive()))
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Active Calendar not found: " + calendarId));
+
+        CalendarVersionFilter versionFilter =
+                filter == null ? new CalendarVersionFilter() : filter;
+
+        Specification<CalendarVersion> specification = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            predicates.add(cb.isTrue(root.get("isActive")));
+            predicates.add(cb.equal(root.get("calendar").get("id"), calendarId));
+
+            if (versionFilter.getClassId() != null) {
+                predicates.add(cb.equal(
+                        root.get("calendar").get("classId"),
+                        versionFilter.getClassId()
+                ));
+            }
+
+            if (versionFilter.getStatus() != null) {
+                predicates.add(cb.equal(
+                        root.get("status"),
+                        versionFilter.getStatus()
+                ));
+            }
+
+            if (versionFilter.getVersionNumber() != null) {
+                predicates.add(cb.equal(
+                        root.get("versionNumber"),
+                        versionFilter.getVersionNumber()
+                ));
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        Pageable sortedPageable = PageRequest.of(
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                Sort.by(Sort.Direction.DESC, "versionNumber")
+        );
+
+        return calendarVersionRepository.findAll(specification, sortedPageable)
+                .map(calendarVersionMapper::toResponse);
+    }
+
+
 }

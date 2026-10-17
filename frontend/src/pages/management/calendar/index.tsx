@@ -1,16 +1,42 @@
 import { useCallback, useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { calendarVersionApi } from "@/api";
+import { MainLayout } from "@/components/layout/MainLayout";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+import { usePermissions } from "@/hooks/usePermissions";
+import { toast } from "sonner";
 import type {
     CalendarSummary,
     CalendarVersionCreationMode,
+    CalendarVersionStatus,
     EntityConfig,
     EntitySchema,
 } from "@/types";
-import { MainLayout } from "@/components/layout/MainLayout";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
-import { CalendarDays, GitBranch, Plus } from "lucide-react";
+import {
+    CalendarDays,
+    ChevronLeft,
+    ChevronRight,
+    Filter,
+    GitBranch,
+    Plus,
+} from "lucide-react";
 import { CreateVersionDialog } from "./components/CreateVersionDialog";
 
 const calendarSchema: EntitySchema = {
@@ -46,6 +72,16 @@ export const entityConfig: EntityConfig = {
     schema: calendarSchema,
 };
 
+const formatDate = (value: string | null | undefined): string => {
+    if (!value) {
+        return "—";
+    }
+
+    const date = new Date(value);
+
+    return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
+};
+
 export default function CalendarManagementPage() {
     const [calendars, setCalendars] = useState<CalendarSummary[]>([]);
     const [selectedCalendarId, setSelectedCalendarId] = useState<number | null>(
@@ -54,6 +90,26 @@ export default function CalendarManagementPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [dialogOpen, setDialogOpen] = useState(false);
+
+    const [page, setPage] = useState(0);
+    const [statusFilter, setStatusFilter] = useState<
+        CalendarVersionStatus | "ALL"
+    >("ALL");
+    const [versionNumberInput, setVersionNumberInput] = useState("");
+
+    const { hasPermission } = usePermissions();
+    const queryClient = useQueryClient();
+
+    const parsedVersionNumber =
+        versionNumberInput.trim() === ""
+            ? undefined
+            : Number(versionNumberInput);
+
+    const versionNumberValid =
+        parsedVersionNumber === undefined ||
+        (Number.isInteger(parsedVersionNumber) && parsedVersionNumber > 0);
+
+    const canReadVersions = hasPermission("CALENDARVERSION_READ");
 
     const loadCalendars = useCallback(async () => {
         setIsLoading(true);
@@ -66,7 +122,7 @@ export default function CalendarManagementPage() {
             setSelectedCalendarId((currentId) =>
                 data.some((calendar) => calendar.id === currentId)
                     ? currentId
-                    : data[0]?.id ?? null,
+                    : (data[0]?.id ?? null),
             );
         } catch (error) {
             const message =
@@ -89,6 +145,44 @@ export default function CalendarManagementPage() {
         (calendar) => calendar.id === selectedCalendarId,
     );
 
+    const versionsQuery = useQuery({
+        queryKey: [
+            "calendar-versions",
+            selectedCalendarId,
+            page,
+            statusFilter,
+            versionNumberInput,
+        ],
+        enabled:
+            selectedCalendarId !== null &&
+            canReadVersions &&
+            versionNumberValid,
+        queryFn: () => {
+            if (selectedCalendarId === null) {
+                throw new Error("Select a calendar to view its versions.");
+            }
+
+            return calendarVersionApi.getVersions(
+                selectedCalendarId,
+                page,
+                10,
+                {
+                    ...(statusFilter !== "ALL"
+                        ? { status: statusFilter }
+                        : {}),
+                    ...(parsedVersionNumber !== undefined
+                        ? { versionNumber: parsedVersionNumber }
+                        : {}),
+                },
+            );
+        },
+    });
+
+    const handleSelectCalendar = (calendarId: number) => {
+        setSelectedCalendarId(calendarId);
+        setPage(0);
+    };
+
     const handleCreateVersion = async (
         mode: CalendarVersionCreationMode,
     ): Promise<void> => {
@@ -107,7 +201,14 @@ export default function CalendarManagementPage() {
             );
 
             setDialogOpen(false);
-            await loadCalendars();
+            setPage(0);
+
+            await Promise.all([
+                loadCalendars(),
+                queryClient.invalidateQueries({
+                    queryKey: ["calendar-versions", selectedCalendar.id],
+                }),
+            ]);
         } catch (error) {
             const message =
                 error instanceof Error
@@ -131,7 +232,7 @@ export default function CalendarManagementPage() {
                             Calendar Versions
                         </h1>
                         <p className="mt-2 text-sm text-muted-foreground">
-                            Create draft versions for an academic calendar.
+                            View and filter versions for an academic calendar.
                         </p>
                     </div>
                 </header>
@@ -140,7 +241,7 @@ export default function CalendarManagementPage() {
                     <h2 className="text-lg font-semibold">Select a calendar</h2>
 
                     {isLoading ? (
-                        <p className="text-sm text-muted-foreground">
+                        <p role="status" className="text-sm text-muted-foreground">
                             Loading calendars...
                         </p>
                     ) : loadError ? (
@@ -171,7 +272,7 @@ export default function CalendarManagementPage() {
                                         key={calendar.id}
                                         type="button"
                                         onClick={() =>
-                                            setSelectedCalendarId(calendar.id)
+                                            handleSelectCalendar(calendar.id)
                                         }
                                         aria-pressed={isSelected}
                                         className={`rounded-2xl border bg-card p-5 text-left shadow-sm transition-colors ${
@@ -186,7 +287,8 @@ export default function CalendarManagementPage() {
                                                     {calendar.name}
                                                 </h3>
                                                 <p className="mt-2 text-sm text-muted-foreground">
-                                                    {calendar.description}
+                                                    {calendar.description ||
+                                                        "No description"}
                                                 </p>
                                             </div>
                                             <CalendarDays className="size-5 shrink-0 text-muted-foreground" />
@@ -230,11 +332,13 @@ export default function CalendarManagementPage() {
 
                         <Button
                             disabled={
-                                isLoading || loadError !== null || !selectedCalendar
+                                isLoading ||
+                                loadError !== null ||
+                                !selectedCalendar
                             }
                             onClick={() => setDialogOpen(true)}
                         >
-                            <Plus className="mr-2 size-4" />
+                            <Plus className="size-4" />
                             Create version
                         </Button>
                     </div>
@@ -244,6 +348,215 @@ export default function CalendarManagementPage() {
                             <GitBranch className="size-4" />
                             Selected Calendar ID: {selectedCalendar.id}
                         </div>
+                    )}
+                </section>
+
+                <section className="rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h2 className="font-semibold">Calendar Versions</h2>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                Versions for{" "}
+                                {selectedCalendar?.name ?? "the selected calendar"}.
+                            </p>
+                        </div>
+
+                        <div className="flex flex-col gap-3 sm:flex-row">
+                            <Select
+                                value={statusFilter}
+                                onValueChange={(value) => {
+                                    setStatusFilter(
+                                        value as CalendarVersionStatus | "ALL",
+                                    );
+                                    setPage(0);
+                                }}
+                                disabled={!selectedCalendar || !canReadVersions}
+                            >
+                                <SelectTrigger className="w-full sm:w-44">
+                                    <SelectValue placeholder="Filter by status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="ALL">
+                                        All statuses
+                                    </SelectItem>
+                                    <SelectItem value="DRAFT">Draft</SelectItem>
+                                    <SelectItem value="ACTIVE">Active</SelectItem>
+                                    <SelectItem value="INACTIVE">
+                                        Inactive
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            <Input
+                                type="number"
+                                min={1}
+                                step={1}
+                                className="w-full sm:w-44"
+                                placeholder="Version number"
+                                aria-label="Filter by version number"
+                                value={versionNumberInput}
+                                disabled={!selectedCalendar || !canReadVersions}
+                                onChange={(event) => {
+                                    setVersionNumberInput(event.target.value);
+                                    setPage(0);
+                                }}
+                            />
+
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => {
+                                    setStatusFilter("ALL");
+                                    setVersionNumberInput("");
+                                    setPage(0);
+                                }}
+                                disabled={
+                                    statusFilter === "ALL" &&
+                                    versionNumberInput === ""
+                                }
+                            >
+                                <Filter className="size-4" />
+                                Clear
+                            </Button>
+                        </div>
+                    </div>
+
+                    {!selectedCalendar ? (
+                        <p className="mt-6 text-sm text-muted-foreground">
+                            Select a calendar to view its versions.
+                        </p>
+                    ) : !canReadVersions ? (
+                        <p className="mt-6 text-sm text-destructive">
+                            You do not have permission to view calendar versions.
+                        </p>
+                    ) : !versionNumberValid ? (
+                        <p className="mt-6 text-sm text-destructive">
+                            Version number must be a positive whole number.
+                        </p>
+                    ) : versionsQuery.isPending ? (
+                        <p
+                            role="status"
+                            className="mt-6 text-sm text-muted-foreground"
+                        >
+                            Loading calendar versions...
+                        </p>
+                    ) : versionsQuery.isError ? (
+                        <div role="alert" className="mt-6 space-y-3">
+                            <p className="text-sm text-destructive">
+                                Could not load calendar versions.
+                            </p>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => void versionsQuery.refetch()}
+                            >
+                                Try again
+                            </Button>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="mt-6">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Version</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead>Created</TableHead>
+                                            <TableHead>Activated</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {versionsQuery.data.content.length ===
+                                        0 ? (
+                                            <TableRow>
+                                                <TableCell
+                                                    colSpan={4}
+                                                    className="h-24 text-center text-muted-foreground"
+                                                >
+                                                    No matching calendar
+                                                    versions found.
+                                                </TableCell>
+                                            </TableRow>
+                                        ) : (
+                                            versionsQuery.data.content.map(
+                                                (version) => (
+                                                    <TableRow
+                                                        key={
+                                                            version.id ??
+                                                            version.versionNumber
+                                                        }
+                                                    >
+                                                        <TableCell className="font-medium">
+                                                            v
+                                                            {
+                                                                version.versionNumber
+                                                            }
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Badge variant="outline">
+                                                                {version.status}
+                                                            </Badge>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {formatDate(
+                                                                version.createdAt,
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {formatDate(
+                                                                version.activatedAt,
+                                                            )}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ),
+                                            )
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
+
+                            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <p className="text-sm text-muted-foreground">
+                                    {versionsQuery.data.totalElements} version(s)
+                                    {" · "}Page {versionsQuery.data.number + 1}{" "}
+                                    of{" "}
+                                    {Math.max(
+                                        versionsQuery.data.totalPages,
+                                        1,
+                                    )}
+                                </p>
+
+                                <div className="flex gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={versionsQuery.data.first}
+                                        onClick={() =>
+                                            setPage((current) =>
+                                                Math.max(0, current - 1),
+                                            )
+                                        }
+                                    >
+                                        <ChevronLeft className="size-4" />
+                                        Previous
+                                    </Button>
+
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={versionsQuery.data.last}
+                                        onClick={() =>
+                                            setPage((current) => current + 1)
+                                        }
+                                    >
+                                        Next
+                                        <ChevronRight className="size-4" />
+                                    </Button>
+                                </div>
+                            </div>
+                        </>
                     )}
                 </section>
 

@@ -8,11 +8,9 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class CalendarVersionFilter extends BaseFilter {
+public class CalendarVersionFilter {
 
-    @FilterField(entityField = "calendar.id")
-    private Long calendarId;
-
-    @FilterField(entityField = "status")
+    private Long classId;
     private CalendarVersionStatus status;
+    private Integer versionNumber;
 }

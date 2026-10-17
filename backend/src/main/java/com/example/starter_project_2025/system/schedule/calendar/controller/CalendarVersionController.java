@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.schedule.calendar.controller;
 
+import com.example.starter_project_2025.system.schedule.calendar.CalendarVersionFilter;
 import com.example.starter_project_2025.system.schedule.calendar.dto.CalendarVersionResponse;
 import com.example.starter_project_2025.system.schedule.calendar.dto.CreateCalendarVersionRequest;
 
@@ -11,8 +12,12 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -36,5 +41,17 @@ public class CalendarVersionController {
                 calendarVersionService.createVersion(calendarId, request);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @GetMapping
+    @PreAuthorize("hasAuthority('CALENDARVERSION_READ')")
+    public ResponseEntity<Page<CalendarVersionResponse>> getVersions(
+            @PathVariable Long calendarId,
+            @PageableDefault(size = 10) Pageable pageable,
+            @ModelAttribute CalendarVersionFilter filter) {
+
+        return ResponseEntity.ok(
+                calendarVersionService.getVersions(calendarId, filter, pageable)
+        );
     }
 }

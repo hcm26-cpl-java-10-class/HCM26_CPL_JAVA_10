@@ -3,6 +3,8 @@ import type {
     CalendarSummary,
     CreateCalendarVersionRequest,
     CalendarVersionResponse,
+    CalendarVersionFilter,
+    SpringPage
 } from "@/types";
 
 export const calendarVersionApi = {
@@ -24,4 +26,22 @@ export const calendarVersionApi = {
 
         return response.data;
     },
+
+    getVersions: async (
+        calendarId: number,
+        page: number,
+        size: number,
+        filter: CalendarVersionFilter,
+    ): Promise<SpringPage<CalendarVersionResponse>> => {
+        const response = await axiosInstance.get<
+            SpringPage<CalendarVersionResponse>
+    >(`/calendars/${calendarId}/versions`, {
+        params: {
+            page,
+            size,
+            ...filter,
+        },
+    });
+    return response.data;
+},
 };
