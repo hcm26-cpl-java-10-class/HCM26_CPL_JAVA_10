@@ -4,6 +4,7 @@ import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.BusinessValidationException;
 import com.example.starter_project_2025.exception.ConflictException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import com.example.starter_project_2025.base.crud.spec.AutoSpecBuilder;
 import com.example.starter_project_2025.base.crud.dto.OnCreate;
 import com.example.starter_project_2025.system.academic.subject.Subject;
 import com.example.starter_project_2025.system.academic.subject.SubjectRepository;
@@ -13,12 +14,17 @@ import com.example.starter_project_2025.system.study_session.SessionStatus;
 import com.example.starter_project_2025.system.study_session.StudySession;
 import com.example.starter_project_2025.system.study_session.StudySessionChangedEvent;
 import com.example.starter_project_2025.system.study_session.StudySessionDTO;
+import com.example.starter_project_2025.system.study_session.StudySessionFilter;
 import com.example.starter_project_2025.system.study_session.StudySessionMapper;
 import com.example.starter_project_2025.system.study_session.StudySessionRepository;
 import com.example.starter_project_2025.system.study_session.StudySessionServiceImpl;
 import com.example.starter_project_2025.system.study_session.StudySessionType;
 import com.example.starter_project_2025.system.study_session.StudySessionVersionLock;
 import jakarta.validation.Validation;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,6 +37,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -39,7 +46,6 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -61,6 +67,9 @@ class StudySessionCancellationServiceTest {
     private StudySessionVersionLock studySessionVersionLock;
 
     @Mock
+    private AutoSpecBuilder autoSpecBuilder;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
@@ -70,6 +79,11 @@ class StudySessionCancellationServiceTest {
 
     @BeforeEach
     void setUp() {
+        ReflectionTestUtils.setField(
+                studySessionService,
+                "autoSpecBuilder",
+                autoSpecBuilder
+        );
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(
                         "test-user",
@@ -231,6 +245,95 @@ class StudySessionCancellationServiceTest {
     }
 
     @Test
+    void updateScheduledSessionWithNewTimesSucceeds() {
+        StudySessionDTO request = StudySessionDTO.builder()
+                .sessionDate(LocalDate.of(2026, 10, 16))
+                .startTime(LocalTime.of(11, 0))
+                .endTime(LocalTime.of(12, 0))
+                .build();
+        StudySessionDTO response = StudySessionDTO.builder().build();
+        when(studySessionRepository.findById(1L))
+                .thenReturn(Optional.of(scheduledSession));
+        when(studySessionVersionLock.isLocked(1L))
+                .thenReturn(false);
+        when(studySessionRepository.save(scheduledSession))
+                .thenReturn(scheduledSession);
+        when(studySessionMapper.toResponse(scheduledSession))
+                .thenReturn(response);
+
+        StudySessionDTO result = studySessionService.update(1L, request);
+
+        assertEquals(response, result);
+    }
+
+    @Test
+    void updateRejectsEndTimeThatDoesNotFollowStartTime() {
+        scheduledSession.setStartTime(LocalTime.of(9, 0));
+        scheduledSession.setEndTime(LocalTime.of(10, 0));
+        StudySessionDTO request = StudySessionDTO.builder()
+                .startTime(LocalTime.of(12, 0))
+                .endTime(LocalTime.of(11, 0))
+                .build();
+        when(studySessionRepository.findById(1L))
+                .thenReturn(Optional.of(scheduledSession));
+        when(studySessionVersionLock.isLocked(1L))
+                .thenReturn(false);
+
+        assertThrows(
+                BusinessValidationException.class,
+                () -> studySessionService.update(1L, request)
+        );
+
+    }
+
+    @Test
+    void getByIdReturnsStudySessionWhenItExists() {
+        authenticate("STUDY_SESSION_READ");
+        StudySessionDTO response = StudySessionDTO.builder().build();
+        when(studySessionRepository.findById(1L))
+                .thenReturn(Optional.of(scheduledSession));
+        when(studySessionMapper.toResponse(scheduledSession))
+                .thenReturn(response);
+
+        assertEquals(response, studySessionService.getById(1L));
+    }
+
+    @Test
+    void getByIdMissingStudySessionReturnsNotFound() {
+        authenticate("STUDY_SESSION_READ");
+        when(studySessionRepository.findById(1L))
+                .thenReturn(Optional.empty());
+
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> studySessionService.getById(1L)
+        );
+    }
+
+    @Test
+    void getAllReturnsPagedStudySessions() {
+        authenticate("STUDY_SESSION_READ");
+        StudySessionDTO response = StudySessionDTO.builder().build();
+        when(autoSpecBuilder.build(any(StudySessionFilter.class)))
+                .thenReturn(null);
+        when(studySessionRepository.findAll(
+                org.mockito.ArgumentMatchers
+                        .<Specification<StudySession>>any(),
+                any(Pageable.class)
+        )).thenReturn(new PageImpl<>(List.of(scheduledSession)));
+        when(studySessionMapper.toResponse(scheduledSession))
+                .thenReturn(response);
+
+        var result = studySessionService.getAll(
+                PageRequest.of(0, 10),
+                null,
+                new StudySessionFilter()
+        );
+
+        assertEquals(new PageImpl<>(List.of(response)), result);
+    }
+
+    @Test
     void createValidSessionAssignsExistingSubjectAndSaves() {
         authenticate("STUDY_SESSION_CREATE");
         StudySessionDTO request = createRequest(
@@ -308,13 +411,22 @@ class StudySessionCancellationServiceTest {
         try (var validatorFactory = Validation.buildDefaultValidatorFactory()) {
             var violations = validatorFactory.getValidator()
                     .validate(new StudySessionDTO(), OnCreate.class);
+            var invalidFields = violations.stream()
+                    .map(violation -> violation.getPropertyPath().toString())
+                    .collect(java.util.stream.Collectors.toSet());
 
-            assertTrue(violations.stream()
-                    .anyMatch(violation -> violation.getPropertyPath().toString().equals("title")));
-            assertTrue(violations.stream()
-                    .anyMatch(violation -> violation.getPropertyPath().toString().equals("subjectId")));
-            assertTrue(violations.stream()
-                    .anyMatch(violation -> violation.getPropertyPath().toString().equals("endTime")));
+            assertEquals(
+                    java.util.Set.of(
+                            "subjectId",
+                            "title",
+                            "sessionDate",
+                            "startTime",
+                            "endTime",
+                            "type",
+                            "isActive"
+                    ),
+                    invalidFields
+            );
         }
     }
 

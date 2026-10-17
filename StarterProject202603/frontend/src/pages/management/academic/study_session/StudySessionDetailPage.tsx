@@ -89,10 +89,12 @@ export function StudySessionDetailPage() {
 
   const cancelMutation = useMutation({
     mutationFn: () => studySessionApi.cancel(id as string, reason.trim()),
-    onSuccess: (session) => {
-      queryClient.setQueryData(["study-session", "detail", id], session);
+    onSuccess: async (updatedSession) => {
+      queryClient.setQueryData(["study-session", "detail", id], updatedSession);
+      await queryClient.invalidateQueries({ queryKey: ["study-session"] });
       setDialogOpen(false);
       setReason("");
+      toast.success("Buổi học đã được hủy.");
     },
   });
 
