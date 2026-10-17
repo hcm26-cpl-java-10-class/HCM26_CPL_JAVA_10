@@ -38,6 +38,8 @@ public class RoleDataInitializer implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
         ensurePermission("EXAM", "TAKE");
+        ensurePermission("STUDENT_SCORE", "RELEASE");
+        ensurePermission("STUDENT_SCORE", "VIEW_OWN");
         List<Permission> allPermissions = permissionRepository.findAll();
 
         upsertRole(
@@ -57,7 +59,8 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "ENROLLMENT_CREATE",
                         "LESSON_READ",
                         "EXAM_READ",
-                        "EXAM_TAKE"
+                        "EXAM_TAKE",
+                        "STUDENT_SCORE_VIEW_OWN"
                 )
         );
 

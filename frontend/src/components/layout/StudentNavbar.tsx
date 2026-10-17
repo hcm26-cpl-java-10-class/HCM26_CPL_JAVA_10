@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useActiveModuleGroups } from "@/hooks/useSidebarMenus";
 import { cn } from "@/lib/utils";
-import { authApi } from "@/api/features/auth.api";
 import { iconMap } from "@/components/datatable/iconMap";
 import { getHomePathByRole } from "@/utils/rbac.utils";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -61,10 +60,7 @@ export function StudentNavbar() {
 
   const hasMenuItems = navGroups.length > 0;
 
-  const handleLogout = async () => {
-    await authApi.logout();
-    navigate("/login");
-  };
+  const handleLogout = () => navigate("/logout");
 
   return (
     <header className="bg-sidebar text-sidebar-foreground border-b border-sidebar-border">
