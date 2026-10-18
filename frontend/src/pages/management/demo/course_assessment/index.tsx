@@ -40,6 +40,7 @@ const assessmentSchema: EntitySchema = {
       label: "Course",
       type: "relation",
       sortable: false,
+      visible: false,
       relation: {
         api: courseApi,
         valueField: "id",
@@ -62,17 +63,19 @@ const assessmentSchema: EntitySchema = {
       label: "Time Limit (mins)",
       type: "number",
       sortable: true,
+      visible: false,
     },
     {
       name: "maxAttempt",
       label: "Max Attempts",
       type: "number",
       sortable: true,
+      visible: false,
     },
     {
       name: "dueAt",
       label: "Due Date",
-      type: "date",
+      type: "datetime-local",
       sortable: true,
     },
     {
@@ -80,6 +83,7 @@ const assessmentSchema: EntitySchema = {
       label: "Description",
       type: "textarea",
       sortable: false,
+      visible: false,
     },
     ...(auditableFieldsSchema as FieldSchema[]),
   ],
