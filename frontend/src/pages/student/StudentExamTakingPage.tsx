@@ -40,7 +40,19 @@ export default function StudentExamTakingPage() {
     const queryClient = useQueryClient();
     const timerRefs = useRef(new Map<number, number>());
     const autoSubmitStarted = useRef(false);
+    const submitStartedRef = useRef(false);
+
+    const pendingAnswersRef = useRef(
+        new Map<number, SaveExamAnswerRequest>(),
+    );
+    const savingRef = useRef(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [hasSaveError, setHasSaveError] = useState(false);
+
     const [answers, setAnswers] = useState<Record<number, ExamAttemptAnswer>>({});
+    const answersRef = useRef(answers);
+    answersRef.current = answers;
+
     const [now, setNow] = useState(() => Date.now());
 
     const attemptQuery = useQuery({
@@ -48,12 +60,6 @@ export default function StudentExamTakingPage() {
         queryFn: () => startOrResumeExam(examId),
         enabled: validExamId,
         retry: false,
-    });
-
-    const saveMutation = useMutation({
-        mutationFn: ({ attemptId, answer }: { attemptId: number; answer: SaveExamAnswerRequest }) =>
-            saveExamAnswers(attemptId, [answer]),
-        onError: () => toast.error('Không thể lưu câu trả lời. Hãy thử lại trước khi nộp bài.'),
     });
 
     const submitMutation = useMutation({
@@ -67,6 +73,57 @@ export default function StudentExamTakingPage() {
     });
 
     const attempt = attemptQuery.data;
+
+    const flushPendingAnswers = async (
+        attemptId: number,
+    ): Promise<boolean> => {
+        // Chờ lần lưu đang chạy kết thúc.
+        while (savingRef.current) {
+            await new Promise<void>((resolve) => {
+                window.setTimeout(resolve, 50);
+            });
+        }
+
+        if (pendingAnswersRef.current.size === 0) {
+            setHasSaveError(false);
+            return true;
+        }
+
+        savingRef.current = true;
+        setIsSaving(true);
+
+        try {
+            while (pendingAnswersRef.current.size > 0) {
+                const entry = pendingAnswersRef.current.entries().next().value as
+                    | [number, SaveExamAnswerRequest]
+                    | undefined;
+
+                if (!entry) break;
+
+                const [questionId, request] = entry;
+                pendingAnswersRef.current.delete(questionId);
+
+                try {
+                    await saveExamAnswers(attemptId, [request]);
+                } catch {
+                    // Giữ lại câu trả lời mới nhất để thử lưu lại.
+                    if (!pendingAnswersRef.current.has(questionId)) {
+                        pendingAnswersRef.current.set(questionId, request);
+                    }
+
+                    setHasSaveError(true);
+                    return false;
+                }
+            }
+
+            setHasSaveError(false);
+            return true;
+        } finally {
+            savingRef.current = false;
+            setIsSaving(pendingAnswersRef.current.size > 0);
+        }
+    };
+
 
     useEffect(() => {
         if (!attempt) return;
@@ -82,20 +139,103 @@ export default function StudentExamTakingPage() {
         return () => window.clearInterval(interval);
     }, [attempt?.status]);
 
+    useEffect(() => {
+        if (!attempt || attempt.status !== 'IN_PROGRESS') return;
+
+        const retryPendingAnswers = () => {
+            void flushPendingAnswers(attempt.id);
+        };
+
+        window.addEventListener('online', retryPendingAnswers);
+
+        return () => {
+            window.removeEventListener('online', retryPendingAnswers);
+        };
+    }, [attempt?.id, attempt?.status]);
+
+
     useEffect(() => () => {
         timerRefs.current.forEach((timer) => window.clearTimeout(timer));
         timerRefs.current.clear();
     }, []);
 
-    const submitCurrentAnswers = () => {
-        if (!attempt || attempt.status !== 'IN_PROGRESS' || submitMutation.isPending) return;
+
+    useEffect(() => {
+        if (attempt?.status !== 'IN_PROGRESS') return;
+
+        const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+            event.preventDefault();
+            event.returnValue = '';
+        };
+
+        window.addEventListener('beforeunload', warnBeforeUnload);
+
+        return () => {
+            window.removeEventListener('beforeunload', warnBeforeUnload);
+        };
+    }, [attempt?.id, attempt?.status]);
+
+    const handleLeaveExam = () => {
+        if (
+            attempt?.status === 'IN_PROGRESS' &&
+            !window.confirm(
+                'Bạn đang làm bài thi. Bạn có chắc chắn muốn rời trang không?',
+            )
+        ) {
+            return;
+        }
+
+        navigate('/student/exams');
+    };
+
+    const submitCurrentAnswers = async (requireConfirmation = false) => {
+        if (
+            !attempt ||
+            attempt.status !== 'IN_PROGRESS' ||
+            submitMutation.isPending ||
+            submitStartedRef.current
+        ) {
+            return;
+        }
+
+        if (
+            requireConfirmation &&
+            !window.confirm(
+                'Bạn có chắc chắn muốn nộp bài? Hãy kiểm tra lại câu trả lời trước khi tiếp tục.',
+            )
+        ) {
+            return;
+        }
+
+        submitStartedRef.current = true;
+
         timerRefs.current.forEach((timer) => window.clearTimeout(timer));
         timerRefs.current.clear();
-        submitMutation.mutate({
-            attemptId: attempt.id,
-            submittedAnswers: toAnswerRequests(answers),
-        });
+
+        try {
+            const saved = await flushPendingAnswers(attempt.id);
+
+            if (!saved && requireConfirmation) {
+                toast.error(
+                    'Một số câu trả lời chưa lưu được. Hãy kiểm tra kết nối mạng rồi thử lại.',
+                );
+                return;
+            }
+
+            await submitMutation.mutateAsync({
+                attemptId: attempt.id,
+                submittedAnswers: toAnswerRequests(answersRef.current),
+            });
+
+            pendingAnswersRef.current.clear();
+            setHasSaveError(false);
+        } catch {
+            // submitMutation đã xử lý thông báo lỗi.
+        } finally {
+            submitStartedRef.current = false;
+        }
     };
+
 
     const secondsRemaining = attempt ? getCountdown(attempt.deadlineAt, now) : 0;
 
@@ -111,23 +251,32 @@ export default function StudentExamTakingPage() {
         }
     }, [attempt?.status, secondsRemaining, submitMutation.isPending]);
 
-    const scheduleAnswerSave = (questionId: number, answer: ExamAttemptAnswer) => {
+    const scheduleAnswerSave = (
+        questionId: number,
+        answer: ExamAttemptAnswer,
+    ) => {
         if (!attempt || attempt.status !== 'IN_PROGRESS') return;
+
         const existingTimer = timerRefs.current.get(questionId);
-        if (existingTimer !== undefined) window.clearTimeout(existingTimer);
+
+        if (existingTimer !== undefined) {
+            window.clearTimeout(existingTimer);
+        }
+
         const timer = window.setTimeout(() => {
-            saveMutation.mutate({
-                attemptId: attempt.id,
-                answer: {
-                    questionId,
-                    selectedOptionIds: answer.selectedOptionIds,
-                    textAnswer: answer.textAnswer,
-                },
+            pendingAnswersRef.current.set(questionId, {
+                questionId,
+                selectedOptionIds: [...answer.selectedOptionIds],
+                textAnswer: answer.textAnswer,
             });
+
             timerRefs.current.delete(questionId);
+            void flushPendingAnswers(attempt.id);
         }, 400);
+
         timerRefs.current.set(questionId, timer);
     };
+
 
     const updateAnswer = (questionId: number, update: Partial<ExamAttemptAnswer>) => {
         const current = answers[questionId] ?? {
@@ -229,7 +378,22 @@ export default function StudentExamTakingPage() {
                     <>
                         <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
                             <span>Câu trả lời được tự động lưu khi bạn thay đổi.</span>
-                            {saveMutation.isPending && <span>Đang lưu...</span>}
+
+                            {isSaving && <span>Đang lưu...</span>}
+
+                            {hasSaveError && (
+                                <span role="alert" className="text-destructive">
+                                    Có câu trả lời chưa được lưu.
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => void flushPendingAnswers(attempt.id)}
+                                    >
+                                        Thử lưu lại
+                                    </Button>
+                                </span>
+                            )}
+
                         </div>
 
                         {attempt.questions.map((question, index) => {
@@ -289,10 +453,13 @@ export default function StudentExamTakingPage() {
                         })}
 
                         <footer className="flex flex-wrap justify-between gap-3 border-t pt-4">
-                            <Button variant="outline" onClick={() => navigate('/student/exams')}>
+                            <Button variant="outline" onClick={handleLeaveExam}>
                                 Rời bài thi
                             </Button>
-                            <Button onClick={submitCurrentAnswers} disabled={submitMutation.isPending}>
+                            <Button
+                                onClick={() => void submitCurrentAnswers(true)}
+                                disabled={submitMutation.isPending}
+                            >
                                 {submitMutation.isPending ? 'Đang nộp...' : 'Nộp bài'}
                             </Button>
                         </footer>
