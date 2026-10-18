@@ -4,6 +4,7 @@ import com.example.starter_project_2025.system.schedule.Session;
 import com.example.starter_project_2025.system.schedule.SessionRepository;
 import com.example.starter_project_2025.system.schedule.SessionStatus;
 import com.example.starter_project_2025.system.schedule.generation.dto.*;
+import com.example.starter_project_2025.system.schedule.generation.engine.ScheduleGeneratorEngine;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -23,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationService {
 
     SessionRepository sessionRepository;
+    ScheduleGeneratorEngine scheduleGeneratorEngine;
 
     // Bộ nhớ đệm Idempotency in-memory (chống click đúp theo BR-UNI-20 & US-F16-05)
     Map<String, BulkSaveSessionsResponseDTO> idempotencyStore = new ConcurrentHashMap<>();
@@ -71,14 +73,70 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
 
     @Override
     public BulkPreviewResponseDTO generatePreview(Long classId, BulkPreviewRequestDTO request) {
-        // Sẽ triển khai chi tiết ở Bước 2 với ScheduleGeneratorEngine
+        ScheduleGenerationContextResponse context = getGenerationContext(classId);
+        List<PreviewSessionItemDTO> previewSessions = scheduleGeneratorEngine.generate(
+                context.getTopics(),
+                request,
+                Collections.emptySet()
+        );
+
+        // Tính tổng số giờ dự kiến
+        double totalHours = previewSessions.stream()
+                .mapToDouble(s -> {
+                    long minutes = java.time.Duration.between(s.getStartTime(), s.getEndTime()).toMinutes();
+                    return minutes / 60.0;
+                })
+                .sum();
+
+        // Kiểm tra xung đột nếu bật checkConflicts (US-F16-04)
+        boolean hasConflicts = false;
+        int conflictCount = 0;
+
+        if (Boolean.TRUE.equals(request.getCheckConflicts())) {
+            // Kiểm tra xung đột với các session đã tồn tại trong DB
+            for (PreviewSessionItemDTO sessionItem : previewSessions) {
+                List<Session> conflicts = sessionRepository.findConflictingSessions(
+                        sessionItem.getTrainerId(),
+                        sessionItem.getRoomId(),
+                        null,
+                        sessionItem.getStartTime(),
+                        sessionItem.getEndTime(),
+                        null
+                );
+
+                if (!conflicts.isEmpty()) {
+                    Session first = conflicts.get(0);
+                    hasConflicts = true;
+                    conflictCount++;
+                    sessionItem.setStatus("CONFLICT");
+
+                    String conflictType = Objects.equals(first.getTrainerId(), sessionItem.getTrainerId())
+                            ? "TRAINER_CONFLICT"
+                            : "ROOM_CONFLICT";
+
+                    String conflictMsg = String.format("Trùng lịch với lớp %s ('%s') từ %s đến %s",
+                            first.getClassCode(),
+                            first.getTitle(),
+                            first.getStartTime().toString(),
+                            first.getEndTime().toString()
+                    );
+
+                    sessionItem.setConflictDetails(PreviewSessionItemDTO.ConflictDetailDTO.builder()
+                            .type(conflictType)
+                            .conflictingClassCode(first.getClassCode())
+                            .message(conflictMsg)
+                            .build());
+                }
+            }
+        }
+
         return BulkPreviewResponseDTO.builder()
                 .classId(classId)
-                .totalSessions(0)
-                .totalHoursCalculated(0.0)
-                .hasConflicts(false)
-                .conflictCount(0)
-                .sessions(Collections.emptyList())
+                .totalSessions(previewSessions.size())
+                .totalHoursCalculated(totalHours)
+                .hasConflicts(hasConflicts)
+                .conflictCount(conflictCount)
+                .sessions(previewSessions)
                 .correlationId(UUID.randomUUID().toString())
                 .build();
     }
