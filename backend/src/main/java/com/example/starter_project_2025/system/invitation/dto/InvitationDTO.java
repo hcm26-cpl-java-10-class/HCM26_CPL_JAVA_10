@@ -28,6 +28,21 @@ public class InvitationDTO extends BaseDTO {
     private String examTitle;
 
     @JsonProperty(access = READ_ONLY)
+    private Integer durationMinutes;
+
+    @JsonProperty(access = READ_ONLY)
+    private LocalDateTime startTime;
+
+    @JsonProperty(access = READ_ONLY)
+    private LocalDateTime endTime;
+
+    @JsonProperty(access = READ_ONLY)
+    private Integer maxAttempts;
+
+    @JsonProperty(access = READ_ONLY)
+    private Integer totalPoints;
+
+    @JsonProperty(access = READ_ONLY)
     private String userEmail;
 
     @JsonProperty(access = READ_ONLY)

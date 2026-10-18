@@ -6,6 +6,11 @@ export interface Exam {
     durationMinutes: number;
     totalPoints?: number;
     isActive?: boolean;
+    startTime?: string | null;
+    endTime?: string | null;
+    maxAttempts?: number;
+    latePolicy?: 'NOT_ALLOWED' | 'ALLOWED_WITH_PENALTY' | 'ALLOWED';
+    lateGraceMinutes?: number;
     createdAt?: string;
     updatedAt?: string;
 }
@@ -29,6 +34,7 @@ export interface ExamAttemptAnswer {
 export interface ExamAttempt {
     id: number;
     examId: number;
+    attemptNumber: number;
     title: string;
     durationMinutes: number;
     totalPoints: number;
@@ -36,18 +42,29 @@ export interface ExamAttempt {
     finalScore: number | null;
     status: ExamAttemptStatus;
     startedAt: string;
+    officialDeadlineAt: string | null;
     deadlineAt: string;
     submittedAt: string | null;
+    late: boolean;
+    latePenaltyPercentApplied: number | null;
+    attemptsUsed: number;
+    attemptsRemaining: number;
+    bestScore: number | null;
     questions: ExamAttemptQuestion[];
     answers: ExamAttemptAnswer[];
 }
 
 export interface ExamAttemptSummary {
+    id: number;
     examId: number;
+    attemptNumber: number;
     status: ExamAttemptStatus;
     objectiveScore: number | null;
     finalScore: number | null;
     totalPoints: number;
+    bestScore: number | null;
+    attemptsUsed: number;
+    attemptsRemaining: number;
 }
 
 export interface SaveExamAnswerRequest {

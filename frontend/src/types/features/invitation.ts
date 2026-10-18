@@ -17,6 +17,15 @@ export interface InvitationDTO extends BaseDTO {
   note?: string;
 }
 
+export interface StudentInvitationDTO extends InvitationDTO {
+  examTitle: string;
+  durationMinutes?: number;
+  startTime?: string | null;
+  endTime?: string | null;
+  maxAttempts?: number;
+  totalPoints?: number;
+}
+
 export interface InvitationFilter {
   ids?: number[];
   isActive?: boolean;

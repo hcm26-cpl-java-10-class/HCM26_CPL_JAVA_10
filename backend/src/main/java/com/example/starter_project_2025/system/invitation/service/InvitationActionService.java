@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.invitation.service;
 
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.BusinessValidationException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserPrincipal;
@@ -38,6 +39,34 @@ public class InvitationActionService {
     private final InvitationValidator invitationValidator;
     private final InvitationAuditService auditService;
     private final InvitationBatchItemProcessor batchItemProcessor;
+
+    @Transactional(readOnly = true)
+    public List<InvitationDTO> findMyInvitations(Long studentId) {
+        return invitationRepository.findByUserIdOrderByCreatedAtDesc(studentId).stream()
+                .filter(invitation -> Boolean.TRUE.equals(invitation.getIsActive()))
+                .map(invitationMapper::toResponse)
+                .toList();
+    }
+
+    @Transactional
+    public InvitationDTO acceptInvitation(Long invitationId, Long studentId) {
+        Invitation invitation = invitationRepository.lockById(invitationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lời mời"));
+        if (invitation.getUser() == null || !Objects.equals(invitation.getUser().getId(), studentId)) {
+            throw new ResourceNotFoundException("Không tìm thấy lời mời");
+        }
+        if (!Boolean.TRUE.equals(invitation.getIsActive()) || invitation.getStatus() != InvitationStatus.PENDING) {
+            throw new BadRequestException("Lời mời không còn ở trạng thái chờ chấp nhận");
+        }
+        if (invitation.getExpiresAt() != null && !invitation.getExpiresAt().isAfter(LocalDateTime.now())) {
+            throw new BadRequestException("Lời mời đã hết hạn");
+        }
+
+        invitation.setStatus(InvitationStatus.ACCEPTED);
+        Invitation saved = invitationRepository.save(invitation);
+        auditService.log(saved.getId(), saved.getExam().getId(), studentId, "ACCEPT", "Học viên chấp nhận lời mời");
+        return invitationMapper.toResponse(saved);
+    }
 
     @Transactional
     public InvitationDTO inviteSingle(InvitationDTO request) {

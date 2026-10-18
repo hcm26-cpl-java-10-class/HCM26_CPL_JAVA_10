@@ -182,6 +182,55 @@ public class InvitationIntegrationTest {
         assertEquals("CREATE", auditLogs.get(0).getAction());
     }
 
+    @Test
+    @DisplayName("Student lists and accepts only their own invitation")
+    void studentCanListAndAcceptOwnInvitation() throws Exception {
+        Invitation invitation = invitationRepository.save(Invitation.builder()
+                .exam(testExam)
+                .user(student1)
+                .status(InvitationStatus.PENDING)
+                .isActive(true)
+                .build());
+
+        mockMvc.perform(get("/api/invitations/my")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].status").value("PENDING"))
+                .andExpect(jsonPath("$[0].durationMinutes").value(60));
+
+        mockMvc.perform(post("/api/invitations/" + invitation.getId() + "/accept")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACCEPTED"));
+
+        Invitation otherStudentInvitation = invitationRepository.save(Invitation.builder()
+                .exam(testExam)
+                .user(student2)
+                .status(InvitationStatus.PENDING)
+                .isActive(true)
+                .build());
+
+        mockMvc.perform(post("/api/invitations/" + otherStudentInvitation.getId() + "/accept")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("Student cannot start an exam before accepting its invitation")
+    void studentCannotStartExamWithPendingInvitation() throws Exception {
+        invitationRepository.save(Invitation.builder()
+                .exam(testExam)
+                .user(student1)
+                .status(InvitationStatus.PENDING)
+                .isActive(true)
+                .build());
+
+        mockMvc.perform(post("/api/exams/" + testExam.getId() + "/attempt")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isBadRequest());
+    }
+
     // 2. Không tạo lời mời trùng
     @Test
     @DisplayName("2. POST /api/invitations - Báo lỗi khi tạo lời mời trùng lặp cùng một học sinh trong kỳ thi (400)")

@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -26,6 +27,7 @@ import java.util.UUID;
 @RequestMapping("/api/topic-marks")
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Tag(name = "Topic Mark Demo", description = "Demo APIs for dynamic gradebook DTO shape")
+@PreAuthorize("hasAuthority('STUDENT_SCORE_READ')")
 public class TopicMarkDemoController {
 
     TopicMarkDemoService topicMarkDemoService;
@@ -54,6 +56,7 @@ public class TopicMarkDemoController {
     }
 
     @PutMapping("/students/{userId}")
+    @PreAuthorize("hasAuthority('STUDENT_SCORE_UPDATE')")
     @Operation(summary = "Update one student marks with reason")
     public TopicMarkDetailResponse updateStudentMarks(
             @PathVariable UUID userId,

@@ -1,12 +1,16 @@
 package com.example.starter_project_2025.system.invitation.controller;
 
+import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.invitation.dto.*;
 import com.example.starter_project_2025.system.invitation.service.InvitationActionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/invitations")
@@ -14,6 +18,23 @@ import org.springframework.web.bind.annotation.*;
 public class InvitationActionController {
 
     private final InvitationActionService actionService;
+
+    @GetMapping("/my")
+    @PreAuthorize("hasAuthority('EXAM_TAKE')")
+    public ResponseEntity<List<InvitationDTO>> getMyInvitations(
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(actionService.findMyInvitations(principal.getUser().getId()));
+    }
+
+    @PostMapping("/{id}/accept")
+    @PreAuthorize("hasAuthority('EXAM_TAKE')")
+    public ResponseEntity<InvitationDTO> acceptInvitation(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(actionService.acceptInvitation(id, principal.getUser().getId()));
+    }
 
     @PostMapping({"/actions/invite", "/invite"})
     @PreAuthorize("hasAuthority('INVITATION_CREATE')")

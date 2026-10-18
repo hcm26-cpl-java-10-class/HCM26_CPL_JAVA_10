@@ -4,15 +4,21 @@ import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.exception.BadRequestException;
+import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -48,6 +54,7 @@ public class StudentScoreServiceImpl
             ctx.add("studentCode", "Student code already exists");
         }
 
+        score.setStatus(StudentScore.Status.DRAFT);
         score.setScores(normalizeScores(score.getScores()));
     }
 
@@ -58,6 +65,10 @@ public class StudentScoreServiceImpl
 
     @Override
     protected void beforeUpdate(StudentScore score, StudentScoreDTO request, ValidationContext ctx) {
+
+        if (score.isPublished()) {
+            throw new BadRequestException("Score already released, use an adjustment with a reason instead");
+        }
 
         if (request.getStudentCode() != null &&
                 !request.getStudentCode().equals(score.getStudentCode()) &&
@@ -71,11 +82,94 @@ public class StudentScoreServiceImpl
         } else {
             score.setScores(normalizeScores(score.getScores()));
         }
+
+        // Editing a reviewed score invalidates the review
+        score.setStatus(StudentScore.Status.DRAFT);
     }
 
     @Override
     protected void afterUpdate(StudentScore score, StudentScoreDTO request) {
         applyOverallScore(score);
+    }
+
+    @Override
+    protected void beforeDelete(StudentScore score) {
+        if (score.isPublished()) {
+            throw new BadRequestException("Score already released, it can no longer be deleted");
+        }
+    }
+
+    public StudentScoreDTO review(Long id) {
+        StudentScore score = findOrThrow(id);
+        requireStatus(score, "Only DRAFT scores can be reviewed", StudentScore.Status.DRAFT);
+
+        score.setStatus(StudentScore.Status.REVIEWED);
+        return studentScoreMapper.toResponse(studentScoreRepository.save(score));
+    }
+
+    public StudentScoreDTO release(Long id) {
+        StudentScore score = findOrThrow(id);
+        requireStatus(score, "Only REVIEWED scores can be released", StudentScore.Status.REVIEWED);
+
+        score.setStatus(StudentScore.Status.RELEASED);
+        score.setApprovedBy(currentUser());
+        score.setReleasedAt(LocalDateTime.now());
+        return studentScoreMapper.toResponse(studentScoreRepository.save(score));
+    }
+
+    public StudentScoreDTO adjust(Long id, Map<String, BigDecimal> newScores, String reason) {
+        StudentScore score = findOrThrow(id);
+        requireStatus(score, "Only released scores can be adjusted",
+                StudentScore.Status.RELEASED, StudentScore.Status.ADJUSTED);
+
+        if (reason == null || reason.isBlank()) {
+            throw new BadRequestException("Reason is required to adjust a released score");
+        }
+
+        Map<String, BigDecimal> changes = normalizeScores(newScores);
+        if (changes.isEmpty()) {
+            throw new BadRequestException("At least one score is required");
+        }
+
+        BigDecimal oldOverall = score.getOverallScore();
+        Map<String, BigDecimal> merged = new LinkedHashMap<>(normalizeScores(score.getScores()));
+        merged.putAll(changes);
+        score.setScores(merged);
+        applyOverallScore(score);
+
+        String line = LocalDateTime.now() + " | " + currentUser() + " | " + reason.trim().replace("\n", " ")
+                + " | overall " + oldOverall + " -> " + score.getOverallScore() + " | changed " + changes;
+        score.setAdjustmentLog(score.getAdjustmentLog() == null ? line : score.getAdjustmentLog() + "\n" + line);
+        score.setStatus(StudentScore.Status.ADJUSTED);
+        score.setApprovedBy(currentUser());
+
+        return studentScoreMapper.toResponse(studentScoreRepository.save(score));
+    }
+
+    @Transactional(readOnly = true)
+    public List<StudentScoreDTO> findMine() {
+        return studentScoreRepository
+                .findByStudentEmailIgnoreCaseAndStatusIn(currentUser(),
+                        List.of(StudentScore.Status.RELEASED, StudentScore.Status.ADJUSTED))
+                .stream()
+                .map(studentScoreMapper::toResponse)
+                .toList();
+    }
+
+    private StudentScore findOrThrow(Long id) {
+        return studentScoreRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Entity not found"));
+    }
+
+    private void requireStatus(StudentScore score, String message, StudentScore.Status... allowed) {
+        if (!List.of(allowed).contains(score.getStatus())) {
+            throw new BadRequestException(message);
+        }
+    }
+
+    private String currentUser() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth == null ? "system" : auth.getName();
     }
 
     private void applyOverallScore(StudentScore score) {

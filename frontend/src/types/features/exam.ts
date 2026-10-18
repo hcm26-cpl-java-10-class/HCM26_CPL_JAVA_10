@@ -42,6 +42,7 @@ export interface ExamDTO {
   passScore?: number | null;
   latePolicy?: LatePolicy;
   latePenaltyPercent?: number | null;
+  lateGraceMinutes?: number;
   resultVisibility?: ResultVisibility;
   questionIds?: number[];
   questions?: QuestionDTO[];

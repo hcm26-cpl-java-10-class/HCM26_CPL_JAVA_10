@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { LogOutIcon } from "lucide-react";
 import { useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { authApi } from "@/api/features/auth.api";
 import { useActiveModuleGroups } from "@/hooks/useSidebarMenus";
 import { iconMap } from "@/components/datatable/iconMap";
 
@@ -84,10 +83,7 @@ export function SidebarMenu() {
                     <Button
                         size="icon"
                         variant="ghost"
-                        onClick={async () => {
-                            await authApi.logout();
-                            navigate("/login");
-                        }}
+                        onClick={() => navigate("/logout")}
                     >
                         <LogOutIcon className="size-4" />
                     </Button>

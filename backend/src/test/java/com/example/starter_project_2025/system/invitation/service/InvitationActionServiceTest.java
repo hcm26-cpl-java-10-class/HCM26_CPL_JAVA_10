@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.invitation.service;
 
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.BusinessValidationException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.exam.domain.Exam;
@@ -219,6 +220,41 @@ class InvitationActionServiceTest {
         when(invitationRepository.findById(100L)).thenReturn(Optional.of(invitation));
 
         assertThrows(BusinessValidationException.class, () -> actionService.revoke(100L, null));
+        verify(invitationRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("student can accept own pending invitation")
+    void acceptInvitation_WhenPendingAndOwned_Succeeds() {
+        invitation.setExpiresAt(java.time.LocalDateTime.now().plusHours(1));
+        when(invitationRepository.lockById(100L)).thenReturn(Optional.of(invitation));
+        when(invitationRepository.save(invitation)).thenReturn(invitation);
+        InvitationDTO dto = new InvitationDTO();
+        when(invitationMapper.toResponse(invitation)).thenReturn(dto);
+
+        InvitationDTO result = actionService.acceptInvitation(100L, 2L);
+
+        assertSame(dto, result);
+        assertEquals(InvitationStatus.ACCEPTED, invitation.getStatus());
+        verify(invitationRepository).save(invitation);
+    }
+
+    @Test
+    @DisplayName("student cannot accept another user's invitation")
+    void acceptInvitation_WhenNotOwned_HidesInvitation() {
+        when(invitationRepository.lockById(100L)).thenReturn(Optional.of(invitation));
+
+        assertThrows(ResourceNotFoundException.class, () -> actionService.acceptInvitation(100L, 999L));
+        verify(invitationRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("student cannot accept an expired invitation")
+    void acceptInvitation_WhenExpired_Rejects() {
+        invitation.setExpiresAt(java.time.LocalDateTime.now().minusMinutes(1));
+        when(invitationRepository.lockById(100L)).thenReturn(Optional.of(invitation));
+
+        assertThrows(BadRequestException.class, () -> actionService.acceptInvitation(100L, 2L));
         verify(invitationRepository, never()).save(any());
     }
 

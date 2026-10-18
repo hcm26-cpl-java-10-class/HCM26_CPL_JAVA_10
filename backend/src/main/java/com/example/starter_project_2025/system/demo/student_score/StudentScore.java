@@ -11,6 +11,8 @@ import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.MapKeyColumn;
@@ -25,6 +27,7 @@ import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -75,4 +78,28 @@ public class StudentScore extends BaseEntity {
     @Column(precision = 8, scale = 2)
     @ExportField(name = "Overall Score")
     BigDecimal overallScore;
+
+    public enum Status { DRAFT, REVIEWED, RELEASED, ADJUSTED }
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    Status status = Status.DRAFT;
+
+    LocalDateTime releasedAt;
+
+    @Column(length = 120)
+    String approvedBy;
+
+    // Linked to the learner's login email; used to resolve "my scores"
+    @Column(length = 120)
+    String studentEmail;
+
+    // One line per post-release adjustment: time | approver | reason | old -> new
+    @Column(length = 10000)
+    String adjustmentLog;
+
+    public boolean isPublished() {
+        return status == Status.RELEASED || status == Status.ADJUSTED;
+    }
 }

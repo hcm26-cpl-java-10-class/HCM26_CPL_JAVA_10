@@ -44,6 +44,7 @@ interface ExamConfigForm {
   passScore: string;
   latePolicy: LatePolicy;
   latePenaltyPercent: string;
+  lateGraceMinutes: string;
   resultVisibility: ResultVisibility;
 }
 
@@ -56,6 +57,7 @@ const DEFAULT_CONFIG: ExamConfigForm = {
   passScore: "",
   latePolicy: "NOT_ALLOWED",
   latePenaltyPercent: "",
+  lateGraceMinutes: "0",
   resultVisibility: "IMMEDIATE",
 };
 
@@ -82,6 +84,7 @@ const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   passScore: exam.passScore != null ? String(exam.passScore) : "",
   latePolicy: exam.latePolicy ?? "NOT_ALLOWED",
   latePenaltyPercent: exam.latePenaltyPercent != null ? String(exam.latePenaltyPercent) : "",
+  lateGraceMinutes: String(exam.lateGraceMinutes ?? 0),
   resultVisibility: exam.resultVisibility ?? "IMMEDIATE",
 });
 
@@ -101,6 +104,8 @@ function validateConfig(duration: number, cfg: ExamConfigForm): string | null {
     const pct = Number(cfg.latePenaltyPercent);
     if (!(pct >= 1 && pct <= 100)) return "Nộp muộn có trừ điểm cần phần trăm trừ từ 1 đến 100.";
   }
+  if (Number(cfg.lateGraceMinutes) < 0) return "Thời gian gia hạn phải >= 0 phút.";
+  if (cfg.latePolicy === "NOT_ALLOWED" && Number(cfg.lateGraceMinutes) > 0) return "Chỉ đặt gia hạn khi cho phép nộp muộn.";
   return null;
 }
 
@@ -172,6 +177,7 @@ export default function ExamManagementPage() {
             cfg.latePolicy === "ALLOWED_WITH_PENALTY" && cfg.latePenaltyPercent !== ""
                 ? Number(cfg.latePenaltyPercent)
                 : undefined,
+              lateGraceMinutes: Number(cfg.lateGraceMinutes || 0),
         resultVisibility: cfg.resultVisibility,
       };
       return editingExam?.id
@@ -411,7 +417,11 @@ export default function ExamManagementPage() {
                   </label>
                   <div className="grid gap-2 text-sm font-medium">
                     Chính sách nộp muộn
-                    <Select value={cfg.latePolicy} onValueChange={(value) => setCfg((c) => ({ ...c, latePolicy: value as LatePolicy }))}>
+                    <Select value={cfg.latePolicy} onValueChange={(value) => setCfg((c) => ({
+                      ...c,
+                      latePolicy: value as LatePolicy,
+                      lateGraceMinutes: value === "NOT_ALLOWED" ? "0" : c.lateGraceMinutes,
+                    }))}>
                       <SelectTrigger aria-label="Chính sách nộp muộn"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {(Object.keys(LATE_POLICY_LABEL) as LatePolicy[]).map((key) => (
@@ -424,6 +434,12 @@ export default function ExamManagementPage() {
                       <label className="grid gap-2 text-sm font-medium">
                         % điểm bị trừ khi nộp muộn (1–100)
                         <Input type="number" min={1} max={100} value={cfg.latePenaltyPercent} onChange={(event) => setCfg((c) => ({ ...c, latePenaltyPercent: event.target.value }))} />
+                      </label>
+                  )}
+                  {cfg.latePolicy !== "NOT_ALLOWED" && (
+                      <label className="grid gap-2 text-sm font-medium">
+                        Thời gian gia hạn (phút)
+                        <Input type="number" min={0} value={cfg.lateGraceMinutes} onChange={(event) => setCfg((c) => ({ ...c, lateGraceMinutes: event.target.value }))} />
                       </label>
                   )}
                   <div className="grid gap-2 text-sm font-medium sm:col-span-2">

@@ -17,8 +17,8 @@ import java.util.Set;
 @Table(
         name = "exam_attempt",
         uniqueConstraints = @UniqueConstraint(
-                name = "uk_exam_attempt_exam_student",
-                columnNames = {"exam_id", "student_id"}
+                name = "uk_exam_attempt_exam_student_number",
+                columnNames = {"exam_id", "student_id", "attempt_number"}
         )
 )
 @Getter
@@ -34,6 +34,9 @@ public class ExamAttempt extends BaseEntity {
     @JoinColumn(name = "student_id", nullable = false)
     private User student;
 
+    @Column(name = "attempt_number", nullable = false)
+    private int attemptNumber = 1;
+
     @Column(nullable = false)
     private int durationMinutes;
 
@@ -43,7 +46,22 @@ public class ExamAttempt extends BaseEntity {
     @Column(nullable = false)
     private Instant startedAt;
 
+    private Instant officialDeadlineAt;
+
+    private Instant deadlineAt;
+
+    @Column(nullable = false)
+    private boolean lateGraceEligible;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 30)
+    private LatePolicy latePolicy;
+
+    private Integer latePenaltyPercent;
+
     private Instant submittedAt;
+
+    private Integer latePenaltyPercentApplied;
 
     private Integer objectiveScore;
 

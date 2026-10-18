@@ -175,7 +175,15 @@ export default function StudentExamTakingPage() {
                         <p className="text-sm text-muted-foreground">Bài thi</p>
                         <h1 className="mt-1 text-2xl font-semibold">{attempt.title}</h1>
                         <p className="mt-2 text-sm text-muted-foreground">
-                            Thời lượng {attempt.durationMinutes} phút · Tổng điểm {attempt.totalPoints}
+                            Lượt làm {attempt.attemptNumber} · Thời lượng {attempt.durationMinutes} phút · Tổng điểm {attempt.totalPoints}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            Hạn chính thức: {attempt.officialDeadlineAt
+                                ? new Date(attempt.officialDeadlineAt).toLocaleString()
+                                : 'Theo thời lượng bài thi'}
+                            {attempt.officialDeadlineAt && attempt.deadlineAt !== attempt.officialDeadlineAt
+                                ? ` · Hạn gia hạn: ${new Date(attempt.deadlineAt).toLocaleString()}`
+                                : ''}
                         </p>
                     </div>
                     {attempt.status === 'IN_PROGRESS' && (
@@ -195,6 +203,19 @@ export default function StudentExamTakingPage() {
                                 ? `Điểm trắc nghiệm tạm thời: ${attempt.objectiveScore ?? 0}/${attempt.totalPoints}`
                                 : `Điểm: ${attempt.finalScore ?? 0}/${attempt.totalPoints}`}
                         </p>
+                        {attempt.bestScore != null && (
+                            <p className="mt-2 text-sm font-medium text-emerald-700">
+                                Điểm cao nhất: {attempt.bestScore}/{attempt.totalPoints}
+                            </p>
+                        )}
+                        {attempt.late && (
+                            <p className="mt-2 text-sm text-amber-700">
+                                Bài được nộp trong thời gian gia hạn.
+                                {attempt.latePenaltyPercentApplied != null
+                                    ? ` Đã trừ ${attempt.latePenaltyPercentApplied}% điểm.`
+                                    : ''}
+                            </p>
+                        )}
                         {attempt.status === 'PENDING_REVIEW' && (
                             <p className="mt-2 text-sm text-muted-foreground">
                                 Điểm cuối cùng sẽ được cập nhật sau khi giáo viên chấm câu tự luận.
