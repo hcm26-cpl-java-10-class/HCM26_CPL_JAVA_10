@@ -20,4 +20,6 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
     Optional<User> findByEmployeeCodeIgnoreCase(String employeeCode);
 
     Long countByIsActive(Boolean isActive);
+
+    long countByRolesId(Long roleId);
 }
