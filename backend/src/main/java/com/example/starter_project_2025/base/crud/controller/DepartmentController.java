@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.base.crud.controller;
 
+import com.example.starter_project_2025.base.crud.domain.Department;
 import com.example.starter_project_2025.base.crud.domain.DepartmentStatus;
 import com.example.starter_project_2025.base.crud.dto.DepartmentDTO;
 import com.example.starter_project_2025.base.crud.dto.DepartmentFilter;
@@ -14,7 +15,8 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/departments")
-public class DepartmentController extends BaseCrudController<UUID, DepartmentDTO, DepartmentFilter> {
+public class DepartmentController
+        extends BaseCrudDataIoController<Department, UUID, DepartmentDTO, DepartmentFilter> {
 
     private final DepartmentService departmentService;
 

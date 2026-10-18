@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.base.crud.service;
 
+import com.example.starter_project_2025.base.crud.domain.Department;
 import com.example.starter_project_2025.base.crud.domain.DepartmentStatus;
 import com.example.starter_project_2025.base.crud.dto.DepartmentDTO;
 import com.example.starter_project_2025.base.crud.dto.DepartmentFilter;
@@ -7,7 +8,7 @@ import com.example.starter_project_2025.base.crud.dto.DepartmentFilter;
 import java.util.List;
 import java.util.UUID;
 
-public interface DepartmentService extends BaseCrudService<UUID, DepartmentDTO, DepartmentFilter> {
+public interface DepartmentService extends BaseCrudService<Department, UUID, DepartmentDTO, DepartmentFilter> {
 
     DepartmentDTO createDepartment(DepartmentDTO dto);
 
@@ -15,6 +16,5 @@ public interface DepartmentService extends BaseCrudService<UUID, DepartmentDTO, 
 
     List<DepartmentDTO> getDepartmentTree();
 
-    // Khớp 100% kiểu dữ liệu với Implementation
     void changeStatus(UUID id, DepartmentStatus status);
 }
