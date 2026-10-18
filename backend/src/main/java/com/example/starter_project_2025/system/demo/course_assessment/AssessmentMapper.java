@@ -10,9 +10,10 @@ import org.mapstruct.Mapping;
 public interface AssessmentMapper extends BaseCrudMapper<Assessment, AssessmentDTO> {
     @Override
     @IgnoreAuditFields
+    @Mapping(target = "course", ignore = true)
     Assessment toEntity(AssessmentDTO dto);
 
     @Mapping(source = "course.id", target = "courseId")
     @Mapping(source = "course.name", target = "courseName")
-    AssessmentDTO toDTO(Assessment entity);
+    AssessmentDTO toResponse(Assessment entity);
 }

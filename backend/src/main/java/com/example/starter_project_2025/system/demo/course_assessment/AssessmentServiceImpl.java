@@ -4,8 +4,6 @@ import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
-import com.example.starter_project_2025.system.demo.book.Book;
-import com.example.starter_project_2025.system.demo.book.BookDTO;
 import com.example.starter_project_2025.system.demo.course.Course;
 import com.example.starter_project_2025.system.demo.course.CourseRepository;
 import lombok.AccessLevel;
