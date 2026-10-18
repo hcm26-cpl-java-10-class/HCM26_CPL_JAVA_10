@@ -52,9 +52,7 @@ public class RoleServiceImpl
         validateRoleNameUnique(request.getName(), null, ctx);
         validatePermissions(request.getPermissionIds(), ctx);
 
-        if (role.getIsSystem() == null) {
-            role.setIsSystem(false);
-        }
+        role.setIsSystem(false);
         assignPermissions(role, request.getPermissionIds());
     }
 
@@ -67,6 +65,7 @@ public class RoleServiceImpl
 
     @Override
     protected void beforeUpdate(Role role, RoleDTO request, ValidationContext ctx) {
+        request.setIsSystem(role.getIsSystem());
 
         if (request.getName() != null) {
             validateRoleNameUnique(request.getName(), role.getId(), ctx);
