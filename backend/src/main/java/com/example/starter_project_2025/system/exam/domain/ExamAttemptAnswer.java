@@ -1,8 +1,6 @@
 package com.example.starter_project_2025.system.exam.domain;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
-import com.example.starter_project_2025.system.question.domain.Question;
-import com.example.starter_project_2025.system.question.domain.QuestionOption;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -30,7 +28,7 @@ public class ExamAttemptAnswer extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "question_id", nullable = false)
-    private Question question;
+    private ExamAttemptQuestion question;
 
     @ManyToMany
     @JoinTable(
@@ -38,7 +36,7 @@ public class ExamAttemptAnswer extends BaseEntity {
             joinColumns = @JoinColumn(name = "answer_id"),
             inverseJoinColumns = @JoinColumn(name = "option_id")
     )
-    private Set<QuestionOption> selectedOptions = new HashSet<>();
+    private Set<ExamAttemptOption> selectedOptions = new HashSet<>();
 
     @Column(columnDefinition = "TEXT")
     private String textAnswer;

@@ -9,7 +9,6 @@ import com.example.starter_project_2025.system.exam.dto.SaveExamAnswerRequest;
 import com.example.starter_project_2025.system.question.domain.Question;
 import com.example.starter_project_2025.system.question.domain.QuestionOption;
 import com.example.starter_project_2025.system.question.domain.QuestionType;
-import com.example.starter_project_2025.system.question.dto.QuestionTakerDTO;
 import com.example.starter_project_2025.system.question.mapper.QuestionTakerMapper;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
@@ -51,14 +50,14 @@ public class ExamAttemptService {
 
         User student = userRepository.findById(studentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found"));
-        Instant startedAt = Instant.now();
         ExamAttempt attempt = new ExamAttempt();
         attempt.setExam(exam);
         attempt.setStudent(student);
         attempt.setDurationMinutes(exam.getDurationMinutes());
         attempt.setTotalPoints(questions.stream().mapToInt(Question::getPoints).sum());
-        attempt.setStartedAt(startedAt);
+        attempt.setStartedAt(Instant.now());
         attempt.setStatus(ExamAttemptStatus.IN_PROGRESS);
+        snapshotQuestions(attempt, exam, questions);
         return toResponse(attemptRepository.save(attempt));
     }
 
@@ -68,14 +67,9 @@ public class ExamAttemptService {
                 .toList();
     }
 
-    public ExamAttemptDTO saveAnswers(
-            Long attemptId,
-            Long studentId,
-            List<SaveExamAnswerRequest> requests
-    ) {
+    public ExamAttemptDTO saveAnswers(Long attemptId, Long studentId, List<SaveExamAnswerRequest> requests) {
         ExamAttempt attempt = findLockedAttempt(attemptId, studentId);
-        Instant now = Instant.now();
-        if (submitIfExpired(attempt, now)) {
+        if (submitIfExpired(attempt, Instant.now())) {
             return toResponse(attempt);
         }
         ensureInProgress(attempt);
@@ -83,11 +77,7 @@ public class ExamAttemptService {
         return toResponse(attemptRepository.save(attempt));
     }
 
-    public ExamAttemptDTO submit(
-            Long attemptId,
-            Long studentId,
-            List<SaveExamAnswerRequest> requests
-    ) {
+    public ExamAttemptDTO submit(Long attemptId, Long studentId, List<SaveExamAnswerRequest> requests) {
         ExamAttempt attempt = findLockedAttempt(attemptId, studentId);
         if (attempt.getStatus() != ExamAttemptStatus.IN_PROGRESS) {
             return toResponse(attempt);
@@ -99,6 +89,41 @@ public class ExamAttemptService {
         }
         gradeAndSubmit(attempt, now);
         return toResponse(attemptRepository.save(attempt));
+    }
+
+    // ===== BR-UNI-16: snapshot questions/options/correct/points at start, apply shuffle once =====
+    private void snapshotQuestions(ExamAttempt attempt, Exam exam, List<Question> source) {
+        List<Question> ordered = new ArrayList<>(source);
+        if (Boolean.TRUE.equals(exam.getShuffleQuestions())) {
+            Collections.shuffle(ordered);
+        }
+        int questionOrder = 0;
+        for (Question q : ordered) {
+            ExamAttemptQuestion snap = new ExamAttemptQuestion();
+            snap.setAttempt(attempt);
+            snap.setSourceQuestionId(q.getId());
+            snap.setContent(q.getContent());
+            snap.setType(q.getType());
+            snap.setPoints(q.getPoints());
+            snap.setDisplayOrder(questionOrder++);
+
+            List<QuestionOption> options = new ArrayList<>(q.getOptions());
+            options.sort(Comparator.comparing(QuestionOption::getId));
+            if (Boolean.TRUE.equals(exam.getShuffleOptions()) && q.getType() != QuestionType.ESSAY) {
+                Collections.shuffle(options);
+            }
+            int optionOrder = 0;
+            for (QuestionOption o : options) {
+                ExamAttemptOption snapOption = new ExamAttemptOption();
+                snapOption.setQuestion(snap);
+                snapOption.setSourceOptionId(o.getId());
+                snapOption.setContent(o.getContent());
+                snapOption.setCorrect(o.isCorrect());
+                snapOption.setDisplayOrder(optionOrder++);
+                snap.getOptions().add(snapOption);
+            }
+            attempt.getQuestions().add(snap);
+        }
     }
 
     private ExamAttempt findLockedAttempt(Long attemptId, Long studentId) {
@@ -131,8 +156,8 @@ public class ExamAttemptService {
             return;
         }
 
-        Map<Long, Question> examQuestions = activeQuestions(attempt.getExam()).stream()
-                .collect(Collectors.toMap(Question::getId, Function.identity()));
+        Map<Long, ExamAttemptQuestion> bySourceId = attempt.getQuestions().stream()
+                .collect(Collectors.toMap(ExamAttemptQuestion::getSourceQuestionId, Function.identity()));
         Set<Long> seenQuestionIds = new HashSet<>();
 
         for (SaveExamAnswerRequest request : requests) {
@@ -143,9 +168,9 @@ public class ExamAttemptService {
             if (!seenQuestionIds.add(questionId)) {
                 throw new BadRequestException("Không được gửi nhiều câu trả lời cho cùng một câu hỏi");
             }
-            Question question = examQuestions.get(questionId);
+            ExamAttemptQuestion question = bySourceId.get(questionId);
             if (question == null) {
-                throw new BadRequestException("Câu hỏi không thuộc đề thi hoặc đã bị vô hiệu hóa");
+                throw new BadRequestException("Câu hỏi không thuộc bài làm này");
             }
 
             Set<Long> selectedIds = request.getSelectedOptionIds() == null
@@ -156,7 +181,7 @@ public class ExamAttemptService {
                 throw new BadRequestException("Không được gửi trùng lựa chọn");
             }
 
-            Set<QuestionOption> selectedOptions = validateAndResolveOptions(question, selectedIds);
+            Set<ExamAttemptOption> selectedOptions = validateAndResolveOptions(question, selectedIds);
             String textAnswer = request.getTextAnswer();
             if (question.getType() == QuestionType.ESSAY) {
                 if (!selectedIds.isEmpty()) {
@@ -172,7 +197,7 @@ public class ExamAttemptService {
         }
     }
 
-    private Set<QuestionOption> validateAndResolveOptions(Question question, Set<Long> selectedIds) {
+    private Set<ExamAttemptOption> validateAndResolveOptions(ExamAttemptQuestion question, Set<Long> selectedIds) {
         if (question.getType() == QuestionType.ESSAY) {
             return Set.of();
         }
@@ -180,17 +205,17 @@ public class ExamAttemptService {
             throw new BadRequestException("Câu hỏi chỉ cho phép chọn một đáp án");
         }
 
-        Map<Long, QuestionOption> optionsById = question.getOptions().stream()
-                .collect(Collectors.toMap(QuestionOption::getId, Function.identity()));
-        if (!optionsById.keySet().containsAll(selectedIds)) {
+        Map<Long, ExamAttemptOption> optionsBySourceId = question.getOptions().stream()
+                .collect(Collectors.toMap(ExamAttemptOption::getSourceOptionId, Function.identity()));
+        if (!optionsBySourceId.keySet().containsAll(selectedIds)) {
             throw new BadRequestException("Có lựa chọn không thuộc câu hỏi");
         }
         return selectedIds.stream()
-                .map(optionsById::get)
+                .map(optionsBySourceId::get)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
-    private ExamAttemptAnswer findOrCreateAnswer(ExamAttempt attempt, Question question) {
+    private ExamAttemptAnswer findOrCreateAnswer(ExamAttempt attempt, ExamAttemptQuestion question) {
         return attempt.getAnswers().stream()
                 .filter(answer -> answer.getQuestion().getId().equals(question.getId()))
                 .findFirst()
@@ -206,24 +231,26 @@ public class ExamAttemptService {
     private void gradeAndSubmit(ExamAttempt attempt, Instant submittedAt) {
         int objectiveScore = 0;
         boolean hasEssay = false;
-        Map<Long, Set<Long>> selectedByQuestion = attempt.getAnswers().stream()
-                .collect(Collectors.toMap(
-                        answer -> answer.getQuestion().getId(),
-                        answer -> answer.getSelectedOptions().stream()
-                                .map(QuestionOption::getId)
-                                .collect(Collectors.toSet())
-                ));
 
-        for (Question question : activeQuestions(attempt.getExam())) {
+        Map<Long, Set<Long>> selectedByQuestion = new HashMap<>();
+        for (ExamAttemptAnswer answer : attempt.getAnswers()) {
+            selectedByQuestion.put(
+                    answer.getQuestion().getSourceQuestionId(),
+                    answer.getSelectedOptions().stream()
+                            .map(ExamAttemptOption::getSourceOptionId)
+                            .collect(Collectors.toSet()));
+        }
+
+        for (ExamAttemptQuestion question : attempt.getQuestions()) {
             if (question.getType() == QuestionType.ESSAY) {
                 hasEssay = true;
                 continue;
             }
             Set<Long> correctIds = question.getOptions().stream()
-                    .filter(QuestionOption::isCorrect)
-                    .map(QuestionOption::getId)
+                    .filter(ExamAttemptOption::isCorrect)
+                    .map(ExamAttemptOption::getSourceOptionId)
                     .collect(Collectors.toSet());
-            if (correctIds.equals(selectedByQuestion.getOrDefault(question.getId(), Set.of()))) {
+            if (correctIds.equals(selectedByQuestion.getOrDefault(question.getSourceQuestionId(), Set.of()))) {
                 objectiveScore += question.getPoints();
             }
         }
@@ -254,11 +281,11 @@ public class ExamAttemptService {
         response.setStartedAt(attempt.getStartedAt());
         response.setDeadlineAt(attempt.getStartedAt().plus(Duration.ofMinutes(attempt.getDurationMinutes())));
         response.setSubmittedAt(attempt.getSubmittedAt());
-        response.setQuestions(activeQuestions(attempt.getExam()).stream()
+        response.setQuestions(attempt.getQuestions().stream()
                 .map(questionTakerMapper::toTakerResponse)
                 .toList());
         response.setAnswers(attempt.getAnswers().stream()
-                .sorted(Comparator.comparing(answer -> answer.getQuestion().getId()))
+                .sorted(Comparator.comparing(answer -> answer.getQuestion().getDisplayOrder()))
                 .map(this::toAnswerResponse)
                 .toList());
         return response;
@@ -266,9 +293,9 @@ public class ExamAttemptService {
 
     private ExamAttemptDTO.AnswerDTO toAnswerResponse(ExamAttemptAnswer answer) {
         ExamAttemptDTO.AnswerDTO response = new ExamAttemptDTO.AnswerDTO();
-        response.setQuestionId(answer.getQuestion().getId());
+        response.setQuestionId(answer.getQuestion().getSourceQuestionId());
         response.setSelectedOptionIds(answer.getSelectedOptions().stream()
-                .map(QuestionOption::getId)
+                .map(ExamAttemptOption::getSourceOptionId)
                 .sorted()
                 .toList());
         response.setTextAnswer(answer.getTextAnswer());

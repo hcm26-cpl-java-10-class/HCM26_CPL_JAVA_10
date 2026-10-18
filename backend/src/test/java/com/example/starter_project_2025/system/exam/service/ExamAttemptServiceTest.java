@@ -1,8 +1,6 @@
 package com.example.starter_project_2025.system.exam.service;
 
 import com.example.starter_project_2025.system.exam.domain.*;
-import com.example.starter_project_2025.system.question.domain.Question;
-import com.example.starter_project_2025.system.question.domain.QuestionOption;
 import com.example.starter_project_2025.system.question.domain.QuestionType;
 import com.example.starter_project_2025.system.question.mapper.QuestionTakerMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,10 +11,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -62,13 +60,11 @@ class ExamAttemptServiceTest {
 
     @Test
     void submitAwardsPointsOnlyWhenEveryCorrectOptionIsSelected() {
-        Question question = question(1L, QuestionType.MULTI_CHOICE, 5);
-        QuestionOption firstCorrect = option(11L, question, true);
-        QuestionOption secondCorrect = option(12L, question, true);
-        option(13L, question, false);
-        question.setOptions(List.of(firstCorrect, secondCorrect, question.getOptions().get(2)));
-        attempt.getExam().setQuestions(Set.of(question));
-        attempt.setAnswers(new HashSet<>(Set.of(answer(question, firstCorrect, secondCorrect))));
+        ExamAttemptQuestion question = snapshotQuestion(1L, QuestionType.MULTI_CHOICE, 5);
+        ExamAttemptOption firstCorrect = snapshotOption(11L, question, true);
+        ExamAttemptOption secondCorrect = snapshotOption(12L, question, true);
+        snapshotOption(13L, question, false);
+        attempt.setAnswers(new HashSet<>(List.of(answer(question, firstCorrect, secondCorrect))));
 
         var result = service.submit(30L, 40L, List.of());
 
@@ -79,12 +75,10 @@ class ExamAttemptServiceTest {
 
     @Test
     void submitDoesNotAwardPartialPointsForMultiChoiceAnswers() {
-        Question question = question(1L, QuestionType.MULTI_CHOICE, 5);
-        QuestionOption firstCorrect = option(11L, question, true);
-        option(12L, question, true);
-        question.setOptions(List.copyOf(question.getOptions()));
-        attempt.getExam().setQuestions(Set.of(question));
-        attempt.setAnswers(new HashSet<>(Set.of(answer(question, firstCorrect))));
+        ExamAttemptQuestion question = snapshotQuestion(1L, QuestionType.MULTI_CHOICE, 5);
+        ExamAttemptOption firstCorrect = snapshotOption(11L, question, true);
+        snapshotOption(12L, question, true);
+        attempt.setAnswers(new HashSet<>(List.of(answer(question, firstCorrect))));
 
         var result = service.submit(30L, 40L, List.of());
 
@@ -94,13 +88,12 @@ class ExamAttemptServiceTest {
 
     @Test
     void submitLeavesFinalScorePendingWhenExamContainsEssayQuestions() {
-        Question essay = question(1L, QuestionType.ESSAY, 5);
-        attempt.getExam().setQuestions(Set.of(essay));
+        ExamAttemptQuestion essay = snapshotQuestion(1L, QuestionType.ESSAY, 5);
         ExamAttemptAnswer answer = new ExamAttemptAnswer();
         answer.setAttempt(attempt);
         answer.setQuestion(essay);
         answer.setTextAnswer("A student's written response");
-        attempt.setAnswers(new HashSet<>(Set.of(answer)));
+        attempt.setAnswers(new HashSet<>(List.of(answer)));
 
         var result = service.submit(30L, 40L, List.of());
 
@@ -109,26 +102,31 @@ class ExamAttemptServiceTest {
         assertEquals(ExamAttemptStatus.PENDING_REVIEW, result.getStatus());
     }
 
-    private Question question(Long id, QuestionType type, int points) {
-        Question question = new Question();
+    private ExamAttemptQuestion snapshotQuestion(Long id, QuestionType type, int points) {
+        ExamAttemptQuestion question = new ExamAttemptQuestion();
         question.setId(id);
-        question.setIsActive(true);
+        question.setSourceQuestionId(id);
+        question.setAttempt(attempt);
         question.setType(type);
         question.setPoints(points);
-        question.setOptions(new java.util.ArrayList<>());
+        question.setDisplayOrder(0);
+        question.setOptions(new ArrayList<>());
+        attempt.getQuestions().add(question);
         return question;
     }
 
-    private QuestionOption option(Long id, Question question, boolean correct) {
-        QuestionOption option = new QuestionOption();
+    private ExamAttemptOption snapshotOption(Long id, ExamAttemptQuestion question, boolean correct) {
+        ExamAttemptOption option = new ExamAttemptOption();
         option.setId(id);
+        option.setSourceOptionId(id);
         option.setQuestion(question);
         option.setCorrect(correct);
+        option.setDisplayOrder(question.getOptions().size());
         question.getOptions().add(option);
         return option;
     }
 
-    private ExamAttemptAnswer answer(Question question, QuestionOption... selectedOptions) {
+    private ExamAttemptAnswer answer(ExamAttemptQuestion question, ExamAttemptOption... selectedOptions) {
         ExamAttemptAnswer answer = new ExamAttemptAnswer();
         answer.setAttempt(attempt);
         answer.setQuestion(question);

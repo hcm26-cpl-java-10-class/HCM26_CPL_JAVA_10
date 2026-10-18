@@ -8,7 +8,9 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Entity
@@ -53,4 +55,8 @@ public class ExamAttempt extends BaseEntity {
 
     @OneToMany(mappedBy = "attempt", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<ExamAttemptAnswer> answers = new HashSet<>();
+
+    @OneToMany(mappedBy = "attempt", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("displayOrder ASC")
+    private List<ExamAttemptQuestion> questions = new ArrayList<>();
 }
