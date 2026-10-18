@@ -1,9 +1,8 @@
 package com.example.starter_project_2025.base.crud.controller;
 
-import com.example.starter_project_2025.base.crud.domain.Department;
 import com.example.starter_project_2025.base.crud.domain.DepartmentStatus;
 import com.example.starter_project_2025.base.crud.dto.DepartmentDTO;
-import com.example.starter_project_2025.base.crud.dto.DepartmentRequest;
+import com.example.starter_project_2025.base.crud.dto.DepartmentFilter;
 import com.example.starter_project_2025.base.crud.service.DepartmentService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -15,7 +14,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/departments")
-public class DepartmentController extends BaseCrudController<UUID, DepartmentDTO, DepartmentRequest> {
+public class DepartmentController extends BaseCrudController<UUID, DepartmentDTO, DepartmentFilter> {
 
     private final DepartmentService departmentService;
 
@@ -25,15 +24,15 @@ public class DepartmentController extends BaseCrudController<UUID, DepartmentDTO
     }
 
     @PostMapping("/create")
-    public ResponseEntity<DepartmentDTO> createDepartment(@Valid @RequestBody DepartmentRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(departmentService.createDepartment(request));
+    public ResponseEntity<DepartmentDTO> createDepartment(@Valid @RequestBody DepartmentDTO dto) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(departmentService.createDepartment(dto));
     }
 
     @PutMapping("/update/{id}")
     public ResponseEntity<DepartmentDTO> updateDepartment(
             @PathVariable UUID id,
-            @Valid @RequestBody DepartmentRequest request) {
-        return ResponseEntity.ok(departmentService.updateDepartment(id, request));
+            @Valid @RequestBody DepartmentDTO dto) {
+        return ResponseEntity.ok(departmentService.updateDepartment(id, dto));
     }
 
     @GetMapping("/tree")

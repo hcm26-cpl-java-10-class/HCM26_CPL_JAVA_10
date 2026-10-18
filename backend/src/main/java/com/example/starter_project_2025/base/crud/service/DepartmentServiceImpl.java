@@ -4,10 +4,10 @@ import com.example.starter_project_2025.base.crud.domain.Department;
 import com.example.starter_project_2025.base.crud.domain.DepartmentRepository;
 import com.example.starter_project_2025.base.crud.domain.DepartmentStatus;
 import com.example.starter_project_2025.base.crud.dto.DepartmentDTO;
-import com.example.starter_project_2025.base.crud.dto.DepartmentRequest;
+import com.example.starter_project_2025.base.crud.dto.DepartmentFilter;
 import com.example.starter_project_2025.base.crud.mapper.DepartmentMapper;
 import com.example.starter_project_2025.exception.BadRequestException;
-import com.fams.iam.repository.UserDepartmentRepository; // Repository quản lý quan hệ User - Department
+import com.fams.iam.repository.UserDepartmentRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,7 +17,7 @@ import java.util.UUID;
 
 @Service
 public class DepartmentServiceImpl
-        extends BaseCrudServiceImpl<Department, UUID, DepartmentDTO, DepartmentRequest, DepartmentRepository, DepartmentMapper>
+        extends BaseCrudServiceImpl<Department, UUID, DepartmentDTO, DepartmentFilter, DepartmentRepository, DepartmentMapper>
         implements DepartmentService {
 
     private final UserDepartmentRepository userDepartmentRepository;
@@ -32,23 +32,23 @@ public class DepartmentServiceImpl
 
     @Override
     @Transactional
-    public DepartmentDTO createDepartment(DepartmentRequest request) {
-        if (repository.existsByCode(request.getCode())) {
-            throw new BadRequestException("Mã phòng ban đã tồn tại: " + request.getCode());
+    public DepartmentDTO createDepartment(DepartmentDTO dto) {
+        if (repository.existsByCode(dto.getCode())) {
+            throw new BadRequestException("Mã phòng ban đã tồn tại: " + dto.getCode());
         }
 
         Department parent = null;
-        if (request.getParentDepartmentId() != null) {
-            parent = repository.findById(request.getParentDepartmentId())
+        if (dto.getParentDepartmentId() != null) {
+            parent = repository.findById(dto.getParentDepartmentId())
                     .orElseThrow(() -> new BadRequestException("Phòng ban cha không tồn tại"));
         }
 
         Department department = Department.builder()
-                .code(request.getCode().trim().toUpperCase())
-                .name(request.getName().trim())
+                .code(dto.getCode().trim().toUpperCase())
+                .name(dto.getName().trim())
                 .parent(parent)
-                .locationId(request.getLocationId())
-                .status(request.getStatus() != null ? request.getStatus() : DepartmentStatus.ACTIVE)
+                .locationId(dto.getLocationId())
+                .status(dto.getStatus() != null ? dto.getStatus() : DepartmentStatus.ACTIVE)
                 .build();
 
         return mapper.toDto(repository.save(department));
@@ -56,15 +56,15 @@ public class DepartmentServiceImpl
 
     @Override
     @Transactional
-    public DepartmentDTO updateDepartment(UUID id, DepartmentRequest request) {
+    public DepartmentDTO updateDepartment(UUID id, DepartmentDTO dto) {
         Department department = repository.findById(id)
                 .orElseThrow(() -> new BadRequestException("Phòng ban không tồn tại: " + id));
 
-        if (repository.existsByCodeAndIdNot(request.getCode(), id)) {
-            throw new BadRequestException("Mã phòng ban đã trùng lặp: " + request.getCode());
+        if (repository.existsByCodeAndIdNot(dto.getCode(), id)) {
+            throw new BadRequestException("Mã phòng ban đã trùng lặp: " + dto.getCode());
         }
 
-        UUID newParentId = request.getParentDepartmentId();
+        UUID newParentId = dto.getParentDepartmentId();
         if (newParentId != null) {
             validateNoCircularDependency(id, newParentId);
             Department parent = repository.findById(newParentId)
@@ -74,15 +74,15 @@ public class DepartmentServiceImpl
             department.setParent(null);
         }
 
-        department.setCode(request.getCode().trim().toUpperCase());
-        department.setName(request.getName().trim());
-        department.setLocationId(request.getLocationId());
+        department.setCode(dto.getCode().trim().toUpperCase());
+        department.setName(dto.getName().trim());
+        department.setLocationId(dto.getLocationId());
 
-        if (request.getStatus() != null && request.getStatus() != department.getStatus()) {
-            if (request.getStatus() == DepartmentStatus.INACTIVE) {
+        if (dto.getStatus() != null && dto.getStatus() != department.getStatus()) {
+            if (dto.getStatus() == DepartmentStatus.INACTIVE) {
                 validateDeactivation(id);
             }
-            department.setStatus(request.getStatus());
+            department.setStatus(dto.getStatus());
         }
 
         return mapper.toDto(repository.save(department));
@@ -127,12 +127,9 @@ public class DepartmentServiceImpl
     }
 
     private void validateDeactivation(UUID deptId) {
-        // 1. Kiểm tra phòng ban con đang ACTIVE
         if (repository.existsByParentIdAndStatus(deptId, DepartmentStatus.ACTIVE)) {
             throw new BadRequestException("Không thể vô hiệu hóa phòng ban đang có phòng ban con hoạt động!");
         }
-
-        // 2. Bổ sung kiểm tra User thuộc phòng ban theo yêu cầu Reviewer
         if (userDepartmentRepository.existsByDepartmentId(deptId)) {
             throw new BadRequestException("Không thể vô hiệu hóa phòng ban đang có người dùng/nhân sự trực thuộc!");
         }
