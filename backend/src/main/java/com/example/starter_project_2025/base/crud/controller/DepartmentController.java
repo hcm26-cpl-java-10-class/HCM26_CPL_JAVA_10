@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.base.crud.controller;
 
 import com.example.starter_project_2025.base.crud.domain.Department;
+import com.example.starter_project_2025.base.crud.domain.DepartmentStatus;
 import com.example.starter_project_2025.base.crud.dto.DepartmentDTO;
 import com.example.starter_project_2025.base.crud.dto.DepartmentRequest;
 import com.example.starter_project_2025.base.crud.service.DepartmentService;
@@ -14,30 +15,37 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/departments")
-public class DepartmentController extends BaseCrudController<Department, UUID, DepartmentDTO, DepartmentRequest, DepartmentRequest, DepartmentService> {
+public class DepartmentController extends BaseCrudController<UUID, DepartmentDTO, DepartmentRequest> {
+
+    private final DepartmentService departmentService;
 
     public DepartmentController(DepartmentService service) {
         super(service);
+        this.departmentService = service;
     }
 
     @PostMapping("/create")
     public ResponseEntity<DepartmentDTO> createDepartment(@Valid @RequestBody DepartmentRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.createDepartment(request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(departmentService.createDepartment(request));
     }
 
     @PutMapping("/update/{id}")
-    public ResponseEntity<DepartmentDTO> updateDepartment(@PathVariable UUID id, @Valid @RequestBody DepartmentRequest request) {
-        return ResponseEntity.ok(service.updateDepartment(id, request));
+    public ResponseEntity<DepartmentDTO> updateDepartment(
+            @PathVariable UUID id,
+            @Valid @RequestBody DepartmentRequest request) {
+        return ResponseEntity.ok(departmentService.updateDepartment(id, request));
     }
 
     @GetMapping("/tree")
     public ResponseEntity<List<DepartmentDTO>> getDepartmentTree() {
-        return ResponseEntity.ok(service.getDepartmentTree());
+        return ResponseEntity.ok(departmentService.getDepartmentTree());
     }
 
     @PatchMapping("/{id}/status")
-    public ResponseEntity<Void> changeStatus(@PathVariable UUID id, @RequestParam String status) {
-        service.changeStatus(id, status);
+    public ResponseEntity<Void> changeStatus(
+            @PathVariable UUID id,
+            @RequestParam DepartmentStatus status) {
+        departmentService.changeStatus(id, status);
         return ResponseEntity.noContent().build();
     }
 }

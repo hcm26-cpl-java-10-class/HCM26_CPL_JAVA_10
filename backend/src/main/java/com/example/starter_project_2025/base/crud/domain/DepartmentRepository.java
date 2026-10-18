@@ -12,7 +12,7 @@ public interface DepartmentRepository extends BaseCrudRepository<Department, UUI
 
     boolean existsByCodeAndIdNot(String code, UUID id);
 
-    boolean existsByParentIdAndStatus(UUID parentId, String status);
+    boolean existsByParentIdAndStatus(UUID parentId, DepartmentStatus status);
 
     List<Department> findByParentIsNull();
 }

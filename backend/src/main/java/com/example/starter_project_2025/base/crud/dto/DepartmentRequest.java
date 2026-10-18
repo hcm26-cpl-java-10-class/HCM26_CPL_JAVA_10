@@ -1,6 +1,8 @@
 package com.example.starter_project_2025.base.crud.dto;
 
+import com.example.starter_project_2025.base.crud.domain.DepartmentStatus;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -19,5 +21,7 @@ public class DepartmentRequest {
 
     private UUID parentDepartmentId;
     private UUID locationId;
-    private String status;
+
+    @NotNull(message = "Trạng thái phòng ban không được để trống")
+    private DepartmentStatus status;
 }

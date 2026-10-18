@@ -23,7 +23,6 @@ public class Department extends BaseEntity {
     @Column(name = "name", nullable = false, length = 100)
     private String name;
 
-    // Tự tham chiếu phòng ban cha (Self-referencing parent)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_department_id")
     private Department parent;
@@ -32,10 +31,10 @@ public class Department extends BaseEntity {
     @Builder.Default
     private List<Department> children = new ArrayList<>();
 
-    // Thuộc tính location_id để nullable (không chờ Task T18 của TV7)
     @Column(name = "location_id")
     private UUID locationId;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private String status;
+    private DepartmentStatus status;
 }

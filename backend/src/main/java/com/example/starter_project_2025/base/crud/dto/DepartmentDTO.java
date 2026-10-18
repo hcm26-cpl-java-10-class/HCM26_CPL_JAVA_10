@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.base.crud.dto;
 
+import com.example.starter_project_2025.base.crud.domain.DepartmentStatus;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
@@ -18,6 +19,6 @@ public class DepartmentDTO extends BaseDTO {
     private UUID parentDepartmentId;
     private String parentDepartmentName;
     private UUID locationId;
-    private String status;
+    private DepartmentStatus status;
     private List<DepartmentDTO> children;
 }
