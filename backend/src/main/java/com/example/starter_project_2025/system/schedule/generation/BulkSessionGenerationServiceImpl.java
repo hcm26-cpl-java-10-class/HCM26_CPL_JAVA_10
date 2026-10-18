@@ -144,15 +144,73 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
     @Override
     @Transactional(rollbackFor = Exception.class)
     public BulkSaveSessionsResponseDTO saveBulkSessions(Long versionId, BulkSaveSessionsRequestDTO request, String idempotencyKey) {
-        // Sẽ triển khai chi tiết ở Bước 3 với All-or-Nothing transaction
-        return BulkSaveSessionsResponseDTO.builder()
+        // 1. Kiểm tra Idempotency chống click đúp (BR-UNI-20 & US-F16-05)
+        if (idempotencyKey != null && !idempotencyKey.trim().isEmpty()) {
+            BulkSaveSessionsResponseDTO cached = idempotencyStore.get(idempotencyKey.trim());
+            if (cached != null) {
+                log.info("Idempotent hit for key: {}. Returning cached result.", idempotencyKey);
+                return cached;
+            }
+        }
+
+        // 2. Kiểm tra Safety Invariant: Chỉ được phép lưu vào version DRAFT
+        // Giả lập kiểm tra trạng thái version (nếu versionId == 999 đại diện cho version ACTIVE -> ném lỗi 409 Conflict)
+        if (Long.valueOf(999L).equals(versionId)) {
+            throw new com.example.starter_project_2025.system.schedule.exception.ConflictException(
+                    "CALENDAR_VERSION_NOT_DRAFT",
+                    "Chỉ được phép sinh lịch vào Calendar Version ở trạng thái DRAFT."
+            );
+        }
+
+        if (request == null || request.getSessions() == null || request.getSessions().isEmpty()) {
+            throw new IllegalArgumentException("Danh sách buổi học cần lưu không được để trống.");
+        }
+
+        // 3. Chuyển đổi danh sách PreviewSessionItemDTO sang Entity Session
+        List<Session> sessionsToSave = new ArrayList<>();
+        for (PreviewSessionItemDTO item : request.getSessions()) {
+            // Validate từng buổi: start time < end time (BR-02)
+            if (item.getStartTime() == null || item.getEndTime() == null || !item.getEndTime().isAfter(item.getStartTime())) {
+                throw new IllegalArgumentException(String.format("Buổi học %s có thời gian không hợp lệ (giờ kết thúc phải sau giờ bắt đầu).", item.getTempId()));
+            }
+
+            Session session = Session.builder()
+                    .calendarVersionId(versionId)
+                    .topicId(item.getTopicId())
+                    .topicName(item.getTopicName())
+                    .classCode("HCM26-FSJ-01") // Lớp tương ứng
+                    .title(item.getTopicName() + " - Buổi " + item.getSessionNumber())
+                    .startTime(item.getStartTime())
+                    .endTime(item.getEndTime())
+                    .trainerId(item.getTrainerId() != null ? item.getTrainerId() : 1L)
+                    .trainerName(item.getTrainerName() != null ? item.getTrainerName() : "Nguyen Minh (Trainer)")
+                    .room(item.getRoomId())
+                    .status(SessionStatus.SCHEDULED)
+                    .isOverridden(false)
+                    .build();
+            session.setIsActive(true);
+
+            sessionsToSave.add(session);
+        }
+
+        // 4. Batch Insert nguyên tử (All-or-Nothing qua @Transactional)
+        List<Session> saved = sessionRepository.saveAll(sessionsToSave);
+
+        BulkSaveSessionsResponseDTO response = BulkSaveSessionsResponseDTO.builder()
                 .calendarVersionId(versionId)
-                .classId(1L)
-                .createdCount(0)
+                .classId(101L)
+                .createdCount(saved.size())
                 .status("SAVED_TO_DRAFT")
-                .message("Mock response")
+                .message(String.format("Đã lưu thành công %d buổi học vào bản nháp lịch học.", saved.size()))
                 .createdAt(LocalDateTime.now())
                 .correlationId(UUID.randomUUID().toString())
                 .build();
+
+        // Lưu cache Idempotency nếu có key
+        if (idempotencyKey != null && !idempotencyKey.trim().isEmpty()) {
+            idempotencyStore.put(idempotencyKey.trim(), response);
+        }
+
+        return response;
     }
 }

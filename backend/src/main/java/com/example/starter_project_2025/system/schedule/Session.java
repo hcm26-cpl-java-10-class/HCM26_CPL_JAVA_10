@@ -35,6 +35,14 @@ import java.time.LocalDateTime;
 )
 public class Session extends BaseEntity {
 
+    @Column(name = "calendar_version_id")
+    @ExportField(name = "Calendar Version ID")
+    Long calendarVersionId;
+
+    @Column(name = "topic_id")
+    @ExportField(name = "Topic ID")
+    Long topicId;
+
     @Column(name = "class_code", nullable = false, length = 60)
     @ImportField(name = "Class Code", required = true)
     @ExportField(name = "Class Code")
