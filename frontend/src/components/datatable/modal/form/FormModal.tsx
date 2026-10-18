@@ -128,7 +128,7 @@ export function FormModal({
           return;
         }
 
-        if (field.type === "boolean") next[field.name] = false;
+        if (field.type === "boolean") next[field.name] = field.defaultValue ?? false;
         else if (field.type === "relation" && field.relation?.multiple)
           next[field.name] = [];
         else if (field.type === "number") next[field.name] = "";
@@ -139,7 +139,7 @@ export function FormModal({
     } else {
       const defaults: Record<string, any> = {};
       editableFields.forEach((f) => {
-        if (f.type === "boolean") defaults[f.name] = false;
+        if (f.type === "boolean") defaults[f.name] = f.defaultValue ?? false;
         else if (f.type === "relation" && f.relation?.multiple)
           defaults[f.name] = [];
         else if (f.type === "number") defaults[f.name] = "";

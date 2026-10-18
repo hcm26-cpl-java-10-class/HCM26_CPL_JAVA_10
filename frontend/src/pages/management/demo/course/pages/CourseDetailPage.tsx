@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { CoursePublishPanel } from "../components/CoursePublishPanel.tsx";
+import { CurriculumReorderPanel } from "../components/CurriculumReorderPanel.tsx";
 import { useCourseEnrollment } from "../hooks/useCourseEnrollment.ts";
 import {
   LEVEL_BADGE_CLASS,
@@ -93,6 +95,9 @@ export function CourseDetailPage() {
 }
 
 function CourseDetailContent({ course }: { course: CourseDetail }) {
+  // Staff: contentUnlocked mà chưa enrolled (xem preview, có quyền quản lý)
+  const isStaffView = course.contentUnlocked && !course.enrolled;
+
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
       <div className="space-y-6">
@@ -141,14 +146,25 @@ function CourseDetailContent({ course }: { course: CourseDetail }) {
         </section>
 
         <Syllabus course={course} />
+
+        {/* Staff-only: kéo thả sắp xếp giáo trình */}
+        {isStaffView && course.sections.length > 0 && (
+          <CurriculumReorderPanel courseId={course.id} sections={course.sections} />
+        )}
       </div>
 
-      <aside className="lg:sticky lg:top-4 lg:self-start">
+      <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
         <CourseActionCard course={course} />
+
+        {/* Staff-only: publish panel */}
+        {isStaffView && (
+          <CoursePublishPanel courseId={course.id} />
+        )}
       </aside>
     </div>
   );
 }
+
 
 /** Nút hành động động: Ghi danh / Tiếp tục học / Xem trước (staff). */
 function CourseActionCard({ course }: { course: CourseDetail }) {
@@ -158,7 +174,7 @@ function CourseActionCard({ course }: { course: CourseDetail }) {
 
   const enrollment = enrollmentByCourseId.get(course.id);
   // Staff (COURSE_UPDATE) xem được nội dung nhưng không ghi danh.
-  const isStaffPreview = !course.enrolled && course.contentUnlocked;
+  const isStaffPreview = !course.enrolled && !course.isFree && course.contentUnlocked;
 
   let action: React.ReactNode;
   if (course.enrolled) {
@@ -198,7 +214,7 @@ function CourseActionCard({ course }: { course: CourseDetail }) {
         disabled={enrollMutation.isPending}
         onClick={() => enrollMutation.mutate(course.id)}
       >
-        {enrollMutation.isPending ? "Enrolling..." : "Enroll for free"}
+        {enrollMutation.isPending ? "Enrolling..." : "Enroll"}
       </Button>
     );
   } else {
@@ -217,8 +233,12 @@ function CourseActionCard({ course }: { course: CourseDetail }) {
         </div>
       ) : (
         <div>
-          <p className="text-2xl font-bold">Free</p>
-          <p className="text-sm text-muted-foreground">Enroll to unlock all lesson content.</p>
+          <p className="text-2xl font-bold">{course.isFree ? "Free" : "Enrollment required"}</p>
+          <p className="text-sm text-muted-foreground">
+            {course.isFree
+              ? "Lesson content is available for free. Enroll to track your progress."
+              : "Enroll to unlock all lesson content."}
+          </p>
         </div>
       )}
 

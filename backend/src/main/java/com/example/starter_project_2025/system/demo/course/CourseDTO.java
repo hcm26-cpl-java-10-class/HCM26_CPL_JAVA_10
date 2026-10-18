@@ -36,5 +36,7 @@ public class CourseDTO extends BaseDTO {
 
     CourseStatus status;
 
+    Boolean isFree;
+
     CourseLevel level;
 }
