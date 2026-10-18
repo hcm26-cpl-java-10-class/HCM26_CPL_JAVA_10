@@ -52,7 +52,9 @@ public class RoleServiceImpl
         validateRoleNameUnique(request.getName(), null, ctx);
         validatePermissions(request.getPermissionIds(), ctx);
 
-        role.setIsSystem(false);
+        if (role.getIsSystem() == null) {
+            role.setIsSystem(false);
+        }
         assignPermissions(role, request.getPermissionIds());
     }
 
