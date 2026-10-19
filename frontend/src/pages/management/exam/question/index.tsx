@@ -9,8 +9,6 @@ import {
   type FieldSchema,
 } from "@/types";
 
-import { QuestionImport } from "@/components/datatable/dataio/QuestionImport";
-
 const typeOptions = [
   { label: "Single choice", value: "SINGLE_CHOICE" },
   { label: "Multi choice", value: "MULTI_CHOICE" },
@@ -79,11 +77,6 @@ export const entityConfig: EntityConfig = {
   path: "/questions",
   api: questionApi,
   schema: questionSchema,
-
-  headerActions: ({ table }) => (
-      <QuestionImport table={table} />
-  ),
-
   actionPages: {
     create: { path: "/questions/create", component: QuestionCreatePage },
     edit: { path: "/questions/:id/edit", component: QuestionEditPage },
