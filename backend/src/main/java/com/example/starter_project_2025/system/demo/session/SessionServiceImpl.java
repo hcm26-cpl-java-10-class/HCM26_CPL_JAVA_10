@@ -4,14 +4,13 @@ import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
-import com.example.starter_project_2025.system.demo.session.SessionService;
+import com.example.starter_project_2025.system.schedule_validation.ScheduleValidationService;
+import com.example.starter_project_2025.system.schedule_validation.SessionConflictCandidate;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDateTime;
 
 @Service
 @Transactional
@@ -23,6 +22,7 @@ public class SessionServiceImpl
 
     SessionMapper sessionMapper;
     SessionRepository sessionRepository;
+    ScheduleValidationService scheduleValidationService;
 
     @Override
     protected BaseCrudRepository<Session, Long> getRepository() {
@@ -36,22 +36,22 @@ public class SessionServiceImpl
 
     @Override
     protected String[] searchableFields() {
-        // Cho phép tìm kiếm nhanh theo tiêu đề hoặc phòng học
+        // Cho phep tim kiem nhanh theo tieu de hoac phong hoc
         return new String[]{"title", "location"};
     }
 
     @Override
     protected void beforeCreate(Session session, SessionDTO request, ValidationContext ctx) {
-        // 1. Kiểm tra thời gian: end_time phải sau start_time (BR-02, FR-CAL-01)
-        validateSessionTime(request.getStartTime(), request.getEndTime(), ctx);
+        // Kiem tra thoi gian: end_time phai sau start_time
+        scheduleValidationService.addValidationErrors(SessionConflictCandidate.from(session), ctx);
 
-        // 2. Mặc định trạng thái khi tạo mới là SCHEDULED
+        // Mac dinh trang thai khi tao moi la SCHEDULED
         session.setStatus(Session.SessionStatus.SCHEDULED);
     }
 
     @Override
     protected void beforeUpdate(Session session, SessionDTO request, ValidationContext ctx) {
-        // Không cho phép sửa nếu buổi học đã hoàn thành hoặc đã bị hủy
+        // Khong cho phep sua neu buoi hoc da hoan thanh hoac da bi huy
         if (session.getStatus() == Session.SessionStatus.COMPLETED) {
             ctx.add("status", "Cannot update a completed session");
             return;
@@ -62,20 +62,17 @@ public class SessionServiceImpl
             return;
         }
 
-        // Lấy thời gian mới (nếu request truyền lên) hoặc giữ nguyên thời gian cũ
-        LocalDateTime newStart = request.getStartTime() != null ? request.getStartTime() : session.getStartTime();
-        LocalDateTime newEnd = request.getEndTime() != null ? request.getEndTime() : session.getEndTime();
-
-        validateSessionTime(newStart, newEnd, ctx);
+        // Lay thoi gian moi neu request truyen len, neu khong thi giu gia tri cu
+        scheduleValidationService.addValidationErrors(candidateForUpdate(session, request), ctx);
     }
 
     @Override
     public SessionDTO cancelSession(Long id, SessionCancelDTO cancelDTO) {
-        // Lấy session từ DB
+        // Lay session tu DB
         Session session = sessionRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Session not found with id: " + id));
 
-        // Kiểm tra điều kiện nghiệp vụ: Không hủy buổi học đã hoàn thành
+        // Khong huy buoi hoc da hoan thanh
         if (session.getStatus() == Session.SessionStatus.COMPLETED) {
             throw new IllegalStateException("Cannot cancel an already completed session");
         }
@@ -84,7 +81,7 @@ public class SessionServiceImpl
             throw new IllegalStateException("Session is already cancelled");
         }
 
-        // Cập nhật trạng thái và lý do hủy (Soft cancel theo BR-03)
+        // Cap nhat trang thai va ly do huy
         session.setStatus(Session.SessionStatus.CANCELLED);
         session.setCancelReason(cancelDTO.getCancelReason());
 
@@ -92,12 +89,15 @@ public class SessionServiceImpl
         return sessionMapper.toDto(updatedSession);
     }
 
-    /**
-     * Validate nghiệp vụ thời gian: End Time phải lớn hơn Start Time
-     */
-    private void validateSessionTime(LocalDateTime start, LocalDateTime end, ValidationContext ctx) {
-        if (start != null && end != null && !end.isAfter(start)) {
-            ctx.add("endTime", "End time must be after start time");
-        }
+    // Tao du lieu kiem tra bang cach ket hop request voi gia tri hien tai.
+    private SessionConflictCandidate candidateForUpdate(Session session, SessionDTO request) {
+        return SessionConflictCandidate.builder()
+                .sessionId(session.getId())
+                .classId(request.getClassId() != null ? request.getClassId() : session.getClassId())
+                .trainerId(request.getTrainerId() != null ? request.getTrainerId() : session.getTrainerId())
+                .location(request.getLocation() != null ? request.getLocation() : session.getLocation())
+                .startTime(request.getStartTime() != null ? request.getStartTime() : session.getStartTime())
+                .endTime(request.getEndTime() != null ? request.getEndTime() : session.getEndTime())
+                .build();
     }
 }

@@ -1,0 +1,53 @@
+# version: '3.8'
+
+# services:
+#   mysql-db:
+#     image: mysql:8.0
+#     container_name: rbac-mysql
+#     restart: always
+#     environment:
+#       MYSQL_DATABASE: learnmangement
+#       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+#     ports:
+#       - "3307:3307"
+#     volumes:
+#       # - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+#       - mysql_data:/var/lib/mysql
+
+#   redis-cache:
+#     image: redis:alpine
+#     container_name: rbac-redis
+#     restart: always
+#     ports:
+#       - "6379:6379"
+
+# volumes:
+#   mysql_data:
+
+
+
+### Newesst
+version: '3.8'
+
+services:
+  mysql-db:
+    image: mysql:8.0
+    container_name: rbac-mysql
+    restart: always
+    environment:
+      - MYSQL_DATABASE=learnmangement
+      - MYSQL_ROOT_PASSWORD=root
+    ports:
+      - "3307:3306" # Maps your computer's 3307 to MySQL's 3306
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  redis-cache:
+    image: redis:alpine
+    container_name: rbac-redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+volumes:
+  mysql_data:

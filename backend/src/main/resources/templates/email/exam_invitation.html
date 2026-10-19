@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Lời mời tham gia kỳ thi</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+        <h2 style="color: #2c3e50;">Lời mời tham gia kỳ thi</h2>
+        <p>Xin chào <strong th:text="${username}">Học sinh</strong>,</p>
+        <p>Bạn đã được mời tham gia kỳ thi: <strong th:text="${examTitle}">Tên kỳ thi</strong>.</p>
+        <p>Thời lượng làm bài: <strong th:text="${durationMinutes}">60</strong> phút.</p>
+        <p>Vui lòng đăng nhập vào hệ thống để kiểm tra lịch thi và sẵn sàng tham gia.</p>
+        <p style="margin-top: 30px; font-size: 0.9em; color: #777;">Trân trọng,<br>Hệ thống Quản lý Kỳ thi</p>
+    </div>
+</body>
+</html>

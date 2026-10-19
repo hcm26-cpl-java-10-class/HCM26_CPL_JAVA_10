@@ -33,4 +33,51 @@ public interface SessionRepository extends BaseCrudRepository<Session, Long> {
             @Param("candidateEnd") LocalDateTime candidateEnd,
             @Param("excludedSessionId") Long excludedSessionId,
             @Param("cancelled") SessionStatus cancelled);
+
+    @Query("""
+            select s from Session s
+            where s.classId = :classId
+              and s.status <> :excludedStatus
+              and (:excludedSessionId is null or s.id <> :excludedSessionId)
+              and s.startTime < :endTime
+              and s.endTime > :startTime
+            """)
+    List<Session> findClassConflicts(
+            @Param("classId") Long classId,
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime,
+            @Param("excludedSessionId") Long excludedSessionId,
+            @Param("excludedStatus") Session.SessionStatus excludedStatus);
+
+    @Query("""
+            select s from Session s
+            where s.trainerId = :trainerId
+              and s.status <> :excludedStatus
+              and (:excludedSessionId is null or s.id <> :excludedSessionId)
+              and s.startTime < :endTime
+              and s.endTime > :startTime
+            """)
+    List<Session> findTrainerConflicts(
+            @Param("trainerId") Long trainerId,
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime,
+            @Param("excludedSessionId") Long excludedSessionId,
+            @Param("excludedStatus") Session.SessionStatus excludedStatus);
+
+    @Query("""
+            select s from Session s
+            where lower(trim(s.location)) = lower(trim(:location))
+              and s.status <> :excludedStatus
+              and (:excludedSessionId is null or s.id <> :excludedSessionId)
+              and s.startTime < :endTime
+              and s.endTime > :startTime
+            """)
+    List<Session> findRoomConflicts(
+            @Param("location") String location,
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime,
+            @Param("excludedSessionId") Long excludedSessionId,
+            @Param("excludedStatus") Session.SessionStatus excludedStatus);
+
+    boolean existsByTopicId(Long topicId);
 }
