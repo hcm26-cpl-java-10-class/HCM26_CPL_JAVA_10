@@ -17,6 +17,31 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class SubjectDTO extends BaseDTO {
 
+    @NotBlank(groups = OnCreate.class, message = "Mã môn học không được để trống")
+    @Size(max = 50, message = "Mã môn học tối đa 50 ký tự")
+    String code;
+
+    @NotBlank(groups = OnCreate.class, message = "Tên môn học không được để trống")
+    @Size(max = 150, message = "Tên môn học tối đa 150 ký tự")
+    String name;
+
+    @NotBlank(groups = OnCreate.class, message = "Phiên bản không được để trống")
+    @Size(max = 20, message = "Phiên bản tối đa 20 ký tự")
+    @Builder.Default
+    String version = "1.0";
+
+    @Size(max = 500, message = "Mô tả tối đa 500 ký tự")
+    String description;
+
+    @Size(max = 100, message = "Nhóm chuyên môn tối đa 100 ký tự")
+    String technicalGroup;
+
+    @NotNull(groups = OnCreate.class, message = "Thời lượng môn học không được để trống")
+    @Min(value = 1, message = "Thời lượng môn học phải lớn hơn hoặc bằng 1 giờ")
+    Integer durationHours;
+
+    @Builder.Default
+    SubjectStatus status = SubjectStatus.ACTIVE;
     @NotBlank(groups = OnCreate.class, message = "Subject code is required")
     @Size(max = 50, message = "Subject code must not exceed 50 characters")
     String code;
