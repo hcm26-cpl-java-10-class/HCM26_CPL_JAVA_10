@@ -34,6 +34,8 @@ public class UserDTO extends BaseDTO {
 
     String lastName;
 
+    String fullName;
+
     @NotEmpty(groups = OnCreate.class, message = "At least one role is required")
     Set<Long> roleIds;
 }

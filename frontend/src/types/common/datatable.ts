@@ -91,6 +91,9 @@ export interface EntitySchema {
   entityName: string;
   idField: string;
   fields: FieldSchema[];
+  indexColumnTitle?: string;
+  indexColumnWidth?: number;
+  renderIndex?: (row: any, index: number, page?: number, size?: number) => React.ReactNode;
 }
 
 export interface RelationConfig {

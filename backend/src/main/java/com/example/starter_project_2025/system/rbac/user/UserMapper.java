@@ -20,6 +20,7 @@ public interface UserMapper extends BaseCrudMapper<User, UserDTO> {
     @Override
     @Mapping(target = "roleIds", expression = "java(mapRoleIds(user))")
     @Mapping(target = "password", ignore = true)
+    @Mapping(target = "fullName", expression = "java(user.getFullName())")
     UserDTO toResponse(User user);
 
     @Override

@@ -5,6 +5,7 @@ export interface UserDTO extends BaseDTO {
   password?: string;
   firstName?: string;
   lastName?: string;
+  fullName?: string;
   roleIds?: string[];
 }
 

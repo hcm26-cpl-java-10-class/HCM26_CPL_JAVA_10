@@ -273,7 +273,7 @@ export function ProTable<TData = any>({
                             <colgroup>
                                 {isExpandable && <col style={{ width: 40 }} />}
                                 <col style={{ width: 20 }} />
-                                <col style={{ width: 50 }} />
+                                <col style={{ width: schema.indexColumnWidth || 50 }} />
                                 {table.visibleFields.map((f: any) => (
                                     <col key={f.name} style={{ width: columnWidths[f.name] || 150 }} />
                                 ))}
@@ -285,8 +285,8 @@ export function ProTable<TData = any>({
                                     <TableHead style={{ width: 20 }}>
                                         <SelectAllCheckbox table={table} idField={schema.idField} />
                                     </TableHead>
-                                    <TableHead style={{ width: 50 }} className="text-center">
-                                        #
+                                    <TableHead style={{ width: schema.indexColumnWidth || 50 }} className="text-center">
+                                        {schema.indexColumnTitle || "#"}
                                     </TableHead>
                                     {table.visibleFields.map((f: any) => (
                                         <SortableHeader
@@ -381,8 +381,10 @@ export function ProTable<TData = any>({
                                                         <RowSelection id={id} table={table} />
                                                     </TableCell>
 
-                                                    <TableCell className="text-center text-muted-foreground">
-                                                        {(table.page || 0) * (table.size || 10) + index + 1}
+                                                    <TableCell className="text-center text-muted-foreground font-medium">
+                                                        {schema.renderIndex
+                                                            ? schema.renderIndex(row, index, table.page, table.size)
+                                                            : (table.page || 0) * (table.size || 10) + index + 1}
                                                     </TableCell>
 
                                                     {table.visibleFields.map((f: any) => (
