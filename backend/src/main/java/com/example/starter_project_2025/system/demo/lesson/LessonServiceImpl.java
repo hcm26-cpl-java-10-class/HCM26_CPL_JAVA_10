@@ -6,15 +6,9 @@ import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.system.demo.section.Section;
 import com.example.starter_project_2025.system.demo.section.SectionRepository;
-import com.example.starter_project_2025.security.UserPrincipal;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,7 +23,6 @@ public class LessonServiceImpl
     LessonRepository lessonRepository;
     LessonMapper lessonMapper;
     SectionRepository sectionRepository;
-    CourseContentAccessGuard contentAccessGuard;
 
     @Override
     protected BaseCrudRepository<Lesson, Long> getRepository() {
@@ -44,20 +37,6 @@ public class LessonServiceImpl
     @Override
     protected String[] searchableFields() {
         return new String[]{"title", "textContent"};
-    }
-
-    @Override
-    public LessonDTO getById(Long id) {
-        LessonDTO lesson = super.getById(id);
-        assertCanReadContent(lesson);
-        return lesson;
-    }
-
-    @Override
-    public Page<LessonDTO> getAll(Pageable pageable, String search, LessonFilter filter) {
-        Page<LessonDTO> lessons = super.getAll(pageable, search, filter);
-        lessons.forEach(this::assertCanReadContent);
-        return lessons;
     }
 
     @Override
@@ -132,25 +111,6 @@ public class LessonServiceImpl
                     ctx.add("textContent", "Text content is required for TEXT lessons");
                 }
             }
-        }
-    }
-
-    private void assertCanReadContent(LessonDTO lesson) {
-        Section section = sectionRepository.findById(lesson.getSectionId())
-                .orElseThrow(() -> new IllegalStateException("Lesson section not found"));
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        UserPrincipal principal = authentication != null
-                && authentication.getPrincipal() instanceof UserPrincipal userPrincipal
-                ? userPrincipal
-                : null;
-        Long userId = principal == null || principal.getUser() == null
-                ? null
-                : principal.getUser().getId();
-        boolean administrator = authentication != null
-                && authentication.getAuthorities().stream()
-                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
-        if (!contentAccessGuard.canAccess(section.getCourse(), userId, administrator)) {
-            throw new AccessDeniedException("Enrollment required to access lesson content");
         }
     }
 }

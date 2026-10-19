@@ -53,9 +53,6 @@ public class CourseServiceImpl
         if (course.getStatus() == null) {
             course.setStatus(CourseStatus.DRAFT);
         }
-        if (course.getIsFree() == null) {
-            course.setIsFree(true);
-        }
         resolveInstructor(course, request);
         resolveCategory(course, request, ctx);
     }
@@ -72,9 +69,6 @@ public class CourseServiceImpl
         }
         if (request.getCategoryId() != null) {
             resolveCategory(course, request, ctx);
-        }
-        if (request.getIsFree() == null) {
-            request.setIsFree(course.getIsFree());
         }
     }
 

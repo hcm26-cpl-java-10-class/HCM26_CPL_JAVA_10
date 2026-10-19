@@ -2,7 +2,6 @@ import type { BaseDTO, BaseFilter } from "@/types/common/base";
 import type { LessonContentType } from "./lesson";
 
 export type CourseLevel = "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
-export type CourseStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 
 export interface CourseDTO extends BaseDTO {
   name?: string;
@@ -12,8 +11,6 @@ export interface CourseDTO extends BaseDTO {
   instructorId?: number;
   categoryId?: number;
   categoryName?: string;
-  status?: CourseStatus;
-  isFree?: boolean;
   level?: CourseLevel;
 }
 
@@ -41,7 +38,6 @@ export interface CatalogCourse {
   lessonCount: number;
   /** Tổng thời lượng, đơn vị giây (cùng đơn vị với Lesson.duration). */
   totalDuration: number;
-  isFree: boolean;
   enrolled: boolean;
 }
 
@@ -102,9 +98,8 @@ export interface CourseDetail {
   categoryId?: number | null;
   categoryName?: string | null;
   level?: CourseLevel | null;
-  isFree: boolean;
   enrolled: boolean;
-  /** true nếu đã ghi danh, khóa miễn phí, là chủ khóa hoặc ADMIN. */
+  /** true nếu đã ghi danh hoặc là staff (COURSE_UPDATE). */
   contentUnlocked: boolean;
   lessonCount: number;
   totalDuration: number;
