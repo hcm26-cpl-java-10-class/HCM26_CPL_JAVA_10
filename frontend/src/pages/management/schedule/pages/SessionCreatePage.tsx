@@ -187,7 +187,7 @@ export function SessionCreatePage() {
                 className="gap-2 border-primary/30 text-primary hover:bg-primary/10 shrink-0"
               >
                 <Sparkles className="h-4 w-4" />
-                Sinh lịch hàng loạt (F16)
+                Bulk Generator (F16)
               </Button>
             </div>
           </CardHeader>
