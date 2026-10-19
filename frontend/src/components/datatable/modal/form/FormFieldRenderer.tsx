@@ -193,6 +193,21 @@ export function FormFieldRenderer({
         </div>
       );
 
+      case "datetime-local":
+      return (
+        <div className="grid gap-2">
+          <Label htmlFor={field.name}>{field.label}</Label>
+          <Input
+            id={field.name}
+            type="datetime-local"
+            className={errorClass}
+            value={value || ""}
+            onChange={(e) => onChange(field.name, e.target.value)}
+          />
+          <FieldError errors={fieldErrors} />
+        </div>
+      );
+
     case "password":
       return (
         <div className="grid gap-2">
