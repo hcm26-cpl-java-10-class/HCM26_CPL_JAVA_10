@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import type { FieldSchema } from "@/types";
 import { FormFieldRenderer } from "./FormFieldRenderer";
+import { validateForm } from "./validateForm";
 
 type SectionField = {
   name: string;
@@ -106,6 +107,7 @@ export function FormModal({
   fieldErrors = {},
 }: FormModalProps) {
   const [form, setForm] = useState<Record<string, any>>({});
+  const [clientErrors, setClientErrors] = useState<Record<string, string[]>>({});
 
   const editableFields: FieldSchema[] = schema.fields.filter(
     (f: FieldSchema) =>
@@ -128,7 +130,7 @@ export function FormModal({
           return;
         }
 
-        if (field.type === "boolean") next[field.name] = field.defaultValue ?? false;
+        if (field.type === "boolean") next[field.name] = false;
         else if (field.type === "relation" && field.relation?.multiple)
           next[field.name] = [];
         else if (field.type === "number") next[field.name] = "";
@@ -139,7 +141,7 @@ export function FormModal({
     } else {
       const defaults: Record<string, any> = {};
       editableFields.forEach((f) => {
-        if (f.type === "boolean") defaults[f.name] = f.defaultValue ?? false;
+        if (f.type === "boolean") defaults[f.name] = false;
         else if (f.type === "relation" && f.relation?.multiple)
           defaults[f.name] = [];
         else if (f.type === "number") defaults[f.name] = "";
@@ -147,18 +149,32 @@ export function FormModal({
       });
       setForm(defaults);
     }
+    setClientErrors({});
   }, [initial, open]);
 
   const updateField = (name: string, value: any) => {
     setForm((prev) => ({ ...prev, [name]: value }));
+    setClientErrors((prev) => {
+      if (!prev[name]) return prev;
+      const { [name]: _removed, ...rest } = prev;
+      return rest;
+    });
   };
 
+  const mergedErrors: Record<string, string[]> = { ...fieldErrors, ...clientErrors };
+
   const handleSubmit = () => {
+    const errors = validateForm(editableFields, form, {
+      isEdit: !!initial,
+      initial,
+    });
+    setClientErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     onSubmit(form);
   };
 
   const hasError = (fieldName: string) =>
-    fieldErrors[fieldName] && fieldErrors[fieldName].length > 0;
+    mergedErrors[fieldName] && mergedErrors[fieldName].length > 0;
 
   const renderField = (field: FieldSchema) => (
     <FormFieldRenderer
@@ -170,7 +186,7 @@ export function FormModal({
           ? "border-destructive focus-visible:ring-destructive"
           : ""
       }
-      fieldErrors={fieldErrors[field.name]}
+      fieldErrors={mergedErrors[field.name]}
       relationOptions={relationOptions}
       onChange={updateField}
     />
