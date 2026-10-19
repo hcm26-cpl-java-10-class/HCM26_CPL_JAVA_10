@@ -57,9 +57,9 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 const DEMO_CLASSES = [
-  { id: 101, code: "HCM26-FSJ-01", name: "Fullstack Java Developer Bootcamp - HCM" },
-  { id: 102, code: "HN26-QAA-02", name: "Quality Assurance & Automation - Hanoi" },
-  { id: 103, code: "DN26-DATA-01", name: "Data Engineering Professional - Danang" },
+  { id: 101, code: "HCM26-FSJ-01", name: "Fullstack Java Bootcamp" },
+  { id: 102, code: "HN26-QAA-02", name: "QA & Automation Bootcamp" },
+  { id: 103, code: "DN26-DATA-01", name: "Data Engineering Bootcamp" },
 ];
 
 const WEEK_DAYS = [
@@ -368,13 +368,13 @@ export function BulkSessionGenerationPage() {
             <CardContent className="space-y-5">
               {/* Chọn Lớp & Version */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 min-w-0">
                   <Label htmlFor="select-class">Lớp học cần lập lịch <span className="text-red-500">*</span></Label>
                   <Select
                     value={selectedClassId.toString()}
                     onValueChange={(val) => setSelectedClassId(Number(val))}
                   >
-                    <SelectTrigger id="select-class">
+                    <SelectTrigger id="select-class" className="w-full">
                       <SelectValue placeholder="Chọn lớp" />
                     </SelectTrigger>
                     <SelectContent>
@@ -387,13 +387,13 @@ export function BulkSessionGenerationPage() {
                   </Select>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 min-w-0">
                   <Label htmlFor="select-version">Calendar Version mục tiêu <span className="text-red-500">*</span></Label>
                   <Select
                     value={calendarVersionId.toString()}
                     onValueChange={(val) => setCalendarVersionId(Number(val))}
                   >
-                    <SelectTrigger id="select-version">
+                    <SelectTrigger id="select-version" className="w-full">
                       <SelectValue placeholder="Chọn version" />
                     </SelectTrigger>
                     <SelectContent>
@@ -407,7 +407,7 @@ export function BulkSessionGenerationPage() {
 
               {/* Ngày bắt đầu & Ca học */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 min-w-0">
                   <Label htmlFor="start-date">Ngày bắt đầu khóa học <span className="text-red-500">*</span></Label>
                   <Input
                     id="start-date"
@@ -415,16 +415,17 @@ export function BulkSessionGenerationPage() {
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
                     required
+                    className="w-full"
                   />
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 min-w-0">
                   <Label htmlFor="slot-type">Khung giờ ca học (Slot) <span className="text-red-500">*</span></Label>
                   <Select
                     value={slotType}
                     onValueChange={(v: any) => setSlotType(v)}
                   >
-                    <SelectTrigger id="slot-type">
+                    <SelectTrigger id="slot-type" className="w-full">
                       <SelectValue placeholder="Chọn ca học" />
                     </SelectTrigger>
                     <SelectContent>
@@ -514,13 +515,13 @@ export function BulkSessionGenerationPage() {
 
               {/* Giảng viên & Phòng mặc định */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 min-w-0">
                   <Label htmlFor="default-trainer">Giảng viên phân công mặc định</Label>
                   <Select
                     value={defaultTrainerId?.toString()}
                     onValueChange={(val) => setDefaultTrainerId(Number(val))}
                   >
-                    <SelectTrigger id="default-trainer">
+                    <SelectTrigger id="default-trainer" className="w-full">
                       <SelectValue placeholder="Chọn giảng viên" />
                     </SelectTrigger>
                     <SelectContent>
@@ -533,13 +534,13 @@ export function BulkSessionGenerationPage() {
                   </Select>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 min-w-0">
                   <Label htmlFor="default-room">Phòng học mặc định</Label>
                   <Select
                     value={defaultRoomId}
                     onValueChange={(val) => setDefaultRoomId(val)}
                   >
-                    <SelectTrigger id="default-room">
+                    <SelectTrigger id="default-room" className="w-full">
                       <SelectValue placeholder="Chọn phòng" />
                     </SelectTrigger>
                     <SelectContent>
