@@ -1,6 +1,9 @@
 package com.example.starter_project_2025.base.crud.dto;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -8,14 +11,10 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-public class LocationDTO {
-    private Long id;
+public class LocationDTO extends BaseDTO {
     private String code;
     private String name;
     private Long parentId;
     private String status;
-
-    @Builder.Default
     private List<LocationDTO> children = new ArrayList<>();
 }

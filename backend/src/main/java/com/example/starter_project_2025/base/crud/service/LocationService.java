@@ -5,6 +5,7 @@ import com.example.starter_project_2025.base.crud.domain.LocationRepository;
 import com.example.starter_project_2025.base.crud.dto.LocationDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,10 +19,12 @@ public class LocationService {
 
     private final LocationRepository locationRepository;
 
+    @Transactional(readOnly = true)
     public List<Location> getAllLocations() {
         return locationRepository.findAll();
     }
 
+    @Transactional(readOnly = true)
     public List<LocationDTO> getLocationTree() {
         List<Location> allLocations = locationRepository.findAll();
 
@@ -52,10 +55,11 @@ public class LocationService {
         dto.setName(location.getName());
         dto.setParentId(location.getParentId());
         dto.setStatus(location.getStatus());
-        dto.setChildren(new ArrayList<>());
+        dto.setIsActive(true);
         return dto;
     }
 
+    @Transactional
     public Location createLocation(Location location) {
         if (locationRepository.existsByCode(location.getCode())) {
             throw new IllegalArgumentException("Location code already exists!");
@@ -63,8 +67,11 @@ public class LocationService {
         return locationRepository.save(location);
     }
 
-
+    @Transactional
     public void deleteLocation(Long id) {
+        if (!locationRepository.existsById(id)) {
+            throw new IllegalArgumentException("Location not found with id: " + id);
+        }
         locationRepository.deleteById(id);
     }
 }
