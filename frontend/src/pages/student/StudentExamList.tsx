@@ -15,7 +15,9 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import { ExamPasswordDialog } from '@/pages/student/components/ExamPasswordDialog';
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { AlertCircle, ArrowRight, CalendarDays, Clock3, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -128,6 +130,7 @@ function ExamCard({
 
 export default function StudentExamList() {
     const navigate = useNavigate();
+    const [passwordExam, setPasswordExam] = useState<Exam | null>(null);
 
     const examsQuery = useQuery({
         queryKey: examsQueryKey,
@@ -152,6 +155,17 @@ export default function StudentExamList() {
 
     const exams = examsQuery.data ?? [];
     const attempts = attemptsQuery.data ?? [];
+
+    const openExam = (examId: number) => {
+        const exam = exams.find((item) => item.id === examId);
+        const isInProgress = attempts.some((item) => item.examId === examId && item.status === 'IN_PROGRESS');
+        // Bài đang làm dở thì server cho vào tiếp, không cần nhập lại mật khẩu.
+        if (exam?.hasPassword && !isInProgress) {
+            setPasswordExam(exam);
+            return;
+        }
+        navigate(`/student/exams/${examId}/take`);
+    };
 
     return (
         <MainLayout pathName={{ exams: 'Lịch thi' }}>
@@ -229,13 +243,28 @@ export default function StudentExamList() {
                                     exam={exam}
                                     attempt={attempt}
                                     disabled={attemptsQuery.isError}
-                                    onOpen={(id) => navigate(`/student/exams/${id}/take`)}
+                                    onOpen={openExam}
                                 />
                             );
                         })}
                     </div>
                 )}
             </div>
+
+            <ExamPasswordDialog
+                open={passwordExam !== null}
+                onOpenChange={(open) => {
+                    if (!open) setPasswordExam(null);
+                }}
+                examId={passwordExam?.id ?? null}
+                examTitle={passwordExam?.title ?? ''}
+                onSuccess={(examId, password) => {
+                    // startOrResumeExam đọc mật khẩu này rồi gửi kèm POST /attempt.
+                    sessionStorage.setItem(`exam_pass_${examId}`, password);
+                    setPasswordExam(null);
+                    navigate(`/student/exams/${examId}/take`);
+                }}
+            />
         </MainLayout>
     );
 }

@@ -8,6 +8,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -20,6 +21,17 @@ function toAnswerRequests(answers: Record<number, ExamAttemptAnswer>): SaveExamA
         selectedOptionIds: answer.selectedOptionIds,
         textAnswer: answer.textAnswer,
     }));
+}
+
+function getStartErrorMessage(error: unknown): string {
+    if (axios.isAxiosError(error)) {
+        if (!error.response) return 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại.';
+        const message = (error.response.data as { message?: string } | undefined)?.message;
+        if (error.response.status === 403) return 'Bạn không có quyền làm bài thi này.';
+        if (error.response.status === 404) return 'Không tìm thấy đề thi hoặc đề thi đã bị tắt.';
+        if (message) return message; // vd: "Mật khẩu đề thi không chính xác", "Bạn đã sử dụng hết số lần làm bài", "Kỳ thi đã đóng"
+    }
+    return 'Không thể mở đề thi. Vui lòng thử lại.';
 }
 
 function getCountdown(deadlineAt: string, now: number): number {
@@ -335,7 +347,7 @@ export default function StudentExamTakingPage() {
         return (
             <MainLayout>
                 <div role="alert" className="space-y-4 rounded-lg border border-destructive p-6 text-destructive">
-                    <p>Không thể mở đề thi. Đề có thể không còn hoạt động hoặc bạn không có quyền làm bài.</p>
+                    <p>{getStartErrorMessage(attemptQuery.error)}</p>
                     <Button variant="outline" onClick={() => navigate('/student/exams')}>Quay lại lịch thi</Button>
                 </div>
             </MainLayout>
