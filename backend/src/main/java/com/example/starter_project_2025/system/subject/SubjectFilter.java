@@ -28,4 +28,9 @@ public class SubjectFilter extends BaseFilter {
 
     @FilterField(entityField = "status", operator = FilterOperator.EQUAL)
     SubjectStatus status;
+    @FilterField(entityField = "technicalGroup", operator = FilterOperator.EQUAL)
+    String technicalGroup;
+
+    @FilterField(entityField = "version", operator = FilterOperator.EQUAL)
+    String version;
 }
