@@ -4,6 +4,12 @@ import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.demo.session.SessionRepository;
@@ -41,11 +47,28 @@ public class SubjectServiceImpl
 
     @Override
     protected String[] searchableFields() {
+        return new String[]{"code", "name", "description", "technicalGroup"};
         return new String[]{"code", "name", "technicalGroup"};
     }
 
     @Override
     protected void beforeCreate(Subject subject, SubjectDTO request, ValidationContext ctx) {
+        if (request.getCode() == null || request.getCode().trim().isEmpty()) {
+            ctx.add("code", "Mã môn học không được để trống");
+        } else {
+            request.setCode(request.getCode().trim().toUpperCase());
+        }
+
+        if (request.getName() == null || request.getName().trim().isEmpty()) {
+            ctx.add("name", "Tên môn học không được để trống");
+        }
+
+        if (request.getVersion() == null || request.getVersion().trim().isEmpty()) {
+            request.setVersion("1.0");
+        }
+
+        if (request.getStatus() == null) {
+            request.setStatus(SubjectStatus.ACTIVE);
         if (subjectRepository.existsByCodeAndVersion(request.getCode(), request.getVersion())) {
             ctx.add("code", "Subject with code '" + request.getCode() + "' and version '" + request.getVersion() + "' already exists");
         }
@@ -70,6 +93,10 @@ public class SubjectServiceImpl
     }
 
     @Override
+    protected void beforeUpdate(Subject subject, SubjectDTO request, ValidationContext ctx) {
+        if (request.getCode() != null) {
+            request.setCode(request.getCode().trim().toUpperCase());
+        }
     @Transactional(readOnly = true)
     public List<SubjectDTO> getActiveSubjects() {
         return subjectRepository.findByIsActiveTrue()
