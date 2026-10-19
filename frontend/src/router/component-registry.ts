@@ -33,7 +33,7 @@ export const routes: RouteConfig[] = [
     path: "/sessions/bulk-generate",
     component: BulkSessionGenerationPage,
     requiredPermission: "SESSION_CREATE",
-    isModuleDriven: true,
+    isModuleDriven: false,
   },
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
   { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
