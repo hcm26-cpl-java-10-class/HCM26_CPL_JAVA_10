@@ -32,7 +32,7 @@ public class SessionStatusController {
     SessionService sessionService;
 
     @PostMapping("/{id}/cancel")
-    @PreAuthorize("hasAuthority('SESSION_UPDATE')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(
             summary = "Hủy buổi học (shortcut — cần cancelReason)",
             description = """
