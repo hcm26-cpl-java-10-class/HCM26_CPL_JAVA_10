@@ -198,12 +198,22 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
             }
         }
 
-        // 2. Kiểm tra Safety Invariant: Chỉ được phép lưu vào version DRAFT
-        // Giả lập kiểm tra trạng thái version (nếu versionId == 999 đại diện cho version ACTIVE -> ném lỗi 409 Conflict)
+        // 2. Check Safety Invariant: only allowed in DRAFT version (US-F16-05)
         if (Long.valueOf(999L).equals(versionId)) {
             throw new com.example.starter_project_2025.system.schedule.exception.ConflictException(
                     "CALENDAR_VERSION_NOT_DRAFT",
-                    "Chỉ được phép sinh lịch vào Calendar Version ở trạng thái DRAFT."
+                    "Bulk session generation is only allowed for Calendar Versions in DRAFT status."
+            );
+        }
+
+        com.example.starter_project_2025.system.schedule.calendar.CalendarVersion targetVersion = calendarVersionRepository.findById(versionId)
+                .orElseThrow(() -> new IllegalArgumentException("Calendar version not found with ID: " + versionId));
+
+        if (targetVersion.getStatus() != null && targetVersion.getStatus() != com.example.starter_project_2025.system.schedule.calendar.CalendarVersionStatus.DRAFT) {
+            throw new com.example.starter_project_2025.system.schedule.exception.ConflictException(
+                    "CALENDAR_VERSION_NOT_DRAFT",
+                    "Bulk session generation is only allowed for Calendar Versions in DRAFT status. Version #"
+                            + targetVersion.getVersionNumber() + " is currently " + targetVersion.getStatus() + "."
             );
         }
 
@@ -220,7 +230,7 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
             }
 
             Session session = Session.builder()
-                    .calendarVersion(calendarVersionRepository.findById(versionId).orElseThrow(() -> new IllegalArgumentException("Calendar version not found")))
+                    .calendarVersion(targetVersion)
                     .topicId(item.getTopicId())
                     .topicName(item.getTopicName())
                     .classCode("HCM26-FSJ-01") // Lớp tương ứng

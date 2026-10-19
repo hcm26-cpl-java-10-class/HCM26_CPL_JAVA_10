@@ -26,4 +26,7 @@ public class SessionFilter extends BaseFilter {
 
     @FilterField(operator = FilterOperator.LIKE, ignoreCase = true)
     private String room;
+
+    @FilterField(entityField = "calendarVersion.id", operator = FilterOperator.EQUAL)
+    private Long calendarVersionId;
 }
