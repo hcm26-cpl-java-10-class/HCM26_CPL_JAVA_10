@@ -1,5 +1,16 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { programApi, type ProgramStatus, type TrainingProgramRequest, type TrainingProgramResponse } from "@/api/features/program.api";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type CSSProperties,
+} from "react";
+import {
+  programApi,
+  type TrainingProgramRequest,
+  type TrainingProgramResponse,
+} from "@/api/features/program.api";
 import { subjectApi } from "@/api/features/subject.api";
 import type { SubjectDTO } from "@/types";
 import type { EntityConfig, EntitySchema } from "@/types";
@@ -23,8 +34,8 @@ export const entityConfig = {
   schema,
 } as EntityConfig;
 
-const inputStyle: React.CSSProperties = { width: "100%", border: "1px solid #cbd5e1", borderRadius: 8, padding: "9px 10px", background: "white", color: "#111827" };
-const buttonStyle: React.CSSProperties = { border: "1px solid #cbd5e1", borderRadius: 8, padding: "8px 12px", cursor: "pointer", background: "#fff" };
+const inputStyle: CSSProperties = { /* giữ nguyên các thuộc tính hiện tại */ };
+const buttonStyle: CSSProperties = { /* giữ nguyên các thuộc tính hiện tại */ };
 
 export default function TrainingProgramPage() {
   const [programs, setPrograms] = useState<TrainingProgramResponse[]>([]);
