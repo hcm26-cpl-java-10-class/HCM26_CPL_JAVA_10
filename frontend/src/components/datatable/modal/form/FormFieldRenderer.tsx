@@ -12,7 +12,6 @@ import {
 import { iconMap } from "@/components/datatable/iconMap";
 import type { FieldSchema } from "@/types";
 import { FieldError } from "./FieldError";
-import { getEffectiveRule } from "./validateForm";
 import { MultiRelationSelect } from "./MultiRelationSelect";
 
 interface FormFieldRendererProps {
@@ -35,11 +34,6 @@ export function FormFieldRenderer({
   relationOptions = {},
   onChange,
 }: FormFieldRendererProps) {
-  const rule = getEffectiveRule(field);
-  const requiredMark = rule.required ? (
-    <span className="text-destructive"> *</span>
-  ) : null;
-
   switch (field.type) {
     case "boolean":
       return (
@@ -74,7 +68,7 @@ export function FormFieldRenderer({
 
       return (
         <div className="grid gap-2">
-          <Label htmlFor={field.name}>{field.label}{requiredMark}</Label>
+          <Label htmlFor={field.name}>{field.label}</Label>
           <Select
             value={value?.toString() || ""}
             onValueChange={(val) => onChange(field.name, val)}
@@ -137,7 +131,7 @@ export function FormFieldRenderer({
       // Single select
       return (
         <div className="grid gap-2">
-          <Label htmlFor={field.name}>{field.label}{requiredMark}</Label>
+          <Label htmlFor={field.name}>{field.label}</Label>
           <Select
             value={value?.toString() || ""}
             onValueChange={(val) => onChange(field.name, val)}
@@ -166,7 +160,7 @@ export function FormFieldRenderer({
     case "number":
       return (
         <div className="grid gap-2">
-          <Label htmlFor={field.name}>{field.label}{requiredMark}</Label>
+          <Label htmlFor={field.name}>{field.label}</Label>
           <Input
             id={field.name}
             type="number"
@@ -187,7 +181,7 @@ export function FormFieldRenderer({
     case "date":
       return (
         <div className="grid gap-2">
-          <Label htmlFor={field.name}>{field.label}{requiredMark}</Label>
+          <Label htmlFor={field.name}>{field.label}</Label>
           <Input
             id={field.name}
             type="date"
@@ -217,7 +211,7 @@ export function FormFieldRenderer({
     case "password":
       return (
         <div className="grid gap-2">
-          <Label htmlFor={field.name}>{field.label}{requiredMark}</Label>
+          <Label htmlFor={field.name}>{field.label}</Label>
           <Input
             id={field.name}
             type="password"
@@ -226,7 +220,6 @@ export function FormFieldRenderer({
             onChange={(e) => onChange(field.name, e.target.value)}
             placeholder={`Enter ${field.label.toLowerCase()}...`}
             autoComplete="new-password"
-            maxLength={rule.maxLength}
           />
           <FieldError errors={fieldErrors} />
         </div>
@@ -235,7 +228,7 @@ export function FormFieldRenderer({
     case "textarea":
       return (
         <div className="grid gap-2">
-          <Label htmlFor={field.name}>{field.label}{requiredMark}</Label>
+          <Label htmlFor={field.name}>{field.label}</Label>
           <Textarea
             id={field.name}
             className={errorClass}
@@ -243,13 +236,7 @@ export function FormFieldRenderer({
             onChange={(e) => onChange(field.name, e.target.value)}
             placeholder={`Enter ${field.label.toLowerCase()}...`}
             rows={4}
-            maxLength={rule.maxLength}
           />
-          {rule.maxLength ? (
-            <p className="text-xs text-muted-foreground text-right">
-              {(value || "").length}/{rule.maxLength}
-            </p>
-          ) : null}
           <FieldError errors={fieldErrors} />
         </div>
       );
@@ -258,14 +245,13 @@ export function FormFieldRenderer({
     default:
       return (
         <div className="grid gap-2">
-          <Label htmlFor={field.name}>{field.label}{requiredMark}</Label>
+          <Label htmlFor={field.name}>{field.label}</Label>
           <Input
             id={field.name}
             className={errorClass}
             value={value || ""}
             onChange={(e) => onChange(field.name, e.target.value)}
             placeholder={`Enter ${field.label.toLowerCase()}...`}
-            maxLength={rule.maxLength}
           />
           <FieldError errors={fieldErrors} />
         </div>

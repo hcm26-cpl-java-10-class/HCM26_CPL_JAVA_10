@@ -2,8 +2,8 @@ import { categoryApi, courseApi, userApi } from "@/api";
 import { usePermissions } from "@/hooks/usePermissions";
 import { AutoCrudPage } from "@/pages/management/AutoCrudPage";
 import { type EntityConfig, type EntitySchema, auditableFieldsSchema, type FieldSchema } from "@/types";
-import { CourseCatalogPage } from "./components/CourseCatalogPage";
-import { CourseDetailPage } from "./pages/CourseDetailPage";
+import { CourseCatalogPage } from "./components/CourseCatalogPage.tsx";
+import { CourseDetailPage } from "./pages/CourseDetailPage.tsx";
 
 const courseSchema: EntitySchema = {
   entityName: "course",
@@ -15,13 +15,6 @@ const courseSchema: EntitySchema = {
       type: "text",
       sortable: true,
       bold: true,
-      // DB: courses.name length 150, unique
-      validation: {
-        required: true,
-        requiredMessage: "Course name is required",
-        minLength: 3,
-        maxLength: 150,
-      },
     },
     {
       name: "instructor",
@@ -62,20 +55,39 @@ const courseSchema: EntitySchema = {
       },
     },
     {
+      name: "status",
+      label: "Publication status",
+      type: "select",
+      defaultValue: "DRAFT",
+      options: [
+        { label: "Draft (hidden from students)", value: "DRAFT" },
+        { label: "Published (visible to students)", value: "PUBLISHED" },
+        { label: "Archived (hidden from students)", value: "ARCHIVED" },
+      ],
+    },
+    {
       name: "description",
       label: "Description",
       type: "textarea",
       sortable: false,
-      // DB: courses.description length 500
-      validation: { maxLength: 500 },
+    },
+    {
+      name: "isFree",
+      label: "Free course",
+      type: "boolean",
+      defaultValue: true,
+      booleanLabels: {
+        true: "Free",
+        false: "Enrollment required",
+        trueColor: "bg-emerald-600 text-white",
+        falseColor: "bg-amber-600 text-white",
+      },
     },
     {
       name: "thumbnailUrl",
       label: "Thumbnail URL",
       type: "text",
       sortable: false,
-      // DB: courses.thumbnail_url length 255 (URL check is automatic for *Url fields)
-      validation: { maxLength: 255 },
     },
     ...(auditableFieldsSchema as FieldSchema[]),
   ],
