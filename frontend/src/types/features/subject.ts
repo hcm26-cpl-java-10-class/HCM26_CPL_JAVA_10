@@ -1,3 +1,10 @@
+
+export interface SubjectDTO {
+    id: number;
+    code: string;
+    name: string;
+    durationHours: number;
+}
 import type { BaseDTO, BaseFilter } from "@/types/common/base";
 
 export interface SubjectDTO extends BaseDTO {
