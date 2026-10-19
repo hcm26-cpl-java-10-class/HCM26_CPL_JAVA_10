@@ -110,6 +110,10 @@ export function FormModal({
   fieldErrors = {},
 }: FormModalProps) {
   const [form, setForm] = useState<Record<string, any>>({});
+  const [clientErrors, setClientErrors] = useState<Record<string, string[]>>({});
+  const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
+  const [submitted, setSubmitted] = useState(false);
+  const [editedFields, setEditedFields] = useState<Set<string>>(new Set());
 
   const editableFields: FieldSchema[] = schema.fields.filter(
     (f: FieldSchema) =>
@@ -123,6 +127,10 @@ export function FormModal({
   );
 
   useEffect(() => {
+    setClientErrors({});
+    setTouchedFields(new Set());
+    setEditedFields(new Set());
+    setSubmitted(false);
     if (initial) {
       const next: Record<string, any> = {};
 
@@ -154,15 +162,35 @@ export function FormModal({
   }, [initial, open]);
 
   const updateField = (name: string, value: any) => {
-    setForm((prev) => ({ ...prev, [name]: value }));
+    const next = { ...form, [name]: value };
+    setForm(next);
+    if (schema.validateForm) {
+      setTouchedFields((prev) => new Set(prev).add(name));
+      setEditedFields((prev) => new Set(prev).add(name));
+      setClientErrors(schema.validateForm(next, { relationOptions, relationLoading, relationErrors }));
+    }
   };
 
   const handleSubmit = () => {
+    if (schema.validateForm) {
+      const errors = schema.validateForm(form, { relationOptions, relationLoading, relationErrors });
+      setClientErrors(errors);
+      setSubmitted(true);
+      if (Object.keys(errors).length > 0) return;
+      setEditedFields(new Set());
+    }
     onSubmit(form);
   };
 
+  const errorsFor = (fieldName: string): string[] | undefined =>
+    (submitted || touchedFields.has(fieldName) || (form[fieldName] !== "" && form[fieldName] != null)) && clientErrors[fieldName]?.length
+      ? clientErrors[fieldName]
+      : schema.validateForm && editedFields.has(fieldName)
+        ? undefined
+        : fieldErrors[fieldName];
+
   const hasError = (fieldName: string) =>
-    fieldErrors[fieldName] && fieldErrors[fieldName].length > 0;
+    !!errorsFor(fieldName)?.length;
 
   const renderField = (field: FieldSchema) => (
     <FormFieldRenderer
@@ -174,7 +202,7 @@ export function FormModal({
           ? "border-destructive focus-visible:ring-destructive"
           : ""
       }
-      fieldErrors={fieldErrors[field.name]}
+      fieldErrors={errorsFor(field.name)}
       relationOptions={relationOptions}
       relationLoading={relationLoading}
       relationErrors={relationErrors}

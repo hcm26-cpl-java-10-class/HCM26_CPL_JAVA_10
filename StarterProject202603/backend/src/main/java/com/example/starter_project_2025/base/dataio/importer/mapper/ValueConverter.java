@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.base.dataio.importer.mapper;
 
 import org.springframework.stereotype.Component;
+import java.math.BigDecimal;
 
 @Component
 public class ValueConverter {
@@ -15,8 +16,13 @@ public class ValueConverter {
         if (type == String.class)
             return val;
 
-        if (type == Long.class || type == long.class)
-            return Long.valueOf(val);
+        if (type == Long.class || type == long.class) {
+            try {
+                return new BigDecimal(val).longValueExact();
+            } catch (NumberFormatException | ArithmeticException e) {
+                throw new IllegalArgumentException("Expected a whole number within Long range: " + val, e);
+            }
+        }
 
         if (type == Integer.class || type == int.class)
             return Integer.valueOf(val);
@@ -41,6 +47,9 @@ public class ValueConverter {
 
         if (type == java.time.LocalDate.class)
             return java.time.LocalDate.parse(val);
+
+        if (type == java.time.LocalTime.class)
+            return java.time.LocalTime.parse(val);
 
         return raw;
     }

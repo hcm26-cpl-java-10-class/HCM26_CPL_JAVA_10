@@ -10,13 +10,22 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { ImportResult } from "@/types";
+import { isImportResult } from "@/types/common/import-result";
 import { ArrowLeft, CheckCircle2, XCircle } from "lucide-react";
 
 interface ImportResultContentProps {
-  result: ImportResult;
+  result: unknown;
 }
 
 export const ImportResultContent = ({ result }: ImportResultContentProps) => {
+  if (!isImportResult(result)) {
+    return (
+      <p role="alert" className="text-red-600 dark:text-red-400">
+        Unable to display import results: the server returned invalid result data.
+      </p>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">

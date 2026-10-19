@@ -3,6 +3,10 @@ package com.example.starter_project_2025.system.study_session;
 import com.example.starter_project_2025.base.crud.controller.BaseCrudDataIoController;
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.service.BaseCrudService;
+import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.base.dataio.importer.result.ImportResult;
+import com.example.starter_project_2025.base.dataio.importer.service.GenericImportService;
+import com.example.starter_project_2025.system.academic.subject.SubjectRepository;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
@@ -13,8 +17,12 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequiredArgsConstructor
@@ -26,6 +34,28 @@ public class StudySessionController
 
     StudySessionService studySessionService;
     StudySessionRepository studySessionRepository;
+    GenericImportService studySessionImportService;
+    SubjectRepository subjectRepository;
+    StudySessionValidator studySessionValidator;
+
+    @Override
+    @PostMapping(value = "/import", consumes = "multipart/form-data")
+    public ImportResult importFile(@RequestParam("file") MultipartFile file) {
+        return studySessionImportService.importFile(file, StudySession.class, studySessionRepository, session -> {
+            ValidationContext ctx = new ValidationContext();
+            studySessionValidator.validateImport(session, ctx);
+            if (session.getSubjectId() == null || !subjectRepository.existsById(session.getSubjectId())) {
+                ctx.add("subjectId", "Subject ID " + session.getSubjectId()
+                        + " does not exist. Select an existing Subject ID from Subjects before importing.");
+            }
+            if (ctx.hasErrors()) {
+                throw new IllegalArgumentException(ctx.getErrors().entrySet().stream()
+                        .sorted(Map.Entry.comparingByKey())
+                        .flatMap(entry -> entry.getValue().stream().map(message -> entry.getKey() + ": " + message))
+                        .collect(Collectors.joining("; ")));
+            }
+        });
+    }
 
     @Override
     protected BaseCrudService<Long, StudySessionDTO, StudySessionFilter> getService() {

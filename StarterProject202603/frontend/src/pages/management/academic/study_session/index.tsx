@@ -1,5 +1,6 @@
 import { subjectApi, studySessionApi } from "@/api";
 import { StudySessionDetailPage } from "./StudySessionDetailPage";
+import { validateStudySession } from "./validation";
 import {
   auditableFieldsSchema,
   type EntityConfig,
@@ -10,6 +11,7 @@ import {
 const studySessionSchema: EntitySchema = {
   entityName: "study-session",
   idField: "id",
+  validateForm: validateStudySession,
   fields: [
     {
       name: "subjectId",
@@ -86,6 +88,8 @@ const studySessionSchema: EntitySchema = {
       name: "description",
       label: "Description",
       type: "textarea",
+      maxLength: 500,
+      showCharacterCount: true,
       sortable: false,
     },
     ...(auditableFieldsSchema as FieldSchema[]),

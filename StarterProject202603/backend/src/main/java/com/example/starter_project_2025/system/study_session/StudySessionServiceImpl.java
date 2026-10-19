@@ -17,8 +17,6 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalTime;
-
 @Service
 @Transactional
 @RequiredArgsConstructor
@@ -32,6 +30,7 @@ public class StudySessionServiceImpl
     SubjectRepository subjectRepository;
     StudySessionVersionLock studySessionVersionLock;
     ApplicationEventPublisher eventPublisher;
+    StudySessionValidator studySessionValidator;
 
     @Override
     protected BaseCrudRepository<StudySession, Long> getRepository() {
@@ -50,7 +49,7 @@ public class StudySessionServiceImpl
 
     @Override
     protected void beforeCreate(StudySession studySession, StudySessionDTO request, ValidationContext ctx) {
-        validateTimeRange(request.getStartTime(), request.getEndTime(), ctx);
+        studySessionValidator.validate(request, ctx);
         assignSubject(studySession, request.getSubjectId(), ctx);
     }
 
@@ -63,9 +62,7 @@ public class StudySessionServiceImpl
             throw new ConflictException("Only scheduled study sessions can be edited");
         }
 
-        LocalTime startTime = request.getStartTime() != null ? request.getStartTime() : studySession.getStartTime();
-        LocalTime endTime = request.getEndTime() != null ? request.getEndTime() : studySession.getEndTime();
-        validateTimeRange(startTime, endTime, ctx);
+        studySessionValidator.validateUpdate(studySession, request, ctx);
 
         if (request.getSubjectId() != null) {
             assignSubject(studySession, request.getSubjectId(), ctx);
@@ -143,12 +140,6 @@ public class StudySessionServiceImpl
                 new StudySessionChangedEvent(saved.getId(), saved.getStatus())
         );
         return studySessionMapper.toResponse(saved);
-    }
-
-    private void validateTimeRange(LocalTime startTime, LocalTime endTime, ValidationContext ctx) {
-        if (startTime != null && endTime != null && !endTime.isAfter(startTime)) {
-            ctx.add("endTime", "End time must be after start time");
-        }
     }
 
     private void assignSubject(StudySession studySession, Long subjectId, ValidationContext ctx) {

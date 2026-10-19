@@ -4,6 +4,7 @@ export type FieldType =
   | "password"
   | "number"
   | "date"
+  | "time"
   | "icon"
   | "select"
   | "boolean"
@@ -45,6 +46,10 @@ export interface FieldSchema {
   label: string;
 
   type: FieldType;
+
+  maxLength?: number;
+
+  showCharacterCount?: boolean;
 
   sortable?: boolean;
 
@@ -90,6 +95,17 @@ export interface EntitySchema {
   entityName: string;
   idField: string;
   fields: FieldSchema[];
+
+  validateForm?: (
+    values: Record<string, unknown>,
+    context: FormValidationContext,
+  ) => Record<string, string[]>;
+}
+
+export interface FormValidationContext {
+  relationOptions: Record<string, Record<string, unknown>[]>;
+  relationLoading: Record<string, boolean>;
+  relationErrors: Record<string, string>;
 }
 
 export interface RelationConfig {

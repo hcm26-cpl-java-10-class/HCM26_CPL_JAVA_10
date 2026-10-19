@@ -20,17 +20,21 @@ import com.example.starter_project_2025.system.study_session.StudySessionReposit
 import com.example.starter_project_2025.system.study_session.StudySessionServiceImpl;
 import com.example.starter_project_2025.system.study_session.StudySessionType;
 import com.example.starter_project_2025.system.study_session.StudySessionVersionLock;
+import com.example.starter_project_2025.system.study_session.StudySessionValidator;
 import jakarta.validation.Validation;
+import jakarta.validation.ValidatorFactory;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.AccessDeniedException;
@@ -54,6 +58,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class StudySessionCancellationServiceTest {
 
+    private static final ValidatorFactory FACTORY = Validation.buildDefaultValidatorFactory();
+
     @Mock
     private StudySessionMapper studySessionMapper;
 
@@ -72,10 +78,19 @@ class StudySessionCancellationServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Spy
+    private StudySessionValidator studySessionValidator = new StudySessionValidator(
+            FACTORY.getValidator());
+
     @InjectMocks
     private StudySessionServiceImpl studySessionService;
 
     private StudySession scheduledSession;
+
+    @AfterAll
+    static void closeValidatorFactory() {
+        FACTORY.close();
+    }
 
     @BeforeEach
     void setUp() {
@@ -94,6 +109,13 @@ class StudySessionCancellationServiceTest {
         scheduledSession = StudySession.builder()
                 .id(1L)
                 .status(SessionStatus.SCHEDULED)
+                .subjectId(9L)
+                .title("Java session")
+                .sessionDate(LocalDate.of(2026, 10, 15))
+                .startTime(LocalTime.of(9, 0))
+                .endTime(LocalTime.of(10, 0))
+                .lecturer("Nguyễn Văn An")
+                .type(StudySessionType.LECTURE)
                 .build();
     }
 
@@ -344,7 +366,7 @@ class StudySessionCancellationServiceTest {
         Subject subject = Subject.builder().id(9L).subjectName("Java").build();
         StudySession entity = StudySession.builder()
                 .subjectId(9L)
-                .title("Java")
+                .title("Java session")
                 .sessionDate(LocalDate.of(2026, 10, 15))
                 .startTime(LocalTime.of(9, 0))
                 .endTime(LocalTime.of(10, 0))
@@ -423,6 +445,7 @@ class StudySessionCancellationServiceTest {
                             "startTime",
                             "endTime",
                             "type",
+                            "lecturer",
                             "isActive"
                     ),
                     invalidFields
@@ -441,14 +464,17 @@ class StudySessionCancellationServiceTest {
             LocalTime startTime,
             LocalTime endTime
     ) {
-        return StudySessionDTO.builder()
+        StudySessionDTO request = StudySessionDTO.builder()
                 .subjectId(subjectId)
-                .title("Java")
+                .title("Java session")
+                .lecturer("Nguyễn Văn An")
                 .sessionDate(LocalDate.of(2026, 10, 15))
                 .startTime(startTime)
                 .endTime(endTime)
                 .type(StudySessionType.LECTURE)
                 .build();
+        request.setIsActive(true);
+        return request;
     }
 
     private void authenticate(String permission) {

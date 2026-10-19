@@ -78,7 +78,7 @@ public class StudySession extends BaseEntity {
     String room;
 
     @Column(length = 150)
-    @ImportField(name = "Lecturer")
+    @ImportField(name = "Lecturer", required = true)
     @ExportField(name = "Lecturer")
     String lecturer;
 
