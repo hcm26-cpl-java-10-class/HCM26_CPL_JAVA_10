@@ -166,10 +166,24 @@ public class ScheduleVersionController
         return ResponseEntity.ok(scheduleVersionService.getHistory(classId));
     }
 
+    /**
+     * Xóa một phiên bản lịch nháp (DRAFT).
+     * Chỉ cho phép xóa khi status == DRAFT.
+     * Chặn lỗi nếu phiên bản đang ACTIVE hoặc ARCHIVED.
+     */
+    @DeleteMapping("/{id}")
+    @Operation(
+            summary = "Xóa phiên bản nháp (DRAFT)",
+            description = "Xóa bản nháp đang soạn thảo. Chặn lỗi nếu phiên bản đang ACTIVE hoặc ARCHIVED."
+    )
+    public ResponseEntity<Void> deleteDraft(@PathVariable Long id) {
+        scheduleVersionService.deleteDraft(id);
+        return ResponseEntity.noContent().build();
+    }
+
     // ════════════════════════════════════════════════════════════════════════
-    // ⬜ TUẦN 3: SẼ BỔ SUNG (validate + activate + delete)
+    // ⬜ TUẦN 3: SẼ BỔ SUNG (validate + activate)
     // ════════════════════════════════════════════════════════════════════════
     // TODO Tuần 3: POST /{id}/validate  → gọi ScheduleConflictService của Thắng
     // TODO Tuần 3: POST /{id}/activate  → kích hoạt nguyên tử @Transactional
-    // TODO Tuần 3: DELETE /{id}         → xóa bản DRAFT
 }

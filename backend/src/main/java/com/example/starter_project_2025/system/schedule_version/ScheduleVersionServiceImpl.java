@@ -194,6 +194,21 @@ public class ScheduleVersionServiceImpl
                 .collect(Collectors.toList());
     }
 
+    @Override
+    @Transactional
+    public void deleteDraft(Long id) {
+        ScheduleVersion version = scheduleVersionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("ScheduleVersion", "id", id));
+
+        if (version.getStatus() != ScheduleVersionStatus.DRAFT) {
+            throw new BadRequestException(
+                    "Cannot delete schedule version in status: " + version.getStatus() +
+                    ". Only DRAFT versions can be deleted.");
+        }
+
+        scheduleVersionRepository.delete(version);
+    }
+
     // ─────────────────── Helper: build response DTO ────────────────────────
 
     private ScheduleVersionDTO toResponseDTO(ScheduleVersion entity,

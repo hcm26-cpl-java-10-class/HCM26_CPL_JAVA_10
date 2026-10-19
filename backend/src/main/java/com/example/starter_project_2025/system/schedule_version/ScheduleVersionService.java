@@ -67,4 +67,12 @@ public interface ScheduleVersionService extends BaseCrudService<Long, ScheduleVe
      * Lấy lịch sử phiên bản của lớp (sắp xếp versionNumber giảm dần).
      */
     List<ScheduleVersionDTO> getHistory(String classId);
+
+    /**
+     * Xóa một phiên bản lịch học ở trạng thái DRAFT.
+     * Chặn không cho xóa nếu phiên bản đang ở trạng thái ACTIVE hoặc ARCHIVED.
+     *
+     * @param id ID của ScheduleVersion cần xóa
+     */
+    void deleteDraft(Long id);
 }
