@@ -57,4 +57,5 @@ public interface SessionRepository extends BaseCrudRepository<Session,Long> {
             @Param("endTime") LocalDateTime endTime,
             @Param("excludedSessionId") Long excludedSessionId,
             @Param("excludedStatus") Session.SessionStatus excludedStatus);
+    boolean existsByTopicId(Long topicId);
 }

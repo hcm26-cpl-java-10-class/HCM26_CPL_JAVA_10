@@ -25,3 +25,6 @@ export * from "./features/demo/session";
 export * from "./features/demo/schedule_version";
 export * from "./features/subject";
 export * from "./features/demo/lesson";
+
+
+export * from "./features/subject";
