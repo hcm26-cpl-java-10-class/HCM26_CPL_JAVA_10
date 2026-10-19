@@ -36,4 +36,7 @@ public class SessionFilter extends BaseFilter {
 
     @FilterField(entityField = "endTime", operator = FilterOperator.LESS_OR_EQUAL)
     private LocalDateTime toDate;
+
+    @FilterField(entityField = "calendarVersion.id", operator = FilterOperator.EQUAL)
+    private Long calendarVersionId;
 }

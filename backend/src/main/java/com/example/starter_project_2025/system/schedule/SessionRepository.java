@@ -30,4 +30,8 @@ public interface SessionRepository extends BaseCrudRepository<Session, Long> {
             @Param("endTime") LocalDateTime endTime,
             @Param("excludeId") Long excludeId
     );
+
+
+    List<Session> findByCalendarVersion_IdAndIsActiveTrue(Long calendarVersionId);
+
 }

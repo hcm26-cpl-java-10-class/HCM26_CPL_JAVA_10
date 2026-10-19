@@ -53,6 +53,9 @@ interface ProTableProps<TData = any> {
     /** Optional: Complete override of row actions. If provided, you have full control */
     renderRowActions?: (row: TData) => React.ReactNode;
 
+    /** Optional: extra row actions rendered after the default CRUD actions */
+    extraRowActions?: (row: TData) => React.ReactNode;
+
     /** Optional: Custom card renderer for card view */
     renderCard?: (props: EntityCardRendererProps) => React.ReactNode;
 
@@ -105,6 +108,7 @@ export function ProTable<TData = any>({
     table,
     headerActions,
     renderRowActions,
+    extraRowActions,
     renderCard,
     onView,
     onEdit,
@@ -225,22 +229,42 @@ export function ProTable<TData = any>({
     const canViewRow = table.permission?.canRead ?? true;
     const canEditRow = table.permission?.canUpdate ?? true;
     const canDeleteRow = table.permission?.canDelete ?? true;
-    const hasRowActions = canViewRow || canEditRow || canDeleteRow;
+    const hasRowActions = canViewRow || canEditRow || canDeleteRow || !!extraRowActions;
 
     const showActionsColumn = !hideActions && hasRowActions;
-    const ACTION_COLUMN_WIDTH = 152;
+
+    // Actions column width is derived from the rendered buttons so extra actions
+    // (e.g. the session status menu) don't overlap the last data column.
+    const ACTION_BUTTON_WIDTH = 36; // Button size="icon" -> size-9
+    const EXTRA_ACTION_WIDTH = 28; // compact extra action trigger -> size-7
+    const ACTION_GAP = 4; // gap-1
+    const ACTION_CELL_PADDING = 16; // TableCell p-2
+    const ACTION_COLUMN_BUFFER = 8;
+    const visibleActionCount =
+        (canViewRow ? 1 : 0) + (canEditRow ? 1 : 0) + (canDeleteRow ? 1 : 0) + (extraRowActions ? 1 : 0);
+    const ACTION_COLUMN_WIDTH = Math.max(
+        152,
+        ACTION_CELL_PADDING +
+            (visibleActionCount - (extraRowActions ? 1 : 0)) * ACTION_BUTTON_WIDTH +
+            (extraRowActions ? EXTRA_ACTION_WIDTH : 0) +
+            Math.max(0, visibleActionCount - 1) * ACTION_GAP +
+            ACTION_COLUMN_BUFFER,
+    );
 
     // Default row actions renderer (uses internal modal system or custom overrides)
     const defaultRenderRowActions = (row: TData) => (
-        <RowActions
-            row={row}
-            onView={onView || setDetailRow}
-            onEdit={onEdit || table.openEdit}
-            onDelete={onDelete || setDeleteItem}
-            viewPermission={table.permission?.keys?.read}
-            editPermission={table.permission?.keys?.update}
-            deletePermission={table.permission?.keys?.delete}
-        />
+        <>
+            <RowActions
+                row={row}
+                onView={onView || setDetailRow}
+                onEdit={onEdit || table.openEdit}
+                onDelete={onDelete || setDeleteItem}
+                viewPermission={table.permission?.keys?.read}
+                editPermission={table.permission?.keys?.update}
+                deletePermission={table.permission?.keys?.delete}
+            />
+            {extraRowActions?.(row)}
+        </>
     );
 
     // Use provided renderer or default (with individual overrides support)
@@ -248,6 +272,19 @@ export function ProTable<TData = any>({
     const effectiveViewMode: ViewMode = isBrowseMode ? "card" : viewMode;
     const cardRowClickHandler =
         onRowClick || (isBrowseMode ? ((onView || setDetailRow) as (row: TData) => void) : undefined);
+
+    // Keep declared column widths honoured: without a min-width, `table-fixed`
+    // squeezes columns while the sticky actions cell keeps its inline width,
+    // making it overlap the last data column.
+    const tableMinWidth =
+        (isExpandable ? 40 : 0) +
+        20 +
+        50 +
+        table.visibleFields.reduce(
+            (sum: number, f: any) => sum + (columnWidths[f.name] || 150),
+            0,
+        ) +
+        (showActionsColumn ? ACTION_COLUMN_WIDTH : 0);
 
     return (
         <div className="grid gap-4 h-full font-inter grid-rows-[auto_1fr_auto]">
@@ -269,7 +306,7 @@ export function ProTable<TData = any>({
             >
                 {effectiveViewMode === "table" ? (
                     <>
-                        <Table className="table-fixed">
+                        <Table className="table-fixed" style={{ minWidth: tableMinWidth }}>
                             <colgroup>
                                 {isExpandable && <col style={{ width: 40 }} />}
                                 <col style={{ width: 20 }} />

@@ -1,9 +1,16 @@
-# === IDE ===
+ === IDE ===
 .idea/
 *.iml
 *.iws
 *.ipr
 .vscode/
+.DS_Store
+*.DS_Store
+
+# === Backend (Java/Maven) ===
+backend/target/
+backend/*.jar
+backend/*.war
 
 # Env
 .env
@@ -21,6 +28,11 @@ node_modules/
 # === Frontend (Node) ===
 frontend/node_modules/
 frontend/dist/
+# === Docker .env (secrets) ===
+docker/.env
+# Maven
+.mvn/wrapper/maven-wrapper.jar
+
 
 # === Docker .env (secrets) ===
 docker/.env

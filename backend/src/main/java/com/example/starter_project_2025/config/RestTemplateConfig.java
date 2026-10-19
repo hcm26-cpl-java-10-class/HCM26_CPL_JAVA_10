@@ -21,8 +21,8 @@ public class RestTemplateConfig {
     @Bean
     public RestTemplate restTemplate(RestTemplateBuilder builder) {
         return builder
-                .setConnectTimeout(Duration.ofMillis(5000)) // Hoặc dùng Duration trực tiếp nếu Spring Boot hỗ trợ
-                .setReadTimeout(Duration.ofMillis(10000))
+                .setConnectTimeout(Duration.ofMillis(connectTimeout))
+                .setReadTimeout(Duration.ofMillis(readTimeout))
                 .build();
     }
 }

@@ -10,6 +10,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -49,6 +50,7 @@ public class SessionController
 
     @PatchMapping("/{id}/status")
     @Operation(summary = "Change the status of session")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<SessionDTO> changeSessionStatus(@PathVariable Long id,  @RequestParam SessionStatus status) {
         return  ResponseEntity.ok(sessionService.changeStatus(id, status));
     }
