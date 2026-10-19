@@ -9,4 +9,6 @@ import java.util.List;
 public interface SessionRepository extends BaseCrudRepository<Session,Long> {
 
     List<Session> findByClassId(Long classId);
+
+    boolean existsByTopicId(Long topicId);
 }
