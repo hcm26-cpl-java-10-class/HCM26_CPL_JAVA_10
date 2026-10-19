@@ -4,7 +4,8 @@ import type {
     CreateCalendarVersionRequest,
     CalendarVersionResponse,
     CalendarVersionFilter,
-    SpringPage
+    SpringPage,
+    UpdateCalendarVersionRequest
 } from "@/types";
 
 export const calendarVersionApi = {
@@ -44,4 +45,27 @@ export const calendarVersionApi = {
     });
     return response.data;
 },
+
+    update: async (
+        calendarId: number,
+        versionId: number,
+        request: UpdateCalendarVersionRequest,
+    ): Promise<CalendarVersionResponse> => {
+        const response = await axiosInstance.patch<CalendarVersionResponse>(
+            `/calendars/${calendarId}/versions/${versionId}`,
+            request,
+        );
+
+        return response.data;
+    },
+
+    delete: async (
+        calendarId: number,
+        versionId: number,
+    ): Promise<void> => {
+        await axiosInstance.delete(
+            `/calendars/${calendarId}/versions/${versionId}`,
+        );
+    },
+
 };

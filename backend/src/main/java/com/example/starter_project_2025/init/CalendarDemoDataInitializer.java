@@ -47,6 +47,14 @@ public class CalendarDemoDataInitializer implements CommandLineRunner {
                 )
                 .orElseGet(() -> createInitialActiveVersion(currentCalendar));
 
+        if (version.getName() == null) {
+            version.setName("Fall Semester 2026 - Version " + version.getVersionNumber());
+        }
+        if (version.getDescription() == null) {
+            version.setDescription("Demo calendar version for Fall Semester 2026.");
+        }
+        calendarVersionRepository.save(version);
+
         System.out.println(
                 "Calendar demo ready: calendarId=" + currentCalendar.getId()
                         + ", versionId=" + version.getId()

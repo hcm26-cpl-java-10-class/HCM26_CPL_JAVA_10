@@ -82,6 +82,12 @@ public class CalendarVersionServiceImpl implements CalendarVersionService {
                 .calendar(calendar)
                 .versionNumber(nextVersionNumber)
                 .status(CalendarVersionStatus.DRAFT)
+                .name(request.getName().trim())
+                .description(
+                        request.getDescription() == null
+                                || request.getDescription().isBlank()
+                                ? null
+                                : request.getDescription().trim())
                 .isActive(true)
                 .build();
 

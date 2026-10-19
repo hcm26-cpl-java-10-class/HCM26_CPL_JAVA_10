@@ -4,14 +4,23 @@ export type CalendarVersionCreationMode = "EMPTY" | "COPY_ACTIVE";
 
 export interface CreateCalendarVersionRequest {
     mode: CalendarVersionCreationMode;
+    name: string;
+    description: string | null;
 }
 
 export interface CalendarVersionResponse extends BaseDTO {
     calendarId: number;
     versionNumber: number;
-    status: string;
+    status: CalendarVersionStatus;
     activatedAt: string | null;
     activatedBy: number | null;
+    name: string | null;
+    description: string | null;
+}
+
+export interface UpdateCalendarVersionRequest {
+    name?: string;
+    description?: string | null;
 }
 
 export interface CalendarSummary {

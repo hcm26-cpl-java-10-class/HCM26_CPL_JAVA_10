@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
+import axios from "axios";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { calendarVersionApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirmdialog";
 import { Input } from "@/components/ui/input";
 import {
     Select,
@@ -24,10 +26,12 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "sonner";
 import type {
     CalendarSummary,
-    CalendarVersionCreationMode,
+    CalendarVersionResponse,
     CalendarVersionStatus,
+    CreateCalendarVersionRequest,
     EntityConfig,
     EntitySchema,
+    UpdateCalendarVersionRequest,
 } from "@/types";
 import {
     CalendarDays,
@@ -35,9 +39,12 @@ import {
     ChevronRight,
     Filter,
     GitBranch,
+    Pencil,
     Plus,
+    Trash2,
 } from "lucide-react";
 import { CreateVersionDialog } from "./components/CreateVersionDialog";
+import { EditVersionDialog } from "./components/EditVersionDialog";
 
 const calendarSchema: EntitySchema = {
     entityName: "calendar",
@@ -82,6 +89,17 @@ const formatDate = (value: string | null | undefined): string => {
     return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
 };
 
+const getRequestErrorMessage = (
+    error: unknown,
+    fallback: string,
+): string => {
+    if (axios.isAxiosError<{ message?: string }>(error)) {
+        return error.response?.data?.message ?? fallback;
+    }
+
+    return error instanceof Error ? error.message : fallback;
+};
+
 export default function CalendarManagementPage() {
     const [calendars, setCalendars] = useState<CalendarSummary[]>([]);
     const [selectedCalendarId, setSelectedCalendarId] = useState<number | null>(
@@ -90,6 +108,13 @@ export default function CalendarManagementPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [dialogOpen, setDialogOpen] = useState(false);
+
+    const [editingVersion, setEditingVersion] =
+        useState<CalendarVersionResponse | null>(null);
+    const [deletingVersion, setDeletingVersion] =
+        useState<CalendarVersionResponse | null>(null);
+    const [isUpdatingVersion, setIsUpdatingVersion] = useState(false);
+    const [isDeletingVersion, setIsDeletingVersion] = useState(false);
 
     const [page, setPage] = useState(0);
     const [statusFilter, setStatusFilter] = useState<
@@ -110,6 +135,8 @@ export default function CalendarManagementPage() {
         (Number.isInteger(parsedVersionNumber) && parsedVersionNumber > 0);
 
     const canReadVersions = hasPermission("CALENDARVERSION_READ");
+    const canUpdateVersion = hasPermission("CALENDARVERSION_UPDATE");
+    const canDeleteVersion = hasPermission("CALENDARVERSION_DELETE");
 
     const loadCalendars = useCallback(async () => {
         setIsLoading(true);
@@ -125,10 +152,10 @@ export default function CalendarManagementPage() {
                     : (data[0]?.id ?? null),
             );
         } catch (error) {
-            const message =
-                error instanceof Error
-                    ? error.message
-                    : "Could not load calendars.";
+            const message = getRequestErrorMessage(
+                error,
+                "Could not load calendars.",
+            );
 
             setLoadError(message);
             toast.error(message);
@@ -184,7 +211,7 @@ export default function CalendarManagementPage() {
     };
 
     const handleCreateVersion = async (
-        mode: CalendarVersionCreationMode,
+        request: CreateCalendarVersionRequest,
     ): Promise<void> => {
         if (!selectedCalendar) {
             toast.error("Please select a calendar.");
@@ -192,9 +219,10 @@ export default function CalendarManagementPage() {
         }
 
         try {
-            const result = await calendarVersionApi.create(selectedCalendar.id, {
-                mode,
-            });
+            const result = await calendarVersionApi.create(
+                selectedCalendar.id,
+                request,
+            );
 
             toast.success(
                 `Version ${result.versionNumber} created with status ${result.status}.`,
@@ -210,12 +238,83 @@ export default function CalendarManagementPage() {
                 }),
             ]);
         } catch (error) {
-            const message =
-                error instanceof Error
-                    ? error.message
-                    : "Could not create calendar version.";
+            toast.error(
+                getRequestErrorMessage(
+                    error,
+                    "Could not create calendar version.",
+                ),
+            );
+        }
+    };
 
-            toast.error(message);
+    const handleUpdateVersion = async (
+        request: UpdateCalendarVersionRequest,
+    ): Promise<void> => {
+        if (!selectedCalendar || editingVersion?.id == null) {
+            toast.error("Could not identify the calendar version to update.");
+            return;
+        }
+
+        setIsUpdatingVersion(true);
+
+        try {
+            await calendarVersionApi.update(
+                selectedCalendar.id,
+                editingVersion.id,
+                request,
+            );
+
+            toast.success("Calendar version updated.");
+            setEditingVersion(null);
+
+            await queryClient.invalidateQueries({
+                queryKey: ["calendar-versions", selectedCalendar.id],
+            });
+        } catch (error) {
+            toast.error(
+                getRequestErrorMessage(
+                    error,
+                    "Could not update calendar version.",
+                ),
+            );
+        } finally {
+            setIsUpdatingVersion(false);
+        }
+    };
+
+    const handleDeleteVersion = async (): Promise<void> => {
+        if (!selectedCalendar || deletingVersion?.id == null) {
+            toast.error("Could not identify the calendar version to delete.");
+            return;
+        }
+
+        setIsDeletingVersion(true);
+
+        try {
+            await calendarVersionApi.delete(
+                selectedCalendar.id,
+                deletingVersion.id,
+            );
+
+            toast.success("Calendar version deleted.");
+            setDeletingVersion(null);
+
+            if (page > 0 && versionsQuery.data?.content.length === 1) {
+                setPage((currentPage) => Math.max(0, currentPage - 1));
+            }
+
+            await queryClient.invalidateQueries({
+                queryKey: ["calendar-versions", selectedCalendar.id],
+            });
+        } catch (error) {
+            toast.error(
+                getRequestErrorMessage(
+                    error,
+                    "Could not delete calendar version.",
+                ),
+            );
+        } finally {
+            setIsDeletingVersion(false);
         }
     };
 
@@ -241,7 +340,10 @@ export default function CalendarManagementPage() {
                     <h2 className="text-lg font-semibold">Select a calendar</h2>
 
                     {isLoading ? (
-                        <p role="status" className="text-sm text-muted-foreground">
+                        <p
+                            role="status"
+                            className="text-sm text-muted-foreground"
+                        >
                             Loading calendars...
                         </p>
                     ) : loadError ? (
@@ -460,9 +562,12 @@ export default function CalendarManagementPage() {
                                     <TableHeader>
                                         <TableRow>
                                             <TableHead>Version</TableHead>
+                                            <TableHead>Name</TableHead>
+                                            <TableHead>Description</TableHead>
                                             <TableHead>Status</TableHead>
                                             <TableHead>Created</TableHead>
                                             <TableHead>Activated</TableHead>
+                                            <TableHead>Actions</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -470,7 +575,7 @@ export default function CalendarManagementPage() {
                                         0 ? (
                                             <TableRow>
                                                 <TableCell
-                                                    colSpan={4}
+                                                    colSpan={7}
                                                     className="h-24 text-center text-muted-foreground"
                                                 >
                                                     No matching calendar
@@ -487,10 +592,14 @@ export default function CalendarManagementPage() {
                                                         }
                                                     >
                                                         <TableCell className="font-medium">
-                                                            v
-                                                            {
-                                                                version.versionNumber
-                                                            }
+                                                            v{version.versionNumber}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {version.name || "—"}
+                                                        </TableCell>
+                                                        <TableCell className="max-w-xs truncate">
+                                                            {version.description ||
+                                                                "—"}
                                                         </TableCell>
                                                         <TableCell>
                                                             <Badge variant="outline">
@@ -505,6 +614,54 @@ export default function CalendarManagementPage() {
                                                         <TableCell>
                                                             {formatDate(
                                                                 version.activatedAt,
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {version.status ===
+                                                            "DRAFT" ? (
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {canUpdateVersion &&
+                                                                        version.id !=
+                                                                        null && (
+                                                                            <Button
+                                                                                type="button"
+                                                                                size="sm"
+                                                                                variant="outline"
+                                                                                onClick={() =>
+                                                                                    setEditingVersion(
+                                                                                        version,
+                                                                                    )
+                                                                                }
+                                                                            >
+                                                                                <Pencil className="size-4" />
+                                                                                Edit
+                                                                            </Button>
+                                                                        )}
+
+                                                                    {canDeleteVersion &&
+                                                                        version.id !=
+                                                                        null && (
+                                                                            <Button
+                                                                                type="button"
+                                                                                size="sm"
+                                                                                variant="destructive"
+                                                                                onClick={() =>
+                                                                                    setDeletingVersion(
+                                                                                        version,
+                                                                                    )
+                                                                                }
+                                                                            >
+                                                                                <Trash2 className="size-4" />
+                                                                                Delete
+                                                                            </Button>
+                                                                        )}
+
+                                                                    {!canUpdateVersion &&
+                                                                        !canDeleteVersion &&
+                                                                        "—"}
+                                                                </div>
+                                                            ) : (
+                                                                "—"
                                                             )}
                                                         </TableCell>
                                                     </TableRow>
@@ -568,6 +725,31 @@ export default function CalendarManagementPage() {
                     }
                     onOpenChange={setDialogOpen}
                     onSubmit={handleCreateVersion}
+                />
+
+                <EditVersionDialog
+                    version={editingVersion}
+                    submitting={isUpdatingVersion}
+                    onOpenChange={(open) => {
+                        if (!open) setEditingVersion(null);
+                    }}
+                    onSubmit={handleUpdateVersion}
+                />
+
+                <ConfirmDialog
+                    open={deletingVersion !== null}
+                    title="Delete draft calendar version?"
+                    description={
+                        deletingVersion
+                            ? `Delete draft v${deletingVersion.versionNumber}? Its sessions will also be soft deleted.`
+                            : undefined
+                    }
+                    confirmLabel="Delete version"
+                    loading={isDeletingVersion}
+                    onConfirm={() => void handleDeleteVersion()}
+                    onCancel={() => {
+                        if (!isDeletingVersion) setDeletingVersion(null);
+                    }}
                 />
             </div>
         </MainLayout>

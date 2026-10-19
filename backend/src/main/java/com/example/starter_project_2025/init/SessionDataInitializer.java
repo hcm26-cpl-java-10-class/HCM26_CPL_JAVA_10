@@ -160,6 +160,8 @@ public class SessionDataInitializer implements CommandLineRunner {
                             .calendar(calendar)
                             .versionNumber(nextVersion)
                             .status(CalendarVersionStatus.DRAFT)
+                            .name("Draft calendar version " + nextVersion)
+                            .description("Demo draft calendar version.")
                             .isActive(true)
                             .build();
 

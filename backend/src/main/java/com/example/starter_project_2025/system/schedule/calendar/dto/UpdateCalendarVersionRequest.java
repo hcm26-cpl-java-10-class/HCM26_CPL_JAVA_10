@@ -18,6 +18,7 @@ public class UpdateCalendarVersionRequest {
     @JsonIgnore
     private final Set<String> unsupportedFields = new LinkedHashSet<>();
 
+    @JsonProperty("name")
     public void setName(Object name){
         this.nameProvided = true;
         this.name = name;
@@ -27,6 +28,11 @@ public class UpdateCalendarVersionRequest {
     public void setDescription(Object description) {
         this.descriptionProvided = true;
         this.description = description;
+    }
+
+    @JsonAnySetter
+    public void handleUnknown(String key, JsonNode value) {
+        unsupportedFields.add(key);
     }
 
     @JsonIgnore
