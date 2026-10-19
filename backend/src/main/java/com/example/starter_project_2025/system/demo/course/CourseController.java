@@ -7,12 +7,8 @@ import com.example.starter_project_2025.base.crud.dto.OnCreate;
 import com.example.starter_project_2025.base.crud.dto.OnUpdate;
 import com.example.starter_project_2025.base.dataio.common.FileFormat;
 import com.example.starter_project_2025.base.dataio.importer.result.ImportResult;
-import com.example.starter_project_2025.system.demo.course.dto.PublishValidationResult;
-import com.example.starter_project_2025.system.demo.course.dto.ReorderRequest;
-import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -25,7 +21,6 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -123,64 +118,4 @@ public class CourseController
     public ImportResult importFile(@RequestParam("file") MultipartFile file) {
         return super.importFile(file);
     }
-
-    // ------------------------------------------------------------------ M2: validate & publish
-
-    /**
-     * Kiểm tra khoá học có đủ điều kiện publish không (không thay đổi trạng thái).
-     * Response: {@code {"valid": true/false, "errors": [...]}}
-     */
-    @GetMapping("/{id}/validate-publish")
-    @PreAuthorize("hasAuthority('COURSE_UPDATE')")
-    @Operation(summary = "Validate khoá học trước khi publish",
-               description = "Kiểm tra ≥1 section, mỗi section ≥1 lesson, URL video/tài liệu hợp lệ. Không thay đổi trạng thái.")
-    public ResponseEntity<PublishValidationResult> validatePublish(@PathVariable Long id) {
-        return ResponseEntity.ok(courseService.validateForPublish(id));
-    }
-
-    /**
-     * Publish khoá học: validate trước, nếu pass → chuyển status → PUBLISHED.
-     * Trả về CourseDTO đã cập nhật, hoặc 400 nếu validate fail.
-     */
-    @PostMapping("/{id}/publish")
-    @PreAuthorize("hasAuthority('COURSE_UPDATE')")
-    @Operation(summary = "Publish khoá học",
-               description = "Validate rồi chuyển trạng thái khoá học sang PUBLISHED. Trả 400 nếu chưa đủ điều kiện.")
-    public ResponseEntity<CourseDTO> publishCourse(@PathVariable Long id) {
-        return ResponseEntity.ok(courseService.publishCourse(id));
-    }
-
-    // ------------------------------------------------------------------ M2: batch reorder
-
-    /**
-     * Cập nhật thứ tự Section và Lesson trong 1 request (batch).
-     * Hỗ trợ di chuyển Lesson sang Section khác cùng khoá học.
-     *
-     * <pre>
-     * PATCH /api/courses/{id}/reorder
-     * {
-     *   "sections": [
-     *     { "sectionId": 1, "orderIndex": 0,
-     *       "lessons": [
-     *         { "lessonId": 10, "orderIndex": 0 },
-     *         { "lessonId": 11, "orderIndex": 1 }
-     *       ]
-     *     },
-     *     { "sectionId": 2, "orderIndex": 1, "lessons": [] }
-     *   ]
-     * }
-     * </pre>
-     */
-    @PatchMapping("/{id}/reorder")
-    @PreAuthorize("hasAuthority('COURSE_UPDATE')")
-    @Operation(summary = "Batch reorder section & lesson",
-               description = "Đổi thứ tự Section/Lesson hàng loạt. Lesson có thể được chuyển sang Section khác trong cùng khoá học.")
-    public ResponseEntity<Void> reorderCurriculum(
-            @PathVariable Long id,
-            @Valid @RequestBody ReorderRequest request
-    ) {
-        courseService.reorderCurriculum(id, request);
-        return ResponseEntity.noContent().build();
-    }
 }
-

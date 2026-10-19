@@ -55,33 +55,10 @@ const courseSchema: EntitySchema = {
       },
     },
     {
-      name: "status",
-      label: "Publication status",
-      type: "select",
-      defaultValue: "DRAFT",
-      options: [
-        { label: "Draft (hidden from students)", value: "DRAFT" },
-        { label: "Published (visible to students)", value: "PUBLISHED" },
-        { label: "Archived (hidden from students)", value: "ARCHIVED" },
-      ],
-    },
-    {
       name: "description",
       label: "Description",
       type: "textarea",
       sortable: false,
-    },
-    {
-      name: "isFree",
-      label: "Free course",
-      type: "boolean",
-      defaultValue: true,
-      booleanLabels: {
-        true: "Free",
-        false: "Enrollment required",
-        trueColor: "bg-emerald-600 text-white",
-        falseColor: "bg-amber-600 text-white",
-      },
     },
     {
       name: "thumbnailUrl",

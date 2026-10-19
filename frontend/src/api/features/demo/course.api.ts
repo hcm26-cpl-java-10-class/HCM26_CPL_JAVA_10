@@ -8,8 +8,6 @@ import type {
   CourseDetail,
   CourseDTO,
   CourseFilter,
-  PublishValidationResult,
-  ReorderRequest,
 } from "@/types";
 
 const path = "/courses";
@@ -47,24 +45,4 @@ export const courseApi = Object.assign({}, base, {
     const response = await axiosInstance.get<CategoryTreeDTO[]>(`${catalogPath}/categories`);
     return response.data;
   },
-
-  // ------------------------------------------------------------------ M2
-
-  /** Validate khoá học trước khi publish (không thay đổi trạng thái). */
-  validatePublish: async (id: number): Promise<PublishValidationResult> => {
-    const response = await axiosInstance.get<PublishValidationResult>(`${path}/${id}/validate-publish`);
-    return response.data;
-  },
-
-  /** Publish khoá học: validate → PUBLISHED. Ném lỗi 400 nếu chưa đủ điều kiện. */
-  publishCourse: async (id: number): Promise<CourseDTO> => {
-    const response = await axiosInstance.post<CourseDTO>(`${path}/${id}/publish`);
-    return response.data;
-  },
-
-  /** Batch reorder section + lesson (và di chuyển lesson sang section khác). */
-  reorderCurriculum: async (id: number, body: ReorderRequest): Promise<void> => {
-    await axiosInstance.patch(`${path}/${id}/reorder`, body);
-  },
 });
-

@@ -8,10 +8,10 @@ import com.example.starter_project_2025.system.demo.course.CourseStatus;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentRepository;
 import com.example.starter_project_2025.system.demo.section.Section;
 import com.example.starter_project_2025.system.demo.section.SectionRepository;
-import com.example.starter_project_2025.system.rbac.user.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -40,6 +40,7 @@ class CourseCatalogServiceTest {
     @Mock
     CourseEnrollmentRepository enrollmentRepository;
 
+    @InjectMocks
     CourseCatalogService service;
 
     Course course;
@@ -52,7 +53,6 @@ class CourseCatalogServiceTest {
                 .id(10L)
                 .name("Java 21")
                 .status(CourseStatus.PUBLISHED)
-                .isFree(false)
                 .build();
         section = Section.builder().id(20L).course(course).title("Intro").orderIndex(0).build();
         lesson = Lesson.builder()
@@ -65,14 +65,6 @@ class CourseCatalogServiceTest {
                 .duration(120)
                 .orderIndex(0)
                 .build();
-        service = new CourseCatalogService(
-                courseRepository,
-                categoryRepository,
-                sectionRepository,
-                lessonRepository,
-                enrollmentRepository,
-                new CourseContentAccessGuard(enrollmentRepository)
-        );
     }
 
     private void stubCourseContent() {
@@ -117,41 +109,13 @@ class CourseCatalogServiceTest {
     }
 
     @Test
-    void administratorSeesContentWithoutEnrollment() {
+    void staffSeesContentWithoutEnrollment() {
         stubCourseContent();
         when(enrollmentRepository.existsByUser_IdAndCourse_Id(7L, 10L)).thenReturn(false);
 
         CourseDetailDTO detail = service.getDetail(10L, 7L, true);
 
         assertFalse(detail.enrolled());
-        assertTrue(detail.contentUnlocked());
-        assertNotNull(detail.sections().getFirst().lessons().getFirst().contentUrl());
-    }
-
-    @Test
-    void freeCourseContentIsAvailableWithoutEnrollment() {
-        course.setIsFree(true);
-        stubCourseContent();
-        when(enrollmentRepository.existsByUser_IdAndCourse_Id(7L, 10L)).thenReturn(false);
-
-        CourseDetailDTO detail = service.getDetail(10L, 7L, false);
-
-        assertTrue(detail.isFree());
-        assertFalse(detail.enrolled());
-        assertTrue(detail.contentUnlocked());
-        assertEquals("https://example.com/video.mp4",
-                detail.sections().getFirst().lessons().getFirst().contentUrl());
-    }
-
-    @Test
-    void courseOwnerCanAccessDraftCourseContent() {
-        course.setStatus(CourseStatus.DRAFT);
-        course.setInstructorUser(User.builder().id(7L).build());
-        stubCourseContent();
-        when(enrollmentRepository.existsByUser_IdAndCourse_Id(7L, 10L)).thenReturn(false);
-
-        CourseDetailDTO detail = service.getDetail(10L, 7L, false);
-
         assertTrue(detail.contentUnlocked());
         assertNotNull(detail.sections().getFirst().lessons().getFirst().contentUrl());
     }
