@@ -75,4 +75,13 @@ public interface ScheduleVersionService extends BaseCrudService<Long, ScheduleVe
      * @param id ID của ScheduleVersion cần xóa
      */
     void deleteDraft(Long id);
+
+    /**
+     * Kích hoạt phiên bản lịch học (DRAFT -> ACTIVE).
+     * Tự động chuyển phiên bản ACTIVE trước đó của cùng lớp thành ARCHIVED.
+     *
+     * @param id ID của ScheduleVersion DRAFT cần kích hoạt
+     * @return DTO của ScheduleVersion sau khi kích hoạt thành ACTIVE
+     */
+    ScheduleVersionDTO activateVersion(Long id);
 }

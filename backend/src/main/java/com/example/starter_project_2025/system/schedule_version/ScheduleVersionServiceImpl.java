@@ -10,8 +10,11 @@ import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -196,6 +199,12 @@ public class ScheduleVersionServiceImpl
 
     @Override
     @Transactional
+    public void delete(Long id) {
+        deleteDraft(id);
+    }
+
+    @Override
+    @Transactional
     public void deleteDraft(Long id) {
         ScheduleVersion version = scheduleVersionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ScheduleVersion", "id", id));
@@ -207,6 +216,46 @@ public class ScheduleVersionServiceImpl
         }
 
         scheduleVersionRepository.delete(version);
+    }
+
+    @Override
+    @Transactional
+    public ScheduleVersionDTO activateVersion(Long id) {
+        ScheduleVersion draft = scheduleVersionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("ScheduleVersion", "id", id));
+
+        if (draft.getStatus() != ScheduleVersionStatus.DRAFT) {
+            throw new BadRequestException(
+                    "Only DRAFT versions can be activated. Current status: " + draft.getStatus()
+            );
+        }
+
+        // Tự động tìm bản ACTIVE hiện tại của lớp (nếu có) và chuyển sang ARCHIVED
+        String previousActiveVersionId = null;
+        Optional<ScheduleVersion> currentActive = scheduleVersionRepository
+                .findByClassIdAndStatus(draft.getClassId(), ScheduleVersionStatus.ACTIVE);
+        if (currentActive.isPresent()) {
+            ScheduleVersion oldActive = currentActive.get();
+            oldActive.setStatus(ScheduleVersionStatus.ARCHIVED);
+            scheduleVersionRepository.save(oldActive);
+            previousActiveVersionId = String.valueOf(oldActive.getId());
+        }
+
+        // Kích hoạt bản DRAFT này thành ACTIVE
+        draft.setStatus(ScheduleVersionStatus.ACTIVE);
+        draft.setActivatedAt(LocalDateTime.now());
+
+        String currentUser = "admin";
+        try {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && auth.getName() != null && !auth.getName().isBlank()) {
+                currentUser = auth.getName();
+            }
+        } catch (Exception ignored) {}
+        draft.setActivatedBy(currentUser);
+
+        ScheduleVersion saved = scheduleVersionRepository.save(draft);
+        return toResponseDTO(saved, 0, saved.getClonedFromVersionId(), previousActiveVersionId);
     }
 
     // ─────────────────── Helper: build response DTO ────────────────────────
