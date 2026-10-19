@@ -4,6 +4,8 @@ import com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.Instant;
+
 @Getter
 @Setter
 public class ExamAttemptSummaryDTO {
@@ -17,4 +19,7 @@ public class ExamAttemptSummaryDTO {
     private Integer bestScore;
     private Integer attemptsUsed;
     private Integer attemptsRemaining;
+    private Instant startedAt;
+    private Instant deadlineAt;
+    private Instant submittedAt;
 }

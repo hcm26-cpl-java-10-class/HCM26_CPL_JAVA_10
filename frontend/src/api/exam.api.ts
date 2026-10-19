@@ -8,14 +8,19 @@ export interface Exam {
     isActive?: boolean;
     startTime?: string | null;
     endTime?: string | null;
-    maxAttempts?: number;
-    latePolicy?: 'NOT_ALLOWED' | 'ALLOWED_WITH_PENALTY' | 'ALLOWED';
-    lateGraceMinutes?: number;
+    maxAttempts?: number | null;
+    latePolicy?: 'NOT_ALLOWED' | 'ALLOWED' | 'ALLOWED_WITH_PENALTY';
     createdAt?: string;
     updatedAt?: string;
 }
 
-export type ExamAttemptStatus = 'IN_PROGRESS' | 'SUBMITTED' | 'PENDING_REVIEW';
+/** NOT_STARTED chỉ là trạng thái hiển thị (chưa có attempt); server không trả về giá trị này. */
+export type ExamAttemptStatus =
+    | 'NOT_STARTED'
+    | 'IN_PROGRESS'
+    | 'SUBMITTED'
+    | 'PENDING_REVIEW'
+    | 'EXPIRED';
 
 export interface ExamAttemptQuestion {
     id: number;
@@ -42,14 +47,14 @@ export interface ExamAttempt {
     finalScore: number | null;
     status: ExamAttemptStatus;
     startedAt: string;
-    officialDeadlineAt: string | null;
+    officialDeadlineAt?: string | null;
     deadlineAt: string;
     submittedAt: string | null;
-    late: boolean;
-    latePenaltyPercentApplied: number | null;
-    attemptsUsed: number;
-    attemptsRemaining: number;
-    bestScore: number | null;
+    late?: boolean;
+    latePenaltyPercentApplied?: number | null;
+    attemptsUsed?: number;
+    attemptsRemaining?: number;
+    bestScore?: number | null;
     questions: ExamAttemptQuestion[];
     answers: ExamAttemptAnswer[];
 }
@@ -58,13 +63,16 @@ export interface ExamAttemptSummary {
     id: number;
     examId: number;
     attemptNumber: number;
+    bestScore: number | null;
+    attemptsUsed: number;
+    attemptsRemaining: number;
     status: ExamAttemptStatus;
     objectiveScore: number | null;
     finalScore: number | null;
     totalPoints: number;
-    bestScore: number | null;
-    attemptsUsed: number;
-    attemptsRemaining: number;
+    startedAt: string;
+    deadlineAt: string;
+    submittedAt: string | null;
 }
 
 export interface SaveExamAnswerRequest {
@@ -83,7 +91,7 @@ export interface PageResponse<T> {
 
 export const getStudentExams = async (page = 0, size = 10) => {
     const response = await api.get<PageResponse<Exam>>('/exams', {
-        params: { page, size, isActive: true }
+        params: { page, size, isActive: true, status: 'PUBLISHED' }
     });
     return response.data;
 };

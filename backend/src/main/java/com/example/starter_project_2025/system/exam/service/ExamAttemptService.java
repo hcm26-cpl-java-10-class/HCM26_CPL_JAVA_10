@@ -52,7 +52,8 @@ public class ExamAttemptService {
                 .max(Comparator.comparingInt(ExamAttempt::getAttemptNumber));
         if (existing.isPresent()) {
             ExamAttempt attempt = existing.get();
-            submitIfExpired(attempt, Instant.now());
+            // Mở lại bài đang làm: nếu đã quá hạn thì chốt EXPIRED ngay (có khóa dòng) rồi mới trả về.
+            expireIfOverdue(attempt.getId(), Instant.now());
             return toResponse(attempt);
         }
 
@@ -151,7 +152,15 @@ public class ExamAttemptService {
     }
 
     public List<ExamAttemptSummaryDTO> findStudentAttempts(Long studentId) {
-        return attemptRepository.findAllByStudent_IdOrderByStartedAtDesc(studentId).stream()
+        Instant now = Instant.now();
+        List<ExamAttempt> attempts = attemptRepository.findAllByStudent_IdOrderByStartedAtDesc(studentId);
+        // Danh sách phải hiện đúng "hết giờ" kể cả khi job chưa kịp chạy.
+        for (ExamAttempt attempt : attempts) {
+            if (attempt.getStatus() == ExamAttemptStatus.IN_PROGRESS && isExpired(attempt, now)) {
+                expireIfOverdue(attempt.getId(), now);
+            }
+        }
+        return attempts.stream()
                 .map(this::toSummary)
                 .toList();
     }
@@ -163,13 +172,17 @@ public class ExamAttemptService {
     ) {
         ExamAttempt attempt = findLockedAttempt(attemptId, studentId);
         Instant now = Instant.now();
-        if (submitIfExpired(attempt, now)) {
-            return toResponse(attempt);
+        switch (ExamAttemptLifecycle.decideSave(attempt.getStatus(), isExpired(attempt, now))) {
+            case APPLY -> {
+                applyAnswers(attempt, requests);
+                attemptRepository.save(attempt);
+            }
+            case EXPIRE -> expire(attempt);
+            case IGNORE -> { }
         }
-        ensureInProgress(attempt);
-        applyAnswers(attempt, requests);
-        return toResponse(attemptRepository.save(attempt));
+        return toResponse(attempt);
     }
+
 
     public ExamAttemptDTO submit(
             Long attemptId,
@@ -177,16 +190,31 @@ public class ExamAttemptService {
             List<SaveExamAnswerRequest> requests
     ) {
         ExamAttempt attempt = findLockedAttempt(attemptId, studentId);
-        if (attempt.getStatus() != ExamAttemptStatus.IN_PROGRESS) {
-            return toResponse(attempt);
-        }
-
         Instant now = Instant.now();
-        if (!isExpired(attempt, now)) {
-            applyAnswers(attempt, requests);
+        switch (ExamAttemptLifecycle.decideSubmit(attempt.getStatus(), isExpired(attempt, now))) {
+            case GRADE_WITH_ANSWERS -> {
+                applyAnswers(attempt, requests);
+                gradeAndSubmit(attempt, now, false);
+                attemptRepository.save(attempt);
+            }
+            case GRADE_AS_EXPIRED -> expire(attempt);
+            case RETURN_CURRENT -> { }
         }
-        gradeAndSubmit(attempt, now);
-        return toResponse(attemptRepository.save(attempt));
+        return toResponse(attempt);
+    }
+
+
+    public boolean expireIfOverdue(Long attemptId, Instant now) {
+        Optional<ExamAttempt> locked = attemptRepository.lockById(attemptId);
+        if (locked.isEmpty()) {
+            return false;
+        }
+        ExamAttempt attempt = locked.get();
+        if (attempt.getStatus() != ExamAttemptStatus.IN_PROGRESS || !isExpired(attempt, now)) {
+            return false;
+        }
+        expire(attempt);
+        return true;
     }
 
     private ExamAttempt findLockedAttempt(Long attemptId, Long studentId) {
@@ -194,26 +222,19 @@ public class ExamAttemptService {
                 .orElseThrow(() -> new ResourceNotFoundException("Exam attempt not found"));
     }
 
-    private boolean submitIfExpired(ExamAttempt attempt, Instant now) {
-        if (attempt.getStatus() != ExamAttemptStatus.IN_PROGRESS || !isExpired(attempt, now)) {
-            return false;
-        }
-        gradeAndSubmit(attempt, now);
+    private void expire(ExamAttempt attempt) {
+        gradeAndSubmit(attempt, deadlineOf(attempt), true);
         attemptRepository.save(attempt);
-        return true;
+    }
+
+    private Instant deadlineOf(ExamAttempt attempt) {
+        return attempt.getDeadlineAt() != null
+                ? attempt.getDeadlineAt()
+                : attempt.getStartedAt().plus(Duration.ofMinutes(attempt.getDurationMinutes()));
     }
 
     private boolean isExpired(ExamAttempt attempt, Instant now) {
-        Instant deadline = attempt.getDeadlineAt() != null
-                ? attempt.getDeadlineAt()
-                : attempt.getStartedAt().plus(Duration.ofMinutes(attempt.getDurationMinutes()));
-        return !now.isBefore(deadline);
-    }
-
-    private void ensureInProgress(ExamAttempt attempt) {
-        if (attempt.getStatus() != ExamAttemptStatus.IN_PROGRESS) {
-            throw new BadRequestException("Bài thi đã được nộp");
-        }
+        return ExamAttemptLifecycle.isExpired(deadlineOf(attempt), now);
     }
 
     private void applyAnswers(ExamAttempt attempt, List<SaveExamAnswerRequest> requests) {
@@ -293,7 +314,7 @@ public class ExamAttemptService {
                 });
     }
 
-    private void gradeAndSubmit(ExamAttempt attempt, Instant submittedAt) {
+    private void gradeAndSubmit(ExamAttempt attempt, Instant submittedAt, boolean expired) {
         int objectiveScore = 0;
         boolean hasEssay = false;
 
@@ -329,7 +350,7 @@ public class ExamAttemptService {
                 : null;
         attempt.setLatePenaltyPercentApplied(penalty);
         attempt.setFinalScore(hasEssay ? null : applyPenalty(objectiveScore, penalty));
-        attempt.setStatus(hasEssay ? ExamAttemptStatus.PENDING_REVIEW : ExamAttemptStatus.SUBMITTED);
+        attempt.setStatus(ExamAttemptLifecycle.finalStatus(hasEssay, expired));
         attempt.setSubmittedAt(submittedAt);
     }
 
@@ -403,6 +424,9 @@ public class ExamAttemptService {
         response.setObjectiveScore(attempt.getObjectiveScore());
         response.setFinalScore(attempt.getFinalScore());
         response.setTotalPoints(attempt.getTotalPoints());
+        response.setStartedAt(attempt.getStartedAt());
+        response.setDeadlineAt(deadlineOf(attempt));
+        response.setSubmittedAt(attempt.getSubmittedAt());
         List<ExamAttempt> attempts = attempt.getStudent() == null
                 ? List.of(attempt)
                 : attemptRepository.findAllByExam_IdAndStudent_IdOrderByAttemptNumberAsc(

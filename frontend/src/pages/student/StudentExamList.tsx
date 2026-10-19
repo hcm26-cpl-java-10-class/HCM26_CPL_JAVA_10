@@ -22,12 +22,24 @@ import { useNavigate } from 'react-router-dom';
 
 const attemptsQueryKey = ['student-exam-attempts'] as const;
 
-function getAttemptStatus(attempt?: ExamAttemptSummary) {
+function isOverdue(attempt: ExamAttemptSummary | undefined, now: number) {
+    return attempt?.status === 'IN_PROGRESS'
+        && attempt.deadlineAt != null
+        && new Date(attempt.deadlineAt).getTime() <= now;
+}
+
+function getAttemptStatus(attempt: ExamAttemptSummary | undefined, now: number) {
     if (!attempt) return null;
+    // Đã quá hạn nhưng server chưa chốt: hiển thị là hết giờ ngay.
+    if (isOverdue(attempt, now)) {
+        return { label: 'Hết giờ', variant: 'destructive' as const };
+    }
 
     switch (attempt.status) {
         case 'IN_PROGRESS':
             return { label: 'Đang làm', variant: 'secondary' as const };
+        case 'EXPIRED':
+            return { label: 'Hết giờ — đã tự động nộp', variant: 'destructive' as const };
         case 'PENDING_REVIEW':
             return { label: 'Chờ chấm tự luận', variant: 'outline' as const };
         case 'SUBMITTED':
@@ -36,36 +48,39 @@ function getAttemptStatus(attempt?: ExamAttemptSummary) {
 }
 
 function ExamCard({
-    exam,
-    attempt,
-    invitation,
-    onOpen,
-    disabled: externallyDisabled,
-}: {
+                      exam,
+                      attempt,
+                      invitation,
+                      onOpen,
+                      disabled: externallyDisabled,
+                  }: {
     exam: Exam;
     attempt?: ExamAttemptSummary;
     invitation: StudentInvitationDTO;
     onOpen: (examId: number) => void;
     disabled: boolean;
 }) {
-    const status = getAttemptStatus(attempt);
     const now = Date.now();
+    const status = getAttemptStatus(attempt, now);
+    const overdue = isOverdue(attempt, now);
     const beforeOpen = exam.startTime != null && now < new Date(exam.startTime).getTime();
     const afterClose = exam.endTime != null && now >= new Date(exam.endTime).getTime();
-    const isInProgress = attempt?.status === 'IN_PROGRESS';
+    const isInProgress = attempt?.status === 'IN_PROGRESS' && !overdue;
     const hasAttempts = (attempt?.attemptsUsed ?? 0) > 0;
     const outOfAttempts = hasAttempts && (attempt?.attemptsRemaining ?? 0) <= 0 && !isInProgress;
-    const disabledBySchedule = (beforeOpen || afterClose) && !isInProgress;
+    const disabledBySchedule = (beforeOpen || afterClose) && !isInProgress && !overdue;
     const isDisabled = externallyDisabled || outOfAttempts || disabledBySchedule;
-    const buttonLabel = isInProgress
-        ? 'Tiếp tục làm bài'
-        : outOfAttempts
-            ? 'Đã hết lượt'
-            : beforeOpen
-                ? 'Chưa đến giờ mở'
-                : afterClose
-                    ? 'Kỳ thi đã đóng'
-                    : 'Vào thi';
+    const buttonLabel = overdue
+        ? 'Xem kết quả'
+        : isInProgress
+            ? 'Tiếp tục làm bài'
+            : outOfAttempts
+                ? 'Đã hết lượt'
+                : beforeOpen
+                    ? 'Chưa đến giờ mở'
+                    : afterClose
+                        ? 'Kỳ thi đã đóng'
+                        : 'Vào thi';
 
     return (
         <Card className="flex h-full flex-col border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
@@ -92,6 +107,18 @@ function ExamCard({
                         Điểm trắc nghiệm tạm thời: {attempt.objectiveScore ?? 0}/{attempt.totalPoints}.
                     </p>
                 )}
+                {overdue && (
+                    <p className="text-sm text-red-700">
+                        Đã hết thời gian làm bài, hệ thống đang tự động nộp bài của bạn.
+                    </p>
+                )}
+                {attempt?.status === 'EXPIRED' && (
+                    <p className="text-sm text-red-700">
+                        {attempt.finalScore != null
+                            ? `Hết giờ, bài được tự động nộp. Điểm: ${attempt.finalScore}/${attempt.totalPoints}.`
+                            : `Hết giờ, bài được tự động nộp. Điểm trắc nghiệm tạm thời: ${attempt.objectiveScore ?? 0}/${attempt.totalPoints}; chờ chấm tự luận.`}
+                    </p>
+                )}
                 {attempt?.status === 'SUBMITTED' && (
                     <p className="text-sm text-emerald-700">
                         Điểm cao nhất: {attempt.bestScore ?? attempt.finalScore ?? 0}/{attempt.totalPoints}.
@@ -108,7 +135,7 @@ function ExamCard({
                 {invitation.endTime && (
                     <p className="mt-2 text-xs text-slate-500">Đóng lúc: {new Date(invitation.endTime).toLocaleString()}</p>
                 )}
-                {attempt?.status === 'IN_PROGRESS' && (
+                {isInProgress && (
                     <p className="text-sm text-sky-700">
                         Bài làm của bạn đã được lưu. Bạn có thể tiếp tục bài thi.
                     </p>
@@ -135,6 +162,9 @@ export default function StudentExamList() {
     const attemptsQuery = useQuery({
         queryKey: attemptsQueryKey,
         queryFn: getMyExamAttempts,
+        // Có bài đang làm thì hỏi lại 15 giây/lần để thấy "hết giờ / đã nộp" (kể cả nộp từ tab khác).
+        refetchInterval: (query) =>
+            query.state.data?.some((item) => item.status === 'IN_PROGRESS') ? 15_000 : false,
     });
     const invitationsQuery = useQuery({
         queryKey: ['student-invitations'],

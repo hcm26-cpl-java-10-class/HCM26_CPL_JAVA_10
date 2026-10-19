@@ -60,6 +60,11 @@ export default function StudentExamTakingPage() {
         queryFn: () => startOrResumeExam(examId),
         enabled: validExamId,
         retry: false,
+        // Quan trọng: POST /attempt sẽ TẠO lượt mới nếu bài hiện tại đã kết thúc và còn lượt.
+        // Nếu để react-query tự gọi lại khi quay lại tab, sinh viên vừa nộp xong sẽ bị bắt đầu một lượt mới.
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+        staleTime: Infinity,
     });
 
     const submitMutation = useMutation({
@@ -67,12 +72,23 @@ export default function StudentExamTakingPage() {
             submitExamAttempt(attemptId, submittedAnswers),
         onSuccess: (attempt) => {
             queryClient.setQueryData(attemptQueryKey(examId), attempt);
-            toast.success(attempt.status === 'PENDING_REVIEW' ? 'Đã nộp bài, phần tự luận đang chờ chấm.' : 'Đã nộp bài.');
+            clearAllPendingSaves();
+            if (attempt.status === 'EXPIRED') {
+                toast.warning('Đã hết giờ, bài của bạn được tự động nộp.');
+            } else {
+                toast.success(attempt.status === 'PENDING_REVIEW' ? 'Đã nộp bài, phần tự luận đang chờ chấm.' : 'Đã nộp bài.');
+            }
         },
         onError: () => toast.error('Không thể nộp bài. Vui lòng thử lại.'),
     });
 
     const attempt = attemptQuery.data;
+
+    function clearAllPendingSaves() {
+        timerRefs.current.forEach((timer) => window.clearTimeout(timer));
+        timerRefs.current.clear();
+        pendingAnswersRef.current.clear();
+    }
 
     const flushPendingAnswers = async (
         attemptId: number,
@@ -104,7 +120,19 @@ export default function StudentExamTakingPage() {
                 pendingAnswersRef.current.delete(questionId);
 
                 try {
-                    await saveExamAnswers(attemptId, [request]);
+                    const saved = await saveExamAnswers(attemptId, [request]);
+                    // Server trả về trạng thái thật: bài đã nộp ở tab khác hoặc đã hết giờ -> chuyển sang màn kết quả.
+                    if (saved.status !== 'IN_PROGRESS') {
+                        clearAllPendingSaves();
+                        queryClient.setQueryData(attemptQueryKey(examId), saved);
+                        toast.warning(
+                            saved.status === 'EXPIRED'
+                                ? 'Đã hết giờ, bài của bạn được tự động nộp.'
+                                : 'Bài thi này đã được nộp (có thể từ tab khác). Thay đổi mới nhất không được lưu.',
+                        );
+                        setHasSaveError(false);
+                        return true;
+                    }
                 } catch {
                     // Giữ lại câu trả lời mới nhất để thử lưu lại.
                     if (!pendingAnswersRef.current.has(questionId)) {
@@ -328,8 +356,8 @@ export default function StudentExamTakingPage() {
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
                             Hạn chính thức: {attempt.officialDeadlineAt
-                                ? new Date(attempt.officialDeadlineAt).toLocaleString()
-                                : 'Theo thời lượng bài thi'}
+                            ? new Date(attempt.officialDeadlineAt).toLocaleString()
+                            : 'Theo thời lượng bài thi'}
                             {attempt.officialDeadlineAt && attempt.deadlineAt !== attempt.officialDeadlineAt
                                 ? ` · Hạn gia hạn: ${new Date(attempt.deadlineAt).toLocaleString()}`
                                 : ''}
@@ -345,13 +373,20 @@ export default function StudentExamTakingPage() {
                 {isFinished ? (
                     <section className="rounded-xl border p-6">
                         <h2 className="text-xl font-semibold">
-                            {attempt.status === 'PENDING_REVIEW' ? 'Đã nộp bài — chờ chấm tự luận' : 'Đã hoàn thành bài thi'}
+                            {attempt.status === 'EXPIRED' && 'Hết giờ — bài đã được tự động nộp'}
+                            {attempt.status === 'PENDING_REVIEW' && 'Đã nộp bài — chờ chấm tự luận'}
+                            {attempt.status === 'SUBMITTED' && 'Đã hoàn thành bài thi'}
                         </h2>
                         <p className="mt-3 text-lg">
-                            {attempt.status === 'PENDING_REVIEW'
+                            {attempt.finalScore === null
                                 ? `Điểm trắc nghiệm tạm thời: ${attempt.objectiveScore ?? 0}/${attempt.totalPoints}`
-                                : `Điểm: ${attempt.finalScore ?? 0}/${attempt.totalPoints}`}
+                                : `Điểm: ${attempt.finalScore}/${attempt.totalPoints}`}
                         </p>
+                        {attempt.status === 'EXPIRED' && (
+                            <p className="mt-2 text-sm text-muted-foreground">
+                                Thời gian làm bài đã kết thúc. Hệ thống chỉ chấm những câu bạn đã trả lời trước khi hết giờ.
+                            </p>
+                        )}
                         {attempt.bestScore != null && (
                             <p className="mt-2 text-sm font-medium text-emerald-700">
                                 Điểm cao nhất: {attempt.bestScore}/{attempt.totalPoints}
@@ -365,7 +400,7 @@ export default function StudentExamTakingPage() {
                                     : ''}
                             </p>
                         )}
-                        {attempt.status === 'PENDING_REVIEW' && (
+                        {attempt.finalScore === null && attempt.status !== 'SUBMITTED' && (
                             <p className="mt-2 text-sm text-muted-foreground">
                                 Điểm cuối cùng sẽ được cập nhật sau khi giáo viên chấm câu tự luận.
                             </p>
