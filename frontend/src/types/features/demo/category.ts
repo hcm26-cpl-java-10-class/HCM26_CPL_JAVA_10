@@ -9,7 +9,8 @@ export interface CategoryDTO extends BaseDTO {
 }
 
 export interface CategoryFilter extends BaseFilter {
-  parentId?: number;
+  name?: string;
+  parentId?: number[];
   code?: string;
 }
 
