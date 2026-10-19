@@ -20,6 +20,9 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class SessionDTO extends BaseDTO {
 
+    Long calendarVersionId;
+    Long topicId;
+
     @NotBlank(groups = OnCreate.class, message = "Class code is required")
     @Size(max = 60, message = "Class code must not exceed 60 characters")
     String classCode;

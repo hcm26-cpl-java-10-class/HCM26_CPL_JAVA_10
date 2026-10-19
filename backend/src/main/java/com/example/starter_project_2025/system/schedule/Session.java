@@ -11,6 +11,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
+import com.example.starter_project_2025.system.schedule.calendar.CalendarVersion;
 
 import java.time.LocalDateTime;
 
@@ -34,6 +35,14 @@ import java.time.LocalDateTime;
         permission = "SESSION_READ"
 )
 public class Session extends BaseEntity {
+
+//    @Column(name = "calendar_version_id")
+//    @ExportField(name = "Calendar Version ID")
+//    Long calendarVersionId;
+
+    @Column(name = "topic_id")
+    @ExportField(name = "Topic ID")
+    Long topicId;
 
     @Column(name = "class_code", nullable = false, length = 60)
     @ImportField(name = "Class Code", required = true)
@@ -103,6 +112,12 @@ public class Session extends BaseEntity {
     @ExportField(name = "Override Reason")
     String overrideReason;
 
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "calendar_version_id", nullable = false)
+    CalendarVersion calendarVersion;
+
+
     /**
      * Optimistic locking version — dùng cho If-Match / ETag khi cập nhật trạng thái (F15).
      */
@@ -110,4 +125,5 @@ public class Session extends BaseEntity {
     @Column(name = "version")
     @ExportField(name = "Version")
     Long version;
+
 }

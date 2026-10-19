@@ -59,4 +59,6 @@ public abstract class BaseCrudController<
         getService().delete(id);
         return ResponseEntity.noContent().build();
     }
+
+
 }
