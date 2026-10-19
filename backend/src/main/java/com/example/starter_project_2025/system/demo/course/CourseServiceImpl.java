@@ -1,17 +1,17 @@
 package com.example.starter_project_2025.system.demo.course;
 
-import com.example.starter_project_2025.system.demo.category.CategoryRepository;
-import com.example.starter_project_2025.system.demo.curriculum.CurriculumValidationResult;
-import com.example.starter_project_2025.system.demo.curriculum.CurriculumValidator;
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import com.example.starter_project_2025.system.demo.category.CategoryRepository;
+import com.example.starter_project_2025.system.demo.curriculum.CurriculumValidationResult;
+import com.example.starter_project_2025.system.demo.curriculum.CurriculumValidator;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
@@ -60,25 +60,22 @@ public class CourseServiceImpl
         if (course.getStatus() == null) {
             course.setStatus(CourseStatus.DRAFT);
         }
-        resolveInstructor(course, request);
+        resolveInstructor(course, request, ctx);
         resolveCategory(course, request, ctx);
     }
 
     @Override
     protected void beforeUpdate(Course course, CourseDTO request, ValidationContext ctx) {
-        if (request.getName() != null &&
-                !request.getName().equals(course.getName()) &&
-                courseRepository.existsByName(request.getName())) {
+        if (request.getName() != null
+                && !request.getName().equals(course.getName())
+                && courseRepository.existsByName(request.getName())) {
             ctx.add("name", "Course name already exists");
         }
         if (request.getInstructorId() != null) {
-            resolveInstructor(course, request);
+            resolveInstructor(course, request, ctx);
         }
         if (request.getCategoryId() != null) {
             resolveCategory(course, request, ctx);
-        }
-        if (request.getIsFree() == null) {
-            request.setIsFree(course.getIsFree());
         }
         validatePublishTransition(course, request, ctx);
     }
@@ -92,7 +89,6 @@ public class CourseServiceImpl
         CurriculumValidationResult result = curriculumValidator.validatePublish(course.getId());
         result.errors().forEach(issue -> ctx.add("status", issue.message()));
     }
-
 
     @Override
     public Page<CourseDTO> getAll(Pageable pageable, String search, CourseFilter filter) {
@@ -124,20 +120,20 @@ public class CourseServiceImpl
      * Nếu instructorId được cung cấp, tìm user và tự động fill:
      * - course.instructorUser = user
      * - course.instructor = user.fullName (nếu instructor string không được set thủ công)
+     * instructorId = null → bỏ liên kết instructorUser.
      */
-    private void resolveInstructor(Course course, CourseDTO request) {
-        if (request.getInstructorId() != null) {
-            userRepository.findById(request.getInstructorId()).ifPresent(user -> {
-                course.setInstructorUser(user);
-                // Auto-fill instructor name from user if not manually provided
-                if (request.getInstructor() == null || request.getInstructor().isBlank()) {
-                    course.setInstructor(user.getFullName());
-                }
-            });
-        } else {
-            // Clear instructor user if no instructorId provided
+    private void resolveInstructor(Course course, CourseDTO request, ValidationContext ctx) {
+        Long instructorId = request.getInstructorId();
+        if (instructorId == null) {
             course.setInstructorUser(null);
+            return;
         }
+        userRepository.findById(instructorId).ifPresentOrElse(user -> {
+            course.setInstructorUser(user);
+            if (request.getInstructor() == null || request.getInstructor().isBlank()) {
+                course.setInstructor(user.getFullName());
+            }
+        }, () -> ctx.add("instructorId", "Instructor not found"));
     }
 
     /** categoryId lấy từ request; null = không thuộc danh mục nào. */
