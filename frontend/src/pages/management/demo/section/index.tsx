@@ -1,7 +1,16 @@
 
 import { useState, type FormEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { Link, useSearchParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
 import { toast } from "sonner";
+import {
+    ArrowLeft,
+    BookOpen,
+    ChevronDown,
+    ChevronUp,
+    Plus,
+} from "lucide-react";
 
 import { courseApi } from "@/api/features/demo/course.api";
 import { sectionApi } from "@/api/features/demo/section.api";
@@ -12,77 +21,376 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirmdialog";
+import { SectionLessons } from "@/pages/management/demo/lesson/components/SectionLessons";
+import { usePermissions } from "@/hooks/usePermissions";
+
+// ======================================
+// VALIDATION HELPERS
+// ======================================
+
+type FormErrors = {
+    title?: string;
+    orderIndex?: string;
+};
+
+function normalizeTitle(value: string): string {
+    return value.trim().replace(/\s+/g, " ");
+}
+
+function titleKey(value: string): string {
+    return normalizeTitle(value).toLocaleLowerCase("vi");
+}
+
+function apiError(error: unknown): {
+    message: string;
+    fields: FormErrors;
+} {
+    if (axios.isAxiosError(error)) {
+        const payload: unknown = error.response?.data;
+
+        if (payload && typeof payload === "object") {
+            const data = payload as {
+                message?: unknown;
+                errors?: unknown;
+            };
+
+            if (data.errors && typeof data.errors === "object") {
+                const fields: FormErrors = {};
+                const messages: string[] = [];
+
+                for (const [field, value] of Object.entries(data.errors)) {
+                    const items = Array.isArray(value) ? value : [value];
+
+                    const strings = items.filter(
+                        (item): item is string => typeof item === "string"
+                    );
+
+                    messages.push(...strings);
+
+                    if (field === "title") {
+                        fields.title = strings[0];
+                    }
+
+                    if (field === "orderIndex") {
+                        fields.orderIndex = strings[0];
+                    }
+                }
+
+                if (messages.length > 0) {
+                    return {
+                        message: messages.join("; "),
+                        fields,
+                    };
+                }
+            }
+
+            if (
+                typeof data.message === "string" &&
+                data.message !== "Validation failed"
+            ) {
+                return {
+                    message: data.message,
+                    fields: {},
+                };
+            }
+        }
+
+        const status = error.response?.status;
+
+        if (status === 401) {
+            return {
+                message: "Please log in again.",
+                fields: {},
+            };
+        }
+
+        if (status === 403) {
+            return {
+                message: "You do not have permission.",
+                fields: {},
+            };
+        }
+
+        if (status === 404) {
+            return {
+                message: "Course or Section not found.",
+                fields: {},
+            };
+        }
+
+        if (!error.response) {
+            return {
+                message: "Cannot connect to Backend.",
+                fields: {},
+            };
+        }
+    }
+
+    return {
+        message: "Operation failed. Please try again.",
+        fields: {},
+    };
+}
+
+// ======================================
+// MAIN COMPONENT
+// ======================================
 
 export default function SectionManagementPage() {
-    const [courseId, setCourseId] = useState(0);
+    const [searchParams, setSearchParams] = useSearchParams();
+    const queryClient = useQueryClient();
+
+    // Course ID từ URL
+    const parsedCourseId = Number(searchParams.get("courseId"));
+
+    const courseId =
+        Number.isSafeInteger(parsedCourseId) && parsedCourseId > 0
+            ? parsedCourseId
+            : 0;
+
+    // Quyền người dùng
+    const { hasPermission } = usePermissions();
+
+    const canCreate = hasPermission("SECTION_CREATE");
+    const canUpdate = hasPermission("SECTION_UPDATE");
+    const canDelete = hasPermission("SECTION_DELETE");
+
+    // State
     const [formOpen, setFormOpen] = useState(false);
     const [editing, setEditing] = useState<SectionDTO | null>(null);
-    const [deleteTarget, setDeleteTarget] = useState<SectionDTO | null>(null);
+
+    const [deleteTarget, setDeleteTarget] =
+        useState<SectionDTO | null>(null);
 
     const [title, setTitle] = useState("");
-    const [orderIndex, setOrderIndex] = useState(1);
+    const [orderIndexInput, setOrderIndexInput] = useState("1");
+
+    const [formErrors, setFormErrors] = useState<FormErrors>({});
+
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
 
-    // Lấy danh sách khóa học
+    const [expandedSectionId, setExpandedSectionId] =
+        useState<number | null>(null);
+
+    // ======================================
+    // GET COURSES
+    // ======================================
+
     const coursesQuery = useQuery({
         queryKey: ["section-courses"],
-        queryFn: () => courseApi.getPage({ page: 0, size: 100 })
+        queryFn: () =>
+            courseApi.getPage({
+                page: 0,
+                size: 100,
+            }),
     });
 
-    // Lấy Section theo khóa học
+    // ======================================
+    // GET SECTIONS
+    // ======================================
+
     const sectionsQuery = useQuery({
         queryKey: ["sections", courseId],
         queryFn: () => sectionApi.getByCourse(courseId),
-        enabled: courseId > 0
+        enabled: courseId > 0,
     });
 
     const courses =
-        coursesQuery.data?.content ?? coursesQuery.data?.items ?? [];
+        coursesQuery.data?.content ??
+        coursesQuery.data?.items ??
+        [];
 
-    const sections =
-        sectionsQuery.data?.content ?? sectionsQuery.data?.items ?? [];
+    const sections = [
+        ...(sectionsQuery.data?.content ??
+            sectionsQuery.data?.items ??
+            []),
+    ].sort(
+        (a, b) =>
+            a.orderIndex - b.orderIndex ||
+            (a.id ?? 0) - (b.id ?? 0)
+    );
 
-    // Mở form thêm
+    const selectedCourse = courses.find(
+        (course) => course.id === courseId
+    );
+
+    // ======================================
+    // VALIDATE TITLE
+    // ======================================
+
+    function validateTitle(
+        rawTitle: string,
+        currentId?: number | null
+    ): string | undefined {
+        const clean = normalizeTitle(rawTitle);
+
+        if (!clean) {
+            return "Section title is required.";
+        }
+
+        if (clean.length < 3) {
+            return "Title must contain at least 3 characters.";
+        }
+
+        if (clean.length > 150) {
+            return "Title must not exceed 150 characters.";
+        }
+
+        // Phải chứa ít nhất một chữ cái
+        if (!/\p{L}/u.test(clean)) {
+            return "Title must contain letters, not only numbers or symbols.";
+        }
+
+        // Kiểm tra trùng tên trong cùng Course
+        const duplicate = sections.some(
+            (section) =>
+                section.id !== currentId &&
+                titleKey(section.title) === titleKey(clean)
+        );
+
+        if (duplicate) {
+            return "Another section in this course already has this title.";
+        }
+
+        return undefined;
+    }
+
+    // ======================================
+    // VALIDATE ORDER INDEX
+    // ======================================
+
+    function validateOrder(
+        rawOrder: string,
+        current?: SectionDTO | null
+    ): string | undefined {
+        const raw = rawOrder.trim();
+
+        if (!raw) {
+            return "Order index is required.";
+        }
+
+        if (!/^(0|[1-9]\d*)$/.test(raw)) {
+            return "Order index must be a non-negative integer.";
+        }
+
+        const next = Number(raw);
+
+        if (!Number.isSafeInteger(next)) {
+            return "Order index is too large.";
+        }
+
+        // Cho phép giữ nguyên thứ tự cũ khi Edit
+        if (current && next === current.orderIndex) {
+            return undefined;
+        }
+
+        // Kiểm tra trùng thứ tự
+        const duplicate = sections.some(
+            (section) =>
+                section.id !== current?.id &&
+                section.orderIndex === next
+        );
+
+        if (duplicate) {
+            return `Order ${next} is already used by another section.`;
+        }
+
+        return undefined;
+    }
+
+    // ======================================
+    // CHANGE COURSE
+    // ======================================
+
+    function handleCourseChange(nextCourseId: number) {
+        const params = new URLSearchParams(searchParams);
+
+        if (nextCourseId > 0) {
+            params.set("courseId", String(nextCourseId));
+        } else {
+            params.delete("courseId");
+        }
+
+        setSearchParams(params);
+        setExpandedSectionId(null);
+        setFormOpen(false);
+        setEditing(null);
+        setFormErrors({});
+    }
+
+    // ======================================
+    // ADD SECTION
+    // ======================================
+
     function openCreate() {
+        if (!courseId || !canCreate) return;
+
         setEditing(null);
         setTitle("");
-        setOrderIndex(sections.length + 1);
+
+        const nextOrder = sections.length
+            ? Math.max(...sections.map((s) => s.orderIndex)) + 1
+            : 1;
+
+        setOrderIndexInput(String(nextOrder));
+        setFormErrors({});
         setFormOpen(true);
     }
 
-    // Mở form sửa
+    // ======================================
+    // EDIT SECTION
+    // ======================================
+
     function openEdit(section: SectionDTO) {
+        if (!canUpdate) return;
+
         setEditing(section);
         setTitle(section.title);
-        setOrderIndex(section.orderIndex);
+        setOrderIndexInput(String(section.orderIndex));
+        setFormErrors({});
         setFormOpen(true);
     }
 
-    // Lưu Section
-    async function handleSave(e: FormEvent<HTMLFormElement>) {
-        e.preventDefault();
+    // ======================================
+    // SAVE SECTION
+    // ======================================
+
+    async function handleSave(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+
+        if (saving) return;
 
         if (!courseId) {
-            toast.error("Please select a course");
+            toast.error("Please select a course.");
             return;
         }
 
-        if (!title.trim()) {
-            toast.error("Section title is required");
-            return;
-        }
+        if (editing && !canUpdate) return;
+        if (!editing && !canCreate) return;
 
-        if (!Number.isInteger(orderIndex) || orderIndex < 0) {
-            toast.error("Invalid order index");
+        // Kiểm tra dữ liệu
+        const errors: FormErrors = {
+            title: validateTitle(title, editing?.id),
+            orderIndex: validateOrder(orderIndexInput, editing),
+        };
+
+        setFormErrors(errors);
+
+        if (errors.title || errors.orderIndex) {
+            toast.error(
+                errors.title ??
+                errors.orderIndex ??
+                "Please check the form."
+            );
             return;
         }
 
         const data = {
             courseId,
-            title: title.trim(),
-            orderIndex,
-            isActive: editing?.isActive ?? true
+            title: normalizeTitle(title),
+            orderIndex: Number(orderIndexInput.trim()),
+            isActive: editing?.isActive ?? true,
         };
 
         setSaving(true);
@@ -90,64 +398,164 @@ export default function SectionManagementPage() {
         try {
             if (editing?.id != null) {
                 await sectionApi.update(editing.id, data);
-                toast.success("Section updated successfully");
+                toast.success("Section updated successfully.");
             } else {
                 await sectionApi.create(data);
-                toast.success("Section created successfully");
+                toast.success("Section created successfully.");
             }
 
             setFormOpen(false);
+            setEditing(null);
+            setFormErrors({});
+
             await sectionsQuery.refetch();
-        } catch {
-            toast.error("Failed to save section");
+
+            await queryClient.invalidateQueries({
+                queryKey: ["course-detail", courseId],
+            });
+        } catch (error) {
+            const parsed = apiError(error);
+
+            setFormErrors(parsed.fields);
+            toast.error(parsed.message);
         } finally {
             setSaving(false);
         }
     }
 
-    // Xóa Section
+    // ======================================
+    // DELETE SECTION
+    // ======================================
+
     async function handleDelete() {
-        if (deleteTarget?.id == null) return;
+        if (
+            !deleteTarget ||
+            deleteTarget.id == null ||
+            !canDelete ||
+            deleting
+        ) {
+            return;
+        }
 
         setDeleting(true);
 
         try {
             await sectionApi.delete(deleteTarget.id);
-            toast.success("Section deleted successfully");
+
+            if (expandedSectionId === deleteTarget.id) {
+                setExpandedSectionId(null);
+            }
+
             setDeleteTarget(null);
+            toast.success("Section deleted successfully.");
+
             await sectionsQuery.refetch();
-        } catch {
-            toast.error("Failed to delete section");
+
+            await queryClient.invalidateQueries({
+                queryKey: ["course-detail", courseId],
+            });
+        } catch (error) {
+            toast.error(apiError(error).message);
         } finally {
             setDeleting(false);
         }
     }
 
+    // ======================================
+    // LEGACY DATA VALIDATION
+    // ======================================
+
+    const invalidExistingSections = sections.filter((section) => {
+        const hasDuplicateTitle = sections.some(
+            (other) =>
+                other.id !== section.id &&
+                titleKey(other.title) === titleKey(section.title)
+        );
+
+        const hasDuplicateOrder = sections.some(
+            (other) =>
+                other.id !== section.id &&
+                other.orderIndex === section.orderIndex
+        );
+
+        const invalidTitle =
+            normalizeTitle(section.title).length < 3 ||
+            !/\p{L}/u.test(section.title);
+
+        return hasDuplicateTitle || hasDuplicateOrder || invalidTitle;
+    });
+
+    // ======================================
+    // UI
+    // ======================================
+
     return (
-        <MainLayout pathName={{ "course-sections": "Course Sections" }}>
-            <div className="space-y-6">
+        <MainLayout
+            pathName={{
+                "course-sections": "Curriculum Builder",
+            }}
+        >
+            <div className="mx-auto w-full max-w-6xl space-y-6">
+                {/* Back */}
+                <Button asChild variant="ghost" size="sm">
+                    <Link
+                        to={courseId ? `/courses/${courseId}` : "/courses"}
+                    >
+                        <ArrowLeft className="size-4" />
+                        Back to Course
+                    </Link>
+                </Button>
 
-                {/* Tiêu đề */}
-                <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-bold">
-                        Course Sections
-                    </h1>
+                {/* Header */}
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                        <h1 className="text-2xl font-bold">
+                            Curriculum Builder
+                        </h1>
 
-                    <Button disabled={!courseId} onClick={openCreate}>
-                        + Add Section
-                    </Button>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            Manage sections and lessons of your course.
+                        </p>
+
+                        {selectedCourse && (
+                            <p className="mt-2 text-sm font-medium">
+                                Course: {selectedCourse.name}
+                            </p>
+                        )}
+                    </div>
+
+                    {canCreate && (
+                        <Button
+                            onClick={openCreate}
+                            disabled={
+                                !courseId ||
+                                saving ||
+                                sectionsQuery.isLoading ||
+                                sectionsQuery.isError
+                            }
+                        >
+                            <Plus className="size-4" />
+                            Add Section
+                        </Button>
+                    )}
                 </div>
 
-                {/* Chọn khóa học */}
-                <div className="rounded-lg border bg-card p-4">
-                    <label className="mb-2 block text-sm font-medium">
+                {/* Select Course */}
+                <div className="rounded-xl border bg-card p-5">
+                    <label
+                        htmlFor="course-select"
+                        className="mb-2 block text-sm font-medium"
+                    >
                         Select Course
                     </label>
 
                     <select
+                        id="course-select"
                         className="w-full rounded-md border bg-background p-2"
                         value={courseId}
-                        onChange={(e) => setCourseId(Number(e.target.value))}
+                        onChange={(event) =>
+                            handleCourseChange(Number(event.target.value))
+                        }
                     >
                         <option value={0}>Choose a course</option>
 
@@ -159,70 +567,210 @@ export default function SectionManagementPage() {
                     </select>
 
                     {coursesQuery.isLoading && (
-                        <p className="mt-2 text-sm">Loading courses...</p>
+                        <p className="mt-2 text-sm">
+                            Loading courses...
+                        </p>
                     )}
 
                     {coursesQuery.isError && (
-                        <p className="mt-2 text-sm text-destructive">
-                            Failed to load courses
+                        <p
+                            role="alert"
+                            className="mt-2 text-sm text-destructive"
+                        >
+                            Failed to load courses.
                         </p>
                     )}
                 </div>
 
-                {/* Danh sách chương */}
-                <div className="space-y-3">
-                    {!courseId ? (
-                        <p className="text-muted-foreground">
-                            Please select a course.
-                        </p>
-                    ) : sectionsQuery.isLoading ? (
-                        <p>Loading sections...</p>
-                    ) : sectionsQuery.isError ? (
-                        <p className="text-destructive">
-                            Failed to load sections.
-                        </p>
-                    ) : sections.length === 0 ? (
-                        <p className="text-muted-foreground">
-                            No sections found.
-                        </p>
-                    ) : (
-                        sections.map((section) => (
+                {/* Sections */}
+                <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                        <BookOpen className="size-5" />
+
+                        <h2 className="text-lg font-semibold">
+                            Sections &amp; Lessons
+                        </h2>
+
+                        {!!courseId && (
+                            <span className="text-sm text-muted-foreground">
+                ({sections.length} sections)
+              </span>
+                        )}
+                    </div>
+
+                    {/* Cảnh báo dữ liệu cũ */}
+                    {!!courseId &&
+                        !sectionsQuery.isLoading &&
+                        !sectionsQuery.isError &&
+                        invalidExistingSections.length > 0 && (
                             <div
-                                key={section.id}
-                                className="flex items-center justify-between rounded-lg border bg-card p-4"
+                                role="alert"
+                                className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
                             >
-                                <div>
-                                    <h3 className="font-medium">
-                                        {section.title}
-                                    </h3>
-                                    <p className="text-sm text-muted-foreground">
-                                        Order: {section.orderIndex}
-                                    </p>
-                                </div>
-
-                                <div className="flex gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => openEdit(section)}
-                                    >
-                                        Edit
-                                    </Button>
-
-                                    <Button
-                                        variant="destructive"
-                                        size="sm"
-                                        onClick={() => setDeleteTarget(section)}
-                                    >
-                                        Delete
-                                    </Button>
-                                </div>
+                                {invalidExistingSections.length} existing
+                                section(s) have invalid or duplicate title/order
+                                values. Edit them to correct the data.
                             </div>
-                        ))
+                        )}
+
+                    {!courseId ? (
+                        <div className="rounded-xl border p-8 text-center text-muted-foreground">
+                            Please select a course.
+                        </div>
+                    ) : sectionsQuery.isLoading ? (
+                        <div className="rounded-xl border p-8 text-center">
+                            Loading sections...
+                        </div>
+                    ) : sectionsQuery.isError ? (
+                        <div
+                            role="alert"
+                            className="rounded-xl border p-8 text-center"
+                        >
+                            <p className="mb-3 text-destructive">
+                                Failed to load sections.
+                            </p>
+
+                            <Button
+                                variant="outline"
+                                onClick={() => void sectionsQuery.refetch()}
+                            >
+                                Try Again
+                            </Button>
+                        </div>
+                    ) : sections.length === 0 ? (
+                        <div className="rounded-xl border border-dashed p-10 text-center">
+                            <BookOpen className="mx-auto mb-3 size-8 text-muted-foreground" />
+
+                            <h3 className="font-semibold">
+                                No sections yet
+                            </h3>
+
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                Add the first section to start building
+                                your curriculum.
+                            </p>
+
+                            {canCreate && (
+                                <Button className="mt-4" onClick={openCreate}>
+                                    <Plus className="size-4" />
+                                    Add Section
+                                </Button>
+                            )}
+                        </div>
+                    ) : (
+                        sections.map((section) => {
+                            const sameTitle = sections.some(
+                                (other) =>
+                                    other.id !== section.id &&
+                                    titleKey(other.title) ===
+                                    titleKey(section.title)
+                            );
+
+                            const sameOrder = sections.some(
+                                (other) =>
+                                    other.id !== section.id &&
+                                    other.orderIndex === section.orderIndex
+                            );
+
+                            const invalidTitle =
+                                normalizeTitle(section.title).length < 3 ||
+                                !/\p{L}/u.test(section.title);
+
+                            return (
+                                <div
+                                    key={section.id}
+                                    className="space-y-4 rounded-xl border bg-card p-5"
+                                >
+                                    {/* Section Header */}
+                                    <div className="flex flex-wrap items-center justify-between gap-3">
+                                        <div>
+                                            <h3 className="text-base font-semibold">
+                                                {section.title}
+                                            </h3>
+
+                                            <p className="mt-1 text-sm text-muted-foreground">
+                                                Order: {section.orderIndex}
+                                            </p>
+
+                                            {(sameTitle ||
+                                                sameOrder ||
+                                                invalidTitle) && (
+                                                <p
+                                                    role="alert"
+                                                    className="mt-1 text-xs text-amber-500"
+                                                >
+                                                    {[
+                                                        sameTitle && "Duplicate title",
+                                                        sameOrder && "Duplicate order",
+                                                        invalidTitle && "Invalid title",
+                                                    ]
+                                                        .filter(Boolean)
+                                                        .join(" · ")}
+                                                    . Please edit this section.
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        {/* Actions */}
+                                        <div className="flex flex-wrap gap-2">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() =>
+                                                    setExpandedSectionId((current) =>
+                                                        current === section.id
+                                                            ? null
+                                                            : section.id ?? null
+                                                    )
+                                                }
+                                            >
+                                                {expandedSectionId === section.id ? (
+                                                    <ChevronUp className="size-4" />
+                                                ) : (
+                                                    <ChevronDown className="size-4" />
+                                                )}
+
+                                                {expandedSectionId === section.id
+                                                    ? "Hide Lessons"
+                                                    : "View Lessons"}
+                                            </Button>
+
+                                            {canUpdate && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => openEdit(section)}
+                                                >
+                                                    Edit
+                                                </Button>
+                                            )}
+
+                                            {canDelete && (
+                                                <Button
+                                                    variant="destructive"
+                                                    size="sm"
+                                                    onClick={() => setDeleteTarget(section)}
+                                                >
+                                                    Delete
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Lesson CRUD của nhóm */}
+                                    {section.id != null &&
+                                        expandedSectionId === section.id && (
+                                            <div className="border-t pt-4">
+                                                <SectionLessons sectionId={section.id} />
+                                            </div>
+                                        )}
+                                </div>
+                            );
+                        })
                     )}
                 </div>
 
-                {/* Modal thêm / sửa */}
+                {/* ADD / EDIT MODAL */}
                 <Modal
                     open={formOpen}
                     onClose={() => {
@@ -231,34 +779,113 @@ export default function SectionManagementPage() {
                     title={editing ? "Edit Section" : "Add Section"}
                     size="sm"
                 >
-                    <form onSubmit={handleSave} className="space-y-4">
+                    <form
+                        onSubmit={(event) => void handleSave(event)}
+                        className="space-y-4"
+                        noValidate
+                    >
+                        {/* TITLE */}
                         <div>
-                            <label className="mb-1 block text-sm">
+                            <label
+                                htmlFor="section-title"
+                                className="mb-1 block text-sm font-medium"
+                            >
                                 Section Title
                             </label>
 
                             <Input
+                                id="section-title"
                                 value={title}
-                                onChange={(e) => setTitle(e.target.value)}
-                                placeholder="Enter section title"
+                                maxLength={150}
+                                onChange={(event) => {
+                                    setTitle(event.target.value);
+
+                                    if (formErrors.title) {
+                                        setFormErrors((prev) => ({
+                                            ...prev,
+                                            title: undefined,
+                                        }));
+                                    }
+                                }}
+                                onBlur={() =>
+                                    setFormErrors((prev) => ({
+                                        ...prev,
+                                        title: validateTitle(title, editing?.id),
+                                    }))
+                                }
+                                placeholder="Example: Java Introduction"
+                                aria-invalid={!!formErrors.title}
+                                required
                             />
+
+                            {formErrors.title && (
+                                <p
+                                    role="alert"
+                                    className="mt-1 text-sm text-destructive"
+                                >
+                                    {formErrors.title}
+                                </p>
+                            )}
+
+                            <p className="mt-1 text-xs text-muted-foreground">
+                                {title.length}/150 characters (minimum 3)
+                            </p>
                         </div>
 
+                        {/* ORDER */}
                         <div>
-                            <label className="mb-1 block text-sm">
+                            <label
+                                htmlFor="section-order"
+                                className="mb-1 block text-sm font-medium"
+                            >
                                 Order Index
                             </label>
 
                             <Input
+                                id="section-order"
                                 type="number"
                                 min={0}
-                                value={orderIndex}
-                                onChange={(e) =>
-                                    setOrderIndex(Number(e.target.value))
+                                step={1}
+                                value={orderIndexInput}
+                                onChange={(event) => {
+                                    setOrderIndexInput(event.target.value);
+
+                                    if (formErrors.orderIndex) {
+                                        setFormErrors((prev) => ({
+                                            ...prev,
+                                            orderIndex: undefined,
+                                        }));
+                                    }
+                                }}
+                                onBlur={() =>
+                                    setFormErrors((prev) => ({
+                                        ...prev,
+                                        orderIndex: validateOrder(
+                                            orderIndexInput,
+                                            editing
+                                        ),
+                                    }))
                                 }
+                                aria-invalid={!!formErrors.orderIndex}
+                                required
                             />
+
+                            {formErrors.orderIndex && (
+                                <p
+                                    role="alert"
+                                    className="mt-1 text-sm text-destructive"
+                                >
+                                    {formErrors.orderIndex}
+                                </p>
+                            )}
+
+                            <p className="mt-1 text-xs text-muted-foreground">
+                                Each section needs a unique order
+                                within this course.
+                            </p>
                         </div>
 
+                        {/* BUTTONS */}
                         <div className="flex justify-end gap-2">
                             <Button
                                 type="button"
@@ -276,11 +903,13 @@ export default function SectionManagementPage() {
                     </form>
                 </Modal>
 
-                {/* Xác nhận xóa */}
+                {/* DELETE CONFIRM */}
                 <ConfirmDialog
                     open={deleteTarget !== null}
                     title="Delete Section"
-                    description="Are you sure you want to delete this section?"
+                    description={`Delete "${
+                        deleteTarget?.title ?? ""
+                    }"? Sections containing lessons cannot be deleted until their lessons are removed.`}
                     confirmLabel="Delete"
                     onConfirm={() => void handleDelete()}
                     onCancel={() => {
@@ -288,7 +917,6 @@ export default function SectionManagementPage() {
                     }}
                     loading={deleting}
                 />
-
             </div>
         </MainLayout>
     );

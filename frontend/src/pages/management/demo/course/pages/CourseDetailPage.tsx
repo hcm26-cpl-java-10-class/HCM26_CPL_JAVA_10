@@ -1,3 +1,5 @@
+import { PermissionGate } from "@/components/PermissionGate";
+
 import { courseApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
@@ -275,12 +277,31 @@ function Syllabus({ course }: { course: CourseDetail }) {
 
   return (
     <section className="rounded-2xl border bg-card p-6">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <h2 className="text-lg font-semibold">Course content</h2>
-        <p className="text-sm text-muted-foreground">
-          {sections.length} sections · {course.lessonCount} lessons · {formatTotalDuration(course.totalDuration)}
-        </p>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold">
+          Course content
+        </h2>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-sm text-muted-foreground">
+            {sections.length} sections · {course.lessonCount} lessons
+          </p>
+
+          <PermissionGate
+              permissions={["SECTION_READ", "COURSE_UPDATE"]}
+              requireAll
+          >
+            <Button asChild variant="outline" size="sm">
+              <Link to={`/course-sections?courseId=${course.id}`}>
+                <BookOpen className="size-4" />
+                Manage Curriculum
+              </Link>
+            </Button>
+          </PermissionGate>
+        </div>
       </div>
+
 
       {sections.length === 0 ? (
         <p className="mt-4 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
