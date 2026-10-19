@@ -12,12 +12,23 @@ const categorySchema: EntitySchema = {
       type: "text",
       sortable: true,
       bold: true,
+      // DB: categories.name length 150, not null
+      validation: { required: true, minLength: 2, maxLength: 150 },
     },
     {
       name: "code",
       label: "Code",
       type: "text",
       sortable: true,
+      // DB: categories.code length 50, unique, not null
+      validation: {
+        required: true,
+        maxLength: 50,
+        pattern: {
+          regex: /^[A-Za-z0-9_-]+$/,
+          message: "Code may only contain letters, numbers, '-' and '_'",
+        },
+      },
     },
     {
       name: "parentName",
@@ -38,12 +49,20 @@ const categorySchema: EntitySchema = {
         valueField: "id",
         labelField: "name",
       },
+      validation: {
+        custom: (value, _form, { initial }) =>
+          value && initial?.id != null && String(value) === String(initial.id)
+            ? "A category cannot be its own parent"
+            : null,
+      },
     },
     {
       name: "description",
       label: "Description",
       type: "textarea",
       sortable: false,
+      // DB: categories.description length 500
+      validation: { maxLength: 500 },
     },
     ...(auditableFieldsSchema as FieldSchema[]),
   ],

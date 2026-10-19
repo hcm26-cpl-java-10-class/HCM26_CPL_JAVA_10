@@ -15,6 +15,7 @@ const courseSchema: EntitySchema = {
       type: "text",
       sortable: true,
       bold: true,
+      // DB: courses.name length 150, unique
       validation: {
         required: true,
         requiredMessage: "Course name is required",
@@ -65,12 +66,16 @@ const courseSchema: EntitySchema = {
       label: "Description",
       type: "textarea",
       sortable: false,
+      // DB: courses.description length 500
+      validation: { maxLength: 500 },
     },
     {
       name: "thumbnailUrl",
       label: "Thumbnail URL",
       type: "text",
       sortable: false,
+      // DB: courses.thumbnail_url length 255 (URL check is automatic for *Url fields)
+      validation: { maxLength: 255 },
     },
     ...(auditableFieldsSchema as FieldSchema[]),
   ],

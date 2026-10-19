@@ -8,7 +8,7 @@ import type { FieldSchema, FieldValidation } from "@/types";
  *     textarea  -> max 2000 characters
  *     password  -> max 128 characters
  *     number    -> must be a valid number
- *     fields named *Url  -> must be an http/https URL, max 500 characters
+ *     fields named *Url  -> must be an http/https URL, max 255 characters
  *     fields named email -> must be a valid email
  * - To add/override rules for one field: set `validation` on that field in the schema.
  * - To remove the default limit: `validation: { maxLength: null }`.
@@ -17,7 +17,7 @@ export const DEFAULT_MAX_LENGTH = {
   text: 255,
   textarea: 2000,
   password: 128,
-  url: 500,
+  url: 255,
 } as const;
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
