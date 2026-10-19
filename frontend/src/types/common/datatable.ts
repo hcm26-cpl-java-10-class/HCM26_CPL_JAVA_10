@@ -39,6 +39,29 @@ export type FilterType =
   | "dateRange"
   | "numberRange";
 
+export interface FieldValidation {
+  required?: boolean;
+  requiredMessage?: string;
+  minLength?: number;
+  /** Overrides the default limit for the field type; `null` = no limit. */
+  maxLength?: number | null;
+  /** number: minimum / maximum value. */
+  min?: number;
+  max?: number;
+  /** Force http/https URL check (auto-enabled for fields named *Url). */
+  url?: boolean;
+  /** Force email check (auto-enabled for fields named email). */
+  email?: boolean;
+  /** Custom regex + its error message. */
+  pattern?: { regex: RegExp; message: string };
+  /** Custom validation: return an error message, or null/undefined if valid. */
+  custom?: (
+    value: any,
+    form: Record<string, any>,
+    ctx: { isEdit: boolean; initial?: any }
+  ) => string | null | undefined;
+}
+
 export interface FieldSchema {
   name: string;
 
@@ -65,7 +88,7 @@ export interface FieldSchema {
   minWidth?: number;
 
   options?: { label: string; value: any }[];
-  defaultValue?: string | number | boolean;
+
   booleanLabels?: {
     true: string;
     false: string;
@@ -80,6 +103,8 @@ export interface FieldSchema {
   dynamicChild?: DynamicChildMeta;
 
   bold?: boolean;
+
+  validation?: FieldValidation;
 
   expandable?: boolean;
 
