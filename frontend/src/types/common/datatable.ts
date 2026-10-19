@@ -4,7 +4,6 @@ export type FieldType =
   | "password"
   | "number"
   | "date"
-  | "datetime-local"
   | "icon"
   | "select"
   | "boolean"

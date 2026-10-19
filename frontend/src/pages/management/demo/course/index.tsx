@@ -1,9 +1,21 @@
 import { categoryApi, courseApi, userApi } from "@/api";
 import { usePermissions } from "@/hooks/usePermissions";
 import { AutoCrudPage } from "@/pages/management/AutoCrudPage";
-import { type EntityConfig, type EntitySchema, auditableFieldsSchema, type FieldSchema } from "@/types";
+import {
+  type CourseStatus,
+  type EntityConfig,
+  type EntitySchema,
+  auditableFieldsSchema,
+  type FieldSchema,
+} from "@/types";
 import { CourseCatalogPage } from "./components/CourseCatalogPage";
 import { CourseDetailPage } from "./pages/CourseDetailPage";
+
+const courseStatusOptions: { label: string; value: CourseStatus }[] = [
+  { label: "Draft (hidden from students)", value: "DRAFT" },
+  { label: "Published", value: "PUBLISHED" },
+  { label: "Archived", value: "ARCHIVED" },
+];
 
 const courseSchema: EntitySchema = {
   entityName: "course",
@@ -59,6 +71,13 @@ const courseSchema: EntitySchema = {
         valueField: "id",
         labelField: "name",
       },
+    },
+    {
+      name: "status",
+      label: "Publication status",
+      type: "select",
+      sortable: true,
+      options: courseStatusOptions,
     },
     {
       name: "description",

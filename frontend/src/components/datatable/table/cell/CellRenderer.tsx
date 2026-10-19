@@ -165,7 +165,11 @@ export function CellRenderer({
     );
   }
 
-  const displayValue = value ?? "—";
+  const optionLabel =
+    field.type === "select"
+      ? field.options?.find((option) => option.value?.toString() === value?.toString())?.label
+      : undefined;
+  const displayValue = optionLabel ?? value ?? "—";
   const displayStr =
     field.type === "date" && value
       ? formatDateValue(value, dateFormat)
