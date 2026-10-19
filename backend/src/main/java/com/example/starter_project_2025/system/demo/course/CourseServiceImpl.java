@@ -60,9 +60,6 @@ public class CourseServiceImpl
         if (course.getStatus() == null) {
             course.setStatus(CourseStatus.DRAFT);
         }
-        if (course.getIsFree() == null) {
-            course.setIsFree(true);
-        }
         resolveInstructor(course, request);
         resolveCategory(course, request, ctx);
     }
