@@ -15,6 +15,7 @@ Thumbs.db
 backend/target/
 backend/*.jar
 backend/*.war
+backend/data/
 
 # === Backend .env (secrets) ===
 backend/.env

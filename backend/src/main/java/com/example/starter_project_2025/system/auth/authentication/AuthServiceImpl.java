@@ -78,8 +78,15 @@ public class AuthServiceImpl implements AuthService {
         }
 
         User user = userRepository.findByEmail(email)
-                .map(existingUser -> updateUserFromGoogleProfile(existingUser, firstName, lastName))
                 .orElseGet(() -> createGoogleUser(email, firstName, lastName));
+
+        if (Boolean.TRUE.equals(user.getLocked())) {
+            throw new org.springframework.security.authentication.LockedException(
+                    "Account is locked"
+            );
+        }
+
+        user = updateUserFromGoogleProfile(user, firstName, lastName);
 
         refreshTokenService.revokeAllRefreshTokens(user.getId());
 
@@ -124,6 +131,14 @@ public class AuthServiceImpl implements AuthService {
         RefreshToken refreshToken = refreshTokenService.verifyRefreshToken(request.token());
 
         User user = refreshToken.getUser();
+
+        if (Boolean.TRUE.equals(user.getLocked())) {
+            refreshTokenService.revokeAllRefreshTokens(user.getId());
+
+            throw new org.springframework.security.authentication.LockedException(
+                    "Account is locked"
+            );
+        }
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
 
