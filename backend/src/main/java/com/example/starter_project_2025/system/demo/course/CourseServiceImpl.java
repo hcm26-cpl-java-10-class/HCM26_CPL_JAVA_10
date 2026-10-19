@@ -1,6 +1,8 @@
 package com.example.starter_project_2025.system.demo.course;
 
 import com.example.starter_project_2025.system.demo.category.CategoryRepository;
+import com.example.starter_project_2025.system.demo.curriculum.CurriculumValidationResult;
+import com.example.starter_project_2025.system.demo.curriculum.CurriculumValidator;
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
@@ -29,6 +31,7 @@ public class CourseServiceImpl
     CourseRepository courseRepository;
     UserRepository userRepository;
     CategoryRepository categoryRepository;
+    CurriculumValidator curriculumValidator;
 
     @Override
     protected BaseCrudRepository<Course, Long> getRepository() {
@@ -49,6 +52,10 @@ public class CourseServiceImpl
     protected void beforeCreate(Course course, CourseDTO request, ValidationContext ctx) {
         if (courseRepository.existsByName(request.getName())) {
             ctx.add("name", "Course name already exists");
+        }
+        if (request.getStatus() == CourseStatus.PUBLISHED) {
+            ctx.add("status", "A new course has no sections or lessons yet. "
+                    + "Save it as Draft, add content, then publish.");
         }
         if (course.getStatus() == null) {
             course.setStatus(CourseStatus.DRAFT);
@@ -76,6 +83,17 @@ public class CourseServiceImpl
         if (request.getIsFree() == null) {
             request.setIsFree(course.getIsFree());
         }
+        validatePublishTransition(course, request, ctx);
+    }
+
+    /** Chuyển sang PUBLISHED phải qua Validate Publish (>=1 section, mỗi section >=1 lesson, URL hợp lệ). */
+    private void validatePublishTransition(Course course, CourseDTO request, ValidationContext ctx) {
+        if (request.getStatus() != CourseStatus.PUBLISHED
+                || course.getStatus() == CourseStatus.PUBLISHED) {
+            return;
+        }
+        CurriculumValidationResult result = curriculumValidator.validatePublish(course.getId());
+        result.errors().forEach(issue -> ctx.add("status", issue.message()));
     }
 
 
