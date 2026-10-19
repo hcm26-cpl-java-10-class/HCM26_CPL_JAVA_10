@@ -1,13 +1,16 @@
-# OS
-.DS_Store
-Thumbs.db
-
-# IDE
+ === IDE ===
 .idea/
 *.iml
 *.iws
 *.ipr
 .vscode/
+.DS_Store
+*.DS_Store
+
+# === Backend (Java/Maven) ===
+backend/target/
+backend/*.jar
+backend/*.war
 
 # Env
 .env
@@ -22,11 +25,14 @@ dist/
 build/
 node_modules/
 
+# === Docker .env (secrets) ===
+docker/.env
 # Maven
 .mvn/wrapper/maven-wrapper.jar
 
-# Logs
-*.log
+
 
 # Local contributor guide
 /AGENTS.md
+
+/backend.zip

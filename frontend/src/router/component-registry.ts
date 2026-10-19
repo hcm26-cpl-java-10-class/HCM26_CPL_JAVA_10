@@ -9,6 +9,7 @@ import { Dashboard } from "@/pages/management/dashboard";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
+import BulkSessionGenerationPage from "@/pages/management/schedule/pages/BulkSessionGenerationPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 
@@ -27,6 +28,12 @@ export const routes: RouteConfig[] = [
     component: TopicMarkGradebookDemoPage,
     requiredPermission: "STUDENT_SCORE_READ",
     isModuleDriven: true,
+  },
+  {
+    path: "/sessions/bulk-generate",
+    component: BulkSessionGenerationPage,
+    requiredPermission: "SESSION_CREATE",
+    isModuleDriven: false,
   },
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
   { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },

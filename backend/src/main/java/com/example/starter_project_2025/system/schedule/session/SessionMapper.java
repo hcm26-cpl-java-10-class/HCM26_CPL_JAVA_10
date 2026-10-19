@@ -1,24 +1,45 @@
 package com.example.starter_project_2025.system.schedule.session;
 
-import com.example.starter_project_2025.base.crud.mapper.BaseMapperConfig;
 import com.example.starter_project_2025.system.schedule.session.dto.SessionDTO;
-import com.example.starter_project_2025.system.schedule.session.dto.SessionResponse;
+import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
+import com.example.starter_project_2025.base.crud.mapper.BaseMapperConfig;
+import com.example.starter_project_2025.base.crud.mapper.IgnoreAuditFields;
 import org.mapstruct.Mapper;
+
 import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 
-@Mapper(config = BaseMapperConfig.class)
-public interface SessionMapper {
+@Mapper(componentModel = "spring", config = BaseMapperConfig.class)
+public interface SessionMapper extends BaseCrudMapper<Session, SessionDTO> {
 
-    @Mapping(target = "calendarVersionNumber", source = "context.calendarVersionNumber")
-    @Mapping(target = "calendarVersionStatus", source = "context.calendarVersionStatus")
-    @Mapping(target = "classId", source = "context.classId")
-    @Mapping(target = "classCode", source = "context.classCode")
-    @Mapping(target = "topicName", source = "context.topicName")
-    @Mapping(target = "trainerName", source = "context.trainerName")
-    SessionResponse toResponse(Session session, SessionReadContextProvider.ReadContext context);
+    @Override
+    @Mapping(source = "calendarVersion.id", target = "calendarVersionId")
+    @Mapping(source = "calendarVersion.versionNumber", target = "calendarVersionNumber")
+    @Mapping(source = "calendarVersion.status", target = "calendarVersionStatus")
+    @Mapping(source = "calendarVersion.calendar.classId", target = "classId")
+    SessionDTO toResponse(Session entity);
 
-    @Mapping(target = "classCode", ignore = true)
-    @Mapping(target = "topicName", ignore = true)
-    @Mapping(target = "trainerName", ignore = true)
-    SessionDTO toStatusResponse(Session session);
+    @Override
+    @IgnoreAuditFields
+    @Mapping(target = "calendarVersion", ignore = true)
+    @Mapping(target = "status", ignore = true)
+    @Mapping(target = "notes", ignore = true)
+    @Mapping(target = "cancelReason", ignore = true)
+    @Mapping(target = "version", ignore = true)
+    @Mapping(target = "isOverridden", ignore = true)
+    @Mapping(target = "overrideReason", ignore = true)
+    @Mapping(target = "isActive", ignore = true)
+    Session toEntity(SessionDTO dto);
+
+    @Override
+    @IgnoreAuditFields
+    @Mapping(target = "calendarVersion", ignore = true)
+    @Mapping(target = "status", ignore = true)
+    @Mapping(target = "notes", ignore = true)
+    @Mapping(target = "cancelReason", ignore = true)
+    @Mapping(target = "version", ignore = true)
+    @Mapping(target = "isOverridden", ignore = true)
+    @Mapping(target = "overrideReason", ignore = true)
+    @Mapping(target = "isActive", ignore = true)
+    void update(@MappingTarget Session entity, SessionDTO dto);
 }

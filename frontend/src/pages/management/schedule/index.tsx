@@ -7,6 +7,7 @@ import {
 } from "@/types";
 import { SessionCreatePage } from "./pages/SessionCreatePage";
 import { SessionEditPage } from "./pages/SessionEditPage";
+import { SessionRowActions } from "./components/SessionRowActions";
 
 const sessionSchema: EntitySchema = {
   entityName: "session",
@@ -94,4 +95,5 @@ export const entityConfig: EntityConfig = {
       requiredPermission: "SESSION_UPDATE",
     },
   },
+  extraRowActions: (row) => <SessionRowActions session={row} />,
 };

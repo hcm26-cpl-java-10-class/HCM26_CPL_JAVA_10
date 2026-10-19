@@ -7,20 +7,11 @@ import com.example.starter_project_2025.base.dataio.importer.annotation.ImportFi
 import com.example.starter_project_2025.base.dataio.template.annotation.ImportEntity;
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.Table;
-import jakarta.persistence.Version;
-import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import jakarta.persistence.*;
+import lombok.*;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
+import com.example.starter_project_2025.system.schedule.calendar.CalendarVersion;
 
 import java.time.LocalDateTime;
 
@@ -45,20 +36,29 @@ import java.time.LocalDateTime;
 )
 public class Session extends BaseEntity {
 
-    @Column(name = "calendar_version_id", nullable = false)
-    @ImportField(name = "Calendar Version ID", required = true)
-    @ExportField(name = "Calendar Version ID")
-    Long calendarVersionId;
-
-    @Column(name = "topic_id", nullable = false)
-    @ImportField(name = "Topic ID", required = true)
+    @Column(name = "topic_id")
     @ExportField(name = "Topic ID")
     Long topicId;
+
+    @Column(name = "class_code", nullable = false, length = 60)
+    @ImportField(name = "Class Code", required = true)
+    @ExportField(name = "Class Code")
+    String classCode;
+
+    @Column(name = "topic_name", length = 120)
+    @ImportField(name = "Topic Name")
+    @ExportField(name = "Topic Name")
+    String topicName;
 
     @Column(name = "trainer_id", nullable = false)
     @ImportField(name = "Trainer ID", required = true)
     @ExportField(name = "Trainer ID")
     Long trainerId;
+
+    @Column(name = "trainer_name", nullable = false, length = 100)
+    @ImportField(name = "Trainer Name", required = true)
+    @ExportField(name = "Trainer Name")
+    String trainerName;
 
     @Column(nullable = false, length = 150)
     @ImportField(name = "Title", required = true)
@@ -85,9 +85,9 @@ public class Session extends BaseEntity {
     @ExportField(name = "Meeting Link")
     String meetingLink;
 
-    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
+    @Builder.Default
     @ExportField(name = "Status")
     SessionStatus status = SessionStatus.SCHEDULED;
 
@@ -99,8 +99,24 @@ public class Session extends BaseEntity {
     @ExportField(name = "Cancel Reason")
     String cancelReason;
 
+    @Builder.Default
+    @Column(name = "is_overridden")
+    @ExportField(name = "Is Overridden")
+    Boolean isOverridden = false;
+
+    @Column(name = "override_reason", length = 255)
+    @ExportField(name = "Override Reason")
+    String overrideReason;
+
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "calendar_version_id", nullable = false)
+    CalendarVersion calendarVersion;
+
+
     @Version
     @Column(name = "version")
     @ExportField(name = "Version")
     Long version;
+
 }
