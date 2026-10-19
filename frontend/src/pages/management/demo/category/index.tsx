@@ -12,12 +12,28 @@ const categorySchema: EntitySchema = {
       type: "text",
       sortable: true,
       bold: true,
+      filterable: true,
+      validation: {
+        required: true,
+        requiredMessage: "Category name is required",
+        maxLength: 150,
+      },
     },
     {
       name: "code",
       label: "Code",
       type: "text",
       sortable: true,
+      filterable: true,
+      validation: {
+        required: true,
+        requiredMessage: "Category code is required",
+        maxLength: 50,
+        pattern: {
+          regex: /^[A-Za-z0-9_-]*$/,
+          message: "Code may only contain letters, digits, '_' and '-'",
+        },
+      },
     },
     {
       name: "parentName",
@@ -33,10 +49,18 @@ const categorySchema: EntitySchema = {
       type: "relation",
       sortable: false,
       visible: false,
+      filterable: true,
       relation: {
         api: categoryApi,
         valueField: "id",
         labelField: "name",
+      },
+      validation: {
+        // Backend: "A category cannot be its own parent"
+        custom: (value, _form, ctx) =>
+          ctx.isEdit && value != null && ctx.initial?.id === value
+            ? "A category cannot be its own parent"
+            : null,
       },
     },
     {
@@ -44,6 +68,9 @@ const categorySchema: EntitySchema = {
       label: "Description",
       type: "textarea",
       sortable: false,
+      validation: {
+        maxLength: 500,
+      },
     },
     ...(auditableFieldsSchema as FieldSchema[]),
   ],
