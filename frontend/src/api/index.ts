@@ -13,3 +13,4 @@ export * from "./features/demo/lesson.api";
 export * from "./features/schedule.api";
 export * from "./features/schedule/session.api";
 export * from "./features/schedule/calendar-version.api";
+export * from "./features/schedule/bulk-session-generation.api";
