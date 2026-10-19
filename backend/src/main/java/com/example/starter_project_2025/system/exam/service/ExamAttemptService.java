@@ -6,9 +6,7 @@ import com.example.starter_project_2025.system.exam.domain.*;
 import com.example.starter_project_2025.system.exam.dto.ExamAttemptDTO;
 import com.example.starter_project_2025.system.exam.dto.ExamAttemptSummaryDTO;
 import com.example.starter_project_2025.system.exam.dto.SaveExamAnswerRequest;
-import com.example.starter_project_2025.system.invitation.domain.Invitation;
-import com.example.starter_project_2025.system.invitation.domain.InvitationRepository;
-import com.example.starter_project_2025.system.invitation.domain.InvitationStatus;
+
 import com.example.starter_project_2025.system.question.domain.Question;
 import com.example.starter_project_2025.system.question.domain.QuestionOption;
 import com.example.starter_project_2025.system.question.domain.QuestionType;
@@ -34,7 +32,6 @@ public class ExamAttemptService {
 
     private final ExamRepository examRepository;
     private final ExamAttemptRepository attemptRepository;
-    private final InvitationRepository invitationRepository;
     private final UserRepository userRepository;
     private final QuestionTakerMapper questionTakerMapper;
 
@@ -47,7 +44,6 @@ public class ExamAttemptService {
                 .filter(candidate -> Boolean.TRUE.equals(candidate.getIsActive()))
                 .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
         LocalDateTime nowLocal = LocalDateTime.now();
-        ensureInvitationAccepted(examId, studentId);
 
         List<ExamAttempt> attempts = attemptRepository
                 .findAllByExam_IdAndStudent_IdOrderByAttemptNumberAsc(examId, studentId);
@@ -149,12 +145,7 @@ public class ExamAttemptService {
         }
     }
 
-    private void ensureInvitationAccepted(Long examId, Long studentId) {
-        Invitation invitation = invitationRepository.findByExamIdAndUserId(examId, studentId)
-                .filter(candidate -> Boolean.TRUE.equals(candidate.getIsActive()))
-                .filter(candidate -> candidate.getStatus() == InvitationStatus.ACCEPTED)
-                .orElseThrow(() -> new BadRequestException("Bạn cần chấp nhận lời mời còn hiệu lực trước khi thi"));
-    }
+
 
     public List<ExamAttemptSummaryDTO> findStudentAttempts(Long studentId) {
         Instant now = Instant.now();

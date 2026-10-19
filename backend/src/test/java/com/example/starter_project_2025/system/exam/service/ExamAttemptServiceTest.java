@@ -2,9 +2,7 @@ package com.example.starter_project_2025.system.exam.service;
 
 import com.example.starter_project_2025.system.exam.domain.*;
 import com.example.starter_project_2025.exception.BadRequestException;
-import com.example.starter_project_2025.system.invitation.domain.InvitationRepository;
-import com.example.starter_project_2025.system.invitation.domain.Invitation;
-import com.example.starter_project_2025.system.invitation.domain.InvitationStatus;
+
 import com.example.starter_project_2025.system.question.domain.Question;
 import com.example.starter_project_2025.system.question.domain.QuestionOption;
 import com.example.starter_project_2025.system.question.domain.QuestionType;
@@ -44,8 +42,7 @@ class ExamAttemptServiceTest {
     @Mock
     private ExamAttemptRepository attemptRepository;
 
-    @Mock
-    private InvitationRepository invitationRepository;
+
 
     @Mock
     private com.example.starter_project_2025.system.rbac.user.UserRepository userRepository;
@@ -101,7 +98,6 @@ class ExamAttemptServiceTest {
         exam.setStartTime(LocalDateTime.now().plusMinutes(5));
         attempt.setStatus(ExamAttemptStatus.SUBMITTED);
         when(examRepository.lockForAttemptStart(20L)).thenReturn(Optional.of(exam));
-        when(invitationRepository.findByExamIdAndUserId(20L, 40L)).thenReturn(Optional.of(acceptedInvitation()));
 
         assertThrows(BadRequestException.class, () -> service.startOrResume(20L, 40L));
     }
@@ -112,7 +108,6 @@ class ExamAttemptServiceTest {
         exam.setMaxAttempts(1);
         attempt.setStatus(ExamAttemptStatus.SUBMITTED);
         when(examRepository.lockForAttemptStart(20L)).thenReturn(Optional.of(exam));
-        when(invitationRepository.findByExamIdAndUserId(20L, 40L)).thenReturn(Optional.of(acceptedInvitation()));
 
         assertThrows(BadRequestException.class, () -> service.startOrResume(20L, 40L));
     }
@@ -128,7 +123,6 @@ class ExamAttemptServiceTest {
         exam.setEndTime(LocalDateTime.now().plusMinutes(10));
         exam.setQuestions(Set.of(question(1L, QuestionType.SINGLE_CHOICE, 5)));
         when(examRepository.lockForAttemptStart(20L)).thenReturn(Optional.of(exam));
-        when(invitationRepository.findByExamIdAndUserId(20L, 40L)).thenReturn(Optional.of(acceptedInvitation()));
         when(attemptRepository.findAllByExam_IdAndStudent_IdOrderByAttemptNumberAsc(20L, 40L))
                 .thenReturn(List.of());
         when(userRepository.findById(40L)).thenReturn(Optional.of(attempt.getStudent()));
@@ -149,7 +143,6 @@ class ExamAttemptServiceTest {
         option(11L, live, true);
         exam.setQuestions(Set.of(live));
         when(examRepository.lockForAttemptStart(20L)).thenReturn(Optional.of(exam));
-        when(invitationRepository.findByExamIdAndUserId(20L, 40L)).thenReturn(Optional.of(acceptedInvitation()));
         when(attemptRepository.findAllByExam_IdAndStudent_IdOrderByAttemptNumberAsc(20L, 40L))
                 .thenReturn(List.of());
         when(userRepository.findById(40L)).thenReturn(Optional.of(attempt.getStudent()));
@@ -174,14 +167,7 @@ class ExamAttemptServiceTest {
         assertTrue(snap.getOptions().get(0).isCorrect());
     }
 
-    private Invitation acceptedInvitation() {
-        return Invitation.builder()
-                .exam(attempt.getExam())
-                .user(attempt.getStudent())
-                .status(InvitationStatus.ACCEPTED)
-                .isActive(true)
-                .build();
-    }
+
 
     @Test
     void submitAwardsPointsOnlyWhenEveryCorrectOptionIsSelected() {

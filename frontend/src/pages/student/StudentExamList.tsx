@@ -1,10 +1,9 @@
 import {
     getMyExamAttempts,
+    getStudentExams,
     type Exam,
     type ExamAttemptSummary,
 } from '@/api/exam.api';
-import { invitationApi } from '@/api';
-import type { StudentInvitationDTO } from '@/types';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,31 +16,18 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, ArrowRight, CalendarDays, Clock3, Lock, Mail, RefreshCw } from 'lucide-react';
-import { useState } from 'react';
+import { AlertCircle, ArrowRight, CalendarDays, Clock3, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { ExamPasswordDialog } from './components/ExamPasswordDialog';
 
+const examsQueryKey = ['student-exams'] as const;
 const attemptsQueryKey = ['student-exam-attempts'] as const;
 
-function isOverdue(attempt: ExamAttemptSummary | undefined, now: number) {
-    return attempt?.status === 'IN_PROGRESS'
-        && attempt.deadlineAt != null
-        && new Date(attempt.deadlineAt).getTime() <= now;
-}
-
-function getAttemptStatus(attempt: ExamAttemptSummary | undefined, now: number) {
+function getAttemptStatus(attempt?: ExamAttemptSummary) {
     if (!attempt) return null;
-    // Đã quá hạn nhưng server chưa chốt: hiển thị là hết giờ ngay.
-    if (isOverdue(attempt, now)) {
-        return { label: 'Hết giờ', variant: 'destructive' as const };
-    }
 
     switch (attempt.status) {
         case 'IN_PROGRESS':
             return { label: 'Đang làm', variant: 'secondary' as const };
-        case 'EXPIRED':
-            return { label: 'Hết giờ — đã tự động nộp', variant: 'destructive' as const };
         case 'PENDING_REVIEW':
             return { label: 'Chờ chấm tự luận', variant: 'outline' as const };
         case 'SUBMITTED':
@@ -52,54 +38,41 @@ function getAttemptStatus(attempt: ExamAttemptSummary | undefined, now: number) 
 function ExamCard({
                       exam,
                       attempt,
-                      invitation,
                       onOpen,
                       disabled: externallyDisabled,
                   }: {
     exam: Exam;
     attempt?: ExamAttemptSummary;
-    invitation: StudentInvitationDTO;
-    onOpen: (exam: Exam, attempt?: ExamAttemptSummary) => void;
+    onOpen: (examId: number) => void;
     disabled: boolean;
 }) {
+    const status = getAttemptStatus(attempt);
     const now = Date.now();
-    const status = getAttemptStatus(attempt, now);
-    const overdue = isOverdue(attempt, now);
     const beforeOpen = exam.startTime != null && now < new Date(exam.startTime).getTime();
     const afterClose = exam.endTime != null && now >= new Date(exam.endTime).getTime();
-    const isInProgress = attempt?.status === 'IN_PROGRESS' && !overdue;
+    const isInProgress = attempt?.status === 'IN_PROGRESS';
     const hasAttempts = (attempt?.attemptsUsed ?? 0) > 0;
     const outOfAttempts = hasAttempts && (attempt?.attemptsRemaining ?? 0) <= 0 && !isInProgress;
-    const disabledBySchedule = (beforeOpen || afterClose) && !isInProgress && !overdue;
+    const disabledBySchedule = (beforeOpen || afterClose) && !isInProgress;
     const isDisabled = externallyDisabled || outOfAttempts || disabledBySchedule;
-    const buttonLabel = overdue
-        ? 'Xem kết quả'
-        : isInProgress
-            ? 'Tiếp tục làm bài'
-            : outOfAttempts
-                ? 'Đã hết lượt'
-                : beforeOpen
-                    ? 'Chưa đến giờ mở'
-                    : afterClose
-                        ? 'Kỳ thi đã đóng'
-                        : 'Vào thi';
+    const buttonLabel = isInProgress
+        ? 'Tiếp tục làm bài'
+        : outOfAttempts
+            ? 'Đã hết lượt'
+            : beforeOpen
+                ? 'Chưa đến giờ mở'
+                : afterClose
+                    ? 'Kỳ thi đã đóng'
+                    : 'Vào thi';
 
     return (
         <Card className="flex h-full flex-col border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
             <CardHeader>
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="secondary" className="gap-1 bg-sky-50 text-sky-700">
-                            <Clock3 className="size-3" />
-                            {exam.durationMinutes} phút
-                        </Badge>
-                        {exam.hasPassword && (
-                            <Badge variant="outline" className="gap-1 border-amber-300 bg-amber-50 text-amber-700">
-                                <Lock className="size-3" />
-                                Mật khẩu
-                            </Badge>
-                        )}
-                    </div>
+                    <Badge variant="secondary" className="gap-1 bg-sky-50 text-sky-700">
+                        <Clock3 className="size-3" />
+                        {exam.durationMinutes} phút
+                    </Badge>
                     {status && <Badge variant={status.variant}>{status.label}</Badge>}
                 </div>
                 <CardTitle className="pt-2 text-lg text-slate-900">{exam.title}</CardTitle>
@@ -117,18 +90,6 @@ function ExamCard({
                         Điểm trắc nghiệm tạm thời: {attempt.objectiveScore ?? 0}/{attempt.totalPoints}.
                     </p>
                 )}
-                {overdue && (
-                    <p className="text-sm text-red-700">
-                        Đã hết thời gian làm bài, hệ thống đang tự động nộp bài của bạn.
-                    </p>
-                )}
-                {attempt?.status === 'EXPIRED' && (
-                    <p className="text-sm text-red-700">
-                        {attempt.finalScore != null
-                            ? `Hết giờ, bài được tự động nộp. Điểm: ${attempt.finalScore}/${attempt.totalPoints}.`
-                            : `Hết giờ, bài được tự động nộp. Điểm trắc nghiệm tạm thời: ${attempt.objectiveScore ?? 0}/${attempt.totalPoints}; chờ chấm tự luận.`}
-                    </p>
-                )}
                 {attempt?.status === 'SUBMITTED' && (
                     <p className="text-sm text-emerald-700">
                         Điểm cao nhất: {attempt.bestScore ?? attempt.finalScore ?? 0}/{attempt.totalPoints}.
@@ -142,10 +103,8 @@ function ExamCard({
                         Lượt {attempt.attemptNumber} · Đã dùng {attempt.attemptsUsed}/{exam.maxAttempts ?? 1} lượt
                     </p>
                 )}
-                {invitation.endTime && (
-                    <p className="mt-2 text-xs text-slate-500">Đóng lúc: {new Date(invitation.endTime).toLocaleString()}</p>
-                )}
-                {isInProgress && (
+
+                {attempt?.status === 'IN_PROGRESS' && (
                     <p className="text-sm text-sky-700">
                         Bài làm của bạn đã được lưu. Bạn có thể tiếp tục bài thi.
                     </p>
@@ -158,7 +117,7 @@ function ExamCard({
             </CardContent>
 
             <CardFooter className="border-t border-slate-100 pt-4">
-                <Button className="w-full bg-cyan-600 text-white hover:bg-cyan-500" disabled={isDisabled} onClick={() => onOpen(exam, attempt)}>
+                <Button className="w-full bg-cyan-600 text-white hover:bg-cyan-500" disabled={isDisabled} onClick={() => onOpen(exam.id)}>
                     {buttonLabel}
                     <ArrowRight className="size-4" />
                 </Button>
@@ -169,69 +128,30 @@ function ExamCard({
 
 export default function StudentExamList() {
     const navigate = useNavigate();
+
+    const examsQuery = useQuery({
+        queryKey: examsQueryKey,
+        queryFn: async () => {
+            const data = await getStudentExams();
+            return data.content || [];
+        },
+    });
+
     const attemptsQuery = useQuery({
         queryKey: attemptsQueryKey,
         queryFn: getMyExamAttempts,
-        // Có bài đang làm thì hỏi lại 15 giây/lần để thấy "hết giờ / đã nộp" (kể cả nộp từ tab khác).
-        refetchInterval: (query) =>
-            query.state.data?.some((item) => item.status === 'IN_PROGRESS') ? 15_000 : false,
     });
-    const invitationsQuery = useQuery({
-        queryKey: ['student-invitations'],
-        queryFn: invitationApi.getMyInvitations,
-    });
+
+    const isLoading = examsQuery.isLoading || attemptsQuery.isLoading;
+    const hasError = examsQuery.isError || attemptsQuery.isError;
 
     const retry = () => {
+        void examsQuery.refetch();
         void attemptsQuery.refetch();
-        void invitationsQuery.refetch();
     };
 
-    const hasError = invitationsQuery.isError || attemptsQuery.isError;
-    const isLoading = invitationsQuery.isLoading || attemptsQuery.isLoading;
-    const invitations = invitationsQuery.data ?? [];
-    const exams = invitations
-        .filter((invitation) => invitation.status === 'ACCEPTED' && invitation.isActive !== false)
-        .map((invitation): { exam: Exam; invitation: StudentInvitationDTO } => ({
-            invitation,
-            exam: {
-                id: invitation.examId,
-                title: invitation.examTitle,
-                durationMinutes: invitation.durationMinutes ?? 0,
-                totalPoints: invitation.totalPoints,
-                startTime: invitation.startTime,
-                endTime: invitation.endTime,
-                maxAttempts: invitation.maxAttempts,
-                hasPassword: invitation.hasPassword,
-                isActive: true,
-            },
-        }));
+    const exams = examsQuery.data ?? [];
     const attempts = attemptsQuery.data ?? [];
-
-    const [passwordDialogExam, setPasswordDialogExam] = useState<Exam | null>(null);
-
-    const handleOpenExam = (exam: Exam, attempt?: ExamAttemptSummary) => {
-        const overdue = isOverdue(attempt, Date.now());
-        const isInProgress = attempt?.status === 'IN_PROGRESS' && !overdue;
-
-        // Nếu bài thi đang làm dở hoặc đã hoàn thành xem kết quả thì không cần nhập lại pass
-        if (isInProgress || overdue || attempt?.status === 'SUBMITTED' || attempt?.status === 'EXPIRED') {
-            navigate(`/student/exams/${exam.id}/take`);
-            return;
-        }
-
-        // Nếu đề thi yêu cầu mật khẩu
-        if (exam.hasPassword) {
-            setPasswordDialogExam(exam);
-            return;
-        }
-
-        navigate(`/student/exams/${exam.id}/take`);
-    };
-
-    const handlePasswordSuccess = (examId: number, password: string) => {
-        sessionStorage.setItem(`exam_pass_${examId}`, password);
-        navigate(`/student/exams/${examId}/take`);
-    };
 
     return (
         <MainLayout pathName={{ exams: 'Lịch thi' }}>
@@ -255,9 +175,6 @@ export default function StudentExamList() {
                             Tải lại
                         </Button>
                     )}
-                    <Button variant="outline" onClick={() => navigate('/student/invitations')}>
-                        <Mail className="size-4" /> Lời mời
-                    </Button>
                 </header>
 
                 {hasError && (
@@ -267,10 +184,10 @@ export default function StudentExamList() {
                     >
                         <AlertCircle className="mt-0.5 size-4 shrink-0" />
                         <p>
-                            {invitationsQuery.isError && attemptsQuery.isError
+                            {examsQuery.isError && attemptsQuery.isError
                                 ? 'Không thể tải lịch thi và trạng thái bài làm.'
-                                : invitationsQuery.isError
-                                    ? 'Không thể tải lời mời đã chấp nhận.'
+                                : examsQuery.isError
+                                    ? 'Không thể tải danh sách kỳ thi.'
                                     : 'Không thể tải trạng thái các bài thi đã làm. Tải lại để xác nhận trạng thái trước khi vào thi.'}
                         </p>
                     </div>
@@ -289,45 +206,35 @@ export default function StudentExamList() {
                             </Card>
                         ))}
                     </div>
-                ) : invitationsQuery.isError ? null : exams.length === 0 ? (
+                ) : examsQuery.isError ? null : exams.length === 0 ? (
                     <Card className="items-center border-dashed border-slate-300 bg-white py-10 text-center">
                         <CardContent className="space-y-2">
-                            <Mail className="mx-auto size-8 text-slate-400" />
-                            <CardTitle className="text-slate-900">Chưa có kỳ thi được chấp nhận</CardTitle>
+                            <CalendarDays className="mx-auto size-8 text-slate-400" />
+                            <CardTitle className="text-slate-900">Chưa có kỳ thi nào</CardTitle>
                             <CardDescription>
-                                Chấp nhận lời mời để xem kỳ thi tại đây.
+                                Hiện tại chưa có kỳ thi nào được xếp lịch dành cho bạn.
                             </CardDescription>
-                            <Button variant="outline" onClick={() => navigate('/student/invitations')}>Xem lời mời</Button>
                         </CardContent>
                     </Card>
                 ) : (
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        {exams.map(({ exam, invitation }) => {
+                        {exams.map((exam) => {
                             const examAttempts = attempts.filter((item) => item.examId === exam.id);
                             const attempt = examAttempts.find((item) => item.status === 'IN_PROGRESS')
                                 ?? examAttempts.reduce<ExamAttemptSummary | undefined>((latest, item) =>
                                     !latest || item.attemptNumber > latest.attemptNumber ? item : latest, undefined);
                             return (
                                 <ExamCard
-                                    key={invitation.id}
+                                    key={exam.id}
                                     exam={exam}
-                                    invitation={invitation}
                                     attempt={attempt}
                                     disabled={attemptsQuery.isError}
-                                    onOpen={handleOpenExam}
+                                    onOpen={(id) => navigate(`/student/exams/${id}/take`)}
                                 />
                             );
                         })}
                     </div>
                 )}
-
-                <ExamPasswordDialog
-                    open={passwordDialogExam != null}
-                    onOpenChange={(open) => !open && setPasswordDialogExam(null)}
-                    examId={passwordDialogExam?.id ?? null}
-                    examTitle={passwordDialogExam?.title ?? ''}
-                    onSuccess={handlePasswordSuccess}
-                />
             </div>
         </MainLayout>
     );
