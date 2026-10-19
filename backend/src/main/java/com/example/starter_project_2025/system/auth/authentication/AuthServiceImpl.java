@@ -334,21 +334,7 @@ public class AuthServiceImpl implements AuthService {
             }
         }
 
-        if (sortedRoles.contains("ADMIN")) {
-            includePreviewRolePermissions(rolePermissions, "STUDENT");
-            includePreviewRolePermissions(rolePermissions, "TEACHER");
-        }
-
         return rolePermissions;
-    }
-
-    private void includePreviewRolePermissions(Map<String, Set<String>> rolePermissions, String roleName) {
-        if (rolePermissions.containsKey(roleName)) {
-            return;
-        }
-
-        roleRepository.findByName(roleName)
-                .ifPresent(role -> rolePermissions.put(roleName, mapRolePermissions(role)));
     }
 
     private Set<String> mapRolePermissions(Role role) {

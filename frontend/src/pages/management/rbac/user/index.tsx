@@ -5,6 +5,8 @@ import { UserCreatePage } from "./pages/UserCreatePage";
 import { UserDetailPage } from "./pages/UserDetailPage";
 import { UserEditPage } from "./pages/UserEditPage";
 import {
+  USER_STATUS_BADGE_CLASS,
+  USER_STATUS_OPTIONS,
   auditableFieldsSchema,
   type EntityConfig,
   type EntitySchema,
@@ -79,7 +81,23 @@ const userSchema: EntitySchema = {
       filterable: true,
       filterType: "select",
     },
-    ...(auditableFieldsSchema as FieldSchema[]),
+    {
+      name: "status",
+      label: "Trạng thái",
+      type: "select",
+      options: USER_STATUS_OPTIONS.map((o) => ({ label: o.label, value: o.value })),
+      optionColors: USER_STATUS_BADGE_CLASS,
+      // Công tắc: bật = Hoạt động, tắt = Bị khóa (gửi status lên BE).
+      toggleValues: { on: "ACTIVE", off: "LOCKED" },
+      // Bấm công tắc → PATCH /users/{id}/unlock (bật) hoặc /lock (tắt).
+      toggleRequest: (row, value) =>
+        value === "ACTIVE" ? userApi.unlock(row.id) : userApi.lock(row.id),
+      sortable: false,
+      filterable: false,
+      editable: false,
+    },
+    // Bỏ cột Switch isActive: trạng thái do cột "Trạng thái" (ACTIVE/LOCKED/INACTIVE) thể hiện.
+    ...(auditableFieldsSchema as FieldSchema[]).filter((f) => f.name !== "isActive"),
   ],
 };
 

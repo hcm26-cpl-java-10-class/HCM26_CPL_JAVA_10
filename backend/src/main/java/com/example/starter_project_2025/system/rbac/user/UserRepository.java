@@ -19,5 +19,10 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
 
     Optional<User> findByEmployeeCodeIgnoreCase(String employeeCode);
 
+    boolean existsByDepartmentsId(Long departmentId);
+
     Long countByIsActive(Boolean isActive);
+
+    /** Số tài khoản ACTIVE: đang hoạt động và không bị khóa. */
+    Long countByIsActiveAndLocked(Boolean isActive, Boolean locked);
 }

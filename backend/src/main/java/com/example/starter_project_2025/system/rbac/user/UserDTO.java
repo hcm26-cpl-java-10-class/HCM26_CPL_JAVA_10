@@ -11,7 +11,6 @@ import lombok.experimental.FieldDefaults;
 import java.util.Set;
 import java.util.UUID;
 
-import static com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY;
 import static com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY;
 
 @Getter
@@ -57,7 +56,9 @@ public class UserDTO extends BaseDTO {
     /** N-N user_departments; không bắt buộc. Gửi [] khi sửa = bỏ hết phòng ban, không gửi = giữ nguyên. */
     Set<Long> departmentIds;
 
-    /** Chỉ đọc: ACTIVE / LOCKED / INACTIVE, suy ra từ isActive + locked. */
-    @JsonProperty(access = READ_ONLY)
+    /**
+     * ACTIVE / LOCKED / INACTIVE. Khi gửi lên sẽ quyết định isActive + locked
+     * (LOCKED = isActive true + locked true); khi trả về được suy ra từ isActive + locked.
+     */
     String status;
 }

@@ -50,9 +50,9 @@ public class UserDataInitializer implements CommandLineRunner {
       Role teacherRole = roleRepository.findByName("TEACHER")
         .orElseThrow(() -> new IllegalStateException("Role TEACHER not found. Ensure role seed runs first."));
 
-      ensureUserWithRole(adminEmail, adminPassword, adminFirstName, adminLastName, adminRole, false);
-      ensureUserWithRole(STUDENT_EMAIL, DEFAULT_PASSWORD, "John", "Doe", studentRole, true);
-      ensureUserWithRole(TEACHER_EMAIL, DEFAULT_PASSWORD, "Teacher", "User", teacherRole, true);
+      ensureUserWithRole(adminEmail, adminPassword, adminFirstName, adminLastName, adminRole, false, "admin", "NV0001");
+      ensureUserWithRole(STUDENT_EMAIL, DEFAULT_PASSWORD, "John", "Doe", studentRole, true, "student", "NV0002");
+      ensureUserWithRole(TEACHER_EMAIL, DEFAULT_PASSWORD, "Teacher", "User", teacherRole, true, "teacher", "NV0003");
       deactivateLegacyJaneAccount();
 
     log.info("Ensured seed users and role assignments.");
@@ -64,7 +64,9 @@ public class UserDataInitializer implements CommandLineRunner {
           String firstName,
           String lastName,
           Role role,
-          boolean replaceExistingRoles
+          boolean replaceExistingRoles,
+          String username,
+          String employeeCode
   ) {
     User user = userRepository.findByEmail(email).orElseGet(User::new);
 
@@ -85,6 +87,15 @@ public class UserDataInitializer implements CommandLineRunner {
       if (user.getLastName() == null || user.getLastName().isBlank()) {
         user.setLastName(lastName);
       }
+    }
+
+    // Form quản lý user yêu cầu username + mã NV; chỉ gán khi còn trống và chưa bị ai dùng.
+    if (user.getUsername() == null && userRepository.findByUsernameIgnoreCase(username).isEmpty()) {
+      user.setUsername(username);
+    }
+
+    if (user.getEmployeeCode() == null && userRepository.findByEmployeeCodeIgnoreCase(employeeCode).isEmpty()) {
+      user.setEmployeeCode(employeeCode);
     }
 
     user.setIsActive(true);

@@ -67,6 +67,15 @@ export interface FieldSchema {
 
   options?: { label: string; value: any }[];
 
+  /** Màu badge theo giá trị (key = value của option). Có thì ô bảng hiển thị dạng badge có màu. */
+  optionColors?: Record<string, string>;
+
+  /** Hiện công tắc bật/tắt ở ô bảng: bật = giá trị `on`, tắt = giá trị `off` (vd ACTIVE / LOCKED). */
+  toggleValues?: { on: any; off: any };
+
+  /** Nếu có, bấm công tắc sẽ gọi hàm này (thay vì PUT cả dòng). Trả về Promise; xong bảng tự tải lại. */
+  toggleRequest?: (row: any, value: any) => Promise<unknown>;
+
   booleanLabels?: {
     true: string;
     false: string;
