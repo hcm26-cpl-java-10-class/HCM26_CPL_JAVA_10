@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý Role và Ma trận quyền - SCR-30</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome cho icon -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { background-color: #f8f9fa; }
+        .sidebar { min-height: 100vh; background-color: #343a40; color: #fff; }
+        .sidebar a { color: #adb5bd; text-decoration: none; padding: 10px 15px; display: block; }
+        .sidebar a:hover, .sidebar a.active { color: #fff; background-color: #495057; border-radius: 4px; }
+        .card { border: none; box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075); }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid">
+    <div class="row">
+        <!-- Sidebar Động theo Role -->
+        <nav id="sidebar" class="col-md-3 col-lg-2 d-md-block sidebar collapse p-3">
+            <h4 class="text-center py-3 text-white border-bottom">Admin Portal</h4>
+            <ul class="nav flex-column mt-3" id="sidebar-menu">
+                <!-- Nội dung menu động -->
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 py-4">
+            
+            <!-- Thanh chọn Role để giả lập -->
+            <div class="alert alert-info d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="fa-solid fa-user-shield me-2"></i><strong>Giả lập đăng nhập với vai trò:</strong>
+                </div>
+                <div>
+                    <select id="roleSelector" class="form-select form-select-sm d-inline-block w-auto" onchange="changeRole(this.value)">
+                        <option value="ADMIN">Administrator</option>
+                        <option value="MANAGER">Manager</option>
+                        <option value="STAFF">Staff</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Header tiêu đề -->
+            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                <h1 class="h2">Phân quyền & Quản lý Vai trò (SCR-30)</h1>
+            </div>
+
+            <!-- Tabs chuyển đổi -->
+            <ul class="nav nav-tabs mb-4" id="myTab" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="roles-tab" data-bs-toggle="tab" data-bs-target="#roles-pane" type="button" role="tab">Danh sách Role</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="matrix-tab" data-bs-toggle="tab" data-bs-target="#matrix-pane" type="button" role="tab">Ma trận quyền (Permission Matrix)</button>
+                </li>
+            </ul>
+
+            <div class="tab-content" id="myTabContent">
+                
+                <!-- TAB 1: DANH SÁCH ROLE -->
+                <div class="tab-pane fade show active" id="roles-pane" role="tabpanel">
+                    <div class="card mb-4">
+                        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Danh sách các Vai trò trong Hệ thống</h5>
+                            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addRoleModal">
+                                <i class="fa-solid fa-plus me-1"></i> Thêm Role mới
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Tên Role</th>
+                                            <th>Mã Code</th>
+                                            <th>Mô tả</th>
+                                            <th>Số lượng User</th>
+                                            <th>Hành động</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="roleTableBody">
+                                        <tr>
+                                            <td>1</td>
+                                            <td>Administrator</td>
+                                            <td><code>ADMIN</code></td>
+                                            <td>Quản trị viên toàn hệ thống</td>
+                                            <td>2</td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-pen"></i></button>
+                                                <button class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td>2</td>
+                                            <td>Manager</td>
+                                            <td><code>MANAGER</code></td>
+                                            <td>Quản lý cửa hàng / nhân sự</td>
+                                            <td>5</td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-pen"></i></button>
+                                                <button class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td>3</td>
+                                            <td>Staff</td>
+                                            <td><code>STAFF</code></td>
+                                            <td>Nhân viên bán hàng / vận hành</td>
+                                            <td>12</td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-pen"></i></button>
+                                                <button class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: MA TRẬN QUYỀN -->
+                <div class="tab-pane fade" id="matrix-pane" role="tabpanel">
+                    <div class="card">
+                        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Ma trận phân quyền chức năng</h5>
+                            <button class="btn btn-success btn-sm" onclick="saveMatrix()">
+                                <i class="fa-solid fa-save me-1"></i> Lưu thay đổi
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-bordered text-center align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="text-start">Chức năng / Quyền (Permissions)</th>
+                                            <th>Administrator</th>
+                                            <th>Manager</th>
+                                            <th>Staff</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td class="text-start">Quản lý người dùng (User Management)</td>
+                                            <td><input class="form-check-input" type="checkbox" checked disabled></td>
+                                            <td><input class="form-check-input" type="checkbox"></td>
+                                            <td><input class="form-check-input" type="checkbox" disabled></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-start">Phân quyền hệ thống (Role Matrix)</td>
+                                            <td><input class="form-check-input" type="checkbox" checked disabled></td>
+                                            <td><input class="form-check-input" type="checkbox"></td>
+                                            <td><input class="form-check-input" type="checkbox" disabled></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-start">Quản lý sản phẩm / Hàng hóa</td>
+                                            <td><input class="form-check-input" type="checkbox" checked></td>
+                                            <td><input class="form-check-input" type="checkbox" checked></td>
+                                            <td><input class="form-check-input" type="checkbox"></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-start">Xem báo cáo doanh thu</td>
+                                            <td><input class="form-check-input" type="checkbox" checked></td>
+                                            <td><input class="form-check-input" type="checkbox" checked></td>
+                                            <td><input class="form-check-input" type="checkbox" disabled></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+</div>
+
+<!-- Modal Thêm Role -->
+<div class="modal fade" id="addRoleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Thêm Vai trò mới</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addRoleForm">
+                    <div class="mb-3">
+                        <label class="form-label">Tên Role</label>
+                        <input type="text" class="form-control" placeholder="Ví dụ: Supervisor" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Mã Code</label>
+                        <input type="text" class="form-control" placeholder="Ví dụ: SUPERVISOR" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Mô tả</label>
+                        <textarea class="form-control" rows="2"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                <button type="button" class="btn btn-primary" onclick="alert('Đã thêm role thành công!')">Lưu</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bootstrap JS Bundle -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // Hàm thay đổi giao diện theo role
+    function changeRole(role) {
+        const menuContainer = document.getElementById('sidebar-menu');
+        let menuHTML = '';
+
+        if (role === 'ADMIN') {
+            menuHTML = `
+                <li class="nav-item mb-1"><a href="#" class="active"><i class="fa-solid fa-gauge me-2"></i> Dashboard</a></li>
+                <li class="nav-item mb-1"><a href="#"><i class="fa-solid fa-users-gear me-2"></i> Quản lý User</a></li>
+                <li class="nav-item mb-1"><a href="#"><i class="fa-solid fa-shield-halved me-2"></i> Phân quyền & Role</a></li>
+                <li class="nav-item mb-1"><a href="#"><i class="fa-solid fa-box me-2"></i> Quản lý Kho</a></li>
+                <li class="nav-item mb-1"><a href="#"><i class="fa-solid fa-chart-line me-2"></i> Báo cáo hệ thống</a></li>
+            `;
+        } else if (role === 'MANAGER') {
+            menuHTML = `
+                <li class="nav-item mb-1"><a href="#" class="active"><i class="fa-solid fa-gauge me-2"></i> Tổng quan</a></li>
+                <li class="nav-item mb-1"><a href="#"><i class="fa-solid fa-box me-2"></i> Quản lý Sản phẩm</a></li>
+                <li class="nav-item mb-1"><a href="#"><i class="fa-solid fa-chart-line me-2"></i> Báo cáo doanh thu</a></li>
+            `;
+        } else { // STAFF
+            menuHTML = `
+                <li class="nav-item mb-1"><a href="#" class="active"><i class="fa-solid fa-cash-register me-2"></i> Bán hàng (POS)</a></li>
+                <li class="nav-item mb-1"><a href="#"><i class="fa-solid fa-list-check me-2"></i> Tra cứu đơn hàng</a></li>
+            `;
+        }
+        menuContainer.innerHTML = menuHTML;
+    }
+
+    function saveMatrix() {
+        alert("Đã lưu cấu hình Ma trận quyền thành công!");
+    }
+
+    // Khởi chạy mặc định
+    changeRole('ADMIN');
+</script>
+</body>
+</html>

@@ -10,6 +10,13 @@ export interface SubjectDTO extends BaseDTO {
   technicalGroup?: string;
   durationHours: number;
   status: SubjectStatus;
+export interface SubjectDTO extends BaseDTO {
+  code: string;
+  name: string;
+  version: string;
+  description?: string;
+  technicalGroup?: string;
+  durationHours: number;
 }
 
 export interface SubjectFilter extends BaseFilter {
@@ -18,4 +25,6 @@ export interface SubjectFilter extends BaseFilter {
   version?: string;
   technicalGroup?: string;
   status?: SubjectStatus;
+  technicalGroup?: string;
+  version?: string;
 }
