@@ -2,6 +2,7 @@ package com.example.starter_project_2025.service;
 
 import com.example.starter_project_2025.system.schedule.Session;
 import com.example.starter_project_2025.system.schedule.SessionRepository;
+import com.example.starter_project_2025.system.schedule.calendar.repository.CalendarVersionRepository;
 import com.example.starter_project_2025.system.schedule.exception.ConflictException;
 import com.example.starter_project_2025.system.schedule.generation.BulkSessionGenerationServiceImpl;
 import com.example.starter_project_2025.system.schedule.generation.dto.BulkSaveSessionsRequestDTO;
@@ -29,13 +30,16 @@ public class BulkSessionGenerationServiceTest {
     @Mock
     private SessionRepository sessionRepository;
 
+    @Mock
+    private CalendarVersionRepository calendarVersionRepository;
+
     private ScheduleGeneratorEngine scheduleGeneratorEngine = new ScheduleGeneratorEngine();
 
     private BulkSessionGenerationServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new BulkSessionGenerationServiceImpl(sessionRepository, scheduleGeneratorEngine);
+        service = new BulkSessionGenerationServiceImpl(sessionRepository, scheduleGeneratorEngine, calendarVersionRepository);
     }
 
     @Test

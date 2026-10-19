@@ -3,6 +3,8 @@ package com.example.starter_project_2025.system.schedule.generation;
 import com.example.starter_project_2025.system.schedule.Session;
 import com.example.starter_project_2025.system.schedule.SessionRepository;
 import com.example.starter_project_2025.system.schedule.SessionStatus;
+import com.example.starter_project_2025.system.schedule.calendar.CalendarVersion;
+import com.example.starter_project_2025.system.schedule.calendar.repository.CalendarVersionRepository;
 import com.example.starter_project_2025.system.schedule.generation.dto.*;
 import com.example.starter_project_2025.system.schedule.generation.engine.ScheduleGeneratorEngine;
 import lombok.AccessLevel;
@@ -25,6 +27,7 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
 
     SessionRepository sessionRepository;
     ScheduleGeneratorEngine scheduleGeneratorEngine;
+    CalendarVersionRepository calendarVersionRepository;
 
     // Bộ nhớ đệm Idempotency in-memory (chống click đúp theo BR-UNI-20 & US-F16-05)
     Map<String, BulkSaveSessionsResponseDTO> idempotencyStore = new ConcurrentHashMap<>();
@@ -175,7 +178,7 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
             }
 
             Session session = Session.builder()
-                    .calendarVersionId(versionId)
+                    .calendarVersion(calendarVersionRepository.findById(versionId).orElseThrow(() -> new IllegalArgumentException("Calendar version not found")))
                     .topicId(item.getTopicId())
                     .topicName(item.getTopicName())
                     .classCode("HCM26-FSJ-01") // Lớp tương ứng
