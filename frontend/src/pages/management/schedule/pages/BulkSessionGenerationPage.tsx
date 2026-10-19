@@ -1,4 +1,4 @@
-import { bulkSessionGenerationApi, calendarVersionApi } from "@/api";
+import { bulkSessionGenerationApi, calendarVersionApi, courseApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -119,7 +119,35 @@ export function BulkSessionGenerationPage() {
   const [previewData, setPreviewData] = useState<BulkPreviewResponseDTO | null>(null);
   const [editableSessions, setEditableSessions] = useState<PreviewSessionItemDTO[]>([]);
 
-  // 1. Fetch Real Calendars
+  // 1. Fetch Real Courses from Database
+  const { data: coursesPage } = useQuery({
+    queryKey: ["realCoursesList"],
+    queryFn: () => courseApi.getPage({ page: 0, size: 50 }),
+  });
+
+  const realCourses = coursesPage?.content || [];
+
+  const availableClasses = useMemo(() => {
+    if (realCourses.length > 0) {
+      return realCourses.map((c) => ({
+        id: Number(c.id),
+        code: `CRS-${c.id}`,
+        name: c.name || `Course #${c.id}`,
+      }));
+    }
+    return DEMO_CLASSES;
+  }, [realCourses]);
+
+  // Sync selectedClassId to first available class if not in list
+  useEffect(() => {
+    if (availableClasses.length > 0 && !paramClassId) {
+      if (!availableClasses.some((c) => c.id === selectedClassId)) {
+        setSelectedClassId(availableClasses[0].id);
+      }
+    }
+  }, [availableClasses, paramClassId, selectedClassId]);
+
+  // 2. Fetch Real Calendars
   const { data: calendars = [], isLoading: isCalendarsLoading } = useQuery<CalendarSummary[]>({
     queryKey: ["calendarsList"],
     queryFn: () => calendarVersionApi.list(),
@@ -136,7 +164,17 @@ export function BulkSessionGenerationPage() {
     }
   }, [calendars, paramCalendarId, selectedCalendarId]);
 
-  // 2. Fetch Real Versions for Selected Calendar
+  // Sync class when calendar is selected
+  useEffect(() => {
+    if (selectedCalendarId && calendars.length > 0) {
+      const currentCal = calendars.find((c) => c.id === selectedCalendarId);
+      if (currentCal?.classId && availableClasses.some((ac) => ac.id === currentCal.classId)) {
+        setSelectedClassId(currentCal.classId);
+      }
+    }
+  }, [selectedCalendarId, calendars, availableClasses]);
+
+  // 3. Fetch Real Versions for Selected Calendar
   const { data: versionsPage, isLoading: isVersionsLoading } = useQuery({
     queryKey: ["calendarVersions", selectedCalendarId],
     enabled: selectedCalendarId !== null,
@@ -438,7 +476,7 @@ export function BulkSessionGenerationPage() {
               {/* Target Class, Academic Calendar & Target Version */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1.5 min-w-0">
-                  <Label htmlFor="select-class">Target Class <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="select-class">Target Class / Course <span className="text-red-500">*</span></Label>
                   <Select
                     value={selectedClassId.toString()}
                     onValueChange={(val) => setSelectedClassId(Number(val))}
@@ -447,7 +485,7 @@ export function BulkSessionGenerationPage() {
                       <SelectValue placeholder="Select class" />
                     </SelectTrigger>
                     <SelectContent>
-                      {DEMO_CLASSES.map((cls) => (
+                      {availableClasses.map((cls) => (
                         <SelectItem key={cls.id} value={cls.id.toString()}>
                           {cls.code} - {cls.name}
                         </SelectItem>

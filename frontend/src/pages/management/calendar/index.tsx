@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { calendarVersionApi } from "@/api";
@@ -106,9 +106,10 @@ const getRequestErrorMessage = (
 
 export default function CalendarManagementPage() {
     const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const urlCalendarId = searchParams.get("calendarId");
     const urlVersionId = searchParams.get("versionId");
+    const autoOpenedVersionIdRef = useRef<string | null>(null);
 
     const [calendars, setCalendars] = useState<CalendarSummary[]>([]);
     const [selectedCalendarId, setSelectedCalendarId] = useState<number | null>(
@@ -120,6 +121,15 @@ export default function CalendarManagementPage() {
 
     const [viewingSessionsVersion, setViewingSessionsVersion] =
         useState<CalendarVersionResponse | null>(null);
+
+    const handleCloseSessionsDialog = useCallback(() => {
+        setViewingSessionsVersion(null);
+        if (searchParams.has("versionId")) {
+            const nextParams = new URLSearchParams(searchParams);
+            nextParams.delete("versionId");
+            setSearchParams(nextParams, { replace: true });
+        }
+    }, [searchParams, setSearchParams]);
     const [editingVersion, setEditingVersion] =
         useState<CalendarVersionResponse | null>(null);
     const [deletingVersion, setDeletingVersion] =
@@ -225,15 +235,20 @@ export default function CalendarManagementPage() {
     };
 
     useEffect(() => {
-        if (urlVersionId && versionsQuery.data?.content) {
+        if (
+            urlVersionId &&
+            versionsQuery.data?.content &&
+            autoOpenedVersionIdRef.current !== urlVersionId
+        ) {
             const found = versionsQuery.data.content.find(
                 (v) => v.id === Number(urlVersionId)
             );
-            if (found && !viewingSessionsVersion) {
+            if (found) {
+                autoOpenedVersionIdRef.current = urlVersionId;
                 setViewingSessionsVersion(found);
             }
         }
-    }, [urlVersionId, versionsQuery.data?.content, viewingSessionsVersion]);
+    }, [urlVersionId, versionsQuery.data?.content]);
 
     const handleCreateVersion = async (
         request: CreateCalendarVersionRequest,
@@ -808,7 +823,7 @@ export default function CalendarManagementPage() {
                 <VersionSessionsDialog
                     open={viewingSessionsVersion !== null}
                     onOpenChange={(open) => {
-                        if (!open) setViewingSessionsVersion(null);
+                        if (!open) handleCloseSessionsDialog();
                     }}
                     calendarName={selectedCalendar?.name}
                     version={viewingSessionsVersion}
