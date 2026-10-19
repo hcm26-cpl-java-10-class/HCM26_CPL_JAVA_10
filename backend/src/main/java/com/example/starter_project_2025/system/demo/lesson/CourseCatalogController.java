@@ -29,7 +29,7 @@ import java.util.List;
 @Tag(name = "Course Catalog", description = "Published course catalog and course detail")
 public class CourseCatalogController {
 
-    private static final String MANAGE_COURSE_AUTHORITY = "COURSE_UPDATE";
+    private static final String ADMIN_ROLE = "ROLE_ADMIN";
 
     private final CourseCatalogService catalogService;
     private final CategoryService categoryService;
@@ -61,10 +61,10 @@ public class CourseCatalogController {
             @PathVariable Long id
     ) {
         Long userId = getUserId(principal);
-        boolean staff = principal.getAuthorities().stream()
+        boolean administrator = principal.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
-                .anyMatch(MANAGE_COURSE_AUTHORITY::equals);
-        return ResponseEntity.ok(catalogService.getDetail(id, userId, staff));
+                .anyMatch(ADMIN_ROLE::equals);
+        return ResponseEntity.ok(catalogService.getDetail(id, userId, administrator));
     }
 
     private Long getUserId(UserPrincipal principal) {

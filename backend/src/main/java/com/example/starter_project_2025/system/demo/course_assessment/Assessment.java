@@ -38,7 +38,7 @@ public class Assessment extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "course_id", nullable = false)
-    @ImportField(name = "Course", required = true, lookupEntity = Course.class, lookupField = "name")
+    @ImportField(name = "Course", required = true)
     @ExportField(name = "Course")
     Course course;
 

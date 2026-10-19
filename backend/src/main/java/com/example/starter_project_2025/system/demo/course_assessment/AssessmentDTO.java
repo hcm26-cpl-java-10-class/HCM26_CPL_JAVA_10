@@ -21,8 +21,6 @@ public class AssessmentDTO extends BaseDTO {
     @NotNull(groups = OnCreate.class, message = "Course is required")
     Long courseId;
 
-    String courseName;
-
     @NotBlank(groups = OnCreate.class, message = "Assessment name is required")
     @Size(max = 255, message = "Name must not exceed 255 characters")
     String name;

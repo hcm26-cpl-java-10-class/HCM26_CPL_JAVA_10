@@ -4,7 +4,6 @@ export type FieldType =
   | "password"
   | "number"
   | "date"
-  | "datetime-local"
   | "icon"
   | "select"
   | "boolean"
@@ -66,7 +65,7 @@ export interface FieldSchema {
   minWidth?: number;
 
   options?: { label: string; value: any }[];
-
+  defaultValue?: string | number | boolean;
   booleanLabels?: {
     true: string;
     false: string;

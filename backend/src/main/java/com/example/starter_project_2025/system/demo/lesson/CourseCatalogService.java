@@ -48,6 +48,7 @@ public class CourseCatalogService {
     private final SectionRepository sectionRepository;
     private final LessonRepository lessonRepository;
     private final CourseEnrollmentRepository enrollmentRepository;
+    private final CourseContentAccessGuard contentAccessGuard;
 
     // ------------------------------------------------------------------ catalog list
 
@@ -96,6 +97,7 @@ public class CourseCatalogService {
                     course.getLevel(),
                     courseStats == null ? 0 : courseStats.lessonCount(),
                     courseStats == null ? 0 : courseStats.totalDuration(),
+                    Boolean.TRUE.equals(course.getIsFree()),
                     enrolledIds.contains(course.getId())
             );
         });
@@ -186,18 +188,18 @@ public class CourseCatalogService {
     // ------------------------------------------------------------------ course detail
 
     /**
-     * @param staff người dùng quản lý khóa học (COURSE_UPDATE): xem được cả khóa chưa PUBLISHED
-     *              và luôn xem được nội dung bài học.
+     * @param administrator người dùng có role ADMIN: xem được cả khóa chưa PUBLISHED.
      */
-    public CourseDetailDTO getDetail(Long courseId, Long userId, boolean staff) {
+    public CourseDetailDTO getDetail(Long courseId, Long userId, boolean administrator) {
         Course course = courseRepository.findById(courseId)
-                .filter(c -> staff || (c.getStatus() == CourseStatus.PUBLISHED
+                .filter(c -> administrator || contentAccessGuard.isOwner(c, userId)
+                        || (c.getStatus() == CourseStatus.PUBLISHED
                         && Boolean.TRUE.equals(c.getIsActive())))
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
 
         boolean enrolled = userId != null
                 && enrollmentRepository.existsByUser_IdAndCourse_Id(userId, courseId);
-        boolean unlocked = enrolled || staff;
+        boolean unlocked = contentAccessGuard.canAccess(course, userId, administrator, enrolled);
 
         List<Section> sections = sectionRepository.findByCourse_IdOrderByOrderIndexAsc(courseId).stream()
                 .filter(section -> Boolean.TRUE.equals(section.getIsActive()))
@@ -232,6 +234,7 @@ public class CourseCatalogService {
                 category == null ? null : category.getId(),
                 category == null ? null : category.getName(),
                 course.getLevel(),
+                Boolean.TRUE.equals(course.getIsFree()),
                 enrolled,
                 unlocked,
                 lessonCount,
