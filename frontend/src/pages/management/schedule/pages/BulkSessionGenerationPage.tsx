@@ -63,23 +63,23 @@ const DEMO_CLASSES = [
 ];
 
 const WEEK_DAYS = [
-  { key: "MONDAY", label: "T2", fullName: "Thứ Hai" },
-  { key: "TUESDAY", label: "T3", fullName: "Thứ Ba" },
-  { key: "WEDNESDAY", label: "T4", fullName: "Thứ Tư" },
-  { key: "THURSDAY", label: "T5", fullName: "Thứ Năm" },
-  { key: "FRIDAY", label: "T6", fullName: "Thứ Sáu" },
-  { key: "SATURDAY", label: "T7", fullName: "Thứ Bảy" },
-  { key: "SUNDAY", label: "CN", fullName: "Chủ Nhật" },
+  { key: "MONDAY", label: "Mon", fullName: "Monday" },
+  { key: "TUESDAY", label: "Tue", fullName: "Tuesday" },
+  { key: "WEDNESDAY", label: "Wed", fullName: "Wednesday" },
+  { key: "THURSDAY", label: "Thu", fullName: "Thursday" },
+  { key: "FRIDAY", label: "Fri", fullName: "Friday" },
+  { key: "SATURDAY", label: "Sat", fullName: "Saturday" },
+  { key: "SUNDAY", label: "Sun", fullName: "Sunday" },
 ];
 
 const SLOT_CONFIGS = {
-  MORNING: { label: "Sáng (08:00 - 12:00)", start: "08:00:00", end: "12:00:00", hours: 4 },
-  AFTERNOON: { label: "Chiều (13:30 - 17:30)", start: "13:30:00", end: "17:30:00", hours: 4 },
-  EVENING: { label: "Tối (18:00 - 21:00)", start: "18:00:00", end: "21:00:00", hours: 3 },
-  CUSTOM: { label: "Tùy chỉnh giờ", start: "08:30:00", end: "11:30:00", hours: 3 },
+  MORNING: { label: "Morning (08:00 - 12:00)", start: "08:00:00", end: "12:00:00", hours: 4 },
+  AFTERNOON: { label: "Afternoon (13:30 - 17:30)", start: "13:30:00", end: "17:30:00", hours: 4 },
+  EVENING: { label: "Evening (18:00 - 21:00)", start: "18:00:00", end: "21:00:00", hours: 3 },
+  CUSTOM: { label: "Custom Slot Time", start: "08:30:00", end: "11:30:00", hours: 3 },
 };
 
-// Khởi tạo ngày bắt đầu là thứ 2 tuần kế tiếp
+// Calculate next Monday as default start date
 const getNextMonday = (): string => {
   const d = new Date();
   const day = d.getDay();
@@ -91,7 +91,7 @@ const getNextMonday = (): string => {
 export function BulkSessionGenerationPage() {
   const navigate = useNavigate();
 
-  // State cấu hình
+  // Configuration state
   const [selectedClassId, setSelectedClassId] = useState<number>(101);
   const [calendarVersionId, setCalendarVersionId] = useState<number>(1);
   const [startDate, setStartDate] = useState<string>(getNextMonday());
@@ -103,17 +103,17 @@ export function BulkSessionGenerationPage() {
   const [defaultRoomId, setDefaultRoomId] = useState<string>("Phòng A-301");
   const [skipHolidays, setSkipHolidays] = useState<boolean>(true);
 
-  // State kết quả preview & danh sách có thể chỉnh sửa
+  // Preview data state
   const [previewData, setPreviewData] = useState<BulkPreviewResponseDTO | null>(null);
   const [editableSessions, setEditableSessions] = useState<PreviewSessionItemDTO[]>([]);
 
-  // 1. Tải Context (Chương trình đào tạo, Topic, Giảng viên, Phòng, Lễ tết)
+  // 1. Fetch Curriculum & Scheduling Context
   const { data: context, isLoading: isContextLoading } = useQuery<ScheduleGenerationContextResponse>({
     queryKey: ["scheduleGenerationContext", selectedClassId],
     queryFn: () => bulkSessionGenerationApi.getContext(selectedClassId),
   });
 
-  // Áp dụng Trainer/Room mặc định khi context tải xong
+  // Apply default trainer & room once context loads
   useMemo(() => {
     if (context) {
       if (context.availableTrainers?.length > 0 && !defaultTrainerId) {
@@ -125,7 +125,7 @@ export function BulkSessionGenerationPage() {
     }
   }, [context, defaultTrainerId, defaultRoomId]);
 
-  // 2. Mutation tạo bản xem trước (Preview in RAM)
+  // 2. Generate Preview Mutation (In-Memory Engine)
   const previewMutation = useMutation({
     mutationFn: (req: BulkPreviewRequestDTO) =>
       bulkSessionGenerationApi.generatePreview(selectedClassId, req),
@@ -133,16 +133,16 @@ export function BulkSessionGenerationPage() {
       setPreviewData(data);
       setEditableSessions(data.sessions || []);
       toast.success(
-        `Đã tạo xem trước ${data.totalSessions} buổi học. Đã bỏ qua ${data.skippedHolidaysCount} ngày nghỉ lễ.`
+        `Generated preview for ${data.totalSessions} session(s). Skipped ${data.skippedHolidaysCount ?? 0} holiday(s).`
       );
     },
     onError: (err: any) => {
-      const msg = err?.response?.data?.message || "Không thể tạo bản xem trước.";
+      const msg = err?.response?.data?.message || "Failed to generate schedule preview.";
       toast.error(msg);
     },
   });
 
-  // 3. Mutation lưu hàng loạt vào DRAFT CalendarVersion (All-or-Nothing + Idempotency)
+  // 3. Atomic Bulk Save to DRAFT Mutation (All-or-Nothing + Idempotency)
   const saveMutation = useMutation({
     mutationFn: async ({
       versionId,
@@ -151,7 +151,6 @@ export function BulkSessionGenerationPage() {
       versionId: number;
       sessions: PreviewSessionItemDTO[];
     }) => {
-      // Tạo Idempotency-Key UUID ngẫu nhiên để chống submit trùng lặp
       const idempotencyKey = crypto.randomUUID();
       return bulkSessionGenerationApi.saveBulkSessions(
         versionId,
@@ -161,7 +160,7 @@ export function BulkSessionGenerationPage() {
     },
     onSuccess: (res) => {
       toast.success(
-        `Lưu thành công ${res.createdCount} buổi học vào Bản nháp lịch học (DRAFT).`
+        `Successfully saved ${res.createdCount} session(s) to DRAFT Calendar Version.`
       );
       navigate("/sessions");
     },
@@ -169,15 +168,15 @@ export function BulkSessionGenerationPage() {
       const res = err?.response?.data;
       if (err?.response?.status === 409) {
         toast.error(
-          res?.message || "Xung đột: Không được phép lưu vào phiên bản lịch đã ACTIVE."
+          res?.message || "Conflict: Cannot save sessions to an ACTIVE calendar version."
         );
       } else {
-        toast.error(res?.message || "Lưu hàng loạt thất bại.");
+        toast.error(res?.message || "Bulk save operation failed.");
       }
     },
   });
 
-  // Handler xử lý Preset thứ trong tuần
+  // Preset handlers
   const applyDaysPreset = (preset: "246" | "357" | "allweek") => {
     if (preset === "246") {
       setSelectedDays(["MONDAY", "WEDNESDAY", "FRIDAY"]);
@@ -194,14 +193,14 @@ export function BulkSessionGenerationPage() {
     );
   };
 
-  // Handler kích hoạt tạo Preview
+  // Trigger preview generation
   const handleGeneratePreview = () => {
     if (selectedDays.length === 0) {
-      toast.error("Vui lòng chọn ít nhất một thứ trong tuần để xếp lịch.");
+      toast.error("Please select at least one day of the week.");
       return;
     }
     if (!startDate) {
-      toast.error("Vui lòng chọn ngày bắt đầu khóa học.");
+      toast.error("Please select a course start date.");
       return;
     }
 
@@ -229,7 +228,7 @@ export function BulkSessionGenerationPage() {
     previewMutation.mutate(payload);
   };
 
-  // Handlers chỉnh sửa trên bảng Preview (Interactive Preview)
+  // Interactive table row adjustments
   const handleUpdateSessionTrainer = (tempId: string, trainerId: number) => {
     const trainer = context?.availableTrainers?.find((t) => t.id === trainerId);
     setEditableSessions((prev) =>
@@ -253,7 +252,7 @@ export function BulkSessionGenerationPage() {
 
   const handleDeleteSession = (tempId: string) => {
     setEditableSessions((prev) => prev.filter((s) => s.tempId !== tempId));
-    toast.info("Đã xóa buổi học khỏi danh sách xem trước.");
+    toast.info("Session removed from preview.");
   };
 
   const handleApplyTrainerToAll = (trainerId: number) => {
@@ -266,7 +265,7 @@ export function BulkSessionGenerationPage() {
         trainerName: trainer.name,
       }))
     );
-    toast.success(`Đã cập nhật Giảng viên ${trainer.name} cho tất cả các buổi.`);
+    toast.success(`Assigned Trainer ${trainer.name} to all sessions.`);
   };
 
   const handleApplyRoomToAll = (roomId: string) => {
@@ -276,13 +275,13 @@ export function BulkSessionGenerationPage() {
         roomId,
       }))
     );
-    toast.success(`Đã cập nhật Phòng học ${roomId} cho tất cả các buổi.`);
+    toast.success(`Assigned Classroom ${roomId} to all sessions.`);
   };
 
-  // Handler Xác nhận lưu vào DRAFT
+  // Confirm save
   const handleSaveToDraft = () => {
     if (editableSessions.length === 0) {
-      toast.error("Không có buổi học nào để lưu.");
+      toast.error("No sessions available to save.");
       return;
     }
     saveMutation.mutate({
@@ -295,7 +294,7 @@ export function BulkSessionGenerationPage() {
     <MainLayout
       pathName={{
         sessions: "Schedules",
-        "bulk-generate": "Sinh lịch học hàng loạt (F16)",
+        "bulk-generate": "Bulk Session Generator",
       }}
     >
       <div className="max-w-6xl mx-auto space-y-6 pb-12">
@@ -310,7 +309,7 @@ export function BulkSessionGenerationPage() {
                 className="gap-1.5 text-muted-foreground hover:text-foreground"
               >
                 <ArrowLeft className="h-4 w-4" />
-                Quay lại
+                Back
               </Button>
               <Badge variant="outline" className="text-primary border-primary/30">
                 F16 - Bulk Generation
@@ -318,10 +317,10 @@ export function BulkSessionGenerationPage() {
               <Badge variant="secondary">Safety Invariant: DRAFT Only</Badge>
             </div>
             <h1 className="text-2xl font-bold tracking-tight">
-              Sinh Lịch Học Hàng Loạt (Bulk Session Generator)
+              Bulk Session Generator
             </h1>
             <p className="text-sm text-muted-foreground">
-              Phân bổ tự động các Topic theo đúng thứ tự chương trình học, tự động tránh ngày lễ tết và hỗ trợ xem trước điều chỉnh linh hoạt.
+              Automatically distribute curriculum topics into scheduled sessions, skip configured holidays, and support interactive preview adjustments before saving to DRAFT.
             </p>
           </div>
 
@@ -333,49 +332,49 @@ export function BulkSessionGenerationPage() {
               className="gap-2"
             >
               <Calendar className="h-4 w-4" />
-              Tạo buổi học đơn lẻ
+              Create Single Session
             </Button>
           </div>
         </div>
 
-        {/* Thông tin Invariant & Thao tác an toàn */}
+        {/* System Invariant Alert */}
         <Alert className="border-sky-200 bg-sky-50 text-sky-900">
           <Info className="h-4 w-4 text-sky-600" />
-          <AlertTitle className="text-sm font-semibold">Quy tắc an toàn hệ thống (BR-UNI-20 & BR-02):</AlertTitle>
+          <AlertTitle className="text-sm font-semibold">System Safety Rules (BR-UNI-20 & BR-02):</AlertTitle>
           <AlertDescription className="text-xs text-sky-800 space-y-1 mt-1">
             <p>
-              • Toàn bộ các buổi học sinh ra sẽ được lưu vào <strong>Calendar Version DRAFT #{calendarVersionId}</strong> theo cơ chế <strong>All-or-Nothing</strong> nguyên tử.
+              • All generated sessions will be saved atomically to Target Calendar Version (DRAFT #{calendarVersionId}) via an <strong>All-or-Nothing</strong> transaction.
             </p>
             <p>
-              • Tính năng không tự động kích hoạt phiên bản sang ACTIVE (quy trình kích hoạt do thành viên Calendar Lifecycle phụ trách).
+              • This feature does not activate versions to ACTIVE (lifecycle transitions are managed via Calendar Version Lifecycle).
             </p>
           </AlertDescription>
         </Alert>
 
-        {/* Khối Cấu hình Lập lịch */}
+        {/* Configuration Block */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Cột 1 & 2: Form Tham số */}
+          {/* Columns 1 & 2: Form Parameters */}
           <Card className="lg:col-span-2 shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" />
-                Tham Số Sinh Lịch Học
+                Generation Parameters
               </CardTitle>
               <CardDescription>
-                Thiết lập ngày khai giảng, các thứ trong tuần và ca học cho lớp.
+                Configure course start date, weekly schedule pattern, and time slots.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              {/* Chọn Lớp & Version */}
+              {/* Target Class & Target Version */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5 min-w-0">
-                  <Label htmlFor="select-class">Lớp học cần lập lịch <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="select-class">Target Class <span className="text-red-500">*</span></Label>
                   <Select
                     value={selectedClassId.toString()}
                     onValueChange={(val) => setSelectedClassId(Number(val))}
                   >
                     <SelectTrigger id="select-class" className="w-full">
-                      <SelectValue placeholder="Chọn lớp" />
+                      <SelectValue placeholder="Select class" />
                     </SelectTrigger>
                     <SelectContent>
                       {DEMO_CLASSES.map((cls) => (
@@ -388,27 +387,27 @@ export function BulkSessionGenerationPage() {
                 </div>
 
                 <div className="space-y-1.5 min-w-0">
-                  <Label htmlFor="select-version">Calendar Version mục tiêu <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="select-version">Target Calendar Version <span className="text-red-500">*</span></Label>
                   <Select
                     value={calendarVersionId.toString()}
                     onValueChange={(val) => setCalendarVersionId(Number(val))}
                   >
                     <SelectTrigger id="select-version" className="w-full">
-                      <SelectValue placeholder="Chọn version" />
+                      <SelectValue placeholder="Select version" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="1">Version 1.0 (DRAFT - Bản nháp đang sửa)</SelectItem>
-                      <SelectItem value="2">Version 2.0 (DRAFT - Tạo mới)</SelectItem>
-                      <SelectItem value="999">Version 9.9 (ACTIVE - Cấm ghi, Test Invariant)</SelectItem>
+                      <SelectItem value="1">Version 1.0 (DRAFT - In Progress)</SelectItem>
+                      <SelectItem value="2">Version 2.0 (DRAFT - New Draft)</SelectItem>
+                      <SelectItem value="999">Version 9.9 (ACTIVE - Read Only / Test Invariant)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
-              {/* Ngày bắt đầu & Ca học */}
+              {/* Start Date & Slot Time */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5 min-w-0">
-                  <Label htmlFor="start-date">Ngày bắt đầu khóa học <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="start-date">Course Start Date <span className="text-red-500">*</span></Label>
                   <Input
                     id="start-date"
                     type="date"
@@ -420,13 +419,13 @@ export function BulkSessionGenerationPage() {
                 </div>
 
                 <div className="space-y-1.5 min-w-0">
-                  <Label htmlFor="slot-type">Khung giờ ca học (Slot) <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="slot-type">Time Slot <span className="text-red-500">*</span></Label>
                   <Select
                     value={slotType}
                     onValueChange={(v: any) => setSlotType(v)}
                   >
                     <SelectTrigger id="slot-type" className="w-full">
-                      <SelectValue placeholder="Chọn ca học" />
+                      <SelectValue placeholder="Select slot" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="MORNING">{SLOT_CONFIGS.MORNING.label}</SelectItem>
@@ -438,11 +437,11 @@ export function BulkSessionGenerationPage() {
                 </div>
               </div>
 
-              {/* Tùy chỉnh giờ nếu chọn CUSTOM */}
+              {/* Custom Slot Time if CUSTOM selected */}
               {slotType === "CUSTOM" && (
                 <div className="grid grid-cols-2 gap-4 p-3 bg-muted/50 rounded-lg">
                   <div className="space-y-1">
-                    <Label htmlFor="custom-start">Giờ bắt đầu</Label>
+                    <Label htmlFor="custom-start">Start Time</Label>
                     <Input
                       id="custom-start"
                       type="time"
@@ -451,7 +450,7 @@ export function BulkSessionGenerationPage() {
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="custom-end">Giờ kết thúc</Label>
+                    <Label htmlFor="custom-end">End Time</Label>
                     <Input
                       id="custom-end"
                       type="time"
@@ -462,31 +461,31 @@ export function BulkSessionGenerationPage() {
                 </div>
               )}
 
-              {/* Chọn thứ trong tuần */}
+              {/* Weekly Days Selector */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium">Lịch học trong tuần <span className="text-red-500">*</span></Label>
+                  <Label className="text-sm font-medium">Weekly Pattern <span className="text-red-500">*</span></Label>
                   <div className="flex items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => applyDaysPreset("246")}
                       className="text-xs px-2 py-0.5 rounded bg-muted hover:bg-muted/80 text-foreground font-medium transition-colors"
                     >
-                      T2-T4-T6
+                      Mon-Wed-Fri
                     </button>
                     <button
                       type="button"
                       onClick={() => applyDaysPreset("357")}
                       className="text-xs px-2 py-0.5 rounded bg-muted hover:bg-muted/80 text-foreground font-medium transition-colors"
                     >
-                      T3-T5-T7
+                      Tue-Thu-Sat
                     </button>
                     <button
                       type="button"
                       onClick={() => applyDaysPreset("allweek")}
                       className="text-xs px-2 py-0.5 rounded bg-muted hover:bg-muted/80 text-foreground font-medium transition-colors"
                     >
-                      T2 đến T6
+                      Mon to Fri
                     </button>
                   </div>
                 </div>
@@ -506,23 +505,23 @@ export function BulkSessionGenerationPage() {
                         }`}
                       >
                         <span className="font-bold text-sm">{day.label}</span>
-                        <span className="text-[10px] opacity-80">{day.fullName.replace("Thứ ", "T")}</span>
+                        <span className="text-[10px] opacity-80">{day.fullName}</span>
                       </button>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Giảng viên & Phòng mặc định */}
+              {/* Default Trainer & Room */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5 min-w-0">
-                  <Label htmlFor="default-trainer">Giảng viên phân công mặc định</Label>
+                  <Label htmlFor="default-trainer">Default Assigned Trainer</Label>
                   <Select
                     value={defaultTrainerId?.toString()}
                     onValueChange={(val) => setDefaultTrainerId(Number(val))}
                   >
                     <SelectTrigger id="default-trainer" className="w-full">
-                      <SelectValue placeholder="Chọn giảng viên" />
+                      <SelectValue placeholder="Select trainer" />
                     </SelectTrigger>
                     <SelectContent>
                       {context?.availableTrainers?.map((t) => (
@@ -535,18 +534,18 @@ export function BulkSessionGenerationPage() {
                 </div>
 
                 <div className="space-y-1.5 min-w-0">
-                  <Label htmlFor="default-room">Phòng học mặc định</Label>
+                  <Label htmlFor="default-room">Default Classroom</Label>
                   <Select
                     value={defaultRoomId}
                     onValueChange={(val) => setDefaultRoomId(val)}
                   >
                     <SelectTrigger id="default-room" className="w-full">
-                      <SelectValue placeholder="Chọn phòng" />
+                      <SelectValue placeholder="Select classroom" />
                     </SelectTrigger>
                     <SelectContent>
                       {context?.availableRooms?.map((r) => (
                         <SelectItem key={r.roomId} value={r.roomId}>
-                          {r.roomId} - {r.roomName} ({r.capacity} chỗ)
+                          {r.roomId} - {r.roomName} ({r.capacity} seats)
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -554,15 +553,15 @@ export function BulkSessionGenerationPage() {
                 </div>
               </div>
 
-              {/* Tùy chọn Bỏ qua ngày nghỉ lễ */}
+              {/* Skip Holidays Toggle */}
               <div className="flex items-center justify-between p-3 border rounded-lg bg-card">
                 <div className="space-y-0.5">
                   <Label htmlFor="skip-holidays" className="text-sm font-medium flex items-center gap-1.5">
                     <CalendarCheck className="h-4 w-4 text-emerald-600" />
-                    Tự động bỏ qua ngày nghỉ lễ (RTM-BSG-02)
+                    Auto Skip Configured Holidays (RTM-BSG-02)
                   </Label>
                   <p className="text-xs text-muted-foreground">
-                    Hệ thống sẽ tự động dời lịch sang buổi tiếp theo nếu rơi vào danh sách ngày lễ đã cấu hình.
+                    Sessions falling on configured holidays will automatically be shifted to the next scheduled day.
                   </p>
                 </div>
                 <Switch
@@ -583,7 +582,7 @@ export function BulkSessionGenerationPage() {
                 }}
                 disabled={!previewData}
               >
-                Đặt lại
+                Reset
               </Button>
 
               <Button
@@ -597,42 +596,42 @@ export function BulkSessionGenerationPage() {
                 ) : (
                   <Sparkles className="h-4 w-4" />
                 )}
-                Tính Toán & Xem Trước (Generate Preview)
+                Generate Preview
               </Button>
             </CardFooter>
           </Card>
 
-          {/* Cột 3: Tóm tắt Khung Đào Tạo (Curriculum Context) */}
+          {/* Column 3: Curriculum Structure Context */}
           <Card className="shadow-sm">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-primary" />
-                Cấu Trúc Chương Trình Học
+                Curriculum Structure
               </CardTitle>
               <CardDescription className="text-xs">
-                {context?.programName || "Đang tải dữ liệu..."}
+                {context?.programName || "Loading curriculum..."}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div className="p-2.5 bg-muted/50 rounded-lg">
-                  <span className="text-muted-foreground block">Tổng thời lượng</span>
+                  <span className="text-muted-foreground block">Total Duration</span>
                   <span className="text-base font-bold text-foreground">
-                    {context?.totalHours || 0} giờ
+                    {context?.totalHours || 0} hrs
                   </span>
                 </div>
                 <div className="p-2.5 bg-muted/50 rounded-lg">
-                  <span className="text-muted-foreground block">Tổng số Topics</span>
+                  <span className="text-muted-foreground block">Total Topics</span>
                   <span className="text-base font-bold text-foreground">
-                    {context?.topics?.length || 0} bài học
+                    {context?.topics?.length || 0} topics
                   </span>
                 </div>
               </div>
 
-              {/* Danh sách Topic theo thứ tự orderIndex (US-F16-01) */}
+              {/* Topic Sequence (US-F16-01) */}
               <div className="space-y-2">
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
-                  Thứ tự bài học (Topics Sequence):
+                  Topic Sequence:
                 </span>
                 <div className="space-y-2 max-h-56 overflow-y-auto pr-1 text-xs">
                   {context?.topics?.map((topic) => (
@@ -657,10 +656,10 @@ export function BulkSessionGenerationPage() {
                 </div>
               </div>
 
-              {/* Ngày nghỉ lễ cấu hình */}
+              {/* Configured Holidays */}
               <div className="space-y-1.5 pt-2 border-t">
                 <span className="text-xs font-semibold text-muted-foreground block">
-                  Ngày nghỉ đã cấu hình:
+                  Configured Holidays:
                 </span>
                 <div className="flex flex-wrap gap-1.5">
                   {context?.holidays?.map((h) => (
@@ -674,7 +673,7 @@ export function BulkSessionGenerationPage() {
           </Card>
         </div>
 
-        {/* Khối Bảng Xem Trước Lịch Học (Interactive Preview Table) */}
+        {/* Schedule Preview Table */}
         {previewData && (
           <Card className="shadow-sm border-primary/20">
             <CardHeader className="border-b bg-muted/10">
@@ -682,10 +681,10 @@ export function BulkSessionGenerationPage() {
                 <div>
                   <CardTitle className="text-lg flex items-center gap-2">
                     <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                    Bảng Xem Trước Lịch Học (Preview Sessions)
+                    Schedule Preview (Preview Sessions)
                   </CardTitle>
                   <CardDescription>
-                    Xem trước kết quả sinh lịch, bạn có thể chỉnh sửa Giảng viên hoặc Phòng học cho từng buổi trước khi xác nhận lưu.
+                    Review generated schedule. You can adjust the trainer or classroom for individual sessions before confirming.
                   </CardDescription>
                 </div>
 
@@ -701,7 +700,7 @@ export function BulkSessionGenerationPage() {
                     ) : (
                       <Save className="h-4 w-4" />
                     )}
-                    Xác Nhận Lưu Vào DRAFT (All-or-Nothing)
+                    Save to DRAFT (All-or-Nothing)
                   </Button>
                 </div>
               </div>
@@ -709,39 +708,39 @@ export function BulkSessionGenerationPage() {
               {/* Metrics Bar */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 text-xs">
                 <div className="p-3 bg-card border rounded-lg">
-                  <span className="text-muted-foreground block">Tổng số buổi dự kiến</span>
-                  <span className="text-lg font-bold text-foreground">{editableSessions.length} buổi</span>
+                  <span className="text-muted-foreground block">Total Sessions</span>
+                  <span className="text-lg font-bold text-foreground">{editableSessions.length} sessions</span>
                 </div>
                 <div className="p-3 bg-card border rounded-lg">
-                  <span className="text-muted-foreground block">Ngày bắt đầu</span>
+                  <span className="text-muted-foreground block">Start Date</span>
                   <span className="text-lg font-bold text-foreground">{previewData.startDate}</span>
                 </div>
                 <div className="p-3 bg-card border rounded-lg">
-                  <span className="text-muted-foreground block">Dự kiến bế giảng</span>
+                  <span className="text-muted-foreground block">Estimated End Date</span>
                   <span className="text-lg font-bold text-foreground">{previewData.estimatedEndDate}</span>
                 </div>
                 <div className="p-3 bg-card border rounded-lg">
-                  <span className="text-muted-foreground block">Số ngày nghỉ đã tránh</span>
+                  <span className="text-muted-foreground block">Holidays Skipped</span>
                   <span className="text-lg font-bold text-emerald-600">
-                    {previewData.skippedHolidaysCount} ngày
+                    {previewData.skippedHolidaysCount} days
                   </span>
                 </div>
               </div>
 
-              {/* Cảnh báo xung đột nếu có */}
+              {/* Conflict Warnings */}
               {previewData.conflictCount > 0 && (
                 <Alert variant="destructive" className="mt-3">
                   <AlertTriangle className="h-4 w-4" />
-                  <AlertTitle>Phát hiện {previewData.conflictCount} buổi học có nguy cơ xung đột lịch!</AlertTitle>
+                  <AlertTitle>Detected {previewData.conflictCount} potential schedule conflict(s)!</AlertTitle>
                   <AlertDescription className="text-xs">
-                    Vui lòng đổi Giảng viên hoặc Phòng học cho các buổi bị đánh dấu đỏ bên dưới trước khi lưu.
+                    Please reassign the trainer or classroom for flagged sessions below before saving.
                   </AlertDescription>
                 </Alert>
               )}
 
-              {/* Thao tác áp dụng nhanh */}
+              {/* Batch Actions Toolbar */}
               <div className="flex flex-wrap items-center justify-between gap-2 pt-3 text-xs">
-                <span className="font-semibold text-muted-foreground">Thao tác nhanh cho tất cả các buổi:</span>
+                <span className="font-semibold text-muted-foreground">Batch Actions for All Sessions:</span>
                 <div className="flex items-center gap-2">
                   {defaultTrainerId && (
                     <Button
@@ -752,7 +751,7 @@ export function BulkSessionGenerationPage() {
                       onClick={() => handleApplyTrainerToAll(defaultTrainerId)}
                     >
                       <Users className="h-3.5 w-3.5 text-primary" />
-                      Gán lại GV mặc định cho tất cả
+                      Apply Default Trainer to All
                     </Button>
                   )}
                   {defaultRoomId && (
@@ -764,7 +763,7 @@ export function BulkSessionGenerationPage() {
                       onClick={() => handleApplyRoomToAll(defaultRoomId)}
                     >
                       <DoorOpen className="h-3.5 w-3.5 text-primary" />
-                      Gán lại Phòng mặc định cho tất cả
+                      Apply Default Room to All
                     </Button>
                   )}
                 </div>
@@ -776,14 +775,14 @@ export function BulkSessionGenerationPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-14 text-center">Buổi</TableHead>
-                      <TableHead className="w-32">Ngày & Thứ</TableHead>
-                      <TableHead className="w-36">Khung Giờ</TableHead>
-                      <TableHead>Chủ Đề (Topic)</TableHead>
-                      <TableHead className="w-56">Giảng Viên (Điều chỉnh)</TableHead>
-                      <TableHead className="w-44">Phòng Học (Điều chỉnh)</TableHead>
-                      <TableHead className="w-28 text-center">Trạng Thái</TableHead>
-                      <TableHead className="w-14 text-center">Xóa</TableHead>
+                      <TableHead className="w-14 text-center">#</TableHead>
+                      <TableHead className="w-32">Date & Day</TableHead>
+                      <TableHead className="w-36">Time Slot</TableHead>
+                      <TableHead>Topic</TableHead>
+                      <TableHead className="w-56">Trainer (Editable)</TableHead>
+                      <TableHead className="w-44">Classroom (Editable)</TableHead>
+                      <TableHead className="w-28 text-center">Status</TableHead>
+                      <TableHead className="w-14 text-center">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -800,13 +799,13 @@ export function BulkSessionGenerationPage() {
                         item.dayOfWeek ||
                         (item.date
                           ? [
-                              "Chủ Nhật",
-                              "Thứ Hai",
-                              "Thứ Ba",
-                              "Thứ Tư",
-                              "Thứ Năm",
-                              "Thứ Sáu",
-                              "Thứ Bảy",
+                              "Sun",
+                              "Mon",
+                              "Tue",
+                              "Wed",
+                              "Thu",
+                              "Fri",
+                              "Sat",
                             ][new Date(item.date).getDay()]
                           : "");
 
@@ -838,13 +837,13 @@ export function BulkSessionGenerationPage() {
                               <span className="font-medium text-foreground block">{item.topicName}</span>
                               {item.isFractional && (
                                 <span className="text-[10px] text-amber-600 font-medium">
-                                  (Buổi học lẻ thời lượng)
+                                  (Fractional Session)
                                 </span>
                               )}
                             </div>
                           </TableCell>
 
-                          {/* Giảng viên có thể đổi trực tiếp trên hàng */}
+                          {/* Editable Trainer per row */}
                           <TableCell>
                             <Select
                               value={item.trainerId?.toString()}
@@ -852,7 +851,7 @@ export function BulkSessionGenerationPage() {
                                 handleUpdateSessionTrainer(item.tempId, Number(val))
                               }
                             >
-                              <SelectTrigger className="h-8 text-xs">
+                              <SelectTrigger className="h-8 text-xs w-full">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -865,7 +864,7 @@ export function BulkSessionGenerationPage() {
                             </Select>
                           </TableCell>
 
-                          {/* Phòng học có thể đổi trực tiếp trên hàng */}
+                          {/* Editable Room per row */}
                           <TableCell>
                             <Select
                               value={item.roomId}
@@ -873,7 +872,7 @@ export function BulkSessionGenerationPage() {
                                 handleUpdateSessionRoom(item.tempId, val)
                               }
                             >
-                              <SelectTrigger className="h-8 text-xs">
+                              <SelectTrigger className="h-8 text-xs w-full">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -886,28 +885,28 @@ export function BulkSessionGenerationPage() {
                             </Select>
                           </TableCell>
 
-                          {/* Trạng thái xung đột */}
+                          {/* Status */}
                           <TableCell className="text-center">
                             {isConflicted ? (
                               <Badge variant="destructive" className="text-[10px] gap-1">
                                 <AlertCircle className="h-3 w-3" />
-                                Xung đột
+                                Conflict
                               </Badge>
                             ) : (
                               <Badge variant="secondary" className="text-[10px] text-emerald-700 bg-emerald-50 border-emerald-200">
-                                Hợp lệ
+                                Valid
                               </Badge>
                             )}
                           </TableCell>
 
-                          {/* Thao tác xóa */}
+                          {/* Action */}
                           <TableCell className="text-center">
                             <Button
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7 text-muted-foreground hover:text-destructive"
                               onClick={() => handleDeleteSession(item.tempId)}
-                              title="Xóa buổi này"
+                              title="Delete session"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
@@ -923,7 +922,7 @@ export function BulkSessionGenerationPage() {
             <CardFooter className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t p-4 bg-muted/10">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                <span>Hiển thị {editableSessions.length} buổi học đã sẵn sàng để lưu.</span>
+                <span>{editableSessions.length} session(s) ready to persist.</span>
               </div>
 
               <div className="flex items-center gap-2">
@@ -932,7 +931,7 @@ export function BulkSessionGenerationPage() {
                   size="sm"
                   onClick={() => setPreviewData(null)}
                 >
-                  Đóng xem trước
+                  Close Preview
                 </Button>
 
                 <Button
@@ -946,7 +945,7 @@ export function BulkSessionGenerationPage() {
                   ) : (
                     <Save className="h-4 w-4" />
                   )}
-                  Xác Nhận Lưu Vào DRAFT (All-or-Nothing)
+                  Save to DRAFT (All-or-Nothing)
                 </Button>
               </div>
             </CardFooter>
