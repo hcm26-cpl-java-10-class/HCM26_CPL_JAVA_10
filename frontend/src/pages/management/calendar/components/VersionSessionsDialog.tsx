@@ -29,6 +29,9 @@ import {
   ExternalLink,
   Search,
   BookOpen,
+  CalendarCheck,
+  CalendarRange,
+  GraduationCap,
 } from "lucide-react";
 
 interface VersionSessionsDialogProps {
@@ -76,29 +79,36 @@ export function VersionSessionsDialog({
     );
   });
 
-  const startDate = sessions.length > 0 ? sessions[0].startTime?.split("T")[0] : null;
-  const endDate =
-    sessions.length > 0
-      ? sessions[sessions.length - 1].startTime?.split("T")[0]
-      : null;
-
-  const formatDateTime = (dtStr?: string) => {
+  const formatDateDisplay = (dtStr?: string) => {
     if (!dtStr) return "—";
     const d = new Date(dtStr);
     if (Number.isNaN(d.getTime())) return dtStr;
-    const dateFormatted = d.toLocaleDateString("en-US", {
+    return d.toLocaleDateString("en-US", {
       weekday: "short",
       year: "numeric",
       month: "short",
       day: "numeric",
     });
-    const timeFormatted = d.toLocaleTimeString("en-US", {
+  };
+
+  const formatTimeDisplay = (dtStr?: string) => {
+    if (!dtStr) return "—";
+    const d = new Date(dtStr);
+    if (Number.isNaN(d.getTime())) {
+      return dtStr.includes("T") ? dtStr.split("T")[1]?.substring(0, 5) : dtStr;
+    }
+    return d.toLocaleTimeString("en-US", {
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
     });
-    return { dateFormatted, timeFormatted };
   };
+
+  const startDate = sessions.length > 0 ? formatDateDisplay(sessions[0].startTime) : null;
+  const endDate =
+    sessions.length > 0
+      ? formatDateDisplay(sessions[sessions.length - 1].startTime)
+      : null;
 
   const handleGoToBulkGenerate = () => {
     onOpenChange(false);
@@ -114,19 +124,19 @@ export function VersionSessionsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col p-6">
-        <DialogHeader>
-          <div className="flex flex-wrap items-center justify-between gap-3 pr-6">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                <CalendarDays className="size-5" />
+      <DialogContent className="sm:max-w-5xl md:max-w-5xl lg:max-w-5xl w-full max-h-[90vh] flex flex-col p-6 overflow-hidden">
+        <DialogHeader className="pb-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 pr-8">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-primary/10 rounded-xl text-primary">
+                <CalendarDays className="size-6" />
               </div>
               <div>
-                <DialogTitle className="text-xl font-bold">
+                <DialogTitle className="text-xl font-bold tracking-tight">
                   Sessions in Version v{version.versionNumber}
                 </DialogTitle>
-                <DialogDescription className="text-sm mt-0.5">
-                  {calendarName || "Calendar"} &bull; {version.name || "No title"}
+                <DialogDescription className="text-sm mt-0.5 text-muted-foreground">
+                  {calendarName || "Calendar"} &bull; {version.name || "Draft Version"}
                 </DialogDescription>
               </div>
             </div>
@@ -140,11 +150,11 @@ export function VersionSessionsDialog({
                     ? "secondary"
                     : "outline"
                 }
-                className="px-2.5 py-0.5"
+                className="px-3 py-1 font-semibold text-xs tracking-wide"
               >
                 {version.status}
               </Badge>
-              <Badge variant="outline" className="text-xs">
+              <Badge variant="outline" className="text-xs font-mono">
                 Version ID: {version.id}
               </Badge>
             </div>
@@ -152,40 +162,63 @@ export function VersionSessionsDialog({
         </DialogHeader>
 
         {/* Summary Metric Header */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 my-2 p-3 bg-muted/40 rounded-xl border text-sm">
-          <div>
-            <div className="text-xs text-muted-foreground">Total Sessions</div>
-            <div className="text-base font-semibold mt-0.5">
-              {sessions.length} sessions
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 my-2 text-sm">
+          <div className="p-3.5 bg-card rounded-xl border shadow-2xs flex items-center gap-3">
+            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg dark:bg-blue-950 dark:text-blue-400">
+              <CalendarCheck className="size-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs text-muted-foreground truncate">Total Sessions</div>
+              <div className="text-base font-bold text-foreground">
+                {sessions.length} sessions
+              </div>
             </div>
           </div>
-          <div>
-            <div className="text-xs text-muted-foreground">Start Date</div>
-            <div className="text-base font-semibold mt-0.5">
-              {startDate || "—"}
+
+          <div className="p-3.5 bg-card rounded-xl border shadow-2xs flex items-center gap-3">
+            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg dark:bg-emerald-950 dark:text-emerald-400">
+              <CalendarRange className="size-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs text-muted-foreground truncate">Start Date</div>
+              <div className="text-sm font-semibold text-foreground truncate" title={startDate || "—"}>
+                {startDate || "—"}
+              </div>
             </div>
           </div>
-          <div>
-            <div className="text-xs text-muted-foreground">End Date</div>
-            <div className="text-base font-semibold mt-0.5">
-              {endDate || "—"}
+
+          <div className="p-3.5 bg-card rounded-xl border shadow-2xs flex items-center gap-3">
+            <div className="p-2 bg-purple-50 text-purple-600 rounded-lg dark:bg-purple-950 dark:text-purple-400">
+              <Clock className="size-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs text-muted-foreground truncate">End Date</div>
+              <div className="text-sm font-semibold text-foreground truncate" title={endDate || "—"}>
+                {endDate || "—"}
+              </div>
             </div>
           </div>
-          <div>
-            <div className="text-xs text-muted-foreground">Class Code</div>
-            <div className="text-base font-semibold mt-0.5">
-              {sessions[0]?.classCode || "HCM26-FSJ-01"}
+
+          <div className="p-3.5 bg-card rounded-xl border shadow-2xs flex items-center gap-3">
+            <div className="p-2 bg-amber-50 text-amber-600 rounded-lg dark:bg-amber-950 dark:text-amber-400">
+              <GraduationCap className="size-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs text-muted-foreground truncate">Class Code</div>
+              <div className="text-sm font-semibold font-mono text-foreground truncate">
+                {sessions[0]?.classCode || "HCM26-FSJ-01"}
+              </div>
             </div>
           </div>
         </div>
 
         {/* Search Toolbar */}
-        <div className="flex items-center justify-between gap-3 my-2">
-          <div className="relative flex-1 max-w-sm">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 my-2">
+          <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Search by topic, trainer, room..."
+              placeholder="Search by topic, trainer, room, title..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9 h-9 text-sm"
@@ -195,18 +228,17 @@ export function VersionSessionsDialog({
           {version.status === "DRAFT" && (
             <Button
               size="sm"
-              variant="outline"
               onClick={handleGoToBulkGenerate}
-              className="gap-1.5"
+              className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90 shrink-0"
             >
-              <Sparkles className="size-3.5 text-primary" />
+              <Sparkles className="size-3.5" />
               {sessions.length === 0 ? "Bulk Generate Sessions" : "Generate More Sessions"}
             </Button>
           )}
         </div>
 
-        {/* Sessions Content */}
-        <div className="flex-1 overflow-y-auto border rounded-xl min-h-[300px]">
+        {/* Sessions Table Container */}
+        <div className="flex-1 overflow-y-auto overflow-x-auto border rounded-xl min-h-[300px] bg-card">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center h-64 gap-2 text-muted-foreground">
               <Clock className="size-6 animate-spin text-primary" />
@@ -247,39 +279,38 @@ export function VersionSessionsDialog({
             </div>
           ) : (
             <Table>
-              <TableHeader className="sticky top-0 bg-muted/80 backdrop-blur z-10">
+              <TableHeader className="sticky top-0 bg-muted/90 backdrop-blur z-10">
                 <TableRow>
-                  <TableHead className="w-12 text-center">#</TableHead>
-                  <TableHead className="w-40">Date</TableHead>
-                  <TableHead className="w-32">Time</TableHead>
-                  <TableHead>Topic & Title</TableHead>
-                  <TableHead className="w-36">Trainer</TableHead>
-                  <TableHead className="w-28">Room</TableHead>
-                  <TableHead className="w-24 text-center">Status</TableHead>
+                  <TableHead className="w-14 text-center font-semibold">#</TableHead>
+                  <TableHead className="w-36 font-semibold">Date</TableHead>
+                  <TableHead className="w-32 font-semibold">Time Slot</TableHead>
+                  <TableHead className="min-w-[220px] font-semibold">Topic & Session</TableHead>
+                  <TableHead className="w-44 font-semibold">Trainer</TableHead>
+                  <TableHead className="w-32 font-semibold">Room</TableHead>
+                  <TableHead className="w-28 text-center font-semibold">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredSessions.map((session, index) => {
-                  const startParsed = formatDateTime(session.startTime);
-                  const endParsed = formatDateTime(session.endTime);
+                  const dateStr = formatDateDisplay(session.startTime);
+                  const startTime = formatTimeDisplay(session.startTime);
+                  const endTime = formatTimeDisplay(session.endTime);
 
                   return (
-                    <TableRow key={session.id || index}>
-                      <TableCell className="text-center font-mono text-xs text-muted-foreground">
+                    <TableRow key={session.id || index} className="hover:bg-muted/40 transition-colors">
+                      <TableCell className="text-center font-mono text-xs text-muted-foreground font-medium">
                         {index + 1}
                       </TableCell>
-                      <TableCell className="text-xs font-medium">
-                        {typeof startParsed === "object"
-                          ? startParsed.dateFormatted
-                          : startParsed}
+                      <TableCell className="text-xs font-medium whitespace-nowrap">
+                        {dateStr}
                       </TableCell>
-                      <TableCell className="text-xs font-mono">
-                        {typeof startParsed === "object" && typeof endParsed === "object"
-                          ? `${startParsed.timeFormatted} - ${endParsed.timeFormatted}`
-                          : session.startTime}
+                      <TableCell className="text-xs font-mono whitespace-nowrap">
+                        <span className="bg-muted px-2 py-0.5 rounded text-muted-foreground">
+                          {startTime} - {endTime}
+                        </span>
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium text-xs sm:text-sm">
+                        <div className="font-semibold text-xs sm:text-sm text-foreground">
                           {session.title || "Session"}
                         </div>
                         {session.topicName && (
@@ -288,13 +319,17 @@ export function VersionSessionsDialog({
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="text-xs">
-                        {session.trainerName || `Trainer #${session.trainerId}`}
+                      <TableCell className="text-xs whitespace-nowrap">
+                        <span className="font-medium text-foreground">
+                          {session.trainerName || `Trainer #${session.trainerId}`}
+                        </span>
                       </TableCell>
-                      <TableCell className="text-xs font-medium">
-                        {session.room || "—"}
+                      <TableCell className="text-xs font-medium whitespace-nowrap">
+                        <span className="inline-block bg-muted/60 px-2 py-0.5 rounded border">
+                          {session.room || "—"}
+                        </span>
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell className="text-center whitespace-nowrap">
                         <Badge
                           variant={
                             session.status === "SCHEDULED"
@@ -303,7 +338,7 @@ export function VersionSessionsDialog({
                               ? "default"
                               : "destructive"
                           }
-                          className="text-[10px] px-2 py-0.5 uppercase tracking-wider"
+                          className="text-[10px] px-2.5 py-0.5 uppercase tracking-wider font-semibold"
                         >
                           {session.status || "SCHEDULED"}
                         </Badge>
@@ -316,9 +351,11 @@ export function VersionSessionsDialog({
           )}
         </div>
 
-        <DialogFooter className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="text-xs text-muted-foreground">
-            Showing {filteredSessions.length} of {sessions.length} sessions
+        {/* Dialog Footer */}
+        <DialogFooter className="mt-4 pt-2 border-t flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="text-xs text-muted-foreground whitespace-nowrap">
+            Showing <strong className="text-foreground">{filteredSessions.length}</strong> of{" "}
+            <strong className="text-foreground">{sessions.length}</strong> session(s)
           </div>
           <div className="flex items-center gap-2">
             <Button

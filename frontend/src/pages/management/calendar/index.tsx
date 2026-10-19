@@ -592,7 +592,7 @@ export default function CalendarManagementPage() {
                                             <TableHead>Status</TableHead>
                                             <TableHead>Created</TableHead>
                                             <TableHead>Activated</TableHead>
-                                            <TableHead>Actions</TableHead>
+                                            <TableHead className="min-w-[280px]">Actions</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
