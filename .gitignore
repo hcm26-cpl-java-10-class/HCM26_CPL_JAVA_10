@@ -4,6 +4,8 @@
 *.iws
 *.ipr
 .vscode/
+.DS_Store
+*.DS_Store
 
 # === Backend (Java/Maven) ===
 backend/target/
