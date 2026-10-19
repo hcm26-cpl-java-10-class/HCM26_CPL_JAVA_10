@@ -35,6 +35,14 @@ import java.time.LocalDateTime;
 )
 public class Session extends BaseEntity {
 
+    @Column(name = "calendar_version_id")
+    @ExportField(name = "Calendar Version ID")
+    Long calendarVersionId;
+
+    @Column(name = "topic_id")
+    @ExportField(name = "Topic ID")
+    Long topicId;
+
     @Column(name = "class_code", nullable = false, length = 60)
     @ImportField(name = "Class Code", required = true)
     @ExportField(name = "Class Code")
@@ -90,6 +98,10 @@ public class Session extends BaseEntity {
     @ExportField(name = "Notes")
     String notes;
 
+    @Column(name = "cancel_reason", length = 500)
+    @ExportField(name = "Cancel Reason")
+    String cancelReason;
+
     @Builder.Default
     @Column(name = "is_overridden")
     @ExportField(name = "Is Overridden")
@@ -98,4 +110,12 @@ public class Session extends BaseEntity {
     @Column(name = "override_reason", length = 255)
     @ExportField(name = "Override Reason")
     String overrideReason;
+
+    /**
+     * Optimistic locking version — dùng cho If-Match / ETag khi cập nhật trạng thái (F15).
+     */
+    @Version
+    @Column(name = "version")
+    @ExportField(name = "Version")
+    Long version;
 }

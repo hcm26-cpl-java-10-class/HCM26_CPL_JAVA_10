@@ -46,4 +46,11 @@ public class SessionController
     ) {
         return ResponseEntity.ok(sessionService.checkConflict(request, excludeId));
     }
+
+    @PatchMapping("/{id}/status")
+    @Operation(summary = "Change the status of session")
+    public ResponseEntity<SessionDTO> changeSessionStatus(@PathVariable Long id,  @RequestParam SessionStatus status) {
+        return  ResponseEntity.ok(sessionService.changeStatus(id, status));
+    }
+
 }
