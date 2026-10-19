@@ -39,6 +39,10 @@ public class ExamAttemptService {
     private final QuestionTakerMapper questionTakerMapper;
 
     public ExamAttemptDTO startOrResume(Long examId, Long studentId) {
+        return startOrResume(examId, studentId, null);
+    }
+
+    public ExamAttemptDTO startOrResume(Long examId, Long studentId, String password) {
         Exam exam = examRepository.lockForAttemptStart(examId)
                 .filter(candidate -> Boolean.TRUE.equals(candidate.getIsActive()))
                 .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
@@ -58,6 +62,7 @@ public class ExamAttemptService {
         }
 
         ensureExamWindowOpen(exam, nowLocal);
+        ensureExamPasswordValid(exam, password);
 
         int maxAttempts = exam.getMaxAttempts() == null ? 1 : exam.getMaxAttempts();
         if (attempts.size() >= maxAttempts) {
@@ -448,5 +453,13 @@ public class ExamAttemptService {
                 .map(ExamAttempt::getFinalScore)
                 .max(Integer::compareTo)
                 .orElse(current.getFinalScore());
+    }
+
+    private void ensureExamPasswordValid(Exam exam, String password) {
+        if (exam.getAccessCode() != null && !exam.getAccessCode().trim().isEmpty()) {
+            if (password == null || !exam.getAccessCode().trim().equals(password.trim())) {
+                throw new BadRequestException("Mật khẩu đề thi không chính xác");
+            }
+        }
     }
 }

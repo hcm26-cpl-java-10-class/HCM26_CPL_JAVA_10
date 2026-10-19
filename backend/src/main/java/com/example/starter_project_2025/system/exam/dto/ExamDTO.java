@@ -63,4 +63,10 @@ public class ExamDTO extends BaseDTO {
 
     @JsonProperty(access = READ_ONLY)
     private Integer totalPoints;
+
+    @Size(max = 100, groups = {OnCreate.class, OnUpdate.class})
+    private String accessCode;
+
+    @JsonProperty(access = READ_ONLY)
+    private Boolean hasPassword;
 }

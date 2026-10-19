@@ -46,6 +46,7 @@ interface ExamConfigForm {
   latePenaltyPercent: string;
   lateGraceMinutes: string;
   resultVisibility: ResultVisibility;
+  accessCode: string;
 }
 
 const DEFAULT_CONFIG: ExamConfigForm = {
@@ -59,6 +60,7 @@ const DEFAULT_CONFIG: ExamConfigForm = {
   latePenaltyPercent: "",
   lateGraceMinutes: "0",
   resultVisibility: "IMMEDIATE",
+  accessCode: "",
 };
 
 const LATE_POLICY_LABEL: Record<LatePolicy, string> = {
@@ -86,6 +88,7 @@ const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   latePenaltyPercent: exam.latePenaltyPercent != null ? String(exam.latePenaltyPercent) : "",
   lateGraceMinutes: String(exam.lateGraceMinutes ?? 0),
   resultVisibility: exam.resultVisibility ?? "IMMEDIATE",
+  accessCode: exam.accessCode ?? "",
 });
 
 /** Kiểm tra nhanh phía client, giống ExamConfigValidator ở backend (backend vẫn là nơi quyết định). */
@@ -179,6 +182,7 @@ export default function ExamManagementPage() {
                 : undefined,
               lateGraceMinutes: Number(cfg.lateGraceMinutes || 0),
         resultVisibility: cfg.resultVisibility,
+        accessCode: cfg.accessCode ? cfg.accessCode.trim() : "",
       };
       return editingExam?.id
           ? examApi.update(String(editingExam.id), request)
@@ -396,6 +400,16 @@ export default function ExamManagementPage() {
                 <label className="grid gap-2 text-sm font-medium">
                   Thời lượng (phút)
                   <Input required type="number" min={1} value={newDuration} onChange={(event) => setNewDuration(event.target.value)} />
+                </label>
+                <label className="grid gap-2 text-sm font-medium">
+                  Mật khẩu đề thi (để trống nếu không yêu cầu)
+                  <Input
+                    type="text"
+                    placeholder="Ví dụ: THI2026"
+                    maxLength={100}
+                    value={cfg.accessCode}
+                    onChange={(event) => setCfg((c) => ({ ...c, accessCode: event.target.value }))}
+                  />
                 </label>
 
                 <div className="grid gap-4 border-t pt-4 sm:grid-cols-2">

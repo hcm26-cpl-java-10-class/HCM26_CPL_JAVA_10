@@ -17,8 +17,10 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, ArrowRight, CalendarDays, Clock3, Mail, RefreshCw } from 'lucide-react';
+import { AlertCircle, ArrowRight, CalendarDays, Clock3, Lock, Mail, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ExamPasswordDialog } from './components/ExamPasswordDialog';
 
 const attemptsQueryKey = ['student-exam-attempts'] as const;
 
@@ -57,7 +59,7 @@ function ExamCard({
     exam: Exam;
     attempt?: ExamAttemptSummary;
     invitation: StudentInvitationDTO;
-    onOpen: (examId: number) => void;
+    onOpen: (exam: Exam, attempt?: ExamAttemptSummary) => void;
     disabled: boolean;
 }) {
     const now = Date.now();
@@ -86,10 +88,18 @@ function ExamCard({
         <Card className="flex h-full flex-col border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
             <CardHeader>
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                    <Badge variant="secondary" className="gap-1 bg-sky-50 text-sky-700">
-                        <Clock3 className="size-3" />
-                        {exam.durationMinutes} phút
-                    </Badge>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary" className="gap-1 bg-sky-50 text-sky-700">
+                            <Clock3 className="size-3" />
+                            {exam.durationMinutes} phút
+                        </Badge>
+                        {exam.hasPassword && (
+                            <Badge variant="outline" className="gap-1 border-amber-300 bg-amber-50 text-amber-700">
+                                <Lock className="size-3" />
+                                Mật khẩu
+                            </Badge>
+                        )}
+                    </div>
                     {status && <Badge variant={status.variant}>{status.label}</Badge>}
                 </div>
                 <CardTitle className="pt-2 text-lg text-slate-900">{exam.title}</CardTitle>
@@ -148,7 +158,7 @@ function ExamCard({
             </CardContent>
 
             <CardFooter className="border-t border-slate-100 pt-4">
-                <Button className="w-full bg-cyan-600 text-white hover:bg-cyan-500" disabled={isDisabled} onClick={() => onOpen(exam.id)}>
+                <Button className="w-full bg-cyan-600 text-white hover:bg-cyan-500" disabled={isDisabled} onClick={() => onOpen(exam, attempt)}>
                     {buttonLabel}
                     <ArrowRight className="size-4" />
                 </Button>
@@ -191,10 +201,37 @@ export default function StudentExamList() {
                 startTime: invitation.startTime,
                 endTime: invitation.endTime,
                 maxAttempts: invitation.maxAttempts,
+                hasPassword: invitation.hasPassword,
                 isActive: true,
             },
         }));
     const attempts = attemptsQuery.data ?? [];
+
+    const [passwordDialogExam, setPasswordDialogExam] = useState<Exam | null>(null);
+
+    const handleOpenExam = (exam: Exam, attempt?: ExamAttemptSummary) => {
+        const overdue = isOverdue(attempt, Date.now());
+        const isInProgress = attempt?.status === 'IN_PROGRESS' && !overdue;
+
+        // Nếu bài thi đang làm dở hoặc đã hoàn thành xem kết quả thì không cần nhập lại pass
+        if (isInProgress || overdue || attempt?.status === 'SUBMITTED' || attempt?.status === 'EXPIRED') {
+            navigate(`/student/exams/${exam.id}/take`);
+            return;
+        }
+
+        // Nếu đề thi yêu cầu mật khẩu
+        if (exam.hasPassword) {
+            setPasswordDialogExam(exam);
+            return;
+        }
+
+        navigate(`/student/exams/${exam.id}/take`);
+    };
+
+    const handlePasswordSuccess = (examId: number, password: string) => {
+        sessionStorage.setItem(`exam_pass_${examId}`, password);
+        navigate(`/student/exams/${examId}/take`);
+    };
 
     return (
         <MainLayout pathName={{ exams: 'Lịch thi' }}>
@@ -277,12 +314,20 @@ export default function StudentExamList() {
                                     invitation={invitation}
                                     attempt={attempt}
                                     disabled={attemptsQuery.isError}
-                                    onOpen={(id) => navigate(`/student/exams/${id}/take`)}
+                                    onOpen={handleOpenExam}
                                 />
                             );
                         })}
                     </div>
                 )}
+
+                <ExamPasswordDialog
+                    open={passwordDialogExam != null}
+                    onOpenChange={(open) => !open && setPasswordDialogExam(null)}
+                    examId={passwordDialogExam?.id ?? null}
+                    examTitle={passwordDialogExam?.title ?? ''}
+                    onSuccess={handlePasswordSuccess}
+                />
             </div>
         </MainLayout>
     );

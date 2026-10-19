@@ -62,6 +62,9 @@ public class Exam extends BaseEntity {
     @Column(nullable = false, length = 30)
     private ResultVisibility resultVisibility = ResultVisibility.IMMEDIATE;
 
+    @Column(length = 100)
+    private String accessCode;
+
     @ManyToMany
     @JoinTable(name = "exam_question",
             joinColumns = @JoinColumn(name = "exam_id"),

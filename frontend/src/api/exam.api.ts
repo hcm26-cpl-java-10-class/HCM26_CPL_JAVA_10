@@ -10,6 +10,7 @@ export interface Exam {
     endTime?: string | null;
     maxAttempts?: number | null;
     latePolicy?: 'NOT_ALLOWED' | 'ALLOWED' | 'ALLOWED_WITH_PENALTY';
+    hasPassword?: boolean;
     createdAt?: string;
     updatedAt?: string;
 }
@@ -101,8 +102,19 @@ export const getMyExamAttempts = async () => {
     return response.data;
 };
 
-export const startOrResumeExam = async (examId: number) => {
-    const response = await api.post<ExamAttempt>(`/exams/${examId}/attempt`);
+export const startOrResumeExam = async (examId: number, password?: string) => {
+    const pass = password || sessionStorage.getItem(`exam_pass_${examId}`) || undefined;
+    const response = await api.post<ExamAttempt>(`/exams/${examId}/attempt`, null, {
+        params: pass ? { password: pass } : undefined,
+    });
+    sessionStorage.removeItem(`exam_pass_${examId}`);
+    return response.data;
+};
+
+export const verifyExamPassword = async (examId: number, password: string) => {
+    const response = await api.post<{ valid: boolean; message: string }>(`/exams/${examId}/verify-password`, {
+        password,
+    });
     return response.data;
 };
 

@@ -43,6 +43,9 @@ public class InvitationDTO extends BaseDTO {
     private Integer totalPoints;
 
     @JsonProperty(access = READ_ONLY)
+    private Boolean hasPassword;
+
+    @JsonProperty(access = READ_ONLY)
     private String userEmail;
 
     @JsonProperty(access = READ_ONLY)

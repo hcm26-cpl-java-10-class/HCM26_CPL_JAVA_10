@@ -25,9 +25,10 @@ public class ExamAttemptController {
     @PostMapping("/{examId}/attempt")
     public ResponseEntity<ExamAttemptDTO> startOrResume(
             @PathVariable Long examId,
+            @RequestParam(value = "password", required = false) String password,
             @AuthenticationPrincipal UserPrincipal principal
     ) {
-        return ResponseEntity.ok(service.startOrResume(examId, principal.getUser().getId()));
+        return ResponseEntity.ok(service.startOrResume(examId, principal.getUser().getId(), password));
     }
 
     @GetMapping("/my-attempts")

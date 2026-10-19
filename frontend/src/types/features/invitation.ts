@@ -24,6 +24,7 @@ export interface StudentInvitationDTO extends InvitationDTO {
   endTime?: string | null;
   maxAttempts?: number;
   totalPoints?: number;
+  hasPassword?: boolean;
 }
 
 export interface InvitationFilter {

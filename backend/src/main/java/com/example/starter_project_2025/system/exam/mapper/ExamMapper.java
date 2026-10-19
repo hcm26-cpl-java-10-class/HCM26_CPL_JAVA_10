@@ -53,6 +53,8 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setQuestionIds(sorted.stream().map(Question::getId).toList());
         d.setQuestions(sorted.stream().map(questionMapper::toResponse).toList());
         d.setTotalPoints(sorted.stream().mapToInt(Question::getPoints).sum());
+        d.setAccessCode(e.getAccessCode());
+        d.setHasPassword(e.getAccessCode() != null && !e.getAccessCode().trim().isEmpty());
         return d;
     }
 
@@ -76,5 +78,9 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         if (d.getLatePenaltyPercent() != null) e.setLatePenaltyPercent(d.getLatePenaltyPercent());
         if (d.getLateGraceMinutes() != null) e.setLateGraceMinutes(d.getLateGraceMinutes());
         if (d.getResultVisibility() != null) e.setResultVisibility(d.getResultVisibility());
+        if (d.getAccessCode() != null) {
+            String trimmed = d.getAccessCode().trim();
+            e.setAccessCode(trimmed.isEmpty() ? null : trimmed);
+        }
     }
 }

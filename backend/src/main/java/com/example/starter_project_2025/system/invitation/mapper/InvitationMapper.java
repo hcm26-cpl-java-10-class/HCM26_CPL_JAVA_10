@@ -62,6 +62,7 @@ public class InvitationMapper implements BaseCrudMapper<Invitation, InvitationDT
                     .filter(question -> Boolean.TRUE.equals(question.getIsActive()))
                     .mapToInt(question -> question.getPoints())
                     .sum());
+            dto.setHasPassword(entity.getExam().getAccessCode() != null && !entity.getExam().getAccessCode().trim().isEmpty());
         }
 
         if (entity.getUser() != null) {

@@ -47,6 +47,8 @@ export interface ExamDTO {
   questionIds?: number[];
   questions?: QuestionDTO[];
   totalPoints?: number;
+  accessCode?: string | null;
+  hasPassword?: boolean;
 }
 
 export interface ExamFilter {
