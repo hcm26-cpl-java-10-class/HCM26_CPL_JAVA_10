@@ -1,10 +1,14 @@
 export interface ProgramTopicItemDTO {
   topicId: number;
-  topicCode: string;
+  topicCode?: string;
   topicName: string;
-  orderIndex: number;
-  durationHours: number;
-  defaultSlot: string;
+  sequenceOrder?: number;
+  orderIndex?: number;
+  totalHours?: number;
+  durationHours?: number;
+  defaultSlot?: string;
+  assignedTrainerId?: number;
+  assignedTrainerName?: string;
   preferredTrainerId?: number;
   preferredTrainerName?: string;
   preferredRoomId?: string;
@@ -25,9 +29,12 @@ export interface RoomOptionDTO {
 export interface ScheduleGenerationContextResponse {
   classId: number;
   classCode: string;
-  calendarVersionId: number;
+  calendarVersionId?: number;
+  programId?: number;
   programName: string;
   totalHours: number;
+  defaultRoomId?: string;
+  defaultRoomName?: string;
   topics: ProgramTopicItemDTO[];
   holidays: string[];
   availableTrainers: TrainerOptionDTO[];
@@ -35,17 +42,17 @@ export interface ScheduleGenerationContextResponse {
 }
 
 export interface BulkPreviewRequestDTO {
-  classId: number;
-  calendarVersionId: number;
   startDate: string; // YYYY-MM-DD
-  selectedDaysOfWeek: string[]; // ["MONDAY", "WEDNESDAY", "FRIDAY"]
-  slot: "MORNING" | "AFTERNOON" | "EVENING" | "CUSTOM";
-  slotStartTime?: string; // HH:mm:ss
-  slotEndTime?: string; // HH:mm:ss
-  defaultTrainerId?: number;
+  daysOfWeek: string[]; // ["MONDAY", "WEDNESDAY", "FRIDAY"]
+  slotTime: {
+    slotName?: string;
+    startTime: string; // HH:mm:ss
+    endTime: string; // HH:mm:ss
+    hoursPerSession?: number;
+  };
   defaultRoomId?: string;
   skipHolidays: boolean;
-  customHolidayDates?: string[];
+  checkConflicts?: boolean;
 }
 
 export interface PreviewSessionItemDTO {
@@ -54,26 +61,35 @@ export interface PreviewSessionItemDTO {
   topicName: string;
   sessionNumber: number;
   date: string; // YYYY-MM-DD
-  dayOfWeek: string;
+  dayOfWeek?: string;
   startTime: string; // YYYY-MM-DDTHH:mm:ss
   endTime: string; // YYYY-MM-DDTHH:mm:ss
   trainerId: number;
   trainerName: string;
   roomId: string;
-  hasConflict: boolean;
+  status?: string; // VALID, CONFLICT
+  hasConflict?: boolean;
+  conflictDetails?: {
+    type?: string;
+    conflictingClassCode?: string;
+    message?: string;
+  };
   conflictReason?: string;
   isFractional?: boolean;
 }
 
 export interface BulkPreviewResponseDTO {
   classId: number;
-  calendarVersionId: number;
+  calendarVersionId?: number;
   totalSessions: number;
+  totalHoursCalculated?: number;
   startDate: string;
   estimatedEndDate: string;
   skippedHolidaysCount: number;
   conflictCount: number;
+  hasConflicts?: boolean;
   sessions: PreviewSessionItemDTO[];
+  correlationId?: string;
 }
 
 export interface BulkSaveSessionsRequestDTO {

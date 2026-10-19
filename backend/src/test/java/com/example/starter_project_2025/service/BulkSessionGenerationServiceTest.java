@@ -78,6 +78,7 @@ public class BulkSessionGenerationServiceTest {
                 .sessions(items)
                 .build();
 
+        when(calendarVersionRepository.findById(versionId)).thenReturn(java.util.Optional.of(new com.example.starter_project_2025.system.schedule.calendar.CalendarVersion()));
         when(sessionRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         // WHEN
@@ -132,6 +133,7 @@ public class BulkSessionGenerationServiceTest {
                 ))
                 .build();
 
+        when(calendarVersionRepository.findById(versionId)).thenReturn(java.util.Optional.of(new com.example.starter_project_2025.system.schedule.calendar.CalendarVersion()));
         when(sessionRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         // WHEN: Lần gọi thứ 1

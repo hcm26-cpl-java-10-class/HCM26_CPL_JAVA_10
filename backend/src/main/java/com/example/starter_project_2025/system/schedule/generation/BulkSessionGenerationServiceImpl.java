@@ -39,6 +39,7 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
         List<ScheduleGenerationContextResponse.TopicContextItem> topics = List.of(
                 ScheduleGenerationContextResponse.TopicContextItem.builder()
                         .topicId(101L)
+                        .topicCode("JAVA-CORE")
                         .topicName("Java Core & OOP Foundation")
                         .sequenceOrder(1)
                         .totalHours(12.0)
@@ -47,6 +48,7 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
                         .build(),
                 ScheduleGenerationContextResponse.TopicContextItem.builder()
                         .topicId(102L)
+                        .topicCode("DB-SQL")
                         .topicName("Database & JPA Hibernate")
                         .sequenceOrder(2)
                         .totalHours(16.0)
@@ -55,6 +57,7 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
                         .build(),
                 ScheduleGenerationContextResponse.TopicContextItem.builder()
                         .topicId(103L)
+                        .topicCode("SPRING-BOOT")
                         .topicName("Spring Boot RESTful API")
                         .sequenceOrder(3)
                         .totalHours(20.0)
@@ -63,24 +66,48 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
                         .build()
         );
 
+        List<ScheduleGenerationContextResponse.TrainerOptionDTO> trainers = List.of(
+                ScheduleGenerationContextResponse.TrainerOptionDTO.builder().id(1L).name("Nguyen Minh (Trainer)").email("minh.nguyen@fpt.edu.vn").build(),
+                ScheduleGenerationContextResponse.TrainerOptionDTO.builder().id(2L).name("Tran Thi Lan (Trainer)").email("lan.tran@fpt.edu.vn").build(),
+                ScheduleGenerationContextResponse.TrainerOptionDTO.builder().id(3L).name("Le Hoang An (Trainer)").email("an.le@fpt.edu.vn").build()
+        );
+
+        List<ScheduleGenerationContextResponse.RoomOptionDTO> rooms = List.of(
+                ScheduleGenerationContextResponse.RoomOptionDTO.builder().roomId("Phòng A-301").roomName("Lab 40 máy").capacity(40).build(),
+                ScheduleGenerationContextResponse.RoomOptionDTO.builder().roomId("Phòng B-202").roomName("Lab 35 máy").capacity(35).build(),
+                ScheduleGenerationContextResponse.RoomOptionDTO.builder().roomId("Phòng A-105").roomName("Lý thuyết 60 chỗ").capacity(60).build()
+        );
+
+        List<String> holidays = List.of("2026-11-20", "2026-12-25", "2027-01-01");
+
         return ScheduleGenerationContextResponse.builder()
                 .classId(classId)
                 .classCode("HCM26-FSJ-01")
                 .programId(1L)
                 .programName("Fullstack Java Spring Boot Professional")
+                .totalHours(48.0)
                 .defaultRoomId("Phòng A-301")
                 .defaultRoomName("Phòng A-301 (Lab 40 máy)")
                 .topics(topics)
+                .holidays(holidays)
+                .availableTrainers(trainers)
+                .availableRooms(rooms)
                 .build();
     }
 
     @Override
     public BulkPreviewResponseDTO generatePreview(Long classId, BulkPreviewRequestDTO request) {
         ScheduleGenerationContextResponse context = getGenerationContext(classId);
+
+        Set<LocalDate> customHolidays = new HashSet<>();
+        customHolidays.add(LocalDate.of(2026, 11, 20)); // Ngày Nhà giáo VN
+        customHolidays.add(LocalDate.of(2026, 12, 25)); // Giáng sinh
+        customHolidays.add(LocalDate.of(2027, 1, 1));   // Tết Dương lịch
+
         List<PreviewSessionItemDTO> previewSessions = scheduleGeneratorEngine.generate(
                 context.getTopics(),
                 request,
-                Collections.emptySet()
+                customHolidays
         );
 
         // Tính tổng số giờ dự kiến
@@ -133,12 +160,27 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
             }
         }
 
+        LocalDate startDate = previewSessions.isEmpty() ? request.getStartDate() : previewSessions.get(0).getDate();
+        LocalDate estimatedEndDate = previewSessions.isEmpty() ? request.getStartDate() : previewSessions.get(previewSessions.size() - 1).getDate();
+
+        int skippedHolidaysCount = 0;
+        if (Boolean.TRUE.equals(request.getSkipHolidays()) && !previewSessions.isEmpty() && request.getDaysOfWeek() != null) {
+            for (LocalDate h : customHolidays) {
+                if (!h.isBefore(startDate) && !h.isAfter(estimatedEndDate) && request.getDaysOfWeek().contains(h.getDayOfWeek())) {
+                    skippedHolidaysCount++;
+                }
+            }
+        }
+
         return BulkPreviewResponseDTO.builder()
                 .classId(classId)
                 .totalSessions(previewSessions.size())
                 .totalHoursCalculated(totalHours)
                 .hasConflicts(hasConflicts)
                 .conflictCount(conflictCount)
+                .startDate(startDate)
+                .estimatedEndDate(estimatedEndDate)
+                .skippedHolidaysCount(skippedHolidaysCount)
                 .sessions(previewSessions)
                 .correlationId(UUID.randomUUID().toString())
                 .build();

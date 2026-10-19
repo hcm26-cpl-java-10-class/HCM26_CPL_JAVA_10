@@ -205,19 +205,25 @@ export function BulkSessionGenerationPage() {
       return;
     }
 
+    const slotStart =
+      slotType === "CUSTOM" ? customStartTime : SLOT_CONFIGS[slotType].start;
+    const slotEnd =
+      slotType === "CUSTOM" ? customEndTime : SLOT_CONFIGS[slotType].end;
+    const slotHours =
+      slotType === "CUSTOM" ? 3 : SLOT_CONFIGS[slotType].hours;
+
     const payload: BulkPreviewRequestDTO = {
-      classId: selectedClassId,
-      calendarVersionId,
       startDate,
-      selectedDaysOfWeek: selectedDays,
-      slot: slotType,
-      slotStartTime:
-        slotType === "CUSTOM" ? customStartTime : SLOT_CONFIGS[slotType].start,
-      slotEndTime:
-        slotType === "CUSTOM" ? customEndTime : SLOT_CONFIGS[slotType].end,
-      defaultTrainerId,
+      daysOfWeek: selectedDays,
+      slotTime: {
+        slotName: slotType,
+        startTime: slotStart,
+        endTime: slotEnd,
+        hoursPerSession: slotHours,
+      },
       defaultRoomId,
       skipHolidays,
+      checkConflicts: true,
     };
 
     previewMutation.mutate(payload);
@@ -635,7 +641,7 @@ export function BulkSessionGenerationPage() {
                     >
                       <div className="flex items-center gap-2">
                         <span className="h-5 w-5 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[11px]">
-                          {topic.orderIndex}
+                          {topic.sequenceOrder ?? topic.orderIndex}
                         </span>
                         <div>
                           <p className="font-medium text-foreground">{topic.topicName}</p>
@@ -643,7 +649,7 @@ export function BulkSessionGenerationPage() {
                         </div>
                       </div>
                       <Badge variant="outline" className="text-[11px]">
-                        {topic.durationHours}h
+                        {topic.totalHours ?? topic.durationHours}h
                       </Badge>
                     </div>
                   ))}
@@ -788,10 +794,25 @@ export function BulkSessionGenerationPage() {
                         ? item.endTime.split("T")[1]?.substring(0, 5)
                         : item.endTime;
 
+                      const isConflicted = item.hasConflict || item.status === "CONFLICT";
+                      const dayOfWeekDisplay =
+                        item.dayOfWeek ||
+                        (item.date
+                          ? [
+                              "Chủ Nhật",
+                              "Thứ Hai",
+                              "Thứ Ba",
+                              "Thứ Tư",
+                              "Thứ Năm",
+                              "Thứ Sáu",
+                              "Thứ Bảy",
+                            ][new Date(item.date).getDay()]
+                          : "");
+
                       return (
                         <TableRow
                           key={item.tempId}
-                          className={item.hasConflict ? "bg-red-50/50 hover:bg-red-50" : ""}
+                          className={isConflicted ? "bg-red-50/50 hover:bg-red-50" : ""}
                         >
                           <TableCell className="text-center font-bold text-muted-foreground">
                             #{item.sessionNumber || index + 1}
@@ -800,7 +821,7 @@ export function BulkSessionGenerationPage() {
                           <TableCell>
                             <div className="text-xs">
                               <span className="font-semibold block">{item.date}</span>
-                              <span className="text-muted-foreground">{item.dayOfWeek}</span>
+                              <span className="text-muted-foreground">{dayOfWeekDisplay}</span>
                             </div>
                           </TableCell>
 
@@ -866,7 +887,7 @@ export function BulkSessionGenerationPage() {
 
                           {/* Trạng thái xung đột */}
                           <TableCell className="text-center">
-                            {item.hasConflict ? (
+                            {isConflicted ? (
                               <Badge variant="destructive" className="text-[10px] gap-1">
                                 <AlertCircle className="h-3 w-3" />
                                 Xung đột
