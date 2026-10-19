@@ -9,6 +9,7 @@ import java.util.List;
 
 public interface SessionRepository extends BaseCrudRepository<Session, Long> {
 
+    // Query kiểm tra xung đột lịch hiện tại
     @Query("""
         SELECT s FROM Session s
         WHERE s.isActive = true

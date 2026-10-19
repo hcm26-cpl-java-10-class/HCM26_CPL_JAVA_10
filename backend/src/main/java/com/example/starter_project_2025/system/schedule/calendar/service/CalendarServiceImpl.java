@@ -1,13 +1,14 @@
 package com.example.starter_project_2025.system.schedule.calendar.service;
 
 import com.example.starter_project_2025.system.schedule.calendar.Calendar;
-import com.example.starter_project_2025.system.schedule.calendar.CalendarMapper;
 import com.example.starter_project_2025.system.schedule.calendar.CalendarVersion;
 import com.example.starter_project_2025.system.schedule.calendar.CalendarVersionStatus;
 import com.example.starter_project_2025.system.schedule.calendar.dto.CalendarSummaryResponse;
 import com.example.starter_project_2025.system.schedule.calendar.repository.CalendarRepository;
 import com.example.starter_project_2025.system.schedule.calendar.repository.CalendarVersionRepository;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,11 +18,11 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class CalendarServiceImpl implements CalendarService {
 
-    private final CalendarRepository calendarRepository;
-    private final CalendarVersionRepository calendarVersionRepository;
-    private final CalendarMapper calendarMapper;
+    CalendarRepository calendarRepository;
+    CalendarVersionRepository calendarVersionRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -32,31 +33,23 @@ public class CalendarServiceImpl implements CalendarService {
             return List.of();
         }
 
-        List<Long> calendarIds = calendars.stream()
-                .map(Calendar::getId)
-                .toList();
+        List<Long> calendarIds = calendars.stream().map(Calendar::getId).toList();
 
-        Map<Long, Integer> activeVersionNumbers =
-                calendarVersionRepository
-                        .findByCalendar_IdInAndStatusAndIsActiveTrue(
-                                calendarIds,
-                                CalendarVersionStatus.ACTIVE
-                        )
-                        .stream()
-                        .collect(Collectors.toMap(
-                                version -> version.getCalendar().getId(),
-                                CalendarVersion::getVersionNumber
-                        ));
+        List<CalendarVersion> activeVersions = calendarVersionRepository
+                .findByCalendar_IdInAndStatusAndIsActiveTrue(calendarIds, CalendarVersionStatus.ACTIVE);
 
-        return calendars.stream()
-                .map(calendar -> {
-                    CalendarSummaryResponse response =
-                            calendarMapper.toSummaryResponse(calendar);
-                    response.setActiveVersionNumber(
-                            activeVersionNumbers.get(calendar.getId())
-                    );
-                    return response;
-                })
-                .toList();
+        Map<Long, Integer> activeVersionMap = activeVersions.stream()
+                .collect(Collectors.toMap(
+                        v -> v.getCalendar().getId(),
+                        CalendarVersion::getVersionNumber,
+                        (v1, v2) -> v1
+                ));
+
+        return calendars.stream().map(calendar -> new CalendarSummaryResponse(
+                calendar.getClassId(),
+                calendar.getName(),
+                calendar.getDescription(),
+                activeVersionMap.get(calendar.getId())
+        )).toList();
     }
 }

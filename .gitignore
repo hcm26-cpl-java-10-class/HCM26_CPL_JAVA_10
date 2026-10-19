@@ -25,14 +25,17 @@ dist/
 build/
 node_modules/
 
+# === Frontend (Node) ===
+frontend/node_modules/
+frontend/dist/
 # === Docker .env (secrets) ===
 docker/.env
 # Maven
 .mvn/wrapper/maven-wrapper.jar
 
 
+# === Docker .env (secrets) ===
+docker/.env
 
-# Local contributor guide
-/AGENTS.md
 
 /backend.zip
