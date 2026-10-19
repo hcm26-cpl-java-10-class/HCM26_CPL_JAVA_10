@@ -53,10 +53,6 @@ public class CourseServiceImpl
         if (courseRepository.existsByName(request.getName())) {
             ctx.add("name", "Course name already exists");
         }
-        if (request.getStatus() == CourseStatus.PUBLISHED) {
-            ctx.add("status", "A new course has no sections or lessons yet. "
-                    + "Save it as Draft, add content, then publish.");
-        }
         if (course.getStatus() == null) {
             course.setStatus(CourseStatus.DRAFT);
         }
@@ -95,7 +91,6 @@ public class CourseServiceImpl
         CurriculumValidationResult result = curriculumValidator.validatePublish(course.getId());
         result.errors().forEach(issue -> ctx.add("status", issue.message()));
     }
-
 
     @Override
     public Page<CourseDTO> getAll(Pageable pageable, String search, CourseFilter filter) {
