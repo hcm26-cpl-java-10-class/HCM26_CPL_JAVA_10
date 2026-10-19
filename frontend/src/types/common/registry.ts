@@ -39,6 +39,8 @@ export interface EntityConfig {
     schema: EntitySchema;
     actionPages?: EntityActionPagesConfig;
     cardRenderer?: (props: EntityCardRendererProps) => ReactNode;
+    /** Extra row actions rendered after the default view/edit/delete actions. */
+    extraRowActions?: (row: any) => ReactNode;
 }
 
 const registry: EntityConfig[] = [];

@@ -25,40 +25,67 @@ public class CalendarDemoDataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        // 1. Tạo hoặc lấy Calendar demo
+
         Calendar calendar = calendarRepository
                 .findByClassIdAndIsActiveTrue(1001L)
                 .orElseGet(() -> calendarRepository.save(
                         Calendar.builder()
                                 .classId(1001L)
+                                .name("Fall Semester 2026")
+                                .description("Academic calendar for Fall Semester 2026.")
                                 .lastIssuedVersionNumber(0)
                                 .isActive(true)
                                 .build()
                 ));
+        final Calendar currentCalendar = calendar;
 
-        // 2. Ưu tiên sử dụng version ACTIVE hiện có
+
         CalendarVersion version = calendarVersionRepository
                 .findActiveVersionByCalendarId(
-                        calendar.getId(),
+                        currentCalendar.getId(),
                         CalendarVersionStatus.ACTIVE
                 )
-                .orElseGet(() -> createDraftVersion(calendar));
+                .orElseGet(() -> createInitialActiveVersion(currentCalendar));
 
-        // Chỉ log để xác nhận dữ liệu đã sẵn sàng
+        if (version.getName() == null) {
+            version.setName("Fall Semester 2026 - Version " + version.getVersionNumber());
+        }
+        if (version.getDescription() == null) {
+            version.setDescription("Demo calendar version for Fall Semester 2026.");
+        }
+        calendarVersionRepository.save(version);
+
         System.out.println(
-                "Calendar demo ready: calendarId=" + calendar.getId()
+                "Calendar demo ready: calendarId=" + currentCalendar.getId()
                         + ", versionId=" + version.getId()
                         + ", status=" + version.getStatus()
         );
+
+        Calendar calendarWithoutActiveVersion = calendarRepository
+                .findByClassIdAndIsActiveTrue(1002L)
+                .orElseGet(() -> Calendar.builder()
+                        .classId(1002L)
+                        .lastIssuedVersionNumber(0)
+                        .isActive(true)
+                        .build());
+
+        calendarWithoutActiveVersion.setName("Spring Semester 2027");
+        calendarWithoutActiveVersion.setDescription(
+                "Academic calendar without an active version.");
+        calendarRepository.save(calendarWithoutActiveVersion);
     }
 
-    private CalendarVersion createDraftVersion(Calendar calendar) {
-        // Nếu đã có DRAFT thì dùng lại, tránh tạo trùng khi restart.
+    private CalendarVersion createInitialActiveVersion(Calendar calendar) {
+        // Promote an existing demo draft so its sessions remain attached.
         return calendarVersionRepository
                 .findFirstByCalendar_IdAndStatusAndIsActiveTrueOrderByVersionNumberDesc(
                         calendar.getId(),
                         CalendarVersionStatus.DRAFT
                 )
+                .map(draft -> {
+                    draft.setStatus(CalendarVersionStatus.ACTIVE);
+                    return calendarVersionRepository.save(draft);
+                })
                 .orElseGet(() -> {
                     Integer lastIssued =
                             calendar.getLastIssuedVersionNumber();
@@ -72,11 +99,12 @@ public class CalendarDemoDataInitializer implements CommandLineRunner {
                     CalendarVersion draft = CalendarVersion.builder()
                             .calendar(calendar)
                             .versionNumber(nextVersion)
-                            .status(CalendarVersionStatus.DRAFT)
+                            .status(CalendarVersionStatus.ACTIVE)
                             .isActive(true)
                             .build();
 
                     return calendarVersionRepository.save(draft);
                 });
     }
+
 }

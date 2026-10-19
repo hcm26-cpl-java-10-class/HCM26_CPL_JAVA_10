@@ -13,6 +13,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+import com.example.starter_project_2025.system.schedule.calendar.CalendarMapper;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.when;
@@ -20,6 +21,9 @@ import static org.mockito.Mockito.when;
 @DataJpaTest
 @Import(CalendarServiceImpl.class)
 class CalendarCreationIntegrationTest {
+
+    @MockBean
+    private CalendarMapper calendarMapper;
 
     @Autowired
     private CalendarServiceImpl calendarService;

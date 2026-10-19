@@ -11,6 +11,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+import com.example.starter_project_2025.system.schedule.calendar.CalendarMapper;
+import com.example.starter_project_2025.system.schedule.calendar.repository.CalendarVersionRepository;
+
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -29,7 +32,9 @@ class CalendarServiceImplTest {
 
         calendarService = new CalendarServiceImpl(
                 calendarRepository,
-                externalApiService
+                externalApiService,
+                mock(CalendarVersionRepository.class),
+                mock(CalendarMapper.class)
         );
     }
 
@@ -63,7 +68,10 @@ class CalendarServiceImplTest {
 
         verify(calendarRepository).save(captor.capture());
 
+
+
         Calendar saved = captor.getValue();
+        assertEquals("Calendar - 10", saved.getName());
         assertEquals(10L, saved.getClassId());
         assertEquals(Boolean.TRUE, saved.getIsActive());
         assertEquals(Integer.valueOf(0),

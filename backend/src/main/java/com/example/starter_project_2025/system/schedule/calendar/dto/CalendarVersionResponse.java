@@ -21,4 +21,7 @@ public class CalendarVersionResponse extends BaseDTO {
     CalendarVersionStatus status;
     LocalDateTime activatedAt;
     Long activatedBy;
+
+    String name;
+    String description;
 }

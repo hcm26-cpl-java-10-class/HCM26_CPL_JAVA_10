@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { SessionDTO } from "@/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Calendar, Clock, Save } from "lucide-react";
+import { ArrowLeft, Calendar, Clock, Save, Sparkles } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -172,10 +172,24 @@ export function SessionCreatePage() {
 
         <Card className="shadow-sm">
           <CardHeader>
-            <CardTitle className="text-xl">Lập Lịch Buổi Học (Create Session)</CardTitle>
-            <CardDescription>
-              Tạo mới buổi học có tích hợp kiểm tra xung đột thời gian thực (Conflict Detection).
-            </CardDescription>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-xl">Lập Lịch Buổi Học (Create Session)</CardTitle>
+                <CardDescription>
+                  Tạo mới buổi học có tích hợp kiểm tra xung đột thời gian thực (Conflict Detection).
+                </CardDescription>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => navigate("/sessions/bulk-generate")}
+                className="gap-2 border-primary/30 text-primary hover:bg-primary/10 shrink-0"
+              >
+                <Sparkles className="h-4 w-4" />
+                Bulk Generator (F16)
+              </Button>
+            </div>
           </CardHeader>
 
           <CardContent>
