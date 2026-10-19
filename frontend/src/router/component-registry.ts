@@ -11,7 +11,7 @@ import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
-
+import SectionManagementPage from "@/pages/management/demo/section";
 export interface RouteConfig {
   path: string;
   component: ComponentType<any>;
@@ -41,4 +41,12 @@ export const routes: RouteConfig[] = [
   { path: "/forgot-password", component: ForgotPasswordPage, isPublic: true },
   { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true,},
   { path: "/unauthorized", component: Unauthorized, isPublic: true },
+
+  {
+    path: "/course-sections",
+    component: SectionManagementPage,
+    requiredPermission: "SECTION_READ",
+  },
+
+
 ];
