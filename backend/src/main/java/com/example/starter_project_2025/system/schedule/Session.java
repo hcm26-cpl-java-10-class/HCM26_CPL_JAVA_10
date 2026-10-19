@@ -36,9 +36,9 @@ import java.time.LocalDateTime;
 )
 public class Session extends BaseEntity {
 
-    @Column(name = "calendar_version_id")
-    @ExportField(name = "Calendar Version ID")
-    Long calendarVersionId;
+//    @Column(name = "calendar_version_id")
+//    @ExportField(name = "Calendar Version ID")
+//    Long calendarVersionId;
 
     @Column(name = "topic_id")
     @ExportField(name = "Topic ID")
@@ -125,4 +125,5 @@ public class Session extends BaseEntity {
     @Column(name = "version")
     @ExportField(name = "Version")
     Long version;
+
 }
