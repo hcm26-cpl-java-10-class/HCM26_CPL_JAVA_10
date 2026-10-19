@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/sessions")
+@RequestMapping("/api/sessions")
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Tag(name = "Session Operational Status (v1)",
         description = "Cập nhật trạng thái buổi học — Trainer được phân công / Class Admin (F15)")
