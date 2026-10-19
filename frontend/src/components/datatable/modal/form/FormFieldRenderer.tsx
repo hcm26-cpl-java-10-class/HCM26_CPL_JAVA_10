@@ -34,6 +34,17 @@ export function FormFieldRenderer({
   relationOptions = {},
   onChange,
 }: FormFieldRendererProps) {
+<<<<<<< Updated upstream
+=======
+  const rule = getEffectiveRule(field);
+  const requiredMark = rule.required ? (
+    <span className="text-destructive"> *</span>
+  ) : null;
+  const hint = rule.hint ? (
+    <p className="text-xs text-muted-foreground -mt-1">{rule.hint}</p>
+  ) : null;
+
+>>>>>>> Stashed changes
   switch (field.type) {
     case "boolean":
       return (
@@ -136,12 +147,16 @@ export function FormFieldRenderer({
             value={value?.toString() || ""}
             onValueChange={(val) => onChange(field.name, val)}
           >
-            <SelectTrigger className={errorClass}>
+            <SelectTrigger className={`${errorClass} w-full`}>
               <SelectValue
                 placeholder={`Select ${field.label.toLowerCase()}...`}
               />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent
+              position="popper"
+              sideOffset={4}
+              className="max-h-60 w-(--radix-select-trigger-width)"
+            >
               {items.map((item) => (
                 <SelectItem
                   key={item[rel.valueField]}
@@ -213,10 +228,15 @@ export function FormFieldRenderer({
     case "textarea":
       return (
         <div className="grid gap-2">
+<<<<<<< Updated upstream
           <Label htmlFor={field.name}>{field.label}</Label>
+=======
+          <Label htmlFor={field.name}>{field.label}{requiredMark}</Label>
+          {hint}
+>>>>>>> Stashed changes
           <Textarea
             id={field.name}
-            className={errorClass}
+            className={`${errorClass} field-sizing-fixed h-28 resize-none overflow-y-auto break-words`}
             value={value || ""}
             onChange={(e) => onChange(field.name, e.target.value)}
             placeholder={`Enter ${field.label.toLowerCase()}...`}
@@ -230,7 +250,12 @@ export function FormFieldRenderer({
     default:
       return (
         <div className="grid gap-2">
+<<<<<<< Updated upstream
           <Label htmlFor={field.name}>{field.label}</Label>
+=======
+          <Label htmlFor={field.name}>{field.label}{requiredMark}</Label>
+          {hint}
+>>>>>>> Stashed changes
           <Input
             id={field.name}
             className={errorClass}
