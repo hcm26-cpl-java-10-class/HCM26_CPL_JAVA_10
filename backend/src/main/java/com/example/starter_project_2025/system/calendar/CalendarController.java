@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import com.example.starter_project_2025.init.annotation.ResourceMenu;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -22,6 +23,14 @@ import java.time.LocalDateTime;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/calendar")
+@ResourceMenu(
+        title = "Timetable",
+        group = "Training Operations",
+        icon = "calendar",
+        url = "/calendar/preview",
+        order = 4,
+        permission = "SESSION_READ"
+)
 public class CalendarController {
 
     private final SessionService sessionService;

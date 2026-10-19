@@ -30,7 +30,7 @@ export const routes: RouteConfig[] = [
     path: "/calendar/preview",
     component: WeeklyCalendarPage,
     requiredPermission: "SESSION_READ",
-    isModuleDriven: false,
+    isModuleDriven: true,
   },
   {
     path: "/fams/module-group-module",
