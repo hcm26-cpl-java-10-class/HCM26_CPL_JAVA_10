@@ -7,6 +7,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -31,5 +33,22 @@ public class ExamGradingController {
             @PathVariable Long attemptId
     ) {
         return ResponseEntity.ok(service.getDetail(examId, attemptId));
+    }
+
+    @PostMapping("/attempts/{attemptId}/grade")
+    public ResponseEntity<EssayGradingDTO.Detail> submitOfficialGrade(
+            @PathVariable Long examId,
+            @PathVariable Long attemptId,
+            @RequestBody EssayGradingDTO.GradeSubmissionRequest request
+    ) {
+        return ResponseEntity.ok(service.submitOfficialGrade(examId, attemptId, request));
+    }
+
+    @PostMapping("/attempts/{attemptId}/ai-suggest")
+    public ResponseEntity<EssayGradingDTO.AiGradingResponse> requestAiGrading(
+            @PathVariable Long examId,
+            @PathVariable Long attemptId
+    ) {
+        return ResponseEntity.ok(service.requestAiGrading(examId, attemptId));
     }
 }

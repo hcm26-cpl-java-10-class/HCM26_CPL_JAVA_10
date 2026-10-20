@@ -49,8 +49,8 @@ public final class ExamAttemptLifecycle {
             case IN_PROGRESS -> to == ExamAttemptStatus.SUBMITTED
                     || to == ExamAttemptStatus.PENDING_REVIEW
                     || to == ExamAttemptStatus.EXPIRED;
-            case PENDING_REVIEW -> to == ExamAttemptStatus.SUBMITTED;
-            case SUBMITTED, EXPIRED -> false;
+            case PENDING_REVIEW, EXPIRED -> to == ExamAttemptStatus.SUBMITTED;
+            case SUBMITTED -> to == ExamAttemptStatus.SUBMITTED;
         };
     }
 

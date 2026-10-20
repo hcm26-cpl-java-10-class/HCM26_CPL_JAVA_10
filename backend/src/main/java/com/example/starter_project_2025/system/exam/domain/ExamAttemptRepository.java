@@ -11,6 +11,10 @@ import java.util.Optional;
 
 public interface ExamAttemptRepository extends BaseCrudRepository<ExamAttempt, Long> {
 
+    boolean existsByExam_Id(Long examId);
+
+    boolean existsByExam_IdAndStatusIn(Long examId, java.util.Collection<ExamAttemptStatus> statuses);
+
     Optional<ExamAttempt> findByExam_IdAndStudent_Id(Long examId, Long studentId);
 
     List<ExamAttempt> findAllByStudent_IdOrderByStartedAtDesc(Long studentId);

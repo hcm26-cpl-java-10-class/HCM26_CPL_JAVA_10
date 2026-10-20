@@ -13,9 +13,17 @@ import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.exam.domain.Exam;
+import com.example.starter_project_2025.system.exam.domain.ExamAttemptRepository;
+import com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus;
+import com.example.starter_project_2025.system.exam.domain.ExamReminder;
+import com.example.starter_project_2025.system.exam.domain.ExamReminderRepository;
 import com.example.starter_project_2025.system.exam.domain.ExamRepository;
+import com.example.starter_project_2025.system.exam.domain.Invitation;
+import com.example.starter_project_2025.system.exam.domain.InvitationRepository;
+import com.example.starter_project_2025.system.exam.domain.InvitationStatus;
 import com.example.starter_project_2025.system.exam.dto.ExamDTO;
 import com.example.starter_project_2025.system.exam.dto.ExamFilter;
 import com.example.starter_project_2025.system.exam.mapper.ExamMapper;
@@ -33,6 +41,9 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 	private final QuestionRepository questionRepository;
 	private final ExamMapper examMapper;
 	private final ExamConfigValidator configValidator;
+	private final ExamAttemptRepository examAttemptRepository;
+	private final InvitationRepository invitationRepository;
+	private final ExamReminderRepository examReminderRepository;
 
 	@Override
 	protected BaseCrudRepository<Exam, Long> getRepository() {
@@ -47,6 +58,53 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 	@Override
 	protected String[] searchableFields() {
 		return new String[]{"title"};
+	}
+
+	@Override
+	public void delete(Long id) {
+		checkPermission(CrudAction.DELETE);
+
+		Exam exam = examRepository.lockForAttemptStart(id)
+				.orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
+
+		beforeDelete(exam);
+
+		examRepository.delete(exam);
+
+		afterDelete(exam);
+	}
+
+	@Override
+	protected void beforeDelete(Exam exam) {
+		java.time.LocalDateTime now = java.time.LocalDateTime.now();
+		if (exam.getStartTime() != null && now.isAfter(exam.getStartTime())
+				&& (exam.getEndTime() == null || now.isBefore(exam.getEndTime()))) {
+			throw new BadRequestException("Cannot delete an exam that is currently in progress");
+		}
+		if (examAttemptRepository.existsByExam_IdAndStatusIn(
+				exam.getId(),
+				List.of(ExamAttemptStatus.NOT_STARTED, ExamAttemptStatus.IN_PROGRESS))) {
+			throw new BadRequestException("Cannot delete an exam that is currently in progress with active student attempts");
+		}
+		if (examAttemptRepository.existsByExam_Id(exam.getId())) {
+			throw new BadRequestException("Cannot delete exam with existing student attempts. Historical records must be preserved.");
+		}
+		List<Invitation> invitations = invitationRepository.findByExamId(exam.getId());
+		boolean hasActiveInvitations = invitations.stream().anyMatch(i ->
+				i.getStatus() == InvitationStatus.PENDING
+						|| i.getStatus() == InvitationStatus.SENT
+						|| i.getStatus() == InvitationStatus.ACCEPTED
+		);
+		if (hasActiveInvitations) {
+			throw new BadRequestException("Cannot delete exam with active invitations. Revoke or remove invitations first.");
+		}
+		List<ExamReminder> reminders = examReminderRepository.findByExamId(exam.getId());
+		if (!reminders.isEmpty()) {
+			examReminderRepository.deleteAll(reminders);
+		}
+		if (!invitations.isEmpty()) {
+			invitationRepository.deleteAll(invitations);
+		}
 	}
 
 	// ===== Create: Gắn câu hỏi nếu request có questionIds, rồi kiểm tra cấu hình kỳ thi =====

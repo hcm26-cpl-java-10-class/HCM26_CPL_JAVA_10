@@ -78,6 +78,8 @@ export interface EssayGradingItem {
   content: string;
   points: number;
   answerText: string;
+  score?: number | null;
+  feedback?: string | null;
 }
 
 export interface EssayGradingDetail {
@@ -93,5 +95,30 @@ export interface EssayGradingDetail {
   submittedAt: string | null;
   totalPoints: number;
   objectiveScore: number | null;
+  finalScore?: number | null;
+  alreadyGraded?: boolean;
   essays: EssayGradingItem[];
 }
+
+export interface QuestionGradeInput {
+  questionId: number;
+  score: number;
+  feedback?: string;
+}
+
+export interface GradeSubmissionRequest {
+  grades: QuestionGradeInput[];
+  confirmOverwrite?: boolean;
+}
+
+export interface AiQuestionProposal {
+  questionId: number;
+  proposedScore: number;
+  feedback: string;
+  reasoning?: string;
+}
+
+export interface AiGradingResponse {
+  proposals: AiQuestionProposal[];
+}
+

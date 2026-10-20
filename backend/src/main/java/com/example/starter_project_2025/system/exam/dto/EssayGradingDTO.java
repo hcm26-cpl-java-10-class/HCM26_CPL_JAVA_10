@@ -39,6 +39,8 @@ public class EssayGradingDTO {
         private Instant submittedAt;
         private int totalPoints;
         private Integer objectiveScore;
+        private Integer finalScore;
+        private boolean alreadyGraded;
         private List<EssayItem> essays;
     }
 
@@ -50,5 +52,37 @@ public class EssayGradingDTO {
         private String content;
         private int points;
         private String answerText;
+        private Integer score;
+        private String feedback;
+    }
+
+    @Getter
+    @Setter
+    public static class GradeSubmissionRequest {
+        private List<QuestionGrade> grades;
+        private Boolean confirmOverwrite;
+    }
+
+    @Getter
+    @Setter
+    public static class QuestionGrade {
+        private Long questionId;
+        private Integer score;
+        private String feedback;
+    }
+
+    @Getter
+    @Setter
+    public static class AiGradingResponse {
+        private List<AiQuestionProposal> proposals;
+    }
+
+    @Getter
+    @Setter
+    public static class AiQuestionProposal {
+        private Long questionId;
+        private Integer proposedScore;
+        private String feedback;
+        private String reasoning;
     }
 }

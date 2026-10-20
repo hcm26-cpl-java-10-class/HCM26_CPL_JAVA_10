@@ -26,9 +26,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { ExamDTO, LatePolicy, QuestionDifficulty, QuestionFilter, QuestionType, ResultVisibility } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, ClipboardCheck, Mail, Pencil, Plus, Search, Trash2, X } from "lucide-react"; // CHANGED: thêm ClipboardCheck
+import { BookOpen, ClipboardCheck, Mail, MoreVertical, Pencil, Plus, Search, Trash2, X } from "lucide-react"; // CHANGED: thêm ClipboardCheck, MoreVertical
 // FIXED: trước đây import nhầm `useNavigate` từ "react" (nó nằm trong react-router-dom) và chưa khai báo `navigate`
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -138,6 +144,8 @@ export default function ExamManagementPage() {
   const [difficulty, setDifficulty] = useState("ALL");
   const [questionPage, setQuestionPage] = useState(0);
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<Set<number>>(new Set());
+  const [examToDelete, setExamToDelete] = useState<ExamDTO | null>(null);
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
 
   const examsQuery = useQuery({
     queryKey: ["exam-management", examPage, examSearch],
@@ -212,11 +220,31 @@ export default function ExamManagementPage() {
         setActiveExam(null);
         setPickerOpen(false);
       }
+      setExamToDelete(null);
+      setDeleteConfirmInput("");
       refreshExams();
-      toast.success("Đã xóa đề thi");
+      toast.success("Exam deleted successfully");
     },
-    onError: (error) => toast.error(getErrorMessage(error, "Không thể xóa đề thi")),
+    onError: (error) => toast.error(getErrorMessage(error, "Failed to delete exam")),
   });
+
+  const openDeleteConfirm = (exam: ExamDTO) => {
+    setExamToDelete(exam);
+    setDeleteConfirmInput("");
+  };
+
+  const closeDeleteConfirm = () => {
+    if (deleteExamMutation.isPending) return;
+    setExamToDelete(null);
+    setDeleteConfirmInput("");
+  };
+
+  const handleConfirmDelete = () => {
+    if (deleteConfirmInput !== "DELETE" || !examToDelete?.id || deleteExamMutation.isPending) {
+      return;
+    }
+    deleteExamMutation.mutate(examToDelete.id);
+  };
 
   const addQuestionsMutation = useMutation({
     mutationFn: () => examApi.addQuestions(activeExam!.id!, [...selectedQuestionIds]),
@@ -377,18 +405,27 @@ export default function ExamManagementPage() {
                           <Button variant="ghost" size="icon-sm" aria-label="Sửa đề thi" title="Sửa đề thi" onClick={() => openEditExam(exam)}>
                             <Pencil />
                           </Button>
-                          <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label="Xóa đề thi"
-                              title="Xóa đề thi"
-                              disabled={deleteExamMutation.isPending}
-                              onClick={() => {
-                                if (window.confirm(`Xóa đề thi “${exam.title}”?`)) deleteExamMutation.mutate(exam.id!);
-                              }}
-                          >
-                            <Trash2 />
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label="Thao tác khác"
+                                title="Thao tác khác"
+                              >
+                                <MoreVertical className="size-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive cursor-pointer"
+                                onClick={() => openDeleteConfirm(exam)}
+                              >
+                                <Trash2 className="mr-2 size-4" />
+                                Xóa đề thi
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -664,6 +701,58 @@ export default function ExamManagementPage() {
                 Đóng
               </Button>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Feature A: Secure Exam Deletion Confirmation Dialog (English UI) */}
+        <Dialog
+          open={Boolean(examToDelete)}
+          onOpenChange={(open) => {
+            if (!open) closeDeleteConfirm();
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Delete Exam</DialogTitle>
+              <DialogDescription>
+                This action cannot be undone. Are you sure you want to permanently delete{" "}
+                <span className="font-semibold text-foreground">
+                  {examToDelete?.title ? `“${examToDelete.title}”` : "this exam"}
+                </span>
+                ?
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 py-3">
+              <p className="text-sm text-muted-foreground">
+                Please type <span className="font-mono font-semibold text-destructive">DELETE</span> to confirm:
+              </p>
+              <Input
+                aria-label="Confirm deletion input"
+                autoComplete="off"
+                placeholder="DELETE"
+                value={deleteConfirmInput}
+                onChange={(event) => setDeleteConfirmInput(event.target.value)}
+                disabled={deleteExamMutation.isPending}
+              />
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                variant="outline"
+                disabled={deleteExamMutation.isPending}
+                onClick={closeDeleteConfirm}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={deleteConfirmInput !== "DELETE" || deleteExamMutation.isPending}
+                onClick={handleConfirmDelete}
+              >
+                {deleteExamMutation.isPending ? "Deleting..." : "Delete Exam"}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </MainLayout>
