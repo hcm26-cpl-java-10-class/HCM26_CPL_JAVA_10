@@ -14,6 +14,7 @@ public record TrainingProgramResponse(
         Integer totalDurationHours
 ) {
     public record ProgramSubjectResponse(
+            Long id,
             Long subjectId,
             String code,
             String name,

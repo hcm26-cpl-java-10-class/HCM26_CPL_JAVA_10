@@ -22,6 +22,14 @@ public class ExternalApiController {
 
     ExternalApiService externalApiService;
 
+    @GetMapping("/data-source")
+    @Operation(summary = "Identify whether shared data is local sample data")
+    public DataSourceResponse getDataSource() {
+        return new DataSourceResponse(externalApiService.isSampleData());
+    }
+
+    public record DataSourceResponse(boolean sampleData) {}
+
     @GetMapping("/classes")
     @Operation(summary = "Fetch classes from external system")
     public ResponseEntity<List<ExternalClassDTO>> getClasses(

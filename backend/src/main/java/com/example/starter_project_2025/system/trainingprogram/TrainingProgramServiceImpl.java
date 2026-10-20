@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.trainingprogram;
 
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import com.example.starter_project_2025.exception.ConflictException;
 import com.example.starter_project_2025.system.subject.Subject;
 import com.example.starter_project_2025.system.subject.SubjectRepository;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +17,7 @@ import java.util.stream.Collectors;
 public class TrainingProgramServiceImpl implements TrainingProgramService {
     private final TrainingProgramRepository programRepository;
     private final SubjectRepository subjectRepository;
+    private final TeachingAssignmentRepository teachingAssignmentRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -59,9 +61,7 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
     @Override
     public TrainingProgramResponse update(Long id, TrainingProgramRequest request) {
         TrainingProgram p = getProgram(id);
-        if (p.getStatus() == ProgramStatus.ACTIVE) {
-            throw new IllegalArgumentException("Active programs cannot be edited. Clone a new version first.");
-        }
+        requireDraft(p);
         validateCodeVersion(request.code(), request.version(), id);
         if (request.subjects() == null || request.subjects().isEmpty()) {
             throw new IllegalArgumentException("A training program must contain at least one subject.");
@@ -77,9 +77,7 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
     @Override
     public TrainingProgramResponse updateSubjects(Long id, List<ProgramSubjectRequest> subjects) {
         TrainingProgram p = getProgram(id);
-        if (p.getStatus() == ProgramStatus.ACTIVE) {
-            throw new IllegalArgumentException("Active programs cannot be edited. Clone a new version first.");
-        }
+        requireDraft(p);
         applySubjects(p, subjects);
         return toResponse(programRepository.save(p));
     }
@@ -135,6 +133,20 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
         Set<Long> ids = new HashSet<>();
         Set<Integer> orderIndexes = new HashSet<>();
         List<ProgramSubject> links = new ArrayList<>();
+        Map<Long, ProgramSubject> existingBySubjectId = new HashMap<>();
+        for (ProgramSubject existing : program.getSubjects()) {
+            existingBySubjectId.put(existing.getSubject().getId(), existing);
+            if (teachingAssignmentRepository.existsByProgramSubject_Id(existing.getId())) {
+                ProgramSubjectRequest replacement = requests.stream()
+                        .filter(request -> request != null
+                                && Objects.equals(request.subjectId(), existing.getSubject().getId()))
+                        .findFirst()
+                        .orElse(null);
+                if (replacement == null || !Objects.equals(replacement.orderIndex(), existing.getOrderIndex())) {
+                    throw new ConflictException("A program subject referenced by a teaching assignment cannot be removed or reordered.");
+                }
+            }
+        }
         for (ProgramSubjectRequest req : requests) {
             if (req == null || req.subjectId() == null || req.orderIndex() == null || req.orderIndex() <= 0)
                 throw new IllegalArgumentException("Each subject requires a valid subjectId and positive orderIndex.");
@@ -145,7 +157,8 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
             if (!Boolean.TRUE.equals(subject.getIsActive())) throw new IllegalArgumentException("Subject is inactive: " + subject.getId());
             if (subject.getDurationHours() == null || subject.getDurationHours() <= 0)
                 throw new IllegalArgumentException("Subject durationHours must be greater than 0: " + subject.getId());
-            ProgramSubject link = new ProgramSubject();
+            ProgramSubject link = existingBySubjectId.get(req.subjectId());
+            if (link == null) link = new ProgramSubject();
             link.setSubject(subject);
             link.setProgram(program);
             link.setOrderIndex(req.orderIndex());
@@ -169,7 +182,7 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
         List<TrainingProgramResponse.ProgramSubjectResponse> subjects = p.getSubjects().stream()
                 .sorted(Comparator.comparing(ProgramSubject::getOrderIndex))
                 .map(ps -> new TrainingProgramResponse.ProgramSubjectResponse(
-                        ps.getSubject().getId(), ps.getSubject().getCode(), ps.getSubject().getName(),
+                        ps.getId(), ps.getSubject().getId(), ps.getSubject().getCode(), ps.getSubject().getName(),
                         ps.getSubject().getVersion(), ps.getSubject().getDurationHours(), ps.getOrderIndex()))
                 .toList();
         int total = subjects.stream().mapToInt(s -> s.durationHours() == null ? 0 : s.durationHours()).sum();
@@ -178,4 +191,10 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
     }
 
     private String trimToNull(String value) { return value == null || value.isBlank() ? null : value.trim(); }
+
+    private void requireDraft(TrainingProgram program) {
+        if (program.getStatus() != ProgramStatus.DRAFT) {
+            throw new IllegalArgumentException("Only DRAFT programs can be edited. Clone a new version first.");
+        }
+    }
 }
