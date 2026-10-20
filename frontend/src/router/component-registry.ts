@@ -12,6 +12,10 @@ import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 import SectionManagementPage from "@/pages/management/demo/section";
+
+import SyllabusesPage from "@/pages/management/demo/syllabus";
+import SyllabusDetailPage from "@/pages/management/demo/syllabus/detail";
+
 export interface RouteConfig {
   path: string;
   component: ComponentType<any>;
@@ -31,6 +35,19 @@ export const routes: RouteConfig[] = [
     component: TopicMarkGradebookDemoPage,
     requiredPermission: "STUDENT_SCORE_READ",
     isModuleDriven: true,
+  },
+
+  {
+    path: "/syllabuses",
+    component: SyllabusesPage,
+    requiredPermission: "SYLLABUS_READ",
+    isModuleDriven: true,
+  },
+  {
+    path: "/syllabuses/:id",
+    component: SyllabusDetailPage,
+    requiredPermission: "SYLLABUS_READ",
+    isModuleDriven: false,
   },
   ...buildEntityRoutes(),
 
