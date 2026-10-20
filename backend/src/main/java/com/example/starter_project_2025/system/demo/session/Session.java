@@ -19,7 +19,7 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "sessions")
+@Table(name = "sessions", indexes = @Index(name = "ix_sessions_validation_time", columnList = "start_time,end_time"))
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ImportEntity("session")
 @ExportEntity(fileName = "class_sessions", sheetName = "Class Sessions")
@@ -48,6 +48,21 @@ public class Session extends BaseEntity {
     @ImportField(name = "Trainer ID", required = true)
     @ExportField(name = "Trainer ID")
     Long trainerId;
+
+    @Column(name = "teaching_assignment_id")
+    @ImportField(name = "Teaching Assignment ID")
+    @ExportField(name = "Teaching Assignment ID")
+    Long teachingAssignmentId;
+
+    @Column(name = "room_id")
+    @ImportField(name = "Room ID")
+    @ExportField(name = "Room ID")
+    Long roomId;
+
+    @Column(name = "meeting_url", length = 1000)
+    @ImportField(name = "Meeting URL")
+    @ExportField(name = "Meeting URL")
+    String meetingUrl;
 
     @Column(nullable = false, length = 150)
     @ImportField(name = "Session Title", required = true)
