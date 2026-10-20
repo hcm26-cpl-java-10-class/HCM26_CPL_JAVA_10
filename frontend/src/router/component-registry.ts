@@ -11,6 +11,7 @@ import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_grade
 import ExamManagementPage from "@/pages/management/exam";
 import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
 import InvitationManagementPage from "@/pages/management/invitation";
+import ScheduleValidationPage from "@/pages/management/schedule-validation";
 import StudentExamList from "@/pages/student/StudentExamList";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
@@ -64,6 +65,7 @@ export const routes: RouteConfig[] = [
     requiredPermission: "STUDENT_SCORE_READ",
     isModuleDriven: true,
   },
+  { path: "/schedule-validation", component: ScheduleValidationPage },
   {
     path: "/student",
     component: StudentLandingPage,
