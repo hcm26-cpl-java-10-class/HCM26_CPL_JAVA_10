@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { usePermissions } from "@/hooks/usePermissions";
+import { useParams } from "react-router-dom";
 import axios from "axios";
 import {
     getTrainingClass,
@@ -9,7 +8,7 @@ import {
 
 export default function TrainingClassDetailPage() {
     const { classId } = useParams<{ classId: string }>();
-    const { hasPermission } = usePermissions();
+
 
     const [data, setData] = useState<TrainingClassResponse | null>(null);
     const [loading, setLoading] = useState(true);
@@ -108,14 +107,7 @@ export default function TrainingClassDetailPage() {
                     <>
                         <p className="mt-2 text-sm text-slate-500">
                             Class ID: {data.id}
-                            {hasPermission("CALENDAR_READ") && (
-                                <Link
-                                    to={`/calendars?classId=${data.id}`}
-                                    className="mt-4 inline-block rounded border px-4 py-2"
-                                >
-                                    View Class Calendar
-                                </Link>
-                            )}
+
                         </p>
 
                         <dl className="mt-6 grid gap-4 sm:grid-cols-2">
