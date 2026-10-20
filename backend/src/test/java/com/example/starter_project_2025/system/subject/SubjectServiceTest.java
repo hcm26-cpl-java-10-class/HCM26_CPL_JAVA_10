@@ -13,6 +13,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcOperations;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -124,5 +125,30 @@ class SubjectServiceTest {
         assertNotNull(result);
         assertFalse(mockSubject.getIsActive());
         verify(subjectRepository).save(mockSubject);
+    }
+
+    @Test
+    @DisplayName("isCodeAvailable: Trả về true khi mã môn và phiên bản chưa tồn tại")
+    void isCodeAvailable_ShouldReturnTrue_WhenNotExists() {
+        when(subjectRepository.existsByCodeAndVersion("NEW_CODE", "1.0")).thenReturn(false);
+
+        boolean available = subjectService.isCodeAvailable("NEW_CODE", "1.0", null);
+
+        assertTrue(available);
+        verify(subjectRepository).existsByCodeAndVersion("NEW_CODE", "1.0");
+    }
+
+    @Test
+    @DisplayName("getSummary: Trả về thống kê số lượng môn học chính xác")
+    void getSummary_ShouldReturnCorrectStatistics() {
+        when(subjectRepository.findAll()).thenReturn(List.of(mockSubject));
+
+        SubjectSummaryDTO summary = subjectService.getSummary();
+
+        assertNotNull(summary);
+        assertEquals(1, summary.getTotalSubjects());
+        assertEquals(1, summary.getActiveSubjects());
+        assertEquals(0, summary.getInactiveSubjects());
+        assertTrue(summary.getCountByTechnicalGroup().containsKey("Backend"));
     }
 }

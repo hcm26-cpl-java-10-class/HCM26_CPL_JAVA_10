@@ -15,6 +15,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -133,5 +135,40 @@ public class SubjectServiceImpl
         }
 
         return false;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isCodeAvailable(String code, String version, Long excludeId) {
+        if (code == null || code.isBlank()) {
+            return false;
+        }
+        String ver = (version == null || version.isBlank()) ? "1.0" : version.trim();
+        if (excludeId != null) {
+            return !subjectRepository.existsByCodeAndVersionAndIdNot(code.trim(), ver, excludeId);
+        }
+        return !subjectRepository.existsByCodeAndVersion(code.trim(), ver);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SubjectSummaryDTO getSummary() {
+        List<Subject> allSubjects = subjectRepository.findAll();
+        long activeCount = allSubjects.stream().filter(s -> Boolean.TRUE.equals(s.getIsActive())).count();
+        long inactiveCount = allSubjects.size() - activeCount;
+
+        Map<String, Long> countByGroup = allSubjects.stream()
+                .filter(s -> s.getTechnicalGroup() != null && !s.getTechnicalGroup().isBlank())
+                .collect(Collectors.groupingBy(
+                        Subject::getTechnicalGroup,
+                        Collectors.counting()
+                ));
+
+        return SubjectSummaryDTO.builder()
+                .totalSubjects(allSubjects.size())
+                .activeSubjects(activeCount)
+                .inactiveSubjects(inactiveCount)
+                .countByTechnicalGroup(countByGroup)
+                .build();
     }
 }

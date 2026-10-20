@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
@@ -58,5 +59,26 @@ public class SubjectController
     @Operation(summary = "Kiểm tra môn học đã được tham chiếu hay chưa", description = "Kiểm tra xem môn học đã được sử dụng trong lịch học hoặc chương trình đào tạo hay chưa")
     public ResponseEntity<Boolean> isSubjectReferenced(@PathVariable Long id) {
         return ResponseEntity.ok(subjectService.isSubjectReferenced(id));
+    }
+
+    @GetMapping("/check-code")
+    @Operation(summary = "Kiểm tra mã môn học và phiên bản có khả dụng không", description = "Kiểm tra xem mã môn và phiên bản đã tồn tại trong hệ thống hay chưa để phục vụ validate form realtime")
+    public ResponseEntity<Map<String, Object>> checkCodeAvailable(
+            @RequestParam String code,
+            @RequestParam(defaultValue = "1.0") String version,
+            @RequestParam(required = false) Long excludeId
+    ) {
+        boolean available = subjectService.isCodeAvailable(code, version, excludeId);
+        return ResponseEntity.ok(Map.of(
+                "code", code,
+                "version", version,
+                "available", available
+        ));
+    }
+
+    @GetMapping("/summary")
+    @Operation(summary = "Thống kê tổng quan môn học", description = "Lấy số lượng tổng môn học, số môn hoạt động/ngừng hoạt động và phân nhóm kỹ thuật")
+    public ResponseEntity<SubjectSummaryDTO> getSummary() {
+        return ResponseEntity.ok(subjectService.getSummary());
     }
 }

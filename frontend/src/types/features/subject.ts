@@ -15,3 +15,11 @@ export interface SubjectFilter extends BaseFilter {
   technicalGroup?: string;
   version?: string;
 }
+
+export interface SubjectSummaryDTO {
+  totalSubjects: number;
+  activeSubjects: number;
+  inactiveSubjects: number;
+  countByTechnicalGroup: Record<string, number>;
+}
+

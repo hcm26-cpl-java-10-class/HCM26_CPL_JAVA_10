@@ -11,4 +11,8 @@ public interface SubjectService extends BaseCrudService<Long, SubjectDTO, Subjec
     SubjectDTO changeStatus(Long id, Boolean isActive);
 
     boolean isSubjectReferenced(Long id);
+
+    boolean isCodeAvailable(String code, String version, Long excludeId);
+
+    SubjectSummaryDTO getSummary();
 }
