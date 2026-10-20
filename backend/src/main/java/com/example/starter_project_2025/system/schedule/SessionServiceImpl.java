@@ -148,19 +148,7 @@ public class SessionServiceImpl
                 .build();
     }
 
-    @Override
-    public SessionDTO changeStatus(Long id, SessionStatus status) {
-
-        checkPermission(CrudAction.UPDATE);
-
-        Session session = sessionRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Session not found: " + id));
-
-        session.setStatus(status);
-
-        Session saved = sessionRepository.save(session);
-        return sessionMapper.toResponse(saved);
-    }
+    
 
     private String buildConflictDescription(SessionDTO request, Session conflict) {
         String timeRange = conflict.getStartTime().format(TIME_FORMATTER) + " -> " + conflict.getEndTime().format(TIME_FORMATTER);
@@ -193,62 +181,5 @@ public class SessionServiceImpl
         );
     }
 
-    /**
-     * F15 — Hủy buổi học (shortcut {@code POST /api/v1/sessions/{id}/cancel}).
-     *
-     * <p>Quy tắc áp dụng:</p>
-     * <ul>
-     *     <li>Bắt buộc có {@code cancelReason} (≤ 500 ký tự) → 422 VALIDATION_FAILED (BR-SES-03).</li>
-     *     <li>Buổi học phải tồn tại → 404 SESSION_NOT_FOUND.</li>
-     *     <li>Phiên bản phải khớp (nếu client gửi If-Match/version) → 409 SESSION_VERSION_CONFLICT.</li>
-     *     <li>Chỉ chuyển được từ SCHEDULED → CANCELLED (một chiều) → 409 SESSION_INVALID_TRANSITION.</li>
-     * </ul>
-     */
-    @Override
-    public SessionDTO cancel(Long id, SessionCancelRequest request, Long expectedVersion) {
-
-        Session session = sessionRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Session", "id", id));
-
-        // 1. Validate cancelReason (BR-SES-03) -> 422 VALIDATION_FAILED
-        String reason = request != null ? request.getCancelReason() : null;
-        if (reason == null || reason.isBlank()) {
-            throw UnprocessableEntityException.of(
-                    "VALIDATION_FAILED",
-                    "cancelReason",
-                    "Lý do hủy là bắt buộc khi hủy buổi học (BR-SES-03).");
-        }
-        reason = reason.trim();
-        if (reason.length() > MAX_CANCEL_REASON_LENGTH) {
-            throw UnprocessableEntityException.of(
-                    "VALIDATION_FAILED",
-                    "cancelReason",
-                    "Lý do hủy không được vượt quá " + MAX_CANCEL_REASON_LENGTH + " ký tự.");
-        }
-
-        // 2. Kiểm tra phiên bản (optimistic locking) -> 409 SESSION_VERSION_CONFLICT
-        if (expectedVersion != null && !expectedVersion.equals(session.getVersion())) {
-            throw new ConflictException(
-                    "SESSION_VERSION_CONFLICT",
-                    "Phiên bản buổi học đã thay đổi, vui lòng tải lại (currentVersion=" + session.getVersion() + ").");
-        }
-
-        // 3. Chỉ hủy được buổi đang SCHEDULED -> 409 SESSION_INVALID_TRANSITION
-        if (session.getStatus() != SessionStatus.SCHEDULED) {
-            throw new ConflictException(
-                    "SESSION_INVALID_TRANSITION",
-                    "Chỉ có thể hủy buổi học ở trạng thái SCHEDULED. Trạng thái hiện tại: " + session.getStatus() + ".");
-        }
-
-        // 4. Áp dụng chuyển trạng thái một chiều SCHEDULED -> CANCELLED
-        session.setStatus(SessionStatus.CANCELLED);
-        session.setCancelReason(reason);
-        if (request.getNotes() != null) {
-            session.setNotes(request.getNotes());
-        }
-
-        // updatedAt/updatedBy được cập nhật tự động bởi JPA auditing.
-        Session saved = sessionRepository.save(session);
-        return sessionMapper.toResponse(saved);
-    }
+    
 }

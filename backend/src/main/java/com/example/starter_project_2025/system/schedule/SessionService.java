@@ -15,6 +15,5 @@ public interface SessionService extends BaseCrudService<Long, SessionDTO, Sessio
      * @param expectedVersion phiên bản client đang giữ (từ If-Match/ETag), có thể null
      * @return buổi học sau khi hủy
      */
-    SessionDTO cancel(Long id, SessionCancelRequest request, Long expectedVersion);
-    SessionDTO changeStatus(Long id, SessionStatus status);
+
 }

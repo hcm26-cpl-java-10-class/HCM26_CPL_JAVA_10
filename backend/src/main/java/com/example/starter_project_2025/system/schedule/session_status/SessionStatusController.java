@@ -1,6 +1,9 @@
-package com.example.starter_project_2025.system.schedule;
+package com.example.starter_project_2025.system.schedule.session_status;
 
 import com.example.starter_project_2025.exception.BadRequestException;
+import com.example.starter_project_2025.system.schedule.SessionDTO;
+import com.example.starter_project_2025.system.schedule.SessionService;
+import com.example.starter_project_2025.system.schedule.SessionStatus;
 import com.example.starter_project_2025.system.schedule.dto.SessionCancelRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -9,12 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * F15 — Session Operational Status (API version v1).
@@ -23,13 +21,21 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/sessions")
+@RequestMapping("/api/v1/sessions")
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Tag(name = "Session Operational Status (v1)",
         description = "Cập nhật trạng thái buổi học — Trainer được phân công / Class Admin (F15)")
 public class SessionStatusController {
 
-    SessionService sessionService;
+    SessionStatusService sessionStatusService;
+
+    @PatchMapping("/{id}/status")
+    @Operation(summary = "Change the status of session")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<SessionDTO> changeSessionStatus(@PathVariable Long id, @RequestParam SessionStatus status) {
+        return  ResponseEntity.ok(sessionStatusService.changeStatus(id, status));
+    }
+
 
     @PostMapping("/{id}/cancel")
     @PreAuthorize("hasRole('ADMIN')")
@@ -51,7 +57,7 @@ public class SessionStatusController {
         SessionCancelRequest payload = request != null ? request : new SessionCancelRequest();
         Long expectedVersion = resolveExpectedVersion(ifMatch, payload.getVersion());
 
-        SessionDTO response = sessionService.cancel(id, payload, expectedVersion);
+        SessionDTO response = sessionStatusService.cancel(id, payload, expectedVersion);
         return ResponseEntity.ok()
                 .eTag(String.valueOf(response.getVersion()))
                 .body(response);

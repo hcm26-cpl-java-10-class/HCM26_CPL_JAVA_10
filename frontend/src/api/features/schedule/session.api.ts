@@ -9,6 +9,7 @@ import type {
 } from "@/types";
 
 const path = "/sessions";
+const v1Path = "/v1/sessions";
 
 const base = createBaseApiService<SessionDTO, SessionFilter>({
   path: path,
@@ -38,7 +39,7 @@ export const sessionApi = Object.assign({}, base, {
     status: SessionStatus
   ): Promise<SessionDTO> => {
     const response = await axiosInstance.patch<SessionDTO>(
-      `${path}/${id}/status`,
+      `${v1Path}/${id}/status`,
       null,
       { params: { status } }
     );
@@ -59,7 +60,7 @@ export const sessionApi = Object.assign({}, base, {
   ): Promise<SessionDTO> => {
     const ifMatch = buildIfMatch(payload.version);
     const response = await axiosInstance.post<SessionDTO>(
-      `${path}/${id}/cancel`,
+      `${v1Path}/${id}/cancel`,
       payload,
       ifMatch ? { headers: ifMatch } : undefined
     );
