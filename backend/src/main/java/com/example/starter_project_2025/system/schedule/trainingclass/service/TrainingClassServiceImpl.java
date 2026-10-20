@@ -1,0 +1,74 @@
+package com.example.starter_project_2025.system.schedule.trainingclass.service;
+
+import com.example.starter_project_2025.exception.BadRequestException;
+import com.example.starter_project_2025.exception.ConflictException;
+import com.example.starter_project_2025.system.schedule.trainingclass.*;
+import com.example.starter_project_2025.system.schedule.trainingclass.dto.CreateTrainingClassRequest;
+import com.example.starter_project_2025.system.schedule.trainingclass.dto.TrainingClassResponse;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.server.ResponseStatusException;
+
+@Service
+@Validated
+@RequiredArgsConstructor
+public class TrainingClassServiceImpl implements TrainingClassService {
+
+    private final TrainingClassRepository repository;
+    private final TrainingClassMapper mapper;
+    private final ObjectProvider<ProgramVersionChecker> checkerProvider;
+
+    @Override
+    @Transactional
+    @PreAuthorize(
+            "hasRole('ADMIN') and hasAuthority('TRAINING_CLASS_CREATE')"
+    )
+    public TrainingClassResponse create(CreateTrainingClassRequest request) {
+
+        if (request.getEndDate().isBefore(request.getStartDate())) {
+            throw new BadRequestException(
+                    "Ngày kết thúc không được trước ngày bắt đầu"
+            );
+        }
+
+        String code = request.getCode().trim();
+
+        if (repository.existsByCode(code)) {
+            throw new ConflictException("Mã lớp đã tồn tại");
+        }
+
+        ProgramVersionChecker checker = checkerProvider.getIfAvailable();
+
+        if (checker == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Chưa có nguồn kiểm tra phiên bản chương trình"
+            );
+        }
+
+        checker.validateForClass(request.getProgramVersionId());
+
+        TrainingClass trainingClass = TrainingClass.builder()
+                .code(code)
+                .name(request.getName().trim())
+                .traineeType(request.getTraineeType().trim())
+                .deliveryFormat(request.getDeliveryFormat().trim())
+                .site(request.getSite().trim())
+                .location(request.getLocation().trim())
+                .programVersionId(request.getProgramVersionId())
+                .startDate(request.getStartDate())
+                .endDate(request.getEndDate())
+                .capacity(request.getCapacity())
+                .status(ClassStatus.PLANNING)
+                .build();
+
+        TrainingClass savedClass = repository.saveAndFlush(trainingClass);
+
+        return mapper.toResponse(savedClass);
+    }
+}
