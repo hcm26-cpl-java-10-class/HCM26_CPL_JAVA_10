@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChevronDown, Search, X } from "lucide-react";
 import type { FieldSchema, RelationConfig } from "@/types";
 import { FieldError } from "./FieldError";
@@ -61,6 +60,20 @@ export function MultiRelationSelect({
     [items, search, rel.labelField]
   );
 
+  const groupedItems = useMemo(() => {
+    if (!rel.groupField) return null;
+
+    const groups = new Map<string, any[]>();
+    filteredItems.forEach((item) => {
+      const group = item[rel.groupField!]?.toString() || "Other";
+      const groupItems = groups.get(group) ?? [];
+      groupItems.push(item);
+      groups.set(group, groupItems);
+    });
+
+    return [...groups.entries()];
+  }, [filteredItems, rel.groupField]);
+
   const allFilteredSelected =
     filteredItems.length > 0 &&
     filteredItems.every((item) =>
@@ -95,6 +108,27 @@ export function MultiRelationSelect({
       filteredItems.map((i) => i[rel.valueField]?.toString())
     );
     onChange(selectedValues.filter((v) => !filteredIds.has(v?.toString())));
+  };
+
+  const toggleGroup = (groupItems: any[]) => {
+    const groupValues = groupItems.map((item) => item[rel.valueField]);
+    const allGroupSelected = groupValues.every((groupValue) =>
+      selectedValues.some((selected) => selected?.toString() === groupValue?.toString())
+    );
+
+    if (allGroupSelected) {
+      const groupIds = new Set(groupValues.map((groupValue) => groupValue?.toString()));
+      onChange(selectedValues.filter((selected) => !groupIds.has(selected?.toString())));
+      return;
+    }
+
+    const nextValues = [...selectedValues];
+    groupValues.forEach((groupValue) => {
+      if (!nextValues.some((selected) => selected?.toString() === groupValue?.toString())) {
+        nextValues.push(groupValue);
+      }
+    });
+    onChange(nextValues);
   };
 
   return (
@@ -147,6 +181,7 @@ export function MultiRelationSelect({
         <PopoverContent
           className="w-[--radix-popover-trigger-width] p-0"
           align="start"
+          onWheel={(e) => e.stopPropagation()}
         >
           {/* Search */}
           <div className="p-2 border-b">
@@ -198,24 +233,87 @@ export function MultiRelationSelect({
           )}
 
           {/* Options */}
-          <ScrollArea className="h-[220px]">
+          <div
+            className="max-h-60 overflow-y-auto overscroll-contain touch-pan-y pointer-events-auto"
+            onWheel={(e) => e.stopPropagation()}
+            tabIndex={0}
+          >
             <div className="p-1">
-              {filteredItems.map((item) => {
-                const itemVal = item[rel.valueField];
-                const checked = selectedValues.some(
-                  (v) => v?.toString() === itemVal?.toString()
-                );
-                return (
-                  <div
-                    key={itemVal}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded-sm hover:bg-accent cursor-pointer"
-                    onClick={() => toggleItem(itemVal)}
-                  >
-                    <Checkbox checked={checked} />
-                    <span className="text-sm">{item[rel.labelField]}</span>
-                  </div>
-                );
-              })}
+              {groupedItems
+                ? groupedItems.map(([group, groupItems]) => {
+                    const allGroupSelected = groupItems.every((item) =>
+                      selectedValues.some(
+                        (selected) =>
+                          selected?.toString() ===
+                          item[rel.valueField]?.toString()
+                      )
+                    );
+                    const someGroupSelected = groupItems.some((item) =>
+                      selectedValues.some(
+                        (selected) =>
+                          selected?.toString() ===
+                          item[rel.valueField]?.toString()
+                      )
+                    );
+
+                    return (
+                      <div key={group}>
+                        <div
+                          className="flex items-center gap-2 border-b bg-muted/50 px-2 py-1.5 cursor-pointer"
+                          onClick={() => toggleGroup(groupItems)}
+                        >
+                          <Checkbox
+                            checked={
+                              allGroupSelected
+                                ? true
+                                : someGroupSelected
+                                  ? "indeterminate"
+                                  : false
+                            }
+                            aria-label={`Select all in ${group}`}
+                          />
+                          <span className="text-xs font-semibold">
+                            Select All in {group}
+                          </span>
+                        </div>
+                        {groupItems.map((item) => {
+                          const itemVal = item[rel.valueField];
+                          const checked = selectedValues.some(
+                            (selected) =>
+                              selected?.toString() === itemVal?.toString()
+                          );
+                          return (
+                            <div
+                              key={itemVal}
+                              className="flex items-center gap-2 px-2 py-1.5 rounded-sm hover:bg-accent cursor-pointer"
+                              onClick={() => toggleItem(itemVal)}
+                            >
+                              <Checkbox checked={checked} />
+                              <span className="text-sm">
+                                {item[rel.labelField]}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })
+                : filteredItems.map((item) => {
+                    const itemVal = item[rel.valueField];
+                    const checked = selectedValues.some(
+                      (v) => v?.toString() === itemVal?.toString()
+                    );
+                    return (
+                      <div
+                        key={itemVal}
+                        className="flex items-center gap-2 px-2 py-1.5 rounded-sm hover:bg-accent cursor-pointer"
+                        onClick={() => toggleItem(itemVal)}
+                      >
+                        <Checkbox checked={checked} />
+                        <span className="text-sm">{item[rel.labelField]}</span>
+                      </div>
+                    );
+                  })}
               {filteredItems.length === 0 && (
                 <div className="px-2 py-4 text-sm text-center text-muted-foreground">
                   {items.length === 0
@@ -224,7 +322,7 @@ export function MultiRelationSelect({
                 </div>
               )}
             </div>
-          </ScrollArea>
+          </div>
         </PopoverContent>
       </Popover>
       <FieldError errors={fieldErrors} />

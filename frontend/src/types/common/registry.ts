@@ -30,6 +30,7 @@ export interface EntityCardRendererProps {
     onDelete: (row: any) => void;
     onBooleanToggle: (id: any, fieldName: string, newValue: boolean) => void;
     disableBooleanToggle?: boolean;
+    isRowProtected?: (row: any) => boolean;
 }
 
 export interface EntityConfig {
@@ -37,6 +38,8 @@ export interface EntityConfig {
     path: string;
     api: any;
     schema: EntitySchema;
+    isRowProtected?: (row: any) => boolean;
+    renderSelectionActions?: (table: any) => ReactNode;
     actionPages?: EntityActionPagesConfig;
     cardRenderer?: (props: EntityCardRendererProps) => ReactNode;
 }

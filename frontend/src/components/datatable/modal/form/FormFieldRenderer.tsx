@@ -232,11 +232,24 @@ export function FormFieldRenderer({
           <Textarea
             id={field.name}
             className={errorClass}
+            maxLength={field.maxLength}
             value={value || ""}
             onChange={(e) => onChange(field.name, e.target.value)}
             placeholder={`Enter ${field.label.toLowerCase()}...`}
             rows={4}
           />
+          {field.maxLength !== undefined && (
+            <div
+              className={`text-right text-xs ${
+                (value?.length ?? 0) >= field.maxLength
+                  ? "text-destructive"
+                  : "text-muted-foreground"
+              }`}
+              aria-live="polite"
+            >
+              {value?.length ?? 0}/{field.maxLength}
+            </div>
+          )}
           <FieldError errors={fieldErrors} />
         </div>
       );
@@ -249,10 +262,23 @@ export function FormFieldRenderer({
           <Input
             id={field.name}
             className={errorClass}
+            maxLength={field.maxLength}
             value={value || ""}
             onChange={(e) => onChange(field.name, e.target.value)}
             placeholder={`Enter ${field.label.toLowerCase()}...`}
           />
+          {field.maxLength !== undefined && (
+            <div
+              className={`text-right text-xs ${
+                (value?.length ?? 0) >= field.maxLength
+                  ? "text-destructive"
+                  : "text-muted-foreground"
+              }`}
+              aria-live="polite"
+            >
+              {value?.length ?? 0}/{field.maxLength}
+            </div>
+          )}
           <FieldError errors={fieldErrors} />
         </div>
       );

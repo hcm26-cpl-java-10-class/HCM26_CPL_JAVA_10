@@ -65,6 +65,8 @@ export interface FieldSchema {
 
   minWidth?: number;
 
+  maxLength?: number;
+
   options?: { label: string; value: any }[];
 
   booleanLabels?: {
@@ -101,6 +103,8 @@ export interface RelationConfig {
   labelField: string;
 
   multiple?: boolean;
+
+  groupField?: string;
 }
 
 export interface DynamicFieldBuilderOptions {

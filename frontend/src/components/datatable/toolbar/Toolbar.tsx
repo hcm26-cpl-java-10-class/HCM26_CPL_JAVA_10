@@ -15,6 +15,7 @@ interface ToolbarProps {
   showViewModeToggle?: boolean;
   showActions?: boolean;
   showCardColumnToggle?: boolean;
+  hideBulkDelete?: boolean;
 }
 
 export function Toolbar({
@@ -25,6 +26,7 @@ export function Toolbar({
   showViewModeToggle = true,
   showActions = true,
   showCardColumnToggle = true,
+  hideBulkDelete = false,
 }: ToolbarProps) {
   const { schema } = table;
 
@@ -76,7 +78,13 @@ export function Toolbar({
         )}
       </div>
 
-      {showActions && <ToolbarActions table={table} headerActions={headerActions} />}
+      {showActions && (
+        <ToolbarActions
+          table={table}
+          headerActions={headerActions}
+          hideBulkDelete={hideBulkDelete}
+        />
+      )}
     </div>
   );
 }

@@ -644,14 +644,14 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
     setFormOpen(true);
   };
 
-  const bulkDelete = async () => {
+  const bulkDelete = async (selectedIds: any[] = selected) => {
     if (!permission.canDelete) return;
 
-    if (!selected.length) {
+    if (!selectedIds.length) {
       return;
     }
 
-    const ids = [...selected];
+    const ids = [...selectedIds];
 
     const results = await Promise.all(
       ids.map((id) => remove(id, { silent: true, skipInvalidate: true })),

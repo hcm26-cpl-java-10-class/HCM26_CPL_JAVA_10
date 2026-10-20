@@ -11,9 +11,14 @@ import { PermissionGate } from "@/components/PermissionGate";
 interface ToolbarActionsProps {
   table: any;
   headerActions?: React.ReactNode;
+  hideBulkDelete?: boolean;
 }
 
-export function ToolbarActions({ table, headerActions }: ToolbarActionsProps) {
+export function ToolbarActions({
+  table,
+  headerActions,
+  hideBulkDelete = false,
+}: ToolbarActionsProps) {
   const [importOpen, setImportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
@@ -40,17 +45,19 @@ export function ToolbarActions({ table, headerActions }: ToolbarActionsProps) {
 
   return (
     <div className="flex flex-col lg:flex-row justify-end items-center gap-2">
-      <PermissionGate permission={table.permission?.keys?.delete}>
-        {table.permission?.canDelete && table.selected?.length > 0 && (
-          <ActionButton
-            onClick={() => setBulkDeleteOpen(true)}
-            tooltip={`Delete ${table.selected.length} selected rows`}
-            title="Delete"
-            variant="destructive"
-            icon={<Trash2 size={16} />}
-          />
-        )}
-      </PermissionGate>
+      {!hideBulkDelete && (
+        <PermissionGate permission={table.permission?.keys?.delete}>
+          {table.permission?.canDelete && table.selected?.length > 0 && (
+            <ActionButton
+              onClick={() => setBulkDeleteOpen(true)}
+              tooltip={`Delete ${table.selected.length} selected rows`}
+              title="Delete"
+              variant="destructive"
+              icon={<Trash2 size={16} />}
+            />
+          )}
+        </PermissionGate>
+      )}
 
       {table.permission?.canImport && (
         <PermissionGate permission={table.permission?.keys?.import}>

@@ -14,6 +14,7 @@ public interface RoleMapper extends BaseCrudMapper<Role, RoleDTO> {
 
     @Override
     @Mapping(target = "permissions", ignore = true)
+    @Mapping(target = "isActive", source = "isActive", defaultValue = "true")
     Role toEntity(RoleDTO request);
 
     @Override
@@ -23,8 +24,19 @@ public interface RoleMapper extends BaseCrudMapper<Role, RoleDTO> {
 
     @Override
     @Mapping(target = "permissions", ignore = true)
+    @Mapping(target = "isActive", ignore = true)
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     void update(@MappingTarget Role role, RoleDTO request);
+
+    @AfterMapping
+    default void updateActiveStatus(
+            @MappingTarget Role role,
+            RoleDTO request
+    ) {
+        if (request.isActiveProvided()) {
+            role.setIsActive(request.getIsActive());
+        }
+    }
 
     default Set<Long> mapPermissionIds(Set<Permission> permissions) {
         if (permissions == null)

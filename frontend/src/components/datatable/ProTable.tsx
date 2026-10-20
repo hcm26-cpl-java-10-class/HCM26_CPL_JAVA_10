@@ -18,6 +18,7 @@ import { SortableHeader } from "./table/SortableHeader";
 import { ColumnToggle } from "./toolbar/ColumnToggle";
 import { Toolbar } from "./toolbar/Toolbar";
 import type { ViewMode } from "./toolbar/Toolbar";
+import type { ReactNode } from "react";
 
 /**
  * ProTable: Reusable data table component with sensible defaults
@@ -89,6 +90,12 @@ interface ProTableProps<TData = any> {
     /** UI mode for datatable. browse mode is card-first with simplified controls. */
     mode?: "default" | "browse";
 
+    /** Optional row-level protection for actions and boolean controls. */
+    isRowProtected?: (row: TData) => boolean;
+
+    /** Optional entity-specific actions shown when rows are selected. */
+    renderSelectionActions?: (table: any) => ReactNode;
+
     /**
      * Optional: Expandable row configuration.
      * Expansion is auto-enabled when any field in the schema has `expandable: true`.
@@ -116,6 +123,8 @@ export function ProTable<TData = any>({
     hideActions = false,
     mode = "default",
     expandable,
+    isRowProtected,
+    renderSelectionActions,
 }: ProTableProps<TData>) {
     const { schema } = table;
     const isBrowseMode = mode === "browse";
@@ -240,6 +249,7 @@ export function ProTable<TData = any>({
             viewPermission={table.permission?.keys?.read}
             editPermission={table.permission?.keys?.update}
             deletePermission={table.permission?.keys?.delete}
+            deleteDisabled={isRowProtected?.(row) ?? false}
         />
     );
 
@@ -259,6 +269,7 @@ export function ProTable<TData = any>({
                 showViewModeToggle={!isBrowseMode}
                 showActions={!isBrowseMode}
                 showCardColumnToggle={!isBrowseMode}
+                hideBulkDelete={!!renderSelectionActions}
             />
 
             <div
@@ -391,7 +402,11 @@ export function ProTable<TData = any>({
                                                             field={f}
                                                             value={row[f.name]}
                                                             relationOptions={table.relationOptions}
-                                                            disableBooleanToggle={!(table.permission?.canUpdate ?? true)}
+                                                            disableBooleanToggle={
+                                                                !(table.permission?.canUpdate ?? true) ||
+                                                                (f.name === "isActive" &&
+                                                                    (isRowProtected?.(row) ?? false))
+                                                            }
                                                             onBooleanToggle={(fieldName, newValue) => {
                                                                 if (!(table.permission?.canUpdate ?? true)) return;
                                                                 table.patchField(id, fieldName, newValue);
@@ -503,6 +518,7 @@ export function ProTable<TData = any>({
                                 disableBooleanToggle={
                                     isBrowseMode || !(table.permission?.canUpdate ?? true)
                                 }
+                                isRowProtected={isRowProtected}
                                 selectable={!isBrowseMode}
                                 showIndex={!isBrowseMode}
                                 renderCard={renderCard}
@@ -537,6 +553,12 @@ export function ProTable<TData = any>({
                     table.setPage(0);
                 }}
             />
+
+            {renderSelectionActions && table.selected?.length > 0 && (
+                <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2">
+                    {renderSelectionActions(table)}
+                </div>
+            )}
 
             {/* Form Modal: Use custom renderer if provided, otherwise use default */}
             {renderFormModal ? (

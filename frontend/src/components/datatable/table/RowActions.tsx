@@ -1,6 +1,8 @@
 import { Eye, Pen, Trash2 } from "lucide-react";
 import ActionButton from "../common/ActionButton";
 import { PermissionGate } from "@/components/PermissionGate";
+import { TooltipWrapper } from "../common/TooltipWrapper";
+import { Button } from "@/components/ui/button";
 
 interface RowActionsProps {
   row: any;
@@ -10,6 +12,7 @@ interface RowActionsProps {
   viewPermission?: string;
   editPermission?: string;
   deletePermission?: string;
+  deleteDisabled?: boolean;
 }
 
 export function RowActions({
@@ -20,6 +23,7 @@ export function RowActions({
   viewPermission,
   editPermission,
   deletePermission,
+  deleteDisabled = false,
 }: RowActionsProps) {
   return (
     <>
@@ -38,11 +42,21 @@ export function RowActions({
         />
       </PermissionGate>
       <PermissionGate permission={deletePermission}>
-        <ActionButton
-          onClick={() => onDelete(row)}
-          tooltip="Delete"
-          icon={<Trash2 size={10} className="text-red-500" />}
-        />
+        {deleteDisabled ? (
+          <TooltipWrapper content="System role cannot be deleted">
+            <span className="inline-flex">
+              <Button variant="outline" size="icon" disabled aria-label="Delete">
+                <Trash2 size={10} className="text-red-500" />
+              </Button>
+            </span>
+          </TooltipWrapper>
+        ) : (
+          <ActionButton
+            onClick={() => onDelete(row)}
+            tooltip="Delete"
+            icon={<Trash2 size={10} className="text-red-500" />}
+          />
+        )}
       </PermissionGate>
     </>
   );

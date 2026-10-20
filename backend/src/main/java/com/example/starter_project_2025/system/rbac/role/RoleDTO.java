@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.rbac.role;
 
+<<<<<<< Updated upstream
 import com.example.starter_project_2025.base.crud.dto.BaseDTO;
 import com.example.starter_project_2025.base.crud.dto.OnCreate;
 import jakarta.validation.constraints.NotBlank;
@@ -31,4 +32,10 @@ public class RoleDTO extends BaseDTO {
     Boolean isActive;
 
     Long userCount;
+=======
+import lombok.NoArgsConstructor;
+
+@NoArgsConstructor
+public class RoleDTO extends RoleRequestDto {
+>>>>>>> Stashed changes
 }

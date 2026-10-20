@@ -165,6 +165,8 @@ export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
                 onEdit={browseMode ? undefined : onEdit}
                 onView={onView}
                 renderCard={entity.cardRenderer}
+                isRowProtected={entity.isRowProtected}
+                renderSelectionActions={entity.renderSelectionActions}
             />
         </MainLayout>
     );

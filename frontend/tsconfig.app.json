@@ -9,6 +9,7 @@
     "skipLibCheck": true,
 
     "baseUrl": ".",
+    "ignoreDeprecations": "5.0",
     "paths": {
       "@/*": [
         "./src/*"
@@ -32,4 +33,5 @@
     "noUncheckedSideEffectImports": true
   },
   "include": ["src", "src/router"]
+ 
 }

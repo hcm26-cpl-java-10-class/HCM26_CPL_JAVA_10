@@ -22,6 +22,7 @@ interface CardItemProps {
   onDelete: (row: any) => void;
   onBooleanToggle: (id: any, fieldName: string, newValue: boolean) => void;
   disableBooleanToggle?: boolean;
+  isRowProtected?: (row: any) => boolean;
   selectable?: boolean;
   showIndex?: boolean;
 }
@@ -42,6 +43,7 @@ export function CardItem({
   onDelete,
   onBooleanToggle,
   disableBooleanToggle = false,
+  isRowProtected,
   selectable = true,
   showIndex = true,
 }: CardItemProps) {
@@ -122,7 +124,10 @@ export function CardItem({
                   field={f}
                   value={row[f.name]}
                   relationOptions={relationOptions}
-                  disableBooleanToggle={disableBooleanToggle}
+                  disableBooleanToggle={
+                    disableBooleanToggle ||
+                    (f.name === "isActive" && (isRowProtected?.(row) ?? false))
+                  }
                   onBooleanToggle={(fieldName, newValue) =>
                     onBooleanToggle(id, fieldName, newValue)
                   }

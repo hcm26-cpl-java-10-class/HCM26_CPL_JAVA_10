@@ -5,6 +5,10 @@ import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.exception.BadRequestException;
+<<<<<<< Updated upstream
+=======
+import com.example.starter_project_2025.exception.ResourceNotFoundException;
+>>>>>>> Stashed changes
 import com.example.starter_project_2025.system.rbac.permission.Permission;
 import com.example.starter_project_2025.system.rbac.permission.PermissionRepository;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
@@ -13,8 +17,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 
@@ -25,6 +33,9 @@ import java.util.Set;
 public class RoleServiceImpl
         extends BaseCrudServiceImpl<Role, Long, RoleDTO, RoleFilter>
         implements RoleService {
+
+    public static final List<String> PROTECTED_ROLES =
+            List.of("ADMIN", "ROLE_SYSTEM_ADMIN");
 
     RoleMapper roleMapper;
     RoleRepository roleRepository;
@@ -44,6 +55,40 @@ public class RoleServiceImpl
     @Override
     protected String[] searchableFields() {
         return new String[]{"name", "description"};
+    }
+
+    @Override
+    public Page<RoleDTO> searchRoles(String keyword, Pageable pageable) {
+        check("ROLE_READ");
+        return roleRepository.searchByKeyword(keyword, pageable)
+                .map(roleMapper::toResponse);
+    }
+
+    @Override
+    public RoleDTO updateRoleStatus(Long id, boolean isActive) {
+        check("ROLE_UPDATE");
+        Role role = roleRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Role not found"));
+
+        if (!isActive && isProtectedRole(role)) {
+            throw new BadRequestException("System roles (ADMIN) cannot be deactivated.");
+        }
+
+        role.setIsActive(isActive);
+        return roleMapper.toResponse(roleRepository.save(role));
+    }
+
+    @Override
+    public void deleteRole(Long id) {
+        delete(id);
+    }
+
+    @Override
+    protected void beforeDelete(Role role) {
+        if (isProtectedRole(role)) {
+            throw new BadRequestException(
+                    "System roles (ADMIN) cannot be deleted to prevent system lockout.");
+        }
     }
 
     @Override
@@ -142,5 +187,10 @@ public class RoleServiceImpl
 
         role.getPermissions().clear();
         role.getPermissions().addAll(permissions);
+    }
+
+    private boolean isProtectedRole(Role role) {
+        return role.getName() != null
+                && PROTECTED_ROLES.contains(role.getName().toUpperCase(Locale.ROOT));
     }
 }

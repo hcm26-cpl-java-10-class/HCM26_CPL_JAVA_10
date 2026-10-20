@@ -13,6 +13,7 @@ interface CardViewProps {
   onDelete: (row: any) => void;
   onBooleanToggle: (id: any, fieldName: string, newValue: boolean) => void;
   disableBooleanToggle?: boolean;
+  isRowProtected?: (row: any) => boolean;
   selectable?: boolean;
   showIndex?: boolean;
   renderCard?: (props: EntityCardRendererProps) => React.ReactNode;
@@ -28,6 +29,7 @@ export function CardView({
   onBooleanToggle,
   showActions = true,
   disableBooleanToggle = false,
+  isRowProtected,
   selectable = true,
   showIndex = true,
   renderCard,
@@ -104,6 +106,7 @@ export function CardView({
             onEdit,
             onDelete,
             disableBooleanToggle,
+            isRowProtected,
             onBooleanToggle,
           };
 
