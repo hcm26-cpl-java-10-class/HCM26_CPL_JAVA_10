@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.schedule.trainingclass.service;
 
+import com.example.starter_project_2025.system.schedule.trainingclass.ClassStatus;
 import com.example.starter_project_2025.system.schedule.trainingclass.dto.CreateTrainingClassRequest;
 import com.example.starter_project_2025.system.schedule.trainingclass.dto.TrainingClassResponse;
 import jakarta.validation.Valid;
@@ -13,5 +14,15 @@ public interface TrainingClassService {
             @NotNull @Valid CreateTrainingClassRequest request);
 
     TrainingClassResponse getById(Long classId);
-    Page<TrainingClassResponse> getClasses(String search, Pageable pageable);
+
+    Page<TrainingClassResponse> getClasses(
+            String search,
+            ClassStatus status,
+            String site,
+            Pageable pageable);
+
+    TrainingClassResponse update(
+            Long classId,
+            @NotNull @Valid CreateTrainingClassRequest request);
+    void deactivate(Long classId);
 }

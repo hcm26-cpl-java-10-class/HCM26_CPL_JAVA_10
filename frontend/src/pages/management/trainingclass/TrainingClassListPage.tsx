@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, ExternalLink } from "lucide-react";
+import { Eye, Pen, Trash2 } from "lucide-react";
 import axios from "axios";
 
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -11,6 +11,7 @@ import { DetailModal } from "@/components/datatable/modal/DetailModal";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { EntitySchema } from "@/types";
 import { useQueryClient } from "@tanstack/react-query";
+import { ConfirmDeleteModal } from "@/components/datatable/modal/ConfirmDeleteModal";
 
 import {
     trainingClassTableApi,
@@ -42,6 +43,8 @@ const trainingClassSchema: EntitySchema = {
             label: "Site",
             type: "text",
             sortable: true,
+            filterable: true,
+            filterType: "text",
             width: 100,
         },
         {
@@ -93,6 +96,19 @@ const trainingClassSchema: EntitySchema = {
             type: "text",
             editable: false,
             sortable: true,
+            filterable: true,
+            filterType: "select",
+            filterOptions: [
+                { label: "Planning", value: "PLANNING" },
+                { label: "Assigned", value: "ASSIGNED" },
+                { label: "Reviewing", value: "REVIEWING" },
+                { label: "In progress", value: "IN_PROGRESS" },
+                { label: "Training completed", value: "TRAINING_COMPLETED" },
+                { label: "Pending close", value: "PENDING_CLOSE" },
+                { label: "Closed", value: "CLOSED" },
+                { label: "Declined", value: "DECLINED" },
+                { label: "Cancelled", value: "CANCELLED" },
+            ],
             width: 180,
         },
         {
@@ -127,10 +143,13 @@ export default function TrainingClassListPage() {
 
     const api = useMemo(
         () => ({
+            delete: trainingClassTableApi.delete,
             create: trainingClassTableApi.create,
+            update: trainingClassTableApi.update,
             async getPage(
                 pagination: TrainingClassTablePagination,
                 search = "",
+                filters: Record<string, unknown> = {},
             ) {
                 setLoadError("");
 
@@ -138,6 +157,7 @@ export default function TrainingClassListPage() {
                     return await trainingClassTableApi.getPage(
                         pagination,
                         search,
+                        filters,
                     );
                 } catch (error: unknown) {
                     let message =
@@ -166,8 +186,8 @@ export default function TrainingClassListPage() {
     const table = useProTable(api, trainingClassSchema, {
         permissionOverrides: {
             canCreate: hasPermission("TRAINING_CLASS_CREATE"),
-            canUpdate: false,
-            canDelete: false,
+            canUpdate: hasPermission("TRAINING_CLASS_UPDATE"),
+            canDelete: hasPermission("TRAINING_CLASS_DELETE"),
             canImport: false,
             canExport: false,
 
@@ -248,36 +268,94 @@ function TrainingClassTable({
                                 onQuickView,
                                 onOpenDetails,
                             }: TrainingClassTableProps) {
-    return (
-        <ProTable<TrainingClassResponse>
-            table={table}
-            mode="default"
-            renderRowActions={(row) =>
-                canRead ? (
-                    <>
-                        <ActionButton
-                            onClick={() => onQuickView(row)}
-                            tooltip="View detail"
-                            icon={
-                                <Eye
-                                    size={10}
-                                    className="text-gray-500"
-                                />
-                            }
-                        />
-                        <ActionButton
-                            onClick={() => onOpenDetails(row)}
-                            tooltip="Open class details"
-                            icon={
-                                <ExternalLink
-                                    size={10}
-                                    className="text-gray-500"
-                                />
-                            }
-                        />
-                    </>
-                ) : null
+    const [deleteRow, setDeleteRow] =
+        useState<TrainingClassResponse | null>(null);
+    const [deleting, setDeleting] = useState(false);
+
+    async function confirmDelete() {
+        if (!deleteRow || !table.permission?.canDelete || deleting) {
+            return;
+        }
+
+        setDeleting(true);
+
+        try {
+            const success = await table.remove(deleteRow.id);
+
+            if (success) {
+                setDeleteRow(null);
             }
-        />
+        } finally {
+            setDeleting(false);
+        }
+    }
+
+    return (
+        <>
+            <ProTable<TrainingClassResponse>
+                table={table}
+                mode="default"
+                onRowClick={canRead ? onOpenDetails : undefined}
+                renderRowActions={(row) => (
+                    <>
+                        {canRead && (
+                            <ActionButton
+                                onClick={() => onQuickView(row)}
+                                tooltip="View detail"
+                                icon={
+                                    <Eye
+                                        size={10}
+                                        className="text-gray-500"
+                                    />
+                                }
+                            />
+                        )}
+
+                        {table.permission?.canUpdate && (
+                            <ActionButton
+                                onClick={() => table.openEdit(row)}
+                                tooltip="Edit"
+                                icon={
+                                    <Pen
+                                        size={10}
+                                        className="text-gray-500"
+                                    />
+                                }
+                            />
+                        )}
+
+                        {table.permission?.canDelete && (
+                            <ActionButton
+                                onClick={() => setDeleteRow(row)}
+                                tooltip="Deactivate class"
+                                icon={
+                                    <Trash2
+                                        size={10}
+                                        className="text-red-500"
+                                    />
+                                }
+                            />
+                        )}
+                    </>
+                )}
+            />
+
+            <ConfirmDeleteModal
+                open={deleteRow !== null}
+                onOpenChange={(open) => {
+                    if (!open && !deleting) {
+                        setDeleteRow(null);
+                    }
+                }}
+                onConfirm={confirmDelete}
+                loading={deleting}
+                title="Deactivate Class"
+                description={
+                    deleteRow
+                        ? `Deactivate "${deleteRow.code}"? It will be hidden from the class list. Its record and related data will be retained.`
+                        : undefined
+                }
+            />
+        </>
     );
 }

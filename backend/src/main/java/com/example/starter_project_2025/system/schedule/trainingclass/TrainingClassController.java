@@ -23,9 +23,13 @@ public class TrainingClassController {
     @GetMapping
     public ResponseEntity<Page<TrainingClassResponse>> getClasses(
             @RequestParam(name = "search", defaultValue = "") String search,
+            @RequestParam(name = "status", required = false) ClassStatus status,
+            @RequestParam(name = "site", defaultValue = "") String site,
             @PageableDefault(sort = "id") Pageable pageable) {
 
-        return ResponseEntity.ok(service.getClasses(search, pageable));
+        return ResponseEntity.ok(
+                service.getClasses(search, status, site, pageable)
+        );
     }
 
     @PostMapping
@@ -42,5 +46,20 @@ public class TrainingClassController {
     public ResponseEntity<TrainingClassResponse> getById(
             @PathVariable("classId") Long classId) {
         return ResponseEntity.ok(service.getById(classId));
+    }
+    @PutMapping("/{classId}")
+    public ResponseEntity<TrainingClassResponse> update(
+            @PathVariable("classId") Long classId,
+            @Valid @RequestBody CreateTrainingClassRequest request) {
+
+        return ResponseEntity.ok(service.update(classId, request));
+    }
+
+    @DeleteMapping("/{classId}")
+    public ResponseEntity<Void> deactivate(
+            @PathVariable("classId") Long classId) {
+
+        service.deactivate(classId);
+        return ResponseEntity.noContent().build();
     }
 }

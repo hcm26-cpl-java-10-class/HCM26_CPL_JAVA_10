@@ -1,27 +1,47 @@
 import { useEffect, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import axios from "axios";
+import { ArrowLeft, BookOpen, CalendarDays, Users } from "lucide-react";
+
+import { MainLayout } from "@/components/layout/MainLayout";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/hooks/usePermissions";
+
 import ClassCalendarTab from "./ClassCalendarTab";
+import ClassTraineesTab from "./ClassTraineesTab";
 import {
     getTrainingClass,
     type TrainingClassResponse,
 } from "@/api/features/schedule/training-class.api";
-import { MainLayout } from "@/components/layout/MainLayout";
+
+type ClassTab = "info" | "trainees" | "calendar";
+
+function formatDate(value: string): string {
+    const parts = value.split("-");
+
+    if (parts.length !== 3) return value;
+
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
 export default function TrainingClassDetailPage() {
     const { classId } = useParams<{ classId: string }>();
     const [searchParams, setSearchParams] = useSearchParams();
     const { hasPermission } = usePermissions();
 
-    const activeTab =
-        searchParams.get("tab") === "calendar" ? "calendar" : "info";
+    const requestedTab = searchParams.get("tab");
+    const activeTab: ClassTab =
+        requestedTab === "calendar" || requestedTab === "trainees"
+            ? requestedTab
+            : "info";
 
     const [data, setData] = useState<TrainingClassResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [reload, setReload] = useState(0);
 
-    function selectTab(tab: "info" | "calendar") {
+    function selectTab(tab: ClassTab) {
         const nextParams = new URLSearchParams(searchParams);
         nextParams.set("tab", tab);
         setSearchParams(nextParams);
@@ -47,7 +67,8 @@ export default function TrainingClassDetailPage() {
             .catch((err: unknown) => {
                 if (!active) return;
 
-                let message = "Unable to load class details. Please try again.";
+                let message =
+                    "Unable to load class details. Please try again.";
 
                 if (axios.isAxiosError(err)) {
                     switch (err.response?.status) {
@@ -55,7 +76,8 @@ export default function TrainingClassDetailPage() {
                             message = "Please log in to view this class.";
                             break;
                         case 403:
-                            message = "You do not have permission to view this class.";
+                            message =
+                                "You do not have permission to view this class.";
                             break;
                         case 404:
                             message = "Class not found.";
@@ -74,19 +96,30 @@ export default function TrainingClassDetailPage() {
         };
     }, [classId, reload]);
 
-    const fields: [string, string | number][] = data
+    const tabs = [
+        { id: "info" as const, label: "Class Info", icon: BookOpen },
+        { id: "trainees" as const, label: "Trainees", icon: Users },
+        ...(hasPermission("CALENDAR_READ")
+            ? [{
+                id: "calendar" as const,
+                label: "Calendar",
+                icon: CalendarDays,
+            }]
+            : []),
+    ];
+
+    const information: [string, string | number][] = data
         ? [
             ["Class Code", data.code],
             ["Class Name", data.name],
-            ["Trainee Type", data.traineeType],
-            ["Delivery Format", data.deliveryFormat],
             ["Site", data.site],
             ["Location", data.location],
+            ["Trainee Type", data.traineeType],
+            ["Delivery Format", data.deliveryFormat],
             ["Program Version ID", data.programVersionId],
-            ["Start Date", data.startDate],
-            ["End Date", data.endDate],
             ["Capacity", data.capacity],
-            ["Status", data.status],
+            ["Start Date", formatDate(data.startDate)],
+            ["End Date", formatDate(data.endDate)],
         ]
         : [];
 
@@ -97,88 +130,149 @@ export default function TrainingClassDetailPage() {
                 ...(classId ? { [classId]: "Class Details" } : {}),
             }}
         >
-            <section className="mx-auto max-w-4xl rounded-xl border bg-white p-6 shadow-sm">
-                <h1 className="text-2xl font-semibold">Class Details</h1>
+            <div className="w-full min-w-0 space-y-5 rounded-xl bg-muted/40 p-4 sm:p-6">
+                <Link
+                    to="/training-classes"
+                    className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+                >
+                    <ArrowLeft className="h-4 w-4" />
+                    Back to Training Classes
+                </Link>
 
                 {loading && (
-                    <p className="mt-6" role="status">
+                    <div
+                        role="status"
+                        className="rounded-lg border bg-card p-6 text-sm text-muted-foreground"
+                    >
                         Loading class details...
-                    </p>
-                )}
-
-                {error && (
-                    <div className="mt-6" role="alert">
-                        <p className="text-red-600">{error}</p>
-                        <button
-                            type="button"
-                            className="mt-3 rounded border px-4 py-2"
-                            onClick={() => setReload((value) => value + 1)}
-                        >
-                            Retry
-                        </button>
                     </div>
                 )}
 
-                {!loading && data && (
+                {error && (
+                    <div
+                        role="alert"
+                        className="space-y-4 rounded-lg border bg-card p-6"
+                    >
+                        <h1 className="text-xl font-semibold">
+                            Class Details
+                        </h1>
+                        <p className="text-sm text-destructive">{error}</p>
+                        <Button
+                            variant="outline"
+                            onClick={() => setReload((value) => value + 1)}
+                        >
+                            Retry
+                        </Button>
+                    </div>
+                )}
+
+                {!loading && !error && data && (
                     <>
-                        <p className="mt-2 text-sm text-slate-500">
-                            Class ID: {data.id}
-                        </p>
+                        <header className="space-y-3 rounded-xl border bg-card p-5 shadow-sm">
+                            <div className="flex flex-wrap items-center gap-3">
+                                <h1 className="break-words text-2xl font-semibold">
+                                    {data.name}
+                                </h1>
+                                <Badge variant="secondary">
+                                    {data.status.replace(/_/g, " ")}
+                                </Badge>
+                            </div>
+
+                            <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                                <span>{data.code}</span>
+                                <span>Site: {data.site}</span>
+                                <span>Class ID: {data.id}</span>
+                            </div>
+                        </header>
 
                         <nav
                             aria-label="Class sections"
-                            className="mt-6 flex gap-2 border-b pb-3"
+                            className="flex gap-1 overflow-x-auto border-b"
                         >
-                            <button
-                                type="button"
-                                aria-current={activeTab === "info" ? "page" : undefined}
-                                onClick={() => selectTab("info")}
-                                className={`rounded px-4 py-2 ${
-                                    activeTab === "info"
-                                        ? "bg-blue-700 text-white"
-                                        : "border"
-                                }`}
-                            >
-                                Class Info
-                            </button>
+                            {tabs.map((tab) => {
+                                const Icon = tab.icon;
+                                const selected = activeTab === tab.id;
 
-                            {hasPermission("CALENDAR_READ") && (
-                                <button
-                                    type="button"
-                                    aria-current={
-                                        activeTab === "calendar" ? "page" : undefined
-                                    }
-                                    onClick={() => selectTab("calendar")}
-                                    className={`rounded px-4 py-2 ${
-                                        activeTab === "calendar"
-                                            ? "bg-blue-700 text-white"
-                                            : "border"
-                                    }`}
-                                >
-                                    Calendar
-                                </button>
-                            )}
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        type="button"
+                                        aria-current={
+                                            selected ? "page" : undefined
+                                        }
+                                        onClick={() => selectTab(tab.id)}
+                                        className={`inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                                            selected
+                                                ? "border-foreground bg-muted text-foreground"
+                                                : "border-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                                        }`}
+                                    >
+                                        <Icon className="h-4 w-4" />
+                                        {tab.label}
+                                    </button>
+                                );
+                            })}
                         </nav>
 
                         {activeTab === "info" && (
-                            <dl className="mt-6 grid gap-4 sm:grid-cols-2">
-                                {fields.map(([label, value]) => (
-                                    <div key={label} className="rounded-lg border p-4">
-                                        <dt className="text-sm text-slate-500">{label}</dt>
-                                        <dd className="mt-1 break-words font-medium">
-                                            {value}
-                                        </dd>
-                                    </div>
-                                ))}
-                            </dl>
+                            <section
+                                aria-label="Class information"
+                                className="rounded-lg border bg-card"
+                            >
+                                <div className="rounded-t-lg border-b bg-muted/40 px-5 py-4">
+                                    <h2 className="font-semibold">
+                                        Class Information
+                                    </h2>
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                        Basic information and training dates.
+                                    </p>
+                                </div>
+
+                                <dl className="grid sm:grid-cols-2 xl:grid-cols-3">
+                                    {information.map(([label, value]) => (
+                                        <div
+                                            key={label}
+                                            className="min-w-0 border-b px-5 py-4 transition-colors hover:bg-muted/30"
+                                        >
+                                            <dt className="text-sm text-muted-foreground">
+                                                {label}
+                                            </dt>
+                                            <dd className="mt-2 break-words text-sm font-medium">
+                                                {value}
+                                            </dd>
+                                        </div>
+                                    ))}
+                                </dl>
+                            </section>
+                        )}
+
+                        {activeTab === "trainees" && (
+                            <section
+                                aria-label="Class trainees"
+                                className="min-w-0 rounded-lg border bg-card p-5"
+                            >
+                                <ClassTraineesTab
+                                    key={data.id}
+                                    classId={data.id}
+                                />
+                            </section>
                         )}
 
                         {activeTab === "calendar" && (
-                            <section aria-label="Class calendar" className="mt-6">
+                            <section
+                                aria-label="Class calendar"
+                                className="min-w-0 rounded-lg border bg-card p-5"
+                            >
                                 {hasPermission("CALENDAR_READ") ? (
-                                    <ClassCalendarTab key={data.id} classId={data.id} />
+                                    <ClassCalendarTab
+                                        key={data.id}
+                                        classId={data.id}
+                                    />
                                 ) : (
-                                    <p role="alert" className="text-red-600">
+                                    <p
+                                        role="alert"
+                                        className="text-sm text-destructive"
+                                    >
                                         You do not have permission to view calendars.
                                     </p>
                                 )}
@@ -186,7 +280,7 @@ export default function TrainingClassDetailPage() {
                         )}
                     </>
                 )}
-            </section>
+            </div>
         </MainLayout>
     );
 }

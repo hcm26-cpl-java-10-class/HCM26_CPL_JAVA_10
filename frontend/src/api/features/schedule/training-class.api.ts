@@ -35,6 +35,31 @@ export interface TrainingClassTablePagination {
 }
 
 export const trainingClassTableApi = {
+    async delete(id: number | string): Promise<void> {
+        await axiosInstance.delete(`/classes/${id}`);
+    },
+    async update(
+        id: number | string,
+        data: Record<string, unknown>,
+    ): Promise<TrainingClassResponse> {
+        const response = await axiosInstance.put<TrainingClassResponse>(
+            `/classes/${id}`,
+            {
+                code: data.code,
+                name: data.name,
+                traineeType: data.traineeType,
+                deliveryFormat: data.deliveryFormat,
+                site: data.site,
+                location: data.location,
+                programVersionId: Number(data.programVersionId),
+                startDate: toApiDate(data.startDate),
+                endDate: toApiDate(data.endDate),
+                capacity: Number(data.capacity),
+            },
+        );
+
+        return response.data;
+    },
     async create(
         data: Record<string, unknown>,
     ): Promise<TrainingClassResponse> {
@@ -59,12 +84,20 @@ export const trainingClassTableApi = {
     async getPage(
         pagination: TrainingClassTablePagination,
         search = "",
+        filters: Record<string, unknown> = {},
     ): Promise<TrainingClassPage> {
         const params = new URLSearchParams();
 
         params.set("page", String(pagination.page));
         params.set("size", String(pagination.size));
         params.set("search", search.trim());
+        for (const key of ["status", "site"] as const) {
+            const value = filters[key];
+
+            if (typeof value === "string" && value.trim()) {
+                params.set(key, value.trim());
+            }
+        }
 
         const sorts = pagination.sort?.length
             ? pagination.sort
