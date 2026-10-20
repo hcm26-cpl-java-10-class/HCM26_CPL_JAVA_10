@@ -11,6 +11,8 @@ import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import { useEffect, useState } from "react";
 
+import { useSearchParams } from "react-router-dom";
+
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
@@ -95,12 +97,46 @@ function SessionCard({ session }: { session: CalendarSessionResponse }) {
   );
 }
 
+function getCalendarDate(value: string | null) {
+  const fallback = getCurrentWeekStart();
+
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return fallback;
+  }
+
+  const parsed = dayjs(value);
+
+  if (!parsed.isValid() || parsed.format("YYYY-MM-DD") !== value) {
+    return fallback;
+  }
+
+  return dayjs.tz(`${value}T00:00:00`, TIME_ZONE);
+}
+
 export default function WeeklyCalendarPage() {
-  const [weekStart, setWeekStart] = useState(getCurrentWeekStart);
-  const [statusFilter, setStatusFilter] = useState<
-    CalendarSessionStatus | "ALL"
-  >("ALL");
-  const [page, setPage] = useState(0);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const selectedDate = getCalendarDate(searchParams.get("date"));
+  const daysSinceMonday = (selectedDate.day() + 6) % 7;
+  const weekStart = selectedDate.subtract(daysSinceMonday, "day");
+
+  const rawStatus = searchParams.get("status");
+  const statusFilter: CalendarSessionStatus | "ALL" =
+    rawStatus === "SCHEDULED" ||
+    rawStatus === "COMPLETED" ||
+    rawStatus === "CANCELLED"
+      ? rawStatus
+      : "ALL";
+
+  const rawPage = searchParams.get("page") ?? "0";
+  const parsedPage = Number(rawPage);
+  const page =
+    /^\d+$/.test(rawPage) &&
+    Number.isSafeInteger(parsedPage) &&
+    parsedPage <= 2147483647
+      ? parsedPage
+      : 0;
+
   const [result, setResult] = useState<CalendarSessionsPage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -157,9 +193,29 @@ export default function WeeklyCalendarPage() {
     return () => controller.abort();
   }, [from, to, statusFilter, page, reloadKey]);
 
+  function updateCalendarUrl(values: Record<string, string>) {
+    const nextParams = new URLSearchParams(searchParams);
+
+    for (const [key, value] of Object.entries(values)) {
+      nextParams.set(key, value);
+    }
+
+    setSearchParams(nextParams);
+  }
+
   function changeWeek(offset: number) {
-    setPage(0);
-    setWeekStart((previous) => previous.add(offset, "day"));
+    updateCalendarUrl({
+      date: weekStart.add(offset, "day").format("YYYY-MM-DD"),
+      page: "0",
+    });
+  }
+
+  function setPage(value: number | ((previous: number) => number)) {
+    const nextPage = typeof value === "function" ? value(page) : value;
+
+    updateCalendarUrl({
+      page: String(Math.max(0, nextPage)),
+    });
   }
   const sessions = result?.content ?? [];
   function getSessionsInRange(start: string, end: string) {
@@ -247,8 +303,10 @@ export default function WeeklyCalendarPage() {
             type="button"
             className={buttonClass}
             onClick={() => {
-              setPage(0);
-              setWeekStart(getCurrentWeekStart());
+              updateCalendarUrl({
+                date: dayjs().tz(TIME_ZONE).format("YYYY-MM-DD"),
+                page: "0",
+              });
             }}
           >
             Hôm nay
@@ -267,6 +325,7 @@ export default function WeeklyCalendarPage() {
 
             <input
               type="date"
+              value={selectedDate.format("YYYY-MM-DD")}
               onChange={(event) => {
                 const value = event.target.value;
 
@@ -274,14 +333,10 @@ export default function WeeklyCalendarPage() {
                   return;
                 }
 
-                const selectedDate = dayjs
-                  .tz(`${value}T00:00:00`, TIME_ZONE)
-                  .startOf("day");
-
-                const daysSinceMonday = (selectedDate.day() + 6) % 7;
-
-                setPage(0);
-                setWeekStart(selectedDate.subtract(daysSinceMonday, "day"));
+                updateCalendarUrl({
+                  date: value,
+                  page: "0",
+                });
               }}
               className="rounded-md border bg-background px-3 py-2 text-sm"
             />
@@ -297,10 +352,10 @@ export default function WeeklyCalendarPage() {
             id="calendar-status"
             value={statusFilter}
             onChange={(event) => {
-              setPage(0);
-              setStatusFilter(
-                event.target.value as CalendarSessionStatus | "ALL",
-              );
+              updateCalendarUrl({
+                status: event.target.value,
+                page: "0",
+              });
             }}
             className="rounded-md border bg-background px-3 py-2 text-sm"
           >
