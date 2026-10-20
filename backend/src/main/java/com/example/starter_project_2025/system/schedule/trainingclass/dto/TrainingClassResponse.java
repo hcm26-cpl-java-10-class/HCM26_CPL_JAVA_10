@@ -30,6 +30,11 @@ public class TrainingClassResponse {
 
     private ClassStatus status;
 
+    private Boolean isActive;
+
     private LocalDateTime createdAt;
     private Long createdBy;
+
+    private LocalDateTime updatedAt;
+    private Long updatedBy;
 }

@@ -25,8 +25,11 @@ export interface TrainingClassResponse {
     endDate: string;
     capacity: number;
     status: string;
+    isActive: boolean;
     createdAt: string;
     createdBy: number | null;
+    updatedAt: string;
+    updatedBy: number | null;
 }
 export interface TrainingClassTablePagination {
     page: number;
