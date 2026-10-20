@@ -6,6 +6,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.Check;
+import com.example.starter_project_2025.init.annotation.ResourceMenu;
 
 import java.time.LocalDate;
 
@@ -17,6 +18,13 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @AllArgsConstructor
 @ResourcePermission("TRAINING_CLASS")
+@ResourceMenu(
+        title = "Training Classes",
+        group = "Training Management",
+        icon = "graduation-cap",
+        url = "/training-classes",
+        permission = "TRAINING_CLASS_READ"
+)
 @Check(constraints = "capacity > 0 AND end_date >= start_date")
 public class TrainingClass extends BaseEntity {
 

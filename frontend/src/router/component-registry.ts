@@ -7,12 +7,13 @@ import NotFoundPage from "@/pages/error/NotFoundPage";
 import { Unauthorized } from "@/pages/error/Unauthorized";
 import { Dashboard } from "@/pages/management/dashboard";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
+import BulkSessionGenerationPage from "@/pages/management/schedule/pages/BulkSessionGenerationPage";
+import TrainingClassDetailPage from "@/pages/management/trainingclass/TrainingClassDetailPage";
+import TrainingClassListPage from "@/pages/management/trainingclass/TrainingClassListPage";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
-import BulkSessionGenerationPage from "@/pages/management/schedule/pages/BulkSessionGenerationPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
-import TrainingClassDetailPage from "@/pages/management/trainingclass/TrainingClassDetailPage";
 
 export interface RouteConfig {
   path: string;
@@ -23,7 +24,11 @@ export interface RouteConfig {
 }
 
 export const routes: RouteConfig[] = [
-  { path: "/dashboard", component: Dashboard, isModuleDriven: true },
+  {
+    path: "/dashboard",
+    component: Dashboard,
+    isModuleDriven: true,
+  },
   {
     path: "/topic-marks/gradebook-demo",
     component: TopicMarkGradebookDemoPage,
@@ -36,14 +41,29 @@ export const routes: RouteConfig[] = [
     requiredPermission: "SESSION_CREATE",
     isModuleDriven: false,
   },
-  { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
+  {
+    path: "/training-classes",
+    component: TrainingClassListPage,
+    requiredPermission: "TRAINING_CLASS_READ",
+    isModuleDriven: true,
+  },
   {
     path: "/training-classes/:classId",
     component: TrainingClassDetailPage,
     requiredPermission: "TRAINING_CLASS_READ",
     isModuleDriven: false,
   },
-  { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
+  {
+    path: "/student",
+    component: StudentLandingPage,
+    requiredPermission: "BOOK_READ",
+  },
+  {
+    path: "/teacher",
+    component: TeacherLandingPage,
+    requiredPermission: "BOOK_UPDATE",
+  },
+
   ...buildEntityRoutes(),
 
   { path: "/not-found-page", component: NotFoundPage, isPublic: true },

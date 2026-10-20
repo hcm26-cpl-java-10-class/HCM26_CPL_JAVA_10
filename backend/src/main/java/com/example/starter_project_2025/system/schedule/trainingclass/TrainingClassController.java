@@ -8,13 +8,25 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/classes")
 public class TrainingClassController {
 
+
     private final TrainingClassService service;
+    @GetMapping
+    public ResponseEntity<Page<TrainingClassResponse>> getClasses(
+            @RequestParam(name = "search", defaultValue = "") String search,
+            @PageableDefault(sort = "id") Pageable pageable) {
+
+        return ResponseEntity.ok(service.getClasses(search, pageable));
+    }
 
     @PostMapping
     public ResponseEntity<TrainingClassResponse> create(

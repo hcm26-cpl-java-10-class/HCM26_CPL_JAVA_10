@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.server.ResponseStatusException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 @Service
 @Validated
@@ -31,6 +33,24 @@ public class TrainingClassServiceImpl implements TrainingClassService {
 
         return mapper.toResponse(trainingClass);
     }
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasRole('ADMIN') and hasAuthority('TRAINING_CLASS_READ')")
+    public Page<TrainingClassResponse> getClasses(
+            String search,
+            Pageable pageable) {
+
+        String keyword = search == null ? "" : search.trim();
+
+        return trainingClassRepository
+                .findByCodeContainingIgnoreCaseOrNameContainingIgnoreCase(
+                        keyword,
+                        keyword,
+                        pageable
+                )
+                .map(trainingClassMapper::toResponse);
+    }
+
 
     private final TrainingClassRepository repository;
     private final TrainingClassMapper mapper;
