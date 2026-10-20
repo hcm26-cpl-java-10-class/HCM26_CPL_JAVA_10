@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.schedule.detection;
 
+import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ConflictException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.schedule.calendar.CalendarVersion;
@@ -10,132 +11,199 @@ import com.example.starter_project_2025.system.schedule.detection.dto.ConflictDT
 import com.example.starter_project_2025.system.schedule.session.Session;
 import com.example.starter_project_2025.system.schedule.session.SessionMapper;
 import com.example.starter_project_2025.system.schedule.session.SessionRepository;
-import com.example.starter_project_2025.system.schedule.session.SessionStatus;
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
-import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
-@Slf4j
 @Service
-@RequiredArgsConstructor
-@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ConflictDetectionServiceImpl implements ConflictDetectionService {
 
-    CalendarVersionRepository calendarVersionRepository;
-    SessionRepository sessionRepository;
-    SessionMapper sessionMapper;
+    private final CalendarVersionRepository calendarVersionRepository;
+    private final ConflictDetectionRepository conflictDetectionRepository;
+    private final ConflictDetectionMapper conflictDetectionMapper;
+    private final boolean legacyCalendarExclusion;
+
+    @Autowired
+    public ConflictDetectionServiceImpl(
+            CalendarVersionRepository calendarVersionRepository,
+            ConflictDetectionRepository conflictDetectionRepository,
+            ConflictDetectionMapper conflictDetectionMapper
+    ) {
+        this.calendarVersionRepository = calendarVersionRepository;
+        this.conflictDetectionRepository = conflictDetectionRepository;
+        this.conflictDetectionMapper = conflictDetectionMapper;
+        this.legacyCalendarExclusion = false;
+    }
+
+    /** Keeps the existing unit-test seam while production uses the dedicated read repository. */
+    public ConflictDetectionServiceImpl(
+            CalendarVersionRepository calendarVersionRepository,
+            SessionRepository sessionRepository,
+            SessionMapper sessionMapper
+    ) {
+        this.calendarVersionRepository = calendarVersionRepository;
+        this.conflictDetectionRepository = new ConflictDetectionRepository() {
+            @Override
+            public List<Session> findSessionsInDraft(Long calendarVersionId) {
+                return sessionRepository.findByCalendarVersion_IdAndIsActiveTrue(calendarVersionId);
+            }
+
+            @Override
+            public List<Session> findSessionsInActiveVersionsOfOtherClasses(Long excludedCalendarId) {
+                return sessionRepository.findActiveSessionsFromOtherCalendars(excludedCalendarId);
+            }
+        };
+        this.conflictDetectionMapper = (session, conflictingSession, conflictTypes) -> ConflictDTO.builder()
+                .session(sessionMapper.toResponse(session))
+                .conflictingSession(sessionMapper.toResponse(conflictingSession))
+                .conflictTypes(conflictTypes)
+                .build();
+        this.legacyCalendarExclusion = true;
+    }
 
     @Override
     @Transactional(readOnly = true)
     public ConflictCheckResult checkConflicts(Long calendarVersionId) {
-        if (calendarVersionId == null) {
-            throw new IllegalArgumentException("Calendar version ID is required");
-        }
+        CalendarVersion draftVersion = requireDraftVersion(calendarVersionId);
 
-        // 1. Validate that the requested calendar version exists and is DRAFT
-        CalendarVersion targetVersion = calendarVersionRepository.findById(calendarVersionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Calendar Version not found: " + calendarVersionId));
+        List<Session> draftSessions = conflictDetectionRepository.findSessionsInDraft(calendarVersionId);
+        Long exclusionId = legacyCalendarExclusion
+                ? draftVersion.getCalendar().getId()
+                : draftVersion.getCalendar().getClassId();
+        List<Session> activeSessions = conflictDetectionRepository
+                .findSessionsInActiveVersionsOfOtherClasses(exclusionId);
 
-        if (!Boolean.TRUE.equals(targetVersion.getIsActive())) {
-            throw new ResourceNotFoundException("Calendar Version not found or inactive: " + calendarVersionId);
-        }
-
-        if (targetVersion.getStatus() != CalendarVersionStatus.DRAFT) {
-            throw new ConflictException("Only DRAFT calendar versions can be checked for conflicts. Version #"
-                    + targetVersion.getVersionNumber() + " is currently " + targetVersion.getStatus());
-        }
-
-        List<ConflictDTO> conflicts = new ArrayList<>();
         Map<String, List<String>> validationErrors = new LinkedHashMap<>();
+        List<Session> validDraftSessions = validSessions(draftSessions, validationErrors);
+        List<Session> validActiveSessions = validSessions(activeSessions, validationErrors);
+        List<ConflictDTO> conflicts = new ArrayList<>();
 
-        // 2. Load all sessions of the DRAFT and validate their time ranges
-        List<Session> draftSessions = sessionRepository.findByCalendarVersion_IdAndIsActiveTrue(calendarVersionId);
-        List<Session> validDraftSessions = new ArrayList<>();
+        detectWithinDraft(validDraftSessions, conflicts);
+        detectAgainstOtherActiveClasses(validDraftSessions, validActiveSessions, conflicts);
 
-        for (Session session : draftSessions) {
-            if (session.getStatus() == SessionStatus.CANCELLED) {
-                continue;
-            }
-
-            boolean hasError = false;
-            if (session.getStartTime() == null || session.getEndTime() == null || !session.getEndTime().isAfter(session.getStartTime())) {
-                validationErrors.computeIfAbsent("invalid_time_range", k -> new ArrayList<>())
-                        .add("Session ID " + session.getId() + " ('" + session.getTitle() + "') has invalid start or end time.");
-                hasError = true;
-            }
-
-            if (session.getTrainerId() == null) {
-                validationErrors.computeIfAbsent("missing_trainer", k -> new ArrayList<>())
-                        .add("Session ID " + session.getId() + " is missing trainer assignment.");
-                hasError = true;
-            }
-
-            if (!hasError) {
-                validDraftSessions.add(session);
-            }
-        }
-
-        // 3. Check each distinct pair within the DRAFT, without duplicate reversed pairs
-        int size = validDraftSessions.size();
-        for (int i = 0; i < size; i++) {
-            Session s1 = validDraftSessions.get(i);
-            for (int j = i + 1; j < size; j++) {
-                Session s2 = validDraftSessions.get(j);
-                checkSessionOverlap(s1, s2, conflicts);
-            }
-        }
-
-        // 4. Compare with sessions from ACTIVE calendar versions of other classes only
-        Long currentCalendarId = targetVersion.getCalendar() != null ? targetVersion.getCalendar().getId() : null;
-        List<Session> otherActiveSessions = sessionRepository.findActiveSessionsFromOtherCalendars(currentCalendarId);
-
-        for (Session s1 : validDraftSessions) {
-            for (Session sOther : otherActiveSessions) {
-                checkSessionOverlap(s1, sOther, conflicts);
-            }
-        }
-
-        boolean hasConflict = !conflicts.isEmpty() || !validationErrors.isEmpty();
-
+        boolean hasConflict = !conflicts.isEmpty();
         return ConflictCheckResult.builder()
                 .calendarVersionId(calendarVersionId)
                 .hasConflict(hasConflict)
+                .hasBlockingConflict(hasConflict)
+                .canActivate(!hasConflict && validationErrors.isEmpty())
+                .conflictCount(conflicts.size())
+                .blockingConflictCount(conflicts.size())
                 .conflicts(conflicts)
                 .validationErrors(validationErrors)
                 .build();
     }
 
-    private void checkSessionOverlap(Session s1, Session s2, List<ConflictDTO> conflicts) {
-        // Overlap: startA < endB && endA > startB; touching endpoints do not overlap
-        if (!s1.getStartTime().isBefore(s2.getEndTime()) || !s1.getEndTime().isAfter(s2.getStartTime())) {
-            return;
+    private CalendarVersion requireDraftVersion(Long calendarVersionId) {
+        if (calendarVersionId == null || calendarVersionId <= 0) {
+            throw new BadRequestException("Calendar version ID must be positive.");
         }
 
-        Set<ConflictType> types = EnumSet.noneOf(ConflictType.class);
+        CalendarVersion version = calendarVersionRepository.findById(calendarVersionId)
+                .filter(value -> Boolean.TRUE.equals(value.getIsActive()))
+                .filter(value -> value.getCalendar() != null)
+                .filter(value -> Boolean.TRUE.equals(value.getCalendar().getIsActive()))
+                .orElseThrow(() -> new ResourceNotFoundException("Calendar version not found."));
 
-        // Check Trainer conflict
-        if (s1.getTrainerId() != null && s1.getTrainerId().equals(s2.getTrainerId())) {
+        if (version.getStatus() != CalendarVersionStatus.DRAFT) {
+            throw new ConflictException("Conflicts can only be checked for a DRAFT calendar version.");
+        }
+        if (version.getCalendar().getClassId() == null) {
+            throw new BadRequestException("The calendar version is not associated with a valid class.");
+        }
+        return version;
+    }
+
+    private List<Session> validSessions(
+            List<Session> sessions,
+            Map<String, List<String>> validationErrors
+    ) {
+        List<Session> validSessions = new ArrayList<>();
+        for (Session session : sessions) {
+            if (hasValidTimeRange(session)) {
+                validSessions.add(session);
+                continue;
+            }
+
+            String sessionKey = session == null || session.getId() == null
+                    ? "sessions.unknown.time"
+                    : "sessions." + session.getId() + ".time";
+            validationErrors.computeIfAbsent(sessionKey, ignored -> new ArrayList<>())
+                    .add("Session start time and end time are required, and end time must be after start time.");
+        }
+        return validSessions;
+    }
+
+    private boolean hasValidTimeRange(Session session) {
+        return session != null
+                && session.getStartTime() != null
+                && session.getEndTime() != null
+                && session.getEndTime().isAfter(session.getStartTime());
+    }
+
+    private void detectWithinDraft(List<Session> draftSessions, List<ConflictDTO> conflicts) {
+        for (int firstIndex = 0; firstIndex < draftSessions.size(); firstIndex++) {
+            for (int secondIndex = firstIndex + 1; secondIndex < draftSessions.size(); secondIndex++) {
+                addConflictIfPresent(draftSessions.get(firstIndex), draftSessions.get(secondIndex), conflicts);
+            }
+        }
+    }
+
+    private void detectAgainstOtherActiveClasses(
+            List<Session> draftSessions,
+            List<Session> activeSessions,
+            List<ConflictDTO> conflicts
+    ) {
+        for (Session draftSession : draftSessions) {
+            for (Session activeSession : activeSessions) {
+                addConflictIfPresent(draftSession, activeSession, conflicts);
+            }
+        }
+    }
+
+    private void addConflictIfPresent(
+            Session session,
+            Session conflictingSession,
+            List<ConflictDTO> conflicts
+    ) {
+        EnumSet<ConflictType> conflictTypes = detectTypes(session, conflictingSession);
+        if (!conflictTypes.isEmpty()) {
+            conflicts.add(conflictDetectionMapper.toDto(session, conflictingSession, conflictTypes));
+        }
+    }
+
+    private EnumSet<ConflictType> detectTypes(Session first, Session second) {
+        EnumSet<ConflictType> types = EnumSet.noneOf(ConflictType.class);
+        if (!overlaps(first, second)) {
+            return types;
+        }
+        if (first.getTrainerId() != null
+                && Objects.equals(first.getTrainerId(), second.getTrainerId())) {
             types.add(ConflictType.TRAINER_CONFLICT);
         }
-
-        // Check Room conflict (excluding blank/empty)
-        if (s1.getRoom() != null && !s1.getRoom().trim().isEmpty()
-                && s2.getRoom() != null && !s2.getRoom().trim().isEmpty()
-                && s1.getRoom().trim().equalsIgnoreCase(s2.getRoom().trim())) {
+        if (sameNonBlankRoom(first.getRoom(), second.getRoom())) {
             types.add(ConflictType.ROOM_CONFLICT);
         }
+        return types;
+    }
 
-        if (!types.isEmpty()) {
-            conflicts.add(ConflictDTO.builder()
-                    .session(sessionMapper.toResponse(s1))
-                    .conflictingSession(sessionMapper.toResponse(s2))
-                    .conflictTypes(types)
-                    .build());
-        }
+    private boolean overlaps(Session first, Session second) {
+        return first.getStartTime().isBefore(second.getEndTime())
+                && first.getEndTime().isAfter(second.getStartTime());
+    }
+
+    private boolean sameNonBlankRoom(String firstRoom, String secondRoom) {
+        return firstRoom != null
+                && secondRoom != null
+                && !firstRoom.isBlank()
+                && !secondRoom.isBlank()
+                && firstRoom.trim().equalsIgnoreCase(secondRoom.trim());
     }
 }

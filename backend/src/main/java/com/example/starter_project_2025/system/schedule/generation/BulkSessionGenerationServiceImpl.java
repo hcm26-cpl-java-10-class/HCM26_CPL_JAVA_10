@@ -11,6 +11,7 @@ import java.time.Duration;
 import com.example.starter_project_2025.system.schedule.session.Session;
 import com.example.starter_project_2025.system.schedule.session.SessionRepository;
 import com.example.starter_project_2025.system.schedule.session.SessionStatus;
+import com.example.starter_project_2025.system.schedule.exception.ConflictException;
 import com.example.starter_project_2025.system.schedule.generation.dto.*;
 import com.example.starter_project_2025.system.schedule.generation.engine.ScheduleGeneratorEngine;
 import lombok.AccessLevel;
@@ -279,6 +280,9 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
     @Override
     @Transactional(rollbackFor = Exception.class)
     public BulkSaveSessionsResponseDTO saveBulkSessions(Long versionId, BulkSaveSessionsRequestDTO request, String idempotencyKey) {
+        // Serialize draft mutations with activation and the conflict-resolution workflow.
+        CalendarVersion targetVersion = calendarLock.version(versionId);
+
         // 1. Kiểm tra Idempotency chống click đúp (BR-UNI-20 & US-F16-05)
         if (idempotencyKey != null && !idempotencyKey.trim().isEmpty()) {
             BulkSaveSessionsResponseDTO cached = idempotencyStore.get(idempotencyKey.trim());
@@ -289,18 +293,15 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
         }
 
         // 2. Check Safety Invariant: only allowed in DRAFT version (US-F16-05)
-        CalendarVersion targetVersion = calendarLock.version(versionId);
-
         if (!Boolean.TRUE.equals(targetVersion.getIsActive())
                 || targetVersion.getStatus() != CalendarVersionStatus.DRAFT
                 || targetVersion.getPublishedAt() != null) {
-            throw new com.example.starter_project_2025.system.schedule.exception.ConflictException(
+            throw new ConflictException(
                     "CALENDAR_VERSION_NOT_DRAFT",
                     "Bulk session generation is only allowed for Calendar Versions in DRAFT status. Version #"
                             + targetVersion.getVersionNumber() + " is currently " + targetVersion.getStatus() + "."
             );
         }
-
         if (request == null || request.getSessions() == null || request.getSessions().isEmpty()) {
             throw new IllegalArgumentException("Session list to save cannot be empty.");
         }

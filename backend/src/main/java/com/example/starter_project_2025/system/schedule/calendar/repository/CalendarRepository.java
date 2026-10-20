@@ -28,6 +28,19 @@ public interface CalendarRepository
             @Param("calendarId") Long calendarId
     );
 
+    /**
+     * Serializes calendar activation across classes. Without this shared database
+     * lock, two conflicting DRAFT versions could both pass detection concurrently.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT c
+            FROM Calendar c
+            WHERE c.isActive = true
+            ORDER BY c.id
+            """)
+    List<Calendar> lockAllActiveCalendarsForScheduleActivation();
+
     boolean existsByClassId(Long classId);
 
     List<Calendar> findByIsActiveTrue();

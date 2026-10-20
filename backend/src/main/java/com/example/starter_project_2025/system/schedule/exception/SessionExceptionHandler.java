@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.schedule.exception;
 
+import com.example.starter_project_2025.system.schedule.calendar.dto.CalendarActivationErrorResponse;
+import com.example.starter_project_2025.system.schedule.calendar.exception.CalendarActivationConflictException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -22,6 +24,20 @@ import java.time.LocalDateTime;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice(basePackages = "com.example.starter_project_2025.system.schedule")
 public class SessionExceptionHandler {
+
+    @ExceptionHandler(CalendarActivationConflictException.class)
+    public ResponseEntity<CalendarActivationErrorResponse> handleCalendarActivationConflict(
+            CalendarActivationConflictException ex) {
+        log.warn("[409] Calendar activation blocked by schedule conflicts");
+        CalendarActivationErrorResponse error = new CalendarActivationErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                "CALENDAR_ACTIVATION_CONFLICT",
+                ex.getMessage(),
+                ex.getConflictCheckResult(),
+                LocalDateTime.now()
+        );
+        return new ResponseEntity<>(error, HttpStatus.CONFLICT);
+    }
 
     @ExceptionHandler(OptimisticLockingFailureException.class)
     public ResponseEntity<ApiErrorResponse> handleVersionConflict(OptimisticLockingFailureException ex) {

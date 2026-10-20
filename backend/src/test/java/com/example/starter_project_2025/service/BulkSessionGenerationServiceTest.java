@@ -2,7 +2,7 @@ package com.example.starter_project_2025.service;
 
 import com.example.starter_project_2025.system.schedule.session.Session;
 import com.example.starter_project_2025.system.schedule.session.SessionRepository;
-import com.example.starter_project_2025.system.schedule.calendar.repository.CalendarVersionRepository;
+import com.example.starter_project_2025.system.schedule.calendar.CalendarVersionStatus;
 import com.example.starter_project_2025.system.schedule.exception.ConflictException;
 import com.example.starter_project_2025.system.schedule.generation.BulkSessionGenerationServiceImpl;
 import com.example.starter_project_2025.system.schedule.generation.dto.BulkSaveSessionsRequestDTO;
@@ -157,6 +157,7 @@ public class BulkSessionGenerationServiceTest {
         // THEN: Cả 2 lần trả về cùng 1 kết quả, nhưng saveAll chỉ được gọi đúng 1 lần duy nhất
         assertSame(firstCall, secondCall);
         verify(sessionRepository, times(1)).saveAll(anyList());
+        verify(calendarLock, times(2)).version(versionId);
     }
 
     @Test
