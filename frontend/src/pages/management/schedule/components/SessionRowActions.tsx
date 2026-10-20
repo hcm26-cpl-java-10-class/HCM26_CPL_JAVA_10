@@ -19,10 +19,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { SessionDTO, SessionStatus } from "@/types";
+import { usePermissions } from "@/hooks/usePermissions";
+import type { SessionDTO } from "@/types";
+import { ADMIN_ROLE } from "@/utils/rbac.utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
-import { CheckCircle2, Loader2, MoreHorizontal, RotateCcw, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, MoreHorizontal, XCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -62,23 +64,26 @@ interface SessionRowActionsProps {
 }
 
 /**
- * Extra row actions for the /sessions page:
- * - PATCH /api/sessions/{id}/status  (complete / reset to scheduled)
- * - POST  /api/sessions/{id}/cancel  (with mandatory cancel reason)
+ * Extra row actions for the /sessions page (F15):
+ * - POST /api/v1/sessions/{id}/complete  (SCHEDULED -> COMPLETED)
+ * - POST /api/v1/sessions/{id}/cancel    (Class Admin only, reason required)
  */
 export function SessionRowActions({ session }: SessionRowActionsProps) {
   const queryClient = useQueryClient();
+  const { activeRole } = usePermissions();
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelError, setCancelError] = useState<string | null>(null);
 
   const sessionId = session.id;
   const status = session.status ?? "SCHEDULED";
+  const canComplete = status === "SCHEDULED";
+  const canCancel = status === "SCHEDULED" && activeRole === ADMIN_ROLE;
 
   const invalidateSessions = () => queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
 
-  const statusMutation = useMutation({
-    mutationFn: (nextStatus: SessionStatus) => sessionApi.changeStatus(sessionId as number, nextStatus),
+  const completeMutation = useMutation({
+    mutationFn: () => sessionApi.complete(sessionId as number, { version: session.version }),
     onSuccess: async (updated) => {
       await invalidateSessions();
       toast.success(`Đã cập nhật trạng thái: ${updated.status ?? "—"}.`);
@@ -131,7 +136,7 @@ export function SessionRowActions({ session }: SessionRowActionsProps) {
     setCancelOpen(true);
   };
 
-  const isBusy = statusMutation.isPending || cancelMutation.isPending;
+  const isBusy = completeMutation.isPending || cancelMutation.isPending;
 
   return (
     <PermissionGate permission="SESSION_UPDATE">
@@ -157,10 +162,10 @@ export function SessionRowActions({ session }: SessionRowActionsProps) {
             Trạng thái buổi học
           </DropdownMenuLabel>
 
-          {status !== "COMPLETED" && status !== "CANCELLED" && (
+          {canComplete && (
             <DropdownMenuItem
-              onSelect={() => statusMutation.mutate("COMPLETED")}
-              disabled={statusMutation.isPending}
+              onSelect={() => completeMutation.mutate()}
+              disabled={completeMutation.isPending}
             >
               <CheckCircle2 className="mr-2 size-4 text-emerald-600" />
               Đánh dấu hoàn thành
@@ -168,16 +173,12 @@ export function SessionRowActions({ session }: SessionRowActionsProps) {
           )}
 
           {status === "COMPLETED" && (
-            <DropdownMenuItem
-              onSelect={() => statusMutation.mutate("SCHEDULED")}
-              disabled={statusMutation.isPending}
-            >
-              <RotateCcw className="mr-2 size-4 text-muted-foreground" />
-              Đặt lại: Đã lên lịch
-            </DropdownMenuItem>
+            <DropdownMenuLabel className="max-w-56 whitespace-normal text-xs font-normal text-muted-foreground">
+              Đã hoàn thành
+            </DropdownMenuLabel>
           )}
 
-          {status === "SCHEDULED" && (
+          {canCancel && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem

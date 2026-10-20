@@ -238,28 +238,6 @@ public class SessionServiceImpl
                 .build();
     }
 
-    @Override
-    public SessionDTO changeStatus(Long id, SessionStatus status) {
-
-        checkPermission(CrudAction.UPDATE);
-        sessionAccessPolicy.requireCreateScope();
-        requireOperationalVersion(id);
-        if (status == SessionStatus.CANCELLED) {
-            throw new BadRequestException("Use the cancellation endpoint and supply a reason.");
-        }
-
-        Session session = sessionRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Session not found: " + id));
-        entityManager.refresh(session);
-        if (session.getStatus() != SessionStatus.SCHEDULED) {
-            throw new com.example.starter_project_2025.exception.ConflictException("Only scheduled sessions can change status");
-        }
-        session.setStatus(status);
-
-        Session saved = sessionRepository.save(session);
-        return sessionMapper.toResponse(saved);
-    }
-
     private String buildConflictDescription(SessionDTO request, Session conflict) {
         String timeRange = conflict.getStartTime().format(TIME_FORMATTER) + " -> " + conflict.getEndTime().format(TIME_FORMATTER);
 
@@ -328,7 +306,7 @@ public class SessionServiceImpl
         if (request.getNotes() != null) {
             session.setNotes(request.getNotes());
         }
-        Session saved = sessionRepository.save(session);
+        Session saved = sessionRepository.saveAndFlush(session);
         return sessionMapper.toResponse(saved);
     }
 

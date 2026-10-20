@@ -202,8 +202,13 @@ class CalendarApiIntegrationTest {
         long v1 = version(cid).path("id").asLong();
         long sid = session(v1).path("id").asLong();
         admin(post("/api/calendar-versions/{id}/activate", v1)).andExpect(status().isOk());
-        admin(post("/api/sessions/{id}/cancel", sid).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"cancelReason\":\"Unavailable\"}")).andExpect(status().isOk());
+        admin(get("/api/v1/sessions/{id}", sid)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SCHEDULED"));
+        admin(post("/api/v1/sessions/{id}/cancel", sid).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"cancelReason\":\"Unavailable\"}"))
+                .andExpect(status().isOk())
+                .andExpect(header().exists("ETag"))
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
 
         JsonNode copied = read(admin(post("/api/calendars/{id}/versions", cid)
                 .contentType(MediaType.APPLICATION_JSON)
