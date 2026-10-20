@@ -60,7 +60,7 @@ export const LocationTree: React.FC<LocationTreeProps> = ({
             }`}
             onClick={() => handleSelect(node)}
           >
-            {/* Toggle Button */}
+            
             <button
               type="button"
               className={`p-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10 transition-transform ${
@@ -75,21 +75,20 @@ export const LocationTree: React.FC<LocationTreeProps> = ({
               )}
             </button>
 
-            {/* Icon đại diện chuẩn Lucide */}
+            
             {hasChildren ? (
               <Folder className="size-4 shrink-0 text-sky-500" />
             ) : (
               <MapPin className="size-4 shrink-0 text-emerald-500" />
             )}
 
-            {/* Title & Code */}
+
             <span className="truncate">{node.name}</span>
             <span className="text-xs text-muted-foreground/70 font-mono">
               ({node.code})
             </span>
           </div>
 
-          {/* Children List */}
           {hasChildren && isExpanded && (
             <div className="pl-4 ml-3 border-l border-border/60">
               {node.children!.map((child) => renderTreeNode(child))}
