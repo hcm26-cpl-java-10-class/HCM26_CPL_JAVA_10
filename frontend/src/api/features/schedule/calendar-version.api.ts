@@ -68,4 +68,9 @@ export const calendarVersionApi = {
         );
     },
 
+
+    checkConflicts: async (versionId: number) => {
+        const response = await axiosInstance.get(`/calendar-versions/${versionId}/conflicts`);
+        return response.data;
+    },
 };

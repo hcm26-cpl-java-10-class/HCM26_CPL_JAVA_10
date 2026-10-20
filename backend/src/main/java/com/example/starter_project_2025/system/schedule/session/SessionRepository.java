@@ -44,4 +44,18 @@ public interface SessionRepository extends BaseCrudRepository<Session, Long> {
 
     List<Session> findByCalendarVersion_IdAndIsActiveTrue(Long calendarVersionId);
 
+
+    @Query("""
+        SELECT s FROM Session s
+        JOIN s.calendarVersion cv
+        JOIN cv.calendar c
+        WHERE s.isActive = true
+          AND s.status != com.example.starter_project_2025.system.schedule.session.SessionStatus.CANCELLED
+          AND cv.status = com.example.starter_project_2025.system.schedule.calendar.CalendarVersionStatus.ACTIVE
+          AND cv.isActive = true
+          AND c.isActive = true
+          AND (:excludeCalendarId IS NULL OR c.id != :excludeCalendarId)
+    """)
+    List<Session> findActiveSessionsFromOtherCalendars(@Param("excludeCalendarId") Long excludeCalendarId);
+
 }

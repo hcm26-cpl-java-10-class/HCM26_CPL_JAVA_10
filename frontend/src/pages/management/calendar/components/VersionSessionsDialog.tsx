@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { sessionApi } from "@/api";
+import { sessionApi, calendarVersionApi } from "@/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +26,8 @@ import {
   CalendarDays,
   Clock,
   Sparkles,
+  AlertTriangle,
+  CheckCircle2,
   ExternalLink,
   Search,
   BookOpen,
@@ -62,6 +64,28 @@ export function VersionSessionsDialog({
       );
     },
   });
+
+  // Query Schedule Conflict Detection Engine (DEV 4 Contract)
+  const { data: conflictData } = useQuery({
+    queryKey: ["version-conflicts", version?.id],
+    enabled: open && !!version?.id && version.status === "DRAFT",
+    queryFn: async () => {
+      if (!version?.id) return null;
+      try {
+        return await calendarVersionApi.checkConflicts(version.id);
+      } catch (e) {
+        return null;
+      }
+    },
+  });
+
+  const conflictingSessionIds = new Set<number>();
+  if (conflictData?.conflicts) {
+    for (const c of conflictData.conflicts) {
+      if (c.session?.id) conflictingSessionIds.add(c.session.id);
+      if (c.conflictingSession?.id) conflictingSessionIds.add(c.conflictingSession.id);
+    }
+  }
 
   if (!version) return null;
 
@@ -212,6 +236,28 @@ export function VersionSessionsDialog({
           </div>
         </div>
 
+        {/* Conflict Status Banner (SCR-51 & BR-UNI-09) */}
+        {version.status === "DRAFT" && conflictData && (
+          <div className="my-1">
+            {!conflictData.hasConflict ? (
+              <div className="flex items-center gap-2.5 p-3 bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 rounded-xl border border-emerald-200 text-xs sm:text-sm font-medium">
+                <CheckCircle2 className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <span>No room, trainer, or schedule conflicts detected in this draft version.</span>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1 p-3 bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-200 rounded-xl border border-amber-200 text-xs sm:text-sm">
+                <div className="flex items-center gap-2 font-semibold">
+                  <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <span>Detected {conflictData.conflicts?.length || 0} schedule conflict(s) in this draft version!</span>
+                </div>
+                <div className="text-xs text-amber-700 dark:text-amber-300 pl-6">
+                  Resolve room or trainer collisions before activating this calendar version to fulfill BR-UNI-09.
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Search Toolbar */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 my-2">
           <div className="relative flex-1 max-w-md">
@@ -295,9 +341,17 @@ export function VersionSessionsDialog({
                   const dateStr = formatDateDisplay(session.startTime);
                   const startTime = formatTimeDisplay(session.startTime);
                   const endTime = formatTimeDisplay(session.endTime);
+                  const hasConflict = session.id != null && conflictingSessionIds.has(session.id);
 
                   return (
-                    <TableRow key={session.id || index} className="hover:bg-muted/40 transition-colors">
+                    <TableRow
+                      key={session.id || index}
+                      className={
+                        hasConflict
+                          ? "bg-amber-50/70 dark:bg-amber-950/40 hover:bg-amber-100/70 border-l-4 border-l-amber-500 transition-colors"
+                          : "hover:bg-muted/40 transition-colors"
+                      }
+                    >
                       <TableCell className="text-center font-mono text-xs text-muted-foreground font-medium">
                         {index + 1}
                       </TableCell>
@@ -310,8 +364,16 @@ export function VersionSessionsDialog({
                         </span>
                       </TableCell>
                       <TableCell>
-                        <div className="font-semibold text-xs sm:text-sm text-foreground">
-                          {session.title || "Session"}
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-xs sm:text-sm text-foreground">
+                            {session.title || "Session"}
+                          </span>
+                          {hasConflict && (
+                            <Badge variant="destructive" className="text-[10px] h-4.5 px-1.5 gap-1">
+                              <AlertTriangle className="size-2.5" />
+                              Conflict
+                            </Badge>
+                          )}
                         </div>
                         {session.topicName && (
                           <div className="text-xs text-muted-foreground mt-0.5">
