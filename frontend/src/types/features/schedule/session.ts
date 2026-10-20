@@ -32,6 +32,22 @@ export interface SessionCancelRequest {
   version?: number;
 }
 
+/** Request body for `PATCH /api/v1/sessions/{id}/status` (F15). */
+export interface SessionStatusUpdateRequest {
+  /** Only COMPLETED or CANCELLED are accepted (SCHEDULED is terminal-exit only). */
+  status: Extract<SessionStatus, "COMPLETED" | "CANCELLED">;
+  notes?: string | null;
+  /** Mandatory when `status = "CANCELLED"`, max 500 characters. */
+  cancelReason?: string | null;
+  version?: number | null;
+}
+
+/** Request body for `POST /api/v1/sessions/{id}/complete` (F15). */
+export interface SessionCompleteRequest {
+  notes?: string | null;
+  version?: number | null;
+}
+
 export interface SessionFilter {
   classCode?: string;
   topicName?: string;

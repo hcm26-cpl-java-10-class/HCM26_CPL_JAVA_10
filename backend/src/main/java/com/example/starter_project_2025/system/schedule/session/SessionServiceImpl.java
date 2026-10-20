@@ -9,9 +9,6 @@ import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.schedule.session.dto.ConflictCheckResponse;
 import com.example.starter_project_2025.system.schedule.session.dto.SessionDTO;
-import com.example.starter_project_2025.system.schedule.session.dto.SessionCancelRequest;
-import com.example.starter_project_2025.system.schedule.exception.ConflictException;
-import com.example.starter_project_2025.system.schedule.exception.UnprocessableEntityException;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -35,8 +32,6 @@ public class SessionServiceImpl
     SessionAccessPolicy sessionAccessPolicy;
 
     static DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy");
-
-    static final int MAX_CANCEL_REASON_LENGTH = 500;
 
     @Override
     protected BaseCrudRepository<Session, Long> getRepository() {
@@ -206,20 +201,6 @@ public class SessionServiceImpl
                 .build();
     }
 
-    @Override
-    public SessionDTO changeStatus(Long id, SessionStatus status) {
-
-        checkPermission(CrudAction.UPDATE);
-
-        Session session = sessionRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Session not found: " + id));
-
-        session.setStatus(status);
-
-        Session saved = sessionRepository.save(session);
-        return sessionMapper.toResponse(saved);
-    }
-
     private String buildConflictDescription(SessionDTO request, Session conflict) {
         String timeRange = conflict.getStartTime().format(TIME_FORMATTER) + " -> " + conflict.getEndTime().format(TIME_FORMATTER);
 
@@ -249,43 +230,5 @@ public class SessionServiceImpl
                 conflict.getTitle(),
                 timeRange
         );
-    }
-
-    @Override
-    public SessionDTO cancel(Long id, SessionCancelRequest request, Long expectedVersion) {
-
-        Session session = sessionRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Session", "id", id));
-        String reason = request != null ? request.getCancelReason() : null;
-        if (reason == null || reason.isBlank()) {
-            throw UnprocessableEntityException.of(
-                    "VALIDATION_FAILED",
-                    "cancelReason",
-                    "Lý do hủy là bắt buộc khi hủy buổi học.");
-        }
-        reason = reason.trim();
-        if (reason.length() > MAX_CANCEL_REASON_LENGTH) {
-            throw UnprocessableEntityException.of(
-                    "VALIDATION_FAILED",
-                    "cancelReason",
-                    "Lý do hủy không được vượt quá " + MAX_CANCEL_REASON_LENGTH + " ký tự.");
-        }
-        if (expectedVersion != null && !expectedVersion.equals(session.getVersion())) {
-            throw new ConflictException(
-                    "SESSION_VERSION_CONFLICT",
-                    "Phiên bản buổi học đã thay đổi, vui lòng tải lại (currentVersion=" + session.getVersion() + ").");
-        }
-        if (session.getStatus() != SessionStatus.SCHEDULED) {
-            throw new ConflictException(
-                    "SESSION_INVALID_TRANSITION",
-                    "Chỉ có thể hủy buổi học ở trạng thái SCHEDULED. Trạng thái hiện tại: " + session.getStatus() + ".");
-        }
-        session.setStatus(SessionStatus.CANCELLED);
-        session.setCancelReason(reason);
-        if (request.getNotes() != null) {
-            session.setNotes(request.getNotes());
-        }
-        Session saved = sessionRepository.save(session);
-        return sessionMapper.toResponse(saved);
     }
 }

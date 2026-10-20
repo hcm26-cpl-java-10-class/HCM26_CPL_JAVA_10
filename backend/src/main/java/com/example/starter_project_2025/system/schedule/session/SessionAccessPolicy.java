@@ -27,6 +27,30 @@ public class SessionAccessPolicy {
         throw new AccessDeniedException("Session is outside your assigned scope.");
     }
 
+    /**
+     * F15 — Trainer được phân công hoặc Class Admin được đổi trạng thái buổi học.
+     */
+    public void requireUpdateScope(Session session) {
+        if (isAdmin()) {
+            return;
+        }
+        Authentication actor = SecurityContextHolder.getContext().getAuthentication();
+        if (actor != null && actor.getPrincipal() instanceof UserPrincipal principal
+                && principal.getUser().getId().equals(session.getTrainerId())) {
+            return;
+        }
+        throw new AccessDeniedException("Session is outside your assigned scope.");
+    }
+
+    /**
+     * F15 — Chỉ Class Admin được hủy buổi học (Trainer không có quyền này).
+     */
+    public void requireCancelScope() {
+        if (!isAdmin()) {
+            throw new AccessDeniedException("Only class administration can cancel a session.");
+        }
+    }
+
     private boolean isAdmin() {
         Authentication actor = SecurityContextHolder.getContext().getAuthentication();
         return actor != null && actor.isAuthenticated() && actor.getAuthorities().stream()
