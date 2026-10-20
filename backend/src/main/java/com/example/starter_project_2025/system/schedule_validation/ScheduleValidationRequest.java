@@ -11,6 +11,6 @@ import java.util.List;
 @Setter
 public class ScheduleValidationRequest {
 
-    @NotEmpty(message = "At least one session is required")
+    @NotEmpty(message = "Provide at least one session to validate.")
     private List<@Valid SessionConflictCandidate> sessions;
 }

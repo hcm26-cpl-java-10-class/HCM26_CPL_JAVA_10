@@ -18,32 +18,41 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class SessionCandidateRequest {
 
-    @NotBlank
-    @Size(max = 100)
+    @NotBlank(message = "A candidate key is required for each session.")
+    @Size(max = 100, message = "The candidate key must not exceed 100 characters.")
     String candidateKey;
 
     Long sessionId;
 
-    @NotNull
-    @Positive
+    @NotNull(message = "Select a class.")
+    @Positive(message = "The class ID must be a positive number.")
     Long classId;
 
-    @NotNull
-    @Positive
+    @NotNull(message = "Select an instructor.")
+    @Positive(message = "The instructor ID must be a positive number.")
     Long trainerId;
 
-    @NotNull
+    @Positive(message = "The subject ID must be a positive number.")
+    Long topicId;
+
+    @Positive(message = "The teaching assignment ID must be a positive number.")
+    Long teachingAssignmentId;
+
+    @Size(max = 150, message = "The session title must not exceed 150 characters.")
+    String title;
+
+    @NotNull(message = "A start date and time are required.")
     LocalDateTime startAt;
 
-    @NotNull
+    @NotNull(message = "An end date and time are required.")
     LocalDateTime endAt;
 
-    @Positive
+    @Positive(message = "The room ID must be a positive number.")
     Long roomId;
 
-    @Size(max = 150)
+    @Size(max = 150, message = "The room name must not exceed 150 characters.")
     String location;
 
-    @Size(max = 500)
+    @Size(max = 500, message = "The meeting URL must not exceed 500 characters.")
     String meetingUrl;
 }

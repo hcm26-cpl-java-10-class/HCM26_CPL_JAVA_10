@@ -45,6 +45,15 @@ public class ScheduleVersionController
 
     ScheduleVersionService scheduleVersionService;
     ScheduleVersionRepository scheduleVersionRepository;
+    com.example.starter_project_2025.system.schedule.conflict.ScheduleConflictService conflicts;
+
+    @PostMapping("/{id}/validate")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('SESSION_READ') and hasAnyAuthority('SESSION_CREATE','SESSION_UPDATE')")
+    public com.example.starter_project_2025.system.schedule.conflict.dto.ScheduleValidationResponse validateCandidates(
+            @PathVariable Long id,
+            @jakarta.validation.Valid @RequestBody com.example.starter_project_2025.system.schedule.conflict.dto.ScheduleValidationRequest request) {
+        return conflicts.validateCandidates(id, request);
+    }
 
     @Override
     protected BaseCrudService<Long, ScheduleVersionDTO, ScheduleVersionFilter> getService() {
@@ -176,7 +185,8 @@ public class ScheduleVersionController
             summary = "Xóa phiên bản nháp (DRAFT)",
             description = "Xóa bản nháp đang soạn thảo. Chặn lỗi nếu phiên bản đang ACTIVE hoặc ARCHIVED."
     )
-    public ResponseEntity<Void> deleteDraft(@PathVariable Long id) {
+    @Override
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
         scheduleVersionService.deleteDraft(id);
         return ResponseEntity.noContent().build();
     }

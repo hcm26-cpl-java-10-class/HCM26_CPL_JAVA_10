@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@RestController
+@RestController("candidateScheduleValidationController")
 @Validated
 @RequiredArgsConstructor
 @RequestMapping("/api/schedule-versions/{versionId}/validations")
@@ -29,10 +29,10 @@ public class ScheduleValidationController {
     ScheduleConflictService scheduleConflictService;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('SESSION_CREATE', 'SESSION_UPDATE')")
+    @PreAuthorize("hasAuthority('SESSION_READ') and hasAnyAuthority('SESSION_CREATE', 'SESSION_UPDATE')")
     @Operation(
             summary = "Validate one or more candidate sessions before saving",
-            description = "Until ScheduleVersion is added to the base source, candidates include classId directly; versionId is returned as request context and is not resolved against a version record.")
+            description = "Uses the same rules as session writes; verifies that candidates belong to the version class.")
     public ResponseEntity<ScheduleValidationResponse> validateCandidates(
             @PathVariable @Positive Long versionId,
             @Valid @RequestBody ScheduleValidationRequest request) {

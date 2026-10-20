@@ -16,13 +16,13 @@ import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDateTime;
 
-@Entity
+@Entity(name = "LegacyScheduleVersion")
 @Getter
 @Setter
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "schedule_versions")
+@Table(name = "legacy_schedule_versions")
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ImportEntity("schedule_version")
 @ExportEntity(fileName = "schedule_versions", sheetName = "Schedule Versions")

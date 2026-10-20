@@ -1,5 +1,4 @@
 import { subjectApi } from "@/api";
-import { AutoCrudPage } from "@/pages/management/AutoCrudPage";
 import {
   auditableFieldsSchema,
   type EntityConfig,
@@ -22,7 +21,6 @@ const subjectSchema: EntitySchema = {
   fields: [
     {
       name: "code",
-      label: "Subject Code",
       label: "Code",
       type: "text",
       sortable: true,
@@ -32,7 +30,6 @@ const subjectSchema: EntitySchema = {
     },
     {
       name: "name",
-      label: "Subject Name",
       label: "Name",
       type: "text",
       sortable: true,
@@ -51,10 +48,6 @@ const subjectSchema: EntitySchema = {
     {
       name: "technicalGroup",
       label: "Technical Group",
-      type: "text",
-      sortable: true,
-      filterable: true,
-      filterType: "text",
       type: "select",
       options: technicalGroupOptions,
       sortable: true,
@@ -67,24 +60,6 @@ const subjectSchema: EntitySchema = {
       label: "Duration (Hours)",
       type: "number",
       sortable: true,
-    },
-    {
-      name: "status",
-      label: "Status",
-      type: "select",
-      sortable: true,
-      filterable: true,
-      filterType: "select",
-      options: [
-        { label: "Active", value: "ACTIVE" },
-        { label: "Inactive", value: "INACTIVE" },
-        { label: "Draft", value: "DRAFT" },
-      ],
-      filterOptions: [
-        { label: "Active", value: "ACTIVE" },
-        { label: "Inactive", value: "INACTIVE" },
-        { label: "Draft", value: "DRAFT" },
-      ],
       filterable: true,
       filterType: "numberRange",
     },
@@ -94,7 +69,6 @@ const subjectSchema: EntitySchema = {
       type: "textarea",
       sortable: false,
     },
-    ...(auditableFieldsSchema as FieldSchema[]),
     {
       name: "isActive",
       label: "Status",
@@ -114,13 +88,8 @@ const subjectSchema: EntitySchema = {
 };
 
 export const entityConfig: EntityConfig = {
-  name: "Subject",
   name: "Subjects",
   path: "/subjects",
   api: subjectApi,
   schema: subjectSchema,
 };
-
-export default function SubjectManagementPage() {
-  return <AutoCrudPage entity={entityConfig} />;
-}

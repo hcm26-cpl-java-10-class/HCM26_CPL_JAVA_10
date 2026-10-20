@@ -18,9 +18,10 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-@RestController
+@RestController("legacyScheduleVersionController")
+@org.springframework.context.annotation.Profile("legacy-schedule")
 @RequiredArgsConstructor
-@RequestMapping("/api/schedule-versions")
+@RequestMapping("/api/legacy/schedule-versions")
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Tag(name = "Schedule Version", description = "APIs for managing schedule versions")
 public class ScheduleVersionController

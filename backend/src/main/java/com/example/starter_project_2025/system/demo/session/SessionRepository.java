@@ -80,4 +80,12 @@ public interface SessionRepository extends BaseCrudRepository<Session, Long> {
             @Param("excludedStatus") Session.SessionStatus excludedStatus);
 
     boolean existsByTopicId(Long topicId);
+
+    @Query("select s from Session s where s.isActive = true and s.status <> :cancelled and s.startTime < :until and s.endTime > :from")
+    List<Session> findBlockingInRange(@Param("from") LocalDateTime from, @Param("until") LocalDateTime until,
+            @Param("cancelled") Session.SessionStatus cancelled);
+
+    default List<Session> findBlockingInRange(LocalDateTime from, LocalDateTime until) {
+        return findBlockingInRange(from, until, Session.SessionStatus.CANCELLED);
+    }
 }

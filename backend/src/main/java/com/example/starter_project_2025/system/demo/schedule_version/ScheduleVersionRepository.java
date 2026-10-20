@@ -6,7 +6,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
-@Repository
+@Repository("legacyScheduleVersionRepository")
 public interface ScheduleVersionRepository extends BaseCrudRepository<ScheduleVersion, Long> {
 
     List<ScheduleVersion> findByClassId(Long classId);

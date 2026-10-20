@@ -12,7 +12,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
-@Service
+@Service("legacyScheduleVersionService")
+@org.springframework.context.annotation.Profile("legacy-schedule")
 @Transactional
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
