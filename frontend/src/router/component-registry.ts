@@ -12,6 +12,7 @@ import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import BulkSessionGenerationPage from "@/pages/management/schedule/pages/BulkSessionGenerationPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
+import TrainingClassDetailPage from "@/pages/management/trainingclass/TrainingClassDetailPage";
 
 export interface RouteConfig {
   path: string;
@@ -36,6 +37,12 @@ export const routes: RouteConfig[] = [
     isModuleDriven: false,
   },
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
+  {
+    path: "/training-classes/:classId",
+    component: TrainingClassDetailPage,
+    requiredPermission: "TRAINING_CLASS_READ",
+    isModuleDriven: false,
+  },
   { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
   ...buildEntityRoutes(),
 
