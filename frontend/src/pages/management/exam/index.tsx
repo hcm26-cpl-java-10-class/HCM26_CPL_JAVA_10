@@ -32,13 +32,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { ExamDTO, LatePolicy, QuestionDifficulty, QuestionFilter, QuestionType, ResultVisibility } from "@/types";
+import type { ExamDTO, LatePolicy, QuestionDTO, QuestionDifficulty, QuestionFilter, QuestionType, ResultVisibility } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, ClipboardCheck, Mail, MoreVertical, Pencil, Plus, Search, Trash2, X } from "lucide-react"; // CHANGED: thêm ClipboardCheck, MoreVertical
 // FIXED: trước đây import nhầm `useNavigate` từ "react" (nó nằm trong react-router-dom) và chưa khai báo `navigate`
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { EditExamQuestionDialog, isExamStarted, QuestionAnswers } from "./ExamQuestionParts";
 
 const PAGE_SIZE = 8;
 
@@ -146,6 +147,7 @@ export default function ExamManagementPage() {
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<Set<number>>(new Set());
   const [examToDelete, setExamToDelete] = useState<ExamDTO | null>(null);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
+  const [editingQuestion, setEditingQuestion] = useState<QuestionDTO | null>(null);
 
   const examsQuery = useQuery({
     queryKey: ["exam-management", examPage, examSearch],
@@ -296,7 +298,11 @@ export default function ExamManagementPage() {
     });
   };
 
-  const questionIdsInExam = new Set(activeExam?.questionIds ?? activeExam?.questions?.map((question) => question.id) ?? []);
+  // Câu hỏi trong đề là bản sao; so sánh theo id câu hỏi gốc để biết câu nào của ngân hàng đã được thêm
+  const sourceIdsInExam = new Set(
+    (activeExam?.questions ?? []).map((question) => question.sourceQuestionId).filter((id): id is number => id != null),
+  );
+  const activeExamStarted = isExamStarted(activeExam);
   const examRows = examsQuery.data?.content ?? [];
   const questionRows = questionsQuery.data?.content ?? [];
   const examTotalPages = examsQuery.data?.totalPages ?? 0;
@@ -616,7 +622,7 @@ export default function ExamManagementPage() {
                   )}
                   <div className="divide-y">
                     {questionRows.map((question) => {
-                      const alreadyAdded = questionIdsInExam.has(question.id);
+                      const alreadyAdded = sourceIdsInExam.has(question.id);
                       const checked = alreadyAdded || selectedQuestionIds.has(question.id);
                       return (
                           <label key={question.id} className="flex cursor-pointer gap-3 p-3 hover:bg-muted/50 has-[:disabled]:cursor-not-allowed">
@@ -633,8 +639,9 @@ export default function ExamManagementPage() {
                             <Badge variant="secondary">{question.topic || "Chưa phân loại"}</Badge>
                             <Badge variant="outline">{question.difficulty}</Badge>
                             <Badge variant="outline">{question.points} điểm</Badge>
-                            {alreadyAdded && <Badge>Đã có trong đề</Badge>}
+                            {alreadyAdded && <Badge>Đã có trong đề này</Badge>}
                           </span>
+                          <QuestionAnswers question={question} />
                         </span>
                           </label>
                       );
@@ -675,7 +682,18 @@ export default function ExamManagementPage() {
                         <div className="min-w-0 flex-1">
                           <p className="line-clamp-3 text-sm">{question.content}</p>
                           <p className="mt-1 text-xs text-muted-foreground">{question.points} điểm · {question.topic || "Chưa phân loại"}</p>
+                          <QuestionAnswers question={question} />
                         </div>
+                        <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label="Sửa câu hỏi trong đề"
+                            title={activeExamStarted ? "Đề đã bắt đầu, không thể sửa câu hỏi" : "Sửa câu hỏi trong đề"}
+                            disabled={activeExamStarted}
+                            onClick={() => setEditingQuestion(question)}
+                        >
+                          <Pencil />
+                        </Button>
                         <Button
                             variant="ghost"
                             size="icon-sm"
@@ -755,6 +773,15 @@ export default function ExamManagementPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        <EditExamQuestionDialog
+            exam={activeExam}
+            question={editingQuestion}
+            onClose={() => setEditingQuestion(null)}
+            onSaved={(exam) => {
+              setActiveExam(exam);
+              refreshExams();
+            }}
+        />
       </MainLayout>
   );
 }

@@ -43,6 +43,10 @@ export const examApi = {
     const response = await axiosInstance.delete<ExamDTO>(`/exams/${examId}/questions/${questionId}`);
     return response.data;
   },
+  updateQuestion: async (examId: number, questionId: number, payload: QuestionDTO): Promise<ExamDTO> => {
+    const response = await axiosInstance.put<ExamDTO>(`/exams/${examId}/questions/${questionId}`, payload);
+    return response.data;
+  },
 };
 
 export const questionApi = createBaseApiService<QuestionDTO, QuestionFilter>({ path: "/questions" });

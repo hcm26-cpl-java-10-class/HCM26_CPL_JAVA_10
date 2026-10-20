@@ -136,7 +136,8 @@ public class QuestionImportService {
         String normalizedTopic = (topic != null && !topic.isBlank()) ? topic.trim().toLowerCase() : null;
 
         return questionRepository.exists((root, query, cb) -> {
-            Predicate contentPredicate = cb.equal(cb.lower(cb.trim(root.get("content"))), trimmedContent);
+            Predicate bankOnly = cb.isNull(root.get("sourceQuestionId"));
+            Predicate contentPredicate = cb.and(bankOnly, cb.equal(cb.lower(cb.trim(root.get("content"))), trimmedContent));
             if (normalizedTopic != null) {
                 Predicate topicPredicate = cb.equal(cb.lower(cb.trim(root.get("topic"))), normalizedTopic);
                 return cb.and(contentPredicate, topicPredicate);
