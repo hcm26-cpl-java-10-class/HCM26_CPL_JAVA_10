@@ -2,11 +2,14 @@ package com.example.starter_project_2025.system.demo.course;
 
 import com.example.starter_project_2025.base.dataio.importer.result.ImportResult;
 import com.example.starter_project_2025.base.dataio.importer.result.RowError;
+import com.example.starter_project_2025.system.demo.category.CategoryRepository;
 import com.example.starter_project_2025.system.demo.lesson.Lesson;
 import com.example.starter_project_2025.system.demo.lesson.LessonContentType;
 import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
 import com.example.starter_project_2025.system.demo.section.Section;
 import com.example.starter_project_2025.system.demo.section.SectionRepository;
+import com.example.starter_project_2025.system.rbac.user.User;
+import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
@@ -29,6 +32,8 @@ public class CourseBundleImportService {
     private final CourseRepository courseRepository;
     private final SectionRepository sectionRepository;
     private final LessonRepository lessonRepository;
+    private final UserRepository userRepository;
+    private final CategoryRepository categoryRepository;
 
     public boolean supports(MultipartFile file) {
         String name = file.getOriginalFilename();
@@ -66,6 +71,18 @@ public class CourseBundleImportService {
                 course.setName(name);
                 course.setDescription(value(row, columns, "Description"));
                 course.setInstructor(optionalValue(row, columns, "Instructor"));
+                String instructorEmail = optionalValue(row, columns, "Instructor Email");
+                if (instructorEmail != null) {
+                    User instructor = userRepository.findByEmail(instructorEmail)
+                            .orElseThrow(() -> new IllegalArgumentException("instructor was not found: " + instructorEmail));
+                    course.setInstructorUser(instructor);
+                    course.setInstructor(instructor.getFullName());
+                }
+                String categoryCode = optionalValue(row, columns, "Category Code");
+                if (categoryCode != null) {
+                    course.setCategory(categoryRepository.findByCodeIgnoreCase(categoryCode)
+                            .orElseThrow(() -> new IllegalArgumentException("category was not found: " + categoryCode)));
+                }
                 course.setThumbnailUrl(optionalValue(row, columns, "Thumbnail URL"));
                 course.setStatus(enumValue(value(row, columns, "Status"), CourseStatus.class, CourseStatus.PUBLISHED));
                 course.setLevel(enumValue(value(row, columns, "Level"), CourseLevel.class, CourseLevel.BEGINNER));
