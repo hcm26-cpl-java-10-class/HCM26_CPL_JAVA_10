@@ -126,6 +126,12 @@ export interface RelationConfig {
   labelField: string;
 
   multiple?: boolean;
+
+  /**
+   * Lọc danh sách lựa chọn trong form trước khi hiển thị
+   * (vd: loại chính nó và con cháu khi chọn danh mục cha).
+   */
+  filterItems?: (items: any[], ctx: { initial?: any; isEdit: boolean }) => any[];
 }
 
 export interface DynamicFieldBuilderOptions {

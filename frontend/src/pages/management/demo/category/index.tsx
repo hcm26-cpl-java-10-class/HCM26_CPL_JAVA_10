@@ -54,6 +54,22 @@ const categorySchema: EntitySchema = {
         api: categoryApi,
         valueField: "id",
         labelField: "name",
+        // Ô chọn cha: ẩn chính nó và toàn bộ con, cháu (tránh vòng lặp cha-con).
+        filterItems: (items, { initial, isEdit }) => {
+          if (!isEdit) return items;
+          const excluded = new Set<number>([initial.id]);
+          let added = true;
+          while (added) {
+            added = false;
+            for (const item of items) {
+              if (item.parentId != null && excluded.has(item.parentId) && !excluded.has(item.id)) {
+                excluded.add(item.id);
+                added = true;
+              }
+            }
+          }
+          return items.filter((item) => !excluded.has(item.id));
+        },
       },
       validation: {
         // Backend: "A category cannot be its own parent"
