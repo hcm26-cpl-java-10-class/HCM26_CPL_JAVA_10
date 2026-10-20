@@ -99,6 +99,14 @@ public class TrainingClassServiceImpl implements TrainingClassService {
                 .orElseThrow(() ->
                         new ResourceNotFoundException("Class not found"));
 
+        if (!Boolean.TRUE.equals(trainingClass.getIsActive())) {
+            throw new ConflictException(
+                    "Inactive classes cannot be edited"
+            );
+        }
+
+        validateDates(request);
+
         validateDates(request);
 
         String code = request.getCode().trim();
