@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotNull;
 public interface TrainingClassService {
 
     TrainingClassResponse create(
-            @NotNull @Valid CreateTrainingClassRequest request
-    );
+            @NotNull @Valid CreateTrainingClassRequest request);
+
+    TrainingClassResponse getById(Long classId);
 }

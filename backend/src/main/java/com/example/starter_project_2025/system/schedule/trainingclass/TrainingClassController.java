@@ -26,4 +26,9 @@ public class TrainingClassController {
                 .status(HttpStatus.CREATED)
                 .body(response);
     }
+    @GetMapping("/{classId}")
+    public ResponseEntity<TrainingClassResponse> getById(
+            @PathVariable("classId") Long classId) {
+        return ResponseEntity.ok(service.getById(classId));
+    }
 }

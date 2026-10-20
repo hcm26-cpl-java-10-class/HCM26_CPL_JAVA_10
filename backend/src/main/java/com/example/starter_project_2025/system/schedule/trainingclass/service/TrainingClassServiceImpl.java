@@ -13,11 +13,24 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.server.ResponseStatusException;
+import com.example.starter_project_2025.exception.ResourceNotFoundException;
 
 @Service
 @Validated
 @RequiredArgsConstructor
+
 public class TrainingClassServiceImpl implements TrainingClassService {
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasRole('ADMIN') and hasAuthority('TRAINING_CLASS_READ')")
+    public TrainingClassResponse getById(Long classId) {
+        TrainingClass trainingClass = repository.findById(classId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Không tìm thấy lớp học"));
+
+        return mapper.toResponse(trainingClass);
+    }
 
     private final TrainingClassRepository repository;
     private final TrainingClassMapper mapper;
