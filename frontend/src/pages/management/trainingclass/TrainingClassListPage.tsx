@@ -66,6 +66,8 @@ const trainingClassSchema: EntitySchema = {
             label: "Program Version ID",
             type: "number",
             sortable: true,
+            filterable: true,
+            filterType: "text",
             width: 170,
         },
         {
@@ -73,6 +75,8 @@ const trainingClassSchema: EntitySchema = {
             label: "Start Date",
             type: "date",
             sortable: true,
+            filterable: true,
+            filterType: "dateRange",
             width: 130,
         },
         {
@@ -89,27 +93,6 @@ const trainingClassSchema: EntitySchema = {
             type: "number",
             sortable: true,
             width: 110,
-        },
-        {
-            name: "status",
-            label: "Class Status",
-            type: "text",
-            editable: false,
-            sortable: true,
-            filterable: true,
-            filterType: "select",
-            filterOptions: [
-                { label: "Planning", value: "PLANNING" },
-                { label: "Assigned", value: "ASSIGNED" },
-                { label: "Reviewing", value: "REVIEWING" },
-                { label: "In progress", value: "IN_PROGRESS" },
-                { label: "Training completed", value: "TRAINING_COMPLETED" },
-                { label: "Pending close", value: "PENDING_CLOSE" },
-                { label: "Closed", value: "CLOSED" },
-                { label: "Declined", value: "DECLINED" },
-                { label: "Cancelled", value: "CANCELLED" },
-            ],
-            width: 180,
         },
         {
             name: "location",
@@ -167,6 +150,9 @@ export default function TrainingClassListPage() {
                         if (error.response?.status === 401) {
                             message =
                                 "Please log in to view training classes.";
+                            if (error instanceof Error) {
+                                message = error.message;
+                            }
                         } else if (error.response?.status === 403) {
                             message =
                                 "You do not have permission to view training classes.";

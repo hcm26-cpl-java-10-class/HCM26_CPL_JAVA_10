@@ -102,6 +102,48 @@ export const trainingClassTableApi = {
             }
         }
 
+        const programVersionId = String(
+            filters.programVersionId ?? "",
+        ).trim();
+
+        if (programVersionId) {
+            if (
+                !/^[1-9]\d*$/.test(programVersionId) ||
+                !Number.isSafeInteger(Number(programVersionId))
+            ) {
+                throw new Error(
+                    "Program version ID must be a positive integer",
+                );
+            }
+
+            params.set("programVersionId", programVersionId);
+        }
+
+        const dateRange = filters.startDate;
+
+        if (
+            typeof dateRange === "object" &&
+            dateRange !== null &&
+            !Array.isArray(dateRange)
+        ) {
+            const range = dateRange as {
+                from?: string;
+                to?: string;
+            };
+
+            const from = range.from ? toApiDate(range.from) : "";
+            const to = range.to ? toApiDate(range.to) : "";
+
+            if (from && to && from > to) {
+                throw new Error(
+                    "Start date From must not be after To",
+                );
+            }
+
+            if (from) params.set("startDateFrom", from);
+            if (to) params.set("startDateTo", to);
+        }
+
         const sorts = pagination.sort?.length
             ? pagination.sort
             : ["id,desc"];

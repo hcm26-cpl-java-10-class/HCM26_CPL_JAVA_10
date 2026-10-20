@@ -8,6 +8,8 @@ import jakarta.validation.constraints.NotNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.time.LocalDate;
+
 public interface TrainingClassService {
 
     TrainingClassResponse create(
@@ -19,6 +21,9 @@ public interface TrainingClassService {
             String search,
             ClassStatus status,
             String site,
+            Long programVersionId,
+            LocalDate startDateFrom,
+            LocalDate startDateTo,
             Pageable pageable);
 
     TrainingClassResponse update(

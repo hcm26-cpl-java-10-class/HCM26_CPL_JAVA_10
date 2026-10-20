@@ -16,6 +16,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.server.ResponseStatusException;
+import java.time.LocalDate;
+
 
 @Service
 @Validated
@@ -44,7 +46,24 @@ public class TrainingClassServiceImpl implements TrainingClassService {
             String search,
             ClassStatus status,
             String site,
+            Long programVersionId,
+            LocalDate startDateFrom,
+            LocalDate startDateTo,
             Pageable pageable) {
+
+        if (programVersionId != null && programVersionId <= 0) {
+            throw new BadRequestException(
+                    "Program version ID must be greater than 0"
+            );
+        }
+
+        if (startDateFrom != null
+                && startDateTo != null
+                && startDateFrom.isAfter(startDateTo)) {
+            throw new BadRequestException(
+                    "Start date From must not be after To"
+            );
+        }
 
         String keyword = search == null ? "" : search.trim();
         String selectedSite = site == null ? "" : site.trim();
@@ -53,6 +72,9 @@ public class TrainingClassServiceImpl implements TrainingClassService {
                 keyword,
                 status,
                 selectedSite,
+                programVersionId,
+                startDateFrom,
+                startDateTo,
                 pageable
         ).map(mapper::toResponse);
     }

@@ -12,6 +12,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.RequestParam;
+import java.time.LocalDate;
+import org.springframework.format.annotation.DateTimeFormat;
 
 @RestController
 @RequiredArgsConstructor
@@ -25,11 +27,25 @@ public class TrainingClassController {
             @RequestParam(name = "search", defaultValue = "") String search,
             @RequestParam(name = "status", required = false) ClassStatus status,
             @RequestParam(name = "site", defaultValue = "") String site,
+            @RequestParam(name = "programVersionId", required = false)
+            Long programVersionId,
+            @RequestParam(name = "startDateFrom", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate startDateFrom,
+            @RequestParam(name = "startDateTo", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate startDateTo,
             @PageableDefault(sort = "id") Pageable pageable) {
 
-        return ResponseEntity.ok(
-                service.getClasses(search, status, site, pageable)
-        );
+        return ResponseEntity.ok(service.getClasses(
+                search,
+                status,
+                site,
+                programVersionId,
+                startDateFrom,
+                startDateTo,
+                pageable
+        ));
     }
 
     @PostMapping
