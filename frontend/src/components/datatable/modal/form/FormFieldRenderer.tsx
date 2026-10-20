@@ -21,6 +21,8 @@ interface FormFieldRendererProps {
   errorClass: string;
   fieldErrors?: string[];
   relationOptions?: Record<string, any[]>;
+  /** Bản ghi đang sửa (undefined khi tạo mới) - dùng cho relation.filterItems. */
+  initial?: any;
   onChange: (name: string, value: any) => void;
 }
 
@@ -33,6 +35,7 @@ export function FormFieldRenderer({
   errorClass,
   fieldErrors,
   relationOptions = {},
+  initial,
   onChange,
 }: FormFieldRendererProps) {
   const rule = getEffectiveRule(field);
@@ -117,7 +120,10 @@ export function FormFieldRenderer({
     case "relation": {
       const rel = field.relation;
       if (!rel) return null;
-      const items: any[] = relationOptions[field.name] ?? [];
+      const allItems: any[] = relationOptions[field.name] ?? [];
+      const items: any[] = rel.filterItems
+        ? rel.filterItems(allItems, { initial, isEdit: initial?.id != null })
+        : allItems;
 
       // Multiple select with checkboxes
       if (rel.multiple) {
