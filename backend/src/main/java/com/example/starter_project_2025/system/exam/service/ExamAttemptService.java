@@ -281,7 +281,7 @@ public class ExamAttemptService {
 
     private Set<ExamAttemptOption> validateAndResolveOptions(ExamAttemptQuestion question, Set<Long> selectedIds) {
         if (question.getType() == QuestionType.ESSAY) {
-            return Set.of();
+            return new LinkedHashSet<>(); // FIXED: trước đây Set.of() (bất biến) -> Hibernate ném UnsupportedOperationException khi lưu câu tự luận
         }
         // CHANGED: không còn SINGLE_CHOICE; câu trắc nghiệm chỉ có 1 đáp án đúng thì chỉ cho chọn 1
         long correctCount = question.getOptions().stream().filter(ExamAttemptOption::isCorrect).count();
