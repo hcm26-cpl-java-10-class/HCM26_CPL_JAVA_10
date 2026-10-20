@@ -11,7 +11,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Seed danh mục mẫu (idempotent: khớp theo code). */
+/** Seed sample categories (idempotent: matched by code). */
 @Slf4j
 @Order(12)
 @Component
@@ -24,29 +24,24 @@ public class CategoryDataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        // Lập trình
-        Category programming = upsert("PROGRAMMING", "Lập trình & Công nghệ", "Các khóa học phát triển phần mềm và lập trình", null, 10);
-        upsert("WEB_DEV", "Lập trình Web", "Phát triển ứng dụng Web với Frontend, Backend và Full-stack", programming, 10);
-        upsert("MOBILE_DEV", "Lập trình Di động", "Phát triển ứng dụng Android, iOS và Đa nền tảng", programming, 20);
-        upsert("JAVA", "Lập trình Java", "Ngôn ngữ lập trình Java và hệ sinh thái Spring Framework", programming, 30);
+        Category programming = upsert("PROGRAMMING", "Programming & Technology", "Software development and programming courses", null, 10);
+        upsert("WEB_DEV", "Web Development", "Frontend, backend, and full-stack web development", programming, 10);
+        upsert("MOBILE_DEV", "Mobile Development", "Android, iOS, and cross-platform application development", programming, 20);
+        upsert("JAVA", "Java Programming", "Java language and the Spring ecosystem", programming, 30);
 
-        // Dữ liệu & AI
-        Category data = upsert("DATA_AI", "Dữ liệu & AI", "Phân tích dữ liệu và Trí tuệ nhân tạo", null, 20);
-        upsert("MACHINE_LEARNING", "Học máy (Machine Learning)", "Học máy truyền thống và Học sâu (Deep Learning)", data, 10);
-        upsert("DATA_ANALYSIS", "Phân tích dữ liệu", "Truy vấn SQL, thống kê và trực quan hóa dữ liệu", data, 20);
+        Category data = upsert("DATA_AI", "Data & AI", "Data analysis and artificial intelligence", null, 20);
+        upsert("MACHINE_LEARNING", "Machine Learning", "Traditional machine learning and deep learning", data, 10);
+        upsert("DATA_ANALYSIS", "Data Analysis", "SQL, statistics, and data visualization", data, 20);
 
-        // Thiết kế
-        Category design = upsert("DESIGN", "Thiết kế & Đồ họa", "Thiết kế hình ảnh và thiết kế sản phẩm", null, 30);
-        upsert("UI_UX", "Thiết kế UI/UX", "Thiết kế giao diện và trải nghiệm người dùng", design, 10);
+        Category design = upsert("DESIGN", "Design & Graphics", "Visual and product design", null, 30);
+        upsert("UI_UX", "UI/UX Design", "User interface and user experience design", design, 10);
 
-        // Kinh doanh
-        Category business = upsert("BUSINESS", "Kinh doanh & Quản lý", "Kỹ năng kinh doanh, quản lý và kỹ năng mềm", null, 40);
-        upsert("MARKETING", "Marketing & Truyền thông", "Marketing kỹ thuật số (Digital Marketing) và xây dựng thương hiệu", business, 10);
+        Category business = upsert("BUSINESS", "Business & Management", "Business, management, and professional skills", null, 40);
+        upsert("MARKETING", "Marketing & Communications", "Digital marketing and brand development", business, 10);
 
-        // Ngoại ngữ
-        upsert("LANGUAGE", "Ngoại ngữ", "Các khóa học luyện thi và giao tiếp ngoại ngữ", null, 50);
+        upsert("LANGUAGE", "Languages", "Language communication and exam preparation", null, 50);
 
-        log.info("Ensured sample categories in Vietnamese.");
+        log.info("Ensured sample categories in English.");
     }
 
     private Category upsert(String code, String name, String description, Category parent, int displayOrder) {
