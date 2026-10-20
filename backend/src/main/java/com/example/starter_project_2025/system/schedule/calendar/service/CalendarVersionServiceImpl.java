@@ -13,6 +13,10 @@ import com.example.starter_project_2025.system.schedule.calendar.dto.CreateCalen
 import com.example.starter_project_2025.system.schedule.calendar.dto.UpdateCalendarVersionRequest;
 import com.example.starter_project_2025.system.schedule.calendar.repository.CalendarRepository;
 import com.example.starter_project_2025.system.schedule.calendar.repository.CalendarVersionRepository;
+import com.example.starter_project_2025.system.schedule.calendar.exception.CalendarActivationConflictException;
+import com.example.starter_project_2025.system.schedule.detection.ConflictDetectionService;
+import com.example.starter_project_2025.system.schedule.detection.dto.ConflictCheckResult;
+import com.example.starter_project_2025.system.schedule.exception.UnprocessableEntityException;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -23,6 +27,8 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -35,6 +41,8 @@ public class CalendarVersionServiceImpl implements CalendarVersionService {
     private final CalendarVersionRepository calendarVersionRepository;
     private final SessionRepository sessionRepository;
     private final CalendarVersionMapper calendarVersionMapper;
+    private final ConflictDetectionService conflictDetectionService;
+    private final Clock clock;
 
     @Override
     @Transactional
@@ -250,6 +258,92 @@ public class CalendarVersionServiceImpl implements CalendarVersionService {
 
         version.setIsActive(false);
         calendarVersionRepository.save(version);
+    }
+
+    @Override
+    @Transactional
+    public CalendarVersionResponse activateVersion(
+            Long calendarId,
+            Long versionId,
+            Long activatedBy) {
+
+        validateActivationRequest(calendarId, versionId, activatedBy);
+
+        // Every activation takes the same database lock before conflict detection.
+        // This prevents two classes with conflicting DRAFTs from being activated concurrently.
+        calendarRepository.lockAllActiveCalendarsForScheduleActivation();
+
+        calendarRepository.findActiveByIdForUpdate(calendarId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Active Calendar not found: " + calendarId));
+
+        CalendarVersion draft = calendarVersionRepository
+                .findActiveByIdForUpdate(calendarId, versionId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Calendar Version not found: " + versionId));
+
+        if (draft.getStatus() != CalendarVersionStatus.DRAFT) {
+            throw new ConflictException(
+                    "Only a DRAFT calendar version can be activated");
+        }
+
+        boolean hasSessions = sessionRepository
+                .existsByCalendarVersion_IdAndIsActiveTrueAndStatusNot(
+                        versionId,
+                        SessionStatus.CANCELLED
+                );
+        if (!hasSessions) {
+            throw UnprocessableEntityException.of(
+                    "CALENDAR_VERSION_EMPTY",
+                    "sessions",
+                    "Calendar version must contain at least one active, non-cancelled session."
+            );
+        }
+
+        ConflictCheckResult conflictResult =
+                conflictDetectionService.checkConflicts(versionId);
+
+        if (!conflictResult.getValidationErrors().isEmpty()) {
+            throw new UnprocessableEntityException(
+                    "CALENDAR_ACTIVATION_VALIDATION_FAILED",
+                    conflictResult.getValidationErrors(),
+                    "Calendar version contains invalid session data."
+            );
+        }
+
+        if (conflictResult.isHasConflict()) {
+            throw new CalendarActivationConflictException(conflictResult);
+        }
+
+        calendarVersionRepository
+                .findActiveVersionByCalendarIdForUpdate(calendarId)
+                .ifPresent(currentActive -> {
+                    currentActive.setStatus(CalendarVersionStatus.INACTIVE);
+                    calendarVersionRepository.save(currentActive);
+                });
+
+        draft.setStatus(CalendarVersionStatus.ACTIVE);
+        draft.setActivatedAt(LocalDateTime.now(clock));
+        draft.setActivatedBy(activatedBy);
+
+        return calendarVersionMapper.toResponse(
+                calendarVersionRepository.saveAndFlush(draft)
+        );
+    }
+
+    private void validateActivationRequest(
+            Long calendarId,
+            Long versionId,
+            Long activatedBy) {
+        if (calendarId == null || calendarId <= 0) {
+            throw new BadRequestException("Calendar ID must be positive.");
+        }
+        if (versionId == null || versionId <= 0) {
+            throw new BadRequestException("Calendar version ID must be positive.");
+        }
+        if (activatedBy == null || activatedBy <= 0) {
+            throw new BadRequestException("Authenticated user ID must be positive.");
+        }
     }
 
     private CalendarVersion getDraftVersionForUpdate(

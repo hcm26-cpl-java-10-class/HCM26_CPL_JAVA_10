@@ -36,4 +36,9 @@ public interface SessionRepository extends BaseCrudRepository<Session, Long> {
 
     List<Session> findByCalendarVersion_IdAndIsActiveTrue(Long calendarVersionId);
 
+    boolean existsByCalendarVersion_IdAndIsActiveTrueAndStatusNot(
+            Long calendarVersionId,
+            SessionStatus excludedStatus
+    );
+
 }

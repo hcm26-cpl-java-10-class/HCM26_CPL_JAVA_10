@@ -30,6 +30,18 @@ public interface CalendarVersionRepository
             @Param("status") CalendarVersionStatus status
     );
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT cv
+        FROM CalendarVersion cv
+        WHERE cv.calendar.id = :calendarId
+          AND cv.status = com.example.starter_project_2025.system.schedule.calendar.CalendarVersionStatus.ACTIVE
+          AND cv.isActive = true
+    """)
+    Optional<CalendarVersion> findActiveVersionByCalendarIdForUpdate(
+            @Param("calendarId") Long calendarId
+    );
+
     @Query("""
         SELECT COUNT(cv) > 0
         FROM CalendarVersion cv

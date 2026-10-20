@@ -6,6 +6,8 @@ import com.example.starter_project_2025.system.schedule.calendar.dto.CreateCalen
 
 import com.example.starter_project_2025.system.schedule.calendar.dto.UpdateCalendarVersionRequest;
 import com.example.starter_project_2025.system.schedule.calendar.service.CalendarVersionService;
+import com.example.starter_project_2025.security.UserPrincipal;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
@@ -19,6 +21,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -75,5 +78,26 @@ public class CalendarVersionController {
 
         calendarVersionService.deleteVersion(calendarId, versionId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{versionId}/activate")
+    @PreAuthorize("hasAuthority('CALENDARVERSION_UPDATE')")
+    @Operation(summary = "Activate a conflict-free DRAFT calendar version")
+    public ResponseEntity<CalendarVersionResponse> activateVersion(
+            @PathVariable Long calendarId,
+            @PathVariable Long versionId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        Long activatedBy = principal == null || principal.getUser() == null
+                ? null
+                : principal.getUser().getId();
+
+        return ResponseEntity.ok(
+                calendarVersionService.activateVersion(
+                        calendarId,
+                        versionId,
+                        activatedBy
+                )
+        );
     }
 }

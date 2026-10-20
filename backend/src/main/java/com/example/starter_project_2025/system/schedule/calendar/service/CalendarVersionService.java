@@ -27,4 +27,10 @@ public interface CalendarVersionService {
     );
 
     void deleteVersion(Long calendarId, Long versionId);
+
+    CalendarVersionResponse activateVersion(
+            Long calendarId,
+            Long versionId,
+            Long activatedBy
+    );
 }
