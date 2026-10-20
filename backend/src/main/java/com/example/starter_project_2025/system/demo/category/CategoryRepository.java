@@ -14,5 +14,13 @@ public interface CategoryRepository extends BaseCrudRepository<Category, Long> {
 
     boolean existsByParentId(Long parentId);
 
+    boolean existsByNameIgnoreCaseAndParentId(String name, Long parentId);
+
+    boolean existsByNameIgnoreCaseAndParentIdIsNull(String name);
+
+    boolean existsByNameIgnoreCaseAndParentIdAndIdNot(String name, Long parentId, Long id);
+
+    boolean existsByNameIgnoreCaseAndParentIdIsNullAndIdNot(String name, Long id);
+
     Optional<Category> findByCodeIgnoreCase(String code);
 }

@@ -188,6 +188,7 @@ export function FormModal({
       }
       fieldErrors={mergedErrors[field.name]}
       relationOptions={relationOptions}
+      initial={initial}
       onChange={updateField}
     />
   );
