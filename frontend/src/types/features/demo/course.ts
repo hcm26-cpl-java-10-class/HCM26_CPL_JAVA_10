@@ -109,4 +109,5 @@ export interface CourseDetail {
   lessonCount: number;
   totalDuration: number;
   sections: CourseDetailSection[];
+  categoryNames?: string[] | null;
 }
