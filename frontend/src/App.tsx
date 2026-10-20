@@ -31,31 +31,7 @@ function AppRoutes() {
             {/* Root redirect */}
             <Route path="/" element={<Navigate to={homePath} replace />} />
 
-            {/* Dynamic routes from backend Module table */}
-            {moduleGroups.flatMap((group) =>
-                group.modules.map((m) => {
-                    if (!m.url) return null;
-                    const Component = componentRegistry[m.url];
-
-                    if (!Component) {
-                        return <Route key={`missing-${m.id ?? m.url}`} path={m.url} element={<Navigate to="/not-found-page" replace />} />;
-                    }
-
-                    return (
-                        <Route
-                            key={m.id}
-                            path={m.url}
-                            element={
-                                <ProtectedRoute requiredPermission={m.requiredPermission}>
-                                    <Component />
-                                </ProtectedRoute>
-                            }
-                        />
-                    );
-                }),
-            )}
-
-            {/* Static routes from componentRegistry */}
+            {/* ============ STATIC ROUTES FIRST (higher priority in matching) ============ */}
             {staticRoutes.map((route, index) => {
                 const Component = route.component;
 
@@ -75,6 +51,31 @@ function AppRoutes() {
                     />
                 );
             })}
+
+            {/* ============ DYNAMIC ROUTES from backend Module table ============ */}
+            {moduleGroups.flatMap((group) =>
+                group.modules.map((m) => {
+                    if (!m.url) return null;
+                    const Component = componentRegistry[m.url];
+
+                    if (!Component) {
+                        // Skip routes without a component - let them fall through to static routes or 404
+                        return null;
+                    }
+
+                    return (
+                        <Route
+                            key={m.id}
+                            path={m.url}
+                            element={
+                                <ProtectedRoute requiredPermission={m.requiredPermission}>
+                                    <Component />
+                                </ProtectedRoute>
+                            }
+                        />
+                    );
+                }),
+            )}
 
             {/* Catch all */}
             <Route path="*" element={<NotFoundRedirect />} />

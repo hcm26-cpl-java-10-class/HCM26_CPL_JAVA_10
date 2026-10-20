@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Lời mời đã bị hủy</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; background:#f7f8fa; padding:16px;">
+<div style="max-width: 620px; margin: 0 auto; background:#ffffff; padding: 28px; border-radius: 10px; border:1px solid #e5e7eb;">
+    <div style="background:#fee2e2; border-left:4px solid #dc2626; padding:12px 16px; border-radius:6px; margin-bottom:20px;">
+        <strong style="color:#991b1b;">Lời mời đã bị hủy</strong>
+    </div>
+
+    <h2 style="color:#2c3e50; margin-top:0;">Thông báo thu hồi lời mời</h2>
+
+    <p>Xin chào <strong th:text="${username}">Học sinh</strong>,</p>
+    <p>
+        Lời mời tham gia kỳ thi <strong th:text="${examTitle}">Tên kỳ thi</strong>
+        của bạn đã bị thu hồi.
+    </p>
+
+    <table style="width:100%; border-collapse:collapse; margin:18px 0;">
+        <tr>
+            <td style="padding:8px 10px; background:#f3f4f6; width:150px;">Lý do</td>
+            <td style="padding:8px 10px;" th:text="${revokedReason}">Không có lý do được cung cấp</td>
+        </tr>
+        <tr>
+            <td style="padding:8px 10px; background:#f3f4f6;">Thời điểm hủy</td>
+            <td style="padding:8px 10px;" th:text="${revokedAt}">--/--/---- --:--</td>
+        </tr>
+    </table>
+
+    <p style="font-size:0.9em; color:#6b7280;">
+        Bạn không thể truy cập kỳ thi này nữa. Nếu có thắc mắc, vui lòng liên hệ giáo viên phụ trách.
+    </p>
+
+    <p style="margin-top: 30px; font-size: 0.9em; color: #777;">Trân trọng,<br>Hệ thống Quản lý Kỳ thi</p>
+</div>
+</body>
+</html>

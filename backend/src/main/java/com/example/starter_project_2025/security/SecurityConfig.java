@@ -60,7 +60,11 @@ public class SecurityConfig {
             "/login/oauth2/**",
             "/verify/**",
             "/api/auth/**",
-            "/h2-console/**"
+            "/h2-console/**",
+            // Anonymous exam access - students without a platform account
+            "/api/exams/verify-access/**",
+            "/api/exams/anonymous-session",
+            "/api/exams/anonymous/**"
     };
 
     @Bean

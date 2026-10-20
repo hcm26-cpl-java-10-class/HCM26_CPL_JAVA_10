@@ -17,8 +17,10 @@ function formatDate(value?: string | null) {
 
 function getStatus(invitation: StudentInvitationDTO) {
     if (invitation.status === 'ACCEPTED') return { label: 'Đã chấp nhận', variant: 'default' as const };
-    if (invitation.status === 'PENDING') return { label: 'Chờ chấp nhận', variant: 'secondary' as const };
+    if (invitation.status === 'PENDING' || invitation.status === 'SENT') return { label: 'Chờ xác nhận', variant: 'secondary' as const };
     if (invitation.status === 'EXPIRED') return { label: 'Hết hạn', variant: 'outline' as const };
+    if (invitation.status === 'REVOKED') return { label: 'Đã thu hồi', variant: 'destructive' as const };
+    if (invitation.status === 'REJECTED') return { label: 'Từ chối', variant: 'outline' as const };
     return { label: invitation.status ?? 'Không xác định', variant: 'outline' as const };
 }
 
@@ -88,7 +90,7 @@ export default function StudentInvitationsPage() {
                             const status = getStatus(invitation);
                             const expired = invitation.expiresAt != null
                                 && new Date(invitation.expiresAt).getTime() <= Date.now();
-                            const canAccept = invitation.status === 'PENDING' && !expired;
+                            const canAccept = (invitation.status === 'PENDING' || invitation.status === 'SENT') && !expired;
                             return (
                                 <article key={invitation.id} className="flex flex-wrap items-center justify-between gap-4 p-4">
                                     <div className="min-w-0 flex-1 space-y-2">

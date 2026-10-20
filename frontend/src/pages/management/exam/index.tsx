@@ -28,8 +28,8 @@ import {
 } from "@/components/ui/table";
 import type { ExamDTO, LatePolicy, QuestionDifficulty, QuestionFilter, QuestionType, ResultVisibility } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, Pencil, Plus, Search, Trash2, X } from "lucide-react";
-import { useState } from "react";
+import { BookOpen, Mail, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { useNavigate, useState } from "react";
 import { toast } from "sonner";
 
 const PAGE_SIZE = 8;
@@ -344,6 +344,15 @@ export default function ExamManagementPage() {
                           <Button variant="outline" size="sm" onClick={() => openQuestionPicker(exam)}>
                             <BookOpen />
                             Câu hỏi
+                          </Button>
+                          <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => exam.id && navigate(`/exams/${exam.id}/invitations`)}
+                              disabled={!exam.id}
+                          >
+                            <Mail className="size-4" />
+                            Lời mời
                           </Button>
                           <Button variant="ghost" size="icon-sm" aria-label="Sửa đề thi" title="Sửa đề thi" onClick={() => openEditExam(exam)}>
                             <Pencil />

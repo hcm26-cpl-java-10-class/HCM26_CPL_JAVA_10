@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Link truy cập kỳ thi</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; background:#f7f8fa; padding:16px;">
+<div style="max-width: 620px; margin: 0 auto; background:#ffffff; padding: 28px; border-radius: 10px; border:1px solid #e5e7eb;">
+    <h2 style="color:#2c3e50; margin-top:0;">Link thi không cần tài khoản</h2>
+
+    <p>Xin chào <strong th:text="${username}">Học sinh</strong>,</p>
+    <p>
+        Bạn được cấp quyền tham gia kỳ thi <strong th:text="${examTitle}">Tên kỳ thi</strong>
+        mà <strong>không cần đăng nhập</strong> vào hệ thống.
+    </p>
+
+    <table style="width:100%; border-collapse:collapse; margin:18px 0;">
+        <tr>
+            <td style="padding:8px 10px; background:#f3f4f6; width:150px;">Bắt đầu</td>
+            <td style="padding:8px 10px;" th:text="${startTime}">--/--/---- --:--</td>
+        </tr>
+        <tr>
+            <td style="padding:8px 10px; background:#f3f4f6;">Thời lượng</td>
+            <td style="padding:8px 10px;">
+                <span th:text="${durationMinutes}">60</span> phút
+            </td>
+        </tr>
+        <tr>
+            <td style="padding:8px 10px; background:#f3f4f6;">Hạn sử dụng</td>
+            <td style="padding:8px 10px;" th:text="${maxAccessTime}">Không giới hạn</td>
+        </tr>
+        <tr>
+            <td style="padding:8px 10px; background:#f3f4f6;">Số lần truy cập</td>
+            <td style="padding:8px 10px;">
+                <span th:text="${maxAccessAttempts}">1</span> lần
+            </td>
+        </tr>
+    </table>
+
+    <div style="text-align:center; margin:22px 0;">
+        <p style="margin-bottom:8px; color:#6b7280; font-size:0.9em;">Mã truy cập của bạn</p>
+        <div style="font-family: 'Courier New', monospace; font-size:32px; font-weight:700; letter-spacing:6px;
+                    color:#2563eb; background:#eff6ff; padding:14px; border-radius:8px; display:inline-block;">
+            <span th:text="${accessCode}">ABCD1234</span>
+        </div>
+    </div>
+
+    <div style="text-align:center; margin:26px 0;">
+        <a th:href="${accessLink}"
+           style="background:#16a34a; color:#ffffff; padding:12px 28px; border-radius:6px;
+                  text-decoration:none; display:inline-block; font-weight:600;">
+            Vào kỳ thi
+        </a>
+    </div>
+
+    <p style="font-size:0.9em; color:#b91c1c; background:#fef2f2; padding:10px 12px; border-radius:6px;">
+        ⚠️ Link này chỉ dành riêng cho bạn. Mỗi thiết bị chỉ được sử dụng 1 lần — vui lòng không chia sẻ.
+    </p>
+
+    <p style="margin-top: 30px; font-size: 0.9em; color: #777;">Trân trọng,<br>Hệ thống Quản lý Kỳ thi</p>
+</div>
+</body>
+</html>
