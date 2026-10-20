@@ -31,23 +31,58 @@ export const sessionApi = Object.assign({}, base, {
   },
 
   /**
-   * `PATCH /sessions/{id}/status?status=...`
-   * Updates only the session status (no cancel reason required).
+   * `GET /api/v1/sessions/{id}`
+   * Reads the current status after an operation (F15).
+   */
+  getStatus: async (id: number | string): Promise<SessionDTO> => {
+    const response = await axiosInstance.get<SessionDTO>(`${v1Path}/${id}`);
+    return response.data;
+  },
+
+  /**
+   * `PATCH /api/v1/sessions/{id}/status`
+   * Body: `{ status, notes, cancelReason, version }`.
+   * Only `COMPLETED` / `CANCELLED` are accepted; `cancelReason` is mandatory when cancelling.
    */
   changeStatus: async (
     id: number | string,
-    status: SessionStatus
+    status: SessionStatus,
+    options?: { notes?: string | null; cancelReason?: string | null; version?: number | null }
   ): Promise<SessionDTO> => {
+    const ifMatch = buildIfMatch(options?.version);
     const response = await axiosInstance.patch<SessionDTO>(
       `${v1Path}/${id}/status`,
-      null,
-      { params: { status } }
+      {
+        status,
+        notes: options?.notes ?? null,
+        cancelReason: options?.cancelReason ?? null,
+        version: options?.version ?? null,
+      },
+      ifMatch ? { headers: ifMatch } : undefined
     );
     return response.data;
   },
 
   /**
-   * `POST /sessions/{id}/cancel`
+   * `POST /api/v1/sessions/{id}/complete`
+   * Shortcut SCHEDULED -> COMPLETED. Requires Calendar Version ACTIVE,
+   * class ONGOING and `startTime <= now`.
+   */
+  complete: async (
+    id: number | string,
+    payload?: { notes?: string | null; version?: number | null }
+  ): Promise<SessionDTO> => {
+    const ifMatch = buildIfMatch(payload?.version);
+    const response = await axiosInstance.post<SessionDTO>(
+      `${v1Path}/${id}/complete`,
+      { notes: payload?.notes ?? null, version: payload?.version ?? null },
+      ifMatch ? { headers: ifMatch } : undefined
+    );
+    return response.data;
+  },
+
+  /**
+   * `POST /api/v1/sessions/{id}/cancel`
    * One-way transition SCHEDULED -> CANCELLED. `cancelReason` is mandatory
    * (max 500 chars). Sends `If-Match` (ETag) when a version is provided.
    *

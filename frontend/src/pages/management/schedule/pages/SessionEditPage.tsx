@@ -244,16 +244,16 @@ export function SessionEditPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="status">Trạng thái buổi học</Label>
-                  <select
+                  <Input
                     id="status"
                     value={form.status ?? "SCHEDULED"}
-                    onChange={(e) => setForm((p) => p && { ...p, status: e.target.value as any })}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                  >
-                    <option value="SCHEDULED">SCHEDULED (Đã lên lịch)</option>
-                    <option value="COMPLETED">COMPLETED (Hoàn thành)</option>
-                    <option value="CANCELLED">CANCELLED (Đã hủy)</option>
-                  </select>
+                    disabled
+                    readOnly
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Trạng thái chỉ thay đổi qua thao tác “Đánh dấu hoàn thành” / “Hủy buổi học”
+                    (API v1 sessions).
+                  </p>
                 </div>
 
                 <div className="grid gap-2">
