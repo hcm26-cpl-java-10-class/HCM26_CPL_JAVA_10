@@ -49,9 +49,10 @@ interface QuestionFormProps {
     submitLabel: string;
     /** NEW: chỉ truyền true ở trang Edit. Khi tạo câu hỏi, trạng thái active mặc định là bật và không cho chỉnh. */
     showActive?: boolean;
+    onCancel?: () => void;
 }
 
-export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel, showActive = false }: QuestionFormProps) {
+export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel, showActive = false, onCancel }: QuestionFormProps) {
     const navigate = useNavigate();
 
     const updateOption = (index: number, patch: Partial<QuestionOptionDTO>) =>
@@ -279,7 +280,7 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel, s
             )}
 
             <CardFooter className="px-0 pt-2 flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => navigate("/questions")} disabled={isSaving}>
+                <Button type="button" variant="outline" onClick={() => (onCancel ? onCancel() : navigate("/questions"))} disabled={isSaving}>
                     <ArrowLeft className="h-4 w-4" />
                     Back
                 </Button>

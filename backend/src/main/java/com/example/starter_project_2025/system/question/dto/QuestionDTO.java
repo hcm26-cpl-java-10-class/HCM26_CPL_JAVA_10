@@ -8,6 +8,7 @@ import com.example.starter_project_2025.system.question.domain.QuestionType;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -32,6 +33,9 @@ public class QuestionDTO extends BaseDTO {
 
     @Min(value = 1, groups = {OnCreate.class, OnUpdate.class})
     private Integer points;
+
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    private Long sourceQuestionId;
 
     @Valid
     private List<OptionDTO> options;

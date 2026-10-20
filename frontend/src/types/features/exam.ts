@@ -16,6 +16,7 @@ export interface QuestionDTO {
   difficulty: QuestionDifficulty;
   topic?: string | null;
   points: number;
+  sourceQuestionId?: number | null;
   options: QuestionOptionDTO[];
 }
 

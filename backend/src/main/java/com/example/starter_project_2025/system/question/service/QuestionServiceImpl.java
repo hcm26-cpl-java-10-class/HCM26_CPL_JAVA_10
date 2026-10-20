@@ -4,6 +4,7 @@ import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.system.exam.domain.ExamRepository;
 import com.example.starter_project_2025.system.question.domain.Question;
 import com.example.starter_project_2025.system.question.domain.QuestionRepository;
@@ -41,13 +42,22 @@ public class QuestionServiceImpl
 
     @Override
     protected void beforeUpdate(Question entity, QuestionDTO request, ValidationContext ctx) {
+        rejectExamCopy(entity);
         boolean inUse = examRepository.existsByQuestions_Id(entity.getId());
         validator.validateForUpdate(entity, request, inUse, ctx);
+    }
+
+    // Bản sao của đề thi chỉ được sửa/xoá qua đề thi chứa nó
+    private void rejectExamCopy(Question entity) {
+        if (entity.getSourceQuestionId() != null) {
+            throw new BadRequestException("Câu hỏi này là bản sao thuộc một đề thi, hãy sửa hoặc xóa trong đề thi");
+        }
     }
 
 
     @Override
     protected void beforeDelete(Question entity) {
+        rejectExamCopy(entity);
         if (examRepository.existsByQuestions_Id(entity.getId())) {
             ValidationContext ctx = new ValidationContext();
             ctx.add("question", "Câu hỏi đang được dùng trong đề thi, không thể xóa. ");
