@@ -135,6 +135,69 @@ interface FormState {
   orderIndex: string;
 }
 
+const LESSON_TEMPLATES: Array<{ label: string; values: Omit<FormState, "orderIndex"> }> = [
+  {
+    label: "Course welcome (Text)",
+    values: {
+      title: "Course Welcome and Overview",
+      contentType: "TEXT",
+      contentUrl: "",
+      textContent: "Welcome to this course. Review the learning objectives and course structure before continuing.",
+      duration: "300",
+    },
+  },
+  {
+    label: "Concept video (Video)",
+    values: {
+      title: "Concept Video",
+      contentType: "VIDEO",
+      contentUrl: "https://www.youtube.com/watch?v=iCYoaTvE9vo",
+      textContent: "",
+      duration: "",
+    },
+  },
+  {
+    label: "Guided tutorial (Video)",
+    values: {
+      title: "Guided Tutorial",
+      contentType: "VIDEO",
+      contentUrl: "https://www.youtube.com/watch?v=efC0Nw5rdA4",
+      textContent: "",
+      duration: "",
+    },
+  },
+  {
+    label: "Reading material (Document)",
+    values: {
+      title: "Reading Material",
+      contentType: "DOCUMENT",
+      contentUrl: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+      textContent: "",
+      duration: "300",
+    },
+  },
+  {
+    label: "Practice exercise (Text)",
+    values: {
+      title: "Practice Exercise",
+      contentType: "TEXT",
+      contentUrl: "",
+      textContent: "Complete the practice task, record your answer, and review the key concepts from this section.",
+      duration: "600",
+    },
+  },
+  {
+    label: "Reference resource (Link)",
+    values: {
+      title: "Reference Resource",
+      contentType: "LINK",
+      contentUrl: "https://docs.oracle.com/en/java/",
+      textContent: "",
+      duration: "300",
+    },
+  },
+];
+
 type FieldErrors = Partial<Record<keyof FormState, string>>;
 
 const needsUrl = (type: LessonContentType) => type !== "TEXT";
@@ -333,6 +396,34 @@ export function LessonFormModal({
         </DialogHeader>
 
         <div className="grid gap-4">
+          {!isEdit && (
+            <div className="grid gap-1.5">
+              <Label>Lesson template</Label>
+              <Select
+                onValueChange={(label) => {
+                  const template = LESSON_TEMPLATES.find((item) => item.label === label);
+                  if (!template) return;
+                  setForm((current) => ({ ...current, ...template.values }));
+                  setErrors({});
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Choose a lesson template" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LESSON_TEMPLATES.map((template) => (
+                    <SelectItem key={template.label} value={template.label}>
+                      {template.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Choose a preset, then customize any field before creating the lesson.
+              </p>
+            </div>
+          )}
+
           <div className="grid gap-1.5">
             <Label htmlFor="lesson-title">Title</Label>
             <Input

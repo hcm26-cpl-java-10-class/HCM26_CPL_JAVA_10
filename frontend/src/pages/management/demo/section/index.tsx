@@ -33,6 +33,15 @@ type FormErrors = {
     orderIndex?: string;
 };
 
+const SECTION_TEMPLATES = [
+    "Course Introduction",
+    "Foundations",
+    "Core Concepts",
+    "Guided Practice",
+    "Assessment and Review",
+    "Final Project",
+];
+
 function normalizeTitle(value: string): string {
     return value.trim().replace(/\s+/g, " ");
 }
@@ -784,6 +793,34 @@ export default function SectionManagementPage() {
                         className="space-y-4"
                         noValidate
                     >
+                        {!editing && (
+                            <div>
+                                <label
+                                    htmlFor="section-template"
+                                    className="mb-1 block text-sm font-medium"
+                                >
+                                    Section Template
+                                </label>
+                                <select
+                                    id="section-template"
+                                    className="w-full rounded-md border bg-background p-2"
+                                    defaultValue=""
+                                    onChange={(event) => {
+                                        setTitle(event.target.value);
+                                        setFormErrors((prev) => ({ ...prev, title: undefined }));
+                                    }}
+                                >
+                                    <option value="" disabled>Choose a template</option>
+                                    {SECTION_TEMPLATES.map((template) => (
+                                        <option key={template} value={template}>{template}</option>
+                                    ))}
+                                </select>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                    Choose a common section or enter your own title below.
+                                </p>
+                            </div>
+                        )}
+
                         {/* TITLE */}
                         <div>
                             <label
