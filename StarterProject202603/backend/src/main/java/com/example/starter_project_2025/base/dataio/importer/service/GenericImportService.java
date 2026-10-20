@@ -15,6 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +30,15 @@ public class GenericImportService implements ImportService {
             MultipartFile file,
             Class<T> entityClass,
             JpaRepository<T, ID> repository
+    ) {
+        return importFile(file, entityClass, repository, entity -> {});
+    }
+
+    public <T, ID> ImportResult importFile(
+            MultipartFile file,
+            Class<T> entityClass,
+            JpaRepository<T, ID> repository,
+            Consumer<T> beforeSave
     ) {
 
         ImportResult result = new ImportResult();
@@ -45,6 +55,8 @@ public class GenericImportService implements ImportService {
 
                 try {
                     T entity = mapper.map(row, entityClass);
+
+                    beforeSave.accept(entity);
 
                     applyHash(entity);
 

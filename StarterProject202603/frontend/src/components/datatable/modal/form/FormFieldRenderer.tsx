@@ -221,6 +221,22 @@ export function FormFieldRenderer({
         </div>
       );
 
+    case "time":
+      return (
+        <div className="grid gap-2">
+          <Label htmlFor={field.name}>{field.label}</Label>
+          <Input
+            id={field.name}
+            type="time"
+            step="60"
+            className={errorClass}
+            value={value || ""}
+            onChange={(e) => onChange(field.name, e.target.value)}
+          />
+          <FieldError errors={fieldErrors} />
+        </div>
+      );
+
     case "password":
       return (
         <div className="grid gap-2">
@@ -245,11 +261,18 @@ export function FormFieldRenderer({
           <Textarea
             id={field.name}
             className={errorClass}
+            maxLength={field.maxLength}
             value={value || ""}
             onChange={(e) => onChange(field.name, e.target.value)}
             placeholder={`Enter ${field.label.toLowerCase()}...`}
             rows={4}
           />
+          {field.showCharacterCount && field.maxLength !== undefined && (
+            <p className="text-xs text-muted-foreground" aria-live="polite">
+              {String(value ?? "").length}/{field.maxLength} ký tự
+              {" · Còn "}{Math.max(0, field.maxLength - String(value ?? "").length)} ký tự
+            </p>
+          )}
           <FieldError errors={fieldErrors} />
         </div>
       );

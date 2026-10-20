@@ -267,6 +267,15 @@ export function ProTable<TData = any>({
                     effectiveViewMode === "card" ? "border-0" : "border"
                 }`}
             >
+                {table.queryError && (
+                    <div role="alert" className="p-3 text-sm text-destructive">
+                        {table.queryError}
+                        <button type="button" className="ml-3 underline" onClick={() => table.retryQuery?.()}>Retry</button>
+                    </div>
+                )}
+                {schema.entityName === "study-session" && table.isFetching && (
+                    <div role="status" className="px-3 py-1 text-sm text-muted-foreground">Loading Study Sessions...</div>
+                )}
                 {effectiveViewMode === "table" ? (
                     <>
                         <Table className="table-fixed">

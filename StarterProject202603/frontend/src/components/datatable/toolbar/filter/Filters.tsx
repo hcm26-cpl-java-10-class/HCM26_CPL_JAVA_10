@@ -56,6 +56,21 @@ export function Filters({ table }: FiltersProps) {
                       })),
                     }
                   : field;
+              if (table.schema.entityName === "study-session") {
+                return (
+                  <select
+                    aria-label={field.label}
+                    className="h-8 w-full rounded-md border bg-background px-2 text-xs"
+                    value={value ?? ""}
+                    onChange={(event) => setFilterValue(field.name, event.target.value || undefined)}
+                  >
+                    <option value="">All</option>
+                    {(filterField.filterOptions ?? filterField.options ?? []).map((option: { label: string; value: string | number }) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                );
+              }
               return (
                 <SelectFilter
                   field={filterField}

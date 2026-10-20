@@ -59,7 +59,7 @@ export function FilterPopover({
                 )}
               </span>
               <div className="flex items-center gap-1">
-                {activeFilterCount > 0 && (
+                {(activeFilterCount > 0 || (table.schema.entityName === "study-session" && table.search)) && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -69,7 +69,7 @@ export function FilterPopover({
                       table.clearFilters?.();
                     }}
                   >
-                    Clear all
+                    {table.schema.entityName === "study-session" ? "Reset Filters" : "Clear all"}
                   </Button>
                 )}
                 <Button
@@ -84,7 +84,7 @@ export function FilterPopover({
             </div>
 
             {/* Filter fields */}
-            <div className="p-3">
+            <div className="p-3 max-h-[65vh] overflow-y-auto">
               <Filters table={table} />
             </div>
           </>

@@ -5,6 +5,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xssf.usermodel.XSSFCell;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -58,7 +59,8 @@ public class ExcelParser implements FileParser {
 
         return switch (cell.getCellType()) {
             case STRING -> cell.getStringCellValue();
-            case NUMERIC -> String.valueOf(cell.getNumericCellValue());
+            // Preserve the stored decimal value; a double round-trip can round Long IDs.
+            case NUMERIC -> ((XSSFCell) cell).getRawValue();
             default -> null;
         };
     }

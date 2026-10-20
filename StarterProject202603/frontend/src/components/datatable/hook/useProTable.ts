@@ -552,6 +552,10 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
       }
     }
 
+    if (error instanceof Error && error.message.trim()) {
+      return error.message;
+    }
+
     return fallback;
   };
 
@@ -754,6 +758,10 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
     data,
     total: query.data?.totalElements ?? 0,
     loading: query.isLoading,
+    queryError: schema.entityName === "study-session" && query.isError
+      ? getMutationErrorMessage(query.error, "Unable to load Study Sessions. Please try again.")
+      : undefined,
+    retryQuery: query.refetch,
     isFetching: query.isFetching,
 
     page: pagination.page,
@@ -765,10 +773,29 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
     setSize: (size: number) => setPagination((prev) => ({ ...prev, size })),
 
     filters,
-    setFilters,
-    clearFilters: () => setFilters({}),
+    setFilters: (value: React.SetStateAction<any>) => {
+      if (schema.entityName === "study-session") {
+        setPagination((prev) => ({ ...prev, page: 0 }));
+        setSelected([]);
+      }
+      setFilters(value);
+    },
+    clearFilters: () => {
+      setFilters({});
+      if (schema.entityName === "study-session") {
+        setSearch("");
+        setPagination((prev) => ({ ...prev, page: 0 }));
+        setSelected([]);
+      }
+    },
     search,
-    setSearch,
+    setSearch: (value: string) => {
+      if (schema.entityName === "study-session") {
+        setPagination((prev) => ({ ...prev, page: 0 }));
+        setSelected([]);
+      }
+      setSearch(value);
+    },
 
     selected,
     setSelected,
