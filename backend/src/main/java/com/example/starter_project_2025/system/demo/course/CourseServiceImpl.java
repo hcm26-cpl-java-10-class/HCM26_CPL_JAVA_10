@@ -77,7 +77,9 @@ public class CourseServiceImpl
         if (request.getInstructorId() != null) {
             resolveInstructor(course, request);
         }
-        if (request.getCategoryId() != null) {
+        if (Boolean.TRUE.equals(request.getClearCategory())) {
+            course.setCategory(null);
+        } else if (request.getCategoryId() != null) {
             resolveCategory(course, request, ctx);
         }
         if (request.getIsFree() == null) {
@@ -151,7 +153,15 @@ public class CourseServiceImpl
             return;
         }
         categoryRepository.findById(categoryId).ifPresentOrElse(
-                course::setCategory,
+                category -> {
+                    boolean unchanged = course.getCategory() != null
+                            && categoryId.equals(course.getCategory().getId());
+                    if (!unchanged && !Boolean.TRUE.equals(category.getIsActive())) {
+                        ctx.add("categoryId", "Category is inactive");
+                        return;
+                    }
+                    course.setCategory(category);
+                },
                 () -> ctx.add("categoryId", "Category not found")
         );
     }

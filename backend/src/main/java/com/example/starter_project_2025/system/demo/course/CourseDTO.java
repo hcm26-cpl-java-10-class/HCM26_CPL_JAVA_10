@@ -32,6 +32,9 @@ public class CourseDTO extends BaseDTO {
 
     Long categoryId;
 
+    /** true = bỏ danh mục của khóa học (PUT bỏ qua null nên cần cờ riêng). */
+    Boolean clearCategory;
+
     String categoryName;
 
     CourseStatus status;
