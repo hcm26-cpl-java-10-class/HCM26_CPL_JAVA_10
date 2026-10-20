@@ -80,6 +80,18 @@ const courseSchema: EntitySchema = {
       options: courseStatusOptions,
     },
     {
+      name: "level",
+      label: "Course level",
+      type: "select",
+      sortable: true,
+      filterable: true,
+      options: [
+        { label: "Beginner", value: "BEGINNER" },
+        { label: "Intermediate", value: "INTERMEDIATE" },
+        { label: "Advanced", value: "ADVANCED" },
+      ],
+    },
+    {
       name: "description",
       label: "Description",
       type: "textarea",

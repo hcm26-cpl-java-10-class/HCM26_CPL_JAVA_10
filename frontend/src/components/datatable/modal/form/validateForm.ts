@@ -41,7 +41,11 @@ const looksLikeUrlField = (name: string) => /url$/i.test(name);
 const looksLikeEmailField = (name: string) => /^email$/i.test(name);
 
 /** Effective rule of a field = type defaults + the field's own `validation`. */
-export function getEffectiveRule(field: FieldSchema): FieldValidation {
+type EffectiveFieldValidation = Omit<FieldValidation, "maxLength"> & {
+  maxLength?: number;
+};
+
+export function getEffectiveRule(field: FieldSchema): EffectiveFieldValidation {
   const own = field.validation ?? {};
   const isUrl = own.url ?? looksLikeUrlField(field.name);
   const isEmail = own.email ?? looksLikeEmailField(field.name);

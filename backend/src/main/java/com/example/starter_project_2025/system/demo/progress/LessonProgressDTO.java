@@ -26,6 +26,7 @@ public record LessonProgressDTO(
             String textContent,
             Integer duration,
             Integer orderIndex,
+            String studentAnswer,
             boolean completed,
             LocalDateTime completedAt,
             LocalDateTime lastAccessedAt

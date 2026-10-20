@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.demo.progress;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollment;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentRepository;
 import com.example.starter_project_2025.system.demo.lesson.Lesson;
+import com.example.starter_project_2025.system.demo.lesson.LessonContentType;
 import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -69,6 +70,32 @@ public class LessonProgressService {
                         .enrollment(enrollment)
                         .lesson(lesson)
                         .build());
+        progress.setLastAccessedAt(now);
+        progressRepository.save(progress);
+        updateLastAccess(enrollment, lessonId, now);
+
+        return buildProgress(enrollment);
+    }
+
+    @Transactional
+    public LessonProgressDTO saveAnswer(Long userId, Long enrollmentId, Long lessonId, String answer) {
+        CourseEnrollment enrollment = getOwnedEnrollment(userId, enrollmentId);
+        Lesson lesson = getCourseLesson(enrollment, lessonId);
+        if (lesson.getContentType() != LessonContentType.TEXT) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Answers are only supported for text lessons");
+        }
+        if (answer != null && answer.length() > 10_000) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Answer must not exceed 10000 characters");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        LessonProgress progress = progressRepository
+                .findByEnrollment_IdAndLesson_Id(enrollmentId, lessonId)
+                .orElseGet(() -> LessonProgress.builder()
+                        .enrollment(enrollment)
+                        .lesson(lesson)
+                        .build());
+        progress.setStudentAnswer(answer == null || answer.isBlank() ? null : answer);
         progress.setLastAccessedAt(now);
         progressRepository.save(progress);
         updateLastAccess(enrollment, lessonId, now);
@@ -149,6 +176,7 @@ public class LessonProgressService {
                 lesson.getTextContent(),
                 lesson.getDuration(),
                 lesson.getOrderIndex(),
+                progress == null ? null : progress.getStudentAnswer(),
                 progress != null && progress.isCompleted(),
                 progress == null ? null : progress.getCompletedAt(),
                 progress == null ? null : progress.getLastAccessedAt()

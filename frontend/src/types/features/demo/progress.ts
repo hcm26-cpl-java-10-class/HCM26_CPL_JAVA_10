@@ -10,6 +10,7 @@ export interface LessonProgressItem {
   textContent?: string | null;
   duration?: number | null;
   orderIndex: number;
+  studentAnswer?: string | null;
   completed: boolean;
   completedAt?: string | null;
   lastAccessedAt?: string | null;

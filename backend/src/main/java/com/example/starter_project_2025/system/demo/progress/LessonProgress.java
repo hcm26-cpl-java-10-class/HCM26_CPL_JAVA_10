@@ -49,4 +49,8 @@ public class LessonProgress extends BaseEntity {
 
     @Column(name = "last_accessed_at")
     LocalDateTime lastAccessedAt;
+
+    @Lob
+    @Column(name = "student_answer")
+    String studentAnswer;
 }
