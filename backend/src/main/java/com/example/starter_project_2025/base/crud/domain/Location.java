@@ -5,7 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
-import java.util.UUID;
+
 
 @Entity
 @Table(name = "locations")
@@ -14,7 +14,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder
-public class Location extends BaseEntity { // <--- Thêm extends ở đây
+public class Location extends BaseEntity {
 
     @Column(nullable = false, unique = true)
     private String code;
@@ -23,7 +23,7 @@ public class Location extends BaseEntity { // <--- Thêm extends ở đây
     private String name;
 
     @Column(name = "parent_id")
-    private UUID parentId;
+    private Long parentId;
 
     @Column(nullable = false)
     private String status;
