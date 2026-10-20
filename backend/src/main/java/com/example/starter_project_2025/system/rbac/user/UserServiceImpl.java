@@ -14,6 +14,9 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.*;
 import java.util.regex.Pattern;
@@ -239,6 +242,30 @@ public class UserServiceImpl
                         new com.example.starter_project_2025.exception.ResourceNotFoundException(
                                 "User not found with id: " + userId
                         ));
+
+        String currentEmail = SecurityContextHolder.getContext()
+                .getAuthentication()
+                .getName();
+
+        // Prevent users from locking themselves
+        if (user.getEmail().equalsIgnoreCase(currentEmail)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "You cannot lock your own account"
+            );
+        }
+
+        // Check whether the target user is an Admin
+        boolean isAdmin = user.getRoles().stream()
+                .anyMatch(role -> "ADMIN".equalsIgnoreCase(role.getName()));
+
+        // Protect Admin accounts from being locked
+        if (isAdmin) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Admin accounts cannot be locked"
+            );
+        }
 
         user.setLocked(true);
         userRepository.save(user);

@@ -44,7 +44,17 @@ export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
     const normalizedActiveRole = normalizeRole(activeRole);
     const isAdminRole = normalizedActiveRole === ADMIN_ROLE;
     const isUserManagement = entity.path === "/users";
+    const isProtectedAdmin = (row: any) => {
+        return row.roleIds?.some(
+            (roleId: string | number) => Number(roleId) === 1
+        ) ?? false;
+    };
     const handleToggleLock = async (row: any) => {
+
+        if (row.roleIds?.some((roleId: number) => Number(roleId) === 1)) {
+            toast.error("Admin accounts cannot be blocked");
+            return;
+        }
         if (!isUserManagement || !isAdminRole) return;
 
         const id = row[entity.schema.idField];
@@ -55,6 +65,11 @@ export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
         }
 
         if (lockingUserId !== null) return;
+
+        if (isProtectedAdmin(row)) {
+            toast.error("Admin accounts cannot be blocked");
+            return;
+        }
 
         const isLocked = row.locked === true;
         const action = isLocked ? "unblock" : "block";
@@ -219,19 +234,25 @@ export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
                 renderCard={entity.cardRenderer}
                 extraRowActions={
                     isUserManagement && isAdminRole && !browseMode
-                        ? (row: any) => (
-                            <ActionButton
-                                onClick={() => handleToggleLock(row)}
-                                tooltip={row.locked ? "Unblock user" : "Block user"}
-                                icon={
-                                    row.locked ? (
-                                        <LockOpen size={14} className="text-green-600" />
-                                    ) : (
-                                        <Lock size={14} className="text-red-500" />
-                                    )
-                                }
-                            />
-                        )
+                        ? (row: any) => {
+                            if (isProtectedAdmin(row)) {
+                                return null;
+                            }
+
+                            return (
+                                <ActionButton
+                                    onClick={() => handleToggleLock(row)}
+                                    tooltip={row.locked ? "Unblock user" : "Block user"}
+                                    icon={
+                                        row.locked ? (
+                                            <LockOpen size={14} className="text-green-600" />
+                                        ) : (
+                                            <Lock size={14} className="text-red-500" />
+                                        )
+                                    }
+                                />
+                            );
+                        }
                         : undefined
                 }
             />
