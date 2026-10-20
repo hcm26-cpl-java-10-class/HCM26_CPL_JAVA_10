@@ -12,7 +12,7 @@ public class MockProgramVersionChecker implements ProgramVersionChecker {
     public void validateForClass(Long programVersionId) {
         if (!Long.valueOf(1L).equals(programVersionId)) {
             throw new BadRequestException(
-                    "Dữ liệu mẫu chỉ cho phép programVersionId = 1"
+                    "Demo data only supports programVersionId = 1"
             );
         }
     }

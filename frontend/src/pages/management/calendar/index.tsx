@@ -108,6 +108,7 @@ export default function CalendarManagementPage() {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const urlCalendarId = searchParams.get("calendarId");
+    const urlClassId = searchParams.get("classId");
     const urlVersionId = searchParams.get("versionId");
     const autoOpenedVersionIdRef = useRef<string | null>(null);
 
@@ -164,7 +165,13 @@ export default function CalendarManagementPage() {
         setLoadError(null);
 
         try {
-            const data = await calendarVersionApi.list();
+            const allCalendars = await calendarVersionApi.list();
+
+            const data = urlClassId === null
+                ? allCalendars
+                : allCalendars.filter(
+                    (calendar) => String(calendar.classId) === urlClassId,
+                );
 
             setCalendars(data);
             setSelectedCalendarId((currentId) => {
@@ -186,7 +193,7 @@ export default function CalendarManagementPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [urlCalendarId]);
+    }, [urlCalendarId, urlClassId]);
 
     useEffect(() => {
         void loadCalendars();
@@ -401,7 +408,9 @@ export default function CalendarManagementPage() {
                         </div>
                     ) : calendars.length === 0 ? (
                         <p className="text-sm text-muted-foreground">
-                            No active calendars found.
+                            {urlClassId
+                                ? `No calendar is available for class ${urlClassId}.`
+                                : "No calendars available."}
                         </p>
                     ) : (
                         <div className="grid gap-4 md:grid-cols-2">

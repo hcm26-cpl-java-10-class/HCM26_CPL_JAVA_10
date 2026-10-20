@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
+import { usePermissions } from "@/hooks/usePermissions";
 import axios from "axios";
 import {
     getTrainingClass,
@@ -8,6 +9,7 @@ import {
 
 export default function TrainingClassDetailPage() {
     const { classId } = useParams<{ classId: string }>();
+    const { hasPermission } = usePermissions();
 
     const [data, setData] = useState<TrainingClassResponse | null>(null);
     const [loading, setLoading] = useState(true);
@@ -22,7 +24,7 @@ export default function TrainingClassDetailPage() {
         setLoading(true);
 
         if (!classId || !/^[1-9]\d*$/.test(classId)) {
-            setError("ID lớp không hợp lệ.");
+            setError("Invalid class ID.");
             setLoading(false);
             return;
         }
@@ -34,18 +36,18 @@ export default function TrainingClassDetailPage() {
             .catch((err: unknown) => {
                 if (!active) return;
 
-                let message = "Chưa tải được thông tin lớp. Bạn thử lại nhé.";
+                let message = "Unable to load class details. Please try again.";
 
                 if (axios.isAxiosError(err)) {
                     switch (err.response?.status) {
                         case 401:
-                            message = "Bạn cần đăng nhập để xem lớp.";
+                            message = "Please log in to view this class.";
                             break;
                         case 403:
-                            message = "Bạn không có quyền xem lớp này.";
+                            message = "You do not have permission to view this class.";
                             break;
                         case 404:
-                            message = "Không tìm thấy lớp học.";
+                            message = "Class not found.";
                             break;
                     }
                 }
@@ -63,28 +65,28 @@ export default function TrainingClassDetailPage() {
 
     const fields: [string, string | number][] = data
         ? [
-            ["Mã lớp", data.code],
-            ["Tên lớp", data.name],
-            ["Loại học viên", data.traineeType],
-            ["Hình thức đào tạo", data.deliveryFormat],
-            ["Cơ sở", data.site],
-            ["Địa điểm", data.location],
-            ["ID phiên bản chương trình", data.programVersionId],
-            ["Ngày bắt đầu", data.startDate],
-            ["Ngày kết thúc", data.endDate],
-            ["Sức chứa", data.capacity],
-            ["Trạng thái", data.status],
+            ["Class Code", data.code],
+            ["Class Name", data.name],
+            ["Trainee Type", data.traineeType],
+            ["Delivery Format", data.deliveryFormat],
+            ["Site", data.site],
+            ["Location", data.location],
+            ["Program Version ID", data.programVersionId],
+            ["Start Date", data.startDate],
+            ["End Date", data.endDate],
+            ["Capacity", data.capacity],
+            ["Status", data.status],
         ]
         : [];
 
     return (
         <main className="min-h-screen bg-slate-50 p-6">
             <section className="mx-auto max-w-4xl rounded-xl border bg-white p-6 shadow-sm">
-                <h1 className="text-2xl font-semibold">Chi tiết lớp học</h1>
+                <h1 className="text-2xl font-semibold">Class Details</h1>
 
                 {loading && (
                     <p className="mt-6" role="status">
-                        Đang tải thông tin lớp...
+                        Loading class details...
                     </p>
                 )}
 
@@ -97,7 +99,7 @@ export default function TrainingClassDetailPage() {
                             className="mt-3 rounded border px-4 py-2"
                             onClick={() => setReload((value) => value + 1)}
                         >
-                            Thử lại
+                            Retry
                         </button>
                     </div>
                 )}
@@ -105,7 +107,15 @@ export default function TrainingClassDetailPage() {
                 {!loading && data && (
                     <>
                         <p className="mt-2 text-sm text-slate-500">
-                            ID lớp: {data.id}
+                            Class ID: {data.id}
+                            {hasPermission("CALENDAR_READ") && (
+                                <Link
+                                    to={`/calendars?classId=${data.id}`}
+                                    className="mt-4 inline-block rounded border px-4 py-2"
+                                >
+                                    View Class Calendar
+                                </Link>
+                            )}
                         </p>
 
                         <dl className="mt-6 grid gap-4 sm:grid-cols-2">

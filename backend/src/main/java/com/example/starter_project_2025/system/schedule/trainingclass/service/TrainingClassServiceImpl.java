@@ -27,7 +27,7 @@ public class TrainingClassServiceImpl implements TrainingClassService {
     public TrainingClassResponse getById(Long classId) {
         TrainingClass trainingClass = repository.findById(classId)
                 .orElseThrow(() ->
-                        new ResourceNotFoundException("Không tìm thấy lớp học"));
+                        new ResourceNotFoundException("Class not found"));
 
         return mapper.toResponse(trainingClass);
     }
@@ -45,14 +45,14 @@ public class TrainingClassServiceImpl implements TrainingClassService {
 
         if (request.getEndDate().isBefore(request.getStartDate())) {
             throw new BadRequestException(
-                    "Ngày kết thúc không được trước ngày bắt đầu"
+                    "End date must not be before start date"
             );
         }
 
         String code = request.getCode().trim();
 
         if (repository.existsByCode(code)) {
-            throw new ConflictException("Mã lớp đã tồn tại");
+            throw new ConflictException("Class code already exists");
         }
 
         ProgramVersionChecker checker = checkerProvider.getIfAvailable();
@@ -60,7 +60,7 @@ public class TrainingClassServiceImpl implements TrainingClassService {
         if (checker == null) {
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
-                    "Chưa có nguồn kiểm tra phiên bản chương trình"
+                    "Program version validation is unavailable"
             );
         }
 
