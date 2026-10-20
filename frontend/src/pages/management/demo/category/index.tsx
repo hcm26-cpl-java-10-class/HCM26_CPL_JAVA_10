@@ -57,24 +57,32 @@ const categorySchema: EntitySchema = {
         // Ô chọn cha: ẩn chính nó và toàn bộ con, cháu (tránh vòng lặp cha-con).
         filterItems: (items, { initial, isEdit }) => {
           if (!isEdit) return items;
-          const excluded = new Set<number>([initial.id]);
+          const excluded = new Set<number>([Number(initial.id)]);
           let added = true;
           while (added) {
             added = false;
             for (const item of items) {
-              if (item.parentId != null && excluded.has(item.parentId) && !excluded.has(item.id)) {
-                excluded.add(item.id);
+              if (
+                item.parentId != null &&
+                excluded.has(Number(item.parentId)) &&
+                !excluded.has(Number(item.id))
+              ) {
+                excluded.add(Number(item.id));
                 added = true;
               }
             }
           }
-          return items.filter((item) => !excluded.has(item.id));
+          return items.filter((item) => !excluded.has(Number(item.id)));
         },
       },
       validation: {
         // Backend: "A category cannot be its own parent"
+        // Giá trị từ <Select> là string ("1") còn initial.id là number -> phải ép kiểu trước khi so sánh.
         custom: (value, _form, ctx) =>
-          ctx.isEdit && value != null && ctx.initial?.id === value
+          ctx.isEdit &&
+          value != null &&
+          value !== "" &&
+          Number(ctx.initial?.id) === Number(value)
             ? "A category cannot be its own parent"
             : null,
       },

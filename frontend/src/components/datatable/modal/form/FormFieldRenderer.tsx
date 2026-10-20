@@ -15,6 +15,9 @@ import { FieldError } from "./FieldError";
 import { getEffectiveRule } from "./validateForm";
 import { MultiRelationSelect } from "./MultiRelationSelect";
 
+/** Radix Select không cho SelectItem có value rỗng nên dùng sentinel cho "không chọn". */
+const NONE_VALUE = "__none__";
+
 interface FormFieldRendererProps {
   field: FieldSchema;
   value: any;
@@ -146,7 +149,9 @@ export function FormFieldRenderer({
           <Label htmlFor={field.name}>{field.label}{requiredMark}</Label>
           <Select
             value={value?.toString() || ""}
-            onValueChange={(val) => onChange(field.name, val)}
+            onValueChange={(val) =>
+              onChange(field.name, val === NONE_VALUE ? null : val)
+            }
           >
             <SelectTrigger className={errorClass}>
               <SelectValue
@@ -154,6 +159,12 @@ export function FormFieldRenderer({
               />
             </SelectTrigger>
             <SelectContent>
+              {/* Field không bắt buộc: cho phép bỏ chọn (vd: đưa danh mục về gốc). */}
+              {!rule.required && (
+                <SelectItem value={NONE_VALUE}>
+                  <span className="text-muted-foreground">— None —</span>
+                </SelectItem>
+              )}
               {items.map((item) => (
                 <SelectItem
                   key={item[rel.valueField]}
