@@ -21,4 +21,4 @@ export * from "./features/rbac/user";
 export * from "./features/demo/category";
 export * from "./features/demo/lesson";
 export * from "./features/demo/progress";
-export * from "./features/demo/assessment";
+export * from "./features/demo/certificate";
