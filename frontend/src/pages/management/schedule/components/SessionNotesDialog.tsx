@@ -171,6 +171,7 @@ export function SessionNotesDialog({ session, open, onOpenChange }: SessionNotes
         <div className="grid gap-4">
           <div className="grid gap-2">
             <Label htmlFor={`session-notes-${sessionId}`}>Ghi chú</Label>
+            {/* Chiều cao cố định: nội dung dài sẽ cuộn bên trong thay vì kéo rộng dialog. */}
             <Textarea
               id={`session-notes-${sessionId}`}
               value={notes}
@@ -180,8 +181,8 @@ export function SessionNotesDialog({ session, open, onOpenChange }: SessionNotes
               }}
               placeholder="Ví dụ: Đã dạy bù phần OOP, lớp nghỉ giữa giờ 15 phút…"
               maxLength={MAX_NOTES_LENGTH}
-              rows={4}
               disabled={mutation.isPending}
+              className="h-36 resize-none overflow-y-auto [field-sizing:fixed]"
             />
             <div className="flex justify-end">
               <p className="text-xs text-muted-foreground">

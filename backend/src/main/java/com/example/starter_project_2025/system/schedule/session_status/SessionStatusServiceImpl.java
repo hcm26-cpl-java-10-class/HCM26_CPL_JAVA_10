@@ -15,6 +15,7 @@ import com.example.starter_project_2025.system.schedule.session.SessionRepositor
 import com.example.starter_project_2025.system.schedule.session.SessionStatus;
 import com.example.starter_project_2025.system.schedule.session.dto.SessionCancelRequest;
 import com.example.starter_project_2025.system.schedule.session.dto.SessionDTO;
+import com.example.starter_project_2025.system.schedule.session_audit.SessionStatusHistoryRecorder;
 import com.example.starter_project_2025.system.schedule.session_status.dto.SessionCompleteRequest;
 import com.example.starter_project_2025.system.schedule.session_status.dto.SessionStatusUpdateRequest;
 import com.example.starter_project_2025.system.schedule.session_status.exception.SessionNotFoundException;
@@ -49,6 +50,7 @@ public class SessionStatusServiceImpl implements SessionStatusService {
     ExternalApiService externalApiService;
     CalendarLock calendarLock;
     EntityManager entityManager;
+    SessionStatusHistoryRecorder statusHistoryRecorder;
 
     // ------------------------------------------------------------------ read
 
@@ -109,11 +111,18 @@ public class SessionStatusServiceImpl implements SessionStatusService {
         requireClassOngoing(session);
         requireStartTimeReached(session);
 
+        SessionStatus fromStatus = session.getStatus();
+        String beforeState = statusHistoryRecorder.snapshot(session);
+
         session.setStatus(SessionStatus.COMPLETED);
         if (request != null && request.getNotes() != null) {
             session.setNotes(request.getNotes());
         }
-        return sessionMapper.toResponse(sessionRepository.saveAndFlush(session));
+        Session saved = sessionRepository.saveAndFlush(session);
+        // T2/AC — mọi lần chuyển trạng thái phải sinh 1 dòng session_status_history.
+        statusHistoryRecorder.recordTransition(
+                saved, fromStatus, SessionStatus.COMPLETED, null, beforeState);
+        return sessionMapper.toResponse(saved);
     }
 
     @Override
@@ -128,12 +137,19 @@ public class SessionStatusServiceImpl implements SessionStatusService {
         requireScheduled(session, "hủy");
         requireActiveCalendarVersion(session);
 
+        SessionStatus fromStatus = session.getStatus();
+        String beforeState = statusHistoryRecorder.snapshot(session);
+
         session.setStatus(SessionStatus.CANCELLED);
         session.setCancelReason(reason);
         if (request != null && request.getNotes() != null) {
             session.setNotes(request.getNotes());
         }
-        return sessionMapper.toResponse(sessionRepository.saveAndFlush(session));
+        Session saved = sessionRepository.saveAndFlush(session);
+        // T2/AC — mọi lần chuyển trạng thái phải sinh 1 dòng session_status_history.
+        statusHistoryRecorder.recordTransition(
+                saved, fromStatus, SessionStatus.CANCELLED, reason, beforeState);
+        return sessionMapper.toResponse(saved);
     }
 
     // ----------------------------------------------------------- helpers
