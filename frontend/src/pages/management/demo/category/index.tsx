@@ -64,6 +64,25 @@ const categorySchema: EntitySchema = {
       },
     },
     {
+      name: "displayOrder",
+      label: "Display Order",
+      type: "number",
+      sortable: false,
+      validation: {
+        min: 0,
+      },
+    },
+    {
+      name: "iconUrl",
+      label: "Icon URL",
+      type: "text",
+      sortable: false,
+      visible: false,
+      validation: {
+        maxLength: 255,
+      },
+    },
+    {
       name: "description",
       label: "Description",
       type: "textarea",

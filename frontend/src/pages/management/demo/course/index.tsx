@@ -66,6 +66,7 @@ const courseSchema: EntitySchema = {
       type: "relation",
       sortable: false,
       visible: false,
+      filterable: true,
       relation: {
         api: categoryApi,
         valueField: "id",

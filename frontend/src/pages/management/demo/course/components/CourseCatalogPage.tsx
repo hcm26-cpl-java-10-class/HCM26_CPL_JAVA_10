@@ -45,10 +45,15 @@ interface CategoryOption {
   label: string;
 }
 
-/** Cây danh mục -> danh sách phẳng, thụt đầu dòng theo cấp. */
+/** Cây danh mục -> danh sách phẳng, thụt đầu dòng theo cấp, kèm số khóa học. */
 function flattenCategories(nodes: CategoryTreeDTO[], depth = 0): CategoryOption[] {
   return nodes.flatMap((node) => [
-    { id: node.id, label: `${"— ".repeat(depth)}${node.name}` },
+    {
+      id: node.id,
+      label: `${"— ".repeat(depth)}${node.name}${
+        node.totalCourseCount != null ? ` (${node.totalCourseCount})` : ""
+      }`,
+    },
     ...flattenCategories(node.children ?? [], depth + 1),
   ]);
 }
