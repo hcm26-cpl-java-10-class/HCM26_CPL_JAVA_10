@@ -44,9 +44,18 @@ public class User extends BaseEntity {
     @ExportField(name = "Email")
     String email;
 
+    /** Export-only column. It is deliberately transient and always null; never expose passwordHash. */
+    @Transient
+    @ExportField(name = "password")
+    String password;
+
+    /**
+     * Import: the "Password" column is optional. When it is empty the account is created with a random
+     * password and the user receives an email to set their own. Passwords are never exported.
+     */
     @Column(nullable = false)
     @ImportHash
-    @ImportField(name = "Password", required = true)
+    @ImportField(name = "Password")
     String passwordHash;
 
     @Column(nullable = false, length = 100)
@@ -55,17 +64,9 @@ public class User extends BaseEntity {
     String firstName;
 
     @Column(length = 100)
+    @ImportField(name = "Last Name")
+    @ExportField(name = "Last Name")
     String lastName;
-
-    @Column(unique = true, length = 50)
-    @ImportField(name = "Username")
-    @ExportField(name = "Username")
-    String username;
-
-    @Column(name = "employee_code", unique = true, length = 50)
-    @ImportField(name = "Employee Code")
-    @ExportField(name = "Employee Code")
-    String employeeCode;
 
     @Column(length = 20)
     @ImportField(name = "Phone")

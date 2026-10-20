@@ -15,6 +15,13 @@ import { getHomePathByRole } from "@/utils/rbac.utils";
 const URL_LOGIN_WITH_GOOGLE =
     import.meta.env.VITE_API_URL_FOR_GOOGLE || "http://localhost:8080/oauth2/authorization/google";
 
+// Local development convenience: the page opens with the seeded admin account already filled in,
+// so one click on "Login" is enough. Production builds are never prefilled.
+// Set VITE_PREFILL_LOGIN=false in .env.local to turn it off while developing.
+const PREFILL_ADMIN = import.meta.env.DEV && import.meta.env.VITE_PREFILL_LOGIN !== "false";
+const DEV_ADMIN_EMAIL = "admin@example.com";
+const DEV_ADMIN_PASSWORD = "password123";
+
 const getOAuthErrorMessage = (errorParam: string | null): string => {
     switch (errorParam) {
         case "google_auth_failed":
@@ -31,8 +38,8 @@ const getOAuthErrorMessage = (errorParam: string | null): string => {
 };
 
 export const Login: React.FC = () => {
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
+    const [email, setEmail] = useState(PREFILL_ADMIN ? DEV_ADMIN_EMAIL : "");
+    const [password, setPassword] = useState(PREFILL_ADMIN ? DEV_ADMIN_PASSWORD : "");
     const [isRememberedMe, setIsRememberedMe] = useState<boolean>(false);
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);

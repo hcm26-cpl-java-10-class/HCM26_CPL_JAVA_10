@@ -1,7 +1,5 @@
 import { TableCell } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { cn } from "@/lib/utils";
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { TruncatedText } from "@/components/datatable/common/TruncatedText";
 import { iconMap } from "@/components/datatable/iconMap";
@@ -18,7 +16,7 @@ interface CellRendererProps {
   field: FieldSchema;
   value: any;
   relationOptions?: Record<string, any[]>;
-  onBooleanToggle?: (fieldName: string, newValue: any) => void;
+  onBooleanToggle?: (fieldName: string, newValue: boolean) => void;
   disableBooleanToggle?: boolean;
   dateFormat?: import("./dateFormat").DateFormatKey;
 }
@@ -50,55 +48,6 @@ export function CellRenderer({
             />
           </div>
         </TooltipWrapper>
-      </TableCell>
-    );
-  }
-
-  if (field.toggleValues) {
-    const key = value == null ? "" : String(value);
-    const checked = key === String(field.toggleValues.on);
-    const label =
-      field.options?.find((o) => String(o.value) === key)?.label ?? key;
-    const toggleValues = field.toggleValues;
-    const disableToggle = disableBooleanToggle || !onBooleanToggle;
-
-    return (
-      <TableCell>
-        <TooltipWrapper content={label}>
-          <div className="inline-flex">
-            <Switch
-              checked={checked}
-              disabled={disableToggle}
-              aria-label={label}
-              onCheckedChange={(next) =>
-                onBooleanToggle?.(
-                  field.name,
-                  next ? toggleValues.on : toggleValues.off
-                )
-              }
-              className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-red-400 dark:data-[state=unchecked]:bg-red-500/70"
-            />
-          </div>
-        </TooltipWrapper>
-      </TableCell>
-    );
-  }
-
-  if (field.optionColors && value != null && value !== "") {
-    const key = String(value);
-    const label =
-      field.options?.find((o) => String(o.value) === key)?.label ?? key;
-    const colorClass =
-      field.optionColors[key] ?? "bg-muted text-muted-foreground";
-
-    return (
-      <TableCell>
-        <Badge
-          variant="outline"
-          className={cn("border-transparent px-2.5 py-0.5", colorClass)}
-        >
-          {label}
-        </Badge>
       </TableCell>
     );
   }
@@ -171,6 +120,23 @@ export function CellRenderer({
     return (
       <TableCell>
         <TruncatedText content={String(displayText)} bold={field.bold} />
+      </TableCell>
+    );
+  }
+
+  if (
+    field.type === "select" &&
+    field.options &&
+    value !== undefined &&
+    value !== null &&
+    value !== ""
+  ) {
+    const label =
+      field.options.find((o) => o.value?.toString() === value?.toString())
+        ?.label ?? String(value);
+    return (
+      <TableCell>
+        <TruncatedText content={label} bold={field.bold} />
       </TableCell>
     );
   }

@@ -128,6 +128,22 @@ export function ImportTab({ loading, onImport, entityName }: ImportTabProps) {
         </div>
       )}
 
+      {entityName === "user" && (
+        <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
+          <p className="font-medium text-foreground">How passwords work</p>
+          <p>
+            Fill the <strong>Password</strong> column: the password is saved and emailed to the
+            user. It needs 8+ characters with at least one letter and one number.
+          </p>
+          <p>
+            Leave it empty: the user receives an email with a link to create their own password.
+          </p>
+          <p>
+            If an email already exists, a filled Password updates that account's password; an empty Password leaves the existing account unchanged.
+          </p>
+        </div>
+      )}
+
       {!file && (
         <div
           onDragOver={handleDragOver}

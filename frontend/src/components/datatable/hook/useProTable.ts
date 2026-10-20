@@ -582,27 +582,11 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
         ),
       };
     });
-
-    const toggleField: any = schema.fields.find((f: any) => f.name === fieldName);
-    if (toggleField?.toggleRequest) {
-      toggleField
-        .toggleRequest(row, value)
-        .then(() => {
-          invalidate();
-          toast.success(`${entityLabel} updated successfully.`);
-        })
-        .catch((error: any) => {
-          invalidate();
-          toast.error(getMutationErrorMessage(error, `Update ${entityLabel} failed.`));
-        });
-      return;
-    }
-
     patchFieldMutation.mutate(
       { id, data: updateData },
       {
         onError: (error) => {
-          // Revert on error
+          // Revert on error and tell the user why the change was rejected
           invalidate();
           toast.error(getMutationErrorMessage(error, `Update ${entityLabel} failed.`));
         },

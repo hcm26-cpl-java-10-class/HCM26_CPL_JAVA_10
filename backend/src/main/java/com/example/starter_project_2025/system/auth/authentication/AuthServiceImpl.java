@@ -15,6 +15,7 @@ import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenSe
 import com.example.starter_project_2025.system.auth.verify.VerificationService;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
+import com.example.starter_project_2025.system.auth.util.PasswordPolicy;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import jakarta.transaction.Transactional;
@@ -184,6 +185,11 @@ public class AuthServiceImpl implements AuthService {
         );
 
         User user = resetToken.getUser();
+
+        String passwordProblem = PasswordPolicy.validate(request.newPassword());
+        if (passwordProblem != null) {
+            throw new BadRequestException(passwordProblem);
+        }
 
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
         userRepository.save(user);

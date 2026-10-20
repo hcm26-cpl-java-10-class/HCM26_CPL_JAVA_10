@@ -6,6 +6,7 @@ import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.system.auth.token.onetime.OneTimeTokenRepository;
 import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenRepository;
+import com.example.starter_project_2025.system.auth.util.PasswordPolicy;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentRepository;
 import com.example.starter_project_2025.system.rbac.department.Department;
 import com.example.starter_project_2025.system.rbac.department.DepartmentRepository;
@@ -31,7 +32,6 @@ public class UserServiceImpl
         extends BaseCrudServiceImpl<User, Long, UserDTO, UserFilter>
         implements UserService {
 
-    private static final Set<String> STATUSES = Set.of("ACTIVE", "LOCKED", "INACTIVE");
     private static final Pattern PHONE_PATTERN = Pattern.compile("^\\+?\\d{8,15}$");
 
     UserMapper userMapper;
@@ -42,6 +42,7 @@ public class UserServiceImpl
     OneTimeTokenRepository oneTimeTokenRepository;
     CourseEnrollmentRepository courseEnrollmentRepository;
     PasswordEncoder passwordEncoder;
+    AccountMailService accountMailService;
 
     @Override
     protected BaseCrudRepository<User, Long> getRepository() {
@@ -55,7 +56,7 @@ public class UserServiceImpl
 
     @Override
     protected String[] searchableFields() {
-        return new String[]{"email", "username", "employeeCode", "firstName", "lastName"};
+        return new String[]{"email", "firstName", "lastName"};
     }
 
     @Override
@@ -64,24 +65,36 @@ public class UserServiceImpl
         normalize(request);
 
         validateEmailUnique(request.getEmail(), null, ctx);
-        validateUsernameUnique(request.getUsername(), null, ctx);
-        validateEmployeeCodeUnique(request.getEmployeeCode(), null, ctx);
         validatePhone(request.getPhone(), ctx);
         validateRoles(request.getRoleIds(), ctx);
         validateDepartments(request.getDepartmentIds(), ctx);
-        validateStatus(request.getStatus(), ctx);
+        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            validatePassword(request.getPassword(), ctx);
+        }
 
         // Mapper đã map trước khi gọi hook, nên gán lại các giá trị đã chuẩn hóa.
-        user.setUsername(request.getUsername());
-        user.setEmployeeCode(request.getEmployeeCode());
         user.setPhone(request.getPhone());
         user.setDescription(request.getDescription());
-        applyStatus(user, request);
 
-        user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+            user.setIsActive(true);
+        } else {
+            user.setPasswordHash(passwordEncoder.encode(UUID.randomUUID() + "Aa1!"));
+            user.setIsActive(false);
+        }
 
         user.setRoles(getRoles(request.getRoleIds()));
         user.setDepartments(getDepartments(request.getDepartmentIds()));
+    }
+
+    @Override
+    protected void afterCreate(User user, UserDTO request) {
+        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            accountMailService.sendAccountCreatedNotification(user);
+        } else {
+            accountMailService.sendSetPasswordInvitation(user);
+        }
     }
 
     @Override
@@ -93,15 +106,11 @@ public class UserServiceImpl
             validateEmailUnique(request.getEmail(), user.getId(), ctx);
         }
 
-        if (request.getUsername() != null) {
-            validateUsernameUnique(request.getUsername(), user.getId(), ctx);
-        }
-
-        if (request.getEmployeeCode() != null) {
-            validateEmployeeCodeUnique(request.getEmployeeCode(), user.getId(), ctx);
-        }
-
         validatePhone(request.getPhone(), ctx);
+
+        if (request.getPassword() != null) {
+            validatePassword(request.getPassword(), ctx);
+        }
 
         if (request.getRoleIds() != null) {
             validateRoles(request.getRoleIds(), ctx);
@@ -111,13 +120,11 @@ public class UserServiceImpl
             validateDepartments(request.getDepartmentIds(), ctx);
         }
 
-        validateStatus(request.getStatus(), ctx);
 
         if (ctx.hasErrors()) {
             return;
         }
 
-        applyStatus(user, request);
 
         if (request.getPassword() != null) {
             user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
@@ -150,11 +157,9 @@ public class UserServiceImpl
         oneTimeTokenRepository.deleteAllByUserId(user.getId());
     }
 
-    /** Trim; username/mã NV rỗng coi như không gửi (null) để không vướng unique với chuỗi rỗng. */
+    /** Trims the input values; a blank password means "not provided". */
     private void normalize(UserDTO request) {
-        request.setStatus(trimToNull(request.getStatus() == null ? null : request.getStatus().toUpperCase()));
-        request.setUsername(trimToNull(request.getUsername()));
-        request.setEmployeeCode(trimToNull(request.getEmployeeCode()));
+        request.setPassword(trimToNull(request.getPassword()));
 
         if (request.getEmail() != null) {
             request.setEmail(request.getEmail().trim());
@@ -168,39 +173,19 @@ public class UserServiceImpl
         }
     }
 
-    private void validateStatus(String status, ValidationContext ctx) {
-        if (status != null && !STATUSES.contains(status)) {
-            ctx.add("status", "Status must be ACTIVE, LOCKED or INACTIVE");
-        }
-    }
-
-    /**
-     * Áp dụng status lên isActive + locked. Gán cả vào request vì khi sửa,
-     * mapper.update chạy sau hook và sẽ copy isActive từ request.
-     */
-    private void applyStatus(User user, UserDTO request) {
-        String status = request.getStatus();
-
-        if (status == null || !STATUSES.contains(status)) {
-            log.info("applyStatus: user={} no status in request, keep isActive={} locked={}",
-                    user.getEmail(), user.getIsActive(), user.getLocked());
-            return;
-        }
-
-        request.setIsActive(!"INACTIVE".equals(status));
-        user.setIsActive(request.getIsActive());
-        user.setLocked("LOCKED".equals(status));
-
-        log.info("applyStatus: user={} status={} -> isActive={} locked={}",
-                user.getEmail(), status, user.getIsActive(), user.getLocked());
-    }
-
     private String trimToNull(String value) {
         if (value == null) {
             return null;
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private void validatePassword(String password, ValidationContext ctx) {
+        String problem = PasswordPolicy.validate(password);
+        if (problem != null) {
+            ctx.add("password", problem);
+        }
     }
 
     private void validatePhone(String phone, ValidationContext ctx) {
@@ -217,36 +202,6 @@ public class UserServiceImpl
                 && (currentUserId == null || !existing.get().getId().equals(currentUserId))) {
 
             ctx.add("email", "Email is already in use");
-        }
-    }
-
-    private void validateUsernameUnique(String username, Long currentUserId, ValidationContext ctx) {
-
-        if (username == null) {
-            return;
-        }
-
-        Optional<User> existing = userRepository.findByUsernameIgnoreCase(username);
-
-        if (existing.isPresent()
-                && (currentUserId == null || !existing.get().getId().equals(currentUserId))) {
-
-            ctx.add("username", "Username is already in use");
-        }
-    }
-
-    private void validateEmployeeCodeUnique(String employeeCode, Long currentUserId, ValidationContext ctx) {
-
-        if (employeeCode == null) {
-            return;
-        }
-
-        Optional<User> existing = userRepository.findByEmployeeCodeIgnoreCase(employeeCode);
-
-        if (existing.isPresent()
-                && (currentUserId == null || !existing.get().getId().equals(currentUserId))) {
-
-            ctx.add("employeeCode", "Employee code is already in use");
         }
     }
 

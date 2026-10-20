@@ -13,5 +13,14 @@ public class ImportResult {
 
     int successCount;
     int failureCount;
+
+    /** Rows skipped because the record already exists. */
+    int skippedCount;
+
+    /** Notification emails sent for newly created records. */
+    int emailsSent;
+
+    /** Notification emails that could not be sent (the records were still created). */
+    int emailsFailed;
     List<RowError> errors = new ArrayList<>();
 }

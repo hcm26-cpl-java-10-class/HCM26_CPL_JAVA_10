@@ -40,6 +40,45 @@ export type FilterType =
   | "dateRange"
   | "numberRange";
 
+/**
+ * Live validation rules for a form field. Rules are checked while the user is typing
+ * (not only when the form is saved), and `maxLength` / `inputFilter` limit what can be typed.
+ */
+export interface FieldValidation {
+  /** Always required. */
+  required?: boolean;
+
+  /** Required only when creating a record (e.g. password). */
+  requiredOnCreate?: boolean;
+
+  minLength?: number;
+
+  /** Hard limit: extra characters cannot be typed or pasted. */
+  maxLength?: number;
+
+  pattern?: RegExp;
+
+  patternMessage?: string;
+
+  /** Removes characters that are not allowed, while typing. */
+  inputFilter?: (value: string) => string;
+
+  /** Custom rule. Return an error message, or undefined when the value is valid. */
+  validate?: (
+    value: any,
+    form: Record<string, any>,
+    ctx: { isEdit: boolean }
+  ) => string | undefined;
+
+  /** Show the live password requirement checklist under the input. */
+  passwordRules?: boolean;
+
+  /** Helper text shown under the input while there is no error. */
+  hint?: string;
+
+  placeholder?: string;
+}
+
 export interface FieldSchema {
   name: string;
 
@@ -67,15 +106,6 @@ export interface FieldSchema {
 
   options?: { label: string; value: any }[];
 
-  /** Màu badge theo giá trị (key = value của option). Có thì ô bảng hiển thị dạng badge có màu. */
-  optionColors?: Record<string, string>;
-
-  /** Hiện công tắc bật/tắt ở ô bảng: bật = giá trị `on`, tắt = giá trị `off` (vd ACTIVE / LOCKED). */
-  toggleValues?: { on: any; off: any };
-
-  /** Nếu có, bấm công tắc sẽ gọi hàm này (thay vì PUT cả dòng). Trả về Promise; xong bảng tự tải lại. */
-  toggleRequest?: (row: any, value: any) => Promise<unknown>;
-
   booleanLabels?: {
     true: string;
     false: string;
@@ -84,6 +114,11 @@ export interface FieldSchema {
   };
 
   relation?: RelationConfig;
+
+  validation?: FieldValidation;
+
+  /** Form-only field (e.g. "confirm password"): shown in the form but never sent to the server. */
+  transient?: boolean;
 
   dynamic?: DynamicFieldConfig;
 

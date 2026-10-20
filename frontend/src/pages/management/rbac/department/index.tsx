@@ -12,20 +12,30 @@ const departmentSchema: EntitySchema = {
   fields: [
     {
       name: "code",
-      label: "Mã phòng ban",
+      label: "Code",
       type: "text",
       sortable: true,
       bold: true,
+      validation: {
+        required: true,
+        minLength: 2,
+        maxLength: 50,
+        pattern: /^[A-Za-z0-9._-]{2,50}$/,
+        patternMessage: "2-50 characters: letters, digits, dot, underscore or hyphen.",
+        inputFilter: (v) => v.replace(/[^A-Za-z0-9._-]/g, ""),
+        hint: "Letters, digits, dot, underscore and hyphen only.",
+      },
     },
     {
       name: "name",
-      label: "Tên phòng ban",
+      label: "Name",
       type: "text",
       sortable: true,
+      validation: { required: true, maxLength: 150 },
     },
     {
       name: "parentDepartmentId",
-      label: "Phòng ban cha",
+      label: "Parent Department",
       type: "relation",
       editable: true,
       relation: {
@@ -39,9 +49,10 @@ const departmentSchema: EntitySchema = {
     },
     {
       name: "description",
-      label: "Mô tả",
+      label: "Description",
       type: "textarea",
       sortable: true,
+      validation: { maxLength: 500 },
     },
     ...(auditableFieldsSchema as FieldSchema[]),
   ],
