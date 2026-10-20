@@ -12,6 +12,7 @@ public class QuestionTakerDTO {
     private String content;
     private QuestionType type;
     private int points;
+    private boolean multiSelect;
     private List<OptionTakerDTO> options;
 
     @Getter @Setter

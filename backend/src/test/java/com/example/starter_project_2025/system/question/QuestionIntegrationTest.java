@@ -83,7 +83,7 @@ public class QuestionIntegrationTest {
     void createSingleChoiceQuestion_Success() throws Exception {
         QuestionDTO dto = new QuestionDTO();
         dto.setContent("Ngon ngu Java ra doi nam nao?");
-        dto.setType(QuestionType.SINGLE_CHOICE);
+        dto.setType(QuestionType.MULTIPLE_CHOICE);
         dto.setDifficulty(Difficulty.EASY);
         dto.setTopic("Java Basics");
         dto.setPoints(1);
@@ -118,7 +118,7 @@ public class QuestionIntegrationTest {
     void createSingleChoice_InvalidCorrectOptionCount_ReturnsBadRequest() throws Exception {
         QuestionDTO dto = new QuestionDTO();
         dto.setContent("Cau hoi 1 dap an nhung khong co dap an dung");
-        dto.setType(QuestionType.SINGLE_CHOICE);
+        dto.setType(QuestionType.MULTIPLE_CHOICE);
         dto.setDifficulty(Difficulty.MEDIUM);
         dto.setTopic("Testing");
         dto.setIsActive(true);
@@ -146,7 +146,7 @@ public class QuestionIntegrationTest {
     void createQuestion_InvalidOptionCount_ReturnsBadRequest() throws Exception {
         QuestionDTO dto = new QuestionDTO();
         dto.setContent("Cau hoi chi co 1 dap an");
-        dto.setType(QuestionType.SINGLE_CHOICE);
+        dto.setType(QuestionType.MULTIPLE_CHOICE);
         dto.setDifficulty(Difficulty.EASY);
         dto.setTopic("Testing");
         dto.setIsActive(true);
@@ -170,7 +170,7 @@ public class QuestionIntegrationTest {
     void createQuestion_DuplicateOptions_ReturnsBadRequest() throws Exception {
         QuestionDTO dto = new QuestionDTO();
         dto.setContent("Cau hoi co dap an trung nhau");
-        dto.setType(QuestionType.SINGLE_CHOICE);
+        dto.setType(QuestionType.MULTIPLE_CHOICE);
         dto.setDifficulty(Difficulty.EASY);
         dto.setTopic("Testing");
         dto.setIsActive(true);
@@ -198,7 +198,7 @@ public class QuestionIntegrationTest {
     void searchQuestions_ReturnsMatchingResults() throws Exception {
         Question q = new Question();
         q.setContent("Tim kiem tu khoa SpringBootDatabases");
-        q.setType(QuestionType.SINGLE_CHOICE);
+        q.setType(QuestionType.MULTIPLE_CHOICE);
         q.setDifficulty(Difficulty.HARD);
         q.setTopic("Spring Framework");
         q.setPoints(2);
@@ -230,7 +230,7 @@ public class QuestionIntegrationTest {
     void deleteQuestion_WhenUsedInExam_ReturnsBadRequest() throws Exception {
         Question q = new Question();
         q.setContent("Cau hoi thuoc ve de thi");
-        q.setType(QuestionType.SINGLE_CHOICE);
+        q.setType(QuestionType.MULTIPLE_CHOICE);
         q.setDifficulty(Difficulty.EASY);
         q.setPoints(1);
         q.setIsActive(true);
@@ -266,7 +266,7 @@ public class QuestionIntegrationTest {
     void createQuestion_AsStudent_ReturnsForbidden() throws Exception {
         QuestionDTO dto = new QuestionDTO();
         dto.setContent("Cau hoi do hoc sinh tao");
-        dto.setType(QuestionType.SINGLE_CHOICE);
+        dto.setType(QuestionType.MULTIPLE_CHOICE);
         dto.setDifficulty(Difficulty.EASY);
         dto.setIsActive(true);
 

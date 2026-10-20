@@ -28,8 +28,10 @@ import {
 } from "@/components/ui/table";
 import type { ExamDTO, LatePolicy, QuestionDifficulty, QuestionFilter, QuestionType, ResultVisibility } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, Mail, Pencil, Plus, Search, Trash2, X } from "lucide-react";
-import { useNavigate, useState } from "react";
+import { BookOpen, ClipboardCheck, Mail, Pencil, Plus, Search, Trash2, X } from "lucide-react"; // CHANGED: thêm ClipboardCheck
+// FIXED: trước đây import nhầm `useNavigate` từ "react" (nó nằm trong react-router-dom) và chưa khai báo `navigate`
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 const PAGE_SIZE = 8;
@@ -120,6 +122,7 @@ const getErrorMessage = (error: any, fallback: string): string => {
 
 export default function ExamManagementPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate(); // FIXED/NEW
   const [examSearch, setExamSearch] = useState("");
   const [examPage, setExamPage] = useState(0);
   const [activeExam, setActiveExam] = useState<ExamDTO | null>(null);
@@ -180,7 +183,7 @@ export default function ExamManagementPage() {
             cfg.latePolicy === "ALLOWED_WITH_PENALTY" && cfg.latePenaltyPercent !== ""
                 ? Number(cfg.latePenaltyPercent)
                 : undefined,
-              lateGraceMinutes: Number(cfg.lateGraceMinutes || 0),
+        lateGraceMinutes: Number(cfg.lateGraceMinutes || 0),
         resultVisibility: cfg.resultVisibility,
         accessCode: cfg.accessCode ? cfg.accessCode.trim() : "",
       };
@@ -328,7 +331,14 @@ export default function ExamManagementPage() {
                 {examRows.map((exam) => (
                     <TableRow key={exam.id}>
                       <TableCell className="font-medium">
-                        {exam.title}
+                        {/* CHANGED: bấm vào tên đề để mở danh sách bài tự luận cần chấm */}
+                        <button
+                            type="button"
+                            className="text-left font-medium hover:underline"
+                            onClick={() => exam.id && navigate(`/exams/${exam.id}/grading`)}
+                        >
+                          {exam.title}
+                        </button>
                         <p className="mt-0.5 text-xs font-normal text-muted-foreground">
                           {exam.startTime || exam.endTime
                               ? `${exam.startTime ? exam.startTime.replace("T", " ").slice(0, 16) : "…"} → ${exam.endTime ? exam.endTime.replace("T", " ").slice(0, 16) : "…"}`
@@ -344,6 +354,16 @@ export default function ExamManagementPage() {
                           <Button variant="outline" size="sm" onClick={() => openQuestionPicker(exam)}>
                             <BookOpen />
                             Câu hỏi
+                          </Button>
+                          {/* NEW: mở danh sách bài tự luận cần chấm của đề */}
+                          <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => exam.id && navigate(`/exams/${exam.id}/grading`)}
+                              disabled={!exam.id}
+                          >
+                            <ClipboardCheck className="size-4" />
+                            Bài tự luận
                           </Button>
                           <Button
                               variant="outline"
@@ -413,11 +433,11 @@ export default function ExamManagementPage() {
                 <label className="grid gap-2 text-sm font-medium">
                   Mật khẩu đề thi (để trống nếu không yêu cầu)
                   <Input
-                    type="text"
-                    placeholder="Ví dụ: THI2026"
-                    maxLength={100}
-                    value={cfg.accessCode}
-                    onChange={(event) => setCfg((c) => ({ ...c, accessCode: event.target.value }))}
+                      type="text"
+                      placeholder="Ví dụ: THI2026"
+                      maxLength={100}
+                      value={cfg.accessCode}
+                      onChange={(event) => setCfg((c) => ({ ...c, accessCode: event.target.value }))}
                   />
                 </label>
 
@@ -525,8 +545,8 @@ export default function ExamManagementPage() {
                     <SelectTrigger aria-label="Lọc loại câu hỏi"><SelectValue placeholder="Loại câu hỏi" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ALL">Tất cả loại</SelectItem>
-                      <SelectItem value="SINGLE_CHOICE">Một đáp án</SelectItem>
-                      <SelectItem value="MULTI_CHOICE">Nhiều đáp án</SelectItem>
+                      {/* CHANGED: gộp Một đáp án / Nhiều đáp án thành Trắc nghiệm */}
+                      <SelectItem value="MULTIPLE_CHOICE">Trắc nghiệm</SelectItem>
                       <SelectItem value="ESSAY">Tự luận</SelectItem>
                     </SelectContent>
                   </Select>

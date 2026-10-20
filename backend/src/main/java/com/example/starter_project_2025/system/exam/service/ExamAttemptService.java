@@ -283,7 +283,9 @@ public class ExamAttemptService {
         if (question.getType() == QuestionType.ESSAY) {
             return Set.of();
         }
-        if (question.getType() == QuestionType.SINGLE_CHOICE && selectedIds.size() > 1) {
+        // CHANGED: không còn SINGLE_CHOICE; câu trắc nghiệm chỉ có 1 đáp án đúng thì chỉ cho chọn 1
+        long correctCount = question.getOptions().stream().filter(ExamAttemptOption::isCorrect).count();
+        if (correctCount <= 1 && selectedIds.size() > 1) {
             throw new BadRequestException("Câu hỏi chỉ cho phép chọn một đáp án");
         }
 

@@ -89,12 +89,17 @@ public class QuestionCsvParser {
         // 2. Type (Loại câu hỏi)
         String typeStr = getValue(row, headerMap, "type", "loại câu hỏi", "loại");
         if (typeStr == null || typeStr.trim().isEmpty()) {
-            throw new IllegalArgumentException("Loại câu hỏi không được để trống (SINGLE_CHOICE, MULTI_CHOICE, ESSAY)");
+            throw new IllegalArgumentException("Loại câu hỏi không được để trống (MULTIPLE_CHOICE, ESSAY)");
         }
         try {
-            dto.setType(QuestionType.valueOf(typeStr.trim().toUpperCase()));
+            String normalizedType = typeStr.trim().toUpperCase();
+            // NEW: file CSV cũ còn ghi SINGLE_CHOICE / MULTI_CHOICE thì tự quy về MULTIPLE_CHOICE
+            if (normalizedType.equals("SINGLE_CHOICE") || normalizedType.equals("MULTI_CHOICE")) {
+                normalizedType = "MULTIPLE_CHOICE";
+            }
+            dto.setType(QuestionType.valueOf(normalizedType));
         } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("Loại câu hỏi [" + typeStr.trim() + "] không hợp lệ. Cho phép: SINGLE_CHOICE, MULTI_CHOICE, ESSAY");
+            throw new IllegalArgumentException("Loại câu hỏi [" + typeStr.trim() + "] không hợp lệ. Cho phép: MULTIPLE_CHOICE, ESSAY");
         }
 
         // 3. Difficulty (Độ khó)
@@ -180,7 +185,7 @@ public class QuestionCsvParser {
     private boolean isTrue(String val) {
         if (val == null) return false;
         String trimmed = val.trim().toLowerCase();
-        return trimmed.equals("true") || trimmed.equals("1") || trimmed.equals("yes") 
+        return trimmed.equals("true") || trimmed.equals("1") || trimmed.equals("yes")
                 || trimmed.equals("y") || trimmed.equals("x") || trimmed.equals("đúng");
     }
 

@@ -30,11 +30,11 @@ export interface QuestionFormValues {
 
 export const initialQuestionForm: QuestionFormValues = {
     content: "",
-    type: "SINGLE_CHOICE",
+    type: "MULTIPLE_CHOICE", // CHANGED: trước đây "SINGLE_CHOICE"
     difficulty: "EASY",
     topic: "",
     points: 1,
-    isActive: true,
+    isActive: true, // NEW: mặc định luôn active khi tạo mới; chỉ cho đổi ở màn hình Edit (showActive)
     options: [
         { content: "", correct: false },
         { content: "", correct: false },
@@ -47,9 +47,11 @@ interface QuestionFormProps {
     onSubmit: (values: QuestionFormValues) => void;
     isSaving: boolean;
     submitLabel: string;
+    /** NEW: chỉ truyền true ở trang Edit. Khi tạo câu hỏi, trạng thái active mặc định là bật và không cho chỉnh. */
+    showActive?: boolean;
 }
 
-export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel }: QuestionFormProps) {
+export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel, showActive = false }: QuestionFormProps) {
     const navigate = useNavigate();
 
     const updateOption = (index: number, patch: Partial<QuestionOptionDTO>) =>
@@ -62,11 +64,8 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel }:
         setForm((prev) => ({
             ...prev,
             options: prev.options.map((option, i) => {
-                if (i === index) {
-                    return { ...option, correct: checked };
-                }
-                // Single choice allows only one correct option
-                return prev.type === "SINGLE_CHOICE" && checked ? { ...option, correct: false } : option;
+                // CHANGED: không còn Single choice -> có thể tick nhiều đáp án đúng
+                return i === index ? { ...option, correct: checked } : option;
             }),
         }));
 
@@ -82,6 +81,15 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel }:
         }
         if (!form.type || !form.difficulty) {
             toast.error("Type and difficulty are required.");
+            return;
+        }
+        // NEW: backend yêu cầu điểm là số nguyên >= 1 và nội dung tối đa 2000 ký tự
+        if (!Number.isInteger(form.points) || form.points < 1) {
+            toast.error("Points must be a whole number of at least 1.");
+            return;
+        }
+        if (content.length > 2000) {
+            toast.error("Content must be at most 2000 characters.");
             return;
         }
         if (form.type === "ESSAY") {
@@ -103,10 +111,7 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel }:
             toast.error("Select at least one correct option.");
             return;
         }
-        if (form.type === "SINGLE_CHOICE" && correctCount !== 1) {
-            toast.error("Single choice must have exactly one correct option.");
-            return;
-        }
+        // REMOVED: kiểm tra "Single choice phải có đúng 1 đáp án đúng"
 
         onSubmit({ ...form, content, topic: form.topic.trim(), options });
     };
@@ -138,11 +143,9 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel }:
                                 options:
                                     value === "ESSAY"
                                         ? []
-                                        : value === "SINGLE_CHOICE"
-                                            ? prev.options.map((option) => ({ ...option, correct: false }))
-                                            : prev.options.length >= 2
-                                                ? prev.options
-                                                : initialQuestionForm.options,
+                                        : prev.options.length >= 2
+                                            ? prev.options
+                                            : initialQuestionForm.options,
                             }))
                         }
                     >
@@ -150,9 +153,9 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel }:
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="SINGLE_CHOICE">Single choice</SelectItem>
-                            <SelectItem value="MULTI_CHOICE">Multi choice</SelectItem>
-                            <SelectItem value="ESSAY">Essay</SelectItem>
+                            {/* CHANGED: chỉ còn 2 loại (trước đây có Single choice / Multi choice) */}
+                            <SelectItem value="MULTIPLE_CHOICE">Multiple choice (trắc nghiệm)</SelectItem>
+                            <SelectItem value="ESSAY">Essay (tự luận)</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
@@ -192,8 +195,8 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel }:
                     <Input
                         id="question-points"
                         type="number"
-                        min={0}
-                        step="any"
+                        min={1}
+                        step={1}
                         value={form.points}
                         onChange={(event) =>
                             setForm((prev) => ({ ...prev, points: Number(event.target.value) }))
@@ -202,23 +205,32 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel }:
                 </div>
             </div>
 
-            <div className="flex items-center gap-3">
-                <Switch
-                    id="question-active"
-                    checked={form.isActive}
-                    onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isActive: checked }))}
-                />
-                <Label htmlFor="question-active">Active</Label>
-            </div>
+            {/* CHANGED: công tắc Active chỉ hiện khi sửa câu hỏi; tạo mới luôn là active */}
+            {showActive && (
+                <div className="flex items-center gap-3">
+                    <Switch
+                        id="question-active"
+                        checked={form.isActive}
+                        onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isActive: checked }))}
+                    />
+                    <Label htmlFor="question-active">Active</Label>
+                </div>
+            )}
 
             {form.type === "ESSAY" ? (
                 <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
-                    Essay questions have no options; they are graded manually.
+                    Essay questions have no options; students type their answer in a pop-up editor and the teacher grades it manually.
                 </p>
             ) : (
                 <div className="grid gap-3">
                     <div className="flex items-center justify-between">
-                        <Label>Options (tick the correct answer)</Label>
+                        <div className="grid gap-1">
+                            <Label>Options (tick the correct answer)</Label>
+                            {/* NEW: giải thích cách hiển thị cho sinh viên */}
+                            <p className="text-xs text-muted-foreground">
+                                One correct answer: students see round buttons (pick one). Several correct answers: students see square boxes (pick many).
+                            </p>
+                        </div>
                         <Button
                             type="button"
                             variant="outline"

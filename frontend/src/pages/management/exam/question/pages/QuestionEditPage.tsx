@@ -32,7 +32,7 @@ export function QuestionEditPage() {
         }
         setForm({
             content: data.content || "",
-            type: data.type || "SINGLE_CHOICE",
+            type: data.type === "ESSAY" ? "ESSAY" : "MULTIPLE_CHOICE", // CHANGED
             difficulty: data.difficulty || "EASY",
             topic: data.topic || "",
             points: data.points ?? 1,
@@ -79,6 +79,7 @@ export function QuestionEditPage() {
                             onSubmit={(values) => updateMutation.mutate(values)}
                             isSaving={updateMutation.isPending}
                             submitLabel="Save changes"
+                            showActive // NEW: chỉ trang Edit mới cho đổi Active
                         />
                     )}
                 </CardContent>

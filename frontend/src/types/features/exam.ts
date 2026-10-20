@@ -1,4 +1,5 @@
-export type QuestionType = "SINGLE_CHOICE" | "MULTI_CHOICE" | "ESSAY";
+// CHANGED: chỉ còn 2 loại (trước đây: SINGLE_CHOICE | MULTI_CHOICE | ESSAY)
+export type QuestionType = "MULTIPLE_CHOICE" | "ESSAY";
 export type QuestionDifficulty = "EASY" | "MEDIUM" | "HARD";
 
 export interface QuestionOptionDTO {
@@ -54,4 +55,43 @@ export interface ExamDTO {
 export interface ExamFilter {
   title?: string;
   isActive?: boolean;
+}
+
+// ===== NEW: giáo viên xem bài tự luận cần chấm =====
+export type EssayAttemptStatus = "IN_PROGRESS" | "SUBMITTED" | "PENDING_REVIEW" | "EXPIRED";
+
+export interface EssayGradingSummary {
+  attemptId: number;
+  studentId: number;
+  studentName: string;
+  studentEmail: string;
+  attemptNumber: number;
+  status: EssayAttemptStatus;
+  submittedAt: string | null;
+  essayCount: number;
+  essayAnswered: number;
+}
+
+export interface EssayGradingItem {
+  questionId: number;
+  displayOrder: number;
+  content: string;
+  points: number;
+  answerText: string;
+}
+
+export interface EssayGradingDetail {
+  attemptId: number;
+  examId: number;
+  examTitle: string;
+  studentId: number;
+  studentName: string;
+  studentEmail: string;
+  attemptNumber: number;
+  status: EssayAttemptStatus;
+  startedAt: string;
+  submittedAt: string | null;
+  totalPoints: number;
+  objectiveScore: number | null;
+  essays: EssayGradingItem[];
 }

@@ -7,6 +7,7 @@ import {
 } from '@/api/exam.api';
 import { Button } from '@/components/ui/button';
 import { MainLayout } from '@/components/layout/MainLayout';
+import { EssayAnswerDialog } from './components/EssayAnswerDialog'; // NEW
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useEffect, useRef, useState } from 'react';
@@ -461,18 +462,20 @@ export default function StudentExamTakingPage() {
                                     <p className="mt-3 whitespace-pre-wrap">{question.content}</p>
 
                                     {question.type === 'ESSAY' ? (
-                                        <textarea
-                                            aria-label={`Câu trả lời câu ${index + 1}`}
-                                            className="mt-4 min-h-40 w-full rounded-md border bg-background p-3"
+                                        // CHANGED: thay <textarea> trực tiếp bằng ô bấm-để-mở popup nhập văn bản
+                                        <EssayAnswerDialog
+                                            label={`Câu ${index + 1}`}
+                                            questionContent={question.content}
                                             value={answer.textAnswer ?? ''}
-                                            onChange={(event) => updateAnswer(question.id, { textAnswer: event.target.value })}
+                                            onChange={(text) => updateAnswer(question.id, { textAnswer: text })}
                                             disabled={isFinished}
                                         />
                                     ) : (
                                         <div className="mt-4 grid gap-3">
                                             {question.options.map((option) => {
                                                 const checked = answer.selectedOptionIds.includes(option.id);
-                                                const inputType = question.type === 'SINGLE_CHOICE' ? 'radio' : 'checkbox';
+                                                // CHANGED: nhiều đáp án đúng -> ô vuông (checkbox), 1 đáp án đúng -> ô tròn (radio)
+                                                const inputType = question.multiSelect ? 'checkbox' : 'radio';
                                                 return (
                                                     <label key={option.id} className="flex cursor-pointer items-start gap-3 rounded-md border p-3">
                                                         <input
@@ -480,7 +483,7 @@ export default function StudentExamTakingPage() {
                                                             name={`question-${question.id}`}
                                                             checked={checked}
                                                             onChange={() => {
-                                                                const selectedOptionIds = question.type === 'SINGLE_CHOICE'
+                                                                const selectedOptionIds = !question.multiSelect
                                                                     ? [option.id]
                                                                     : checked
                                                                         ? answer.selectedOptionIds.filter((id) => id !== option.id)

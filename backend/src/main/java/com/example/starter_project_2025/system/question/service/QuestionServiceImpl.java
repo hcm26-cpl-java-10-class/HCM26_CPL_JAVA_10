@@ -34,6 +34,8 @@ public class QuestionServiceImpl
 
     @Override
     protected void beforeCreate(Question entity, QuestionDTO request, ValidationContext ctx) {
+        // NEW: tạo mới luôn ở trạng thái active; chỉ đổi được khi sửa (edit) câu hỏi
+        entity.setIsActive(true);
         validator.validateForCreate(request, ctx);
     }
 

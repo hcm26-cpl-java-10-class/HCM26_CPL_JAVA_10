@@ -30,4 +30,18 @@ public interface ExamAttemptRepository extends BaseCrudRepository<ExamAttempt, L
             @Param("attemptId") Long attemptId,
             @Param("studentId") Long studentId
     );
+
+    @Query("""
+            select a from ExamAttempt a
+            where a.exam.id = :examId
+              and a.status in :statuses
+              and exists (select 1 from ExamAttemptQuestion q
+                          where q.attempt = a and q.type = :essayType)
+            order by a.submittedAt asc, a.id asc
+            """)
+    List<ExamAttempt> findFinishedWithQuestionType(
+            @Param("examId") Long examId,
+            @Param("statuses") java.util.Collection<ExamAttemptStatus> statuses,
+            @Param("essayType") com.example.starter_project_2025.system.question.domain.QuestionType essayType
+    );
 }

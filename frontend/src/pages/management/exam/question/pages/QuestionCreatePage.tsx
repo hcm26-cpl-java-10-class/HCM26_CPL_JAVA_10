@@ -19,7 +19,8 @@ export function QuestionCreatePage() {
     const [form, setForm] = useState<QuestionFormValues>(initialQuestionForm);
 
     const createMutation = useMutation({
-        mutationFn: (payload: QuestionFormValues) => questionApi.create(payload as any),
+        // CHANGED: luôn gửi isActive = true khi tạo (công tắc Active chỉ có ở trang Edit)
+        mutationFn: (payload: QuestionFormValues) => questionApi.create({ ...payload, isActive: true } as any),
         onSuccess: async () => {
             await queryClient.invalidateQueries({ queryKey: ["question"] });
             toast.success("Question created successfully.");

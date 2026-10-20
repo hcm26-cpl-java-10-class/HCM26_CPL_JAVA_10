@@ -7,6 +7,9 @@ import NotFoundPage from "@/pages/error/NotFoundPage";
 import { Unauthorized } from "@/pages/error/Unauthorized";
 import { Dashboard } from "@/pages/management/dashboard";
 import ExamManagementPage from "@/pages/management/exam";
+// NEW: trang giáo viên xem bài tự luận
+import EssayAttemptListPage from "@/pages/management/exam/grading/EssayAttemptListPage";
+import EssayAttemptDetailPage from "@/pages/management/exam/grading/EssayAttemptDetailPage";
 import InvitationsLandingPage from "@/pages/management/exam/invitations";
 import InvitationsPage from "@/pages/management/exam/invitation";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
@@ -34,6 +37,9 @@ export const routes: RouteConfig[] = [
   { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
   { path: "/invitations", component: InvitationsLandingPage, requiredPermission: "EXAM_READ" },
   { path: "/exams/:examId/invitations", component: InvitationsPage, requiredPermission: "INVITATION_READ" },
+  // NEW
+  { path: "/exams/:examId/grading", component: EssayAttemptListPage, requiredPermission: "EXAM_UPDATE" },
+  { path: "/exams/:examId/grading/:attemptId", component: EssayAttemptDetailPage, requiredPermission: "EXAM_UPDATE" },
   { path: "/anonymous-exam", component: AnonymousAccessPage, isPublic: true },
   { path: "/student/invitations", component: StudentInvitationsPage, requiredPermission: "INVITATION_READ" },
 
