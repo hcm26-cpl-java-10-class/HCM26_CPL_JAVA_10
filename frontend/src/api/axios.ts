@@ -48,6 +48,7 @@ axiosInstance.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem("token");
         const requestUrl = config.url ?? "";
+
         const isAuthRequest = requestUrl.startsWith("/auth/") || requestUrl.includes("/auth/");
 
         if (token && !isAuthRequest) {
@@ -65,6 +66,24 @@ axiosInstance.interceptors.response.use(
     async (error) => {
         const originalReq = error.config;
         const requestUrl = originalReq?.url ?? "";
+        const status = error.response?.status;
+        const errorData = error.response?.data;
+
+        if (
+            status === 403 &&
+            (
+                errorData?.code === "ACCOUNT_LOCKED" ||
+                errorData?.message === "Account is locked or disabled"
+            )
+        ) {
+            store.dispatch(setLogout());
+
+            if (window.location.pathname !== "/login") {
+                window.location.replace("/login?reason=locked");
+            }
+
+            return Promise.reject(error);
+        }
 
         if (!originalReq) {
             return Promise.reject(error);

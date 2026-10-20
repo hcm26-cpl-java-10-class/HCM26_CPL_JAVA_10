@@ -3,7 +3,7 @@ package com.example.starter_project_2025.system.rbac.user;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.mapper.BaseMapperConfig;
 import com.example.starter_project_2025.base.crud.mapper.IgnoreAuditFields;
-// import com.example.starter_project_2025.system.rbac.department.Department;
+    // import com.example.starter_project_2025.system.rbac.department.Department;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import org.mapstruct.*;
 
@@ -22,6 +22,8 @@ public interface UserMapper extends BaseCrudMapper<User, UserDTO> {
     @Mapping(target = "roleIds", expression = "java(mapRoleIds(user))")
     // @Mapping(target = "departmentIds", expression = "java(mapDepartmentIds(user))")
     @Mapping(target = "status", expression = "java(mapStatus(user))")
+    @Mapping(target = "isActive", expression = "java(user.getIsActive())")
+    @Mapping(target = "locked", expression = "java(user.getLocked())")
     @Mapping(target = "password", ignore = true)
     UserDTO toResponse(User user);
 

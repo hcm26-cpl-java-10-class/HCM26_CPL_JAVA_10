@@ -52,6 +52,7 @@ interface ProTableProps<TData = any> {
 
     /** Optional: Complete override of row actions. If provided, you have full control */
     renderRowActions?: (row: TData) => React.ReactNode;
+    extraRowActions?: (row: TData) => React.ReactNode;
 
     /** Optional: Custom card renderer for card view */
     renderCard?: (props: EntityCardRendererProps) => React.ReactNode;
@@ -105,6 +106,7 @@ export function ProTable<TData = any>({
     table,
     headerActions,
     renderRowActions,
+    extraRowActions,
     renderCard,
     onView,
     onEdit,
@@ -228,7 +230,7 @@ export function ProTable<TData = any>({
     const hasRowActions = canViewRow || canEditRow || canDeleteRow;
 
     const showActionsColumn = !hideActions && hasRowActions;
-    const ACTION_COLUMN_WIDTH = 152;
+    const ACTION_COLUMN_WIDTH = 190;
 
     // Default row actions renderer (uses internal modal system or custom overrides)
     const defaultRenderRowActions = (row: TData) => (
@@ -240,6 +242,7 @@ export function ProTable<TData = any>({
             viewPermission={table.permission?.keys?.read}
             editPermission={table.permission?.keys?.update}
             deletePermission={table.permission?.keys?.delete}
+            extraActions={extraRowActions}
         />
     );
 

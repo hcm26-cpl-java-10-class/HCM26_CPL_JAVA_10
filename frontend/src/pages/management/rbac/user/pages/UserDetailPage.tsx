@@ -79,8 +79,23 @@ export function UserDetailPage() {
     <MainLayout pathName={pathName}>
       <Card className="w-full">
         <CardHeader>
-          <CardTitle>Chi tiết người dùng</CardTitle>
-          <CardDescription>Thông tin chi tiết người dùng #{id}.</CardDescription>
+          <div className="flex items-center gap-4">
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate("/users")}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Button>
+
+            <div>
+              <CardTitle>User Details</CardTitle>
+              <CardDescription>
+                View user information and account access.
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
 
         {!id ? (
@@ -137,10 +152,6 @@ export function UserDetailPage() {
         )}
 
         <CardFooter className="flex justify-end gap-2">
-          <Button variant="outline" onClick={() => navigate("/users")}>
-            <ArrowLeft className="h-4 w-4" />
-            Quay lại
-          </Button>
           {id && (
             <PermissionGate permission="USER_UPDATE">
               <Button asChild>

@@ -18,6 +18,10 @@ import { Plus } from "lucide-react";
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { userApi } from "@/api/features/rbac/user.api";
+import { Lock, LockOpen } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
 interface AutoCrudPageProps {
     entity: EntityConfig;
@@ -25,6 +29,8 @@ interface AutoCrudPageProps {
 
 export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
+    const [lockingUserId, setLockingUserId] = useState<string | number | null>(null);
     const { activeRole } = usePermissions();
     const breadcrumbKey = entity.path.replace(/^\/+/, "");
 
@@ -38,6 +44,52 @@ export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
     const normalizedActiveRole = normalizeRole(activeRole);
     const isAdminRole = normalizedActiveRole === ADMIN_ROLE;
     const isUserManagement = entity.path === "/users";
+    const handleToggleLock = async (row: any) => {
+        if (!isUserManagement || !isAdminRole) return;
+
+        const id = row[entity.schema.idField];
+
+        if (id == null) {
+            toast.error("User ID not found");
+            return;
+        }
+
+        if (lockingUserId !== null) return;
+
+        const isLocked = row.locked === true;
+        const action = isLocked ? "unblock" : "block";
+
+        const confirmed = window.confirm(
+            `Are you sure you want to ${action} user "${row.username}"?`
+        );
+
+        if (!confirmed) return;
+
+        try {
+            setLockingUserId(id);
+
+            if (isLocked) {
+                await userApi.unlockUser(id);
+            } else {
+                await userApi.lockUser(id);
+            }
+
+            toast.success(
+                isLocked
+                    ? "User unblocked successfully"
+                    : "User blocked successfully"
+            );
+
+            await queryClient.invalidateQueries({
+                queryKey: [entity.schema.entityName],
+            });
+        } catch (error) {
+            console.error(error);
+            toast.error(`Failed to ${action} user`);
+        } finally {
+            setLockingUserId(null);
+        }
+    };
     const isStudentRole = normalizedActiveRole === STUDENT_ROLE;
 
     const headerActions = useMemo(() => {
@@ -165,6 +217,23 @@ export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
                 onEdit={browseMode ? undefined : onEdit}
                 onView={onView}
                 renderCard={entity.cardRenderer}
+                extraRowActions={
+                    isUserManagement && isAdminRole && !browseMode
+                        ? (row: any) => (
+                            <ActionButton
+                                onClick={() => handleToggleLock(row)}
+                                tooltip={row.locked ? "Unblock user" : "Block user"}
+                                icon={
+                                    row.locked ? (
+                                        <LockOpen size={14} className="text-green-600" />
+                                    ) : (
+                                        <Lock size={14} className="text-red-500" />
+                                    )
+                                }
+                            />
+                        )
+                        : undefined
+                }
             />
         </MainLayout>
     );

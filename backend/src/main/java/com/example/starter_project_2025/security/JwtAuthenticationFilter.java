@@ -54,12 +54,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 if (!userDetails.isAccountNonLocked()
                         || !userDetails.isEnabled()) {
+
                     SecurityContextHolder.clearContext();
 
-                    response.sendError(
-                            HttpServletResponse.SC_FORBIDDEN,
-                            "Account is locked or disabled"
+                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    response.setContentType("application/json;charset=UTF-8");
+
+                    response.getWriter().write(
+                            "{\"code\":\"ACCOUNT_LOCKED\","
+                                    + "\"message\":\"Account is locked or disabled\"}"
                     );
+
                     return;
                 }
 

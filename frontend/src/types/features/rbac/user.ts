@@ -19,6 +19,7 @@ export interface UserDTO extends BaseDTO {
   phone?: string;
   description?: string;
   status?: UserStatus;
+  locked?: boolean;
   /** Quan hệ N-N user_roles (ít nhất 1 role). */
   roleIds?: Array<string | number>;
   /** Quan hệ N-N user_departments. */

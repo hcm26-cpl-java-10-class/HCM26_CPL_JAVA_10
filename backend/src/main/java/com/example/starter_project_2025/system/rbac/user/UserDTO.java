@@ -60,4 +60,10 @@ public class UserDTO extends BaseDTO {
     /** Chỉ đọc: ACTIVE / LOCKED / INACTIVE, suy ra từ isActive + locked. */
     @JsonProperty(access = READ_ONLY)
     String status;
+
+    @JsonProperty(access = READ_ONLY)
+    Boolean isActive;
+
+    @JsonProperty(access = READ_ONLY)
+    Boolean locked;
 }
