@@ -48,11 +48,25 @@ public class ScheduleVersionController
     com.example.starter_project_2025.system.schedule.conflict.ScheduleConflictService conflicts;
 
     @PostMapping("/{id}/validate")
-    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('SESSION_READ') and hasAnyAuthority('SESSION_CREATE','SESSION_UPDATE')")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyAuthority('SCHEDULE_VERSION_READ', 'SCHEDULE_VERSION_UPDATE', 'SESSION_READ', 'SESSION_CREATE', 'SESSION_UPDATE')")
     public com.example.starter_project_2025.system.schedule.conflict.dto.ScheduleValidationResponse validateCandidates(
             @PathVariable Long id,
-            @jakarta.validation.Valid @RequestBody com.example.starter_project_2025.system.schedule.conflict.dto.ScheduleValidationRequest request) {
-        return conflicts.validateCandidates(id, request);
+            @RequestBody(required = false) com.example.starter_project_2025.system.schedule.conflict.dto.ScheduleValidationRequest request) {
+        if (request != null && request.getSessions() != null && !request.getSessions().isEmpty()) {
+            return conflicts.validateCandidates(id, request);
+        }
+        var result = scheduleVersionService.validateVersion(id);
+        var issues = result.issues().stream()
+                .map(i -> new com.example.starter_project_2025.system.schedule.conflict.dto.ScheduleConflictIssue(
+                        i.code(),
+                        null,
+                        i.field(),
+                        i.message(),
+                        i.conflictSessionId(),
+                        null
+                ))
+                .toList();
+        return new com.example.starter_project_2025.system.schedule.conflict.dto.ScheduleValidationResponse(id, result.valid(), issues);
     }
 
     @Override
@@ -191,9 +205,21 @@ public class ScheduleVersionController
         return ResponseEntity.noContent().build();
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // ⬜ TUẦN 3: SẼ BỔ SUNG (validate + activate)
-    // ════════════════════════════════════════════════════════════════════════
-    // TODO Tuần 3: POST /{id}/validate  → gọi ScheduleConflictService của Thắng
-    // TODO Tuần 3: POST /{id}/activate  → kích hoạt nguyên tử @Transactional
+    /**
+     * Kích hoạt phiên bản lịch nháp (DRAFT) thành bản chính thức (ACTIVE).
+     * Bản ACTIVE cũ của cùng lớp sẽ được chuyển sang ARCHIVED.
+     * Bắt buộc có lý do kích hoạt (activationReason).
+     */
+    @PostMapping("/{id}/activate")
+    @Operation(
+            summary = "Kích hoạt phiên bản lịch (DRAFT -> ACTIVE)",
+            description = "Chuyển trạng thái bản DRAFT thành ACTIVE nguyên tử, lưu trữ bản ACTIVE cũ và ghi nhận activationReason."
+    )
+    public ResponseEntity<ScheduleVersionDTO> activateVersion(
+            @PathVariable Long id,
+            @RequestBody(required = false) Map<String, String> body) {
+        String reason = (body != null) ? body.get("activationReason") : null;
+        ScheduleVersionDTO activated = scheduleVersionService.activateVersion(id, reason);
+        return ResponseEntity.ok(activated);
+    }
 }
