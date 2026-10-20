@@ -17,7 +17,7 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class ScheduleValidationRequest {
 
-    @NotEmpty
-    @Size(max = 100)
-    List<@Valid SessionCandidateRequest> sessions;
+    @NotEmpty(message = "Provide at least one session to validate.")
+    @Size(max = 100, message = "A validation request cannot contain more than 100 sessions.")
+    List<@jakarta.validation.constraints.NotNull(message = "Session details are required.") @Valid SessionCandidateRequest> sessions;
 }
