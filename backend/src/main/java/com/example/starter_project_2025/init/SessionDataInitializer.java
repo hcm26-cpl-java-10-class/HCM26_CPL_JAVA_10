@@ -1,8 +1,8 @@
 package com.example.starter_project_2025.init;
 
-import com.example.starter_project_2025.system.schedule.Session;
-import com.example.starter_project_2025.system.schedule.SessionRepository;
-import com.example.starter_project_2025.system.schedule.SessionStatus;
+import com.example.starter_project_2025.system.schedule.session.Session;
+import com.example.starter_project_2025.system.schedule.session.SessionRepository;
+import com.example.starter_project_2025.system.schedule.session.SessionStatus;
 import com.example.starter_project_2025.system.schedule.calendar.Calendar;
 import com.example.starter_project_2025.system.schedule.calendar.CalendarVersion;
 import com.example.starter_project_2025.system.schedule.calendar.CalendarVersionStatus;

@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.schedule.exception;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -19,8 +20,14 @@ import java.time.LocalDateTime;
  */
 @Slf4j
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@RestControllerAdvice
+@RestControllerAdvice(basePackages = "com.example.starter_project_2025.system.schedule")
 public class SessionExceptionHandler {
+
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ApiErrorResponse> handleVersionConflict(OptimisticLockingFailureException ex) {
+        return handleConflict(new ConflictException("SESSION_VERSION_CONFLICT",
+                "Phiên bản buổi học đã thay đổi, vui lòng tải lại."));
+    }
 
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<ApiErrorResponse> handleConflict(ConflictException ex) {

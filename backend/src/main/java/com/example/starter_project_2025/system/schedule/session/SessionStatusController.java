@@ -1,7 +1,8 @@
-package com.example.starter_project_2025.system.schedule;
+package com.example.starter_project_2025.system.schedule.session;
 
+import com.example.starter_project_2025.system.schedule.session.dto.SessionDTO;
 import com.example.starter_project_2025.exception.BadRequestException;
-import com.example.starter_project_2025.system.schedule.dto.SessionCancelRequest;
+import com.example.starter_project_2025.system.schedule.session.dto.SessionCancelRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.AccessLevel;
@@ -16,17 +17,12 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * F15 — Session Operational Status (API version v1).
- *
- * <p>Chỉ triển khai shortcut hủy buổi học theo yêu cầu (UFR-PEO-014, BR-SES-02/03).</p>
- */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/sessions")
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Tag(name = "Session Operational Status (v1)",
-        description = "Cập nhật trạng thái buổi học — Trainer được phân công / Class Admin (F15)")
+        description = "Cập nhật trạng thái buổi học — Trainer được phân công / Class Admin")
 public class SessionStatusController {
 
     SessionService sessionService;
@@ -57,10 +53,6 @@ public class SessionStatusController {
                 .body(response);
     }
 
-    /**
-     * Lấy phiên bản mong đợi từ header {@code If-Match} (ETag: {@code "3"} / {@code W/"3"}),
-     * fallback sang field {@code version} trong body.
-     */
     private Long resolveExpectedVersion(String ifMatch, Long bodyVersion) {
         if (ifMatch != null && !ifMatch.isBlank()) {
             String normalized = ifMatch.trim();

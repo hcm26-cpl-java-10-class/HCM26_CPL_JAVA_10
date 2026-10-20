@@ -1,7 +1,7 @@
 package com.example.starter_project_2025.service;
 
-import com.example.starter_project_2025.system.schedule.Session;
-import com.example.starter_project_2025.system.schedule.SessionRepository;
+import com.example.starter_project_2025.system.schedule.session.Session;
+import com.example.starter_project_2025.system.schedule.session.SessionRepository;
 import com.example.starter_project_2025.system.schedule.calendar.repository.CalendarVersionRepository;
 import com.example.starter_project_2025.system.schedule.exception.ConflictException;
 import com.example.starter_project_2025.system.schedule.generation.BulkSessionGenerationServiceImpl;

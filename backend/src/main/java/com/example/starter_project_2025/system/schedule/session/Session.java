@@ -1,4 +1,4 @@
-package com.example.starter_project_2025.system.schedule;
+package com.example.starter_project_2025.system.schedule.session;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.base.dataio.exporter.annotation.ExportEntity;
@@ -35,10 +35,6 @@ import java.time.LocalDateTime;
         permission = "SESSION_READ"
 )
 public class Session extends BaseEntity {
-
-//    @Column(name = "calendar_version_id")
-//    @ExportField(name = "Calendar Version ID")
-//    Long calendarVersionId;
 
     @Column(name = "topic_id")
     @ExportField(name = "Topic ID")
@@ -118,9 +114,6 @@ public class Session extends BaseEntity {
     CalendarVersion calendarVersion;
 
 
-    /**
-     * Optimistic locking version — dùng cho If-Match / ETag khi cập nhật trạng thái (F15).
-     */
     @Version
     @Column(name = "version")
     @ExportField(name = "Version")

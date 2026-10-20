@@ -1,6 +1,6 @@
 package com.example.starter_project_2025.system.schedule.detection.dto;
 
-import com.example.starter_project_2025.system.schedule.SessionDTO;
+import com.example.starter_project_2025.system.schedule.session.dto.SessionDTO;
 import com.example.starter_project_2025.system.schedule.detection.ConflictType;
 import lombok.*;
 import lombok.experimental.FieldDefaults;

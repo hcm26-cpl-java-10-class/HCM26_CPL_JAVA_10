@@ -1,7 +1,11 @@
-package com.example.starter_project_2025.system.schedule;
+package com.example.starter_project_2025.system.schedule.session.dto;
 
 import com.example.starter_project_2025.base.crud.dto.BaseDTO;
 import com.example.starter_project_2025.base.crud.dto.OnCreate;
+import com.example.starter_project_2025.base.crud.dto.OnUpdate;
+import com.example.starter_project_2025.system.schedule.session.SessionStatus;
+import jakarta.validation.constraints.Positive;
+import org.hibernate.validator.constraints.URL;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
@@ -20,8 +24,22 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class SessionDTO extends BaseDTO {
 
+    @NotNull(groups = OnCreate.class, message = "Calendar version ID is required")
+    @Positive
     Long calendarVersionId;
+
+    @NotNull(groups = {OnCreate.class, OnUpdate.class}, message = "Topic ID is required")
+    @Positive
     Long topicId;
+
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    Integer calendarVersionNumber;
+
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    String calendarVersionStatus;
+
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    Long classId;
 
     @NotBlank(groups = OnCreate.class, message = "Class code is required")
     @Size(max = 60, message = "Class code must not exceed 60 characters")
@@ -30,22 +48,23 @@ public class SessionDTO extends BaseDTO {
     @Size(max = 120, message = "Topic name must not exceed 120 characters")
     String topicName;
 
-    @NotNull(groups = OnCreate.class, message = "Trainer ID is required")
+    @NotNull(groups = {OnCreate.class, OnUpdate.class}, message = "Trainer ID is required")
+    @Positive
     Long trainerId;
 
     @NotBlank(groups = OnCreate.class, message = "Trainer name is required")
     @Size(max = 100, message = "Trainer name must not exceed 100 characters")
     String trainerName;
 
-    @NotBlank(groups = OnCreate.class, message = "Title is required")
+    @NotBlank(groups = {OnCreate.class, OnUpdate.class}, message = "Title is required")
     @Size(max = 150, message = "Title must not exceed 150 characters")
     String title;
 
-    @NotNull(groups = OnCreate.class, message = "Start time is required")
+    @NotNull(groups = {OnCreate.class, OnUpdate.class}, message = "Start time is required")
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     LocalDateTime startTime;
 
-    @NotNull(groups = OnCreate.class, message = "End time is required")
+    @NotNull(groups = {OnCreate.class, OnUpdate.class}, message = "End time is required")
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     LocalDateTime endTime;
 
@@ -53,6 +72,7 @@ public class SessionDTO extends BaseDTO {
     String room;
 
     @Size(max = 255, message = "Meeting link must not exceed 255 characters")
+    @URL(regexp = "https?://.+")
     String meetingLink;
 
     SessionStatus status;
@@ -66,12 +86,8 @@ public class SessionDTO extends BaseDTO {
 
     String overrideReason;
 
-    // Field hỗ trợ request override từ Client (BR-10)
     Boolean forceOverride;
 
-    /**
-     * Phiên bản lạc hậu (optimistic locking) — chỉ trả về trong response, không nhận từ client.
-     */
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     Long version;
 }

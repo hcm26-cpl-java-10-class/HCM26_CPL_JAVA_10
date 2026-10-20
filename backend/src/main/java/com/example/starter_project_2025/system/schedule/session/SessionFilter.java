@@ -1,4 +1,4 @@
-package com.example.starter_project_2025.system.schedule;
+package com.example.starter_project_2025.system.schedule.session;
 
 import com.example.starter_project_2025.base.crud.dto.BaseFilter;
 import com.example.starter_project_2025.base.crud.spec.FilterField;
