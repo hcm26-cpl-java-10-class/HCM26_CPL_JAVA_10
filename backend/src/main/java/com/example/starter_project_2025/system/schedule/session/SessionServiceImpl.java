@@ -15,6 +15,7 @@ import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.schedule.session.dto.ConflictCheckResponse;
 import com.example.starter_project_2025.system.schedule.session.dto.SessionDTO;
 import com.example.starter_project_2025.system.schedule.session.dto.SessionCancelRequest;
+import com.example.starter_project_2025.system.schedule.session_audit.SessionStatusHistoryRecorder;
 import com.example.starter_project_2025.system.schedule.exception.ConflictException;
 import com.example.starter_project_2025.system.schedule.exception.UnprocessableEntityException;
 import lombok.AccessLevel;
@@ -40,6 +41,7 @@ public class SessionServiceImpl
     SessionAccessPolicy sessionAccessPolicy;
     CalendarLock calendarLock;
     EntityManager entityManager;
+    SessionStatusHistoryRecorder statusHistoryRecorder;
 
     static DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy");
 
@@ -301,12 +303,16 @@ public class SessionServiceImpl
                     "SESSION_INVALID_TRANSITION",
                     "Chỉ có thể hủy buổi học ở trạng thái SCHEDULED. Trạng thái hiện tại: " + session.getStatus() + ".");
         }
+        String beforeState = statusHistoryRecorder.snapshot(session);
         session.setStatus(SessionStatus.CANCELLED);
         session.setCancelReason(reason);
         if (request.getNotes() != null) {
             session.setNotes(request.getNotes());
         }
         Session saved = sessionRepository.saveAndFlush(session);
+        // T2/AC — ghi lịch sử trạng thái cho cả endpoint legacy /api/sessions/{id}/cancel.
+        statusHistoryRecorder.recordTransition(
+                saved, SessionStatus.SCHEDULED, SessionStatus.CANCELLED, reason, beforeState);
         return sessionMapper.toResponse(saved);
     }
 

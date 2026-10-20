@@ -21,52 +21,36 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { SessionDTO } from "@/types";
+import { getApiErrorMessage } from "@/utils/api-error.utils";
 import { ADMIN_ROLE } from "@/utils/rbac.utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import axios from "axios";
-import { CheckCircle2, Loader2, MoreHorizontal, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  History,
+  Loader2,
+  MoreHorizontal,
+  NotebookPen,
+  XCircle,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { SessionHistoryDialog } from "./SessionHistoryDialog";
+import { SessionNotesDialog } from "./SessionNotesDialog";
 
 const MAX_CANCEL_REASON_LENGTH = 500;
 const SESSION_QUERY_KEY = ["session"] as const;
-
-const getApiErrorMessage = (error: unknown, fallback: string): string => {
-  if (axios.isAxiosError(error)) {
-    const data = error.response?.data as
-      | {
-          message?: string;
-          fieldErrors?: Record<string, string[]>;
-          errors?: Record<string, string[]>;
-        }
-      | undefined;
-
-    const fieldErrors = data?.fieldErrors ?? data?.errors;
-    const firstFieldError = fieldErrors ? Object.values(fieldErrors)[0] : undefined;
-    if (Array.isArray(firstFieldError) && firstFieldError.length > 0) {
-      return firstFieldError[0];
-    }
-
-    if (typeof data?.message === "string" && data.message.trim()) {
-      return data.message;
-    }
-  }
-
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return fallback;
-};
 
 interface SessionRowActionsProps {
   session: SessionDTO;
 }
 
 /**
- * Extra row actions for the /sessions page (F15):
- * - POST /api/v1/sessions/{id}/complete  (SCHEDULED -> COMPLETED)
- * - POST /api/v1/sessions/{id}/cancel    (Class Admin only, reason required)
+ * Extra row actions for the /sessions page (F15 / T2):
+ * - POST   /api/v1/sessions/{id}/complete  (SCHEDULED -> COMPLETED)
+ * - POST   /api/v1/sessions/{id}/cancel    (Class Admin only, reason required)
+ * - PATCH  /api/v1/sessions/{id}/notes     (notes + optional transition + audit/history)
+ * - GET    /api/v1/sessions/{id}/history   (immutable status history)
+ * - GET    /api/v1/audit-logs              (Admin only — merged into the History dialog)
  */
 export function SessionRowActions({ session }: SessionRowActionsProps) {
   const queryClient = useQueryClient();
@@ -74,6 +58,8 @@ export function SessionRowActions({ session }: SessionRowActionsProps) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const sessionId = session.id;
   const status = session.status ?? "SCHEDULED";
@@ -157,7 +143,7 @@ export function SessionRowActions({ session }: SessionRowActionsProps) {
           </Button>
         </DropdownMenuTrigger>
 
-        <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuContent align="end" className="w-60">
           <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">
             Trạng thái buổi học
           </DropdownMenuLabel>
@@ -171,6 +157,11 @@ export function SessionRowActions({ session }: SessionRowActionsProps) {
               Đánh dấu hoàn thành
             </DropdownMenuItem>
           )}
+
+          <DropdownMenuItem onSelect={() => setNotesOpen(true)}>
+            <NotebookPen className="mr-2 size-4 text-primary" />
+            Cập nhật ghi chú…
+          </DropdownMenuItem>
 
           {status === "COMPLETED" && (
             <DropdownMenuLabel className="max-w-56 whitespace-normal text-xs font-normal text-muted-foreground">
@@ -197,8 +188,18 @@ export function SessionRowActions({ session }: SessionRowActionsProps) {
               {session.cancelReason ? ` — ${session.cancelReason}` : "."}
             </DropdownMenuLabel>
           )}
+
+          <DropdownMenuSeparator />
+
+          <DropdownMenuItem onSelect={() => setHistoryOpen(true)}>
+            <History className="mr-2 size-4 text-muted-foreground" />
+            History
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <SessionNotesDialog session={session} open={notesOpen} onOpenChange={setNotesOpen} />
+      <SessionHistoryDialog session={session} open={historyOpen} onOpenChange={setHistoryOpen} />
 
       <Dialog
         open={cancelOpen}
