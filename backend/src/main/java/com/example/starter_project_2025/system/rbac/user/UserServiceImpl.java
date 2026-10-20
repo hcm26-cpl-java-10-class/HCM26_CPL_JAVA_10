@@ -1,11 +1,11 @@
 package com.example.starter_project_2025.system.rbac.user;
 
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
+import com.example.starter_project_2025.base.crud.domain.Department;
+import com.example.starter_project_2025.base.crud.domain.DepartmentRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
-import com.example.starter_project_2025.system.rbac.department.Department;
-import com.example.starter_project_2025.system.rbac.department.DepartmentRepository;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
 import lombok.AccessLevel;

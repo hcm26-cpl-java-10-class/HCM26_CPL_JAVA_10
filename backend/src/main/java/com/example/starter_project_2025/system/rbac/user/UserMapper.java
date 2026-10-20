@@ -3,7 +3,7 @@ package com.example.starter_project_2025.system.rbac.user;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.mapper.BaseMapperConfig;
 import com.example.starter_project_2025.base.crud.mapper.IgnoreAuditFields;
-import com.example.starter_project_2025.system.rbac.department.Department;
+import com.example.starter_project_2025.base.crud.domain.Department;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import org.mapstruct.*;
 

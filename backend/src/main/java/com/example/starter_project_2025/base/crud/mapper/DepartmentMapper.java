@@ -6,10 +6,14 @@ import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
 @Mapper(config = BaseMapperConfig.class)
-public interface DepartmentMapper extends BaseCrudMapper<Department, DepartmentDTO, DepartmentDTO, DepartmentDTO> {
+public interface DepartmentMapper extends BaseCrudMapper<Department, DepartmentDTO> {
 
     @Override
     @Mapping(target = "parentDepartmentId", source = "parent.id")
     @Mapping(target = "parentDepartmentName", source = "parent.name")
-    DepartmentDTO toDto(Department entity);
+    DepartmentDTO toResponse(Department entity);
+
+    @Override
+    @Mapping(target = "parent", ignore = true)
+    Department toEntity(DepartmentDTO dto);
 }

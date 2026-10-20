@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.base.crud.domain;
 
+import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
@@ -15,6 +16,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder
+@ResourcePermission("DEPARTMENT")
 public class Department extends BaseEntity {
 
     @Column(name = "code", nullable = false, unique = true, length = 50)

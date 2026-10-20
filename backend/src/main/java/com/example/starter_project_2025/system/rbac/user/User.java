@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.rbac.user;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
+import com.example.starter_project_2025.base.crud.domain.Department;
 import com.example.starter_project_2025.base.dataio.exporter.annotation.ExportEntity;
 import com.example.starter_project_2025.base.dataio.exporter.annotation.ExportField;
 import com.example.starter_project_2025.base.dataio.importer.annotation.ImportField;
@@ -8,7 +9,6 @@ import com.example.starter_project_2025.base.dataio.importer.annotation.ImportHa
 import com.example.starter_project_2025.base.dataio.template.annotation.ImportEntity;
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
-import com.example.starter_project_2025.system.rbac.department.Department;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import jakarta.persistence.*;
 import lombok.*;

@@ -5,7 +5,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.*;
-import lombok.experimental.SuperBuilder;
 
 import java.util.List;
 import java.util.UUID;
@@ -14,7 +13,7 @@ import java.util.UUID;
 @EqualsAndHashCode(callSuper = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@SuperBuilder
+@Builder
 public class DepartmentDTO extends BaseDTO {
 
     @NotBlank(message = "Mã phòng ban không được để trống", groups = {OnCreate.class, OnUpdate.class})
@@ -25,7 +24,7 @@ public class DepartmentDTO extends BaseDTO {
     @Size(max = 100, message = "Tên phòng ban không quá 100 ký tự", groups = {OnCreate.class, OnUpdate.class})
     private String name;
 
-    private UUID parentDepartmentId;
+    private Long parentDepartmentId; // Đổi từ UUID sang Long cho khớp với BaseEntity
     private String parentDepartmentName;
     private UUID locationId;
 
