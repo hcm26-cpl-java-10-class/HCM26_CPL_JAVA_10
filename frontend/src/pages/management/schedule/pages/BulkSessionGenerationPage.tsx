@@ -112,7 +112,7 @@ export function BulkSessionGenerationPage() {
   const [customStartTime, setCustomStartTime] = useState<string>("08:30:00");
   const [customEndTime, setCustomEndTime] = useState<string>("11:30:00");
   const [defaultTrainerId, setDefaultTrainerId] = useState<number | undefined>(1);
-  const [defaultRoomId, setDefaultRoomId] = useState<string>("Phòng A-301");
+  const [defaultRoomId, setDefaultRoomId] = useState<string>("Room A-301");
   const [skipHolidays, setSkipHolidays] = useState<boolean>(true);
 
   // Preview data state
@@ -206,16 +206,16 @@ export function BulkSessionGenerationPage() {
   });
 
   // Apply default trainer & room once context loads
-  useMemo(() => {
+  useEffect(() => {
     if (context) {
-      if (context.availableTrainers?.length > 0 && !defaultTrainerId) {
+      if (context.availableTrainers && context.availableTrainers.length > 0 && !defaultTrainerId) {
         setDefaultTrainerId(context.availableTrainers[0].id);
       }
-      if (context.availableRooms?.length > 0 && !defaultRoomId) {
-        setDefaultRoomId(context.availableRooms[0].roomId);
+      if (context.availableRooms && context.availableRooms.length > 0) {
+        setDefaultRoomId((prev) => prev || context.defaultRoomId || context.availableRooms[0].roomId);
       }
     }
-  }, [context, defaultTrainerId, defaultRoomId]);
+  }, [context, defaultTrainerId]);
 
   // 4. Generate Preview Mutation (In-Memory Engine)
   const previewMutation = useMutation({

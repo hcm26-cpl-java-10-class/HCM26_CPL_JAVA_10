@@ -153,9 +153,9 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
         }
 
         List<ScheduleGenerationContextResponse.RoomOptionDTO> rooms = List.of(
-                ScheduleGenerationContextResponse.RoomOptionDTO.builder().roomId("Phòng A-301").roomName("Lab 40 máy").capacity(40).build(),
-                ScheduleGenerationContextResponse.RoomOptionDTO.builder().roomId("Phòng B-202").roomName("Lab 35 máy").capacity(35).build(),
-                ScheduleGenerationContextResponse.RoomOptionDTO.builder().roomId("Phòng A-105").roomName("Lý thuyết 60 chỗ").capacity(60).build(),
+                ScheduleGenerationContextResponse.RoomOptionDTO.builder().roomId("Room A-301").roomName("Lab 40 PCs").capacity(40).build(),
+                ScheduleGenerationContextResponse.RoomOptionDTO.builder().roomId("Room B-202").roomName("Lab 35 PCs").capacity(35).build(),
+                ScheduleGenerationContextResponse.RoomOptionDTO.builder().roomId("Room A-105").roomName("Theory Hall 60 seats").capacity(60).build(),
                 ScheduleGenerationContextResponse.RoomOptionDTO.builder().roomId("Online Meet").roomName("Virtual Room").capacity(100).build()
         );
 
@@ -169,8 +169,8 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
                 .programId(classId != null ? classId : 1L)
                 .programName(programName)
                 .totalHours(totalHours)
-                .defaultRoomId("Phòng A-301")
-                .defaultRoomName("Phòng A-301 (Lab 40 máy)")
+                .defaultRoomId("Room A-301")
+                .defaultRoomName("Room A-301 (Lab 40 PCs)")
                 .topics(topics)
                 .holidays(holidays)
                 .availableTrainers(trainers)
@@ -227,7 +227,7 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
                             ? "TRAINER_CONFLICT"
                             : "ROOM_CONFLICT";
 
-                    String conflictMsg = String.format("Trùng lịch với lớp %s ('%s') từ %s đến %s",
+                    String conflictMsg = String.format("Schedule conflict with class %s ('%s') from %s to %s",
                             first.getClassCode(),
                             first.getTitle(),
                             first.getStartTime().toString(),
@@ -301,9 +301,12 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
         }
 
         if (request == null || request.getSessions() == null || request.getSessions().isEmpty()) {
-            throw new IllegalArgumentException("Danh sách buổi học cần lưu không được để trống.");
+            throw new IllegalArgumentException("Session list to save cannot be empty.");
         }
 
+        Long finalClassId = (targetVersion.getCalendar() != null && targetVersion.getCalendar().getClassId() != null)
+                ? targetVersion.getCalendar().getClassId()
+                : 101L;
         String classCode = "HCM26-FSJ-01";
         if (targetVersion.getCalendar() != null && targetVersion.getCalendar().getClassId() != null) {
             ScheduleGenerationContextResponse ctx = getGenerationContext(targetVersion.getCalendar().getClassId());
@@ -317,7 +320,7 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
         for (PreviewSessionItemDTO item : request.getSessions()) {
             // Validate từng buổi: start time < end time (BR-02)
             if (item.getStartTime() == null || item.getEndTime() == null || !item.getEndTime().isAfter(item.getStartTime())) {
-                throw new IllegalArgumentException(String.format("Buổi học %s có thời gian không hợp lệ (giờ kết thúc phải sau giờ bắt đầu).", item.getTempId()));
+                throw new IllegalArgumentException(String.format("Session %s has invalid time window (end time must be after start time).", item.getTempId()));
             }
 
             Session session = Session.builder()
@@ -325,7 +328,7 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
                     .topicId(item.getTopicId())
                     .topicName(item.getTopicName())
                     .classCode(classCode)
-                    .title(item.getTopicName() + " - Buổi " + item.getSessionNumber())
+                    .title(item.getTopicName() + " - Session " + item.getSessionNumber())
                     .startTime(item.getStartTime())
                     .endTime(item.getEndTime())
                     .trainerId(item.getTrainerId() != null ? item.getTrainerId() : 1L)
@@ -344,10 +347,10 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
 
         BulkSaveSessionsResponseDTO response = BulkSaveSessionsResponseDTO.builder()
                 .calendarVersionId(versionId)
-                .classId(101L)
+                .classId(finalClassId)
                 .createdCount(saved.size())
                 .status("SAVED_TO_DRAFT")
-                .message(String.format("Đã lưu thành công %d buổi học vào bản nháp lịch học.", saved.size()))
+                .message(String.format("Successfully saved %d session(s) into Draft Calendar Version.", saved.size()))
                 .createdAt(LocalDateTime.now())
                 .correlationId(UUID.randomUUID().toString())
                 .build();
