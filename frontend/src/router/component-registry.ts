@@ -42,8 +42,9 @@ export const routes: RouteConfig[] = [
   { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true },
   { path: "/unauthorized", component: Unauthorized, isPublic: true },
   {
-    path: "/course-sections",
+    path: "/sections",
     component: SectionManagementPage,
     requiredPermission: "SECTION_READ",
+    isModuleDriven: true,
   },
 ];
