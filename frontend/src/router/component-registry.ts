@@ -6,12 +6,13 @@ import RegisterPage from "@/pages/auth/RegisterPage";
 import NotFoundPage from "@/pages/error/NotFoundPage";
 import { Unauthorized } from "@/pages/error/Unauthorized";
 import { Dashboard } from "@/pages/management/dashboard";
+import SectionManagementPage from "@/pages/management/demo/section";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
-import SectionManagementPage from "@/pages/management/demo/section";
+
 export interface RouteConfig {
   path: string;
   component: ComponentType<any>;
@@ -33,20 +34,16 @@ export const routes: RouteConfig[] = [
     isModuleDriven: true,
   },
   ...buildEntityRoutes(),
-
   { path: "/not-found-page", component: NotFoundPage, isPublic: true },
   { path: "/login", component: Login, isPublic: true },
   { path: "/logout", component: Logout, isPublic: true },
   { path: "/register", component: RegisterPage, isPublic: true },
   { path: "/forgot-password", component: ForgotPasswordPage, isPublic: true },
-  { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true,},
+  { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true },
   { path: "/unauthorized", component: Unauthorized, isPublic: true },
-
   {
     path: "/course-sections",
     component: SectionManagementPage,
     requiredPermission: "SECTION_READ",
   },
-
-
 ];

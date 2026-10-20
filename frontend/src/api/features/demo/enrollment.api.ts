@@ -1,5 +1,10 @@
 import axiosInstance from "@/api/axios";
-import type { Enrollment } from "@/types";
+import type { DepartmentEnrollmentPreview, DepartmentEnrollmentResult, Enrollment } from "@/types";
+
+interface DepartmentEnrollmentRequest {
+    departmentId: number;
+    courseId: number;
+}
 
 export const enrollmentApi = {
     enroll: async (courseId: number): Promise<Enrollment> => {
@@ -19,5 +24,25 @@ export const enrollmentApi = {
 
     cancel: async (enrollmentId: number): Promise<void> => {
         await axiosInstance.delete(`/enrollments/${enrollmentId}`);
+    },
+
+    previewDepartment: async (
+        request: DepartmentEnrollmentRequest,
+    ): Promise<DepartmentEnrollmentPreview> => {
+        const response = await axiosInstance.post<DepartmentEnrollmentPreview>(
+            "/enrollments/departments/preview",
+            request,
+        );
+        return response.data;
+    },
+
+    enrollDepartment: async (
+        request: DepartmentEnrollmentRequest,
+    ): Promise<DepartmentEnrollmentResult> => {
+        const response = await axiosInstance.post<DepartmentEnrollmentResult>(
+            "/enrollments/departments",
+            request,
+        );
+        return response.data;
     },
 };

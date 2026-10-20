@@ -6,3 +6,14 @@ export interface Enrollment {
     thumbnailUrl?: string | null;
     enrolledAt?: string | null;
 }
+
+export interface DepartmentEnrollmentPreview {
+    departmentId: number;
+    courseId: number;
+    courseName: string;
+    studentCount: number;
+    alreadyEnrolled: number;
+    newEnrollments: number;
+}
+
+export interface DepartmentEnrollmentResult extends DepartmentEnrollmentPreview {}

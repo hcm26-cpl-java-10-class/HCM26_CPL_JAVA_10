@@ -19,11 +19,15 @@ public interface UserMapper extends BaseCrudMapper<User, UserDTO> {
 
     @Override
     @Mapping(target = "roleIds", expression = "java(mapRoleIds(user))")
+    @Mapping(target = "departmentId", source = "department.id")
+    @Mapping(target = "departmentName", source = "department.name")
     @Mapping(target = "password", ignore = true)
+    @Mapping(target = "clearDepartment", ignore = true)
     UserDTO toResponse(User user);
 
     @Override
     @Mapping(target = "passwordHash", ignore = true)
+    @Mapping(target = "department", ignore = true)
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     void update(@MappingTarget User user, UserDTO dto);
 

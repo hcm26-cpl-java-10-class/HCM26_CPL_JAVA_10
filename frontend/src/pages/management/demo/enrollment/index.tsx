@@ -51,7 +51,7 @@ export default function EnrollmentManagementPage() {
                     <div className="flex flex-wrap items-end justify-between gap-4">
                         <div>
                             <p className="text-sm font-medium text-blue-700">YOUR LEARNING SPACE</p>
-                            <h1 className="mt-1 text-3xl font-bold tracking-tight">My learning</h1>
+                            <h1 className="mt-1 text-3xl font-bold tracking-tight">Enrollment</h1>
                         </div>
                         <Button asChild>
                             <Link to="/courses">

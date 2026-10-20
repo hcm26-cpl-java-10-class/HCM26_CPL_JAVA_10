@@ -5,9 +5,13 @@ export interface UserDTO extends BaseDTO {
   password?: string;
   firstName?: string;
   lastName?: string;
-  roleIds?: string[];
+  departmentId?: number | null;
+  departmentName?: string | null;
+  clearDepartment?: boolean;
+  roleIds?: number[];
 }
 
 export interface UserFilter extends BaseFilter {
-  roleIds?: string[];
+  departmentId?: number;
+  roleIds?: number[];
 }
