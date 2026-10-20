@@ -7,6 +7,8 @@ import {
 } from "@/types";
 import { SessionCreatePage } from "./pages/SessionCreatePage";
 import { SessionEditPage } from "./pages/SessionEditPage";
+import { SessionDetailPage } from "./pages/SessionDetailPage";
+import { SessionListPage } from "./pages/SessionListPage";
 import { SessionRowActions } from "./components/SessionRowActions";
 
 const sessionSchema: EntitySchema = {
@@ -65,7 +67,7 @@ const sessionSchema: EntitySchema = {
     },
     {
       name: "isOverridden",
-      label: "Override (BR-10)",
+      label: "Override",
       type: "boolean",
       sortable: true,
     },
@@ -84,6 +86,11 @@ export const entityConfig: EntityConfig = {
   api: sessionApi,
   schema: sessionSchema,
   actionPages: {
+    detail: {
+      path: "/sessions/:id",
+      component: SessionDetailPage,
+      requiredPermission: "SESSION_READ",
+    },
     create: {
       path: "/sessions/create",
       component: SessionCreatePage,
@@ -97,3 +104,7 @@ export const entityConfig: EntityConfig = {
   },
   extraRowActions: (row) => <SessionRowActions session={row} />,
 };
+
+export default function SchedulePage() {
+  return <SessionListPage entity={entityConfig} />;
+}
