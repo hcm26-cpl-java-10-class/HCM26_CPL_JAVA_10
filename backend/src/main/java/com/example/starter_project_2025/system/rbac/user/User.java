@@ -56,6 +56,15 @@ public class User extends BaseEntity {
     @Column(length = 100)
     String lastName;
 
+    @Column(length = 20)
+    String phoneNumber;
+
+    @Column(length = 50)
+    String employeeCode;
+
+    @Column(length = 100)
+    String department;
+
     @Builder.Default
     @ManyToMany(fetch = FetchType.LAZY)
     @ExportField(name = "Roles", relation = true, path = "name")
@@ -66,6 +75,6 @@ public class User extends BaseEntity {
     Set<Role> roles = new HashSet<>();
 
     public String getFullName() {
-        return firstName + (lastName != null ? " " + lastName : "");
+        return firstName + (lastName != null && !lastName.isBlank() ? " " + lastName : "");
     }
 }
