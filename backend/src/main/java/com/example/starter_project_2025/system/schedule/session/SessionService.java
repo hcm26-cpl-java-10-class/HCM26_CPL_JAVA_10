@@ -8,6 +8,6 @@ import com.example.starter_project_2025.system.schedule.session.dto.SessionCance
 public interface SessionService extends BaseCrudService<Long, SessionDTO, SessionFilter> {
     ConflictCheckResponse checkConflict(SessionDTO request, Long excludeId);
 
+    /** Compatibility for /api/sessions: cancel in a draft or the active version. */
     SessionDTO cancel(Long id, SessionCancelRequest request, Long expectedVersion);
-    SessionDTO changeStatus(Long id, SessionStatus status);
 }

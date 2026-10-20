@@ -50,6 +50,7 @@ export function SessionDetailPage() {
   const canManageDraft =
     !sessionQuery.isError &&
     session?.calendarVersionStatus === "DRAFT" &&
+    session.status === "SCHEDULED" &&
     normalizeRole(activeRole) === "ADMIN";
   const errorStatus = axios.isAxiosError(sessionQuery.error)
     ? sessionQuery.error.response?.status

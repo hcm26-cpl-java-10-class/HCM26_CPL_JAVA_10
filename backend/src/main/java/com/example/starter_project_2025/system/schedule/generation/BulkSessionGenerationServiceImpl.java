@@ -1,10 +1,16 @@
 package com.example.starter_project_2025.system.schedule.generation;
 
+import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.system.rbac.user.User;
+import com.example.starter_project_2025.system.schedule.calendar.CalendarVersion;
+import com.example.starter_project_2025.system.schedule.calendar.CalendarVersionStatus;
+import com.example.starter_project_2025.system.schedule.calendar.crud.CalendarLock;
+import com.example.starter_project_2025.system.schedule.calendar.crud.CalendarRules;
+import java.time.Duration;
+
 import com.example.starter_project_2025.system.schedule.session.Session;
 import com.example.starter_project_2025.system.schedule.session.SessionRepository;
 import com.example.starter_project_2025.system.schedule.session.SessionStatus;
-import com.example.starter_project_2025.system.schedule.calendar.CalendarVersion;
-import com.example.starter_project_2025.system.schedule.calendar.repository.CalendarVersionRepository;
 import com.example.starter_project_2025.system.schedule.generation.dto.*;
 import com.example.starter_project_2025.system.schedule.generation.engine.ScheduleGeneratorEngine;
 import lombok.AccessLevel;
@@ -33,7 +39,8 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
 
     SessionRepository sessionRepository;
     ScheduleGeneratorEngine scheduleGeneratorEngine;
-    CalendarVersionRepository calendarVersionRepository;
+    CalendarLock calendarLock;
+    CalendarRules calendarRules;
 
     @Autowired(required = false)
     @NonFinal
@@ -57,8 +64,8 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
         List<ScheduleGenerationContextResponse.TrainerOptionDTO> trainers = new ArrayList<>();
         if (userRepository != null) {
             try {
-                List<com.example.starter_project_2025.system.rbac.user.User> users = userRepository.findAll();
-                for (com.example.starter_project_2025.system.rbac.user.User u : users) {
+                List<User> users = userRepository.findAll();
+                for (User u : users) {
                     String name = ((u.getFirstName() != null ? u.getFirstName() : "") +
                             (u.getLastName() != null ? " " + u.getLastName() : "")).trim();
                     if (name.isEmpty()) {
@@ -196,7 +203,7 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
         // Tính tổng số giờ dự kiến
         double totalHours = previewSessions.stream()
                 .mapToDouble(s -> {
-                    long minutes = java.time.Duration.between(s.getStartTime(), s.getEndTime()).toMinutes();
+                    long minutes = Duration.between(s.getStartTime(), s.getEndTime()).toMinutes();
                     return minutes / 60.0;
                 })
                 .sum();
@@ -282,17 +289,11 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
         }
 
         // 2. Check Safety Invariant: only allowed in DRAFT version (US-F16-05)
-        if (Long.valueOf(999L).equals(versionId)) {
-            throw new com.example.starter_project_2025.system.schedule.exception.ConflictException(
-                    "CALENDAR_VERSION_NOT_DRAFT",
-                    "Bulk session generation is only allowed for Calendar Versions in DRAFT status."
-            );
-        }
+        CalendarVersion targetVersion = calendarLock.version(versionId);
 
-        com.example.starter_project_2025.system.schedule.calendar.CalendarVersion targetVersion = calendarVersionRepository.findById(versionId)
-                .orElseThrow(() -> new IllegalArgumentException("Calendar version not found with ID: " + versionId));
-
-        if (targetVersion.getStatus() != null && targetVersion.getStatus() != com.example.starter_project_2025.system.schedule.calendar.CalendarVersionStatus.DRAFT) {
+        if (!Boolean.TRUE.equals(targetVersion.getIsActive())
+                || targetVersion.getStatus() != CalendarVersionStatus.DRAFT
+                || targetVersion.getPublishedAt() != null) {
             throw new com.example.starter_project_2025.system.schedule.exception.ConflictException(
                     "CALENDAR_VERSION_NOT_DRAFT",
                     "Bulk session generation is only allowed for Calendar Versions in DRAFT status. Version #"
@@ -338,6 +339,10 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
                     .isOverridden(false)
                     .build();
             session.setIsActive(true);
+            var validation = new ValidationContext();
+            calendarRules.sessionForCalendar(targetVersion.getCalendar(), session.getStartTime(),
+                    session.getEndTime(), "sessions[" + item.getTempId() + "].", validation);
+            validation.throwIfErrors();
 
             sessionsToSave.add(session);
         }

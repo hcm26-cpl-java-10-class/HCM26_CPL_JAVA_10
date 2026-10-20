@@ -52,6 +52,7 @@ export function SessionListPage({ entity }: { entity: EntityConfig }) {
         onView={(session) => navigate("/sessions/" + session.id)}
         renderRowActions={(session) => {
           const isDraft = session.calendarVersionStatus === "DRAFT";
+          const canChange = isDraft && session.status === "SCHEDULED";
           return (
             <>
               {table.permission.canRead && (
@@ -70,8 +71,14 @@ export function SessionListPage({ entity }: { entity: EntityConfig }) {
                   variant="outline"
                   size="icon"
                   aria-label="Chỉnh sửa buổi học"
-                  title={isDraft ? "Chỉnh sửa buổi học" : "Chỉ sửa buổi học trong DRAFT"}
-                  disabled={!isDraft}
+                  title={
+                    !isDraft
+                      ? "Chỉ sửa buổi học trong DRAFT"
+                      : !canChange
+                        ? "Chỉ sửa buổi học đang SCHEDULED"
+                        : "Chỉnh sửa buổi học"
+                  }
+                  disabled={!canChange}
                   onClick={() => navigate("/sessions/" + session.id + "/edit")}
                 >
                   <Pen className="size-3.5 text-muted-foreground" />
@@ -82,8 +89,14 @@ export function SessionListPage({ entity }: { entity: EntityConfig }) {
                   variant="outline"
                   size="icon"
                   aria-label="Xóa buổi học"
-                  title={isDraft ? "Xóa buổi học" : "Chỉ xóa buổi học trong DRAFT"}
-                  disabled={!isDraft}
+                  title={
+                    !isDraft
+                      ? "Chỉ xóa buổi học trong DRAFT"
+                      : !canChange
+                        ? "Chỉ xóa buổi học đang SCHEDULED"
+                        : "Xóa buổi học"
+                  }
+                  disabled={!canChange}
                   onClick={() => setDeleteSession(session)}
                 >
                   <Trash2 className="size-3.5 text-destructive" />

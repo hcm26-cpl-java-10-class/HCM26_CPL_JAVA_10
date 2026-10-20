@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.schedule.session.dto;
 
+import jakarta.validation.constraints.Pattern;
+
 import com.example.starter_project_2025.base.crud.dto.BaseDTO;
 import com.example.starter_project_2025.base.crud.dto.OnCreate;
 import com.example.starter_project_2025.base.crud.dto.OnUpdate;
@@ -24,11 +26,13 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class SessionDTO extends BaseDTO {
 
+    { setIsActive(true); }
+
     @NotNull(groups = OnCreate.class, message = "Calendar version ID is required")
     @Positive
     Long calendarVersionId;
 
-    @NotNull(groups = {OnCreate.class, OnUpdate.class}, message = "Topic ID is required")
+    @NotNull(groups = OnCreate.class, message = "Topic ID is required")
     @Positive
     Long topicId;
 
@@ -41,42 +45,43 @@ public class SessionDTO extends BaseDTO {
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     Long classId;
 
-    @NotBlank(groups = OnCreate.class, message = "Class code is required")
     @Size(max = 60, message = "Class code must not exceed 60 characters")
     String classCode;
 
     @Size(max = 120, message = "Topic name must not exceed 120 characters")
     String topicName;
 
-    @NotNull(groups = {OnCreate.class, OnUpdate.class}, message = "Trainer ID is required")
+    @NotNull(groups = OnCreate.class, message = "Trainer ID is required")
     @Positive
     Long trainerId;
 
-    @NotBlank(groups = OnCreate.class, message = "Trainer name is required")
     @Size(max = 100, message = "Trainer name must not exceed 100 characters")
     String trainerName;
 
-    @NotBlank(groups = {OnCreate.class, OnUpdate.class}, message = "Title is required")
+    @NotBlank(groups = OnCreate.class, message = "Title is required")
+    @Pattern(regexp = "(?s).*\\S.*", groups = OnUpdate.class)
     @Size(max = 150, message = "Title must not exceed 150 characters")
     String title;
 
-    @NotNull(groups = {OnCreate.class, OnUpdate.class}, message = "Start time is required")
+    @NotNull(groups = OnCreate.class, message = "Start time is required")
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     LocalDateTime startTime;
 
-    @NotNull(groups = {OnCreate.class, OnUpdate.class}, message = "End time is required")
+    @NotNull(groups = OnCreate.class, message = "End time is required")
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     LocalDateTime endTime;
 
     @Size(max = 80, message = "Room must not exceed 80 characters")
+    @com.fasterxml.jackson.annotation.JsonAlias("location")
     String room;
 
     @Size(max = 255, message = "Meeting link must not exceed 255 characters")
-    @URL(regexp = "https?://.+")
+    @URL(regexp = "(https?://.+)?")
     String meetingLink;
 
     SessionStatus status;
 
+    @com.fasterxml.jackson.annotation.JsonAlias("note")
     String notes;
 
     @Size(max = 500, message = "Cancel reason must not exceed 500 characters")

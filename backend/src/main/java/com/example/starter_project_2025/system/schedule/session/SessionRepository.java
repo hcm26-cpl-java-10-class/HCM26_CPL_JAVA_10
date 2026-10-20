@@ -10,6 +10,14 @@ import java.util.Optional;
 
 public interface SessionRepository extends BaseCrudRepository<Session, Long> {
 
+    List<Session> findByCalendarVersionIdOrderByStartTimeAscIdAsc(Long calendarVersionId);
+
+    @Query("select s.calendarVersion.id from Session s where s.id = :id")
+    Optional<Long> findCalendarVersionId(@Param("id") Long id);
+
+    @Query("select s from Session s where s.calendarVersion.calendar.id = :calendarId")
+    List<Session> findAllByCalendarId(@Param("calendarId") Long calendarId);
+
     Optional<Session> findByIdAndIsActiveTrue(Long id);
 
     @Query("""

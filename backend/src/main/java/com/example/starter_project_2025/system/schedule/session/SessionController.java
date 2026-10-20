@@ -1,5 +1,10 @@
 package com.example.starter_project_2025.system.schedule.session;
 
+import com.example.starter_project_2025.base.dataio.importer.result.ImportResult;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
+
 import com.example.starter_project_2025.base.crud.controller.BaseCrudDataIoController;
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.dto.OnCreate;
@@ -45,6 +50,16 @@ public class SessionController
     }
 
     @Override
+    @PostMapping("/import")
+    public ImportResult importFile(
+            @RequestParam(value = "file", required = false) MultipartFile file) {
+        // Direct repository imports bypass calendar locks, publication rules and conflict checks.
+        throw new ResponseStatusException(
+                HttpStatus.METHOD_NOT_ALLOWED,
+                "Create sessions through the scheduling service.");
+    }
+
+    @Override
     @PostMapping
     public ResponseEntity<SessionDTO> create(@Validated(OnCreate.class) @RequestBody SessionDTO request) {
         SessionDTO response = sessionService.create(request);
@@ -65,13 +80,6 @@ public class SessionController
             @RequestParam(required = false) Long excludeId
     ) {
         return ResponseEntity.ok(sessionService.checkConflict(request, excludeId));
-    }
-
-    @PatchMapping("/{id}/status")
-    @Operation(summary = "Change the status of session")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<SessionDTO> changeSessionStatus(@PathVariable Long id,  @RequestParam SessionStatus status) {
-        return  ResponseEntity.ok(sessionService.changeStatus(id, status));
     }
 
 }

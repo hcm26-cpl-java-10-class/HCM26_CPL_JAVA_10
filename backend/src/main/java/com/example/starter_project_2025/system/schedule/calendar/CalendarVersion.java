@@ -20,7 +20,8 @@ import java.time.LocalDateTime;
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "calendarVersions")
+@Table(name = "calendar_versions", uniqueConstraints =
+        @UniqueConstraint(name = "uk_calendar_version_number", columnNames = {"calendar_id", "version_number"}))
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ImportEntity("calendarVersion")
 @ExportEntity(fileName = "calendarVersions", sheetName = "CalendarVersions")
@@ -31,6 +32,13 @@ public class CalendarVersion extends BaseEntity {
     @JoinColumn(name = "calendar_id", nullable = false)
     @ExportField(name = "Calendar ID")
     Calendar calendar;
+
+    @Column(name = "calendar_id", insertable = false, updatable = false)
+    Long calendarId;
+
+    public Long getCalendarId() {
+        return calendar != null ? calendar.getId() : calendarId;
+    }
 
     @Column(name = "version_number", nullable = false)
     @ExportField(name = "Version Number")
@@ -47,11 +55,14 @@ public class CalendarVersion extends BaseEntity {
     @ExportField(name = "Activated By")
     Long activatedBy;
 
+    @Column(name = "published_at")
+    LocalDateTime publishedAt;
+
     @Column(length = 255)
     @ExportField(name = "Name")
     String name;
 
-    @Column(length = 500)
+    @Column(length = 1000)
     @ExportField(name = "Description")
     String description;
 }

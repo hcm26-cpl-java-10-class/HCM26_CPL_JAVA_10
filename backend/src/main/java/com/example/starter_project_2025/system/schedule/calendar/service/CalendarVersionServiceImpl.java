@@ -68,14 +68,8 @@ public class CalendarVersionServiceImpl implements CalendarVersionService {
         }
 
         // 5. Cấp version number mới
-        Integer lastIssued = calendar.getLastIssuedVersionNumber();
-
-        if (lastIssued == null) {
-            lastIssued = 0;
-        }
-
-        int nextVersionNumber = lastIssued + 1;
-        calendar.setLastIssuedVersionNumber(nextVersionNumber);
+        int nextVersionNumber = calendar.getNextVersionNumber();
+        calendar.setNextVersionNumber(Math.addExact(nextVersionNumber, 1));
 
         // 6. Tạo Version mới với trạng thái DRAFT
         CalendarVersion newVersion = CalendarVersion.builder()
@@ -109,6 +103,7 @@ public class CalendarVersionServiceImpl implements CalendarVersionService {
                 Session copied = Session.builder()
                         .calendarVersion(savedVersion)
                         .classCode(source.getClassCode())
+                        .topicId(source.getTopicId())
                         .topicName(source.getTopicName())
                         .trainerId(source.getTrainerId())
                         .trainerName(source.getTrainerName())
@@ -256,12 +251,15 @@ public class CalendarVersionServiceImpl implements CalendarVersionService {
             Long calendarId,
             Long versionId) {
 
+        calendarRepository.findActiveByIdForUpdate(calendarId)
+                .orElseThrow(() -> new ResourceNotFoundException("Active Calendar not found: " + calendarId));
+
         CalendarVersion version = calendarVersionRepository
                 .findActiveByIdForUpdate(calendarId, versionId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Calendar Version not found: " + versionId));
 
-        if (version.getStatus() != CalendarVersionStatus.DRAFT) {
+        if (version.getStatus() != CalendarVersionStatus.DRAFT || version.getPublishedAt() != null) {
             throw new ConflictException(
                     "Only DRAFT calendar versions can be updated or deleted");
         }

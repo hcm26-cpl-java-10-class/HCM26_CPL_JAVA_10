@@ -18,6 +18,11 @@ import java.util.Optional;
 public interface CalendarVersionRepository
         extends BaseCrudRepository<CalendarVersion, Long> {
 
+    boolean existsByCalendarId(Long calendarId);
+
+    @Query("select v.calendar.id from CalendarVersion v where v.id = :id")
+    Optional<Long> findCalendarId(@Param("id") Long id);
+
     @Query("""
         SELECT cv
         FROM CalendarVersion cv

@@ -1,5 +1,10 @@
 package com.example.starter_project_2025.system.schedule.session;
 
+import com.example.starter_project_2025.system.schedule.calendar.CalendarVersion;
+import com.example.starter_project_2025.system.schedule.calendar.CalendarVersionStatus;
+import com.example.starter_project_2025.system.schedule.calendar.crud.CalendarLock;
+import jakarta.persistence.EntityManager;
+
 import com.example.starter_project_2025.base.crud.CrudAction;
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
@@ -33,6 +38,8 @@ public class SessionServiceImpl
     SessionRepository sessionRepository;
     SessionValidator sessionValidator;
     SessionAccessPolicy sessionAccessPolicy;
+    CalendarLock calendarLock;
+    EntityManager entityManager;
 
     static DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy");
 
@@ -59,7 +66,6 @@ public class SessionServiceImpl
         sessionValidator.validateCreateRequest(request, ctx);
         entity.setCalendarVersion(sessionValidator.requireDraftVersion(request.getCalendarVersionId(), ctx));
         entity.setStatus(SessionStatus.SCHEDULED);
-        entity.setNotes(null);
         entity.setCancelReason(null);
         entity.setIsActive(true);
         sessionValidator.validateReferences(entity, request, ctx);
@@ -81,19 +87,27 @@ public class SessionServiceImpl
         ValidationContext ctx = new ValidationContext();
         Long versionId = entity.getCalendarVersion().getId();
         sessionValidator.requireDraftVersion(versionId, ctx);
+        entityManager.refresh(entity);
+        if (entity.getStatus() != SessionStatus.SCHEDULED) {
+            throw new com.example.starter_project_2025.exception.ConflictException("Cannot update a completed or cancelled session");
+        }
         sessionValidator.validateUpdateRequest(request, ctx);
         if (request.getCalendarVersionId() != null && !versionId.equals(request.getCalendarVersionId())) {
             ctx.add("calendarVersionId", "Session cannot be moved to another calendar version.");
         }
         ctx.throwIfErrors();
 
-        Session updated = sessionMapper.toEntity(request);
+        Session updated = sessionMapper.toEntity(sessionMapper.toResponse(entity));
+        sessionMapper.update(updated, request);
         updated.setCalendarVersion(entity.getCalendarVersion());
         updated.setIsOverridden(entity.getIsOverridden());
         updated.setOverrideReason(entity.getOverrideReason());
-        sessionValidator.validateReferences(updated, request, ctx);
+        SessionDTO effectiveRequest = sessionMapper.toResponse(updated);
+        effectiveRequest.setForceOverride(request.getForceOverride());
+        effectiveRequest.setOverrideReason(request.getOverrideReason());
+        sessionValidator.validateReferences(updated, effectiveRequest, ctx);
         ctx.throwIfErrors();
-        validateSession(updated, request, ctx, id);
+        validateSession(updated, effectiveRequest, ctx, id);
         ctx.throwIfErrors();
         sessionValidator.validateClassDates(updated, ctx);
         ctx.throwIfErrors();
@@ -117,6 +131,10 @@ public class SessionServiceImpl
         Session entity = sessionRepository.findByIdAndIsActiveTrue(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Session not found."));
         sessionValidator.requireDraftVersion(entity.getCalendarVersion().getId(), new ValidationContext());
+        entityManager.refresh(entity);
+        if (entity.getStatus() != SessionStatus.SCHEDULED) {
+            throw new com.example.starter_project_2025.exception.ConflictException("Cannot delete a completed or cancelled session");
+        }
         sessionRepository.delete(entity);
         sessionRepository.flush();
     }
@@ -151,7 +169,7 @@ public class SessionServiceImpl
                 request.getStartTime(),
                 request.getEndTime(),
                 excludeId
-        );
+        ).stream().filter(other -> !isAlternativeVersion(entity, other)).toList();
 
         if (!conflicts.isEmpty()) {
             if (Boolean.TRUE.equals(request.getForceOverride())) {
@@ -179,6 +197,13 @@ public class SessionServiceImpl
         }
     }
 
+    private boolean isAlternativeVersion(Session session, Session other) {
+        return session.getCalendarVersion() != null && other.getCalendarVersion() != null
+                && !session.getCalendarVersion().getId().equals(other.getCalendarVersion().getId())
+                && session.getCalendarVersion().getCalendar().getId()
+                        .equals(other.getCalendarVersion().getCalendar().getId());
+    }
+
     @Override
     public ConflictCheckResponse checkConflict(SessionDTO request, Long excludeId) {
         if (request.getStartTime() == null || request.getEndTime() == null || !request.getEndTime().isAfter(request.getStartTime())) {
@@ -196,6 +221,13 @@ public class SessionServiceImpl
                 request.getEndTime(),
                 excludeId
         );
+        if (request.getCalendarVersionId() != null) {
+            Session target = new Session();
+            target.setCalendarVersion(entityManager.find(
+                    CalendarVersion.class,
+                    request.getCalendarVersionId()));
+            conflicts = conflicts.stream().filter(other -> !isAlternativeVersion(target, other)).toList();
+        }
 
         if (conflicts.isEmpty()) {
             return ConflictCheckResponse.builder()
@@ -212,20 +244,6 @@ public class SessionServiceImpl
                 .message(cause)
                 .conflictingSessions(conflicts.stream().map(sessionMapper::toResponse).toList())
                 .build();
-    }
-
-    @Override
-    public SessionDTO changeStatus(Long id, SessionStatus status) {
-
-        checkPermission(CrudAction.UPDATE);
-
-        Session session = sessionRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Session not found: " + id));
-
-        session.setStatus(status);
-
-        Session saved = sessionRepository.save(session);
-        return sessionMapper.toResponse(saved);
     }
 
     private String buildConflictDescription(SessionDTO request, Session conflict) {
@@ -261,9 +279,12 @@ public class SessionServiceImpl
 
     @Override
     public SessionDTO cancel(Long id, SessionCancelRequest request, Long expectedVersion) {
-
+        checkPermission(CrudAction.UPDATE);
+        sessionAccessPolicy.requireCreateScope();
+        requireOperationalVersion(id);
         Session session = sessionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Session", "id", id));
+        entityManager.refresh(session);
         String reason = request != null ? request.getCancelReason() : null;
         if (reason == null || reason.isBlank()) {
             throw UnprocessableEntityException.of(
@@ -293,7 +314,16 @@ public class SessionServiceImpl
         if (request.getNotes() != null) {
             session.setNotes(request.getNotes());
         }
-        Session saved = sessionRepository.save(session);
+        Session saved = sessionRepository.saveAndFlush(session);
         return sessionMapper.toResponse(saved);
+    }
+
+    private void requireOperationalVersion(Long sessionId) {
+        var version = calendarLock.session(sessionId);
+        if (!Boolean.TRUE.equals(version.getIsActive())
+                || version.getStatus() == CalendarVersionStatus.INACTIVE) {
+            throw new com.example.starter_project_2025.exception.ConflictException(
+                    "Cannot change a session in an inactive published version");
+        }
     }
 }

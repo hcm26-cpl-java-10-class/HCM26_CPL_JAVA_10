@@ -31,4 +31,8 @@ public interface CalendarRepository
     boolean existsByClassId(Long classId);
 
     List<Calendar> findByIsActiveTrue();
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from Calendar c where c.id = :id")
+    Optional<Calendar> findForUpdate(@Param("id") Long id);
 }

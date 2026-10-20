@@ -123,8 +123,8 @@ function SessionEditor({ session }: { session: SessionDTO }) {
       trainerName: getTrainerName(trainer),
       startTime: formatSessionTime(form.startTime),
       endTime: formatSessionTime(form.endTime),
-      room: form.room.trim() || null,
-      meetingLink: form.meetingLink.trim() || null,
+      room: form.room.trim(),
+      meetingLink: form.meetingLink.trim(),
       forceOverride: false,
     };
     setPendingRequest(request);
@@ -276,7 +276,9 @@ export function SessionEditPage() {
   });
   const session = sessionQuery.data;
   const canEdit =
-    normalizeRole(activeRole) === "ADMIN" && session?.calendarVersionStatus === "DRAFT";
+    normalizeRole(activeRole) === "ADMIN" &&
+    session?.calendarVersionStatus === "DRAFT" &&
+    session.status === "SCHEDULED";
   let errorMessage = getSessionErrorMessage(
     sessionQuery.error,
     "Không thể tải thông tin buổi học. Vui lòng thử lại.",
@@ -286,7 +288,9 @@ export function SessionEditPage() {
     errorMessage =
       session.calendarVersionStatus !== "DRAFT"
         ? "Chỉ có thể sửa buổi học thuộc bản lịch DRAFT."
-        : "Bạn không có quyền chỉnh sửa buổi học này.";
+        : session.status !== "SCHEDULED"
+          ? "Chỉ có thể sửa buổi học đang ở trạng thái SCHEDULED."
+          : "Bạn không có quyền chỉnh sửa buổi học này.";
 
   return (
     <MainLayout

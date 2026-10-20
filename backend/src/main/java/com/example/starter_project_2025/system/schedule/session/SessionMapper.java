@@ -1,5 +1,8 @@
 package com.example.starter_project_2025.system.schedule.session;
 
+import org.mapstruct.BeanMapping;
+import org.mapstruct.NullValuePropertyMappingStrategy;
+
 import com.example.starter_project_2025.system.schedule.session.dto.SessionDTO;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.mapper.BaseMapperConfig;
@@ -23,7 +26,6 @@ public interface SessionMapper extends BaseCrudMapper<Session, SessionDTO> {
     @IgnoreAuditFields
     @Mapping(target = "calendarVersion", ignore = true)
     @Mapping(target = "status", ignore = true)
-    @Mapping(target = "notes", ignore = true)
     @Mapping(target = "cancelReason", ignore = true)
     @Mapping(target = "version", ignore = true)
     @Mapping(target = "isOverridden", ignore = true)
@@ -33,9 +35,9 @@ public interface SessionMapper extends BaseCrudMapper<Session, SessionDTO> {
 
     @Override
     @IgnoreAuditFields
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "calendarVersion", ignore = true)
     @Mapping(target = "status", ignore = true)
-    @Mapping(target = "notes", ignore = true)
     @Mapping(target = "cancelReason", ignore = true)
     @Mapping(target = "version", ignore = true)
     @Mapping(target = "isOverridden", ignore = true)

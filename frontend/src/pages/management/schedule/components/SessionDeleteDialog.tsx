@@ -43,8 +43,13 @@ export function SessionDeleteDialog({ session, onClose, onDeleted }: SessionDele
   const errorStatus = axios.isAxiosError(deleteMutation.error)
     ? deleteMutation.error.response?.status
     : undefined;
-  const blocked =
-    session.calendarVersionStatus !== "DRAFT" || [403, 404, 409].includes(errorStatus || 0);
+  const ruleError =
+    session.calendarVersionStatus !== "DRAFT"
+      ? "Chỉ có thể xóa buổi học thuộc bản lịch DRAFT."
+      : session.status !== "SCHEDULED"
+        ? "Chỉ có thể xóa buổi học đang ở trạng thái SCHEDULED."
+        : "";
+  const blocked = !!ruleError || [403, 404, 409].includes(errorStatus || 0);
   const close = () => {
     if (!deleteMutation.isPending) onClose();
   };
@@ -80,15 +85,14 @@ export function SessionDeleteDialog({ session, onClose, onDeleted }: SessionDele
             <dd>{dayjs(session.startTime).format("DD/MM/YYYY HH:mm")}</dd>
           </div>
         </dl>
-        {(deleteMutation.isError || session.calendarVersionStatus !== "DRAFT") && (
+        {(deleteMutation.isError || ruleError) && (
           <Alert variant="destructive">
             <AlertDescription>
-              {session.calendarVersionStatus !== "DRAFT"
-                ? "Chỉ có thể xóa buổi học thuộc bản lịch DRAFT."
-                : getSessionErrorMessage(
-                    deleteMutation.error,
-                    "Không thể xóa buổi học. Vui lòng thử lại.",
-                  )}
+              {ruleError ||
+                getSessionErrorMessage(
+                  deleteMutation.error,
+                  "Không thể xóa buổi học. Vui lòng thử lại.",
+                )}
             </AlertDescription>
           </Alert>
         )}

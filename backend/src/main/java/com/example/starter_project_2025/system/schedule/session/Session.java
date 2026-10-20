@@ -11,6 +11,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.Check;
 import com.example.starter_project_2025.system.schedule.calendar.CalendarVersion;
 
 import java.time.LocalDateTime;
@@ -21,9 +22,9 @@ import java.time.LocalDateTime;
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "sessions")
+@Table(name = "sessions", indexes = @Index(name = "idx_session_version_time", columnList = "calendar_version_id,start_time"))
+@Check(constraints = "end_time > start_time")
 @FieldDefaults(level = AccessLevel.PRIVATE)
-@ImportEntity("session")
 @ExportEntity(fileName = "sessions", sheetName = "Sessions")
 @ResourcePermission("SESSION")
 @ResourceMenu(
@@ -112,6 +113,18 @@ public class Session extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "calendar_version_id", nullable = false)
     CalendarVersion calendarVersion;
+
+    @Column(name = "calendar_version_id", insertable = false, updatable = false)
+    Long calendarVersionId;
+
+    public Long getCalendarVersionId() {
+        return calendarVersion != null ? calendarVersion.getId() : calendarVersionId;
+    }
+
+    public Long getClassId() {
+        return calendarVersion != null && calendarVersion.getCalendar() != null
+                ? calendarVersion.getCalendar().getClassId() : null;
+    }
 
 
     @Version

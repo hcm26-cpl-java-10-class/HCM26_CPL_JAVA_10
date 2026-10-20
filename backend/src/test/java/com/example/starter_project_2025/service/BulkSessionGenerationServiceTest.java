@@ -31,7 +31,18 @@ public class BulkSessionGenerationServiceTest {
     private SessionRepository sessionRepository;
 
     @Mock
-    private CalendarVersionRepository calendarVersionRepository;
+    private com.example.starter_project_2025.system.schedule.calendar.crud.CalendarLock calendarLock;
+    private com.example.starter_project_2025.system.schedule.calendar.crud.CalendarRules calendarRules =
+            new com.example.starter_project_2025.system.schedule.calendar.crud.CalendarRules(null);
+
+    private com.example.starter_project_2025.system.schedule.calendar.CalendarVersion version(
+            com.example.starter_project_2025.system.schedule.calendar.CalendarVersionStatus status) {
+        return com.example.starter_project_2025.system.schedule.calendar.CalendarVersion.builder()
+                .status(status).calendar(com.example.starter_project_2025.system.schedule.calendar.Calendar.builder()
+                        .id(1L).classId(101L)
+                        .classStartDate(LocalDate.of(2026, 11, 1))
+                        .classEndDate(LocalDate.of(2026, 11, 30)).build()).build();
+    }
 
     private ScheduleGeneratorEngine scheduleGeneratorEngine = new ScheduleGeneratorEngine();
 
@@ -39,7 +50,7 @@ public class BulkSessionGenerationServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new BulkSessionGenerationServiceImpl(sessionRepository, scheduleGeneratorEngine, calendarVersionRepository);
+        service = new BulkSessionGenerationServiceImpl(sessionRepository, scheduleGeneratorEngine, calendarLock, calendarRules);
     }
 
     @Test
@@ -78,7 +89,7 @@ public class BulkSessionGenerationServiceTest {
                 .sessions(items)
                 .build();
 
-        when(calendarVersionRepository.findById(versionId)).thenReturn(java.util.Optional.of(new com.example.starter_project_2025.system.schedule.calendar.CalendarVersion()));
+        when(calendarLock.version(versionId)).thenReturn(version(com.example.starter_project_2025.system.schedule.calendar.CalendarVersionStatus.DRAFT));
         when(sessionRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         // WHEN
@@ -96,8 +107,9 @@ public class BulkSessionGenerationServiceTest {
     @Test
     @DisplayName("TC-BSG-503: Chặn cố tình lưu vào CalendarVersion ACTIVE (Safety Invariant)")
     void saveBulkSessions_ShouldThrowConflict_WhenVersionIsActive() {
-        // GIVEN: Version 999 đại diện cho ACTIVE version
-        Long activeVersionId = 999L;
+        // GIVEN: A persisted ACTIVE version, regardless of its ID
+        Long activeVersionId = 42L;
+        when(calendarLock.version(activeVersionId)).thenReturn(version(com.example.starter_project_2025.system.schedule.calendar.CalendarVersionStatus.ACTIVE));
         BulkSaveSessionsRequestDTO request = BulkSaveSessionsRequestDTO.builder()
                 .sessions(List.of(
                         PreviewSessionItemDTO.builder()
@@ -133,7 +145,7 @@ public class BulkSessionGenerationServiceTest {
                 ))
                 .build();
 
-        when(calendarVersionRepository.findById(versionId)).thenReturn(java.util.Optional.of(new com.example.starter_project_2025.system.schedule.calendar.CalendarVersion()));
+        when(calendarLock.version(versionId)).thenReturn(version(com.example.starter_project_2025.system.schedule.calendar.CalendarVersionStatus.DRAFT));
         when(sessionRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         // WHEN: Lần gọi thứ 1
@@ -145,5 +157,18 @@ public class BulkSessionGenerationServiceTest {
         // THEN: Cả 2 lần trả về cùng 1 kết quả, nhưng saveAll chỉ được gọi đúng 1 lần duy nhất
         assertSame(firstCall, secondCall);
         verify(sessionRepository, times(1)).saveAll(anyList());
+    }
+
+    @Test
+    void saveBulkSessionsRejectsDatesOutsideCalendarBeforeSaving() {
+        when(calendarLock.version(10L)).thenReturn(version(
+                com.example.starter_project_2025.system.schedule.calendar.CalendarVersionStatus.DRAFT));
+        var request = BulkSaveSessionsRequestDTO.builder().sessions(List.of(
+                PreviewSessionItemDTO.builder().tempId("outside-class")
+                        .startTime(LocalDateTime.of(2026, 12, 1, 8, 0))
+                        .endTime(LocalDateTime.of(2026, 12, 1, 10, 0)).build())).build();
+        assertThrows(com.example.starter_project_2025.exception.BusinessValidationException.class,
+                () -> service.saveBulkSessions(10L, request, null));
+        verify(sessionRepository, never()).saveAll(anyList());
     }
 }

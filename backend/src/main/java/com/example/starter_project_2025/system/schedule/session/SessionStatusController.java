@@ -17,17 +17,19 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@RestController
+@RestController("legacySessionStatusController")
 @RequiredArgsConstructor
 @RequestMapping("/api/sessions")
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-@Tag(name = "Session Operational Status (v1)",
+@Tag(name = "Session Cancellation (legacy)",
         description = "Cập nhật trạng thái buổi học — Trainer được phân công / Class Admin")
 public class SessionStatusController {
 
     SessionService sessionService;
 
-    @PostMapping("/{id}/cancel")
+    @RequestMapping(value = "/{id}/cancel", method = {
+            org.springframework.web.bind.annotation.RequestMethod.POST,
+            org.springframework.web.bind.annotation.RequestMethod.PATCH})
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(
             summary = "Hủy buổi học (shortcut — cần cancelReason)",
