@@ -1,22 +1,24 @@
 package com.example.starter_project_2025.init;
 
-import com.example.starter_project_2025.system.rbac.permission.Permission;
-import com.example.starter_project_2025.system.rbac.permission.PermissionRepository;
-import com.example.starter_project_2025.system.rbac.role.Role;
-import com.example.starter_project_2025.system.rbac.role.RoleRepository;
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
-import lombok.extern.slf4j.Slf4j;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
+import com.example.starter_project_2025.system.rbac.permission.Permission;
+import com.example.starter_project_2025.system.rbac.permission.PermissionRepository;
+import com.example.starter_project_2025.system.rbac.role.Role;
+import com.example.starter_project_2025.system.rbac.role.RoleRepository;
+
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Order(2)
@@ -35,6 +37,7 @@ public class RoleDataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
+        ensurePermission("EXAM", "TAKE");
         List<Permission> allPermissions = permissionRepository.findAll();
 
         upsertRole(
@@ -52,13 +55,16 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "COURSE_READ",
                         "ENROLLMENT_READ",
                         "ENROLLMENT_CREATE",
-                        "LESSON_READ"
+                        "SCHEDULE_VERSION_READ",
+                        "SUBJECT_READ",
+                        "LESSON_READ",
+                        "EXAM_TAKE"
                 )
         );
 
         upsertRole(
                 TEACHER_ROLE,
-                "Teacher with book and course management permissions",
+                "Teacher with book, course and exam management permissions",
                 findPermissions(
                         "MENU_READ",
                         "BOOK_CREATE",
@@ -69,10 +75,30 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "COURSE_READ",
                         "COURSE_UPDATE",
                         "COURSE_DELETE",
+                        "SCHEDULE_VERSION_CREATE",
+                        "SCHEDULE_VERSION_READ",
+                        "SCHEDULE_VERSION_UPDATE",
+                        "SCHEDULE_VERSION_DELETE",
+                        "SUBJECT_CREATE",
+                        "SUBJECT_READ",
+                        "SUBJECT_UPDATE",
+                        "SUBJECT_DELETE",
                         "LESSON_CREATE",
                         "LESSON_READ",
                         "LESSON_UPDATE",
-                        "LESSON_DELETE"
+                        "LESSON_DELETE",
+                        "EXAM_CREATE",
+                        "EXAM_READ",
+                        "EXAM_UPDATE",
+                        "EXAM_DELETE",
+                        "QUESTION_CREATE",
+                        "QUESTION_READ",
+                        "QUESTION_UPDATE",
+                        "QUESTION_DELETE",
+                        "INVITATION_CREATE",
+                        "INVITATION_READ",
+                        "INVITATION_UPDATE",
+                        "INVITATION_DELETE"
                 )
         );
 
@@ -84,6 +110,7 @@ public class RoleDataInitializer implements CommandLineRunner {
 
         role.setName(roleName);
         role.setDescription(description);
+        role.setIsSystem(true);
         role.setIsActive(true);
         role.setPermissions(new HashSet<>(permissions));
 
@@ -98,5 +125,13 @@ public class RoleDataInitializer implements CommandLineRunner {
         }
 
         return permissions;
+    }
+
+    private void ensurePermission(String resource, String action) {
+        String name = resource + "_" + action;
+        if (permissionRepository.existsByName(name)) return;
+        permissionRepository.save(Permission.builder()
+                .name(name).resource(resource).action(action)
+                .description("Manually defined permission").build());
     }
 }

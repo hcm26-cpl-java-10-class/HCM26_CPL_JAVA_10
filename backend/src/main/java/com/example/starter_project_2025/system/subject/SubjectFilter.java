@@ -14,6 +14,9 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class SubjectFilter extends BaseFilter {
 
+    @FilterField(entityField = "status", operator = FilterOperator.EQUAL)
+    SubjectStatus status;
+
     @FilterField(entityField = "code", operator = FilterOperator.LIKE)
     String code;
 

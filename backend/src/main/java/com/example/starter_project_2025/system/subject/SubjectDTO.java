@@ -17,6 +17,8 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class SubjectDTO extends BaseDTO {
 
+    SubjectStatus status;
+
     @NotBlank(groups = OnCreate.class, message = "Subject code is required")
     @Size(max = 50, message = "Subject code must not exceed 50 characters")
     String code;

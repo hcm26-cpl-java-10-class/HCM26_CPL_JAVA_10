@@ -46,6 +46,11 @@ import lombok.experimental.SuperBuilder;
 )
 public class Subject extends BaseEntity {
 
+    @lombok.Builder.Default
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(length = 20)
+    SubjectStatus status = SubjectStatus.ACTIVE;
+
     @Column(nullable = false, length = 50)
     @ImportField(name = "Code", required = true)
     @ExportField(name = "Code")

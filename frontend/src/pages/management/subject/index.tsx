@@ -93,4 +93,3 @@ export const entityConfig: EntityConfig = {
   api: subjectApi,
   schema: subjectSchema,
 };
-
