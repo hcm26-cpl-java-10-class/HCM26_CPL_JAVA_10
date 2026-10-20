@@ -13,6 +13,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -157,14 +158,31 @@ public class GlobalExceptionHandler {
                 LocalDateTime.now());
         return new ResponseEntity<>(error, httpStatus);
     }
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ErrorResponse> handleResponseStatusException(
+            ResponseStatusException ex) {
+
+        ErrorResponse error = new ErrorResponse(
+                ex.getStatusCode().value(),
+                ex.getReason() != null ? ex.getReason() : "Request failed",
+                LocalDateTime.now()
+        );
+
+        return ResponseEntity
+                .status(ex.getStatusCode())
+                .body(error);
+    }
 
     @ExceptionHandler(ConflictException.class)
-    public ResponseEntity<ErrorResponse> handleConflictException(ConflictException ex) {
+    public ResponseEntity<ErrorResponse> handleConflictException(
+            ConflictException ex) {
+
         ErrorResponse error = new ErrorResponse(
                 HttpStatus.CONFLICT.value(),
                 ex.getMessage(),
-                LocalDateTime.now());
+                LocalDateTime.now()
+        );
+
         return new ResponseEntity<>(error, HttpStatus.CONFLICT);
     }
-
 }
