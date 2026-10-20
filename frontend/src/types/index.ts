@@ -23,3 +23,7 @@ export * from "./features/menu/module_group";
 export * from "./features/rbac/permission";
 export * from "./features/rbac/role";
 export * from "./features/rbac/user";
+export * from "./features/demo/category";
+export * from "./features/demo/lesson";
+export * from "./features/demo/progress";
+export * from "./features/demo/certificate";

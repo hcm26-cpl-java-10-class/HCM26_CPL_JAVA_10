@@ -14,3 +14,8 @@ export * from "./features/menu/module_group.api";
 export * from "./features/rbac/permission.api";
 export * from "./features/rbac/role.api";
 export * from "./features/rbac/user.api";
+export * from "./features/demo/enrollment.api";
+export * from "./features/demo/category.api";
+export * from "./features/demo/lesson.api";
+export * from "./features/demo/progress.api";
+export * from "./features/demo/certificate.api"
