@@ -30,12 +30,10 @@ import {
   Loader2,
   MoreHorizontal,
   NotebookPen,
-  ShieldCheck,
   XCircle,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { SessionAuditLogDialog } from "./SessionAuditLogDialog";
 import { SessionHistoryDialog } from "./SessionHistoryDialog";
 import { SessionNotesDialog } from "./SessionNotesDialog";
 
@@ -52,18 +50,16 @@ interface SessionRowActionsProps {
  * - POST   /api/v1/sessions/{id}/cancel    (Class Admin only, reason required)
  * - PATCH  /api/v1/sessions/{id}/notes     (notes + optional transition + audit/history)
  * - GET    /api/v1/sessions/{id}/history   (immutable status history)
- * - GET    /api/v1/audit-logs              (Admin/Auditor, per session)
+ * - GET    /api/v1/audit-logs              (Admin only — merged into the History dialog)
  */
 export function SessionRowActions({ session }: SessionRowActionsProps) {
   const queryClient = useQueryClient();
   const { activeRole } = usePermissions();
-  const isAdmin = activeRole === ADMIN_ROLE;
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [notesOpen, setNotesOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [auditOpen, setAuditOpen] = useState(false);
 
   const sessionId = session.id;
   const status = session.status ?? "SCHEDULED";
@@ -194,29 +190,16 @@ export function SessionRowActions({ session }: SessionRowActionsProps) {
           )}
 
           <DropdownMenuSeparator />
-          <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">
-            Kiểm toán
-          </DropdownMenuLabel>
 
           <DropdownMenuItem onSelect={() => setHistoryOpen(true)}>
             <History className="mr-2 size-4 text-muted-foreground" />
-            Lịch sử trạng thái
+            History
           </DropdownMenuItem>
-
-          {isAdmin && (
-            <DropdownMenuItem onSelect={() => setAuditOpen(true)}>
-              <ShieldCheck className="mr-2 size-4 text-muted-foreground" />
-              Audit log (UFR-SYS-014)
-            </DropdownMenuItem>
-          )}
         </DropdownMenuContent>
       </DropdownMenu>
 
       <SessionNotesDialog session={session} open={notesOpen} onOpenChange={setNotesOpen} />
       <SessionHistoryDialog session={session} open={historyOpen} onOpenChange={setHistoryOpen} />
-      {isAdmin && (
-        <SessionAuditLogDialog session={session} open={auditOpen} onOpenChange={setAuditOpen} />
-      )}
 
       <Dialog
         open={cancelOpen}
