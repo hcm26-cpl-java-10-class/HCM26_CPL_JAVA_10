@@ -1,3 +1,4 @@
+import ResourceAssignmentManager from "@/pages/resourceAssignment/ResourceAssignmentManager";
 import { Logout } from "@/components/auth/Logout";
 import { OAuth2RedirectHandler } from "@/components/auth/OAuth2RedirectHandler";
 import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage";
@@ -12,6 +13,7 @@ import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import BulkSessionGenerationPage from "@/pages/management/schedule/pages/BulkSessionGenerationPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
+
 
 export interface RouteConfig {
   path: string;
@@ -37,6 +39,15 @@ export const routes: RouteConfig[] = [
   },
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
   { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
+
+  // Route phân công nguồn lực của bạn
+  {
+    path: "/resource-assignments",
+    component: ResourceAssignmentManager,
+    requiredPermission: "RESOURCE_ASSIGNMENT_READ",
+    isModuleDriven: true,
+  },
+
   ...buildEntityRoutes(),
 
   { path: "/not-found-page", component: NotFoundPage, isPublic: true },
