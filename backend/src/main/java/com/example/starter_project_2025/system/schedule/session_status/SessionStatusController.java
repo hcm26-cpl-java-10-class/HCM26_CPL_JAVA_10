@@ -1,10 +1,19 @@
+<<<<<<<< HEAD:backend/src/main/java/com/example/starter_project_2025/system/schedule/session_status/SessionStatusController.java
 package com.example.starter_project_2025.system.schedule.session_status;
+========
+package com.example.starter_project_2025.system.schedule.session;
+>>>>>>>> bea2080d3d5e575eb31f9e5e7775052426cc9e41:backend/src/main/java/com/example/starter_project_2025/system/schedule/session/SessionStatusController.java
 
+import com.example.starter_project_2025.system.schedule.session.dto.SessionDTO;
 import com.example.starter_project_2025.exception.BadRequestException;
+<<<<<<<< HEAD:backend/src/main/java/com/example/starter_project_2025/system/schedule/session_status/SessionStatusController.java
 import com.example.starter_project_2025.system.schedule.SessionDTO;
 import com.example.starter_project_2025.system.schedule.SessionService;
 import com.example.starter_project_2025.system.schedule.SessionStatus;
 import com.example.starter_project_2025.system.schedule.dto.SessionCancelRequest;
+========
+import com.example.starter_project_2025.system.schedule.session.dto.SessionCancelRequest;
+>>>>>>>> bea2080d3d5e575eb31f9e5e7775052426cc9e41:backend/src/main/java/com/example/starter_project_2025/system/schedule/session/SessionStatusController.java
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.AccessLevel;
@@ -14,17 +23,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-/**
- * F15 — Session Operational Status (API version v1).
- *
- * <p>Chỉ triển khai shortcut hủy buổi học theo yêu cầu (UFR-PEO-014, BR-SES-02/03).</p>
- */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/sessions")
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Tag(name = "Session Operational Status (v1)",
-        description = "Cập nhật trạng thái buổi học — Trainer được phân công / Class Admin (F15)")
+        description = "Cập nhật trạng thái buổi học — Trainer được phân công / Class Admin")
 public class SessionStatusController {
 
     SessionStatusService sessionStatusService;
@@ -63,10 +67,6 @@ public class SessionStatusController {
                 .body(response);
     }
 
-    /**
-     * Lấy phiên bản mong đợi từ header {@code If-Match} (ETag: {@code "3"} / {@code W/"3"}),
-     * fallback sang field {@code version} trong body.
-     */
     private Long resolveExpectedVersion(String ifMatch, Long bodyVersion) {
         if (ifMatch != null && !ifMatch.isBlank()) {
             String normalized = ifMatch.trim();

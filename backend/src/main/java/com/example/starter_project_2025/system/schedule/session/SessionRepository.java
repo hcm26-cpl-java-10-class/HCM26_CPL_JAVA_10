@@ -1,4 +1,4 @@
-package com.example.starter_project_2025.system.schedule;
+package com.example.starter_project_2025.system.schedule.session;
 
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -6,13 +6,16 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface SessionRepository extends BaseCrudRepository<Session, Long> {
+
+    Optional<Session> findByIdAndIsActiveTrue(Long id);
 
     @Query("""
         SELECT s FROM Session s
         WHERE s.isActive = true
-          AND s.status != com.example.starter_project_2025.system.schedule.SessionStatus.CANCELLED
+          AND s.status != com.example.starter_project_2025.system.schedule.session.SessionStatus.CANCELLED
           AND (:excludeId IS NULL OR s.id != :excludeId)
           AND s.startTime < :endTime AND s.endTime > :startTime
           AND (

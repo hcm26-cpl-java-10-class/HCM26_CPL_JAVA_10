@@ -3,6 +3,7 @@ import type { BaseDTO } from "@/types/common/base";
 export type SessionStatus = "SCHEDULED" | "COMPLETED" | "CANCELLED";
 
 export interface SessionDTO extends BaseDTO {
+  calendarVersionId?: number;
   classCode: string;
   topicName?: string;
   trainerId: number;
@@ -37,6 +38,7 @@ export interface SessionFilter {
   trainerId?: number;
   status?: SessionStatus;
   room?: string;
+  calendarVersionId?: number;
 }
 
 export interface ConflictCheckResponse {

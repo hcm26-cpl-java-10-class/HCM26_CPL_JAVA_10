@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { calendarVersionApi } from "@/api";
@@ -33,18 +33,22 @@ import type {
     EntitySchema,
     UpdateCalendarVersionRequest,
 } from "@/types";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
     CalendarDays,
     ChevronLeft,
     ChevronRight,
+    Eye,
     Filter,
     GitBranch,
     Pencil,
     Plus,
+    Sparkles,
     Trash2,
 } from "lucide-react";
 import { CreateVersionDialog } from "./components/CreateVersionDialog";
 import { EditVersionDialog } from "./components/EditVersionDialog";
+import { VersionSessionsDialog } from "./components/VersionSessionsDialog";
 
 const calendarSchema: EntitySchema = {
     entityName: "calendar",
@@ -101,14 +105,31 @@ const getRequestErrorMessage = (
 };
 
 export default function CalendarManagementPage() {
+    const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const urlCalendarId = searchParams.get("calendarId");
+    const urlVersionId = searchParams.get("versionId");
+    const autoOpenedVersionIdRef = useRef<string | null>(null);
+
     const [calendars, setCalendars] = useState<CalendarSummary[]>([]);
     const [selectedCalendarId, setSelectedCalendarId] = useState<number | null>(
-        null,
+        urlCalendarId ? Number(urlCalendarId) : null,
     );
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [dialogOpen, setDialogOpen] = useState(false);
 
+    const [viewingSessionsVersion, setViewingSessionsVersion] =
+        useState<CalendarVersionResponse | null>(null);
+
+    const handleCloseSessionsDialog = useCallback(() => {
+        setViewingSessionsVersion(null);
+        if (searchParams.has("versionId")) {
+            const nextParams = new URLSearchParams(searchParams);
+            nextParams.delete("versionId");
+            setSearchParams(nextParams, { replace: true });
+        }
+    }, [searchParams, setSearchParams]);
     const [editingVersion, setEditingVersion] =
         useState<CalendarVersionResponse | null>(null);
     const [deletingVersion, setDeletingVersion] =
@@ -146,11 +167,14 @@ export default function CalendarManagementPage() {
             const data = await calendarVersionApi.list();
 
             setCalendars(data);
-            setSelectedCalendarId((currentId) =>
-                data.some((calendar) => calendar.id === currentId)
+            setSelectedCalendarId((currentId) => {
+                if (urlCalendarId && data.some((c) => c.id === Number(urlCalendarId))) {
+                    return Number(urlCalendarId);
+                }
+                return data.some((calendar) => calendar.id === currentId)
                     ? currentId
-                    : (data[0]?.id ?? null),
-            );
+                    : (data[0]?.id ?? null);
+            });
         } catch (error) {
             const message = getRequestErrorMessage(
                 error,
@@ -162,7 +186,7 @@ export default function CalendarManagementPage() {
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [urlCalendarId]);
 
     useEffect(() => {
         void loadCalendars();
@@ -209,6 +233,22 @@ export default function CalendarManagementPage() {
         setSelectedCalendarId(calendarId);
         setPage(0);
     };
+
+    useEffect(() => {
+        if (
+            urlVersionId &&
+            versionsQuery.data?.content &&
+            autoOpenedVersionIdRef.current !== urlVersionId
+        ) {
+            const found = versionsQuery.data.content.find(
+                (v) => v.id === Number(urlVersionId)
+            );
+            if (found) {
+                autoOpenedVersionIdRef.current = urlVersionId;
+                setViewingSessionsVersion(found);
+            }
+        }
+    }, [urlVersionId, versionsQuery.data?.content]);
 
     const handleCreateVersion = async (
         request: CreateCalendarVersionRequest,
@@ -567,7 +607,7 @@ export default function CalendarManagementPage() {
                                             <TableHead>Status</TableHead>
                                             <TableHead>Created</TableHead>
                                             <TableHead>Activated</TableHead>
-                                            <TableHead>Actions</TableHead>
+                                            <TableHead className="min-w-[280px]">Actions</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -617,52 +657,80 @@ export default function CalendarManagementPage() {
                                                             )}
                                                         </TableCell>
                                                         <TableCell>
-                                                            {version.status ===
-                                                            "DRAFT" ? (
-                                                                <div className="flex flex-wrap gap-2">
-                                                                    {canUpdateVersion &&
-                                                                        version.id !=
-                                                                        null && (
-                                                                            <Button
-                                                                                type="button"
-                                                                                size="sm"
-                                                                                variant="outline"
-                                                                                onClick={() =>
-                                                                                    setEditingVersion(
-                                                                                        version,
-                                                                                    )
-                                                                                }
-                                                                            >
-                                                                                <Pencil className="size-4" />
-                                                                                Edit
-                                                                            </Button>
-                                                                        )}
+                                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                                <Button
+                                                                    type="button"
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    className="h-8 gap-1 px-2.5 text-xs"
+                                                                    onClick={() =>
+                                                                        setViewingSessionsVersion(
+                                                                            version,
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    <Eye className="size-3.5" />
+                                                                    Sessions
+                                                                </Button>
 
-                                                                    {canDeleteVersion &&
-                                                                        version.id !=
-                                                                        null && (
-                                                                            <Button
-                                                                                type="button"
-                                                                                size="sm"
-                                                                                variant="destructive"
-                                                                                onClick={() =>
-                                                                                    setDeletingVersion(
-                                                                                        version,
-                                                                                    )
-                                                                                }
-                                                                            >
-                                                                                <Trash2 className="size-4" />
-                                                                                Delete
-                                                                            </Button>
-                                                                        )}
+                                                                {version.status ===
+                                                                "DRAFT" && (
+                                                                    <>
+                                                                        <Button
+                                                                            type="button"
+                                                                            size="sm"
+                                                                            variant="outline"
+                                                                            className="h-8 gap-1 px-2.5 text-xs border-primary/40 text-primary hover:bg-primary/10"
+                                                                            onClick={() =>
+                                                                                navigate(
+                                                                                    `/sessions/bulk-generate?calendarId=${selectedCalendar?.id}&versionId=${version.id}&classId=${selectedCalendar?.classId ?? 101}`,
+                                                                                )
+                                                                            }
+                                                                        >
+                                                                            <Sparkles className="size-3.5" />
+                                                                            Generate
+                                                                        </Button>
 
-                                                                    {!canUpdateVersion &&
-                                                                        !canDeleteVersion &&
-                                                                        "—"}
-                                                                </div>
-                                                            ) : (
-                                                                "—"
-                                                            )}
+                                                                        {canUpdateVersion &&
+                                                                            version.id !=
+                                                                            null && (
+                                                                                <Button
+                                                                                    type="button"
+                                                                                    size="sm"
+                                                                                    variant="outline"
+                                                                                    className="h-8 gap-1 px-2.5 text-xs"
+                                                                                    onClick={() =>
+                                                                                        setEditingVersion(
+                                                                                            version,
+                                                                                        )
+                                                                                    }
+                                                                                >
+                                                                                    <Pencil className="size-3.5" />
+                                                                                    Edit
+                                                                                </Button>
+                                                                            )}
+
+                                                                        {canDeleteVersion &&
+                                                                            version.id !=
+                                                                            null && (
+                                                                                <Button
+                                                                                    type="button"
+                                                                                    size="sm"
+                                                                                    variant="destructive"
+                                                                                    className="h-8 gap-1 px-2.5 text-xs"
+                                                                                    onClick={() =>
+                                                                                        setDeletingVersion(
+                                                                                            version,
+                                                                                        )
+                                                                                    }
+                                                                                >
+                                                                                    <Trash2 className="size-3.5" />
+                                                                                    Delete
+                                                                                </Button>
+                                                                            )}
+                                                                    </>
+                                                                )}
+                                                            </div>
                                                         </TableCell>
                                                     </TableRow>
                                                 ),
@@ -750,6 +818,15 @@ export default function CalendarManagementPage() {
                     onCancel={() => {
                         if (!isDeletingVersion) setDeletingVersion(null);
                     }}
+                />
+
+                <VersionSessionsDialog
+                    open={viewingSessionsVersion !== null}
+                    onOpenChange={(open) => {
+                        if (!open) handleCloseSessionsDialog();
+                    }}
+                    calendarName={selectedCalendar?.name}
+                    version={viewingSessionsVersion}
                 />
             </div>
         </MainLayout>

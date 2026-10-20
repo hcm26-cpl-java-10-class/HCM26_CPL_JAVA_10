@@ -1,8 +1,8 @@
 package com.example.starter_project_2025.system.schedule.generation;
 
-import com.example.starter_project_2025.system.schedule.Session;
-import com.example.starter_project_2025.system.schedule.SessionRepository;
-import com.example.starter_project_2025.system.schedule.SessionStatus;
+import com.example.starter_project_2025.system.schedule.session.Session;
+import com.example.starter_project_2025.system.schedule.session.SessionRepository;
+import com.example.starter_project_2025.system.schedule.session.SessionStatus;
 import com.example.starter_project_2025.system.schedule.calendar.CalendarVersion;
 import com.example.starter_project_2025.system.schedule.calendar.repository.CalendarVersionRepository;
 import com.example.starter_project_2025.system.schedule.generation.dto.*;
@@ -13,6 +13,12 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import lombok.experimental.NonFinal;
+import org.springframework.beans.factory.annotation.Autowired;
+import com.example.starter_project_2025.system.rbac.user.UserRepository;
+import com.example.starter_project_2025.system.demo.course.CourseRepository;
+import com.example.starter_project_2025.system.demo.online_lession.LessonRepository;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -29,65 +35,142 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
     ScheduleGeneratorEngine scheduleGeneratorEngine;
     CalendarVersionRepository calendarVersionRepository;
 
+    @Autowired(required = false)
+    @NonFinal
+    UserRepository userRepository;
+
+    @Autowired(required = false)
+    @NonFinal
+    CourseRepository courseRepository;
+
+    @Autowired(required = false)
+    @NonFinal
+    LessonRepository lessonRepository;
+
     // Bộ nhớ đệm Idempotency in-memory (chống click đúp theo BR-UNI-20 & US-F16-05)
     Map<String, BulkSaveSessionsResponseDTO> idempotencyStore = new ConcurrentHashMap<>();
 
     @Override
     @Transactional(readOnly = true)
     public ScheduleGenerationContextResponse getGenerationContext(Long classId) {
-        // Dữ liệu mẫu topic theo thứ tự sequence_order (US-F16-01)
-        List<ScheduleGenerationContextResponse.TopicContextItem> topics = List.of(
-                ScheduleGenerationContextResponse.TopicContextItem.builder()
-                        .topicId(101L)
-                        .topicCode("JAVA-CORE")
-                        .topicName("Java Core & OOP Foundation")
-                        .sequenceOrder(1)
-                        .totalHours(12.0)
-                        .assignedTrainerId(1L)
-                        .assignedTrainerName("Nguyen Minh (Trainer)")
-                        .build(),
-                ScheduleGenerationContextResponse.TopicContextItem.builder()
-                        .topicId(102L)
-                        .topicCode("DB-SQL")
-                        .topicName("Database & JPA Hibernate")
-                        .sequenceOrder(2)
-                        .totalHours(16.0)
-                        .assignedTrainerId(2L)
-                        .assignedTrainerName("Tran Thi Lan (Trainer)")
-                        .build(),
-                ScheduleGenerationContextResponse.TopicContextItem.builder()
-                        .topicId(103L)
-                        .topicCode("SPRING-BOOT")
-                        .topicName("Spring Boot RESTful API")
-                        .sequenceOrder(3)
-                        .totalHours(20.0)
-                        .assignedTrainerId(1L)
-                        .assignedTrainerName("Nguyen Minh (Trainer)")
-                        .build()
-        );
+        // 1. Tải danh sách Giảng viên thực tế từ CSDL nếu có
+        List<ScheduleGenerationContextResponse.TrainerOptionDTO> trainers = new ArrayList<>();
+        if (userRepository != null) {
+            try {
+                List<com.example.starter_project_2025.system.rbac.user.User> users = userRepository.findAll();
+                for (com.example.starter_project_2025.system.rbac.user.User u : users) {
+                    String name = ((u.getFirstName() != null ? u.getFirstName() : "") +
+                            (u.getLastName() != null ? " " + u.getLastName() : "")).trim();
+                    if (name.isEmpty()) {
+                        name = u.getEmail();
+                    }
+                    trainers.add(ScheduleGenerationContextResponse.TrainerOptionDTO.builder()
+                            .id(u.getId())
+                            .name(name + " (Trainer)")
+                            .email(u.getEmail())
+                            .build());
+                }
+            } catch (Exception e) {
+                log.warn("Could not load users for trainers: {}", e.getMessage());
+            }
+        }
 
-        List<ScheduleGenerationContextResponse.TrainerOptionDTO> trainers = List.of(
-                ScheduleGenerationContextResponse.TrainerOptionDTO.builder().id(1L).name("Nguyen Minh (Trainer)").email("minh.nguyen@fpt.edu.vn").build(),
-                ScheduleGenerationContextResponse.TrainerOptionDTO.builder().id(2L).name("Tran Thi Lan (Trainer)").email("lan.tran@fpt.edu.vn").build(),
-                ScheduleGenerationContextResponse.TrainerOptionDTO.builder().id(3L).name("Le Hoang An (Trainer)").email("an.le@fpt.edu.vn").build()
-        );
+        if (trainers.isEmpty()) {
+            trainers = List.of(
+                    ScheduleGenerationContextResponse.TrainerOptionDTO.builder().id(1L).name("Nguyen Minh (Trainer)").email("minh.nguyen@fpt.edu.vn").build(),
+                    ScheduleGenerationContextResponse.TrainerOptionDTO.builder().id(2L).name("Tran Thi Lan (Trainer)").email("lan.tran@fpt.edu.vn").build(),
+                    ScheduleGenerationContextResponse.TrainerOptionDTO.builder().id(3L).name("Le Hoang An (Trainer)").email("an.le@fpt.edu.vn").build()
+            );
+        }
+
+        // 2. Tải khóa học và bài học (Topics) thực tế từ Course / Lesson nếu có
+        String programName = "Fullstack Java Spring Boot Professional";
+        String classCode = "HCM26-FSJ-01";
+        List<ScheduleGenerationContextResponse.TopicContextItem> topics = new ArrayList<>();
+
+        if (courseRepository != null && classId != null) {
+            try {
+                var courseOpt = courseRepository.findById(classId);
+                if (courseOpt.isPresent()) {
+                    var course = courseOpt.get();
+                    programName = course.getName();
+                    classCode = "CLASS-" + (course.getId() != null ? course.getId() : classId);
+                    if (lessonRepository != null) {
+                        var lessons = lessonRepository.findByCourse_IdOrderByOrderIndexAsc(course.getId());
+                        if (lessons != null && !lessons.isEmpty()) {
+                            for (var l : lessons) {
+                                double hrs = (l.getDurationMinutes() != null && l.getDurationMinutes() > 0)
+                                        ? Math.max(2.0, l.getDurationMinutes() / 60.0)
+                                        : 4.0;
+                                topics.add(ScheduleGenerationContextResponse.TopicContextItem.builder()
+                                        .topicId(l.getId())
+                                        .topicCode("LES-" + l.getId())
+                                        .topicName(l.getTitle())
+                                        .sequenceOrder(l.getOrderIndex() != null ? l.getOrderIndex() : topics.size() + 1)
+                                        .totalHours(hrs)
+                                        .assignedTrainerId(trainers.get(0).getId())
+                                        .assignedTrainerName(trainers.get(0).getName())
+                                        .build());
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Could not load course/lessons: {}", e.getMessage());
+            }
+        }
+
+        if (topics.isEmpty()) {
+            topics = List.of(
+                    ScheduleGenerationContextResponse.TopicContextItem.builder()
+                            .topicId(101L)
+                            .topicCode("JAVA-CORE")
+                            .topicName("Java Core & OOP Foundation")
+                            .sequenceOrder(1)
+                            .totalHours(12.0)
+                            .assignedTrainerId(trainers.get(0).getId())
+                            .assignedTrainerName(trainers.get(0).getName())
+                            .build(),
+                    ScheduleGenerationContextResponse.TopicContextItem.builder()
+                            .topicId(102L)
+                            .topicCode("DB-SQL")
+                            .topicName("Database & JPA Hibernate")
+                            .sequenceOrder(2)
+                            .totalHours(16.0)
+                            .assignedTrainerId(trainers.size() > 1 ? trainers.get(1).getId() : trainers.get(0).getId())
+                            .assignedTrainerName(trainers.size() > 1 ? trainers.get(1).getName() : trainers.get(0).getName())
+                            .build(),
+                    ScheduleGenerationContextResponse.TopicContextItem.builder()
+                            .topicId(103L)
+                            .topicCode("SPRING-BOOT")
+                            .topicName("Spring Boot RESTful API")
+                            .sequenceOrder(3)
+                            .totalHours(20.0)
+                            .assignedTrainerId(trainers.get(0).getId())
+                            .assignedTrainerName(trainers.get(0).getName())
+                            .build()
+            );
+        }
 
         List<ScheduleGenerationContextResponse.RoomOptionDTO> rooms = List.of(
-                ScheduleGenerationContextResponse.RoomOptionDTO.builder().roomId("Phòng A-301").roomName("Lab 40 máy").capacity(40).build(),
-                ScheduleGenerationContextResponse.RoomOptionDTO.builder().roomId("Phòng B-202").roomName("Lab 35 máy").capacity(35).build(),
-                ScheduleGenerationContextResponse.RoomOptionDTO.builder().roomId("Phòng A-105").roomName("Lý thuyết 60 chỗ").capacity(60).build()
+                ScheduleGenerationContextResponse.RoomOptionDTO.builder().roomId("Room A-301").roomName("Lab 40 PCs").capacity(40).build(),
+                ScheduleGenerationContextResponse.RoomOptionDTO.builder().roomId("Room B-202").roomName("Lab 35 PCs").capacity(35).build(),
+                ScheduleGenerationContextResponse.RoomOptionDTO.builder().roomId("Room A-105").roomName("Theory Hall 60 seats").capacity(60).build(),
+                ScheduleGenerationContextResponse.RoomOptionDTO.builder().roomId("Online Meet").roomName("Virtual Room").capacity(100).build()
         );
 
         List<String> holidays = List.of("2026-11-20", "2026-12-25", "2027-01-01");
 
+        double totalHours = topics.stream().mapToDouble(ScheduleGenerationContextResponse.TopicContextItem::getTotalHours).sum();
+
         return ScheduleGenerationContextResponse.builder()
                 .classId(classId)
-                .classCode("HCM26-FSJ-01")
-                .programId(1L)
-                .programName("Fullstack Java Spring Boot Professional")
-                .totalHours(48.0)
-                .defaultRoomId("Phòng A-301")
-                .defaultRoomName("Phòng A-301 (Lab 40 máy)")
+                .classCode(classCode)
+                .programId(classId != null ? classId : 1L)
+                .programName(programName)
+                .totalHours(totalHours)
+                .defaultRoomId("Room A-301")
+                .defaultRoomName("Room A-301 (Lab 40 PCs)")
                 .topics(topics)
                 .holidays(holidays)
                 .availableTrainers(trainers)
@@ -144,7 +227,7 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
                             ? "TRAINER_CONFLICT"
                             : "ROOM_CONFLICT";
 
-                    String conflictMsg = String.format("Trùng lịch với lớp %s ('%s') từ %s đến %s",
+                    String conflictMsg = String.format("Schedule conflict with class %s ('%s') from %s to %s",
                             first.getClassCode(),
                             first.getTitle(),
                             first.getStartTime().toString(),
@@ -198,17 +281,38 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
             }
         }
 
-        // 2. Kiểm tra Safety Invariant: Chỉ được phép lưu vào version DRAFT
-        // Giả lập kiểm tra trạng thái version (nếu versionId == 999 đại diện cho version ACTIVE -> ném lỗi 409 Conflict)
+        // 2. Check Safety Invariant: only allowed in DRAFT version (US-F16-05)
         if (Long.valueOf(999L).equals(versionId)) {
             throw new com.example.starter_project_2025.system.schedule.exception.ConflictException(
                     "CALENDAR_VERSION_NOT_DRAFT",
-                    "Chỉ được phép sinh lịch vào Calendar Version ở trạng thái DRAFT."
+                    "Bulk session generation is only allowed for Calendar Versions in DRAFT status."
+            );
+        }
+
+        com.example.starter_project_2025.system.schedule.calendar.CalendarVersion targetVersion = calendarVersionRepository.findById(versionId)
+                .orElseThrow(() -> new IllegalArgumentException("Calendar version not found with ID: " + versionId));
+
+        if (targetVersion.getStatus() != null && targetVersion.getStatus() != com.example.starter_project_2025.system.schedule.calendar.CalendarVersionStatus.DRAFT) {
+            throw new com.example.starter_project_2025.system.schedule.exception.ConflictException(
+                    "CALENDAR_VERSION_NOT_DRAFT",
+                    "Bulk session generation is only allowed for Calendar Versions in DRAFT status. Version #"
+                            + targetVersion.getVersionNumber() + " is currently " + targetVersion.getStatus() + "."
             );
         }
 
         if (request == null || request.getSessions() == null || request.getSessions().isEmpty()) {
-            throw new IllegalArgumentException("Danh sách buổi học cần lưu không được để trống.");
+            throw new IllegalArgumentException("Session list to save cannot be empty.");
+        }
+
+        Long finalClassId = (targetVersion.getCalendar() != null && targetVersion.getCalendar().getClassId() != null)
+                ? targetVersion.getCalendar().getClassId()
+                : 101L;
+        String classCode = "HCM26-FSJ-01";
+        if (targetVersion.getCalendar() != null && targetVersion.getCalendar().getClassId() != null) {
+            ScheduleGenerationContextResponse ctx = getGenerationContext(targetVersion.getCalendar().getClassId());
+            if (ctx.getClassCode() != null && !ctx.getClassCode().isEmpty()) {
+                classCode = ctx.getClassCode();
+            }
         }
 
         // 3. Chuyển đổi danh sách PreviewSessionItemDTO sang Entity Session
@@ -216,15 +320,15 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
         for (PreviewSessionItemDTO item : request.getSessions()) {
             // Validate từng buổi: start time < end time (BR-02)
             if (item.getStartTime() == null || item.getEndTime() == null || !item.getEndTime().isAfter(item.getStartTime())) {
-                throw new IllegalArgumentException(String.format("Buổi học %s có thời gian không hợp lệ (giờ kết thúc phải sau giờ bắt đầu).", item.getTempId()));
+                throw new IllegalArgumentException(String.format("Session %s has invalid time window (end time must be after start time).", item.getTempId()));
             }
 
             Session session = Session.builder()
-                    .calendarVersion(calendarVersionRepository.findById(versionId).orElseThrow(() -> new IllegalArgumentException("Calendar version not found")))
+                    .calendarVersion(targetVersion)
                     .topicId(item.getTopicId())
                     .topicName(item.getTopicName())
-                    .classCode("HCM26-FSJ-01") // Lớp tương ứng
-                    .title(item.getTopicName() + " - Buổi " + item.getSessionNumber())
+                    .classCode(classCode)
+                    .title(item.getTopicName() + " - Session " + item.getSessionNumber())
                     .startTime(item.getStartTime())
                     .endTime(item.getEndTime())
                     .trainerId(item.getTrainerId() != null ? item.getTrainerId() : 1L)
@@ -243,10 +347,10 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
 
         BulkSaveSessionsResponseDTO response = BulkSaveSessionsResponseDTO.builder()
                 .calendarVersionId(versionId)
-                .classId(101L)
+                .classId(finalClassId)
                 .createdCount(saved.size())
                 .status("SAVED_TO_DRAFT")
-                .message(String.format("Đã lưu thành công %d buổi học vào bản nháp lịch học.", saved.size()))
+                .message(String.format("Successfully saved %d session(s) into Draft Calendar Version.", saved.size()))
                 .createdAt(LocalDateTime.now())
                 .correlationId(UUID.randomUUID().toString())
                 .build();

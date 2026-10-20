@@ -1,4 +1,4 @@
-package com.example.starter_project_2025.system.schedule;
+package com.example.starter_project_2025.system.schedule.session;
 
 import com.example.starter_project_2025.base.crud.dto.BaseFilter;
 import com.example.starter_project_2025.base.crud.spec.FilterField;
@@ -26,4 +26,7 @@ public class SessionFilter extends BaseFilter {
 
     @FilterField(operator = FilterOperator.LIKE, ignoreCase = true)
     private String room;
+
+    @FilterField(entityField = "calendarVersion.id", operator = FilterOperator.EQUAL)
+    private Long calendarVersionId;
 }

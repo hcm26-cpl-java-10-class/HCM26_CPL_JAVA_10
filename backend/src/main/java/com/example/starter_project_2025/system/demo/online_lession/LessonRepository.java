@@ -13,4 +13,6 @@ public interface LessonRepository extends BaseCrudRepository<Lesson, Long> {
     boolean existsByCourse_IdAndTitleIgnoreCaseAndIdNot(Long courseId, String title, Long id);
 
     boolean existsByCourse_IdAndOrderIndexAndIdNot(Long courseId, Integer orderIndex, Long id);
+
+    java.util.List<Lesson> findByCourse_IdOrderByOrderIndexAsc(Long courseId);
 }

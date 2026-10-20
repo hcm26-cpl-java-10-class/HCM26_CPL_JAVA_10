@@ -1,4 +1,4 @@
-import { bulkSessionGenerationApi } from "@/api";
+import { bulkSessionGenerationApi, calendarVersionApi, courseApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +32,7 @@ import {
 import type {
   BulkPreviewRequestDTO,
   BulkPreviewResponseDTO,
+  CalendarSummary,
   PreviewSessionItemDTO,
   ScheduleGenerationContextResponse,
 } from "@/types";
@@ -52,8 +53,8 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
 const DEMO_CLASSES = [
@@ -90,42 +91,133 @@ const getNextMonday = (): string => {
 
 export function BulkSessionGenerationPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const paramCalendarId = searchParams.get("calendarId");
+  const paramVersionId = searchParams.get("versionId");
+  const paramClassId = searchParams.get("classId");
 
   // Configuration state
-  const [selectedClassId, setSelectedClassId] = useState<number>(101);
-  const [calendarVersionId, setCalendarVersionId] = useState<number>(1);
+  const [selectedClassId, setSelectedClassId] = useState<number>(
+    paramClassId ? Number(paramClassId) : 101
+  );
+  const [selectedCalendarId, setSelectedCalendarId] = useState<number | null>(
+    paramCalendarId ? Number(paramCalendarId) : null
+  );
+  const [calendarVersionId, setCalendarVersionId] = useState<number>(
+    paramVersionId ? Number(paramVersionId) : 1
+  );
   const [startDate, setStartDate] = useState<string>(getNextMonday());
   const [selectedDays, setSelectedDays] = useState<string[]>(["MONDAY", "WEDNESDAY", "FRIDAY"]);
   const [slotType, setSlotType] = useState<"MORNING" | "AFTERNOON" | "EVENING" | "CUSTOM">("MORNING");
   const [customStartTime, setCustomStartTime] = useState<string>("08:30:00");
   const [customEndTime, setCustomEndTime] = useState<string>("11:30:00");
   const [defaultTrainerId, setDefaultTrainerId] = useState<number | undefined>(1);
-  const [defaultRoomId, setDefaultRoomId] = useState<string>("Phòng A-301");
+  const [defaultRoomId, setDefaultRoomId] = useState<string>("Room A-301");
   const [skipHolidays, setSkipHolidays] = useState<boolean>(true);
 
   // Preview data state
   const [previewData, setPreviewData] = useState<BulkPreviewResponseDTO | null>(null);
   const [editableSessions, setEditableSessions] = useState<PreviewSessionItemDTO[]>([]);
 
-  // 1. Fetch Curriculum & Scheduling Context
+  // 1. Fetch Real Courses from Database
+  const { data: coursesPage } = useQuery({
+    queryKey: ["realCoursesList"],
+    queryFn: () => courseApi.getPage({ page: 0, size: 50 }),
+  });
+
+  const realCourses = coursesPage?.content || [];
+
+  const availableClasses = useMemo(() => {
+    if (realCourses.length > 0) {
+      return realCourses.map((c) => ({
+        id: Number(c.id),
+        code: `CRS-${c.id}`,
+        name: c.name || `Course #${c.id}`,
+      }));
+    }
+    return DEMO_CLASSES;
+  }, [realCourses]);
+
+  // Sync selectedClassId to first available class if not in list
+  useEffect(() => {
+    if (availableClasses.length > 0 && !paramClassId) {
+      if (!availableClasses.some((c) => c.id === selectedClassId)) {
+        setSelectedClassId(availableClasses[0].id);
+      }
+    }
+  }, [availableClasses, paramClassId, selectedClassId]);
+
+  // 2. Fetch Real Calendars
+  const { data: calendars = [], isLoading: isCalendarsLoading } = useQuery<CalendarSummary[]>({
+    queryKey: ["calendarsList"],
+    queryFn: () => calendarVersionApi.list(),
+  });
+
+  // Auto-select initial calendar
+  useEffect(() => {
+    if (calendars.length > 0) {
+      if (paramCalendarId && calendars.some((c) => c.id === Number(paramCalendarId))) {
+        setSelectedCalendarId(Number(paramCalendarId));
+      } else if (selectedCalendarId === null) {
+        setSelectedCalendarId(calendars[0].id);
+      }
+    }
+  }, [calendars, paramCalendarId, selectedCalendarId]);
+
+  // Sync class when calendar is selected
+  useEffect(() => {
+    if (selectedCalendarId && calendars.length > 0) {
+      const currentCal = calendars.find((c) => c.id === selectedCalendarId);
+      if (currentCal?.classId && availableClasses.some((ac) => ac.id === currentCal.classId)) {
+        setSelectedClassId(currentCal.classId);
+      }
+    }
+  }, [selectedCalendarId, calendars, availableClasses]);
+
+  // 3. Fetch Real Versions for Selected Calendar
+  const { data: versionsPage, isLoading: isVersionsLoading } = useQuery({
+    queryKey: ["calendarVersions", selectedCalendarId],
+    enabled: selectedCalendarId !== null,
+    queryFn: () => calendarVersionApi.getVersions(selectedCalendarId!, 0, 50, {}),
+  });
+
+  const availableVersions = versionsPage?.content || [];
+
+  // Auto-select initial version
+  useEffect(() => {
+    if (availableVersions.length > 0) {
+      if (paramVersionId && availableVersions.some((v) => v.id === Number(paramVersionId))) {
+        setCalendarVersionId(Number(paramVersionId));
+      } else if (!availableVersions.some((v) => v.id === calendarVersionId)) {
+        const draftVer = availableVersions.find((v) => v.status === "DRAFT");
+        if (draftVer && draftVer.id != null) {
+          setCalendarVersionId(draftVer.id);
+        } else if (availableVersions[0].id != null) {
+          setCalendarVersionId(availableVersions[0].id);
+        }
+      }
+    }
+  }, [availableVersions, paramVersionId, calendarVersionId]);
+
+  // 3. Fetch Curriculum & Scheduling Context
   const { data: context, isLoading: isContextLoading } = useQuery<ScheduleGenerationContextResponse>({
     queryKey: ["scheduleGenerationContext", selectedClassId],
     queryFn: () => bulkSessionGenerationApi.getContext(selectedClassId),
   });
 
   // Apply default trainer & room once context loads
-  useMemo(() => {
+  useEffect(() => {
     if (context) {
-      if (context.availableTrainers?.length > 0 && !defaultTrainerId) {
+      if (context.availableTrainers && context.availableTrainers.length > 0 && !defaultTrainerId) {
         setDefaultTrainerId(context.availableTrainers[0].id);
       }
-      if (context.availableRooms?.length > 0 && !defaultRoomId) {
-        setDefaultRoomId(context.availableRooms[0].roomId);
+      if (context.availableRooms && context.availableRooms.length > 0) {
+        setDefaultRoomId((prev) => prev || context.defaultRoomId || context.availableRooms[0].roomId);
       }
     }
-  }, [context, defaultTrainerId, defaultRoomId]);
+  }, [context, defaultTrainerId]);
 
-  // 2. Generate Preview Mutation (In-Memory Engine)
+  // 4. Generate Preview Mutation (In-Memory Engine)
   const previewMutation = useMutation({
     mutationFn: (req: BulkPreviewRequestDTO) =>
       bulkSessionGenerationApi.generatePreview(selectedClassId, req),
@@ -142,7 +234,7 @@ export function BulkSessionGenerationPage() {
     },
   });
 
-  // 3. Atomic Bulk Save to DRAFT Mutation (All-or-Nothing + Idempotency)
+  // 5. Atomic Bulk Save to DRAFT Mutation (All-or-Nothing + Idempotency)
   const saveMutation = useMutation({
     mutationFn: async ({
       versionId,
@@ -159,10 +251,26 @@ export function BulkSessionGenerationPage() {
       );
     },
     onSuccess: (res) => {
+      const verObj = availableVersions.find((v) => v.id === calendarVersionId);
+      const verLabel = verObj ? `v${verObj.versionNumber}` : `#${calendarVersionId}`;
+
       toast.success(
-        `Successfully saved ${res.createdCount} session(s) to DRAFT Calendar Version.`
+        `Successfully saved ${res.createdCount} session(s) into Calendar Version ${verLabel} (DRAFT)!`,
+        {
+          action: {
+            label: "View in Calendar",
+            onClick: () =>
+              navigate(
+                `/calendars?calendarId=${selectedCalendarId}&versionId=${calendarVersionId}`
+              ),
+          },
+          duration: 6000,
+        }
       );
-      navigate("/sessions");
+
+      navigate(
+        `/calendars?calendarId=${selectedCalendarId}&versionId=${calendarVersionId}`
+      );
     },
     onError: (err: any) => {
       const res = err?.response?.data;
@@ -365,10 +473,10 @@ export function BulkSessionGenerationPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              {/* Target Class & Target Version */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Target Class, Academic Calendar & Target Version */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1.5 min-w-0">
-                  <Label htmlFor="select-class">Target Class <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="select-class">Target Class / Course <span className="text-red-500">*</span></Label>
                   <Select
                     value={selectedClassId.toString()}
                     onValueChange={(val) => setSelectedClassId(Number(val))}
@@ -377,7 +485,7 @@ export function BulkSessionGenerationPage() {
                       <SelectValue placeholder="Select class" />
                     </SelectTrigger>
                     <SelectContent>
-                      {DEMO_CLASSES.map((cls) => (
+                      {availableClasses.map((cls) => (
                         <SelectItem key={cls.id} value={cls.id.toString()}>
                           {cls.code} - {cls.name}
                         </SelectItem>
@@ -387,18 +495,60 @@ export function BulkSessionGenerationPage() {
                 </div>
 
                 <div className="space-y-1.5 min-w-0">
-                  <Label htmlFor="select-version">Target Calendar Version <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="select-calendar">Academic Calendar <span className="text-red-500">*</span></Label>
+                  <Select
+                    value={selectedCalendarId ? selectedCalendarId.toString() : ""}
+                    onValueChange={(val) => setSelectedCalendarId(Number(val))}
+                    disabled={isCalendarsLoading || calendars.length === 0}
+                  >
+                    <SelectTrigger id="select-calendar" className="w-full">
+                      <SelectValue placeholder={isCalendarsLoading ? "Loading calendars..." : "Select calendar"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {calendars.map((cal) => (
+                        <SelectItem key={cal.id} value={cal.id.toString()}>
+                          {cal.name} {cal.activeVersionNumber ? `(v${cal.activeVersionNumber})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="select-version">Calendar Version <span className="text-red-500">*</span></Label>
+                    {selectedCalendarId && (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/calendars?calendarId=${selectedCalendarId}`)}
+                        className="text-[11px] text-primary hover:underline"
+                      >
+                        Manage
+                      </button>
+                    )}
+                  </div>
                   <Select
                     value={calendarVersionId.toString()}
                     onValueChange={(val) => setCalendarVersionId(Number(val))}
+                    disabled={isVersionsLoading}
                   >
                     <SelectTrigger id="select-version" className="w-full">
-                      <SelectValue placeholder="Select version" />
+                      <SelectValue placeholder={isVersionsLoading ? "Loading..." : "Select version"} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="1">Version 1.0 (DRAFT - In Progress)</SelectItem>
-                      <SelectItem value="2">Version 2.0 (DRAFT - New Draft)</SelectItem>
-                      <SelectItem value="999">Version 9.9 (ACTIVE - Read Only / Test Invariant)</SelectItem>
+                      {availableVersions.map((ver) => (
+                        <SelectItem key={ver.id} value={ver.id ? ver.id.toString() : "1"}>
+                          v{ver.versionNumber} - {ver.name || "Draft"} ({ver.status})
+                        </SelectItem>
+                      ))}
+                      {availableVersions.length === 0 && (
+                        <SelectItem value="1">
+                          v1 - Default Draft (DRAFT)
+                        </SelectItem>
+                      )}
+                      <SelectItem value="999">
+                        v9.9 - Safety Guard Test (ACTIVE)
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
