@@ -142,6 +142,34 @@ function CourseDetailContent({ course }: { course: CourseDetail }) {
           </p>
         </section>
 
+        <section className="rounded-2xl border bg-card p-6">
+          <h2 className="text-lg font-semibold">Skills you will achieve</h2>
+          {(() => {
+            const skills =
+                course.categoryNames && course.categoryNames.length > 0
+                    ? course.categoryNames
+                    : course.categoryName
+                        ? [course.categoryName]
+                        : [];
+
+            return skills.length === 0 ? (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  The instructor has not added any skills yet.
+                </p>
+            ) : (
+                <div className="mt-4 flex flex-wrap gap-3">
+                  {skills.map((skill) => (
+                      <span
+                          key={skill}
+                          className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-[0_2px_8px_rgba(15,23,42,0.08)]"
+                      >
+            {skill}
+          </span>
+                  ))}
+                </div>
+            );
+          })()}
+        </section>
         <Syllabus course={course} />
       </div>
 
