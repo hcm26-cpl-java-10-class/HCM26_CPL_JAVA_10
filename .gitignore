@@ -1,0 +1,26 @@
+ === IDE ===
+.idea/
+*.iml
+.vscode/
+
+# === OS ===
+.DS_Store
+Thumbs.db
+
+# === Backend (Java/Maven) ===
+backend/target/
+backend/*.jar
+backend/*.war
+
+# === Backend .env (secrets) ===
+backend/.env
+
+# === Frontend (Node) ===
+frontend/node_modules/
+frontend/dist/
+
+# === Docker .env (secrets) ===
+docker/.env
+
+
+/backend.zip
