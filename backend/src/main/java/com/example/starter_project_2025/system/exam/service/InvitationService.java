@@ -271,16 +271,6 @@ public class InvitationService {
         return generateQRCodeImage(url, 300, 300);
     }
 
-    @Transactional(readOnly = true)
-    public InvitationDTO validateToken(String token) {
-        Invitation invitation = invitationRepository.findByToken(token)
-                .orElseThrow(() -> new ResourceNotFoundException("Invalid invitation token"));
-
-        validateInvitationForAction(invitation);
-
-        return toDTO(invitation);
-    }
-
     // ============ ANONYMOUS METHODS ============
 
     @Transactional

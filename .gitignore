@@ -7,6 +7,9 @@
 .DS_Store
 Thumbs.db
 
+# === Nested repo (not part of this project) ===
+HCM26_CPL_JAVA_10/
+
 # === Backend (Java/Maven) ===
 backend/target/
 backend/*.jar
