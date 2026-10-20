@@ -6,6 +6,12 @@ import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 // import com.example.starter_project_2025.system.rbac.department.Department;
 // import com.example.starter_project_2025.system.rbac.department.DepartmentRepository;
+import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenService;
+import com.example.starter_project_2025.exception.BadRequestException;
+import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import com.example.starter_project_2025.security.UserPrincipal;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
 import lombok.AccessLevel;
@@ -33,6 +39,7 @@ public class UserServiceImpl
     RoleRepository roleRepository;
     // DepartmentRepository departmentRepository;
     PasswordEncoder passwordEncoder;
+    RefreshTokenService refreshTokenService;
 
     @Override
     protected BaseCrudRepository<User, Long> getRepository() {
@@ -234,25 +241,33 @@ public class UserServiceImpl
 
     @Override
     public void lockUser(Long userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() ->
-                        new com.example.starter_project_2025.exception.ResourceNotFoundException(
-                                "User not found with id: " + userId
-                        ));
+        if (isCurrentUser(userId)) {
+            throw new BadRequestException("You cannot lock your own account");
+        }
 
+        User user = findUserOrThrow(userId);
         user.setLocked(true);
         userRepository.save(user);
+
+        refreshTokenService.revokeAllRefreshTokens(userId);
     }
 
     @Override
     public void unlockUser(Long userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() ->
-                        new com.example.starter_project_2025.exception.ResourceNotFoundException(
-                                "User not found with id: " + userId
-                        ));
-
+        User user = findUserOrThrow(userId);
         user.setLocked(false);
         userRepository.save(user);
+    }
+
+    private User findUserOrThrow(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+    }
+
+    private boolean isCurrentUser(Long userId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null
+                && auth.getPrincipal() instanceof UserPrincipal me
+                && me.getUser().getId().equals(userId);
     }
 }

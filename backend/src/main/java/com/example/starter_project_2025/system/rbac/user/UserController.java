@@ -41,17 +41,16 @@ public class UserController
     }
 
     @PatchMapping("/{id}/lock")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('USER_UPDATE')")
     public ResponseEntity<Void> lockUser(@PathVariable Long id) {
         service.lockUser(id);
         return ResponseEntity.noContent().build();
     }
 
     @PatchMapping("/{id}/unlock")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('USER_UPDATE')")
     public ResponseEntity<Void> unlockUser(@PathVariable Long id) {
         service.unlockUser(id);
         return ResponseEntity.noContent().build();
     }
-
 }

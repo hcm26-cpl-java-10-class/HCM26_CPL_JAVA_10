@@ -133,8 +133,6 @@ public class AuthServiceImpl implements AuthService {
         User user = refreshToken.getUser();
 
         if (Boolean.TRUE.equals(user.getLocked())) {
-            refreshTokenService.revokeAllRefreshTokens(user.getId());
-
             throw new org.springframework.security.authentication.LockedException(
                     "Account is locked"
             );
