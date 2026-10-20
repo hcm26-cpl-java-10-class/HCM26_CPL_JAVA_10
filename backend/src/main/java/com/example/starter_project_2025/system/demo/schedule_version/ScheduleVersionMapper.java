@@ -5,7 +5,7 @@ import com.example.starter_project_2025.base.crud.mapper.BaseMapperConfig;
 import com.example.starter_project_2025.base.crud.mapper.IgnoreAuditFields;
 import org.mapstruct.Mapper;
 
-@Mapper(componentModel = "spring", config = BaseMapperConfig.class)
+@Mapper(componentModel = "spring", config = BaseMapperConfig.class, implementationName = "LegacyScheduleVersionMapperImpl")
 public interface ScheduleVersionMapper extends BaseCrudMapper<ScheduleVersion, ScheduleVersionDTO> {
 
     @Override

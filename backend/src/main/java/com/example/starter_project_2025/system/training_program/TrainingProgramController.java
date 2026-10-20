@@ -7,7 +7,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 
-@RestController
+@RestController("academicTrainingProgramController")
 @RequestMapping("/api/training-programs")
 @RequiredArgsConstructor
 public class TrainingProgramController {

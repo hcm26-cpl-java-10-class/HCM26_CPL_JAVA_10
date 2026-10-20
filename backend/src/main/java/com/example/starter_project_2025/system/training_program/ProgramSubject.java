@@ -3,7 +3,7 @@ package com.example.starter_project_2025.system.training_program;
 import jakarta.persistence.*;
 import lombok.*;
 
-@Entity
+@Entity(name = "AcademicProgramSubject")
 @Table(name = "program_subjects",
        uniqueConstraints = @UniqueConstraint(name = "uk_program_subject", columnNames = {"program_id", "subject_id"}),
        indexes = @Index(name = "idx_program_subject_order", columnList = "program_id, order_index"))

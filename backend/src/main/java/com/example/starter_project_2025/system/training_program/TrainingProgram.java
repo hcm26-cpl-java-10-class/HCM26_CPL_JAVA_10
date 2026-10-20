@@ -11,7 +11,7 @@ import lombok.experimental.SuperBuilder;
 import java.util.ArrayList;
 import java.util.List;
 
-@Entity
+@Entity(name = "AcademicTrainingProgram")
 @Table(name = "training_programs",
        uniqueConstraints = @UniqueConstraint(name = "uk_program_code_version", columnNames = {"code", "version"}))
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @SuperBuilder

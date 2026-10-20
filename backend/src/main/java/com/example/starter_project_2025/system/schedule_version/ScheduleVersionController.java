@@ -176,7 +176,8 @@ public class ScheduleVersionController
             summary = "Xóa phiên bản nháp (DRAFT)",
             description = "Xóa bản nháp đang soạn thảo. Chặn lỗi nếu phiên bản đang ACTIVE hoặc ARCHIVED."
     )
-    public ResponseEntity<Void> deleteDraft(@PathVariable Long id) {
+    @Override
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
         scheduleVersionService.deleteDraft(id);
         return ResponseEntity.noContent().build();
     }

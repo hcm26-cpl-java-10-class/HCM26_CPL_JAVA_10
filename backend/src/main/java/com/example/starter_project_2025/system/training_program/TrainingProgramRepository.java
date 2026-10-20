@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import java.util.Optional;
 
+@org.springframework.stereotype.Repository("academicTrainingProgramRepository")
 public interface TrainingProgramRepository extends JpaRepository<TrainingProgram, Long>,
         JpaSpecificationExecutor<TrainingProgram> {
     boolean existsByCodeAndVersion(String code, Integer version);
