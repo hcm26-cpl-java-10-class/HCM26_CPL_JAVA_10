@@ -31,6 +31,28 @@ function AppRoutes() {
             {/* Root redirect */}
             <Route path="/" element={<Navigate to={homePath} replace />} />
 
+            {/* ============ STATIC ROUTES FIRST (higher priority in matching) ============ */}
+            {staticRoutes.map((route, index) => {
+                const Component = route.component;
+
+                if (route.isPublic) {
+                    return <Route key={index} path={route.path} element={<Component />} />;
+                }
+
+                return (
+                    <Route
+                        key={index}
+                        path={route.path}
+                        element={
+                            <ProtectedRoute requiredPermission={route.requiredPermission}>
+                                <Component />
+                            </ProtectedRoute>
+                        }
+                    />
+                );
+            })}
+
+            {/* ============ DYNAMIC ROUTES from backend Module table ============ */}
             {/* Dynamic routes from backend Module table */}
             {moduleGroups.flatMap((group) =>
                 group.modules.map((m) => {
@@ -39,6 +61,8 @@ function AppRoutes() {
 
                     if (!Component) {
                         return <Route key={`missing-${m.id ?? m.url}`} path={m.url} element={<Navigate to="/not-found-page" replace />} />;
+                        // Skip routes without a component - let them fall through to static routes or 404
+                        return null;
                     }
 
                     return (

@@ -60,22 +60,25 @@ function getAttemptStatus(attempt?: ExamAttemptSummary) {
             return { label: 'Chờ chấm tự luận', variant: 'outline' as const };
         case 'SUBMITTED':
             return { label: 'Đã hoàn thành', variant: 'default' as const };
+        default:
+            return null;
     }
 }
 
 function ExamCard({
                       exam,
                       attempt,
+                      now,
                       onOpen,
                       disabled: externallyDisabled,
                   }: {
     exam: Exam;
     attempt?: ExamAttemptSummary;
+    now: number;
     onOpen: (examId: number) => void;
     disabled: boolean;
 }) {
     const status = getAttemptStatus(attempt);
-    const now = Date.now();
     const open = isExamOpen(exam, now);
     const beforeOpen = exam.startTime != null && now < new Date(exam.startTime).getTime();
     const afterClose = exam.endTime != null && now >= new Date(exam.endTime).getTime();
@@ -163,6 +166,7 @@ function ExamCard({
 export default function StudentExamList() {
     const navigate = useNavigate();
     const [passwordExam, setPasswordExam] = useState<Exam | null>(null);
+    const [now] = useState(() => Date.now()); // Lấy thời gian khi component mount, tuân thủ Purity Rule
 
     const examsQuery = useQuery({
         queryKey: examsQueryKey,
@@ -274,6 +278,7 @@ export default function StudentExamList() {
                                     key={exam.id}
                                     exam={exam}
                                     attempt={attempt}
+                                    now={now}
                                     disabled={attemptsQuery.isError}
                                     onOpen={openExam}
                                 />
@@ -291,7 +296,6 @@ export default function StudentExamList() {
                 examId={passwordExam?.id ?? null}
                 examTitle={passwordExam?.title ?? ''}
                 onSuccess={(examId, password) => {
-                    // startOrResumeExam đọc mật khẩu này rồi gửi kèm POST /attempt.
                     sessionStorage.setItem(`exam_pass_${examId}`, password);
                     setPasswordExam(null);
                     navigate(`/student/exams/${examId}/take`);

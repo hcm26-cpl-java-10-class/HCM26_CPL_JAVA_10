@@ -1,11 +1,12 @@
 import { invitationApi } from '@/api';
-import type { StudentInvitationDTO } from '@/types';
+import type { InvitationDTO } from '@/types';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarDays, Check, Clock3, Mail, RefreshCw } from 'lucide-react';
+import { CalendarDays, Check, Mail, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 
@@ -15,16 +16,20 @@ function formatDate(value?: string | null) {
     return value ? new Date(value).toLocaleString() : 'Không giới hạn';
 }
 
-function getStatus(invitation: StudentInvitationDTO) {
+function getStatus(invitation: InvitationDTO) {
     if (invitation.status === 'ACCEPTED') return { label: 'Đã chấp nhận', variant: 'default' as const };
     if (invitation.status === 'PENDING') return { label: 'Chờ chấp nhận', variant: 'secondary' as const };
     if (invitation.status === 'EXPIRED') return { label: 'Hết hạn', variant: 'outline' as const };
+    if (invitation.status === 'REVOKED') return { label: 'Đã thu hồi', variant: 'destructive' as const };
+    if (invitation.status === 'REJECTED') return { label: 'Từ chối', variant: 'outline' as const };
     return { label: invitation.status ?? 'Không xác định', variant: 'outline' as const };
 }
 
 export default function StudentInvitationsPage() {
     const queryClient = useQueryClient();
     const navigate = useNavigate();
+    const [now] = useState(() => Date.now());
+
     const invitationsQuery = useQuery({
         queryKey: invitationsQueryKey,
         queryFn: invitationApi.getMyInvitations,
@@ -32,8 +37,8 @@ export default function StudentInvitationsPage() {
 
     const acceptMutation = useMutation({
         mutationFn: invitationApi.accept,
-        onSuccess: (updated) => {
-            queryClient.setQueryData<StudentInvitationDTO[]>(invitationsQueryKey, (current) =>
+        onSuccess: (updated: InvitationDTO) => {
+            queryClient.setQueryData<InvitationDTO[]>(invitationsQueryKey, (current) =>
                 current?.map((invitation) => invitation.id === updated.id ? updated : invitation),
             );
             toast.success('Đã chấp nhận lời mời.');
@@ -87,7 +92,7 @@ export default function StudentInvitationsPage() {
                         {invitations.map((invitation) => {
                             const status = getStatus(invitation);
                             const expired = invitation.expiresAt != null
-                                && new Date(invitation.expiresAt).getTime() <= Date.now();
+                                && new Date(invitation.expiresAt).getTime() <= now;
                             const canAccept = invitation.status === 'PENDING' && !expired;
                             return (
                                 <article key={invitation.id} className="flex flex-wrap items-center justify-between gap-4 p-4">
@@ -98,11 +103,6 @@ export default function StudentInvitationsPage() {
                                                 {expired ? 'Lời mời hết hạn' : status.label}
                                             </Badge>
                                         </div>
-                                        <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                                            <span className="inline-flex items-center gap-1"><Clock3 className="size-3.5" />{invitation.durationMinutes ?? '—'} phút</span>
-                                            <span>Mở: {formatDate(invitation.startTime)}</span>
-                                            <span>Đóng: {formatDate(invitation.endTime)}</span>
-                                        </p>
                                         {invitation.expiresAt && (
                                             <p className="text-xs text-muted-foreground">Hạn phản hồi: {formatDate(invitation.expiresAt)}</p>
                                         )}

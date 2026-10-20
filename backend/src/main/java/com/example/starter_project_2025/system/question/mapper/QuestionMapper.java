@@ -37,6 +37,7 @@ public class QuestionMapper implements BaseCrudMapper<Question, QuestionDTO> {
         d.setDifficulty(q.getDifficulty());
         d.setTopic(q.getTopic());
         d.setPoints(q.getPoints());
+        d.setSourceQuestionId(q.getSourceQuestionId());
         d.setOptions(q.getOptions().stream().map(o -> {
             QuestionDTO.OptionDTO od = new QuestionDTO.OptionDTO();
             od.setId(o.getId());

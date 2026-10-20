@@ -20,8 +20,10 @@ public class QuestionDataInitializer implements CommandLineRunner {
         repository.save(make("Java là ngôn ngữ như thế nào?", QuestionType.SINGLE_CHOICE, Difficulty.EASY,
                 "java", Set.of(2), "Chỉ biên dịch", "Chỉ thông dịch",
                 "Biên dịch ra bytecode rồi chạy trên JVM", "Không phải ngôn ngữ lập trình"));
+
         repository.save(make("Những kiểu nào là kiểu nguyên thủy trong Java?", QuestionType.MULTI_CHOICE,
                 Difficulty.MEDIUM, "java", Set.of(0, 2), "int", "String", "boolean", "List"));
+
         repository.save(make("HTTP status 404 nghĩa là gì?", QuestionType.SINGLE_CHOICE, Difficulty.EASY,
                 "web", Set.of(1), "Lỗi server", "Không tìm thấy tài nguyên", "Thành công", "Chưa đăng nhập"));
     }

@@ -82,7 +82,16 @@ class ExamAttemptServiceTest {
                 .thenReturn(List.of(attempt));
     }
 
-    
+    @Test
+    void startOrResumeRejectsStudentWithoutAcceptedInvitation() {
+        Exam exam = attempt.getExam();
+        exam.setIsActive(true);
+        exam.setQuestions(Set.of(question(1L, QuestionType.SINGLE_CHOICE, 5)));
+        when(examRepository.lockForAttemptStart(20L)).thenReturn(Optional.of(exam));
+
+        assertThrows(BadRequestException.class, () -> service.startOrResume(20L, 40L));
+    }
+
 
     @Test
     void startOrResumeRejectsBeforeExamOpens() {

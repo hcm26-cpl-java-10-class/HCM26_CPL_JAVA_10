@@ -10,6 +10,8 @@ import {
 } from "@/types";
 
 const typeOptions = [
+  // CHANGED: gộp Single/Multi choice thành "Trắc nghiệm"
+  { label: "Multiple choice", value: "MULTIPLE_CHOICE" },
   { label: "Single choice", value: "SINGLE_CHOICE" },
   { label: "Multi choice", value: "MULTI_CHOICE" },
   { label: "Essay", value: "ESSAY" },

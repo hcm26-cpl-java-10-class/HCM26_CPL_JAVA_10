@@ -40,4 +40,10 @@ public class ExamAttemptAnswer extends BaseEntity {
 
     @Column(columnDefinition = "TEXT")
     private String textAnswer;
+
+    @Column(name = "score")
+    private Integer score;
+
+    @Column(name = "feedback", columnDefinition = "TEXT")
+    private String feedback;
 }

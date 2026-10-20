@@ -2,10 +2,11 @@ package com.example.starter_project_2025.system.exam.service;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 import org.junit.jupiter.api.AfterEach;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import org.junit.jupiter.api.BeforeEach;
@@ -77,7 +78,7 @@ class ExamServiceImplTest {
     }
 
     @Test
-    void addQuestionsDeduplicatesIdsAndReturnsUpdatedExam() {
+    void addQuestionsClonesBankQuestionsAndLeavesOriginalUntouched() {
         ExamDTO response = new ExamDTO();
         when(examRepository.findById(1L)).thenReturn(Optional.of(exam));
         when(questionRepository.findAllById(any())).thenReturn(List.of(question));
@@ -87,7 +88,14 @@ class ExamServiceImplTest {
         ExamDTO result = examService.addQuestions(1L, List.of(10L, 10L));
 
         assertSame(response, result);
-        assertEquals(Set.of(question), exam.getQuestions());
+        assertEquals(1, exam.getQuestions().size());
+
+        Question copy = exam.getQuestions().iterator().next();
+        assertNotSame(question, copy);
+        assertEquals(10L, copy.getSourceQuestionId());
+        assertEquals("Question content", copy.getContent());
+        assertNull(question.getSourceQuestionId());
+
         verify(examRepository).save(exam);
     }
 
@@ -101,7 +109,7 @@ class ExamServiceImplTest {
                 () -> examService.addQuestions(1L, List.of(10L, 999L))
         );
 
-        assertEquals(Set.of(), exam.getQuestions());
+        assertEquals(0, exam.getQuestions().size());
         verify(examRepository, never()).save(any(Exam.class));
     }
 }

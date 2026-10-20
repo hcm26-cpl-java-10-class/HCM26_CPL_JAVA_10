@@ -52,7 +52,6 @@ public class ExamAttemptService {
                 .max(Comparator.comparingInt(ExamAttempt::getAttemptNumber));
         if (existing.isPresent()) {
             ExamAttempt attempt = existing.get();
-            // Mở lại bài đang làm: nếu đã quá hạn thì chốt EXPIRED ngay (có khóa dòng) rồi mới trả về.
             expireIfOverdue(attempt.getId(), Instant.now());
             return toResponse(attempt);
         }
@@ -101,7 +100,6 @@ public class ExamAttemptService {
         return toResponse(attemptRepository.save(attempt));
     }
 
-    // ===== BR-UNI-16: snapshot questions/options/correct/points at start, apply shuffle once =====
     private void snapshotQuestions(ExamAttempt attempt, Exam exam, List<Question> source) {
         List<Question> ordered = new ArrayList<>(source);
         if (Boolean.TRUE.equals(exam.getShuffleQuestions())) {
@@ -146,12 +144,9 @@ public class ExamAttemptService {
         }
     }
 
-
-
     public List<ExamAttemptSummaryDTO> findStudentAttempts(Long studentId) {
         Instant now = Instant.now();
         List<ExamAttempt> attempts = attemptRepository.findAllByStudent_IdOrderByStartedAtDesc(studentId);
-        // Danh sách phải hiện đúng "hết giờ" kể cả khi job chưa kịp chạy.
         for (ExamAttempt attempt : attempts) {
             if (attempt.getStatus() == ExamAttemptStatus.IN_PROGRESS && isExpired(attempt, now)) {
                 expireIfOverdue(attempt.getId(), now);
@@ -180,7 +175,6 @@ public class ExamAttemptService {
         return toResponse(attempt);
     }
 
-
     public ExamAttemptDTO submit(
             Long attemptId,
             Long studentId,
@@ -199,7 +193,6 @@ public class ExamAttemptService {
         }
         return toResponse(attempt);
     }
-
 
     public boolean expireIfOverdue(Long attemptId, Instant now) {
         Optional<ExamAttempt> locked = attemptRepository.lockById(attemptId);
@@ -282,9 +275,11 @@ public class ExamAttemptService {
 
     private Set<ExamAttemptOption> validateAndResolveOptions(ExamAttemptQuestion question, Set<Long> selectedIds) {
         if (question.getType() == QuestionType.ESSAY) {
-            return Set.of();
+            return new LinkedHashSet<>();
         }
-        if (question.getType() == QuestionType.SINGLE_CHOICE && selectedIds.size() > 1) {
+
+        long correctCount = question.getOptions().stream().filter(ExamAttemptOption::isCorrect).count();
+        if (correctCount <= 1 && selectedIds.size() > 1) {
             throw new BadRequestException("Câu hỏi chỉ cho phép chọn một đáp án");
         }
 

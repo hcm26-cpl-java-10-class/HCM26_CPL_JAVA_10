@@ -11,6 +11,10 @@ import java.util.Optional;
 
 public interface ExamAttemptRepository extends BaseCrudRepository<ExamAttempt, Long> {
 
+    boolean existsByExam_Id(Long examId);
+
+    boolean existsByExam_IdAndStatusIn(Long examId, java.util.Collection<ExamAttemptStatus> statuses);
+
     Optional<ExamAttempt> findByExam_IdAndStudent_Id(Long examId, Long studentId);
 
     List<ExamAttempt> findAllByStudent_IdOrderByStartedAtDesc(Long studentId);
@@ -29,5 +33,19 @@ public interface ExamAttemptRepository extends BaseCrudRepository<ExamAttempt, L
     Optional<ExamAttempt> lockByIdAndStudentId(
             @Param("attemptId") Long attemptId,
             @Param("studentId") Long studentId
+    );
+
+    @Query("""
+            select a from ExamAttempt a
+            where a.exam.id = :examId
+              and a.status in :statuses
+              and exists (select 1 from ExamAttemptQuestion q
+                          where q.attempt = a and q.type = :essayType)
+            order by a.submittedAt asc, a.id asc
+            """)
+    List<ExamAttempt> findFinishedWithQuestionType(
+            @Param("examId") Long examId,
+            @Param("statuses") java.util.Collection<ExamAttemptStatus> statuses,
+            @Param("essayType") com.example.starter_project_2025.system.question.domain.QuestionType essayType
     );
 }

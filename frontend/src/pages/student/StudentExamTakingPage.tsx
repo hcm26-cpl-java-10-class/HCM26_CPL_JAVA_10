@@ -7,6 +7,7 @@ import {
 } from '@/api/exam.api';
 import { Button } from '@/components/ui/button';
 import { MainLayout } from '@/components/layout/MainLayout';
+import { EssayAnswerDialog } from './components/EssayAnswerDialog';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useEffect, useRef, useState } from 'react';
@@ -29,7 +30,7 @@ function getStartErrorMessage(error: unknown): string {
         const message = (error.response.data as { message?: string } | undefined)?.message;
         if (error.response.status === 403) return 'Bạn không có quyền làm bài thi này.';
         if (error.response.status === 404) return 'Không tìm thấy đề thi hoặc đề thi đã bị tắt.';
-        if (message) return message; // vd: "Mật khẩu đề thi không chính xác", "Bạn đã sử dụng hết số lần làm bài", "Kỳ thi đã đóng"
+        if (message) return message;
     }
     return 'Không thể mở đề thi. Vui lòng thử lại.';
 }
@@ -72,8 +73,6 @@ export default function StudentExamTakingPage() {
         queryFn: () => startOrResumeExam(examId),
         enabled: validExamId,
         retry: false,
-        // Quan trọng: POST /attempt sẽ TẠO lượt mới nếu bài hiện tại đã kết thúc và còn lượt.
-        // Nếu để react-query tự gọi lại khi quay lại tab, sinh viên vừa nộp xong sẽ bị bắt đầu một lượt mới.
         refetchOnWindowFocus: false,
         refetchOnReconnect: false,
         staleTime: Infinity,
@@ -105,7 +104,6 @@ export default function StudentExamTakingPage() {
     const flushPendingAnswers = async (
         attemptId: number,
     ): Promise<boolean> => {
-        // Chờ lần lưu đang chạy kết thúc.
         while (savingRef.current) {
             await new Promise<void>((resolve) => {
                 window.setTimeout(resolve, 50);
@@ -133,7 +131,6 @@ export default function StudentExamTakingPage() {
 
                 try {
                     const saved = await saveExamAnswers(attemptId, [request]);
-                    // Server trả về trạng thái thật: bài đã nộp ở tab khác hoặc đã hết giờ -> chuyển sang màn kết quả.
                     if (saved.status !== 'IN_PROGRESS') {
                         clearAllPendingSaves();
                         queryClient.setQueryData(attemptQueryKey(examId), saved);
@@ -146,7 +143,6 @@ export default function StudentExamTakingPage() {
                         return true;
                     }
                 } catch {
-                    // Giữ lại câu trả lời mới nhất để thử lưu lại.
                     if (!pendingAnswersRef.current.has(questionId)) {
                         pendingAnswersRef.current.set(questionId, request);
                     }
@@ -163,7 +159,6 @@ export default function StudentExamTakingPage() {
             setIsSaving(pendingAnswersRef.current.size > 0);
         }
     };
-
 
     useEffect(() => {
         if (!attempt) return;
@@ -193,12 +188,10 @@ export default function StudentExamTakingPage() {
         };
     }, [attempt?.id, attempt?.status]);
 
-
     useEffect(() => () => {
         timerRefs.current.forEach((timer) => window.clearTimeout(timer));
         timerRefs.current.clear();
     }, []);
-
 
     useEffect(() => {
         if (attempt?.status !== 'IN_PROGRESS') return;
@@ -276,7 +269,6 @@ export default function StudentExamTakingPage() {
         }
     };
 
-
     const secondsRemaining = attempt ? getCountdown(attempt.deadlineAt, now) : 0;
 
     useEffect(() => {
@@ -316,7 +308,6 @@ export default function StudentExamTakingPage() {
 
         timerRefs.current.set(questionId, timer);
     };
-
 
     const updateAnswer = (questionId: number, update: Partial<ExamAttemptAnswer>) => {
         const current = answers[questionId] ?? {
@@ -440,7 +431,6 @@ export default function StudentExamTakingPage() {
                                     </Button>
                                 </span>
                             )}
-
                         </div>
 
                         {attempt.questions.map((question, index) => {
@@ -461,18 +451,19 @@ export default function StudentExamTakingPage() {
                                     <p className="mt-3 whitespace-pre-wrap">{question.content}</p>
 
                                     {question.type === 'ESSAY' ? (
-                                        <textarea
-                                            aria-label={`Câu trả lời câu ${index + 1}`}
-                                            className="mt-4 min-h-40 w-full rounded-md border bg-background p-3"
+                                        <EssayAnswerDialog
+                                            label={`Câu ${index + 1}`}
+                                            questionContent={question.content}
                                             value={answer.textAnswer ?? ''}
-                                            onChange={(event) => updateAnswer(question.id, { textAnswer: event.target.value })}
+                                            onChange={(text) => updateAnswer(question.id, { textAnswer: text })}
                                             disabled={isFinished}
                                         />
                                     ) : (
                                         <div className="mt-4 grid gap-3">
                                             {question.options.map((option) => {
                                                 const checked = answer.selectedOptionIds.includes(option.id);
-                                                const inputType = question.type === 'SINGLE_CHOICE' ? 'radio' : 'checkbox';
+                                                const isMulti = question.multiSelect ?? question.type === 'MULTI_CHOICE';
+                                                const inputType = isMulti ? 'checkbox' : 'radio';
                                                 return (
                                                     <label key={option.id} className="flex cursor-pointer items-start gap-3 rounded-md border p-3">
                                                         <input
@@ -480,7 +471,7 @@ export default function StudentExamTakingPage() {
                                                             name={`question-${question.id}`}
                                                             checked={checked}
                                                             onChange={() => {
-                                                                const selectedOptionIds = question.type === 'SINGLE_CHOICE'
+                                                                const selectedOptionIds = !isMulti
                                                                     ? [option.id]
                                                                     : checked
                                                                         ? answer.selectedOptionIds.filter((id) => id !== option.id)

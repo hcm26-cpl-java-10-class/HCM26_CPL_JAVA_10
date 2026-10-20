@@ -55,7 +55,10 @@ export function useActiveModuleGroups(enabled = true) {
                 return acc;
             }, {});
 
-            // Ensure Invitation menu under Exam Management if permitted and not already in DB
+            // Ensure Invitation menu under Exam Management if permitted and not already in DB.
+            // IMPORTANT: url must match a static route registered in component-registry.ts and must
+            // NOT collide with /exams/:examId/invitations (otherwise React Router falls through to
+            // catch-all and we get a 404).
             const hasInvitationInDb = modules.some((m) => m.url === "/invitations");
             if (!hasInvitationInDb && canAccessByPermission("INVITATION_READ", hasPermission)) {
                 let examGroup = groups.find(

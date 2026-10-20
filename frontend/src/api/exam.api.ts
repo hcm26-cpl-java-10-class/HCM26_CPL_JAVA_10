@@ -26,9 +26,12 @@ export type ExamAttemptStatus =
 export interface ExamAttemptQuestion {
     id: number;
     content: string;
-    type: 'SINGLE_CHOICE' | 'MULTI_CHOICE' | 'ESSAY';
+    type: 'SINGLE_CHOICE' | 'MULTI_CHOICE' | 'MULTIPLE_CHOICE' | 'ESSAY';
     points: number;
-    options: { id: number; content: string; imageUrl?: string | null }[];}
+    /** true = nhiều đáp án đúng -> ô vuông (checkbox); false = ô tròn (radio). */
+    multiSelect: boolean;
+    options: { id: number; content: string; imageUrl?: string | null }[];
+}
 
 export interface ExamAttemptAnswer {
     questionId: number;

@@ -26,11 +26,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { ExamDTO, LatePolicy, QuestionDifficulty, QuestionFilter, QuestionType, ResultVisibility } from "@/types";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import type { ExamDTO, LatePolicy, QuestionDTO, QuestionDifficulty, QuestionFilter, QuestionType, ResultVisibility } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { BookOpen, ClipboardCheck, Mail, MoreVertical, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { EditExamQuestionDialog, isExamStarted, QuestionAnswers } from "./ExamQuestionParts";
 
 const PAGE_SIZE = 8;
 
@@ -91,7 +99,6 @@ const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   accessCode: exam.accessCode ?? "",
 });
 
-/** Kiểm tra nhanh phía client, giống ExamConfigValidator ở backend (backend vẫn là nơi quyết định). */
 function validateConfig(duration: number, cfg: ExamConfigForm): string | null {
   if (cfg.startTime && cfg.endTime) {
     const start = new Date(cfg.startTime).getTime();
@@ -112,14 +119,16 @@ function validateConfig(duration: number, cfg: ExamConfigForm): string | null {
   return null;
 }
 
-const getErrorMessage = (error: any, fallback: string): string => {
-  const data = error?.response?.data;
-  const fieldError = data?.errors ? (Object.values(data.errors).flat()[0] as string | undefined) : undefined;
+const getErrorMessage = (error: unknown, fallback: string): string => {
+  const err = error as { response?: { data?: { errors?: Record<string, string[]>; message?: string } } };
+  const data = err?.response?.data;
+  const fieldError = data?.errors ? (Object.values(data.errors).flat()[0]) : undefined;
   return fieldError || data?.message || fallback;
 };
 
 export default function ExamManagementPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [examSearch, setExamSearch] = useState("");
   const [examPage, setExamPage] = useState(0);
   const [activeExam, setActiveExam] = useState<ExamDTO | null>(null);
@@ -135,6 +144,9 @@ export default function ExamManagementPage() {
   const [difficulty, setDifficulty] = useState("ALL");
   const [questionPage, setQuestionPage] = useState(0);
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<Set<number>>(new Set());
+  const [examToDelete, setExamToDelete] = useState<ExamDTO | null>(null);
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
+  const [editingQuestion, setEditingQuestion] = useState<QuestionDTO | null>(null);
 
   const examsQuery = useQuery({
     queryKey: ["exam-management", examPage, examSearch],
@@ -168,7 +180,6 @@ export default function ExamManagementPage() {
         title: newTitle.trim(),
         durationMinutes: Number(newDuration),
         isActive: editingExam?.isActive ?? true,
-        // Backend: trường null/không gửi = giữ nguyên giá trị hiện có
         startTime: cfg.startTime || undefined,
         endTime: cfg.endTime || undefined,
         maxAttempts: Number(cfg.maxAttempts),
@@ -180,7 +191,7 @@ export default function ExamManagementPage() {
             cfg.latePolicy === "ALLOWED_WITH_PENALTY" && cfg.latePenaltyPercent !== ""
                 ? Number(cfg.latePenaltyPercent)
                 : undefined,
-              lateGraceMinutes: Number(cfg.lateGraceMinutes || 0),
+        lateGraceMinutes: Number(cfg.lateGraceMinutes || 0),
         resultVisibility: cfg.resultVisibility,
         accessCode: cfg.accessCode ? cfg.accessCode.trim() : "",
       };
@@ -209,11 +220,31 @@ export default function ExamManagementPage() {
         setActiveExam(null);
         setPickerOpen(false);
       }
+      setExamToDelete(null);
+      setDeleteConfirmInput("");
       refreshExams();
       toast.success("Đã xóa đề thi");
     },
     onError: (error) => toast.error(getErrorMessage(error, "Không thể xóa đề thi")),
   });
+
+  const openDeleteConfirm = (exam: ExamDTO) => {
+    setExamToDelete(exam);
+    setDeleteConfirmInput("");
+  };
+
+  const closeDeleteConfirm = () => {
+    if (deleteExamMutation.isPending) return;
+    setExamToDelete(null);
+    setDeleteConfirmInput("");
+  };
+
+  const handleConfirmDelete = () => {
+    if (deleteConfirmInput !== "DELETE" || !examToDelete?.id || deleteExamMutation.isPending) {
+      return;
+    }
+    deleteExamMutation.mutate(examToDelete.id);
+  };
 
   const addQuestionsMutation = useMutation({
     mutationFn: () => examApi.addQuestions(activeExam!.id!, [...selectedQuestionIds]),
@@ -265,7 +296,10 @@ export default function ExamManagementPage() {
     });
   };
 
-  const questionIdsInExam = new Set(activeExam?.questionIds ?? activeExam?.questions?.map((question) => question.id) ?? []);
+  const sourceIdsInExam = new Set(
+      (activeExam?.questions ?? []).map((question) => question.sourceQuestionId).filter((id): id is number => id != null),
+  );
+  const activeExamStarted = isExamStarted(activeExam);
   const examRows = examsQuery.data?.content ?? [];
   const questionRows = questionsQuery.data?.content ?? [];
   const examTotalPages = examsQuery.data?.totalPages ?? 0;
@@ -328,7 +362,13 @@ export default function ExamManagementPage() {
                 {examRows.map((exam) => (
                     <TableRow key={exam.id}>
                       <TableCell className="font-medium">
-                        {exam.title}
+                        <button
+                            type="button"
+                            className="text-left font-medium hover:underline"
+                            onClick={() => exam.id && navigate(`/exams/${exam.id}/grading`)}
+                        >
+                          {exam.title}
+                        </button>
                         <p className="mt-0.5 text-xs font-normal text-muted-foreground">
                           {exam.startTime || exam.endTime
                               ? `${exam.startTime ? exam.startTime.replace("T", " ").slice(0, 16) : "…"} → ${exam.endTime ? exam.endTime.replace("T", " ").slice(0, 16) : "…"}`
@@ -345,21 +385,48 @@ export default function ExamManagementPage() {
                             <BookOpen />
                             Câu hỏi
                           </Button>
+                          <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => exam.id && navigate(`/exams/${exam.id}/grading`)}
+                              disabled={!exam.id}
+                          >
+                            <ClipboardCheck className="size-4" />
+                            Bài tự luận
+                          </Button>
+                          <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => exam.id && navigate(`/exams/${exam.id}/invitations`)}
+                              disabled={!exam.id}
+                          >
+                            <Mail className="size-4" />
+                            Lời mời
+                          </Button>
                           <Button variant="ghost" size="icon-sm" aria-label="Sửa đề thi" title="Sửa đề thi" onClick={() => openEditExam(exam)}>
                             <Pencil />
                           </Button>
-                          <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label="Xóa đề thi"
-                              title="Xóa đề thi"
-                              disabled={deleteExamMutation.isPending}
-                              onClick={() => {
-                                if (window.confirm(`Xóa đề thi “${exam.title}”?`)) deleteExamMutation.mutate(exam.id!);
-                              }}
-                          >
-                            <Trash2 />
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  aria-label="Thao tác khác"
+                                  title="Thao tác khác"
+                              >
+                                <MoreVertical className="size-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive cursor-pointer"
+                                  onClick={() => openDeleteConfirm(exam)}
+                              >
+                                <Trash2 className="mr-2 size-4" />
+                                Xóa đề thi
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -404,11 +471,11 @@ export default function ExamManagementPage() {
                 <label className="grid gap-2 text-sm font-medium">
                   Mật khẩu đề thi (để trống nếu không yêu cầu)
                   <Input
-                    type="text"
-                    placeholder="Ví dụ: THI2026"
-                    maxLength={100}
-                    value={cfg.accessCode}
-                    onChange={(event) => setCfg((c) => ({ ...c, accessCode: event.target.value }))}
+                      type="text"
+                      placeholder="Ví dụ: THI2026"
+                      maxLength={100}
+                      value={cfg.accessCode}
+                      onChange={(event) => setCfg((c) => ({ ...c, accessCode: event.target.value }))}
                   />
                 </label>
 
@@ -516,6 +583,7 @@ export default function ExamManagementPage() {
                     <SelectTrigger aria-label="Lọc loại câu hỏi"><SelectValue placeholder="Loại câu hỏi" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ALL">Tất cả loại</SelectItem>
+                      <SelectItem value="MULTIPLE_CHOICE">Trắc nghiệm</SelectItem>
                       <SelectItem value="SINGLE_CHOICE">Một đáp án</SelectItem>
                       <SelectItem value="MULTI_CHOICE">Nhiều đáp án</SelectItem>
                       <SelectItem value="ESSAY">Tự luận</SelectItem>
@@ -550,7 +618,7 @@ export default function ExamManagementPage() {
                   )}
                   <div className="divide-y">
                     {questionRows.map((question) => {
-                      const alreadyAdded = questionIdsInExam.has(question.id);
+                      const alreadyAdded = sourceIdsInExam.has(question.id);
                       const checked = alreadyAdded || selectedQuestionIds.has(question.id);
                       return (
                           <label key={question.id} className="flex cursor-pointer gap-3 p-3 hover:bg-muted/50 has-[:disabled]:cursor-not-allowed">
@@ -562,79 +630,116 @@ export default function ExamManagementPage() {
                                 onChange={(event) => toggleQuestion(question.id, event.target.checked)}
                             />
                             <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-medium leading-5">{question.content}</span>
-                          <span className="mt-2 flex flex-wrap gap-1.5">
-                            <Badge variant="secondary">{question.topic || "Chưa phân loại"}</Badge>
-                            <Badge variant="outline">{question.difficulty}</Badge>
-                            <Badge variant="outline">{question.points} điểm</Badge>
-                            {alreadyAdded && <Badge>Đã có trong đề</Badge>}
-                          </span>
-                        </span>
+                              <span className="block text-sm font-medium leading-5">{question.content}</span>
+                              <span className="mt-2 flex flex-wrap gap-1.5">
+                                <Badge variant="secondary">{question.type}</Badge>
+                                <Badge variant="outline">{question.difficulty}</Badge>
+                                {question.topic && <Badge variant="outline">{question.topic}</Badge>}
+                              </span>
+                            </span>
                           </label>
                       );
                     })}
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs text-muted-foreground">{questionsQuery.data?.totalElements ?? 0} câu hỏi</span>
+                <div className="flex items-center justify-between gap-2 shrink-0">
+                  <Button
+                      size="sm"
+                      disabled={selectedQuestionIds.size === 0 || addQuestionsMutation.isPending}
+                      onClick={() => addQuestionsMutation.mutate()}
+                  >
+                    {addQuestionsMutation.isPending ? "Đang thêm..." : `Thêm (${selectedQuestionIds.size}) câu đã chọn`}
+                  </Button>
                   <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" disabled={questionPage === 0} onClick={() => setQuestionPage((page) => page - 1)}>Trước</Button>
-                    <span className="min-w-16 text-center text-xs text-muted-foreground">{questionTotalPages === 0 ? 0 : questionPage + 1} / {questionTotalPages}</span>
+                    <span className="text-xs text-muted-foreground">{questionTotalPages === 0 ? 0 : questionPage + 1} / {questionTotalPages}</span>
                     <Button variant="outline" size="sm" disabled={questionPage + 1 >= questionTotalPages} onClick={() => setQuestionPage((page) => page + 1)}>Sau</Button>
                   </div>
                 </div>
               </section>
 
-              <section className="flex min-h-48 flex-col rounded-md border lg:min-h-0">
-                <div className="flex items-center justify-between border-b px-3 py-2.5">
-                  <div>
-                    <h2 className="text-sm font-semibold">Câu hỏi trong đề</h2>
-                    <p className="text-xs text-muted-foreground">
-                      {(activeExam?.questions?.length ?? 0)} câu · {activeExam?.totalPoints ?? 0} điểm
-                    </p>
-                  </div>
-                  <Button
-                      size="sm"
-                      disabled={!selectedQuestionIds.size || addQuestionsMutation.isPending}
-                      onClick={() => addQuestionsMutation.mutate()}
-                  >
-                    <Plus />
-                    Thêm {selectedQuestionIds.size || ""}
-                  </Button>
+              <section className="flex min-h-0 flex-col gap-3 rounded-md border p-3 bg-muted/20">
+                <div className="flex items-center justify-between border-b pb-2">
+                  <h3 className="text-sm font-semibold">Câu hỏi trong đề ({activeExam?.questions?.length ?? 0})</h3>
+                  {activeExamStarted && <Badge variant="destructive" className="text-[10px]">Đang/Đã diễn ra</Badge>}
                 </div>
-                <div className="min-h-0 flex-1 divide-y overflow-y-auto">
-                  {activeExam?.questions?.map((question) => (
-                      <div key={question.id} className="flex items-start gap-2 p-3">
-                        <div className="min-w-0 flex-1">
-                          <p className="line-clamp-3 text-sm">{question.content}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">{question.points} điểm · {question.topic || "Chưa phân loại"}</p>
-                        </div>
-                        <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label="Gỡ câu hỏi khỏi đề"
-                            title="Gỡ câu hỏi khỏi đề"
-                            disabled={removeQuestionMutation.isPending}
-                            onClick={() => removeQuestionMutation.mutate({ examId: activeExam.id!, questionId: question.id })}
-                        >
-                          <Trash2 />
-                        </Button>
-                      </div>
-                  ))}
-                  {!activeExam?.questions?.length && (
-                      <p className="p-5 text-center text-sm text-muted-foreground">Đề chưa có câu hỏi.</p>
+                <div className="flex-1 overflow-y-auto divide-y">
+                  {(activeExam?.questions ?? []).length === 0 ? (
+                      <p className="p-4 text-center text-xs text-muted-foreground">Chưa có câu hỏi nào trong đề thi này.</p>
+                  ) : (
+                      (activeExam?.questions ?? []).map((q) => (
+                          <div key={q.id} className="py-2.5 space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="text-xs font-medium leading-tight">{q.content}</span>
+                              <div className="flex gap-1 shrink-0">
+                                <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    title="Sửa bản sao câu hỏi"
+                                    disabled={activeExamStarted}
+                                    onClick={() => setEditingQuestion(q)}
+                                >
+                                  <Pencil className="size-3" />
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    title="Gỡ khỏi đề thi"
+                                    disabled={activeExamStarted || removeQuestionMutation.isPending}
+                                    onClick={() => activeExam?.id && removeQuestionMutation.mutate({ examId: activeExam.id, questionId: q.id })}
+                                >
+                                  <Trash2 className="size-3 text-destructive" />
+                                </Button>
+                              </div>
+                            </div>
+                            <QuestionAnswers question={q} />
+                          </div>
+                      ))
                   )}
                 </div>
               </section>
             </div>
+          </DialogContent>
+        </Dialog>
 
-            <div className="flex shrink-0 justify-end border-t pt-3">
-              <Button variant="outline" onClick={() => setPickerOpen(false)}>
-                <X />
-                Đóng
+        {editingQuestion && activeExam && (
+            <EditExamQuestionDialog
+                exam={activeExam}
+                question={editingQuestion}
+                onClose={() => setEditingQuestion(null)}
+                onSaved={(updatedExam: ExamDTO) => {
+                  setActiveExam(updatedExam);
+                  refreshExams();
+                  setEditingQuestion(null);
+                }}
+            />
+        )}
+
+        <Dialog open={Boolean(examToDelete)} onOpenChange={(open: boolean) => { if (!open) closeDeleteConfirm(); }}>
+          <DialogContent aria-describedby="delete-exam-description">
+            <DialogHeader>
+              <DialogTitle>Xác nhận xóa đề thi</DialogTitle>
+              <DialogDescription id="delete-exam-description">
+                Hành động này sẽ xóa vĩnh viễn đề thi “{examToDelete?.title}”. Hãy nhập <strong className="text-foreground">DELETE</strong> để xác nhận.
+              </DialogDescription>
+            </DialogHeader>
+            <Input
+                value={deleteConfirmInput}
+                onChange={(e) => setDeleteConfirmInput(e.target.value)}
+                placeholder="Nhập DELETE"
+            />
+            <DialogFooter>
+              <Button variant="outline" onClick={closeDeleteConfirm}>Hủy</Button>
+
+              <Button
+                  variant="destructive"
+                  disabled={deleteConfirmInput !== "DELETE" || deleteExamMutation.isPending}
+                  onClick={handleConfirmDelete}
+              >
+                {deleteExamMutation.isPending ? "Đang xóa..." : "Xóa vĩnh viễn"}
               </Button>
-            </div>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </MainLayout>

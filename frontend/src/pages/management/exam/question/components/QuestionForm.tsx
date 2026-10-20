@@ -30,7 +30,7 @@ export interface QuestionFormValues {
 
 export const initialQuestionForm: QuestionFormValues = {
     content: "",
-    type: "SINGLE_CHOICE",
+    type: "MULTI_CHOICE",
     difficulty: "EASY",
     topic: "",
     points: 1,
@@ -47,9 +47,19 @@ interface QuestionFormProps {
     onSubmit: (values: QuestionFormValues) => void;
     isSaving: boolean;
     submitLabel: string;
+    showActive?: boolean;
+    onCancel?: () => void;
 }
 
-export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel }: QuestionFormProps) {
+export function QuestionForm({
+                                 form,
+                                 setForm,
+                                 onSubmit,
+                                 isSaving,
+                                 submitLabel,
+                                 showActive = false,
+                                 onCancel,
+                             }: QuestionFormProps) {
     const navigate = useNavigate();
 
     const updateOption = (index: number, patch: Partial<QuestionOptionDTO>) =>
@@ -65,7 +75,6 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel }:
                 if (i === index) {
                     return { ...option, correct: checked };
                 }
-                // Single choice allows only one correct option
                 return prev.type === "SINGLE_CHOICE" && checked ? { ...option, correct: false } : option;
             }),
         }));
@@ -88,8 +97,15 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel }:
             toast.error("Type and difficulty are required.");
             return;
         }
+        if (!Number.isInteger(form.points) || form.points < 1) {
+            toast.error("Points must be a whole number of at least 1.");
+            return;
+        }
+        if (content.length > 2000) {
+            toast.error("Content must be at most 2000 characters.");
+            return;
+        }
         if (form.type === "ESSAY") {
-            // Essay has no options: send an empty list so the backend clears any old ones
             onSubmit({ ...form, content, topic: form.topic.trim(), options: [] });
             return;
         }
@@ -154,9 +170,10 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel }:
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
+                            <SelectItem value="MULTIPLE_CHOICE">Multiple choice (Trắc nghiệm)</SelectItem>
                             <SelectItem value="SINGLE_CHOICE">Single choice</SelectItem>
                             <SelectItem value="MULTI_CHOICE">Multi choice</SelectItem>
-                            <SelectItem value="ESSAY">Essay</SelectItem>
+                            <SelectItem value="ESSAY">Essay (Tự luận)</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
@@ -196,8 +213,8 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel }:
                     <Input
                         id="question-points"
                         type="number"
-                        min={0}
-                        step="any"
+                        min={1}
+                        step={1}
                         value={form.points}
                         onChange={(event) =>
                             setForm((prev) => ({ ...prev, points: Number(event.target.value) }))
@@ -206,23 +223,30 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel }:
                 </div>
             </div>
 
-            <div className="flex items-center gap-3">
-                <Switch
-                    id="question-active"
-                    checked={form.isActive}
-                    onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isActive: checked }))}
-                />
-                <Label htmlFor="question-active">Active</Label>
-            </div>
+            {showActive && (
+                <div className="flex items-center gap-3">
+                    <Switch
+                        id="question-active"
+                        checked={form.isActive}
+                        onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isActive: checked }))}
+                    />
+                    <Label htmlFor="question-active">Active</Label>
+                </div>
+            )}
 
             {form.type === "ESSAY" ? (
                 <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
-                    Essay questions have no options; they are graded manually.
+                    Essay questions have no options; students type their answer in an editor and the teacher grades it manually.
                 </p>
             ) : (
                 <div className="grid gap-3">
                     <div className="flex items-center justify-between">
-                        <Label>Options (tick the correct answer)</Label>
+                        <div className="grid gap-1">
+                            <Label>Options (tick the correct answer)</Label>
+                            <p className="text-xs text-muted-foreground">
+                                One correct answer: students see round buttons (pick one). Several correct answers: students see square boxes (pick many).
+                            </p>
+                        </div>
                         <Button
                             type="button"
                             variant="outline"
@@ -282,7 +306,12 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel }:
             )}
 
             <CardFooter className="px-0 pt-2 flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => navigate("/questions")} disabled={isSaving}>
+                <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => (onCancel ? onCancel() : navigate("/questions"))}
+                    disabled={isSaving}
+                >
                     <ArrowLeft className="h-4 w-4" />
                     Back
                 </Button>

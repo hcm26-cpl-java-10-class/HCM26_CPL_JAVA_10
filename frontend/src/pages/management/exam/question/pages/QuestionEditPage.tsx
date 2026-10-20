@@ -41,6 +41,7 @@ export function QuestionEditPage() {
                 id: option.id,
                 content: option.content,
                 correct: !!option.correct,
+                imageUrl: option.imageUrl || null,
             })),
         });
     }, [questionQuery.data]);
@@ -79,6 +80,7 @@ export function QuestionEditPage() {
                             onSubmit={(values) => updateMutation.mutate(values)}
                             isSaving={updateMutation.isPending}
                             submitLabel="Save changes"
+                            showActive
                         />
                     )}
                 </CardContent>
