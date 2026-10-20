@@ -76,4 +76,15 @@ public interface CalendarVersionRepository
             @Param("versionId") Long versionId
     );
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+    SELECT cv
+    FROM CalendarVersion cv
+    WHERE cv.id = :versionId
+      AND cv.isActive = true
+    """)
+    Optional<CalendarVersion> findActiveByIdForUpdate(
+            @Param("versionId") Long versionId
+    );
+
 }

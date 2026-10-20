@@ -51,9 +51,14 @@ public class ConflictDetectionServiceImpl implements ConflictDetectionService {
         detectWithinDraft(validDraftSessions, conflicts);
         detectAgainstOtherActiveClasses(validDraftSessions, validActiveSessions, conflicts);
 
+        boolean hasConflict = !conflicts.isEmpty();
         return ConflictCheckResult.builder()
                 .calendarVersionId(calendarVersionId)
-                .hasConflict(!conflicts.isEmpty())
+                .hasConflict(hasConflict)
+                .hasBlockingConflict(hasConflict)
+                .canActivate(!hasConflict && validationErrors.isEmpty())
+                .conflictCount(conflicts.size())
+                .blockingConflictCount(conflicts.size())
                 .conflicts(conflicts)
                 .validationErrors(validationErrors)
                 .build();

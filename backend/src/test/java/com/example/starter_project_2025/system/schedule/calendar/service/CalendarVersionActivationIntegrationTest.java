@@ -11,6 +11,7 @@ import com.example.starter_project_2025.system.schedule.calendar.repository.Cale
 import com.example.starter_project_2025.system.schedule.detection.ConflictDetectionService;
 import com.example.starter_project_2025.system.schedule.detection.dto.ConflictCheckResult;
 import com.example.starter_project_2025.system.schedule.detection.dto.ConflictDTO;
+import com.example.starter_project_2025.system.schedule.conflict_resolution.ConflictResolutionServiceImpl;
 import com.example.starter_project_2025.system.schedule.session.Session;
 import com.example.starter_project_2025.system.schedule.session.SessionRepository;
 import com.example.starter_project_2025.system.schedule.session.SessionStatus;
@@ -37,6 +38,7 @@ import static org.mockito.Mockito.when;
 @DataJpaTest
 @Import({
         CalendarVersionServiceImpl.class,
+        ConflictResolutionServiceImpl.class,
         CalendarVersionActivationIntegrationTest.FixedClockConfig.class
 })
 class CalendarVersionActivationIntegrationTest {
@@ -101,6 +103,7 @@ class CalendarVersionActivationIntegrationTest {
                 .thenReturn(ConflictCheckResult.builder()
                         .calendarVersionId(fixture.draft().getId())
                         .hasConflict(true)
+                        .hasBlockingConflict(true)
                         .conflicts(List.of(new ConflictDTO()))
                         .build());
 

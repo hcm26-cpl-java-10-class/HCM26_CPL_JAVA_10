@@ -16,6 +16,7 @@ import com.example.starter_project_2025.system.schedule.calendar.repository.Cale
 import com.example.starter_project_2025.system.schedule.calendar.exception.CalendarActivationConflictException;
 import com.example.starter_project_2025.system.schedule.detection.ConflictDetectionService;
 import com.example.starter_project_2025.system.schedule.detection.dto.ConflictCheckResult;
+import com.example.starter_project_2025.system.schedule.conflict_resolution.ConflictResolutionService;
 import com.example.starter_project_2025.system.schedule.exception.UnprocessableEntityException;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +43,7 @@ public class CalendarVersionServiceImpl implements CalendarVersionService {
     private final SessionRepository sessionRepository;
     private final CalendarVersionMapper calendarVersionMapper;
     private final ConflictDetectionService conflictDetectionService;
+    private final ConflictResolutionService conflictResolutionService;
     private final Clock clock;
 
     @Override
@@ -300,8 +302,9 @@ public class CalendarVersionServiceImpl implements CalendarVersionService {
             );
         }
 
-        ConflictCheckResult conflictResult =
-                conflictDetectionService.checkConflicts(versionId);
+        ConflictCheckResult conflictResult = conflictResolutionService.resolve(
+                conflictDetectionService.checkConflicts(versionId)
+        );
 
         if (!conflictResult.getValidationErrors().isEmpty()) {
             throw new UnprocessableEntityException(
@@ -311,9 +314,11 @@ public class CalendarVersionServiceImpl implements CalendarVersionService {
             );
         }
 
-        if (conflictResult.isHasConflict()) {
+        if (conflictResult.isHasBlockingConflict()) {
             throw new CalendarActivationConflictException(conflictResult);
         }
+
+        conflictResolutionService.markApplied(conflictResult, activatedBy);
 
         calendarVersionRepository
                 .findActiveVersionByCalendarIdForUpdate(calendarId)

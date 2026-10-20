@@ -4,7 +4,9 @@ import com.example.starter_project_2025.system.schedule.session.Session;
 import com.example.starter_project_2025.system.schedule.session.SessionRepository;
 import com.example.starter_project_2025.system.schedule.session.SessionStatus;
 import com.example.starter_project_2025.system.schedule.calendar.CalendarVersion;
+import com.example.starter_project_2025.system.schedule.calendar.CalendarVersionStatus;
 import com.example.starter_project_2025.system.schedule.calendar.repository.CalendarVersionRepository;
+import com.example.starter_project_2025.system.schedule.exception.ConflictException;
 import com.example.starter_project_2025.system.schedule.generation.dto.*;
 import com.example.starter_project_2025.system.schedule.generation.engine.ScheduleGeneratorEngine;
 import lombok.AccessLevel;
@@ -272,6 +274,21 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
     @Override
     @Transactional(rollbackFor = Exception.class)
     public BulkSaveSessionsResponseDTO saveBulkSessions(Long versionId, BulkSaveSessionsRequestDTO request, String idempotencyKey) {
+        // Serialize draft mutations with activation and the conflict-resolution workflow.
+        CalendarVersion targetVersion = calendarVersionRepository
+                .findActiveByIdForUpdate(versionId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Calendar version not found with ID: " + versionId
+                ));
+
+        if (targetVersion.getStatus() != CalendarVersionStatus.DRAFT) {
+            throw new ConflictException(
+                    "CALENDAR_VERSION_NOT_DRAFT",
+                    "Bulk session generation is only allowed for Calendar Versions in DRAFT status. Version #"
+                            + targetVersion.getVersionNumber() + " is currently " + targetVersion.getStatus() + "."
+            );
+        }
+
         // 1. Kiểm tra Idempotency chống click đúp (BR-UNI-20 & US-F16-05)
         if (idempotencyKey != null && !idempotencyKey.trim().isEmpty()) {
             BulkSaveSessionsResponseDTO cached = idempotencyStore.get(idempotencyKey.trim());
@@ -279,25 +296,6 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
                 log.info("Idempotent hit for key: {}. Returning cached result.", idempotencyKey);
                 return cached;
             }
-        }
-
-        // 2. Check Safety Invariant: only allowed in DRAFT version (US-F16-05)
-        if (Long.valueOf(999L).equals(versionId)) {
-            throw new com.example.starter_project_2025.system.schedule.exception.ConflictException(
-                    "CALENDAR_VERSION_NOT_DRAFT",
-                    "Bulk session generation is only allowed for Calendar Versions in DRAFT status."
-            );
-        }
-
-        com.example.starter_project_2025.system.schedule.calendar.CalendarVersion targetVersion = calendarVersionRepository.findById(versionId)
-                .orElseThrow(() -> new IllegalArgumentException("Calendar version not found with ID: " + versionId));
-
-        if (targetVersion.getStatus() != null && targetVersion.getStatus() != com.example.starter_project_2025.system.schedule.calendar.CalendarVersionStatus.DRAFT) {
-            throw new com.example.starter_project_2025.system.schedule.exception.ConflictException(
-                    "CALENDAR_VERSION_NOT_DRAFT",
-                    "Bulk session generation is only allowed for Calendar Versions in DRAFT status. Version #"
-                            + targetVersion.getVersionNumber() + " is currently " + targetVersion.getStatus() + "."
-            );
         }
 
         if (request == null || request.getSessions() == null || request.getSessions().isEmpty()) {

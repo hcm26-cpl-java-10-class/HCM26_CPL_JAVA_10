@@ -162,7 +162,7 @@ Các trường hợp bị chặn:
 | `422 Unprocessable Entity` | `CALENDAR_VERSION_EMPTY` |
 | `422 Unprocessable Entity` | `CALENDAR_ACTIVATION_VALIDATION_FAILED` |
 
-Policy hiện tại là nghiêm ngặt: còn bất kỳ conflict nào thì không activate, kể cả session có `isOverridden=true`.
+Policy activate vẫn bỏ qua cờ legacy `Session.isOverridden`, nhưng hỗ trợ hồ sơ audit override mới. Chỉ conflict type được một resolution `APPROVED`, còn hiệu lực và đúng policy mới được waive. `ACKNOWLEDGED` vẫn chặn activate. Xem hướng dẫn đầy đủ tại [SCHEDULE_CONFLICT_RESOLUTION.md](SCHEDULE_CONFLICT_RESOLUTION.md).
 
 ## 4. Lấy access token để test
 
@@ -192,7 +192,7 @@ Cũng có thể gọi API qua Swagger UI:
 http://localhost:8080/swagger-ui/index.html
 ```
 
-Admin được dùng trong ví dụ vì role `ADMIN` có toàn bộ permission. Role `TEACHER` hiện chưa được seed quyền `CALENDARVERSION_READ`.
+Admin được dùng trong ví dụ vì role `ADMIN` có toàn bộ permission. Role `TEACHER` cũng được seed `CALENDARVERSION_READ` để có thể chạy detection trước khi gửi conflict resolution request.
 
 ## 5. Tạo dữ liệu test thủ công trên H2
 
@@ -400,7 +400,7 @@ Phạm vi test hiện tại:
 bash mvnw -q test
 ```
 
-Tại thời điểm viết tài liệu, các test conflict detection và activate CalendarVersion đều pass. Toàn bộ suite còn lỗi độc lập trong `ModuleGroupControllerTest`: Web MVC context thiếu bean `RefreshTokenService` cho `JwtAuthenticationFilter`.
+Tại thời điểm cập nhật tài liệu, các test conflict detection, conflict resolution và activate CalendarVersion đều pass. Toàn bộ suite còn lỗi độc lập trong `ModuleGroupControllerTest`: Web MVC test context thiếu bean `RefreshTokenService` cho `JwtAuthenticationFilter`.
 
 ## 8. Các API liên quan
 
@@ -422,7 +422,7 @@ API activate sử dụng database pessimistic lock chung cho các calendar. Cơ 
 
 - Không cần endpoint riêng cho conflict nội bộ và conflict bên ngoài; response hiện tại đã trả chung đầy đủ.
 - Chưa cần API lưu conflict vào database vì conflict là dữ liệu tính toán.
-- Chưa cần endpoint `resolve conflict` riêng: session đã có cơ chế update/override. Policy activate hiện vẫn chặn mọi conflict.
+- Các endpoint conflict resolution đã được bổ sung để request, approve, reject, revoke và xem audit trail. Policy activate chỉ bỏ qua đúng conflict type đã được approve.
 
 ### Nâng cấp tùy chọn khi dữ liệu lớn
 
@@ -438,5 +438,5 @@ Các filter `scope`, `type` và pagination chỉ cần thiết khi số lượng
 
 - Endpoint GET conflict chỉ đọc dữ liệu và không tự động sửa session.
 - API activate luôn kiểm tra lại conflict trong transaction, không tin vào kết quả GET trước đó.
-- `isOverridden=true` hiện không làm conflict biến mất và không cho phép bypass activation.
+- `isOverridden=true` không làm conflict biến mất và không cho phép bypass activation; phải dùng audited conflict resolution.
 - Room hiện là chuỗi, không phải `roomId`. Nếu hệ thống phòng có mã định danh ổn định, nên bổ sung `roomId` trong một migration riêng.

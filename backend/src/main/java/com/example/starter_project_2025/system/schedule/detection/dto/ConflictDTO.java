@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.schedule.detection.dto;
 
+import com.example.starter_project_2025.system.schedule.conflict_resolution.ConflictResolutionReason;
+import com.example.starter_project_2025.system.schedule.conflict_resolution.ConflictResolutionStatus;
 import com.example.starter_project_2025.system.schedule.session.dto.SessionDTO;
 import com.example.starter_project_2025.system.schedule.detection.ConflictType;
 import lombok.*;
@@ -18,7 +20,21 @@ import java.util.Set;
 public class ConflictDTO {
     SessionDTO session;
     SessionDTO conflictingSession;
+    String conflictKey;
 
     @Builder.Default
     Set<ConflictType> conflictTypes = EnumSet.noneOf(ConflictType.class);
+
+    @Builder.Default
+    Set<ConflictType> blockingConflictTypes = EnumSet.noneOf(ConflictType.class);
+
+    @Builder.Default
+    Set<ConflictType> waivedConflictTypes = EnumSet.noneOf(ConflictType.class);
+
+    @Builder.Default
+    boolean blocking = true;
+
+    Long resolutionId;
+    ConflictResolutionStatus resolutionStatus;
+    ConflictResolutionReason resolutionReason;
 }

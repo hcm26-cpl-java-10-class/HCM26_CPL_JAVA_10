@@ -11,6 +11,7 @@ import com.example.starter_project_2025.system.schedule.calendar.exception.Calen
 import com.example.starter_project_2025.system.schedule.calendar.repository.CalendarRepository;
 import com.example.starter_project_2025.system.schedule.calendar.repository.CalendarVersionRepository;
 import com.example.starter_project_2025.system.schedule.detection.ConflictDetectionService;
+import com.example.starter_project_2025.system.schedule.conflict_resolution.ConflictResolutionService;
 import com.example.starter_project_2025.system.schedule.detection.dto.ConflictCheckResult;
 import com.example.starter_project_2025.system.schedule.detection.dto.ConflictDTO;
 import com.example.starter_project_2025.system.schedule.exception.UnprocessableEntityException;
@@ -31,6 +32,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -49,6 +51,7 @@ class CalendarVersionActivationServiceTest {
     private SessionRepository sessionRepository;
     private CalendarVersionMapper calendarVersionMapper;
     private ConflictDetectionService conflictDetectionService;
+    private ConflictResolutionService conflictResolutionService;
     private CalendarVersionServiceImpl service;
     private Calendar calendar;
     private CalendarVersion draft;
@@ -60,6 +63,7 @@ class CalendarVersionActivationServiceTest {
         sessionRepository = mock(SessionRepository.class);
         calendarVersionMapper = mock(CalendarVersionMapper.class);
         conflictDetectionService = mock(ConflictDetectionService.class);
+        conflictResolutionService = mock(ConflictResolutionService.class);
 
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         service = new CalendarVersionServiceImpl(
@@ -68,6 +72,7 @@ class CalendarVersionActivationServiceTest {
                 sessionRepository,
                 calendarVersionMapper,
                 conflictDetectionService,
+                conflictResolutionService,
                 clock
         );
 
@@ -97,6 +102,12 @@ class CalendarVersionActivationServiceTest {
         )).thenReturn(true);
         when(conflictDetectionService.checkConflicts(DRAFT_ID))
                 .thenReturn(noConflicts());
+        when(conflictResolutionService.resolve(any(ConflictCheckResult.class)))
+                .thenAnswer(invocation -> {
+                    ConflictCheckResult result = invocation.getArgument(0);
+                    result.setHasBlockingConflict(result.isHasConflict());
+                    return result;
+                });
         when(calendarVersionRepository.saveAndFlush(draft)).thenReturn(draft);
         when(calendarVersionMapper.toResponse(draft)).thenAnswer(invocation -> {
             CalendarVersion entity = invocation.getArgument(0);
@@ -133,6 +144,7 @@ class CalendarVersionActivationServiceTest {
         assertEquals(LocalDateTime.ofInstant(NOW, ZoneOffset.UTC), draft.getActivatedAt());
         assertEquals(ACTOR_ID, draft.getActivatedBy());
         assertEquals(CalendarVersionStatus.ACTIVE, response.getStatus());
+        verify(conflictResolutionService).markApplied(any(ConflictCheckResult.class), eq(ACTOR_ID));
         verify(calendarRepository).lockAllActiveCalendarsForScheduleActivation();
         verify(conflictDetectionService).checkConflicts(DRAFT_ID);
         verify(calendarVersionRepository).save(currentActive);

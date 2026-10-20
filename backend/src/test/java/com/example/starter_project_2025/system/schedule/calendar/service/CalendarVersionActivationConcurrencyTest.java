@@ -8,6 +8,7 @@ import com.example.starter_project_2025.system.schedule.calendar.dto.CalendarVer
 import com.example.starter_project_2025.system.schedule.calendar.exception.CalendarActivationConflictException;
 import com.example.starter_project_2025.system.schedule.calendar.repository.CalendarRepository;
 import com.example.starter_project_2025.system.schedule.calendar.repository.CalendarVersionRepository;
+import com.example.starter_project_2025.system.schedule.conflict_resolution.ConflictResolutionServiceImpl;
 import com.example.starter_project_2025.system.schedule.detection.ConflictDetectionMapperImpl;
 import com.example.starter_project_2025.system.schedule.detection.ConflictDetectionServiceImpl;
 import com.example.starter_project_2025.system.schedule.session.Session;
@@ -44,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 @Import({
         CalendarVersionServiceImpl.class,
         ConflictDetectionServiceImpl.class,
+        ConflictResolutionServiceImpl.class,
         CalendarVersionMapperImpl.class,
         ConflictDetectionMapperImpl.class,
         SessionMapperImpl.class,

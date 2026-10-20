@@ -3,6 +3,8 @@ package com.example.starter_project_2025.service;
 import com.example.starter_project_2025.system.schedule.session.Session;
 import com.example.starter_project_2025.system.schedule.session.SessionRepository;
 import com.example.starter_project_2025.system.schedule.calendar.repository.CalendarVersionRepository;
+import com.example.starter_project_2025.system.schedule.calendar.CalendarVersion;
+import com.example.starter_project_2025.system.schedule.calendar.CalendarVersionStatus;
 import com.example.starter_project_2025.system.schedule.exception.ConflictException;
 import com.example.starter_project_2025.system.schedule.generation.BulkSessionGenerationServiceImpl;
 import com.example.starter_project_2025.system.schedule.generation.dto.BulkSaveSessionsRequestDTO;
@@ -78,7 +80,10 @@ public class BulkSessionGenerationServiceTest {
                 .sessions(items)
                 .build();
 
-        when(calendarVersionRepository.findById(versionId)).thenReturn(java.util.Optional.of(new com.example.starter_project_2025.system.schedule.calendar.CalendarVersion()));
+        CalendarVersion draft = new CalendarVersion();
+        draft.setStatus(CalendarVersionStatus.DRAFT);
+        when(calendarVersionRepository.findActiveByIdForUpdate(versionId))
+                .thenReturn(java.util.Optional.of(draft));
         when(sessionRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         // WHEN
@@ -96,7 +101,7 @@ public class BulkSessionGenerationServiceTest {
     @Test
     @DisplayName("TC-BSG-503: Chặn cố tình lưu vào CalendarVersion ACTIVE (Safety Invariant)")
     void saveBulkSessions_ShouldThrowConflict_WhenVersionIsActive() {
-        // GIVEN: Version 999 đại diện cho ACTIVE version
+        // GIVEN: version đang ở trạng thái ACTIVE
         Long activeVersionId = 999L;
         BulkSaveSessionsRequestDTO request = BulkSaveSessionsRequestDTO.builder()
                 .sessions(List.of(
@@ -107,6 +112,12 @@ public class BulkSessionGenerationServiceTest {
                                 .build()
                 ))
                 .build();
+
+        CalendarVersion active = new CalendarVersion();
+        active.setVersionNumber(1);
+        active.setStatus(CalendarVersionStatus.ACTIVE);
+        when(calendarVersionRepository.findActiveByIdForUpdate(activeVersionId))
+                .thenReturn(java.util.Optional.of(active));
 
         // WHEN & THEN: Phải ném ngoại lệ ConflictException (HTTP 409)
         ConflictException ex = assertThrows(ConflictException.class, () ->
@@ -133,7 +144,10 @@ public class BulkSessionGenerationServiceTest {
                 ))
                 .build();
 
-        when(calendarVersionRepository.findById(versionId)).thenReturn(java.util.Optional.of(new com.example.starter_project_2025.system.schedule.calendar.CalendarVersion()));
+        CalendarVersion draft = new CalendarVersion();
+        draft.setStatus(CalendarVersionStatus.DRAFT);
+        when(calendarVersionRepository.findActiveByIdForUpdate(versionId))
+                .thenReturn(java.util.Optional.of(draft));
         when(sessionRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         // WHEN: Lần gọi thứ 1
@@ -145,5 +159,6 @@ public class BulkSessionGenerationServiceTest {
         // THEN: Cả 2 lần trả về cùng 1 kết quả, nhưng saveAll chỉ được gọi đúng 1 lần duy nhất
         assertSame(firstCall, secondCall);
         verify(sessionRepository, times(1)).saveAll(anyList());
+        verify(calendarVersionRepository, times(2)).findActiveByIdForUpdate(versionId);
     }
 }
