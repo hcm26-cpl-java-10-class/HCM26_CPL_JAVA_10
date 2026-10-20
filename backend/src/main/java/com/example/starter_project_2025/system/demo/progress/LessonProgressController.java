@@ -55,6 +55,17 @@ public class LessonProgressController {
         return progressService.recordAccess(getUserId(principal), enrollmentId, lessonId);
     }
 
+    @PutMapping("/{enrollmentId}/lessons/{lessonId}/answer")
+    @PreAuthorize("hasAuthority('LESSON_PROGRESS_UPDATE')")
+    public LessonProgressDTO saveAnswer(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long enrollmentId,
+            @PathVariable Long lessonId,
+            @RequestBody UpdateAnswerRequest request
+    ) {
+        return progressService.saveAnswer(getUserId(principal), enrollmentId, lessonId, request.answer());
+    }
+
     @GetMapping("/{enrollmentId}/last-lesson")
     @PreAuthorize("hasAuthority('LESSON_PROGRESS_READ')")
     public LessonProgressDTO.LessonItem getLastLesson(
@@ -72,5 +83,8 @@ public class LessonProgressController {
     }
 
     public record UpdateProgressRequest(Boolean completed) {
+    }
+
+    public record UpdateAnswerRequest(String answer) {
     }
 }

@@ -122,4 +122,24 @@ class LessonProgressServiceTest {
         verify(enrollmentRepository).save(enrollment);
         verify(progressRepository).save(any(LessonProgress.class));
     }
+
+    @Test
+    void savesStudentAnswerForTextLesson() {
+        LessonProgress progress = LessonProgress.builder()
+                .enrollment(enrollment)
+                .lesson(lesson)
+                .build();
+        when(enrollmentRepository.findByIdAndUser_Id(40L, 7L)).thenReturn(Optional.of(enrollment));
+        when(lessonRepository.findById(30L)).thenReturn(Optional.of(lesson));
+        when(progressRepository.findByEnrollment_IdAndLesson_Id(40L, 30L))
+                .thenReturn(Optional.of(progress));
+        when(lessonRepository.findByCourseIdOrdered(10L)).thenReturn(List.of(lesson));
+        when(progressRepository.findAllByEnrollment_Id(40L)).thenReturn(List.of(progress));
+
+        LessonProgressDTO result = service.saveAnswer(7L, 40L, 30L, "My answer");
+
+        assertEquals("My answer", progress.getStudentAnswer());
+        assertEquals("My answer", result.lessons().getFirst().studentAnswer());
+        verify(progressRepository).save(progress);
+    }
 }

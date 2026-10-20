@@ -2,6 +2,7 @@
 package com.example.starter_project_2025.system.demo.section;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
+import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import com.example.starter_project_2025.system.demo.course.Course;
 import jakarta.persistence.*;
@@ -18,6 +19,14 @@ import lombok.experimental.SuperBuilder;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ResourcePermission("SECTION")
+@ResourceMenu(
+        title = "Sections",
+        group = "Course Management",
+        icon = "layers",
+        url = "/sections",
+        order = 3,
+        permission = "SECTION_READ"
+)
 public class Section extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)

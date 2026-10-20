@@ -31,6 +31,18 @@ export const progressApi = {
     return response.data;
   },
 
+  saveAnswer: async (
+    enrollmentId: number,
+    lessonId: number,
+    answer: string,
+  ): Promise<EnrollmentProgress> => {
+    const response = await axiosInstance.put<EnrollmentProgress>(
+      `/progress/enrollments/${enrollmentId}/lessons/${lessonId}/answer`,
+      { answer },
+    );
+    return response.data;
+  },
+
   getLastLesson: async (enrollmentId: number): Promise<LessonProgressItem> => {
     const response = await axiosInstance.get<LessonProgressItem>(
       `/progress/enrollments/${enrollmentId}/last-lesson`,

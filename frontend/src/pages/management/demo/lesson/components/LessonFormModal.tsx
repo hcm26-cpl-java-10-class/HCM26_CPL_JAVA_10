@@ -30,6 +30,90 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { formatDuration, LessonPreview } from "./LessonPreview";
 
+type YouTubeWindow = Window & {
+  YT?: { Player: new (element: HTMLElement, options: Record<string, unknown>) => unknown };
+  onYouTubeIframeAPIReady?: () => void;
+};
+
+let youtubeApiPromise: Promise<void> | undefined;
+
+function getYouTubeVideoId(value: string): string | null {
+  try {
+    const url = new URL(value.trim());
+    if (url.hostname === "youtu.be") return url.pathname.split("/").filter(Boolean)[0] ?? null;
+    if (url.hostname.endsWith("youtube.com")) {
+      if (url.pathname === "/watch") return url.searchParams.get("v");
+      const parts = url.pathname.split("/").filter(Boolean);
+      if (["embed", "shorts", "live"].includes(parts[0])) return parts[1] ?? null;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function loadYouTubeApi(): Promise<void> {
+  const target = window as YouTubeWindow;
+  if (target.YT?.Player) return Promise.resolve();
+  if (youtubeApiPromise) return youtubeApiPromise;
+
+  youtubeApiPromise = new Promise((resolve, reject) => {
+    const previousReady = target.onYouTubeIframeAPIReady;
+    target.onYouTubeIframeAPIReady = () => {
+      previousReady?.();
+      resolve();
+    };
+
+    const existing = document.querySelector<HTMLScriptElement>(
+      'script[src="https://www.youtube.com/iframe_api"]',
+    );
+    if (existing) return;
+
+    const script = document.createElement("script");
+    script.src = "https://www.youtube.com/iframe_api";
+    script.async = true;
+    script.onerror = () => {
+      youtubeApiPromise = undefined;
+      reject(new Error("Could not load YouTube metadata"));
+    };
+    document.head.appendChild(script);
+  });
+
+  return youtubeApiPromise;
+}
+
+async function getYouTubeDuration(videoId: string): Promise<number> {
+  await loadYouTubeApi();
+  const target = window as YouTubeWindow;
+
+  return new Promise((resolve, reject) => {
+    const host = document.createElement("div");
+    host.hidden = true;
+    document.body.appendChild(host);
+
+    const cleanUp = (player?: { destroy?: () => void }) => {
+      player?.destroy?.();
+      host.remove();
+    };
+
+    const player = new target.YT!.Player(host, {
+      videoId,
+      events: {
+        onReady: (event: { target: { getDuration: () => number; destroy?: () => void } }) => {
+          const seconds = Math.round(event.target.getDuration());
+          cleanUp(event.target);
+          if (seconds > 0) resolve(seconds);
+          else reject(new Error("Video duration is unavailable"));
+        },
+        onError: () => {
+          cleanUp(player as { destroy?: () => void });
+          reject(new Error("Video duration is unavailable"));
+        },
+      },
+    }) as { destroy?: () => void };
+  });
+}
+
 interface LessonFormModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -123,6 +207,7 @@ export function LessonFormModal({
   const [form, setForm] = useState<FormState>(() => buildInitialState(lesson, defaultOrderIndex));
   const [errors, setErrors] = useState<FieldErrors>({});
   const [showPreview, setShowPreview] = useState(false);
+  const [durationStatus, setDurationStatus] = useState("");
 
   // Reset form mỗi lần mở modal hoặc đổi bài học đang sửa
   useEffect(() => {
@@ -130,8 +215,42 @@ export function LessonFormModal({
       setForm(buildInitialState(lesson, defaultOrderIndex));
       setErrors({});
       setShowPreview(false);
+      setDurationStatus("");
     }
   }, [open, lesson, defaultOrderIndex]);
+
+  useEffect(() => {
+    if (!open || form.contentType !== "VIDEO") {
+      setDurationStatus("");
+      return;
+    }
+
+    const videoId = getYouTubeVideoId(form.contentUrl);
+    if (!videoId) {
+      setDurationStatus(form.contentUrl.trim() ? "Enter duration manually for non-YouTube videos." : "");
+      return;
+    }
+
+    let cancelled = false;
+    setDurationStatus("Reading duration from YouTube...");
+    const timer = window.setTimeout(() => {
+      void getYouTubeDuration(videoId)
+        .then((seconds) => {
+          if (cancelled) return;
+          setForm((current) => ({ ...current, duration: String(seconds) }));
+          setErrors((current) => ({ ...current, duration: undefined }));
+          setDurationStatus(`Detected automatically: ${formatDuration(seconds)}`);
+        })
+        .catch(() => {
+          if (!cancelled) setDurationStatus("Could not detect duration. You can enter it manually.");
+        });
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [open, form.contentType, form.contentUrl]);
 
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -177,6 +296,7 @@ export function LessonFormModal({
       title: form.title.trim(),
       contentType: form.contentType,
       orderIndex: Number(form.orderIndex),
+      isActive: lesson?.isActive ?? true,
     };
     if (form.duration !== "") payload.duration = Number(form.duration);
 
@@ -226,7 +346,7 @@ export function LessonFormModal({
             <FieldMessage message={errors.title} />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid items-start gap-4 sm:grid-cols-3">
             <div className="grid gap-1.5 sm:col-span-1">
               <Label>Content type</Label>
               <Select
@@ -244,6 +364,7 @@ export function LessonFormModal({
                   ))}
                 </SelectContent>
               </Select>
+              <p className="min-h-4 text-xs text-muted-foreground">&nbsp;</p>
             </div>
 
             <div className="grid gap-1.5">
@@ -260,7 +381,7 @@ export function LessonFormModal({
               {errors.duration ? (
                 <FieldMessage message={errors.duration} />
               ) : (
-                <p className="text-xs text-muted-foreground">{durationHint}</p>
+                <p className="min-h-4 text-xs text-muted-foreground">{durationHint}</p>
               )}
             </div>
 
@@ -276,6 +397,7 @@ export function LessonFormModal({
                 onChange={(e) => setField("orderIndex", e.target.value)}
               />
               <FieldMessage message={errors.orderIndex} />
+              {!errors.orderIndex && <p className="min-h-4 text-xs text-muted-foreground">&nbsp;</p>}
             </div>
           </div>
 
@@ -297,6 +419,9 @@ export function LessonFormModal({
                 }
               />
               <FieldMessage message={errors.contentUrl} />
+              {form.contentType === "VIDEO" && durationStatus && (
+                <p className="text-xs text-muted-foreground">{durationStatus}</p>
+              )}
             </div>
           ) : (
             <div className="grid gap-1.5">

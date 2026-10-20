@@ -1,9 +1,11 @@
 import { progressApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import type { EnrollmentProgress, LessonProgressItem } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, BookOpen, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, BookOpen, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -15,6 +17,7 @@ export function CourseLearningPage() {
   const enrollmentId = Number(id);
   const queryClient = useQueryClient();
   const [activeLessonId, setActiveLessonId] = useState<number>();
+  const [answerDraft, setAnswerDraft] = useState("");
 
   const progressQuery = useQuery({
     queryKey: ["lesson-progress", enrollmentId],
@@ -62,6 +65,22 @@ export function CourseLearningPage() {
   const currentLessonIndex = progressQuery.data?.lessons.findIndex(
     (lesson) => lesson.lessonId === activeLessonId,
   ) ?? -1;
+
+  useEffect(() => {
+    setAnswerDraft(currentLesson?.studentAnswer ?? "");
+  }, [currentLesson?.lessonId, currentLesson?.studentAnswer]);
+
+  const answerMutation = useMutation({
+    mutationFn: ({ lessonId, answer }: { lessonId: number; answer: string }) =>
+      progressApi.saveAnswer(enrollmentId, lessonId, answer),
+    onSuccess: (updated: EnrollmentProgress) => {
+      queryClient.setQueryData(["lesson-progress", enrollmentId], updated);
+      toast.success("Answer saved.");
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || "Could not save answer.");
+    },
+  });
 
   const selectLesson = (lesson: LessonProgressItem) => {
     setActiveLessonId(lesson.lessonId);
@@ -115,7 +134,40 @@ export function CourseLearningPage() {
               {currentLesson && (
                 <div className="mt-3">
                   <LessonPreview lesson={currentLesson} />
-                  <div className="mt-6 flex justify-between gap-3 border-t pt-5">
+                  {currentLesson.contentType === "TEXT" && (
+                    <section className="mt-5 space-y-2 rounded-xl border bg-muted/20 p-4">
+                      <Label htmlFor="student-answer">Your answer</Label>
+                      <Textarea
+                        id="student-answer"
+                        value={answerDraft}
+                        maxLength={10_000}
+                        rows={7}
+                        placeholder="Write your answer or notes here..."
+                        onChange={(event) => setAnswerDraft(event.target.value)}
+                      />
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-xs text-muted-foreground">
+                          {answerDraft.length}/10000 characters
+                        </span>
+                        <Button
+                          variant="outline"
+                          disabled={
+                            answerMutation.isPending ||
+                            answerDraft === (currentLesson.studentAnswer ?? "")
+                          }
+                          onClick={() =>
+                            answerMutation.mutate({
+                              lessonId: currentLesson.lessonId,
+                              answer: answerDraft,
+                            })
+                          }
+                        >
+                          {answerMutation.isPending ? "Saving..." : "Save answer"}
+                        </Button>
+                      </div>
+                    </section>
+                  )}
+                  <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t pt-5">
                     <Button
                       variant="outline"
                       disabled={currentLessonIndex <= 0}
@@ -123,16 +175,31 @@ export function CourseLearningPage() {
                     >
                       <ChevronLeft className="size-4" /> Previous lesson
                     </Button>
-                    <Button
-                      variant="outline"
-                      disabled={
-                        currentLessonIndex < 0 ||
-                        currentLessonIndex >= progressQuery.data.lessons.length - 1
-                      }
-                      onClick={() => goToLesson(currentLessonIndex + 1)}
-                    >
-                      Next lesson <ChevronRight className="size-4" />
-                    </Button>
+                    <div className="flex flex-wrap justify-end gap-3">
+                      <Button
+                        disabled={currentLesson.completed || updateMutation.isPending}
+                        onClick={() =>
+                          updateMutation.mutate({ lessonId: currentLesson.lessonId, completed: true })
+                        }
+                      >
+                        <CheckCircle2 className="size-4" />
+                        {currentLesson.completed
+                          ? "Lesson completed"
+                          : updateMutation.isPending
+                            ? "Saving..."
+                            : "Mark lesson complete"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        disabled={
+                          currentLessonIndex < 0 ||
+                          currentLessonIndex >= progressQuery.data.lessons.length - 1
+                        }
+                        onClick={() => goToLesson(currentLessonIndex + 1)}
+                      >
+                        Next lesson <ChevronRight className="size-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )}
