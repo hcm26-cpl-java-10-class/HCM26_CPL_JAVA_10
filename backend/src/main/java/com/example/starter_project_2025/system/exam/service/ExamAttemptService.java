@@ -368,8 +368,6 @@ public class ExamAttemptService {
         response.setTitle(attempt.getExam().getTitle());
         response.setDurationMinutes(attempt.getDurationMinutes());
         response.setTotalPoints(attempt.getTotalPoints());
-        response.setObjectiveScore(attempt.getObjectiveScore());
-        response.setFinalScore(attempt.getFinalScore());
         response.setStatus(attempt.getStatus());
         response.setStartedAt(attempt.getStartedAt());
         response.setOfficialDeadlineAt(attempt.getOfficialDeadlineAt());
@@ -385,7 +383,6 @@ public class ExamAttemptService {
         int attemptsUsed = Math.max(attempt.getAttemptNumber(), attempts.size());
         response.setAttemptsUsed(attemptsUsed);
         response.setAttemptsRemaining(Math.max(0, maxAttempts(attempt.getExam()) - attemptsUsed));
-        response.setBestScore(bestScore(attempt, attempts));
         response.setQuestions(attempt.getQuestions().stream()
                 .map(questionTakerMapper::toTakerResponse)
                 .toList());
@@ -413,8 +410,6 @@ public class ExamAttemptService {
         response.setExamId(attempt.getExam().getId());
         response.setAttemptNumber(attempt.getAttemptNumber());
         response.setStatus(attempt.getStatus());
-        response.setObjectiveScore(attempt.getObjectiveScore());
-        response.setFinalScore(attempt.getFinalScore());
         response.setTotalPoints(attempt.getTotalPoints());
         response.setStartedAt(attempt.getStartedAt());
         response.setDeadlineAt(deadlineOf(attempt));
@@ -426,7 +421,6 @@ public class ExamAttemptService {
         int attemptsUsed = Math.max(attempt.getAttemptNumber(), attempts.size());
         response.setAttemptsUsed(attemptsUsed);
         response.setAttemptsRemaining(Math.max(0, maxAttempts(attempt.getExam()) - attemptsUsed));
-        response.setBestScore(bestScore(attempt, attempts));
         return response;
     }
 

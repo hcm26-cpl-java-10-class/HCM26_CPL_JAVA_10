@@ -11,6 +11,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.example.starter_project_2025.system.exam.service.ExamResultEmailDispatcher;
 
 import java.time.LocalDateTime;
 
@@ -20,6 +21,7 @@ public class ExamResultPublicationService {
 
     private final ExamRepository examRepository;
     private final ExamResultPublicationRepository publicationRepository;
+    private final ExamResultEmailDispatcher emailDispatcher;
 
     @Transactional(readOnly = true)
     public ExamResultPublicationDTO getStatus(Long examId) {
@@ -29,6 +31,7 @@ public class ExamResultPublicationService {
                 .map(this::toDTO)
                 .orElseGet(() -> createDefaultDTO(examId));
     }
+
 
     @Transactional
     public ExamResultPublicationDTO publish(
@@ -53,10 +56,11 @@ public class ExamResultPublicationService {
                     return created;
                 });
 
+        boolean wasPublished = publication.isPublished();
+
         publication.setReleasePolicy(policy);
 
-        // Avoid treating repeated Publish requests as a new publication.
-        if (!publication.isPublished()) {
+        if (!wasPublished) {
             publication.setPublished(true);
             publication.setPublishedAt(LocalDateTime.now());
             publication.setPublishedBy(userId);
@@ -64,8 +68,14 @@ public class ExamResultPublicationService {
 
         publicationRepository.save(publication);
 
+        if (!wasPublished
+                && policy == ScoreReleasePolicy.MY_SCORES_AND_EMAIL) {
+            emailDispatcher.dispatch(exam);
+        }
+
         return toDTO(publication);
     }
+
 
     @Transactional
     public ExamResultPublicationDTO unpublish(Long examId) {

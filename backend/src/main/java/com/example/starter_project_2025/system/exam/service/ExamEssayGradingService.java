@@ -86,15 +86,19 @@ public class ExamEssayGradingService {
                 || attempt.getStatus() == ExamAttemptStatus.NOT_STARTED) {
             throw new BadRequestException("Bài làm chưa được nộp");
         }
+        boolean alreadyGraded = attempt.getFinalScore() != null;
 
-        if (!ExamAttemptLifecycle.canTransition(attempt.getStatus(), ExamAttemptStatus.SUBMITTED)) {
-            throw new BadRequestException("Cannot grade attempt with status " + attempt.getStatus());
-        }
-
-        // Check overwrite protection
-        boolean alreadyGraded = attempt.getFinalScore() != null || attempt.getStatus() == ExamAttemptStatus.SUBMITTED;
         if (alreadyGraded && !Boolean.TRUE.equals(request.getConfirmOverwrite())) {
-            throw new BadRequestException("Attempt has already been graded. Explicit confirmation is required to overwrite official grade.");
+            throw new BadRequestException(
+                    "Attempt has already been graded. Explicit confirmation is required to overwrite official grade.");
+        }
+        if (!alreadyGraded
+                && attempt.getStatus() != ExamAttemptStatus.SUBMITTED
+                && !ExamAttemptLifecycle.canTransition(
+                attempt.getStatus(),
+                ExamAttemptStatus.SUBMITTED)) {
+            throw new BadRequestException(
+                    "Cannot grade attempt with status " + attempt.getStatus());
         }
 
         if (request.getGrades() == null || request.getGrades().isEmpty()) {
