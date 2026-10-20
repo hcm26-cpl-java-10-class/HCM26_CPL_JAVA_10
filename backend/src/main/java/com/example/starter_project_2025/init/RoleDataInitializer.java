@@ -51,13 +51,14 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "BOOK_READ",
                         "COURSE_READ",
                         "ENROLLMENT_READ",
-                        "ENROLLMENT_CREATE"
+                        "ENROLLMENT_CREATE",
+                        "LESSON_READ"
                 )
         );
 
         upsertRole(
                 TEACHER_ROLE,
-                "Teacher with book and course management permissions",
+                "Teacher with book, course and session management permissions",
                 findPermissions(
                         "MENU_READ",
                         "BOOK_CREATE",
@@ -67,7 +68,16 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "COURSE_CREATE",
                         "COURSE_READ",
                         "COURSE_UPDATE",
-                        "COURSE_DELETE"
+                        "COURSE_DELETE",
+                        "SESSION_CREATE",
+                        "SESSION_READ",
+                        "SESSION_UPDATE",
+                        "SESSION_DELETE",
+                        "COURSE_DELETE",
+                        "LESSON_CREATE",
+                        "LESSON_READ",
+                        "LESSON_UPDATE",
+                        "LESSON_DELETE"
                 )
         );
 

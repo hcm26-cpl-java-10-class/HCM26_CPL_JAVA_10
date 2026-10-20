@@ -13,6 +13,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -24,7 +25,14 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler({ConflictException.class, org.springframework.dao.DataIntegrityViolationException.class,
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotAllowed(
+            org.springframework.web.HttpRequestMethodNotSupportedException ex) {
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .body(new ErrorResponse(405, ex.getMessage(), LocalDateTime.now()));
+    }
+
+    @ExceptionHandler({org.springframework.dao.DataIntegrityViolationException.class,
             org.springframework.dao.PessimisticLockingFailureException.class})
     public ResponseEntity<ErrorResponse> handleConflict(RuntimeException ex) {
         String message = ex instanceof ConflictException ? ex.getMessage()
@@ -147,5 +155,50 @@ public class GlobalExceptionHandler {
                 ex.getMessage(),
                 LocalDateTime.now());
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(com.example.starter_project_2025.system.external_api.exception.ExternalApiException.class)
+    public ResponseEntity<ErrorResponse> handleExternalApiException(
+            com.example.starter_project_2025.system.external_api.exception.ExternalApiException ex) {
+        log.error("[ExternalAPI] {}", ex.getMessage());
+
+        int status = ex.getStatusCode() > 0 ? ex.getStatusCode() : HttpStatus.SERVICE_UNAVAILABLE.value();
+        HttpStatus httpStatus = HttpStatus.resolve(status);
+        if (httpStatus == null) {
+            httpStatus = HttpStatus.SERVICE_UNAVAILABLE;
+        }
+
+        ErrorResponse error = new ErrorResponse(
+                httpStatus.value(),
+                ex.getMessage(),
+                LocalDateTime.now());
+        return new ResponseEntity<>(error, httpStatus);
+    }
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ErrorResponse> handleResponseStatusException(
+            ResponseStatusException ex) {
+
+        ErrorResponse error = new ErrorResponse(
+                ex.getStatusCode().value(),
+                ex.getReason() != null ? ex.getReason() : "Request failed",
+                LocalDateTime.now()
+        );
+
+        return ResponseEntity
+                .status(ex.getStatusCode())
+                .body(error);
+    }
+
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<ErrorResponse> handleConflictException(
+            ConflictException ex) {
+
+        ErrorResponse error = new ErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                ex.getMessage(),
+                LocalDateTime.now()
+        );
+
+        return new ResponseEntity<>(error, HttpStatus.CONFLICT);
     }
 }

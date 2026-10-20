@@ -7,9 +7,9 @@ import NotFoundPage from "@/pages/error/NotFoundPage";
 import { Unauthorized } from "@/pages/error/Unauthorized";
 import { Dashboard } from "@/pages/management/dashboard";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
-import SchedulePage from "@/pages/management/schedule";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
+import BulkSessionGenerationPage from "@/pages/management/schedule/pages/BulkSessionGenerationPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 
@@ -30,14 +30,9 @@ export const routes: RouteConfig[] = [
     isModuleDriven: true,
   },
   {
-    path: "/study-schedule",
-    component: SchedulePage,
-    requiredPermission: "SCHEDULE_READ",
-    isModuleDriven: true,
-  },
-  {
-    path: "/schedule",
-    component: SchedulePage,
+    path: "/sessions/bulk-generate",
+    component: BulkSessionGenerationPage,
+    requiredPermission: "SESSION_CREATE",
     isModuleDriven: false,
   },
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
@@ -49,6 +44,6 @@ export const routes: RouteConfig[] = [
   { path: "/logout", component: Logout, isPublic: true },
   { path: "/register", component: RegisterPage, isPublic: true },
   { path: "/forgot-password", component: ForgotPasswordPage, isPublic: true },
-  { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true,},
+  { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true },
   { path: "/unauthorized", component: Unauthorized, isPublic: true },
 ];

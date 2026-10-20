@@ -15,7 +15,6 @@ import { authApi } from "@/api/features/auth.api";
 import { iconMap } from "@/components/datatable/iconMap";
 import { getHomePathByRole } from "@/utils/rbac.utils";
 import { usePermissions } from "@/hooks/usePermissions";
-import { injectScheduleMenu } from "@/utils/schedule-menu.utils";
 import { ChevronDown, LogOutIcon, Menu } from "lucide-react";
 import { useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -40,7 +39,7 @@ export function StudentNavbar() {
       return iconMap[key];
     };
 
-    return injectScheduleMenu(moduleGroups)
+    return moduleGroups
       .map((group) => ({
         id: group.id ?? group.name ?? "group",
         name: group.name ?? "Menu",

@@ -2,9 +2,21 @@ package com.example.starter_project_2025.calendar;
 
 import com.example.starter_project_2025.base.crud.spec.AutoSpecBuilder;
 import com.example.starter_project_2025.exception.*;
-import com.example.starter_project_2025.system.demo.calendar.*;
-import com.example.starter_project_2025.system.demo.calendar_version.*;
-import com.example.starter_project_2025.system.demo.session.*;
+import com.example.starter_project_2025.system.schedule.calendar.crud.*;
+import com.example.starter_project_2025.system.schedule.calendar.Calendar;
+import com.example.starter_project_2025.system.schedule.calendar.CalendarVersion;
+import com.example.starter_project_2025.system.schedule.calendar.CalendarVersionStatus;
+import com.example.starter_project_2025.system.schedule.calendar.repository.*;
+import com.example.starter_project_2025.system.schedule.session.dto.*;
+import com.example.starter_project_2025.system.external_api.ExternalApiService;
+import com.example.starter_project_2025.system.demo.online_lession.LessonRepository;
+import com.example.starter_project_2025.system.demo.online_lession.Lesson;
+import com.example.starter_project_2025.system.rbac.user.UserRepository;
+import com.example.starter_project_2025.system.rbac.user.User;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import static org.mockito.Mockito.*;
+
+import com.example.starter_project_2025.system.schedule.session.*;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -41,15 +53,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class CalendarFeatureTest {
     @Configuration
     @EnableAutoConfiguration(exclude = {SecurityAutoConfiguration.class, UserDetailsServiceAutoConfiguration.class})
-    @EntityScan(basePackageClasses = {TrainingCalendar.class, CalendarVersion.class, Session.class})
+    @EntityScan(basePackageClasses = {Calendar.class, CalendarVersion.class, Session.class})
     @EnableJpaRepositories(basePackageClasses = {CalendarRepository.class, CalendarVersionRepository.class, SessionRepository.class})
-    @Import({CalendarServiceImpl.class, CalendarVersionServiceImpl.class, SessionServiceImpl.class,
-            CalendarMapperImpl.class, CalendarVersionMapperImpl.class, SessionMapperImpl.class,
-            CalendarRules.class, CalendarLock.class, AutoSpecBuilder.class})
+    @Import({CalendarCrudServiceImpl.class, CalendarVersionCrudServiceImpl.class, SessionServiceImpl.class,
+            CalendarCrudMapperImpl.class, CalendarVersionCrudMapperImpl.class, SessionMapperImpl.class,
+            CalendarRules.class, CalendarLock.class, AutoSpecBuilder.class, SessionValidator.class, SessionAccessPolicy.class})
     static class Config {}
 
-    @Autowired CalendarService calendars;
-    @Autowired CalendarVersionService versions;
+    @MockBean ExternalApiService externalApiService;
+    @MockBean LessonRepository lessonRepository;
+    @MockBean UserRepository userRepository;
+    @Autowired CalendarCrudService calendars;
+    @Autowired CalendarVersionCrudService versions;
     @Autowired SessionService sessions;
     @Autowired SessionRepository sessionRepository;
     @Autowired JdbcTemplate jdbc;
@@ -63,10 +78,12 @@ class CalendarFeatureTest {
         jdbc.update("delete from calendar_versions");
         jdbc.update("delete from calendars");
         authenticate();
+        when(lessonRepository.findById(3L)).thenReturn(Optional.of(Lesson.builder().id(3L).title("Spring Boot").build()));
+        when(userRepository.findById(5L)).thenReturn(Optional.of(User.builder().id(5L).firstName("Trainer").build()));
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
-        mvc = MockMvcBuilders.standaloneSetup(new CalendarController(calendars),
-                new CalendarVersionController(versions), new SessionController(sessions))
+        mvc = MockMvcBuilders.standaloneSetup(new CalendarCrudController(calendars),
+                new CalendarVersionCrudController(versions), new SessionController(sessions, sessionRepository))
                 .setControllerAdvice(new GlobalExceptionHandler()).setValidator(validator).build();
     }
 
@@ -74,10 +91,11 @@ class CalendarFeatureTest {
 
     static void authenticate() {
         List<String> permissions = new ArrayList<>();
-        for (String resource : List.of("CALENDAR", "CALENDAR_VERSION", "SESSION")) {
+        for (String resource : List.of("CALENDAR", "CALENDARVERSION", "SESSION")) {
             for (String action : List.of("CREATE", "READ", "UPDATE", "DELETE")) permissions.add(resource + "_" + action);
         }
         permissions.add("CALENDAR_VERSION_ACTIVATE");
+        permissions.add("ROLE_ADMIN");
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("admin", "",
                 permissions.stream().map(SimpleGrantedAuthority::new).toList()));
     }
@@ -102,6 +120,8 @@ class CalendarFeatureTest {
         dto.setTopicId(3L);
         dto.setTrainerId(5L);
         dto.setTitle("Spring Boot");
+        dto.setForceOverride(true);
+        dto.setOverrideReason("Independent version fixture");
         dto.setStartTime(LocalDateTime.parse(start));
         dto.setEndTime(LocalDateTime.parse(end));
         return dto;
@@ -117,10 +137,10 @@ class CalendarFeatureTest {
         var firstSession = session(v1.getId());
         var secondSession = session(v2.getId());
         assertTrue(calendars.events(calendar.getId(), null, null).isEmpty());
-        assertEquals(CalendarVersion.Status.ACTIVE, versions.activate(v1.getId()).getStatus());
+        assertEquals(CalendarVersionStatus.ACTIVE, versions.activate(v1.getId()).getStatus());
         versions.activate(v2.getId());
         var activated = versions.getById(v2.getId());
-        assertEquals(CalendarVersion.Status.INACTIVE, versions.getById(v1.getId()).getStatus());
+        assertEquals(CalendarVersionStatus.INACTIVE, versions.getById(v1.getId()).getStatus());
         assertEquals(activated.getPublishedAt(), versions.activate(v2.getId()).getPublishedAt());
         assertEquals(secondSession.getId(), calendars.events(calendar.getId(), null, null).getFirst().getId());
         assertEquals(firstSession.getStatus(), sessions.getById(firstSession.getId()).getStatus());
@@ -189,7 +209,7 @@ class CalendarFeatureTest {
         assertThrows(ConflictException.class, () -> sessions.delete(s1.getId()));
         assertThrows(ConflictException.class, () -> session(v1.getId()));
         var v2 = versions.cloneVersion(v1.getId());
-        assertEquals(CalendarVersion.Status.DRAFT, v2.getStatus());
+        assertEquals(CalendarVersionStatus.DRAFT, v2.getStatus());
         var cloned = sessionRepository.findByCalendarVersionIdOrderByStartTimeAscIdAsc(v2.getId()).getFirst();
         assertNotEquals(s1.getId(), cloned.getId());
         SessionDTO update = new SessionDTO();
@@ -197,7 +217,7 @@ class CalendarFeatureTest {
         sessions.update(cloned.getId(), update);
         assertEquals("Spring Boot", sessions.getById(s1.getId()).getTitle());
         versions.activate(v2.getId());
-        assertEquals(CalendarVersion.Status.INACTIVE, versions.getById(v1.getId()).getStatus());
+        assertEquals(CalendarVersionStatus.INACTIVE, versions.getById(v1.getId()).getStatus());
     }
 
     @Test void deletingDraftDeletesChildrenAndDoesNotReuseVersionNumber() {
@@ -218,13 +238,13 @@ class CalendarFeatureTest {
         var request = new SessionDTO();
         request.setId(999L);
         request.setClassId(999L);
-        request.setStatus(Session.SessionStatus.COMPLETED);
+        request.setStatus(SessionStatus.COMPLETED);
         request.setCreatedBy(999L);
         request.setIsActive(false);
         var updated = sessions.update(s.getId(), request);
         assertEquals(s.getId(), updated.getId());
         assertEquals(c.getClassId(), updated.getClassId());
-        assertEquals(Session.SessionStatus.SCHEDULED, updated.getStatus());
+        assertEquals(SessionStatus.SCHEDULED, updated.getStatus());
         assertTrue(updated.getIsActive());
         request.setCalendarVersionId(version(c.getId()).getId());
         assertThrows(BusinessValidationException.class, () -> sessions.update(s.getId(), request));
@@ -240,22 +260,22 @@ class CalendarFeatureTest {
                 new UsernamePasswordAuthenticationToken("reader", "", List.of(new SimpleGrantedAuthority("CALENDAR_VERSION_READ"))));
         assertThrows(AccessDeniedException.class, () -> versions.activate(v.getId()));
         assertThrows(AccessDeniedException.class, () -> versions.cloneVersion(v.getId()));
-        assertThrows(AccessDeniedException.class, () -> sessions.cancelSession(s.getId(), new SessionCancelDTO()));
+        assertThrows(AccessDeniedException.class, () -> sessions.cancel(s.getId(), new SessionCancelRequest(), null));
     }
 
     @Test void cancelRequiresReasonAndPreservesHistoricalVersions() {
         var v1 = version(calendar(1).getId());
         var s1 = session(v1.getId());
         versions.activate(v1.getId());
-        assertThrows(BadRequestException.class, () -> sessions.cancelSession(s1.getId(), new SessionCancelDTO()));
-        SessionCancelDTO cancel = new SessionCancelDTO();
+        assertThrows(com.example.starter_project_2025.system.schedule.exception.UnprocessableEntityException.class, () -> sessions.cancel(s1.getId(), new SessionCancelRequest(), null));
+        SessionCancelRequest cancel = new SessionCancelRequest();
         cancel.setCancelReason("Trainer unavailable");
-        assertEquals(Session.SessionStatus.CANCELLED, sessions.cancelSession(s1.getId(), cancel).getStatus());
+        assertEquals(SessionStatus.CANCELLED, sessions.cancel(s1.getId(), cancel, null).getStatus());
         var v2 = versions.cloneVersion(v1.getId());
         var copy = sessionRepository.findByCalendarVersionIdOrderByStartTimeAscIdAsc(v2.getId()).getFirst();
-        assertEquals(Session.SessionStatus.CANCELLED, copy.getStatus());
+        assertEquals(SessionStatus.CANCELLED, copy.getStatus());
         versions.activate(v2.getId());
-        assertThrows(ConflictException.class, () -> sessions.cancelSession(s1.getId(), cancel));
+        assertThrows(ConflictException.class, () -> sessions.cancel(s1.getId(), cancel, null));
     }
 
     @Test void eventsUseOverlapAndVersionFilterWorks() {
@@ -269,6 +289,27 @@ class CalendarFeatureTest {
         SessionFilter filter = new SessionFilter();
         filter.setCalendarVersionId(v.getId());
         assertEquals(1, sessions.getAll(Pageable.unpaged(), null, filter).getTotalElements());
+    }
+
+    @Test void alternativeVersionsDoNotConflictAndPartialUpdatesPreserveSessionData() {
+        var c = calendar(1);
+        var active = version(c.getId());
+        session(active.getId());
+        versions.activate(active.getId());
+        var draft = version(c.getId());
+        SessionDTO request = sessionRequest(draft.getId(), "2026-10-20T08:00", "2026-10-20T11:00");
+        request.setForceOverride(false);
+        request.setNotes("Keep these notes");
+        assertFalse(sessions.checkConflict(request, null).isHasConflict());
+        var created = sessions.create(request);
+        SessionDTO update = new SessionDTO();
+        update.setTitle("Updated title");
+        var updated = sessions.update(created.getId(), update);
+        assertEquals(created.getStartTime(), updated.getStartTime());
+        assertEquals("Keep these notes", updated.getNotes());
+        assertFalse(updated.getIsOverridden());
+        update.setTitle("   ");
+        assertThrows(BusinessValidationException.class, () -> sessions.update(created.getId(), update));
     }
 
     @Test void concurrentActivationsSerializeAndKeepOneActive() throws Exception {
@@ -296,7 +337,7 @@ class CalendarFeatureTest {
             for (Future<?> task : tasks) task.get(15, TimeUnit.SECONDS);
         }
         long activeCount = List.of(versions.getById(a.getId()), versions.getById(b.getId())).stream()
-                .filter(v -> v.getStatus() == CalendarVersion.Status.ACTIVE).count();
+                .filter(v -> v.getStatus() == CalendarVersionStatus.ACTIVE).count();
         assertEquals(1, activeCount);
     }
 

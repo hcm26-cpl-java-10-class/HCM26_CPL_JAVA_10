@@ -35,12 +35,22 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class CalendarApiIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
+    @Autowired com.example.starter_project_2025.system.demo.course.CourseRepository courses;
+    @Autowired com.example.starter_project_2025.system.demo.online_lession.LessonRepository lessons;
+    @Autowired com.example.starter_project_2025.system.rbac.user.UserRepository users;
+    private Long topicId;
+    private Long trainerId;
     private String adminToken;
     private String studentToken;
     private final AtomicLong classIds = new AtomicLong(800000);
 
     @BeforeAll
     void loginWithSeededAccounts() throws Exception {
+        var course = courses.save(com.example.starter_project_2025.system.demo.course.Course.builder()
+                .name("Calendar API test course").build());
+        topicId = lessons.save(com.example.starter_project_2025.system.demo.online_lession.Lesson.builder()
+                .course(course).title("Spring Boot").orderIndex(1).build()).getId();
+        trainerId = users.findByEmail("calendar-admin@example.com").orElseThrow().getId();
         adminToken = login("calendar-admin@example.com", "calendar-test-password");
         studentToken = login("student@example.com", "password123");
     }
@@ -74,16 +84,17 @@ class CalendarApiIntegrationTest {
 
     private JsonNode session(long versionId) throws Exception {
         return read(admin(post("/api/sessions").contentType(MediaType.APPLICATION_JSON).content("""
-                {"calendarVersionId":%d,"topicId":3,"trainerId":5,"title":"Spring Boot",
+                {"calendarVersionId":%d,"topicId":%d,"trainerId":%d,"title":"Spring Boot",
+                 "forceOverride":true,"overrideReason":"Independent calendar fixture",
                  "startTime":"2026-10-20T08:00:00","endTime":"2026-10-20T11:00:00"}
-                """.formatted(versionId))).andExpect(status().isOk()));
+                """.formatted(versionId, topicId, trainerId))).andExpect(status().isCreated()));
     }
 
     @Test
     void calendarCrudSearchPaginationAndValidation() throws Exception {
         JsonNode c = calendar();
         long id = c.path("id").asLong();
-        admin(get("/api/calendars").param("classId", c.path("classId").asText())
+        admin(get("/api/calendars/search").param("classId", c.path("classId").asText())
                 .param("search", "Postman").param("page", "0").param("size", "1").param("sort", "id,desc"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].id").value(id));
@@ -183,6 +194,36 @@ class CalendarApiIntegrationTest {
                 .andExpect(status().isUnauthorized());
         mvc.perform(get(path).header("Authorization", "Bearer " + studentToken))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void nestedVersionsAndCalendarLifecycleShareCountersAndSessionData() throws Exception {
+        long cid = calendar().path("id").asLong();
+        long v1 = version(cid).path("id").asLong();
+        long sid = session(v1).path("id").asLong();
+        admin(post("/api/calendar-versions/{id}/activate", v1)).andExpect(status().isOk());
+        admin(post("/api/sessions/{id}/cancel", sid).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"cancelReason\":\"Unavailable\"}")).andExpect(status().isOk());
+
+        JsonNode copied = read(admin(post("/api/calendars/{id}/versions", cid)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"mode\":\"COPY_ACTIVE\",\"name\":\"New schedule\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.versionNumber").value(2)));
+        long copyId = copied.path("id").asLong();
+        admin(get("/api/sessions").param("calendarVersionId", "" + copyId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].topicId").value(topicId))
+                .andExpect(jsonPath("$.content[0].status").value("SCHEDULED"));
+        // The new COPY_ACTIVE action resets operations; the retained clone action preserves history.
+        admin(post("/api/calendar-versions/{id}/clone", v1))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.versionNumber").value(3));
+        admin(delete("/api/calendars/{cid}/versions/{vid}", cid, copyId))
+                .andExpect(status().isNoContent());
+        admin(post("/api/calendar-versions/{id}/activate", copyId)).andExpect(status().isNotFound());
+        assertEquals(4, version(cid).path("versionNumber").asInt());
+        admin(get("/api/calendars")).andExpect(status().isOk()).andExpect(jsonPath("$").isArray());
     }
 
     @ParameterizedTest
