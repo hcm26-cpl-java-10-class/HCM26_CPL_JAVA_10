@@ -64,6 +64,11 @@ const sessionSchema: EntitySchema = {
       sortable: true,
     },
     {
+      name: "notes",
+      label: "Ghi Chú",
+      type: "text",
+    },
+    {
       name: "isOverridden",
       label: "Override (BR-10)",
       type: "boolean",
