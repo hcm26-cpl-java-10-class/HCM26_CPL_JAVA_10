@@ -1,4 +1,4 @@
-package com.example.starter_project_2025.system.demo.course_assessment;
+package com.example.starter_project_2025.system.demo.certificate;
 
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
@@ -6,6 +6,8 @@ import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.system.demo.course.Course;
 import com.example.starter_project_2025.system.demo.course.CourseRepository;
+import com.example.starter_project_2025.system.rbac.user.User;
+import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -16,22 +18,23 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-public class AssessmentServiceImpl
-        extends BaseCrudServiceImpl<Assessment, Long, AssessmentDTO, AssessmentFilter>
-        implements AssessmentService{
+public class CertificateServiceImpl
+        extends BaseCrudServiceImpl<Certificate, Long, CertificateDTO, CertificateFilter>
+        implements CertificateService{
 
-    AssessmentRepository assessmentRepository;
-    AssessmentMapper assessmentMapper;
+    CertificateRepository certificateRepository;
+    CertificateMapper certificateMapper;
     CourseRepository courseRepository;
+    UserRepository userRepository;
 
     @Override
-    protected BaseCrudRepository<Assessment, Long> getRepository() {
-        return assessmentRepository;
+    protected BaseCrudRepository<Certificate, Long> getRepository() {
+        return certificateRepository;
     }
 
     @Override
-    protected BaseCrudMapper<Assessment, AssessmentDTO> getMapper() {
-        return assessmentMapper;
+    protected BaseCrudMapper<Certificate, CertificateDTO> getMapper() {
+        return certificateMapper;
     }
 
     @Override
@@ -40,9 +43,13 @@ public class AssessmentServiceImpl
     }
 
     @Override
-    protected void beforeCreate(Assessment assessment, AssessmentDTO request, ValidationContext ctx) {
+    protected void beforeCreate(Certificate certificate, CertificateDTO request, ValidationContext ctx) {
         if (request.getCourseId() == null) {
             throw new IllegalArgumentException("Course is required");
+        }
+        
+        if (request.getUserId() == null) {
+            throw new IllegalArgumentException("User is required");
         }
 
         Course course = courseRepository.findById(request.getCourseId())
@@ -51,7 +58,11 @@ public class AssessmentServiceImpl
                                 "Course not found: " + request.getCourseId()
                         )
                 );
+        
+        User user = userRepository.findById(request.getUserId())
+                        .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
-        assessment.setCourse(course);
+        certificate.setCourse(course);
+        certificate.setUser(user);
     }
 }
