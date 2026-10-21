@@ -6,6 +6,12 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirmdialog";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
     Select,
@@ -36,17 +42,20 @@ import type {
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
     CalendarDays,
+    CalendarCheck2,
     ChevronLeft,
     ChevronRight,
     Eye,
     Filter,
     GitBranch,
+    MoreHorizontal,
     Pencil,
     Plus,
     Sparkles,
     Trash2,
 } from "lucide-react";
 import { CreateVersionDialog } from "./components/CreateVersionDialog";
+import { ActivationReviewDialog } from "./components/ActivationReviewDialog";
 import { EditVersionDialog } from "./components/EditVersionDialog";
 import { VersionSessionsDialog } from "./components/VersionSessionsDialog";
 
@@ -133,6 +142,8 @@ export default function CalendarManagementPage() {
     const [editingVersion, setEditingVersion] =
         useState<CalendarVersionResponse | null>(null);
     const [deletingVersion, setDeletingVersion] =
+        useState<CalendarVersionResponse | null>(null);
+    const [activationVersion, setActivationVersion] =
         useState<CalendarVersionResponse | null>(null);
     const [isUpdatingVersion, setIsUpdatingVersion] = useState(false);
     const [isDeletingVersion, setIsDeletingVersion] = useState(false);
@@ -356,6 +367,32 @@ export default function CalendarManagementPage() {
         } finally {
             setIsDeletingVersion(false);
         }
+    };
+
+    const handleActivationRefresh = async (
+        refreshedVersion: CalendarVersionResponse,
+    ): Promise<void> => {
+        if (
+            refreshedVersion.status === "ACTIVE" &&
+            statusFilter === "DRAFT" &&
+            page > 0 &&
+            versionsQuery.data?.content.length === 1
+        ) {
+            setPage((currentPage) => Math.max(0, currentPage - 1));
+        }
+
+        await Promise.all([
+            loadCalendars(),
+            queryClient.invalidateQueries({
+                queryKey: ["calendar-versions", selectedCalendarId],
+            }),
+        ]);
+    };
+
+    const handleGenerateForVersion = (version: CalendarVersionResponse) => {
+        navigate(
+            `/sessions/bulk-generate?calendarId=${version.calendarId}&versionId=${version.id}&classId=${selectedCalendar?.classId ?? 101}`,
+        );
     };
 
     return (
@@ -607,7 +644,7 @@ export default function CalendarManagementPage() {
                                             <TableHead>Status</TableHead>
                                             <TableHead>Created</TableHead>
                                             <TableHead>Activated</TableHead>
-                                            <TableHead className="min-w-[280px]">Actions</TableHead>
+                                            <TableHead className="min-w-[360px]">Actions</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -691,43 +728,50 @@ export default function CalendarManagementPage() {
                                                                             Generate
                                                                         </Button>
 
-                                                                        {canUpdateVersion &&
-                                                                            version.id !=
-                                                                            null && (
-                                                                                <Button
-                                                                                    type="button"
-                                                                                    size="sm"
-                                                                                    variant="outline"
-                                                                                    className="h-8 gap-1 px-2.5 text-xs"
-                                                                                    onClick={() =>
-                                                                                        setEditingVersion(
-                                                                                            version,
-                                                                                        )
-                                                                                    }
-                                                                                >
-                                                                                    <Pencil className="size-3.5" />
-                                                                                    Edit
-                                                                                </Button>
-                                                                            )}
+                                                                        {canReadVersions && version.id != null && (
+                                                                            <Button
+                                                                                type="button"
+                                                                                size="sm"
+                                                                                variant={canUpdateVersion ? "default" : "outline"}
+                                                                                className="h-8 gap-1 px-2.5 text-xs"
+                                                                                onClick={() => setActivationVersion(version)}
+                                                                            >
+                                                                                <CalendarCheck2 className="size-3.5" />
+                                                                                {canUpdateVersion ? "Review & activate" : "Review conflicts"}
+                                                                            </Button>
+                                                                        )}
 
-                                                                        {canDeleteVersion &&
-                                                                            version.id !=
-                                                                            null && (
-                                                                                <Button
-                                                                                    type="button"
-                                                                                    size="sm"
-                                                                                    variant="destructive"
-                                                                                    className="h-8 gap-1 px-2.5 text-xs"
-                                                                                    onClick={() =>
-                                                                                        setDeletingVersion(
-                                                                                            version,
-                                                                                        )
-                                                                                    }
-                                                                                >
-                                                                                    <Trash2 className="size-3.5" />
-                                                                                    Delete
-                                                                                </Button>
-                                                                            )}
+                                                                        {(canUpdateVersion || canDeleteVersion) && version.id != null && (
+                                                                            <DropdownMenu>
+                                                                                <DropdownMenuTrigger asChild>
+                                                                                    <Button
+                                                                                        type="button"
+                                                                                        size="icon-sm"
+                                                                                        variant="ghost"
+                                                                                        aria-label={`More actions for version v${version.versionNumber}`}
+                                                                                    >
+                                                                                        <MoreHorizontal className="size-4" />
+                                                                                    </Button>
+                                                                                </DropdownMenuTrigger>
+                                                                                <DropdownMenuContent align="end">
+                                                                                    {canUpdateVersion && (
+                                                                                        <DropdownMenuItem onSelect={() => setEditingVersion(version)}>
+                                                                                            <Pencil className="size-4" />
+                                                                                            Edit version
+                                                                                        </DropdownMenuItem>
+                                                                                    )}
+                                                                                    {canDeleteVersion && (
+                                                                                        <DropdownMenuItem
+                                                                                            variant="destructive"
+                                                                                            onSelect={() => setDeletingVersion(version)}
+                                                                                        >
+                                                                                            <Trash2 className="size-4" />
+                                                                                            Delete version
+                                                                                        </DropdownMenuItem>
+                                                                                    )}
+                                                                                </DropdownMenuContent>
+                                                                            </DropdownMenu>
+                                                                        )}
                                                                     </>
                                                                 )}
                                                             </div>
@@ -818,6 +862,19 @@ export default function CalendarManagementPage() {
                     onCancel={() => {
                         if (!isDeletingVersion) setDeletingVersion(null);
                     }}
+                />
+
+                <ActivationReviewDialog
+                    open={activationVersion !== null}
+                    calendar={selectedCalendar ?? null}
+                    version={activationVersion}
+                    canActivateVersion={canUpdateVersion}
+                    onOpenChange={(open) => {
+                        if (!open) setActivationVersion(null);
+                    }}
+                    onViewSessions={(version) => setViewingSessionsVersion(version)}
+                    onGenerateSessions={handleGenerateForVersion}
+                    onActivated={handleActivationRefresh}
                 />
 
                 <VersionSessionsDialog
