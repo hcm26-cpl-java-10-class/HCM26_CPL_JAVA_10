@@ -1,4 +1,4 @@
-import { questionApi } from "@/api";
+﻿import { questionApi } from "@/api";
 import { Button } from "@/components/ui/button";
 import { CardFooter } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -50,7 +50,7 @@ export interface QuestionFormValues {
 
 export const initialQuestionForm: QuestionFormValues = {
     content: "",
-    type: "MULTIPLE_CHOICE",
+    type: "MULTIPLE_CHOICE", // CHANGED: trước đây "SINGLE_CHOICE"
     difficulty: "EASY",
     topic: "",
     points: 1,
@@ -71,185 +71,75 @@ interface QuestionFormProps {
     onCancel?: () => void;
 }
 
-/**
- * Parses markdown inline syntax (**bold**, *italic*, `code`) into real React elements
- */
-function parseInlineFormatting(text: string): React.ReactNode[] {
-    const parts: React.ReactNode[] = [];
-    let remaining = text;
-    let key = 0;
-
-    // Pattern for **bold**, *italic*, `code`
-    const regex = /(\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`)/;
-
-    while (remaining) {
-        const match = remaining.match(regex);
-        if (!match || match.index === undefined) {
-            parts.push(remaining);
-            break;
-        }
-
-        if (match.index > 0) {
-            parts.push(remaining.substring(0, match.index));
-        }
-
-        const fullMatch = match[0];
-        if (fullMatch.startsWith("**")) {
-            parts.push(
-                <strong key={key++} className="font-bold text-foreground">
-                    {match[2]}
-                </strong>,
-            );
-        } else if (fullMatch.startsWith("*")) {
-            parts.push(
-                <em key={key++} className="italic text-foreground">
-                    {match[3]}
-                </em>,
-            );
-        } else if (fullMatch.startsWith("`")) {
-            parts.push(
-                <code
-                    key={key++}
-                    className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-primary"
-                >
-                    {match[4]}
-                </code>,
-            );
-        }
-
-        remaining = remaining.substring(match.index + fullMatch.length);
-    }
-
-    return parts;
-}
-
-function QuestionContentPreview({ content }: { content: string }) {
-    if (!content.trim()) {
-        return (
-            <p className="text-sm italic text-muted-foreground">
-                No content to preview. Type above or click B (Bold), I (Italic) to add formatting.
-            </p>
-        );
-    }
-
-    const lines = content.split("\n");
-    return (
-        <div className="space-y-2 text-sm text-foreground">
-            {lines.map((line, idx) => {
-                const imgMatch = line.match(/!\[(.*?)\]\((.*?)\)/);
-                if (imgMatch) {
-                    const altText = imgMatch[1] || "Question Image";
-                    const imgSrc = imgMatch[2];
-                    return (
-                        <div key={idx} className="my-2">
-                            <img
-                                src={imgSrc}
-                                alt={altText}
-                                className="max-h-64 rounded border border-border object-contain shadow-sm"
-                                onError={(e) => {
-                                    (e.target as HTMLImageElement).alt = "Image failed to load";
-                                }}
-                            />
-                        </div>
-                    );
-                }
-                if (line.startsWith(">")) {
-                    return (
-                        <blockquote
-                            key={idx}
-                            className="border-l-4 border-amber-500 bg-amber-50/50 dark:bg-amber-950/20 py-1.5 pl-3 my-1 italic rounded-r text-foreground"
-                        >
-                            {parseInlineFormatting(line.replace(/^>\s*/, ""))}
-                        </blockquote>
-                    );
-                }
-                return (
-                    <p key={idx} className="min-h-[1.25rem]">
-                        {parseInlineFormatting(line)}
-                    </p>
-                );
-            })}
-        </div>
-    );
-}
-
-export function QuestionForm({
-    form,
-    setForm,
-    onSubmit,
-    isSaving,
-    submitLabel,
-    showActive = false,
-    onCancel,
-}: QuestionFormProps) {
+export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel, showActive = false, onCancel }: QuestionFormProps) {
     const navigate = useNavigate();
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const [showPreview, setShowPreview] = useState(false);
-    const [isAddingTopic, setIsAddingTopic] = useState(false);
-    const [newTopicInput, setNewTopicInput] = useState("");
-    const [customTopics, setCustomTopics] = useState<string[]>([]);
+    const contentRef = useRef<HTMLTextAreaElement>(null);
+    const [isPreview, setIsPreview] = useState(false);
 
-    // Fetch existing questions to extract unique topic list
-    const questionsQuery = useQuery({
-        queryKey: ["questions", "topics-lookup"],
-        queryFn: () => questionApi.getPage({ page: 0, size: 1000 }),
-        staleTime: 60 * 1000,
+    // Topic state
+    const [isAddingNewTopic, setIsAddingNewTopic] = useState(false);
+    const [newTopicText, setNewTopicText] = useState("");
+    const [localCustomTopics, setLocalCustomTopics] = useState<string[]>([]);
+
+    // Fetch existing questions to provide topic suggestions
+    const { data: questionPage } = useQuery({
+        queryKey: ["question-topics"],
+        queryFn: () => questionApi.getPage({ page: 0, size: 200 }),
+        staleTime: 60_000,
     });
 
-    const allTopics = React.useMemo(() => {
-        const list = questionsQuery.data?.content || questionsQuery.data?.items || [];
-        const set = new Set<string>();
-        list.forEach((q: any) => {
-            if (q.topic && typeof q.topic === "string" && q.topic.trim()) {
-                set.add(q.topic.trim());
-            }
-        });
-        customTopics.forEach((t) => set.add(t));
-        if (form.topic && form.topic.trim()) {
-            set.add(form.topic.trim());
-        }
-        return Array.from(set).sort((a, b) => a.localeCompare(b));
-    }, [questionsQuery.data, customTopics, form.topic]);
+    const backendTopics = (questionPage?.content ?? [])
+        .map((q) => q.topic?.trim())
+        .filter((t): t is string => Boolean(t));
 
-    const handleSaveNewTopic = () => {
-        const trimmed = newTopicInput.trim();
+    const allTopics = Array.from(
+        new Set([...backendTopics, ...localCustomTopics, form.topic].filter(Boolean)),
+    ).sort();
+
+    const handleConfirmNewTopic = () => {
+        const trimmed = newTopicText.trim();
         if (!trimmed) {
             toast.error("Please enter a topic name.");
             return;
         }
-        setCustomTopics((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+
+        setLocalCustomTopics((prev) => Array.from(new Set([...prev, trimmed])));
         setForm((prev) => ({ ...prev, topic: trimmed }));
-        setNewTopicInput("");
-        setIsAddingTopic(false);
-        toast.success(`Topic "${trimmed}" saved and selected.`);
+        setNewTopicText("");
+        setIsAddingNewTopic(false);
+        toast.success(`Topic "${trimmed}" added.`);
     };
 
-    const applyFormatting = (prefix: string, suffix: string = prefix, placeholder: string = "text") => {
-        const textarea = textareaRef.current;
+    const insertFormatting = (prefix: string, suffix = "", defaultText = "") => {
+        const textarea = contentRef.current;
         if (!textarea) return;
 
         const start = textarea.selectionStart;
         const end = textarea.selectionEnd;
         const currentVal = form.content;
-        const selectedText = currentVal.substring(start, end) || placeholder;
+        const selected = currentVal.substring(start, end) || defaultText;
 
-        const before = currentVal.substring(0, start);
-        const after = currentVal.substring(end);
-        const newText = `${before}${prefix}${selectedText}${suffix}${after}`;
+        const replacement = `${prefix}${selected}${suffix}`;
+        const nextVal = currentVal.substring(0, start) + replacement + currentVal.substring(end);
 
-        setForm((prev) => ({ ...prev, content: newText }));
+        setForm((prev) => ({ ...prev, content: nextVal }));
 
         setTimeout(() => {
             textarea.focus();
-            const newCursorPos = start + prefix.length + selectedText.length;
-            textarea.setSelectionRange(newCursorPos, newCursorPos);
+            textarea.setSelectionRange(
+                start + prefix.length,
+                start + prefix.length + selected.length,
+            );
         }, 0);
     };
 
-    const insertImageTemplate = () => {
-        const url = prompt("Enter Image URL (http/https):");
-        if (!url) return;
-        applyFormatting(`![image](${url})`, "", "");
+    const handleInsertImageLink = () => {
+        const url = window.prompt("Enter image web URL (https://...):", "https://");
+        if (url && url.trim() !== "https://" && url.trim().length > 0) {
+            const alt = window.prompt("Enter image description (optional):", "Diagram") || "Diagram";
+            insertFormatting(`\n![${alt.trim()}](${url.trim()})\n`, "", "");
+            toast.success("Image link inserted. Click Preview to view.");
+        }
     };
 
     const updateOption = (index: number, patch: Partial<QuestionOptionDTO>) =>
@@ -261,7 +151,10 @@ export function QuestionForm({
     const toggleCorrect = (index: number, checked: boolean) =>
         setForm((prev) => ({
             ...prev,
-            options: prev.options.map((option, i) => (i === index ? { ...option, correct: checked } : option)),
+            options: prev.options.map((option, i) => {
+                // CHANGED: không còn Single choice -> có thể tick nhiều đáp án đúng
+                return i === index ? { ...option, correct: checked } : option;
+            }),
         }));
 
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -294,6 +187,7 @@ export function QuestionForm({
             onSubmit({ ...form, content, topic: form.topic.trim(), options: [] });
             return;
         }
+
         if (options.length < 2 || options.length > 6 || options.some((option) => !option.content)) {
             toast.error("Need 2-6 options and none may be empty.");
             return;
@@ -308,44 +202,41 @@ export function QuestionForm({
             toast.error("Select at least one correct option.");
             return;
         }
+        // REMOVED: kiểm tra "Single choice phải có đúng 1 đáp án đúng"
 
         onSubmit({ ...form, content, topic: form.topic.trim(), options });
     };
 
     return (
         <form className="grid gap-5" onSubmit={handleSubmit}>
-            {/* 1. TOPIC ROW (Dedicated single row) */}
+            {/* 1. TOPIC ROW (Dedicated single row with only 1 Add Topic button) */}
             <div className="grid gap-2">
                 <Label htmlFor="question-topic">Topic</Label>
 
-                {isAddingTopic ? (
+                {isAddingNewTopic ? (
                     <div className="flex items-center gap-2">
                         <Input
-                            id="question-topic"
-                            value={newTopicInput}
-                            onChange={(e) => setNewTopicInput(e.target.value)}
+                            autoFocus
+                            placeholder="Enter new topic name..."
+                            value={newTopicText}
+                            onChange={(e) => setNewTopicText(e.target.value)}
                             onKeyDown={(e) => {
                                 if (e.key === "Enter") {
                                     e.preventDefault();
-                                    handleSaveNewTopic();
-                                } else if (e.key === "Escape") {
-                                    setIsAddingTopic(false);
+                                    handleConfirmNewTopic();
                                 }
                             }}
-                            placeholder="Enter new topic name (e.g. Java Basics, Spring Boot...)"
-                            className="flex-1"
-                            autoFocus
                         />
-                        <Button type="button" onClick={handleSaveNewTopic}>
-                            <Save className="mr-1 h-4 w-4" />
+                        <Button type="button" size="sm" onClick={handleConfirmNewTopic}>
                             Save
                         </Button>
                         <Button
                             type="button"
-                            variant="ghost"
+                            variant="outline"
+                            size="sm"
                             onClick={() => {
-                                setNewTopicInput("");
-                                setIsAddingTopic(false);
+                                setIsAddingNewTopic(false);
+                                setNewTopicText("");
                             }}
                         >
                             Cancel
@@ -354,35 +245,47 @@ export function QuestionForm({
                 ) : (
                     <div className="flex items-center gap-2">
                         <Select
-                            value={form.topic || ""}
-                            onValueChange={(val) => setForm((prev) => ({ ...prev, topic: val }))}
+                            value={form.topic}
+                            onValueChange={(val) => {
+                                if (val === "__ADD_NEW__") {
+                                    setIsAddingNewTopic(true);
+                                    setNewTopicText("");
+                                } else {
+                                    setForm((prev) => ({ ...prev, topic: val }));
+                                }
+                            }}
                         >
-                            <SelectTrigger id="question-topic" className="flex-1">
-                                <SelectValue placeholder="Select topic from list..." />
+                            <SelectTrigger id="question-topic" className="w-full">
+                                <SelectValue placeholder="Select a topic..." />
                             </SelectTrigger>
                             <SelectContent>
-                                {allTopics.length === 0 ? (
-                                    <div className="p-2 text-center text-xs text-muted-foreground">
+                                {allTopics.length === 0 && (
+                                    <div className="p-2 text-xs text-muted-foreground text-center">
                                         No existing topics. Click &quot;Add Topic&quot; to create one.
                                     </div>
-                                ) : (
-                                    allTopics.map((t) => (
-                                        <SelectItem key={t} value={t}>
-                                            {t}
-                                        </SelectItem>
-                                    ))
                                 )}
+                                {allTopics.map((topic) => (
+                                    <SelectItem key={topic} value={topic}>
+                                        {topic}
+                                    </SelectItem>
+                                ))}
+                                <SelectItem value="__ADD_NEW__" className="font-medium text-primary">
+                                    + Add new topic...
+                                </SelectItem>
                             </SelectContent>
                         </Select>
+
                         <Button
                             type="button"
                             variant="outline"
+                            size="sm"
+                            className="shrink-0"
                             onClick={() => {
-                                setNewTopicInput("");
-                                setIsAddingTopic(true);
+                                setIsAddingNewTopic(true);
+                                setNewTopicText("");
                             }}
                         >
-                            <Plus className="mr-1 h-4 w-4" />
+                            <Plus className="mr-1 h-3.5 w-3.5" />
                             Add Topic
                         </Button>
                     </div>
@@ -392,7 +295,7 @@ export function QuestionForm({
             {/* 2. TYPE & DIFFICULTY (Single row with 2 columns) */}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="grid gap-2">
-                    <Label>Type</Label>
+                    <Label>Question Type</Label>
                     <Select
                         key={form.type}
                         value={form.type}
@@ -403,9 +306,11 @@ export function QuestionForm({
                                 options:
                                     value === "ESSAY"
                                         ? []
-                                        : prev.options.length >= 2
-                                            ? prev.options
-                                            : initialQuestionForm.options,
+                                        : value === "SINGLE_CHOICE"
+                                            ? prev.options.map((option) => ({ ...option, correct: false }))
+                                            : prev.options.length >= 2
+                                                ? prev.options
+                                                : initialQuestionForm.options,
                             }))
                         }
                     >
@@ -413,14 +318,15 @@ export function QuestionForm({
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="MULTIPLE_CHOICE">Multiple choice</SelectItem>
-                            <SelectItem value="ESSAY">Essay</SelectItem>
+                            {/* CHANGED: chỉ còn 2 loại (trước đây có Single choice / Multi choice) */}
+                            <SelectItem value="MULTIPLE_CHOICE">Multiple choice (trắc nghiệm)</SelectItem>
+                            <SelectItem value="ESSAY">Essay (tự luận)</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
 
                 <div className="grid gap-2">
-                    <Label>Difficulty</Label>
+                    <Label>Difficulty Level</Label>
                     <Select
                         key={form.difficulty}
                         value={form.difficulty}
@@ -440,7 +346,7 @@ export function QuestionForm({
                 </div>
             </div>
 
-            {/* 3. CONTENT (With formatting toolbar, scrollbar, adjacent to options) */}
+            {/* 3. QUESTION CONTENT (With formatting toolbar & scrollbar) */}
             <div className="grid gap-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <Label htmlFor="question-content">Question Content</Label>
@@ -449,104 +355,93 @@ export function QuestionForm({
                             type="button"
                             variant="outline"
                             size="sm"
-                            className="h-8 px-2 font-bold"
+                            className="h-8 px-2"
+                            onClick={() => insertFormatting("**", "**", "bold text")}
                             title="Bold (**text**)"
-                            onClick={() => applyFormatting("**", "**", "bold text")}
                         >
-                            <Bold className="h-3.5 w-3.5 mr-1" />
-                            Bold
+                            <Bold className="h-3.5 w-3.5" />
                         </Button>
                         <Button
                             type="button"
                             variant="outline"
                             size="sm"
-                            className="h-8 px-2 italic"
+                            className="h-8 px-2"
+                            onClick={() => insertFormatting("*", "*", "italic text")}
                             title="Italic (*text*)"
-                            onClick={() => applyFormatting("*", "*", "italic text")}
                         >
-                            <Italic className="h-3.5 w-3.5 mr-1" />
-                            Italic
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-8 px-2 font-mono"
-                            title="Inline Code (`code`)"
-                            onClick={() => applyFormatting("`", "`", "code")}
-                        >
-                            <Code className="h-3.5 w-3.5 mr-1" />
-                            Code
+                            <Italic className="h-3.5 w-3.5" />
                         </Button>
                         <Button
                             type="button"
                             variant="outline"
                             size="sm"
                             className="h-8 px-2"
-                            title="Note/Quote (> Note)"
-                            onClick={() => applyFormatting("> ", "", "Important Note")}
+                            onClick={() => insertFormatting("`", "`", "code")}
+                            title="Code (`code`)"
                         >
-                            <Quote className="h-3.5 w-3.5 mr-1" />
-                            Note
+                            <Code className="h-3.5 w-3.5" />
                         </Button>
                         <Button
                             type="button"
                             variant="outline"
                             size="sm"
                             className="h-8 px-2"
-                            title="Insert Image (![image](url))"
-                            onClick={insertImageTemplate}
+                            onClick={() => insertFormatting("> Note: ", "\n", "Important note")}
+                            title="Note (> Note: ...)"
                         >
-                            <ImageIcon className="h-3.5 w-3.5 mr-1" />
-                            Image
+                            <Quote className="h-3.5 w-3.5" />
                         </Button>
                         <Button
                             type="button"
-                            variant={showPreview ? "secondary" : "ghost"}
+                            variant="outline"
                             size="sm"
-                            className="h-8 px-2 text-xs"
-                            onClick={() => setShowPreview(!showPreview)}
+                            className="h-8 px-2"
+                            onClick={handleInsertImageLink}
+                            title="Insert Image URL"
                         >
-                            {showPreview ? (
+                            <ImageIcon className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                            type="button"
+                            variant={isPreview ? "default" : "ghost"}
+                            size="sm"
+                            className="h-8 px-2.5 text-xs"
+                            onClick={() => setIsPreview(!isPreview)}
+                        >
+                            {isPreview ? (
                                 <>
-                                    <EyeOff className="h-3.5 w-3.5 mr-1" /> Hide Preview
+                                    <EyeOff className="mr-1 h-3.5 w-3.5" /> Edit
                                 </>
                             ) : (
                                 <>
-                                    <Eye className="h-3.5 w-3.5 mr-1" /> Preview
+                                    <Eye className="mr-1 h-3.5 w-3.5" /> Preview
                                 </>
                             )}
                         </Button>
                     </div>
                 </div>
 
-                <div className="relative">
+                {isPreview ? (
+                    <div className="min-h-[140px] max-h-[260px] overflow-y-auto rounded-md border border-input bg-muted/20 p-3">
+                        <QuestionContentPreview content={form.content} />
+                    </div>
+                ) : (
                     <Textarea
-                        ref={textareaRef}
+                        ref={contentRef}
                         id="question-content"
                         value={form.content}
                         onChange={(event) => setForm((prev) => ({ ...prev, content: event.target.value }))}
-                        rows={4}
-                        className="max-h-[260px] overflow-y-auto font-sans text-sm"
-                        placeholder="Enter question content. Use the toolbar above to add bold text, notes, or images."
+                        rows={5}
+                        className="min-h-[140px] max-h-[260px] overflow-y-auto resize-y"
+                        placeholder="Enter question content (highlight text and click B to bold, I to italic, or click Preview to test)..."
                         autoFocus
                     />
-                </div>
-
-                {showPreview && (
-                    <div className="mt-1 rounded-md border bg-muted/40 p-3">
-                        <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                            Rendered Preview:
-                        </div>
-                        <QuestionContentPreview content={form.content} />
-                    </div>
                 )}
             </div>
 
-            {/* 4. ANSWER OPTIONS (Adjacent to content, includes teammate's imageUrl support) */}
             {form.type === "ESSAY" ? (
                 <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
-                    Essay questions have no options; students type their answer in an editor and the teacher grades it manually.
+                    Essay questions have no options; students type their answer in a pop-up editor and the teacher grades it manually.
                 </p>
             ) : (
                 <div className="grid gap-3 border-t pt-3">
@@ -554,7 +449,7 @@ export function QuestionForm({
                         <div className="grid gap-0.5">
                             <Label>Options (tick the correct answer)</Label>
                             <p className="text-xs text-muted-foreground">
-                                One correct answer: students see round buttons (pick one). Several correct answers: students see square boxes (pick many).
+                                One correct answer: students see radio buttons. Multiple correct answers: students see checkboxes.
                             </p>
                         </div>
                         <Button
@@ -608,20 +503,12 @@ export function QuestionForm({
                                 placeholder="Image URL (optional, https://...)"
                             />
                             {option.imageUrl?.trim() && (
-                                <img
-                                    src={option.imageUrl}
-                                    alt=""
-                                    className="ml-8 max-h-32 rounded border object-contain"
-                                    onError={(e) => {
-                                        (e.target as HTMLImageElement).style.display = "none";
-                                    }}
-                                />
+                                <img src={option.imageUrl} alt="" className="ml-8 max-h-32 rounded border object-contain" />
                             )}
                         </div>
                     ))}
                 </div>
             )}
-
             {/* 5. POINTS ROW (Placed after Answer Options) */}
             <div className="grid max-w-xs gap-2 border-t pt-3">
                 <Label htmlFor="question-points">Points</Label>
@@ -638,38 +525,30 @@ export function QuestionForm({
                 />
             </div>
 
-            {/* 6. BOTTOM ROW: Active switch (at the end) + Action buttons */}
-            <CardFooter className="flex items-center justify-between border-t px-0 pt-4">
-                <div>
-                    {showActive && (
-                        <div className="flex items-center gap-3">
-                            <Switch
-                                id="question-active"
-                                checked={form.isActive}
-                                onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isActive: checked }))}
-                            />
-                            <Label htmlFor="question-active" className="cursor-pointer font-medium">
-                                Active
-                            </Label>
-                        </div>
-                    )}
+            {/* 6. ACTIVE SWITCH (At the very bottom, right above footer) */}
+            {showActive && (
+                <div className="flex items-center gap-3 pt-2">
+                    <Switch
+                        id="question-active"
+                        checked={form.isActive}
+                        onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isActive: checked }))}
+                    />
+                    <Label htmlFor="question-active" className="cursor-pointer font-medium">
+                        Active
+                    </Label>
                 </div>
+            )}
 
-                <div className="flex items-center gap-2">
-                    <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => (onCancel ? onCancel() : navigate("/questions"))}
-                        disabled={isSaving}
-                    >
-                        <ArrowLeft className="mr-1 h-4 w-4" />
-                        Back
-                    </Button>
-                    <Button type="submit" disabled={isSaving}>
-                        <Save className="mr-1 h-4 w-4" />
-                        {isSaving ? "Saving..." : submitLabel}
-                    </Button>
-                </div>
+
+            <CardFooter className="px-0 pt-2 flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => (onCancel ? onCancel() : navigate("/questions"))} disabled={isSaving}>
+                    <ArrowLeft className="h-4 w-4" />
+                    Back
+                </Button>
+                <Button type="submit" disabled={isSaving}>
+                    <Save className="h-4 w-4" />
+                    {isSaving ? "Saving..." : submitLabel}
+                </Button>
             </CardFooter>
         </form>
     );
