@@ -27,7 +27,6 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import type {
     CalendarActivationConflictError,
@@ -346,10 +345,10 @@ export function ActivationReviewDialog({
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogContent
-                className="flex max-h-[90vh] w-full flex-col overflow-hidden p-0 sm:max-w-3xl lg:max-w-4xl"
+                className="flex max-h-[90dvh] w-full flex-col overflow-hidden p-0 sm:max-w-3xl lg:max-w-4xl"
                 showCloseButton={!activateMutation.isPending}
             >
-                <DialogHeader className="border-b px-5 py-4 pr-12 sm:px-6">
+                <DialogHeader className="shrink-0 border-b px-5 py-4 pr-12 sm:px-6">
                     <div className="flex items-start gap-3">
                         <div className="rounded-xl bg-primary/10 p-2.5 text-primary">
                             <CalendarCheck2 className="size-5" aria-hidden="true" />
@@ -366,10 +365,10 @@ export function ActivationReviewDialog({
                     </div>
                 </DialogHeader>
 
-                <ScrollArea className="min-h-0 flex-1">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
                     <div
                         key={confirming ? "confirming" : conflictQuery.status}
-                        className="min-h-80 space-y-5 p-5 animate-in fade-in-0 duration-150 motion-reduce:animate-none sm:p-6"
+                        className="space-y-5 p-5 animate-in fade-in-0 duration-150 motion-reduce:animate-none sm:p-6"
                     >
                         {conflictQuery.isPending ? (
                             <ReviewSkeleton />
@@ -479,7 +478,7 @@ export function ActivationReviewDialog({
                             </>
                         ) : null}
                     </div>
-                </ScrollArea>
+                </div>
 
                 <DialogFooter className="m-0 shrink-0 rounded-none px-5 py-4 sm:px-6">
                     <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
