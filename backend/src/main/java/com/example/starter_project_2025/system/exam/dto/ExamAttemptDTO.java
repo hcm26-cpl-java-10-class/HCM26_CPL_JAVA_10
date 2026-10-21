@@ -38,5 +38,7 @@ public class ExamAttemptDTO {
         private Long questionId;
         private List<Long> selectedOptionIds;
         private String textAnswer;
+        // NEW: câu tự luận đã được bấm "Lưu bài" chưa
+        private boolean saved;
     }
 }

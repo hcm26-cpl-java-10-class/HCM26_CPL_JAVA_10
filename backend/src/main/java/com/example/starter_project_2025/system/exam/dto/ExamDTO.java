@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.exam.dto;
 import com.example.starter_project_2025.base.crud.dto.BaseDTO;
 import com.example.starter_project_2025.base.crud.dto.OnCreate;
 import com.example.starter_project_2025.base.crud.dto.OnUpdate;
+import com.example.starter_project_2025.system.exam.domain.ExamType;
 import com.example.starter_project_2025.system.exam.domain.LatePolicy;
 import com.example.starter_project_2025.system.exam.domain.ResultVisibility;
 import com.example.starter_project_2025.system.question.dto.QuestionDTO;
@@ -55,6 +56,8 @@ public class ExamDTO extends BaseDTO {
     private Integer lateGraceMinutes;
 
     private ResultVisibility resultVisibility;
+
+    private ExamType examType;
 
     private List<Long> questionIds;
 

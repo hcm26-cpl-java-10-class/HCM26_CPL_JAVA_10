@@ -29,6 +29,8 @@ export interface QuestionFilter {
 }
 
 export type LatePolicy = "NOT_ALLOWED" | "ALLOWED_WITH_PENALTY" | "ALLOWED";
+// NEW: kiểu bài thi quyết định đề chứa loại câu hỏi nào
+export type ExamType = "MULTIPLE_CHOICE" | "ESSAY" | "MIXED";
 export type ResultVisibility = "IMMEDIATE" | "AFTER_EXAM_CLOSED" | "MANUAL_RELEASE";
 
 export interface ExamDTO {
@@ -47,6 +49,7 @@ export interface ExamDTO {
   latePenaltyPercent?: number | null;
   lateGraceMinutes?: number;
   resultVisibility?: ResultVisibility;
+  examType?: ExamType; // NEW
   questionIds?: number[];
   questions?: QuestionDTO[];
   totalPoints?: number;

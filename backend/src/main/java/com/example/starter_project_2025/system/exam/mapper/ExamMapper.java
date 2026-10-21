@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.exam.mapper;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.system.exam.domain.Exam;
 import com.example.starter_project_2025.system.exam.dto.ExamDTO;
+import com.example.starter_project_2025.system.exam.service.ExamTypePolicy; // NEW
 import com.example.starter_project_2025.system.question.domain.Question;
 import com.example.starter_project_2025.system.question.mapper.QuestionMapper;
 import lombok.RequiredArgsConstructor;
@@ -47,6 +48,7 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setLatePenaltyPercent(e.getLatePenaltyPercent());
         d.setLateGraceMinutes(e.getLateGraceMinutes());
         d.setResultVisibility(e.getResultVisibility());
+        d.setExamType(ExamTypePolicy.effective(e.getExamType())); // NEW
 
         List<Question> sorted = e.getQuestions().stream()
                 .sorted(Comparator.comparing(Question::getId)).toList();
@@ -78,6 +80,7 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         if (d.getLatePenaltyPercent() != null) e.setLatePenaltyPercent(d.getLatePenaltyPercent());
         if (d.getLateGraceMinutes() != null) e.setLateGraceMinutes(d.getLateGraceMinutes());
         if (d.getResultVisibility() != null) e.setResultVisibility(d.getResultVisibility());
+        if (d.getExamType() != null) e.setExamType(d.getExamType()); // NEW
         if (d.getAccessCode() != null) {
             String trimmed = d.getAccessCode().trim();
             e.setAccessCode(trimmed.isEmpty() ? null : trimmed);

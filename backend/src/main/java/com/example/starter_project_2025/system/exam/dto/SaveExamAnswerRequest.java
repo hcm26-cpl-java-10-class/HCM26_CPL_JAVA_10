@@ -15,4 +15,7 @@ public class SaveExamAnswerRequest {
     private List<Long> selectedOptionIds;
 
     private String textAnswer;
+
+    private Boolean markSaved;
+
 }

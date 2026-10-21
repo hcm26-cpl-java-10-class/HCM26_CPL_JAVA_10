@@ -55,12 +55,17 @@ public class Exam extends BaseEntity {
 
     private Integer latePenaltyPercent;
 
-        @Column(nullable = false)
-        private Integer lateGraceMinutes = 0;
+    @Column(nullable = false)
+    private Integer lateGraceMinutes = 0;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private ResultVisibility resultVisibility = ResultVisibility.IMMEDIATE;
+
+    // NEW: kiểu bài thi (chỉ trắc nghiệm / chỉ tự luận / cả hai). Đề cũ mặc định MIXED.
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    private ExamType examType = ExamType.MIXED;
 
     @Column(length = 100)
     private String accessCode;

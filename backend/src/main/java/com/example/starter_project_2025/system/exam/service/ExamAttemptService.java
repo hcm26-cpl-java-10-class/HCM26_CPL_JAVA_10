@@ -268,8 +268,23 @@ public class ExamAttemptService {
             }
 
             ExamAttemptAnswer answer = findOrCreateAnswer(attempt, question);
+            String previousText = answer.getTextAnswer();
             answer.setSelectedOptions(selectedOptions);
             answer.setTextAnswer(question.getType() == QuestionType.ESSAY ? textAnswer : null);
+            // NEW: trạng thái "đã lưu" của câu tự luận
+            if (question.getType() == QuestionType.ESSAY) {
+                String newText = answer.getTextAnswer();
+                boolean hasText = newText != null && !newText.isBlank();
+                if (Boolean.TRUE.equals(request.getMarkSaved())) {
+                    if (!hasText) {
+                        throw new BadRequestException("Câu tự luận chưa có nội dung để lưu");
+                    }
+                    answer.setSaved(true);
+                } else if (!java.util.Objects.equals(previousText == null ? "" : previousText,
+                        newText == null ? "" : newText)) {
+                    answer.setSaved(false); // sửa lại sau khi lưu -> phải bấm lưu lại
+                }
+            }
         }
     }
 
@@ -401,6 +416,7 @@ public class ExamAttemptService {
                 .sorted()
                 .toList());
         response.setTextAnswer(answer.getTextAnswer());
+        response.setSaved(answer.isSaved()); // NEW
         return response;
     }
 
