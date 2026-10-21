@@ -30,11 +30,7 @@ interface SectionLessonsProps {
   sectionId: number;
 }
 
-/**
- * Quản lý toàn bộ bài học của một Section: danh sách, thêm, sửa, xóa, preview.
- * Component độc lập -> trang Section (M3) có thể nhúng trực tiếp:
- *   <SectionLessons sectionId={section.id} />
- */
+
 export function SectionLessons({ sectionId }: SectionLessonsProps) {
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
