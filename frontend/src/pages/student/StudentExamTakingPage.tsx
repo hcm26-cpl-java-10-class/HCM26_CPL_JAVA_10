@@ -448,7 +448,7 @@ export default function StudentExamTakingPage() {
     const activeId = currentEssay ? currentEssay.id : activeQuestionId;
 
     const timerBox = (
-        <div role="timer" aria-live="polite" className={`shrink-0 rounded-lg border px-4 py-2 font-mono text-xl ${secondsRemaining <= 60 ? 'border-red-500 text-red-500' : ''}`}>
+        <div role="timer" aria-live="polite" className={`pointer-events-auto shrink-0 rounded-lg border bg-card px-4 py-2 font-mono text-xl ${secondsRemaining <= 60 ? 'border-red-500 text-red-500' : ''}`}>
             {formatCountdown(secondsRemaining)}
         </div>
     );
@@ -472,9 +472,9 @@ export default function StudentExamTakingPage() {
     // NEW: thanh ghim cố định trên cùng — đồng hồ bên trái, danh sách câu hỏi bên phải
     // Màu ô: vàng (đánh dấu, luôn ưu tiên) > xanh (đã làm) > đen (chưa làm); viền đỏ = câu đang chọn
     const pinnedBar = (
-        <div className="sticky top-0 z-30 flex items-start justify-between gap-4 bg-background/95 py-3 backdrop-blur">
+        <div className="pointer-events-none sticky top-0 z-30 flex items-start justify-between gap-4 py-3">
             {timerBox}
-            <div className="flex w-[15.5rem] shrink-0 flex-col gap-3 rounded-xl border bg-card p-3 shadow-sm">
+            <div className="pointer-events-auto flex w-[15.5rem] shrink-0 flex-col gap-3 rounded-xl border bg-card p-3 shadow-sm">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                     <span className="w-full text-sm font-semibold text-foreground">Danh sách câu hỏi</span>
                     <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-sm bg-black ring-1 ring-border" /> Chưa làm</span>
