@@ -28,6 +28,22 @@ public class ExamConfigValidator {
         Integer lateGraceMinutes = r.getLateGraceMinutes() != null ? r.getLateGraceMinutes()
             : (existing == null ? 0 : existing.getLateGraceMinutes());
 
+        LocalDateTime now = LocalDateTime.now();
+
+        if (r.getStartTime() != null) {
+            boolean isNewOrChanged = (existing == null || existing.getStartTime() == null || !existing.getStartTime().isEqual(r.getStartTime()));
+            if (isNewOrChanged && r.getStartTime().isBefore(now.minusMinutes(1))) {
+                ctx.add("startTime", "Thời gian mở không được ở trong quá khứ");
+            }
+        }
+
+        if (r.getEndTime() != null) {
+            boolean isNewOrChanged = (existing == null || existing.getEndTime() == null || !existing.getEndTime().isEqual(r.getEndTime()));
+            if (isNewOrChanged && r.getEndTime().isBefore(now)) {
+                ctx.add("endTime", "Thời gian đóng không được ở trong quá khứ");
+            }
+        }
+
         if (start != null && end != null) {
             if (!start.isBefore(end)) {
                 ctx.add("endTime", "Thời gian đóng phải sau thời gian mở");

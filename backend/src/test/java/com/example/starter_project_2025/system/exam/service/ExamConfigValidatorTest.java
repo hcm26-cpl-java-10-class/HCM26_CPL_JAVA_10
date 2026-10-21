@@ -37,4 +37,42 @@ class ExamConfigValidatorTest {
 
         context.throwIfErrors();
     }
+
+    @Test
+    void rejectsStartTimeInThePast() {
+        ExamDTO request = new ExamDTO();
+        request.setStartTime(java.time.LocalDateTime.now().minusHours(2));
+        ValidationContext context = new ValidationContext();
+
+        validator.validate(null, request, 10, context);
+
+        assertThrows(BusinessValidationException.class, context::throwIfErrors);
+    }
+
+    @Test
+    void acceptsStartTimeInTheFuture() {
+        ExamDTO request = new ExamDTO();
+        request.setStartTime(java.time.LocalDateTime.now().plusHours(2));
+        request.setEndTime(java.time.LocalDateTime.now().plusHours(4));
+        ValidationContext context = new ValidationContext();
+
+        validator.validate(null, request, 10, context);
+
+        context.throwIfErrors();
+    }
+
+    @Test
+    void allowsUnchangedPastStartTimeWhenUpdatingExam() {
+        java.time.LocalDateTime pastTime = java.time.LocalDateTime.now().minusHours(5);
+        Exam existing = new Exam();
+        existing.setStartTime(pastTime);
+
+        ExamDTO request = new ExamDTO();
+        request.setStartTime(pastTime); // unchanged
+        ValidationContext context = new ValidationContext();
+
+        validator.validate(existing, request, 10, context);
+
+        context.throwIfErrors();
+    }
 }

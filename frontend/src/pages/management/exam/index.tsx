@@ -94,6 +94,16 @@ const RESULT_VISIBILITY_LABEL: Record<ResultVisibility, string> = {
 
 const toInputDateTime = (value?: string | null) => (value ? value.slice(0, 16) : "");
 
+const getLocalDatetimeString = (date = new Date()) => {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const y = date.getFullYear();
+  const m = pad(date.getMonth() + 1);
+  const d = pad(date.getDate());
+  const h = pad(date.getHours());
+  const min = pad(date.getMinutes());
+  return `${y}-${m}-${d}T${h}:${min}`;
+};
+
 const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   startTime: toInputDateTime(exam.startTime),
   endTime: toInputDateTime(exam.endTime),
@@ -109,7 +119,30 @@ const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   accessCode: exam.accessCode ?? "",
 });
 
-function validateConfig(duration: number, cfg: ExamConfigForm): string | null {
+function validateConfig(
+  duration: number,
+  cfg: ExamConfigForm,
+  originalStartTime?: string,
+  originalEndTime?: string,
+): string | null {
+  const now = Date.now() - 60 * 1000; // Cho phép sai số 1 phút lúc bấm lưu
+
+  if (cfg.startTime) {
+    const start = new Date(cfg.startTime).getTime();
+    const isStartChanged = !originalStartTime || new Date(originalStartTime).getTime() !== start;
+    if (isStartChanged && start < now) {
+      return "Thời gian mở không được ở trong quá khứ.";
+    }
+  }
+
+  if (cfg.endTime) {
+    const end = new Date(cfg.endTime).getTime();
+    const isEndChanged = !originalEndTime || new Date(originalEndTime).getTime() !== end;
+    if (isEndChanged && end < now) {
+      return "Thời gian đóng không được ở trong quá khứ.";
+    }
+  }
+
   if (cfg.startTime && cfg.endTime) {
     const start = new Date(cfg.startTime).getTime();
     const end = new Date(cfg.endTime).getTime();
@@ -467,7 +500,12 @@ export default function ExamManagementPage() {
             <form
                 onSubmit={(event) => {
                   event.preventDefault();
-                  const problem = validateConfig(Number(newDuration), cfg);
+                  const problem = validateConfig(
+                    Number(newDuration),
+                    cfg,
+                    editingExam?.startTime ? toInputDateTime(editingExam.startTime) : undefined,
+                    editingExam?.endTime ? toInputDateTime(editingExam.endTime) : undefined,
+                  );
                   if (problem) {
                     toast.error(problem);
                     return;
@@ -517,11 +555,21 @@ export default function ExamManagementPage() {
                 <div className="grid gap-4 border-t pt-4 sm:grid-cols-2">
                   <label className="grid gap-2 text-sm font-medium">
                     Thời gian mở
-                    <Input type="datetime-local" value={cfg.startTime} onChange={(event) => setCfg((c) => ({ ...c, startTime: event.target.value }))} />
+                    <Input
+                      type="datetime-local"
+                      min={editingExam?.startTime && new Date(editingExam.startTime).getTime() < Date.now() ? undefined : getLocalDatetimeString()}
+                      value={cfg.startTime}
+                      onChange={(event) => setCfg((c) => ({ ...c, startTime: event.target.value }))}
+                    />
                   </label>
                   <label className="grid gap-2 text-sm font-medium">
                     Thời gian đóng
-                    <Input type="datetime-local" value={cfg.endTime} onChange={(event) => setCfg((c) => ({ ...c, endTime: event.target.value }))} />
+                    <Input
+                      type="datetime-local"
+                      min={cfg.startTime || (editingExam?.endTime && new Date(editingExam.endTime).getTime() < Date.now() ? undefined : getLocalDatetimeString())}
+                      value={cfg.endTime}
+                      onChange={(event) => setCfg((c) => ({ ...c, endTime: event.target.value }))}
+                    />
                   </label>
                   <label className="grid gap-2 text-sm font-medium">
                     Số lần làm tối đa
