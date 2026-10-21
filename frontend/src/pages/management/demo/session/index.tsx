@@ -1,4 +1,5 @@
 import { sessionApi } from "@/api/features/demo/session.api";
+import { SessionScheduleEditor } from "@/pages/management/schedule-validation/SessionScheduleEditor";
 import { PermissionGate } from "@/components/PermissionGate";
 import { Button } from "@/components/ui/button";
 import {
@@ -118,4 +119,8 @@ export const entityConfig: EntityConfig = {
     api: sessionApi,
     schema: sessionSchema,
     headerActions: scheduleValidationAction,
+    actionPages: {
+        create: { path: "create", component: SessionScheduleEditor, requiredPermission: "SESSION_CREATE" },
+        edit: { path: ":id/edit", component: SessionScheduleEditor, requiredPermission: "SESSION_UPDATE" },
+    },
 };
