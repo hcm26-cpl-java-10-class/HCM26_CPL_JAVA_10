@@ -427,6 +427,7 @@ export function ProTable<TData = any>({
                                                             key={f.name}
                                                             field={f}
                                                             value={row[f.name]}
+                                                            row={row}
                                                             relationOptions={table.relationOptions}
                                                             disableBooleanToggle={!(table.permission?.canUpdate ?? true)}
                                                             onBooleanToggle={(fieldName, newValue) => {

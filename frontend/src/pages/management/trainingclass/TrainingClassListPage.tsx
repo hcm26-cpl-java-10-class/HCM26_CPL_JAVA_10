@@ -1,134 +1,108 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Eye, Pen, Trash2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Eye, Pen, Trash2, History } from "lucide-react";
 import axios from "axios";
-
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import TrainingClassCreateForm from "./TrainingClassCreateForm";
+import TrainingClassEditForm from "./TrainingClassEditForm";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { ProTable } from "@/components/datatable/ProTable";
 import { useProTable } from "@/components/datatable/hook/useProTable";
 import ActionButton from "@/components/datatable/common/ActionButton";
 import { DetailModal } from "@/components/datatable/modal/DetailModal";
+import { ConfirmDeleteModal } from "@/components/datatable/modal/ConfirmDeleteModal";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { EntitySchema } from "@/types";
-import { useQueryClient } from "@tanstack/react-query";
-import { ConfirmDeleteModal } from "@/components/datatable/modal/ConfirmDeleteModal";
+
 
 import {
+    getTrainingClassCreateOptions,
     trainingClassTableApi,
     type TrainingClassResponse,
     type TrainingClassTablePagination,
 } from "@/api/features/schedule/training-class.api";
 
-const trainingClassSchema: EntitySchema = {
-    entityName: "training-class",
-    idField: "id",
-    fields: [
-        {
-            name: "code",
-            label: "Class Code",
-            type: "text",
-            bold: true,
-            sortable: true,
-            width: 230,
-        },
-        {
-            name: "name",
-            label: "Class Name",
-            type: "text",
-            sortable: true,
-            width: 240,
-        },
-        {
-            name: "site",
-            label: "Site",
-            type: "text",
-            sortable: true,
-            filterable: true,
-            filterType: "text",
-            width: 100,
-        },
-        {
-            name: "traineeType",
-            label: "Trainee Type",
-            type: "text",
-            sortable: true,
-            width: 140,
-        },
-        {
-            name: "deliveryFormat",
-            label: "Delivery Format",
-            type: "text",
-            sortable: true,
-            width: 150,
-        },
-        {
-            name: "programVersionId",
-            label: "Program Version ID",
-            type: "number",
-            sortable: true,
-            filterable: true,
-            filterType: "text",
-            width: 170,
-        },
-        {
-            name: "startDate",
-            label: "Start Date",
-            type: "date",
-            sortable: true,
-            filterable: true,
-            filterType: "dateRange",
-            width: 130,
-        },
-        {
-            name: "endDate",
-            label: "End Date",
-            type: "date",
-            sortable: true,
-            visible: false,
-            width: 130,
-        },
-        {
-            name: "capacity",
-            label: "Capacity",
-            type: "number",
-            sortable: true,
-            width: 110,
-        },
-        {
-            name: "location",
-            label: "Location",
-            type: "text",
-            visible: false,
-            width: 180,
-        },
-        {
-            name: "createdAt",
-            label: "Created At",
-            type: "date",
-            editable: false,
-            sortable: true,
-            visible: false,
-            width: 180,
-        },
-    ],
-};
+import { trainingClassSchema } from "./training-class.schema";
 
 export default function TrainingClassListPage() {
-    const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { hasPermission } = usePermissions();
+    const canRead = hasPermission("TRAINING_CLASS_READ");
+    const canViewRevisions = ["TRAINING_CLASS_CREATE", "TRAINING_CLASS_UPDATE", "TRAINING_CLASS_SUBMIT", "TRAINING_CLASS_APPROVE"].some(hasPermission);
 
     const [detailRow, setDetailRow] =
         useState<TrainingClassResponse | null>(null);
-
     const [loadError, setLoadError] = useState("");
-    const [retryVersion, setRetryVersion] = useState(0);
+
+    const canLoadOptions =
+        hasPermission("TRAINING_CLASS_CREATE") ||
+        hasPermission("TRAINING_CLASS_UPDATE");
+
+    const createOptionsQuery = useQuery({
+        queryKey: ["training-class-create-options"],
+        queryFn: getTrainingClassCreateOptions,
+        enabled: canLoadOptions,
+        staleTime: 60_000,
+    });
+
+    const resolvedSchema = useMemo<EntitySchema>(() => {
+        const options = createOptionsQuery.data;
+
+        return {
+            ...trainingClassSchema,
+            fields: trainingClassSchema.fields.map((field) => {
+                switch (field.name) {
+                    case "code":
+                        return {
+                            ...field,
+                            render: (value: unknown, row: TrainingClassResponse) =>
+                                canRead ? (
+                                    <Link
+                                        to={`/training-classes/${row.id}?tab=info`}
+                                        className="font-semibold text-primary underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    >
+                                        {String(value ?? "—")}
+                                    </Link>
+                                ) : String(value ?? "—"),
+                        };
+
+                    case "site":
+                        return {
+                            ...field,
+                            type: "select" as const,
+                            options: options?.sites ?? [],
+                        };
+
+                    case "traineeType":
+                        return {
+                            ...field,
+                            type: "select" as const,
+                            options: options?.traineeTypes ?? [],
+                        };
+
+                    case "deliveryFormat":
+                        return {
+                            ...field,
+                            type: "select" as const,
+                            options: options?.deliveryFormats ?? [],
+                        };
+
+                    case "location":
+                        return { ...field, options: options?.locations ?? [] };
+
+                    default:
+                        return field;
+                }
+            }),
+        };
+    }, [createOptionsQuery.data, canRead]);
 
     const api = useMemo(
         () => ({
-            delete: trainingClassTableApi.delete,
             create: trainingClassTableApi.create,
             update: trainingClassTableApi.update,
+            delete: trainingClassTableApi.delete,
+
             async getPage(
                 pagination: TrainingClassTablePagination,
                 search = "",
@@ -146,44 +120,45 @@ export default function TrainingClassListPage() {
                     let message =
                         "Unable to load training classes. Please try again.";
 
+                    if (error instanceof Error) {
+                        message = error.message;
+                    }
+
                     if (axios.isAxiosError(error)) {
                         if (error.response?.status === 401) {
                             message =
                                 "Please log in to view training classes.";
-                            if (error instanceof Error) {
-                                message = error.message;
-                            }
                         } else if (error.response?.status === 403) {
                             message =
                                 "You do not have permission to view training classes.";
                         }
                     }
 
-
                     setLoadError(message);
                     throw error;
-
                 }
             },
         }),
         [],
     );
 
-    const table = useProTable(api, trainingClassSchema, {
+    const table = useProTable(api, resolvedSchema, {
         permissionOverrides: {
-            canCreate: hasPermission("TRAINING_CLASS_CREATE"),
-            canUpdate: hasPermission("TRAINING_CLASS_UPDATE"),
+            canCreate:
+                hasPermission("TRAINING_CLASS_CREATE") &&
+                createOptionsQuery.isSuccess,
+            canUpdate:
+                hasPermission("TRAINING_CLASS_UPDATE") &&
+                createOptionsQuery.isSuccess,
             canDelete: hasPermission("TRAINING_CLASS_DELETE"),
             canImport: false,
             canExport: false,
-
         },
     });
 
     function retry() {
         setLoadError("");
-        setRetryVersion((value) => value + 1);
-        table.setSearch(table.search);
+
         void queryClient.invalidateQueries({
             queryKey: ["training-class"],
         });
@@ -194,12 +169,42 @@ export default function TrainingClassListPage() {
             pathName={{ "training-classes": "Training Classes" }}
         >
             <div className="flex h-full min-h-0 flex-col gap-4">
+                {canLoadOptions && createOptionsQuery.isPending && (
+                    <p
+                        role="status"
+                        className="text-sm text-muted-foreground"
+                    >
+                        Loading class options...
+                    </p>
+                )}
+
+                {canLoadOptions && createOptionsQuery.isError && (
+                    <div
+                        role="alert"
+                        className="flex items-center justify-between gap-3 rounded-md border p-3 text-sm"
+                    >
+                        <p>Unable to load class options.</p>
+
+                        <button
+                            type="button"
+                            className="rounded-md border bg-background px-3 py-2"
+                            onClick={() =>
+                                void createOptionsQuery.refetch()
+                            }
+                            disabled={createOptionsQuery.isFetching}
+                        >
+                            Retry
+                        </button>
+                    </div>
+                )}
+
                 {loadError && (
                     <div
                         role="alert"
                         className="flex items-center justify-between gap-4 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm"
                     >
                         <p>{loadError}</p>
+
                         <button
                             type="button"
                             className="rounded-md border bg-background px-3 py-2"
@@ -210,30 +215,23 @@ export default function TrainingClassListPage() {
                     </div>
                 )}
 
-                <div
-                    className={
-                        loadError
-                            ? "hidden"
-                            : "min-h-0 flex-1"
-                    }
-                >
+                <div className="min-h-0 flex-1">
                     <TrainingClassTable
-                        key={retryVersion}
                         table={table}
+                        canRead={canRead}
+                        canViewRevisions={canViewRevisions}
                         onQuickView={setDetailRow}
-                        onOpenDetails={(row) =>
-                            navigate(`/training-classes/${row.id}`)
-                        }
-                        canRead={hasPermission("TRAINING_CLASS_READ")}
                     />
                 </div>
 
                 <DetailModal
                     open={detailRow !== null}
                     onClose={(open) => {
-                        if (!open) setDetailRow(null);
+                        if (!open) {
+                            setDetailRow(null);
+                        }
                     }}
-                    schema={trainingClassSchema}
+                    schema={resolvedSchema}
                     row={detailRow}
                 />
             </div>
@@ -244,22 +242,26 @@ export default function TrainingClassListPage() {
 interface TrainingClassTableProps {
     table: ReturnType<typeof useProTable>;
     canRead: boolean;
+    canViewRevisions: boolean;
     onQuickView: (row: TrainingClassResponse) => void;
-    onOpenDetails: (row: TrainingClassResponse) => void;
 }
 
 function TrainingClassTable({
                                 table,
                                 canRead,
+                                canViewRevisions,
                                 onQuickView,
-                                onOpenDetails,
                             }: TrainingClassTableProps) {
     const [deleteRow, setDeleteRow] =
         useState<TrainingClassResponse | null>(null);
     const [deleting, setDeleting] = useState(false);
 
     async function confirmDelete() {
-        if (!deleteRow || !table.permission?.canDelete || deleting) {
+        if (
+            !deleteRow ||
+            !table.permission?.canDelete ||
+            deleting
+        ) {
             return;
         }
 
@@ -281,7 +283,29 @@ function TrainingClassTable({
             <ProTable<TrainingClassResponse>
                 table={table}
                 mode="default"
-                onRowClick={canRead ? onOpenDetails : undefined}
+                renderFormModal={({ open, onClose, schema, initial, onSubmit }) =>
+                    initial ? (
+                        <TrainingClassEditForm
+                            open={open}
+                            onClose={onClose}
+                            schema={schema}
+                            initial={initial}
+                            isSubmitting={table.isSubmitting}
+                            fieldErrors={table.fieldErrors}
+                            onClearErrors={() => table.setFieldErrors({})}
+                            onSubmit={onSubmit}
+                        />
+                    ) : (
+                        <TrainingClassCreateForm
+                            open={open}
+                            onClose={onClose}
+                            schema={schema}
+                            isSubmitting={table.isSubmitting}
+                            fieldErrors={table.fieldErrors}
+                            onSubmit={onSubmit}
+                        />
+                    )
+                }
                 renderRowActions={(row) => (
                     <>
                         {canRead && (
@@ -297,18 +321,23 @@ function TrainingClassTable({
                             />
                         )}
 
-                        {table.permission?.canUpdate && (
-                            <ActionButton
-                                onClick={() => table.openEdit(row)}
-                                tooltip="Edit"
-                                icon={
-                                    <Pen
-                                        size={10}
-                                        className="text-gray-500"
-                                    />
-                                }
-                            />
-                        )}
+                        {table.permission?.canUpdate &&
+                            row.isActive &&
+                            ["PLANNING", "ONGOING"].includes(row.status) && (
+                                <ActionButton
+                                    onClick={() => table.openEdit(row)}
+                                    tooltip="Edit draft"
+                                    icon={
+                                        <Pen
+                                            size={10}
+                                            className="text-gray-500"
+                                        />
+                                    }
+                                />
+                            )}
+
+                        {canRead && canViewRevisions && <Link to={`/training-classes/${row.id}?tab=revisions`} aria-label={`Revisions of ${row.code}`}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-md border hover:bg-muted"><History size={14} /></Link>}
 
                         {table.permission?.canDelete && (
                             <ActionButton

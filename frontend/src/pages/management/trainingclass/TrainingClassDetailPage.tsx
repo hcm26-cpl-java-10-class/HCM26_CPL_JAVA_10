@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import axios from "axios";
-import { ArrowLeft, BookOpen, CalendarDays, Users } from "lucide-react";
+import { ArrowLeft, BookOpen, CalendarDays, Users, History } from "lucide-react";
 
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
@@ -10,12 +10,13 @@ import { usePermissions } from "@/hooks/usePermissions";
 
 import ClassCalendarTab from "./ClassCalendarTab";
 import ClassTraineesTab from "./ClassTraineesTab";
+import TrainingClassRevisionPanel from "./TrainingClassRevisionPanel";
 import {
     getTrainingClass,
     type TrainingClassResponse,
 } from "@/api/features/schedule/training-class.api";
 
-type ClassTab = "info" | "trainees" | "calendar";
+type ClassTab = "info" | "trainees" | "calendar" | "revisions";
 
 function formatDate(value: string): string {
     const parts = value.split("-");
@@ -29,10 +30,11 @@ export default function TrainingClassDetailPage() {
     const { classId } = useParams<{ classId: string }>();
     const [searchParams, setSearchParams] = useSearchParams();
     const { hasPermission } = usePermissions();
+    const canViewRevisions = ["TRAINING_CLASS_CREATE", "TRAINING_CLASS_UPDATE", "TRAINING_CLASS_SUBMIT", "TRAINING_CLASS_APPROVE"].some(hasPermission);
 
     const requestedTab = searchParams.get("tab");
     const activeTab: ClassTab =
-        requestedTab === "calendar" || requestedTab === "trainees"
+        requestedTab === "calendar" || requestedTab === "trainees" || (requestedTab === "revisions" && canViewRevisions)
             ? requestedTab
             : "info";
 
@@ -99,6 +101,7 @@ export default function TrainingClassDetailPage() {
     const tabs = [
         { id: "info" as const, label: "Class Info", icon: BookOpen },
         { id: "trainees" as const, label: "Trainees", icon: Users },
+        ...(canViewRevisions ? [{ id: "revisions" as const, label: "Revisions & Approval", icon: History }] : []),
         ...(hasPermission("CALENDAR_READ")
             ? [{
                 id: "calendar" as const,
@@ -112,6 +115,7 @@ export default function TrainingClassDetailPage() {
         ? [
             ["Class Code", data.code],
             ["Class Name", data.name],
+            ["Description / Notes", data.description || "—"],
             ["Site", data.site],
             ["Location", data.location],
             ["Trainee Type", data.traineeType],
@@ -176,6 +180,8 @@ export default function TrainingClassDetailPage() {
                                 <Badge variant="secondary">
                                     {data.status.replace(/_/g, " ")}
                                 </Badge>
+                                <Badge variant="outline">{data.currentRevisionNo ? `Active v${data.currentRevisionNo}` : "Not approved"}</Badge>
+                                {canViewRevisions && data.pendingRevisionNo && <Button variant="outline" size="sm" onClick={() => selectTab("revisions")}>{data.pendingRevisionStatus?.replace(/_/g, " ")} v{data.pendingRevisionNo}</Button>}
                             </div>
 
                             <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
@@ -224,7 +230,7 @@ export default function TrainingClassDetailPage() {
                                         Class Information
                                     </h2>
                                     <p className="mt-1 text-sm text-muted-foreground">
-                                        Basic information and training dates.
+                                        {data.currentRevisionNo ? `Approved information from Active v${data.currentRevisionNo}.` : "Draft preview. This class has no approved revision yet."}
                                     </p>
                                 </div>
 
@@ -237,7 +243,7 @@ export default function TrainingClassDetailPage() {
                                             <dt className="text-sm text-muted-foreground">
                                                 {label}
                                             </dt>
-                                            <dd className="mt-2 break-words text-sm font-medium">
+                                            <dd className="mt-2 whitespace-pre-wrap break-words text-sm font-medium">
                                                 {value}
                                             </dd>
                                         </div>
@@ -257,6 +263,8 @@ export default function TrainingClassDetailPage() {
                                 />
                             </section>
                         )}
+
+                        {activeTab === "revisions" && canViewRevisions && <TrainingClassRevisionPanel data={data} onChanged={setData} />}
 
                         {activeTab === "calendar" && (
                             <section

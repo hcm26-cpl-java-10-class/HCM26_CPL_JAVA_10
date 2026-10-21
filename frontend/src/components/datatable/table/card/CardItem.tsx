@@ -121,6 +121,7 @@ export function CardItem({
                 <CardFieldValue
                   field={f}
                   value={row[f.name]}
+                  row={row}
                   relationOptions={relationOptions}
                   disableBooleanToggle={disableBooleanToggle}
                   onBooleanToggle={(fieldName, newValue) =>

@@ -8,6 +8,7 @@ import type { FieldSchema } from "@/types";
 interface CardFieldValueProps {
   field: FieldSchema;
   value: any;
+  row?: any;
   relationOptions: Record<string, any[]>;
   onBooleanToggle?: (fieldName: string, newValue: boolean) => void;
   disableBooleanToggle?: boolean;
@@ -18,10 +19,15 @@ const MAX_CARD_BADGES = 3;
 export function CardFieldValue({
   field,
   value,
+  row,
   relationOptions,
   onBooleanToggle,
   disableBooleanToggle = false,
 }: CardFieldValueProps) {
+  if (field.render && row) {
+    return <>{field.render(value, row)}</>;
+  }
+
   if (field.type === "boolean") {
     const labels = field.booleanLabels || { true: "Yes", false: "No" };
     const label = value ? labels.true : labels.false;

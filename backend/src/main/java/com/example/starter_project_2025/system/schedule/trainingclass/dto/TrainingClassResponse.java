@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.schedule.trainingclass.dto;
 
 import com.example.starter_project_2025.system.schedule.trainingclass.ClassStatus;
+import com.example.starter_project_2025.system.schedule.trainingclass.ClassRevisionStatus;
 import lombok.*;
 
 import java.time.LocalDate;
@@ -14,8 +15,16 @@ import java.time.LocalDateTime;
 public class TrainingClassResponse {
 
     private Long id;
+    private Long version;
+    private Long currentRevisionId;
+    private Integer currentRevisionNo;
+    private Long pendingRevisionId;
+    private Integer pendingRevisionNo;
+    private ClassRevisionStatus pendingRevisionStatus;
+    private Integer lastIssuedRevisionNo;
     private String code;
     private String name;
+    private String description;
 
     private String traineeType;
     private String deliveryFormat;
@@ -37,4 +46,6 @@ public class TrainingClassResponse {
 
     private LocalDateTime updatedAt;
     private Long updatedBy;
+
+    private Long openClassRequestId;
 }

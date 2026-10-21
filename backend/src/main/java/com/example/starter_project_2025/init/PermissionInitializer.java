@@ -14,6 +14,7 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
+import java.util.List;
 
 @Order(1)
 @Component
@@ -46,6 +47,13 @@ public class PermissionInitializer implements CommandLineRunner {
                     .action("ACTIVATE")
                     .description("Activate a calendar version")
                     .build());
+        }
+        for (String action : List.of("SUBMIT", "APPROVE")) {
+            String name = "TRAINING_CLASS_" + action;
+            if (!permissionRepository.existsByName(name)) {
+                permissionRepository.save(Permission.builder().name(name).resource("TRAINING_CLASS")
+                        .action(action).description(action + " a training class revision").build());
+            }
         }
     }
 

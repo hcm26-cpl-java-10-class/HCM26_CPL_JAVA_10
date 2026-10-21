@@ -57,6 +57,14 @@ export interface FieldSchema {
 
   editable?: boolean;
 
+  maxLength?: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  integerOnly?: boolean;
+  helpText?: string;
+  disabled?: boolean;
+
   visible?: boolean;
 
   hideable?: boolean;
@@ -81,6 +89,8 @@ export interface FieldSchema {
   dynamicChild?: DynamicChildMeta;
 
   bold?: boolean;
+
+  render?: (value: any, row: any) => React.ReactNode;
 
   expandable?: boolean;
 

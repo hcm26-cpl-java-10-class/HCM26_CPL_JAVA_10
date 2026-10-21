@@ -14,6 +14,23 @@ import type { FieldSchema } from "@/types";
 import { FieldError } from "./FieldError";
 import { MultiRelationSelect } from "./MultiRelationSelect";
 
+function validIntegerInput(text: string, field: FieldSchema) {
+  if (!/^\d+$/.test(text)) return false;
+  if (field.max !== undefined && text.length > String(field.max).length) return false;
+  const number = Number(text);
+  return Number.isSafeInteger(number)
+    && (field.min === undefined || number >= field.min)
+    && (field.max === undefined || number <= field.max);
+}
+
+function FieldHint({ field, value }: { field: FieldSchema; value: unknown }) {
+  if (field.maxLength === undefined && !field.helpText) return null;
+  return <div id={`${field.name}-hint`} className="flex justify-between gap-3 text-xs text-muted-foreground">
+    <span>{field.helpText}</span>
+    {field.maxLength !== undefined && <span className="shrink-0">{String(value ?? "").length}/{field.maxLength} characters</span>}
+  </div>;
+}
+
 interface FormFieldRendererProps {
   field: FieldSchema;
   value: any;
@@ -71,9 +88,10 @@ export function FormFieldRenderer({
           <Label htmlFor={field.name}>{field.label}</Label>
           <Select
             value={value?.toString() || ""}
+            disabled={field.disabled}
             onValueChange={(val) => onChange(field.name, val)}
           >
-            <SelectTrigger className={errorClass}>
+            <SelectTrigger id={field.name} className={errorClass} aria-describedby={field.helpText ? `${field.name}-hint` : undefined}>
               <SelectValue
                 placeholder={`Select ${field.label.toLowerCase()}...`}
               >
@@ -104,6 +122,7 @@ export function FormFieldRenderer({
               })}
             </SelectContent>
           </Select>
+          <FieldHint field={field} value={value} />
           <FieldError errors={fieldErrors} />
         </div>
       );
@@ -164,16 +183,27 @@ export function FormFieldRenderer({
           <Input
             id={field.name}
             type="number"
+            min={field.min}
+            max={field.max}
+            step={field.step ?? (field.integerOnly ? 1 : undefined)}
+            inputMode={field.integerOnly ? "numeric" : undefined}
+            aria-describedby={field.helpText ? `${field.name}-hint` : undefined}
             className={errorClass}
             value={value ?? ""}
-            onChange={(e) =>
-              onChange(
-                field.name,
-                e.target.value === "" ? "" : Number(e.target.value)
-              )
-            }
+            onKeyDown={(event) => {
+              if (field.integerOnly && ["e", "E", "+", "-", ".", ","].includes(event.key)) event.preventDefault();
+            }}
+            onPaste={(event) => {
+              if (field.integerOnly && !validIntegerInput(event.clipboardData.getData("text"), field)) event.preventDefault();
+            }}
+            onChange={(event) => {
+              const next = event.target.value;
+              if (field.integerOnly && next !== "" && !validIntegerInput(next, field)) return;
+              onChange(field.name, next === "" ? "" : Number(next));
+            }}
             placeholder={`Enter ${field.label.toLowerCase()}...`}
           />
+          <FieldHint field={field} value={value} />
           <FieldError errors={fieldErrors} />
         </div>
       );
@@ -233,12 +263,15 @@ export function FormFieldRenderer({
           <Label htmlFor={field.name}>{field.label}</Label>
           <Textarea
             id={field.name}
+            maxLength={field.maxLength}
+            aria-describedby={field.maxLength !== undefined || field.helpText ? `${field.name}-hint` : undefined}
             className={errorClass}
             value={value || ""}
-            onChange={(e) => onChange(field.name, e.target.value)}
+            onChange={(e) => onChange(field.name, field.maxLength === undefined ? e.target.value : e.target.value.slice(0, field.maxLength))}
             placeholder={`Enter ${field.label.toLowerCase()}...`}
             rows={4}
           />
+          <FieldHint field={field} value={value} />
           <FieldError errors={fieldErrors} />
         </div>
       );
@@ -250,11 +283,14 @@ export function FormFieldRenderer({
           <Label htmlFor={field.name}>{field.label}</Label>
           <Input
             id={field.name}
+            maxLength={field.maxLength}
+            aria-describedby={field.maxLength !== undefined || field.helpText ? `${field.name}-hint` : undefined}
             className={errorClass}
             value={value || ""}
-            onChange={(e) => onChange(field.name, e.target.value)}
+            onChange={(e) => onChange(field.name, field.maxLength === undefined ? e.target.value : e.target.value.slice(0, field.maxLength))}
             placeholder={`Enter ${field.label.toLowerCase()}...`}
           />
+          <FieldHint field={field} value={value} />
           <FieldError errors={fieldErrors} />
         </div>
       );

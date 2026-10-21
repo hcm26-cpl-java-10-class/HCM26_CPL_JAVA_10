@@ -3,16 +3,21 @@ package com.example.starter_project_2025.system.schedule.trainingclass;
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.time.LocalDate;
+import java.util.Optional;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
 
 public interface TrainingClassRepository
         extends BaseCrudRepository<TrainingClass, Long> {
 
     boolean existsByCode(String code);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from TrainingClass c where c.id = :id")
+    Optional<TrainingClass> findForRevisionUpdate(@Param("id") Long id);
     Page<TrainingClass> findByCodeContainingIgnoreCaseOrNameContainingIgnoreCase(
             String code,
             String name,
@@ -22,6 +27,7 @@ public interface TrainingClassRepository
     @Query("""
         SELECT c FROM TrainingClass c
         WHERE c.isActive = true
+        AND (:includeUnpublished = true OR c.currentRevision IS NOT NULL)
         AND (
             LOWER(c.code) LIKE LOWER(CONCAT('%', :search, '%'))
             OR LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%'))
@@ -34,6 +40,7 @@ public interface TrainingClassRepository
         AND (:startDateTo IS NULL OR c.startDate <= :startDateTo)
         """)
     Page<TrainingClass> searchClasses(
+            @Param("includeUnpublished") boolean includeUnpublished,
             @Param("search") String search,
             @Param("status") ClassStatus status,
             @Param("site") String site,

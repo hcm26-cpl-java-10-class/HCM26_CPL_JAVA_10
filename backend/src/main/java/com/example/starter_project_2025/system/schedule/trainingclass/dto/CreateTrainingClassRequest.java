@@ -4,6 +4,9 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Max;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.example.starter_project_2025.system.schedule.trainingclass.TrainingClassRules;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -14,6 +17,9 @@ import java.time.LocalDate;
 @Setter
 @NoArgsConstructor
 public class CreateTrainingClassRequest {
+    @NotNull(message = "Open class request is required")
+    @Positive(message = "Open class request ID must be greater than 0")
+    private Long openClassRequestId;
 
     @NotBlank(message = "Class code is required")
     @Size(max = 255, message = "Class code must not exceed 255 characters")
@@ -22,6 +28,9 @@ public class CreateTrainingClassRequest {
     @NotBlank(message = "Class name is required")
     @Size(max = 255, message = "Class name must not exceed 255 characters")
     private String name;
+
+    @Size(max = 2000, message = "Description must not exceed 2000 characters")
+    private String description;
 
     @NotBlank(message = "Trainee type is required")
     @Size(max = 255, message = "Trainee type must not exceed 255 characters")
@@ -51,5 +60,7 @@ public class CreateTrainingClassRequest {
 
     @NotNull(message = "Capacity is required")
     @Positive(message = "Capacity must be greater than 0")
+    @Max(value = TrainingClassRules.MAX_CAPACITY, message = "Capacity must not exceed 50 trainees")
+    @JsonDeserialize(using = ClassCapacityDeserializer.class)
     private Integer capacity;
 }
