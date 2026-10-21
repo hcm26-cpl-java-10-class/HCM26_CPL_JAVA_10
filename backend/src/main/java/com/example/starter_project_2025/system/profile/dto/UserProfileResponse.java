@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.profile.dto;
 
 import lombok.Builder;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 
@@ -18,6 +19,7 @@ public record UserProfileResponse(
     String department,
     String status,
     String lastLogin,
+    Instant lastLoginAt,
     String device,
     List<String> skills
 ) {}

@@ -14,6 +14,7 @@ export interface BackendProfileResponse {
   department: string;
   status: "Active" | "Inactive";
   lastLogin: string | null;
+  lastLoginAt?: string | null;
   device: string | null;
   skills: string[];
 }
@@ -52,8 +53,9 @@ export const profileApi = {
       department: data.department || "FHN.G2",
       status: data.status || "Active",
       initials: computeInitials(data.fullName || data.firstName || ""),
-      lastLogin: data.lastLogin || "12/08/2026 10:24",
-      device: data.device || "Chrome · Windows 11",
+      lastLogin: data.lastLoginAt || data.lastLogin || null,
+      lastLoginAt: data.lastLoginAt || data.lastLogin || null,
+      device: data.device || null,
       skills: (data.skills && data.skills.length > 0
         ? data.skills.map((s, idx) => ({
             name: s,
@@ -82,8 +84,9 @@ export const profileApi = {
       department: data.department || "FHN.G2",
       status: data.status || "Active",
       initials: computeInitials(data.fullName || data.firstName || ""),
-      lastLogin: data.lastLogin || "12/08/2026 10:24",
-      device: data.device || "Chrome · Windows 11",
+      lastLogin: data.lastLoginAt || data.lastLogin || null,
+      lastLoginAt: data.lastLoginAt || data.lastLogin || null,
+      device: data.device || null,
       skills: [
         { name: "Java", color: "blue" },
         { name: "Curriculum", color: "green" },

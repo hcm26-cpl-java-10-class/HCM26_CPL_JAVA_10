@@ -14,6 +14,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
 
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -64,6 +65,9 @@ public class User extends BaseEntity {
 
     @Column(length = 100)
     String department;
+
+    @Column(name = "last_login_at")
+    Instant lastLoginAt;
 
     @Builder.Default
     @ManyToMany(fetch = FetchType.LAZY)

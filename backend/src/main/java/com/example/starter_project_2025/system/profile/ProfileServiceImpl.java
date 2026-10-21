@@ -112,7 +112,8 @@ public class ProfileServiceImpl implements ProfileService {
                 .roles(roleNames)
                 .department(user.getDepartment() != null ? user.getDepartment() : "")
                 .status(Boolean.TRUE.equals(user.getIsActive()) ? "Active" : "Inactive")
-                .lastLogin(null)
+                .lastLogin(user.getLastLoginAt() != null ? user.getLastLoginAt().toString() : null)
+                .lastLoginAt(user.getLastLoginAt())
                 .device(null)
                 .skills(List.of("Java", "Curriculum", "Agile"))
                 .build();

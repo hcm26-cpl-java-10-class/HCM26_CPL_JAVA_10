@@ -9,8 +9,9 @@ export const initialProfileData: UserProfileData = {
   department: "FHN.G2",
   status: "Active",
   initials: "TA",
-  lastLogin: "12/08/2026 10:24",
-  device: "Chrome · Windows 11",
+  lastLogin: null,
+  lastLoginAt: null,
+  device: null,
   skills: [
     { name: "Java", color: "blue" },
     { name: "Curriculum", color: "green" },

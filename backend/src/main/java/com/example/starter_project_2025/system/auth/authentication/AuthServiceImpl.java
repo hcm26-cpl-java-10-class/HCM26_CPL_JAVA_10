@@ -28,6 +28,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import java.time.Instant;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -52,6 +53,7 @@ public class AuthServiceImpl implements AuthService {
     PasswordEncoder passwordEncoder;
 
     @Override
+    @Transactional
     public AuthenticationResponse login(LoginRequest request) {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
@@ -61,6 +63,9 @@ public class AuthServiceImpl implements AuthService {
         );
 
         UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
+        User user = principal.getUser();
+        user.setLastLoginAt(Instant.now());
+        user = userRepository.save(user);
 
         refreshTokenService.revokeAllRefreshTokens(principal.getUser().getId());
 
@@ -80,6 +85,9 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(email)
                 .map(existingUser -> updateUserFromGoogleProfile(existingUser, firstName, lastName))
                 .orElseGet(() -> createGoogleUser(email, firstName, lastName));
+
+        user.setLastLoginAt(Instant.now());
+        user = userRepository.save(user);
 
         refreshTokenService.revokeAllRefreshTokens(user.getId());
 

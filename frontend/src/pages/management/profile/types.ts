@@ -14,8 +14,9 @@ export interface UserProfileData {
   department: string;
   status: "Active" | "Inactive";
   initials: string;
-  lastLogin: string;
-  device: string;
+  lastLogin: string | null;
+  lastLoginAt?: string | null;
+  device: string | null;
   skills: SkillItem[];
 }
 

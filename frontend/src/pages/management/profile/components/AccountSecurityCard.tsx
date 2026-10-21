@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Shield, ShieldAlert, Monitor, Clock } from "lucide-react";
 import {
@@ -15,8 +15,60 @@ interface AccountSecurityCardProps {
   profile: UserProfileData;
 }
 
+const formatAbsoluteDateTime = (dateStr: string | null | undefined): string | null => {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+
+  return new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(d);
+};
+
+const computeRelativeTime = (dateStr: string | null | undefined): string => {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "";
+
+  const diffSec = Math.floor((Date.now() - d.getTime()) / 1000);
+
+  if (diffSec < 0 || diffSec < 45) return "Just now";
+  if (diffSec < 90) return "1 minute ago";
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} minutes ago`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return diffHour === 1 ? "1 hour ago" : `${diffHour} hours ago`;
+  const diffDays = Math.floor(diffHour / 24);
+  if (diffDays < 30) return diffDays === 1 ? "1 day ago" : `${diffDays} days ago`;
+  return "";
+};
+
 export const AccountSecurityCard: React.FC<AccountSecurityCardProps> = ({ profile }) => {
   const [showSessionModal, setShowSessionModal] = useState(false);
+
+  const rawLastLogin = profile.lastLoginAt || profile.lastLogin;
+  const formattedLastLogin = formatAbsoluteDateTime(rawLastLogin);
+
+  const [relativeTime, setRelativeTime] = useState<string>(() =>
+    computeRelativeTime(rawLastLogin)
+  );
+
+  useEffect(() => {
+    setRelativeTime(computeRelativeTime(rawLastLogin));
+    if (!rawLastLogin) return;
+
+    const timer = setInterval(() => {
+      setRelativeTime(computeRelativeTime(rawLastLogin));
+    }, 30000);
+
+    return () => clearInterval(timer);
+  }, [rawLastLogin]);
 
   return (
     <>
@@ -37,7 +89,20 @@ export const AccountSecurityCard: React.FC<AccountSecurityCardProps> = ({ profil
                 Last Login
               </div>
               <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 pl-5">
-                {profile.lastLogin}
+                {formattedLastLogin ? (
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                    <span>{formattedLastLogin}</span>
+                    {relativeTime && (
+                      <span className="text-xs font-normal text-muted-foreground">
+                        ({relativeTime})
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-xs font-normal text-muted-foreground italic">
+                    Not available
+                  </span>
+                )}
               </div>
             </div>
 
@@ -48,7 +113,11 @@ export const AccountSecurityCard: React.FC<AccountSecurityCardProps> = ({ profil
                 Device
               </div>
               <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 pl-5">
-                {profile.device}
+                {profile.device || (
+                  <span className="text-xs font-normal text-muted-foreground italic">
+                    Not available
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -81,7 +150,7 @@ export const AccountSecurityCard: React.FC<AccountSecurityCardProps> = ({ profil
               </p>
               <div className="rounded-lg bg-gray-50 dark:bg-muted/40 p-3 border border-gray-200/60 dark:border-border text-xs text-gray-600 dark:text-gray-300">
                 <span className="font-semibold text-gray-800 dark:text-gray-100">Current active session:</span>{" "}
-                {profile.device} (Authenticated)
+                {profile.device || "Current browser session"} (Authenticated)
               </div>
             </DialogDescription>
           </DialogHeader>

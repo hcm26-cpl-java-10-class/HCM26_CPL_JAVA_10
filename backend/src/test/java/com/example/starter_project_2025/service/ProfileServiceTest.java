@@ -19,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
 
@@ -74,7 +75,22 @@ public class ProfileServiceTest {
         assertEquals("FHN.G2", response.department());
         assertEquals("Active", response.status());
         assertNull(response.lastLogin());
+        assertNull(response.lastLoginAt());
         assertNull(response.device());
+    }
+
+    @Test
+    @DisplayName("getProfile - Should return populated lastLogin when user has recorded login")
+    void getProfile_WithLastLogin_ShouldReturnPopulatedTimestamp() {
+        Instant loginInstant = Instant.parse("2026-10-21T08:00:00Z");
+        sampleUser.setLastLoginAt(loginInstant);
+        when(userRepository.findByEmail("admin@example.com")).thenReturn(Optional.of(sampleUser));
+
+        UserProfileResponse response = profileService.getProfile("admin@example.com");
+
+        assertNotNull(response);
+        assertEquals("2026-10-21T08:00:00Z", response.lastLogin());
+        assertEquals(loginInstant, response.lastLoginAt());
     }
 
     @Test

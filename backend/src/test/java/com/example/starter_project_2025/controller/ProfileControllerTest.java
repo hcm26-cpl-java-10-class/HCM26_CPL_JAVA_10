@@ -114,6 +114,25 @@ public class ProfileControllerTest {
     }
 
     @Test
+    @DisplayName("GET /api/profile - Should return 200 with lastLogin when present")
+    void getProfile_WithLastLogin_ShouldReturnTimestamp() throws Exception {
+        UserProfileResponse responseWithLogin = UserProfileResponse.builder()
+                .id(1L)
+                .email("admin@example.com")
+                .fullName("Minh Anh Tran")
+                .lastLogin("2026-10-21T08:00:00Z")
+                .lastLoginAt(java.time.Instant.parse("2026-10-21T08:00:00Z"))
+                .build();
+
+        when(profileService.getProfile("admin@example.com")).thenReturn(responseWithLogin);
+
+        mockMvc.perform(get("/api/profile").principal(mockAuth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lastLogin").value("2026-10-21T08:00:00Z"))
+                .andExpect(jsonPath("$.lastLoginAt").value("2026-10-21T08:00:00Z"));
+    }
+
+    @Test
     @DisplayName("PUT /api/profile - Should update profile and return 200")
     void updateProfile_ValidRequest_ShouldReturn200() throws Exception {
         UpdateProfileRequest request = new UpdateProfileRequest("Jane Doe", "0912 345 678");
