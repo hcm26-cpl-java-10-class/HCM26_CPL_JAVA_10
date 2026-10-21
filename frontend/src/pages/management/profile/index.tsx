@@ -7,6 +7,7 @@ import { initialProfileData } from "./mockData";
 import { ProfileHeader } from "./components/ProfileHeader";
 import { ProfileSummaryCard } from "./components/ProfileSummaryCard";
 import { PersonalInfoCard } from "./components/PersonalInfoCard";
+import { LearningProgressCard } from "./components/LearningProgressCard";
 import { AccountSecurityCard } from "./components/AccountSecurityCard";
 import { SkillsCard } from "./components/SkillsCard";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
@@ -228,6 +229,7 @@ export const PersonalProfilePage: React.FC = () => {
                 onCancelEditing={() => setIsEditing(false)}
                 onSaveProfile={handleSaveProfile}
               />
+              <LearningProgressCard />
             </div>
 
             {/* Right Column: Account Security & Skills */}
