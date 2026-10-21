@@ -33,7 +33,7 @@ export function SessionDeleteDialog({ session, onClose, onDeleted }: SessionDele
         queryClient.invalidateQueries({ queryKey: ["session"] }),
         queryClient.invalidateQueries({ queryKey: ["version-sessions"] }),
       ]);
-      toast.success("Đã xóa buổi học khỏi bản lịch nháp.");
+      toast.success("Session deleted from draft calendar.");
     },
     onError: (error: unknown) => {
       if (axios.isAxiosError(error) && [403, 404, 409].includes(error.response?.status || 0))
@@ -45,9 +45,9 @@ export function SessionDeleteDialog({ session, onClose, onDeleted }: SessionDele
     : undefined;
   const ruleError =
     session.calendarVersionStatus !== "DRAFT"
-      ? "Chỉ có thể xóa buổi học thuộc bản lịch DRAFT."
+      ? "Can only delete sessions in DRAFT calendar versions."
       : session.status !== "SCHEDULED"
-        ? "Chỉ có thể xóa buổi học đang ở trạng thái SCHEDULED."
+        ? "Can only delete sessions in SCHEDULED status."
         : "";
   const blocked = !!ruleError || [403, 404, 409].includes(errorStatus || 0);
   const close = () => {
@@ -65,24 +65,24 @@ export function SessionDeleteDialog({ session, onClose, onDeleted }: SessionDele
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Trash2 className="size-5 text-destructive" />
-            Xóa buổi học
+            Delete Session
           </DialogTitle>
           <DialogDescription>
-            Buổi học sẽ bị xóa khỏi bản lịch nháp. Thao tác này không thể hoàn tác.
+            This session will be removed from the draft calendar. This action cannot be undone.
           </DialogDescription>
         </DialogHeader>
         <dl className="grid min-w-0 gap-3 rounded-lg border bg-muted/30 p-4 text-sm">
           <div>
-            <dt className="text-muted-foreground">Buổi học</dt>
+            <dt className="text-muted-foreground">Session</dt>
             <dd className="break-words font-medium">{session.title}</dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">Lớp học</dt>
+            <dt className="text-muted-foreground">Class</dt>
             <dd>{session.classCode}</dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">Bắt đầu</dt>
-            <dd>{dayjs(session.startTime).format("DD/MM/YYYY HH:mm")}</dd>
+            <dt className="text-muted-foreground">Start</dt>
+            <dd>{dayjs(session.startTime).format("MM/DD/YYYY HH:mm")}</dd>
           </div>
         </dl>
         {(deleteMutation.isError || ruleError) && (
@@ -91,7 +91,7 @@ export function SessionDeleteDialog({ session, onClose, onDeleted }: SessionDele
               {ruleError ||
                 getSessionErrorMessage(
                   deleteMutation.error,
-                  "Không thể xóa buổi học. Vui lòng thử lại.",
+                  "Failed to delete session. Please try again.",
                 )}
             </AlertDescription>
           </Alert>
@@ -103,7 +103,7 @@ export function SessionDeleteDialog({ session, onClose, onDeleted }: SessionDele
             onClick={close}
             disabled={deleteMutation.isPending}
           >
-            Đóng
+            Close
           </Button>
           <Button
             type="button"
@@ -116,7 +116,7 @@ export function SessionDeleteDialog({ session, onClose, onDeleted }: SessionDele
             ) : (
               <Trash2 className="size-4" />
             )}
-            {deleteMutation.isPending ? "Đang xóa..." : "Xác nhận xóa"}
+            {deleteMutation.isPending ? "Deleting..." : "Confirm Delete"}
           </Button>
         </DialogFooter>
       </DialogContent>

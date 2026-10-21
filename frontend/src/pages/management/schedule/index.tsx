@@ -17,14 +17,14 @@ const sessionSchema: EntitySchema = {
   fields: [
     {
       name: "classCode",
-      label: "Mã Lớp",
+      label: "Class Code",
       type: "text",
       sortable: true,
       bold: true,
     },
     {
       name: "title",
-      label: "Tiêu Đề Buổi Học",
+      label: "Session Title",
       type: "text",
       sortable: true,
       bold: true,
@@ -37,37 +37,37 @@ const sessionSchema: EntitySchema = {
     },
     {
       name: "trainerName",
-      label: "Giảng Viên",
+      label: "Trainer",
       type: "text",
       sortable: true,
     },
     {
       name: "startTime",
-      label: "Thời Gian Bắt Đầu",
+      label: "Start Time",
       type: "date",
       sortable: true,
     },
     {
       name: "endTime",
-      label: "Thời Gian Kết Thúc",
+      label: "End Time",
       type: "date",
       sortable: true,
     },
     {
       name: "room",
-      label: "Phòng Học",
+      label: "Room",
       type: "text",
       sortable: true,
     },
     {
       name: "status",
-      label: "Trạng Thái",
+      label: "Status",
       type: "text",
       sortable: true,
     },
     {
       name: "notes",
-      label: "Ghi Chú",
+      label: "Notes",
       type: "text",
     },
     {
@@ -78,7 +78,7 @@ const sessionSchema: EntitySchema = {
     },
     {
       name: "overrideReason",
-      label: "Lý Do Override",
+      label: "Override Reason",
       type: "text",
     },
     ...(auditableFieldsSchema as FieldSchema[]),
