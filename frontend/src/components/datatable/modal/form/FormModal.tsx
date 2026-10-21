@@ -83,6 +83,9 @@ const sideMenuFormLayouts: Record<string, FormLayout> = {
   },
 };
 
+/** Field dạng chọn/bật tắt: validate ngay khi đổi giá trị (blur của Radix Select không đáng tin). */
+const CHOICE_TYPES = new Set(["select", "icon", "relation", "boolean"]);
+
 interface FormModalProps {
   open: boolean;
   onClose: (open: boolean) => void;
@@ -108,6 +111,8 @@ export function FormModal({
 }: FormModalProps) {
   const [form, setForm] = useState<Record<string, any>>({});
   const [clientErrors, setClientErrors] = useState<Record<string, string[]>>({});
+  // Field đã được người dùng rời khỏi (blur) -> từ đó validate trực tiếp khi gõ
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const editableFields: FieldSchema[] = schema.fields.filter(
     (f: FieldSchema) =>
@@ -150,15 +155,47 @@ export function FormModal({
       setForm(defaults);
     }
     setClientErrors({});
+    setTouched({});
   }, [initial, open]);
 
-  const updateField = (name: string, value: any) => {
-    setForm((prev) => ({ ...prev, [name]: value }));
-    setClientErrors((prev) => {
-      if (!prev[name]) return prev;
-      const { [name]: _removed, ...rest } = prev;
-      return rest;
+  /** Validate đúng 1 field với state form mới nhất, cập nhật lỗi của field đó. */
+  const validateSingleField = (name: string, nextForm: Record<string, any>) => {
+    const field = editableFieldMap.get(name);
+    if (!field) return;
+    const errors = validateForm([field], nextForm, {
+      isEdit: !!initial,
+      initial,
     });
+    setClientErrors((prev) => {
+      const { [name]: _removed, ...rest } = prev;
+      return errors[name] ? { ...rest, [name]: errors[name] } : rest;
+    });
+  };
+
+  const updateField = (name: string, value: any) => {
+    const nextForm = { ...form, [name]: value };
+    setForm(nextForm);
+
+    const field = editableFieldMap.get(name);
+    const isChoice = !!field && CHOICE_TYPES.has(field.type);
+
+    if (isChoice || touched[name]) {
+      // Đã rời field hoặc là ô chọn: báo lỗi/xoá lỗi ngay khi giá trị đổi
+      validateSingleField(name, nextForm);
+    } else {
+      setClientErrors((prev) => {
+        if (!prev[name]) return prev;
+        const { [name]: _removed, ...rest } = prev;
+        return rest;
+      });
+    }
+  };
+
+  /** Rời khỏi ô nhập (Tab, click ra ngoài...) -> báo lỗi luôn. */
+  const handleFieldBlur = (field: FieldSchema) => {
+    if (CHOICE_TYPES.has(field.type)) return;
+    setTouched((prev) => (prev[field.name] ? prev : { ...prev, [field.name]: true }));
+    validateSingleField(field.name, form);
   };
 
   const mergedErrors: Record<string, string[]> = { ...fieldErrors, ...clientErrors };
@@ -177,8 +214,8 @@ export function FormModal({
     mergedErrors[fieldName] && mergedErrors[fieldName].length > 0;
 
   const renderField = (field: FieldSchema) => (
+    <div key={field.name} onBlur={() => handleFieldBlur(field)}>
     <FormFieldRenderer
-      key={field.name}
       field={field}
       value={form[field.name]}
       errorClass={
@@ -191,6 +228,7 @@ export function FormModal({
       initial={initial}
       onChange={updateField}
     />
+    </div>
   );
 
   const configuredFieldNames = new Set(
