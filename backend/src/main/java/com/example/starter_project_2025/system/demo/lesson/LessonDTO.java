@@ -13,10 +13,13 @@ import lombok.experimental.FieldDefaults;
 @Getter
 @Setter
 @Builder
-@NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class LessonDTO extends BaseDTO {
+
+    public LessonDTO() {
+        setIsActive(true);
+    }
 
     @NotNull(groups = OnCreate.class, message = "Section ID is required")
     Long sectionId;

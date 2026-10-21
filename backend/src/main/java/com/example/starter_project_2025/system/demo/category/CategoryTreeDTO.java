@@ -25,6 +25,16 @@ public class CategoryTreeDTO {
     String description;
     Boolean isActive;
     Long parentId;
+    String iconUrl;
+    Integer displayOrder;
+
+    /** Số khóa PUBLISHED + active thuộc trực tiếp danh mục này. */
+    @Builder.Default
+    long courseCount = 0;
+
+    /** Như courseCount nhưng gồm cả các danh mục con, cháu. */
+    @Builder.Default
+    long totalCourseCount = 0;
 
     @Builder.Default
     List<CategoryTreeDTO> children = new ArrayList<>();

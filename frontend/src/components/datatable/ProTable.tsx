@@ -409,7 +409,7 @@ export function ProTable<TData = any>({
                                                             style={{ width: ACTION_COLUMN_WIDTH }}
                                                             className={`sticky right-0 z-20 border-l border-border/70 ${
                                                                 index % 2 === 0 ? "bg-accent" : "bg-background"
-                                                            } group-hover:bg-muted/50 shadow-[-8px_0_10px_-10px_rgba(0,0,0,0.35)]`}
+                                                            } group-hover:bg-muted shadow-[-8px_0_10px_-10px_rgba(0,0,0,0.35)]`}
                                                         >
                                                             <div className="flex items-center gap-1 overflow-hidden">
                                                                 {finalRenderRowActions(row)}

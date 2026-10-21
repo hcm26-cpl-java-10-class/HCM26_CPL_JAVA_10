@@ -7,6 +7,8 @@ import jakarta.validation.constraints.Size;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.util.List;
+
 @Getter
 @Setter
 @Builder
@@ -30,13 +32,17 @@ public class CourseDTO extends BaseDTO {
 
     Long instructorId;
 
-    Long categoryId;
+    List<Long> categoryIds;
 
-    String categoryName;
+    /** true = bỏ danh mục của khóa học (PUT bỏ qua null nên cần cờ riêng). */
+    Boolean clearCategory;
+
+    List<String> categoryNames;
 
     CourseStatus status;
 
     Boolean isFree;
 
     CourseLevel level;
+
 }

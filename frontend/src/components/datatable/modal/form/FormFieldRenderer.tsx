@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -15,12 +16,17 @@ import { FieldError } from "./FieldError";
 import { getEffectiveRule } from "./validateForm";
 import { MultiRelationSelect } from "./MultiRelationSelect";
 
+// Textarea mặc định có field-sizing: content (tự giãn theo nội dung) -> ép về kích thước cố định, nội dung dài sẽ cuộn.
+const FIXED_TEXTAREA_STYLE = { fieldSizing: "fixed" } as CSSProperties;
+
 interface FormFieldRendererProps {
   field: FieldSchema;
   value: any;
   errorClass: string;
   fieldErrors?: string[];
   relationOptions?: Record<string, any[]>;
+  /** Bản ghi đang sửa (undefined khi tạo mới) - dùng cho relation.filterItems. */
+  initial?: any;
   onChange: (name: string, value: any) => void;
 }
 
@@ -33,9 +39,11 @@ export function FormFieldRenderer({
   errorClass,
   fieldErrors,
   relationOptions = {},
+  initial,
   onChange,
 }: FormFieldRendererProps) {
   const rule = getEffectiveRule(field);
+  const noNegative = rule.min !== undefined && rule.min >= 0;
   const requiredMark = rule.required ? (
     <span className="text-destructive"> *</span>
   ) : null;
@@ -79,7 +87,7 @@ export function FormFieldRenderer({
             value={value?.toString() || ""}
             onValueChange={(val) => onChange(field.name, val)}
           >
-            <SelectTrigger className={errorClass}>
+            <SelectTrigger className={`w-full ${errorClass}`}>
               <SelectValue
                 placeholder={`Select ${field.label.toLowerCase()}...`}
               >
@@ -91,7 +99,11 @@ export function FormFieldRenderer({
                 ) : null}
               </SelectValue>
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent
+              position="popper"
+              sideOffset={4}
+              className="max-h-60 w-(--radix-select-trigger-width)"
+            >
               {options.map((opt) => {
                 const optionIconKey = opt.value?.toString();
                 const OptionIcon =
@@ -117,7 +129,10 @@ export function FormFieldRenderer({
     case "relation": {
       const rel = field.relation;
       if (!rel) return null;
-      const items: any[] = relationOptions[field.name] ?? [];
+      const allItems: any[] = relationOptions[field.name] ?? [];
+      const items: any[] = rel.filterItems
+        ? rel.filterItems(allItems, { initial, isEdit: initial?.id != null })
+        : allItems;
 
       // Multiple select with checkboxes
       if (rel.multiple) {
@@ -142,12 +157,16 @@ export function FormFieldRenderer({
             value={value?.toString() || ""}
             onValueChange={(val) => onChange(field.name, val)}
           >
-            <SelectTrigger className={errorClass}>
+            <SelectTrigger className={`w-full ${errorClass}`}>
               <SelectValue
                 placeholder={`Select ${field.label.toLowerCase()}...`}
               />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent
+              position="popper"
+              sideOffset={4}
+              className="max-h-60 w-(--radix-select-trigger-width)"
+            >
               {items.map((item) => (
                 <SelectItem
                   key={item[rel.valueField]}
@@ -172,12 +191,23 @@ export function FormFieldRenderer({
             type="number"
             className={errorClass}
             value={value ?? ""}
-            onChange={(e) =>
-              onChange(
-                field.name,
-                e.target.value === "" ? "" : Number(e.target.value)
-              )
-            }
+            min={rule.min}
+            max={rule.max}
+            onKeyDown={(e) => {
+              // Không cho gõ dấu âm / số mũ khi field không cho phép số âm
+              if (noNegative && ["-", "+", "e", "E"].includes(e.key)) {
+                e.preventDefault();
+              }
+            }}
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw === "") return onChange(field.name, "");
+              const n = Number(raw);
+              // Chặn luôn số âm (kể cả dán vào) / vượt min, max
+              if (rule.min !== undefined && n < rule.min && noNegative) return;
+              if (rule.max !== undefined && n > rule.max) return;
+              onChange(field.name, n);
+            }}
             placeholder={`Enter ${field.label.toLowerCase()}...`}
           />
           <FieldError errors={fieldErrors} />
@@ -238,12 +268,13 @@ export function FormFieldRenderer({
           <Label htmlFor={field.name}>{field.label}{requiredMark}</Label>
           <Textarea
             id={field.name}
-            className={errorClass}
+            className={`h-32 resize-none overflow-y-auto ${errorClass}`}
             value={value || ""}
             onChange={(e) => onChange(field.name, e.target.value)}
             placeholder={`Enter ${field.label.toLowerCase()}...`}
             rows={4}
             maxLength={rule.maxLength}
+            style={FIXED_TEXTAREA_STYLE}
           />
           {rule.maxLength ? (
             <p className="text-xs text-muted-foreground text-right">

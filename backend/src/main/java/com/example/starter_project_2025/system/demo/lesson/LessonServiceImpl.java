@@ -18,6 +18,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.Objects;
+
 @Service
 @Transactional
 @RequiredArgsConstructor
@@ -79,8 +83,18 @@ public class LessonServiceImpl
         if (request.getTitle() != null) {
             lesson.setTitle(request.getTitle());
         }
+        normalizeUrl(request);
+        if (request.getContentUrl() != null) {
+            lesson.setContentUrl(request.getContentUrl());
+        }
+        if (lesson.getIsActive() == null) {
+            lesson.setIsActive(true);
+        }
         validateContent(request.getContentType(), request.getContentUrl(),
                 request.getTextContent(), ctx);
+        if (sectionId != null) {
+            validateOrderIndex(sectionId, request.getOrderIndex(), null, ctx);
+        }
     }
 
     @Override
@@ -91,8 +105,14 @@ public class LessonServiceImpl
         }
 
         normalizeTitle(request, ctx);
+        normalizeUrl(request);
 
-        // Gộp giá trị mới (nếu có) với giá trị hiện tại để kiểm tra nội dung
+        if (request.getOrderIndex() != null
+                && !request.getOrderIndex().equals(lesson.getOrderIndex())) {
+            validateOrderIndex(lesson.getSection().getId(), request.getOrderIndex(),
+                    lesson.getId(), ctx);
+        }
+
         LessonContentType type = request.getContentType() != null
                 ? request.getContentType() : lesson.getContentType();
         String url = request.getContentUrl() != null
@@ -113,6 +133,37 @@ public class LessonServiceImpl
         }
     }
 
+    private void normalizeUrl(LessonDTO request) {
+        if (request.getContentUrl() != null) {
+            request.setContentUrl(request.getContentUrl().trim());
+        }
+    }
+
+    private void validateOrderIndex(Long sectionId, Integer orderIndex, Long editingId,
+                                    ValidationContext ctx) {
+        if (orderIndex == null) {
+            return;
+        }
+        boolean duplicate = lessonRepository.findBySection_IdOrderByOrderIndexAsc(sectionId)
+                .stream()
+                .anyMatch(other -> !Objects.equals(other.getId(), editingId)
+                        && Objects.equals(other.getOrderIndex(), orderIndex));
+        if (duplicate) {
+            ctx.add("orderIndex", "Order index already exists in this section");
+        }
+    }
+
+    private static boolean isValidHttpUrl(String url) {
+        try {
+            URI uri = new URI(url);
+            String scheme = uri.getScheme();
+            return ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
+                    && uri.getHost() != null && !uri.getHost().isBlank();
+        } catch (URISyntaxException ex) {
+            return false;
+        }
+    }
+
     private void validateContent(LessonContentType type, String url, String text,
                                  ValidationContext ctx) {
         if (type == null) {
@@ -125,6 +176,8 @@ public class LessonServiceImpl
             case VIDEO, DOCUMENT, LINK -> {
                 if (!hasUrl) {
                     ctx.add("contentUrl", "Content URL is required for " + type + " lessons");
+                } else if (!isValidHttpUrl(url.trim())) {
+                    ctx.add("contentUrl", "Content URL must be a valid http/https URL");
                 }
             }
             case TEXT -> {

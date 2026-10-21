@@ -1,7 +1,6 @@
 package com.example.starter_project_2025.system.demo.lesson;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
-import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import com.example.starter_project_2025.system.demo.section.Section;
 import jakarta.persistence.*;
@@ -18,14 +17,6 @@ import lombok.experimental.SuperBuilder;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ResourcePermission("LESSON")
-@ResourceMenu(
-        title = "Lessons",
-        group = "Course Management",
-        icon = "book-open",
-        url = "/lessons",
-        order = 4,
-        permission = "LESSON_READ"
-)
 public class Lesson extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -45,7 +36,6 @@ public class Lesson extends BaseEntity {
     @Column(name = "text_content", columnDefinition = "TEXT")
     String textContent;
 
-    /** Thời lượng bài học, đơn vị: giây. */
     @Column
     Integer duration;
 

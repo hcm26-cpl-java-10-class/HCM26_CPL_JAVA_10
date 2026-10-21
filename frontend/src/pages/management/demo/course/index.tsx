@@ -54,22 +54,14 @@ const courseSchema: EntitySchema = {
       },
     },
     {
-      name: "categoryName",
-      label: "Category",
-      type: "text",
-      sortable: false,
-      editable: false,
-    },
-    {
-      name: "categoryId",
-      label: "Category",
+      name: "categoryIds",
+      label: "Categories",
       type: "relation",
-      sortable: false,
-      visible: false,
       relation: {
         api: categoryApi,
         valueField: "id",
         labelField: "name",
+        multiple: true,
       },
     },
     {

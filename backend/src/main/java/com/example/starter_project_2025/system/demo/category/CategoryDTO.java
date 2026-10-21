@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.demo.category;
 
 import com.example.starter_project_2025.base.crud.dto.BaseDTO;
 import com.example.starter_project_2025.base.crud.dto.OnCreate;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -27,6 +28,12 @@ public class CategoryDTO extends BaseDTO {
 
     @Size(max = 500, message = "Description must not exceed 500 characters")
     String description;
+
+    @Size(max = 255, message = "Icon URL must not exceed 255 characters")
+    String iconUrl;
+
+    @Min(value = 0, message = "Display order must not be negative")
+    Integer displayOrder;
 
     /** Parent category id; null = root category. */
     Long parentId;

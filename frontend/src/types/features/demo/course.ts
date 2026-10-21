@@ -10,14 +10,20 @@ export interface CourseDTO extends BaseDTO {
   thumbnailUrl?: string;
   instructor?: string;
   instructorId?: number;
-  categoryId?: number;
-  categoryName?: string;
+  categoryIds?: number[];
+  categoryNames?: string[];
+  /** true = bỏ danh mục của khóa học khi cập nhật (backend bỏ qua categoryId = null). */
+  clearCategory?: boolean;
   status?: CourseStatus;
   isFree?: boolean;
   level?: CourseLevel;
 }
 
-export interface CourseFilter extends BaseFilter {}
+export interface CourseFilter extends BaseFilter {
+  categoryId?: number;
+  status?: CourseStatus;
+  level?: CourseLevel;
+}
 
 export const COURSE_LEVEL_OPTIONS: { label: string; value: CourseLevel }[] = [
   { label: "Beginner", value: "BEGINNER" },

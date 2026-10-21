@@ -2,11 +2,15 @@ package com.example.starter_project_2025.system.demo.course;
 
 import com.example.starter_project_2025.base.dataio.importer.result.ImportResult;
 import com.example.starter_project_2025.base.dataio.importer.result.RowError;
+import com.example.starter_project_2025.system.demo.category.Category;
+import com.example.starter_project_2025.system.demo.category.CategoryRepository;
 import com.example.starter_project_2025.system.demo.lesson.Lesson;
 import com.example.starter_project_2025.system.demo.lesson.LessonContentType;
 import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
 import com.example.starter_project_2025.system.demo.section.Section;
 import com.example.starter_project_2025.system.demo.section.SectionRepository;
+import com.example.starter_project_2025.system.rbac.user.User;
+import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
@@ -17,10 +21,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +36,8 @@ public class CourseBundleImportService {
     private final CourseRepository courseRepository;
     private final SectionRepository sectionRepository;
     private final LessonRepository lessonRepository;
+    private final UserRepository userRepository;
+    private final CategoryRepository categoryRepository;
 
     public boolean supports(MultipartFile file) {
         String name = file.getOriginalFilename();
@@ -66,10 +75,35 @@ public class CourseBundleImportService {
                 course.setName(name);
                 course.setDescription(value(row, columns, "Description"));
                 course.setInstructor(optionalValue(row, columns, "Instructor"));
+
+                String instructorEmail = optionalValue(row, columns, "Instructor Email");
+                if (instructorEmail != null) {
+                    User instructor = userRepository.findByEmail(instructorEmail)
+                            .orElseThrow(() -> new IllegalArgumentException("instructor was not found: " + instructorEmail));
+                    course.setInstructorUser(instructor);
+                    course.setInstructor(instructor.getFullName());
+                }
+
+                Set<Category> categories = new HashSet<>();
+                String categoryCodes = optionalValue(row, columns, "Category Codes");
+                if (categoryCodes != null && !categoryCodes.isBlank()) {
+                    String[] codes = categoryCodes.split("[,;|]");
+                    for (String rawCode : codes) {
+                        String code = rawCode.trim();
+                        if (code.isEmpty()) continue;
+                        Category category = categoryRepository.findByCodeIgnoreCase(code)
+                                .orElseThrow(() -> new IllegalArgumentException("category was not found: " + code));
+                        categories.add(category);
+                    }
+                }
+
+                course.setCategories(categories);
+
                 course.setThumbnailUrl(optionalValue(row, columns, "Thumbnail URL"));
                 course.setStatus(enumValue(value(row, columns, "Status"), CourseStatus.class, CourseStatus.PUBLISHED));
                 course.setLevel(enumValue(value(row, columns, "Level"), CourseLevel.class, CourseLevel.BEGINNER));
                 course.setIsActive(booleanValue(row, columns, "Active", true));
+
                 courseRepository.save(course);
                 success(result);
             } catch (Exception exception) {
@@ -86,10 +120,13 @@ public class CourseBundleImportService {
             try {
                 Course course = courseRepository.findByName(value(row, columns, "Course Name"))
                         .orElseThrow(() -> new IllegalArgumentException("course was not found"));
+
                 String title = value(row, columns, "Section Title");
                 Section section = sectionRepository.findByCourse_IdOrderByOrderIndexAsc(course.getId()).stream()
                         .filter(item -> title.equalsIgnoreCase(item.getTitle()))
-                        .findFirst().orElseGet(Section::new);
+                        .findFirst()
+                        .orElseGet(Section::new);
+
                 section.setCourse(course);
                 section.setTitle(title);
                 section.setOrderIndex(integerValue(row, columns, "Order Index", 0));
@@ -110,25 +147,29 @@ public class CourseBundleImportService {
             try {
                 Course course = courseRepository.findByName(value(row, columns, "Course Name"))
                         .orElseThrow(() -> new IllegalArgumentException("course was not found"));
+
                 String sectionTitle = value(row, columns, "Section Title");
                 Section section = sectionRepository.findByCourse_IdOrderByOrderIndexAsc(course.getId()).stream()
                         .filter(item -> sectionTitle.equalsIgnoreCase(item.getTitle()))
                         .findFirst()
                         .orElseThrow(() -> new IllegalArgumentException("section was not found"));
+
                 String title = value(row, columns, "Lesson Title");
                 List<Lesson> existing = lessonRepository.findBySection_IdOrderByOrderIndexAsc(section.getId());
                 Lesson lesson = existing.stream()
                         .filter(item -> title.equalsIgnoreCase(item.getTitle()))
-                        .findFirst().orElseGet(Lesson::new);
+                        .findFirst()
+                        .orElseGet(Lesson::new);
+
                 lesson.setSection(section);
                 lesson.setTitle(title);
-                lesson.setContentType(enumValue(value(row, columns, "Content Type"),
-                        LessonContentType.class, LessonContentType.VIDEO));
+                lesson.setContentType(enumValue(value(row, columns, "Content Type"), LessonContentType.class, LessonContentType.VIDEO));
                 lesson.setContentUrl(optionalValue(row, columns, "Content URL"));
                 lesson.setTextContent(optionalValue(row, columns, "Text Content"));
                 lesson.setDuration(nullableIntegerValue(row, columns, "Duration (seconds)"));
                 lesson.setOrderIndex(integerValue(row, columns, "Order Index", 0));
                 lesson.setIsActive(booleanValue(row, columns, "Active", true));
+
                 lessonRepository.save(lesson);
                 success(result);
             } catch (Exception exception) {

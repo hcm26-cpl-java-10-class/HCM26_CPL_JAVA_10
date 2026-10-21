@@ -62,6 +62,25 @@ public class CourseEnrollmentController {
         enrollmentService.cancelEnrollment(userId, id);
     }
 
+    @PostMapping("/departments/preview")
+    @PreAuthorize("hasAuthority('ENROLLMENT_CREATE')")
+    public DepartmentEnrollmentPreviewDTO previewDepartmentEnrollment(
+            @RequestBody DepartmentEnrollRequest request
+    ) {
+        return enrollmentService.previewDepartmentEnrollment(
+                request.getDepartmentId(), request.getCourseId());
+    }
+
+    @PostMapping("/departments")
+    @PreAuthorize("hasAuthority('ENROLLMENT_CREATE')")
+    @ResponseStatus(HttpStatus.CREATED)
+    public DepartmentEnrollmentResultDTO enrollDepartment(
+            @RequestBody DepartmentEnrollRequest request
+    ) {
+        return enrollmentService.enrollDepartment(
+                request.getDepartmentId(), request.getCourseId());
+    }
+
     private Long getUserId(UserPrincipal principal) {
         if (principal == null || principal.getUser() == null) {
             throw new ResponseStatusException(
@@ -85,6 +104,12 @@ public class CourseEnrollmentController {
 
     @Getter
     public static class EnrollRequest {
+        private Long courseId;
+    }
+
+    @Getter
+    public static class DepartmentEnrollRequest {
+        private Long departmentId;
         private Long courseId;
     }
 }

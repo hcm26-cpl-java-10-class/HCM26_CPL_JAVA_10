@@ -8,6 +8,7 @@ import com.example.starter_project_2025.base.dataio.importer.annotation.ImportHa
 import com.example.starter_project_2025.base.dataio.template.annotation.ImportEntity;
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
+import com.example.starter_project_2025.system.demo.department.Department;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import jakarta.persistence.*;
 import lombok.*;
@@ -55,6 +56,15 @@ public class User extends BaseEntity {
 
     @Column(length = 100)
     String lastName;
+
+    @Builder.Default
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "user_departments",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "department_id")
+    )
+    Set<Department> departments = new HashSet<>();
 
     @Builder.Default
     @ManyToMany(fetch = FetchType.LAZY)

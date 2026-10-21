@@ -7,12 +7,16 @@ import type { EntityConfig } from "@/types";
 import { Link } from "react-router-dom";
 import { CourseLearningPage } from "../progress/CourseLearningPage";
 import { EnrollmentProgressBar } from "../progress/EnrollmentProgressBar";
+import { AdminDepartmentStudentCourses } from "@/pages/student/AdminDepartmentStudentCourses";
+import { useAdminStudentPreview } from "@/pages/student/useAdminStudentPreview";
 
 const formatEnrollmentDate = (value: string) => {
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("vi-VN");
 };
 
+// The router discovers this configuration as a named export.
+// eslint-disable-next-line react-refresh/only-export-components
 export const entityConfig: EntityConfig = {
     name: "Enrollments",
     path: "/enrollments",
@@ -39,9 +43,11 @@ export const entityConfig: EntityConfig = {
 };
 
 export default function EnrollmentManagementPage() {
+    const isAdminStudentPreview = useAdminStudentPreview();
     const { data: enrollments = [], isLoading, isError, error, refetch } = useQuery({
         queryKey: ["my-enrollments"],
         queryFn: enrollmentApi.getMyCourses,
+        enabled: !isAdminStudentPreview,
     });
 
     return (
@@ -51,7 +57,7 @@ export default function EnrollmentManagementPage() {
                     <div className="flex flex-wrap items-end justify-between gap-4">
                         <div>
                             <p className="text-sm font-medium text-blue-700">YOUR LEARNING SPACE</p>
-                            <h1 className="mt-1 text-3xl font-bold tracking-tight">My learning</h1>
+                            <h1 className="mt-1 text-3xl font-bold tracking-tight">Enrollment</h1>
                         </div>
                         <Button asChild>
                             <Link to="/courses">
@@ -64,7 +70,9 @@ export default function EnrollmentManagementPage() {
                     </p>
                 </div>
 
-                {isLoading ? (
+                {isAdminStudentPreview ? (
+                    <AdminDepartmentStudentCourses />
+                ) : isLoading ? (
                     <p role="status" className="rounded-xl border p-8 text-center text-sm text-muted-foreground">
                         Loading enrollments...
                     </p>

@@ -51,6 +51,14 @@ public class Category extends BaseEntity {
     @ExportField(name = "Description")
     String description;
 
+    @Column(length = 255)
+    String iconUrl;
+
+    /** Thứ tự hiển thị giữa các danh mục cùng cấp (nhỏ hơn hiển thị trước). */
+    @Builder.Default
+    @Column(nullable = false)
+    Integer displayOrder = 0;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
     Category parent;
