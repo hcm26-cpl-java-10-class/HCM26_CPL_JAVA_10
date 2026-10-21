@@ -14,7 +14,7 @@ export const initialProfileData: UserProfileData = {
   device: null,
   skills: [
     { name: "Java", color: "blue" },
-    { name: "Curriculum", color: "green" },
+    { name: "Curriculum", color: "blue" },
     { name: "Agile", color: "blue" },
   ],
 };

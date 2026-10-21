@@ -57,13 +57,13 @@ export const profileApi = {
       lastLoginAt: data.lastLoginAt || data.lastLogin || null,
       device: data.device || null,
       skills: (data.skills && data.skills.length > 0
-        ? data.skills.map((s, idx) => ({
+        ? data.skills.map((s) => ({
             name: s,
-            color: idx === 0 ? "blue" : idx === 1 ? "green" : "blue",
+            color: "blue" as const,
           }))
         : [
             { name: "Java", color: "blue" },
-            { name: "Curriculum", color: "green" },
+            { name: "Curriculum", color: "blue" },
             { name: "Agile", color: "blue" },
           ]) as UserProfileData["skills"],
     };
@@ -89,7 +89,7 @@ export const profileApi = {
       device: data.device || null,
       skills: [
         { name: "Java", color: "blue" },
-        { name: "Curriculum", color: "green" },
+        { name: "Curriculum", color: "blue" },
         { name: "Agile", color: "blue" },
       ],
     };

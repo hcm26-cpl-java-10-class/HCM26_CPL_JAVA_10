@@ -7,18 +7,15 @@ interface SkillsCardProps {
 }
 
 export const SkillsCard: React.FC<SkillsCardProps> = ({ skills }) => {
-  const getBadgeStyle = (color: SkillItem["color"]) => {
+  const getBadgeStyle = (color?: SkillItem["color"]) => {
     switch (color) {
-      case "blue":
-        return "bg-blue-50 text-blue-700 border-blue-200/80 dark:bg-blue-950/60 dark:text-blue-400 dark:border-blue-900/60";
-      case "green":
-        return "bg-emerald-50 text-emerald-700 border-emerald-200/80 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-900/60";
-      case "orange":
-        return "bg-blue-50 text-blue-700 border-blue-200/80 dark:bg-blue-950/60 dark:text-blue-400 dark:border-blue-900/60";
       case "purple":
         return "bg-purple-50 text-purple-700 border-purple-200/80 dark:bg-purple-950/60 dark:text-purple-400 dark:border-purple-900/60";
+      case "blue":
+      case "green":
+      case "orange":
       default:
-        return "bg-gray-50 text-gray-700 border-gray-200/80 dark:bg-muted dark:text-gray-300 dark:border-border";
+        return "bg-blue-50 text-blue-700 border-blue-200/80 dark:bg-blue-950/60 dark:text-blue-400 dark:border-blue-900/60";
     }
   };
 
