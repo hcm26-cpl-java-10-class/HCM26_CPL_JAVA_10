@@ -472,16 +472,16 @@ export default function StudentExamTakingPage() {
     // NEW: thanh ghim cố định trên cùng — đồng hồ bên trái, danh sách câu hỏi bên phải
     // Màu ô: vàng (đánh dấu, luôn ưu tiên) > xanh (đã làm) > đen (chưa làm); viền đỏ = câu đang chọn
     const pinnedBar = (
-        <div className="sticky top-0 z-30 flex items-start justify-between gap-4 border-b bg-background/95 py-3 backdrop-blur">
+        <div className="sticky top-0 z-30 flex items-start justify-between gap-4 bg-background/95 py-3 backdrop-blur">
             {timerBox}
-            <div className="flex min-w-0 flex-col items-end gap-2">
-                <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                    <span className="text-sm font-semibold text-foreground">Danh sách câu hỏi</span>
+            <div className="flex w-[15.5rem] shrink-0 flex-col gap-3 rounded-xl border bg-card p-3 shadow-sm">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <span className="w-full text-sm font-semibold text-foreground">Danh sách câu hỏi</span>
                     <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-sm bg-black ring-1 ring-border" /> Chưa làm</span>
                     <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-sm bg-green-600" /> Đã làm</span>
                     <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-sm bg-yellow-400" /> Đánh dấu</span>
                 </div>
-                <div className="flex max-h-24 flex-wrap justify-end gap-2 overflow-y-auto p-1">
+                <div className="grid max-h-[8.5rem] grid-cols-5 justify-items-center gap-2 overflow-y-auto p-1">
                     {attempt.questions.map((question, index) => {
                         const isFlagged = flagged.has(question.id);
                         const color = isFlagged
