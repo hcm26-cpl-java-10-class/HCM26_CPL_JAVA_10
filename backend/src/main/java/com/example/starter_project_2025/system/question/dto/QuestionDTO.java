@@ -32,6 +32,10 @@ public class QuestionDTO extends BaseDTO {
     private Difficulty difficulty;
 
     private String topic;
+    @Size(max = 1000, groups = {OnCreate.class, OnUpdate.class})
+    @Pattern(regexp = "^$|^https?://.+", message = "Image URL must start with http:// or https://",
+            groups = {OnCreate.class, OnUpdate.class})
+    private String imageUrl;
 
     @Min(value = 1, groups = {OnCreate.class, OnUpdate.class})
     private Integer points;

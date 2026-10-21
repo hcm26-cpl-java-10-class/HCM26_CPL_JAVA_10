@@ -12,6 +12,7 @@ public class QuestionTakerMapper {
         QuestionTakerDTO d = new QuestionTakerDTO();
         d.setId(q.getId());
         d.setContent(q.getContent());
+        d.setImageUrl(q.getImageUrl());
         d.setType(q.getType());
         d.setPoints(q.getPoints());
         d.setOptions(q.getOptions().stream().map(o -> {
@@ -29,6 +30,7 @@ public class QuestionTakerMapper {
         QuestionTakerDTO d = new QuestionTakerDTO();
         d.setId(q.getSourceQuestionId());
         d.setContent(q.getContent());
+        d.setImageUrl(q.getImageUrl());
         d.setType(q.getType());
         d.setPoints(q.getPoints());
         d.setOptions(q.getOptions().stream().map(o -> {

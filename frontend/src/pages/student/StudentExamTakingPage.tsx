@@ -7,12 +7,11 @@ import {
 } from '@/api/exam.api';
 import { Button } from '@/components/ui/button';
 import { MainLayout } from '@/components/layout/MainLayout';
-// REMOVED: import EssayAnswerDialog (popup cũ) — câu tự luận giờ có trang riêng /take?essay=ID. File EssayAnswerDialog.tsx có thể xóa.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'; // NEW: useSearchParams
-import { ArrowLeft, Save, Star } from 'lucide-react'; // NEW: Star = đánh dấu câu
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, Save, Star } from 'lucide-react';
 import { toast } from 'sonner';
 
 const attemptQueryKey = (examId: number) => ['student-exam-attempt', examId] as const;
@@ -51,7 +50,6 @@ export default function StudentExamTakingPage() {
     const examId = Number(rawExamId);
     const validExamId = Number.isSafeInteger(examId) && examId > 0;
     const navigate = useNavigate();
-    // NEW: trang làm tự luận nằm trong cùng route, chọn bằng ?essay=<questionId>
     const [searchParams, setSearchParams] = useSearchParams();
     const essayParam = Number(searchParams.get('essay'));
     const queryClient = useQueryClient();
@@ -99,7 +97,6 @@ export default function StudentExamTakingPage() {
 
     const attempt = attemptQuery.data;
 
-    // NEW: đánh dấu ngôi sao (lưu localStorage theo từng lượt làm) + câu đang được chọn
     const [flagged, setFlagged] = useState<Set<number>>(new Set());
     const [activeQuestionId, setActiveQuestionId] = useState<number | null>(null);
     const flagKey = attempt ? `exam-flagged-${attempt.id}` : null;
@@ -123,7 +120,7 @@ export default function StudentExamTakingPage() {
                 try {
                     localStorage.setItem(flagKey, JSON.stringify([...next]));
                 } catch {
-                    // bỏ qua nếu trình duyệt chặn localStorage
+                    // Bỏ qua nếu trình duyệt chặn localStorage
                 }
             }
             return next;
@@ -269,7 +266,6 @@ export default function StudentExamTakingPage() {
         if (
             requireConfirmation &&
             !window.confirm(
-                // NEW: cảnh báo số câu tự luận chưa bấm "Lưu bài"
                 'Bạn có chắc chắn muốn nộp bài? Hãy kiểm tra lại câu trả lời trước khi tiếp tục.' +
                 (() => {
                     const unsaved = attempt.questions.filter((q) => q.type === 'ESSAY' && !answersRef.current[q.id]?.saved).length;
@@ -356,7 +352,6 @@ export default function StudentExamTakingPage() {
             textAnswer: null,
         };
         const next = { ...current, ...update };
-        // NEW: sửa nội dung bài tự luận đã lưu -> quay về trạng thái chưa lưu (xanh dương)
         if (update.textAnswer !== undefined && (update.textAnswer ?? '') !== (current.textAnswer ?? '')) {
             next.saved = false;
         }
@@ -364,7 +359,6 @@ export default function StudentExamTakingPage() {
         scheduleAnswerSave(questionId, next);
     };
 
-    // ===== NEW: logic trang làm tự luận =====
     const openEssay = (questionId: number) => setSearchParams({ essay: String(questionId) });
     const closeEssay = () => setSearchParams({});
 
@@ -374,7 +368,6 @@ export default function StudentExamTakingPage() {
             ? hasText(question.id)
             : (answers[question.id]?.selectedOptionIds.length ?? 0) > 0;
 
-    // Bấm "Lưu bài": gửi nội dung + markSaved, thành công thì đánh dấu "Đã lưu" và quay về trang chính
     const saveEssay = async (questionId: number) => {
         if (!attempt || attempt.status !== 'IN_PROGRESS') return;
         if (!hasText(questionId)) {
@@ -404,7 +397,7 @@ export default function StudentExamTakingPage() {
     };
 
     const jumpToQuestion = (question: { id: number; type: string }) => {
-        setActiveQuestionId(question.id); // NEW: ô được chọn có viền đỏ
+        setActiveQuestionId(question.id);
         if (question.type === 'ESSAY') {
             openEssay(question.id);
             return;
@@ -469,8 +462,6 @@ export default function StudentExamTakingPage() {
         );
     };
 
-    // NEW: thanh ghim cố định trên cùng — đồng hồ bên trái, danh sách câu hỏi bên phải
-    // Màu ô: vàng (đánh dấu, luôn ưu tiên) > xanh (đã làm) > đen (chưa làm); viền đỏ = câu đang chọn
     const pinnedBar = (
         <div className="pointer-events-none sticky top-0 z-30 flex items-start justify-between gap-4 py-3">
             {timerBox}
@@ -515,7 +506,6 @@ export default function StudentExamTakingPage() {
         </Button>
     );
 
-    // ===== Trang làm 1 câu tự luận: full màn hình, thanh ghim trên cùng, câu hỏi : bài làm = 1 : 4 =====
     if (!isFinished && currentEssay) {
         return (
             <MainLayout pathName={{ exams: 'Lịch thi', take: 'Làm bài thi' }}>
@@ -551,6 +541,15 @@ export default function StudentExamTakingPage() {
                         <section className="min-h-0 overflow-auto rounded-xl border p-4 md:col-span-1">
                             <h2 className="font-semibold">Câu hỏi</h2>
                             <p className="mt-3 whitespace-pre-wrap text-sm">{currentEssay.content}</p>
+                            {currentEssay.imageUrl?.trim() && (
+                                <div className="mt-3">
+                                    <img
+                                        src={currentEssay.imageUrl}
+                                        alt={`Hình ảnh câu ${currentEssayIndex + 1}`}
+                                        className="max-h-64 rounded-md border object-contain shadow-sm"
+                                    />
+                                </div>
+                            )}
                         </section>
                         <section className="flex min-h-0 flex-col rounded-xl border p-4 md:col-span-4">
                             <h2 className="mb-3 shrink-0 font-semibold">Bài làm</h2>
@@ -633,7 +632,6 @@ export default function StudentExamTakingPage() {
                         </section>
                     ) : (
                         <>
-                            {/* NEW: danh sách câu tự luận ở trên cùng; bấm vào để mở trang làm câu đó */}
                             {essayQuestions.length > 0 && (
                                 <section className="rounded-xl border p-4">
                                     <h2 className="mb-3 font-semibold">Câu tự luận</h2>
@@ -675,21 +673,19 @@ export default function StudentExamTakingPage() {
 
                                 {hasSaveError && (
                                     <span role="alert" className="text-destructive">
-                                    Có câu trả lời chưa được lưu.
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => void flushPendingAnswers(attempt.id)}
-                                    >
-                                        Thử lưu lại
-                                    </Button>
-                                </span>
+                                        Có câu trả lời chưa được lưu.
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => void flushPendingAnswers(attempt.id)}
+                                        >
+                                            Thử lưu lại
+                                        </Button>
+                                    </span>
                                 )}
                             </div>
 
                             {attempt.questions.map((question, index) => {
-                                // CHANGED: câu tự luận không hiện ở đây nữa (đã có danh sách tự luận phía trên)
-                                if (question.type === 'ESSAY') return null;
                                 const answer = answers[question.id] ?? {
                                     questionId: question.id,
                                     selectedOptionIds: [],
@@ -697,45 +693,99 @@ export default function StudentExamTakingPage() {
                                 };
 
                                 return (
-                                    <section key={question.id} id={`question-card-${question.id}`} className="scroll-mt-40 rounded-xl border p-5">
+                                    <section
+                                        key={question.id}
+                                        id={`question-card-${question.id}`}
+                                        className={`rounded-xl border p-5 transition-all ${
+                                            activeId === question.id ? 'ring-2 ring-red-500' : ''
+                                        }`}
+                                    >
                                         <div className="flex items-center justify-between gap-2">
                                             <h2 className="font-semibold">
                                                 Câu {index + 1}
                                                 <span className="ml-2 text-sm font-normal text-muted-foreground">
-                                                {question.points} điểm
-                                            </span>
+                                                    {question.points} điểm
+                                                </span>
                                             </h2>
                                             {starButton(question.id, index + 1)}
                                         </div>
+
                                         <p className="mt-3 whitespace-pre-wrap">{question.content}</p>
 
-                                        <div className="mt-4 grid gap-3">
-                                            {question.options.map((option) => {
-                                                const checked = answer.selectedOptionIds.includes(option.id);
-                                                const isMulti = question.multiSelect ?? question.type === 'MULTI_CHOICE';
-                                                const inputType = isMulti ? 'checkbox' : 'radio';
-                                                return (
-                                                    <label key={option.id} className="flex cursor-pointer items-start gap-3 rounded-md border p-3">
-                                                        <input
-                                                            type={inputType}
-                                                            name={`question-${question.id}`}
-                                                            checked={checked}
-                                                            onChange={() => {
-                                                                const selectedOptionIds = !isMulti
-                                                                    ? [option.id]
-                                                                    : checked
-                                                                        ? answer.selectedOptionIds.filter((id) => id !== option.id)
-                                                                        : [...answer.selectedOptionIds, option.id];
-                                                                setActiveQuestionId(question.id);
-                                                                updateAnswer(question.id, { selectedOptionIds });
-                                                            }}
-                                                            disabled={isFinished}
-                                                        />
-                                                        <span>{option.content}</span>
-                                                    </label>
-                                                );
-                                            })}
-                                        </div>
+                                        {question.imageUrl?.trim() && (
+                                            <div className="mt-3">
+                                                <img
+                                                    src={question.imageUrl}
+                                                    alt={`Hình ảnh câu ${index + 1}`}
+                                                    className="max-h-64 rounded-md border object-contain shadow-sm"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {question.type === 'ESSAY' ? (
+                                            <div className="mt-4 flex items-center justify-between rounded-lg border bg-muted/30 p-3">
+                                                <span className="text-sm text-muted-foreground">
+                                                    {hasText(question.id)
+                                                        ? 'Đã có nội dung bài làm tự luận'
+                                                        : 'Chưa làm câu tự luận này'}
+                                                </span>
+                                                <Button
+                                                    size="sm"
+                                                    className={
+                                                        answer.saved
+                                                            ? 'bg-green-600 text-white hover:bg-green-700'
+                                                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                                                    }
+                                                    onClick={() => openEssay(question.id)}
+                                                >
+                                                    {answer.saved
+                                                        ? 'Sửa bài tự luận'
+                                                        : hasText(question.id)
+                                                            ? 'Làm tiếp'
+                                                            : 'Mở bài tự luận'}
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            <div className="mt-4 grid gap-3">
+                                                {question.options.map((option) => {
+                                                    const checked = answer.selectedOptionIds.includes(option.id);
+                                                    const isMulti = question.multiSelect ?? question.type === 'MULTI_CHOICE';
+                                                    const inputType = isMulti ? 'checkbox' : 'radio';
+                                                    return (
+                                                        <label
+                                                            key={option.id}
+                                                            className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-muted/50"
+                                                        >
+                                                            <input
+                                                                type={inputType}
+                                                                name={`question-${question.id}`}
+                                                                checked={checked}
+                                                                onChange={() => {
+                                                                    const selectedOptionIds = !isMulti
+                                                                        ? [option.id]
+                                                                        : checked
+                                                                            ? answer.selectedOptionIds.filter((id) => id !== option.id)
+                                                                            : [...answer.selectedOptionIds, option.id];
+                                                                    updateAnswer(question.id, { selectedOptionIds });
+                                                                }}
+                                                                disabled={isFinished}
+                                                                className="mt-1"
+                                                            />
+                                                            <div className="flex flex-col gap-2">
+                                                                <span>{option.content}</span>
+                                                                {option.imageUrl?.trim() && (
+                                                                    <img
+                                                                        src={option.imageUrl}
+                                                                        alt=""
+                                                                        className="max-h-40 rounded border object-contain"
+                                                                    />
+                                                                )}
+                                                            </div>
+                                                        </label>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
                                     </section>
                                 );
                             })}
@@ -744,7 +794,6 @@ export default function StudentExamTakingPage() {
                                 <Button variant="outline" onClick={handleLeaveExam}>
                                     Rời bài thi
                                 </Button>
-                                {/* CHANGED: nhãn "Nộp bài" -> "Nộp bài thi" */}
                                 {submitButton}
                             </footer>
                         </>

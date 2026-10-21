@@ -30,6 +30,7 @@ export interface ExamAttemptQuestion {
     /** true = nhiều đáp án đúng -> ô vuông (checkbox); false = ô tròn (radio). */
     multiSelect: boolean;
     options: { id: number; content: string; imageUrl?: string | null }[];
+    imageUrl?: string | null;
 }
 
 export interface ExamAttemptAnswer {

@@ -33,6 +33,7 @@ public class QuestionMapper implements BaseCrudMapper<Question, QuestionDTO> {
         d.setCreatedBy(q.getCreatedBy());
         d.setUpdatedBy(q.getUpdatedBy());
         d.setContent(q.getContent());
+        d.setImageUrl(q.getImageUrl());
         d.setType(q.getType());
         d.setDifficulty(q.getDifficulty());
         d.setTopic(q.getTopic());
@@ -58,6 +59,7 @@ public class QuestionMapper implements BaseCrudMapper<Question, QuestionDTO> {
 
     private void apply(Question q, QuestionDTO d) {
         if (d.getContent() != null) q.setContent(d.getContent().trim());
+        if (d.getImageUrl() != null) q.setImageUrl(d.getImageUrl().isBlank() ? null : d.getImageUrl().trim());
         if (d.getType() != null) q.setType(d.getType());
         if (d.getDifficulty() != null) q.setDifficulty(d.getDifficulty());
         if (d.getTopic() != null) {

@@ -111,6 +111,7 @@ public class ExamAttemptService {
             snap.setAttempt(attempt);
             snap.setSourceQuestionId(q.getId());
             snap.setContent(q.getContent());
+            snap.setImageUrl(q.getImageUrl());
             snap.setType(q.getType());
             snap.setPoints(q.getPoints());
             snap.setDisplayOrder(questionOrder++);
