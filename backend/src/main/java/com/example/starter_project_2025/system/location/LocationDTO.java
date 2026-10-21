@@ -1,4 +1,4 @@
-package com.example.starter_project_2025.base.crud.dto;
+package com.example.starter_project_2025.system.location;
 
 import lombok.*;
 import java.util.ArrayList;
