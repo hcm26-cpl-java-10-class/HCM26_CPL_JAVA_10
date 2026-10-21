@@ -75,10 +75,10 @@ export function SessionRowActions({ session }: SessionRowActionsProps) {
     mutationFn: () => sessionApi.complete(sessionId as number, { version: session.version }),
     onSuccess: async (updated) => {
       await invalidateSessions();
-      toast.success(`Đã cập nhật trạng thái: ${updated.status ?? "—"}.`);
+      toast.success(`Status updated: ${updated.status ?? "—"}.`);
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, "Không thể cập nhật trạng thái buổi học."));
+      toast.error(getApiErrorMessage(error, "Failed to update session status."));
     },
   });
 
@@ -90,13 +90,13 @@ export function SessionRowActions({ session }: SessionRowActionsProps) {
       }),
     onSuccess: async () => {
       await invalidateSessions();
-      toast.success("Đã hủy buổi học.");
+      toast.success("Session cancelled.");
       setCancelOpen(false);
       setCancelReason("");
       setCancelError(null);
     },
     onError: (error) => {
-      const message = getApiErrorMessage(error, "Không thể hủy buổi học.");
+      const message = getApiErrorMessage(error, "Failed to cancel session.");
       setCancelError(message);
       toast.error(message);
     },
@@ -106,12 +106,12 @@ export function SessionRowActions({ session }: SessionRowActionsProps) {
     const reason = cancelReason.trim();
 
     if (!reason) {
-      setCancelError("Vui lòng nhập lý do hủy buổi học.");
+      setCancelError("Please provide a cancellation reason.");
       return;
     }
 
     if (reason.length > MAX_CANCEL_REASON_LENGTH) {
-      setCancelError(`Lý do hủy không được vượt quá ${MAX_CANCEL_REASON_LENGTH} ký tự.`);
+      setCancelError(`Cancellation reason must not exceed ${MAX_CANCEL_REASON_LENGTH} characters.`);
       return;
     }
 
@@ -148,7 +148,7 @@ export function SessionRowActions({ session }: SessionRowActionsProps) {
 
         <DropdownMenuContent align="end" className="w-60">
           <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">
-            Trạng thái buổi học
+            Session Status
           </DropdownMenuLabel>
 
           {canComplete && (
@@ -157,13 +157,13 @@ export function SessionRowActions({ session }: SessionRowActionsProps) {
               disabled={completeMutation.isPending}
             >
               <CheckCircle2 className="mr-2 size-4 text-emerald-600" />
-              Đánh dấu hoàn thành
+              Mark Complete
             </DropdownMenuItem>
           )}
 
           <DropdownMenuItem onSelect={() => setNotesOpen(true)}>
             <NotebookPen className="mr-2 size-4 text-primary" />
-            Cập nhật ghi chú…
+            Update Notes…
           </DropdownMenuItem>
 
           <DropdownMenuItem onSelect={() => setAttendanceOpen(true)}>
@@ -173,7 +173,7 @@ export function SessionRowActions({ session }: SessionRowActionsProps) {
 
           {status === "COMPLETED" && (
             <DropdownMenuLabel className="max-w-56 whitespace-normal text-xs font-normal text-muted-foreground">
-              Đã hoàn thành
+              Completed
             </DropdownMenuLabel>
           )}
 
@@ -185,14 +185,14 @@ export function SessionRowActions({ session }: SessionRowActionsProps) {
                 className="text-red-600 focus:text-red-600"
               >
                 <XCircle className="mr-2 size-4" />
-                Hủy buổi học…
+                Cancel Session…
               </DropdownMenuItem>
             </>
           )}
 
           {status === "CANCELLED" && (
             <DropdownMenuLabel className="max-w-56 whitespace-normal text-xs font-normal text-muted-foreground">
-              Đã hủy
+              Cancelled
               {session.cancelReason ? ` — ${session.cancelReason}` : "."}
             </DropdownMenuLabel>
           )}
@@ -230,18 +230,18 @@ export function SessionRowActions({ session }: SessionRowActionsProps) {
               <span className="flex size-9 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
                 <XCircle className="size-4 text-red-600" />
               </span>
-              Hủy buổi học
+              Cancel Session
             </DialogTitle>
             <DialogDescription>
-              Buổi học “{session.title || session.classCode}” sẽ chuyển sang trạng thái{" "}
-              <span className="font-medium text-destructive">Đã hủy</span>. Thao tác này không
-              thể hoàn tác.
+              Session "{session.title || session.classCode}" will be moved to
+              <span className="font-medium text-destructive">Cancelled</span>. This action cannot
+              be undone.
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-2">
             <Label htmlFor={`cancel-reason-${sessionId}`}>
-              Lý do hủy <span className="text-destructive">*</span>
+              Cancellation Reason <span className="text-destructive">*</span>
             </Label>
             <Textarea
               id={`cancel-reason-${sessionId}`}
@@ -250,7 +250,7 @@ export function SessionRowActions({ session }: SessionRowActionsProps) {
                 setCancelReason(event.target.value);
                 if (cancelError) setCancelError(null);
               }}
-              placeholder="Ví dụ: Giảng viên bận đột xuất, lớp nghỉ lễ…"
+              placeholder="e.g. Trainer unavailable, class holiday…"
               maxLength={MAX_CANCEL_REASON_LENGTH}
               rows={4}
               disabled={cancelMutation.isPending}
@@ -271,7 +271,7 @@ export function SessionRowActions({ session }: SessionRowActionsProps) {
               onClick={() => setCancelOpen(false)}
               disabled={cancelMutation.isPending}
             >
-              Đóng
+              Close
             </Button>
             <Button
               type="button"
@@ -282,12 +282,12 @@ export function SessionRowActions({ session }: SessionRowActionsProps) {
               {cancelMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 size-4 animate-spin" />
-                  Đang hủy…
+                  Cancelling...
                 </>
               ) : (
                 <>
                   <XCircle className="mr-2 size-4" />
-                  Xác nhận hủy
+                  Confirm Cancel
                 </>
               )}
             </Button>
