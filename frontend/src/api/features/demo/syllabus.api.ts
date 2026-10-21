@@ -36,9 +36,48 @@ export type SyllabusValidation = {
     errors: string[];
 };
 
+export type SyllabusInformationInput = {
+    code: string;
+    name: string;
+    description: string;
+    teachingMethods: string;
+    degreeLevel: string;
+    timeAllocation: string;
+    studentResponsibilities: string;
+    requiredTools: string;
+    scoringScale: number | null;
+};
+
+export type SyllabusInformation = SyllabusInformationInput & {
+    id: number;
+};
+
+
 const root = "/syllabuses";
 
 export const syllabusApi = {
+    getInformation: async (id: number) =>
+        (
+            await api.get<SyllabusInformation>(
+                `${root}/${id}/information`
+            )
+        ).data,
+
+    updateInformation: async (
+        id: number,
+        body: SyllabusInformationInput
+    ) =>
+        (
+            await api.put<SyllabusInformation>(
+                `${root}/${id}/information`,
+                body
+            )
+        ).data,
+
+
+
+    
+
     list: async (search = "") =>
         (
             await api.get<SyllabusSummary[]>(root, {

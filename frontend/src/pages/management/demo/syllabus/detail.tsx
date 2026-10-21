@@ -1,3 +1,4 @@
+import GeneralInformationPanel from "./GeneralInformationPanel";
 import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -105,8 +106,7 @@ export default function SyllabusDetailPage() {
     const [bulkCount, setBulkCount] =
         useState(3);
 
-    const [bulkTitles, setBulkTitles] =
-        useState<string[]>(["", "", ""]);
+
 
     const [topicSection, setTopicSection] =
         useState<SyllabusSection | null>(null);
@@ -268,87 +268,60 @@ export default function SyllabusDetailPage() {
 
     function openBulk() {
         setBulkCount(3);
-        setBulkTitles(["", "", ""]);
         setBulkOpen(true);
     }
 
-    function resizeBulk(n: number) {
-        const count = Math.max(
-            1,
-            Math.min(30, n)
-        );
+    function resizeBulk(value: number) {
+        if (!Number.isFinite(value)) return;
 
+        const count = Math.max(1, Math.min(30, Math.trunc(value)));
         setBulkCount(count);
-
-        setBulkTitles((old) =>
-            Array.from(
-                { length: count },
-                (_, i) => old[i] ?? ""
-            )
-        );
     }
 
-    async function saveBulk(
-        e: FormEvent<HTMLFormElement>
-    ) {
+    async function saveBulk(e: FormEvent<HTMLFormElement>) {
         e.preventDefault();
 
         if (busy) return;
 
-        const titles = bulkTitles
-            .slice(0, bulkCount)
-            .map(norm);
-
         if (
-            titles.some(
-                (x) =>
-                    x.length < 3 ||
-                    x.length > 150 ||
-                    !/\p{L}/u.test(x)
-            )
+            !Number.isInteger(bulkCount) ||
+            bulkCount < 1 ||
+            bulkCount > 30
         ) {
-            toast.error(
-                "Each section needs a valid title (3-150 characters)"
-            );
+            toast.error("Number of sections must be between 1 and 30");
             return;
         }
 
-        const existing = new Set(
-            sections.map((x) =>
-                norm(x.title)
-                    .toLocaleLowerCase("vi")
-            )
+        // Avoid duplicate internally generated section titles.
+        const usedTitles = new Set(
+            sections.map((s) => norm(s.title).toLowerCase())
         );
 
-        for (const title of titles) {
-            const key =
-                title.toLocaleLowerCase("vi");
+        const titles: string[] = [];
 
-            if (existing.has(key)) {
-                toast.error(
-                    `Duplicate Section: ${title}`
-                );
-                return;
+        let nextNumber =
+            Math.max(0, ...sections.map((s) => s.orderIndex)) + 1;
+
+        while (titles.length < bulkCount) {
+            const title = `Section ${nextNumber++}`;
+            const key = title.toLowerCase();
+
+            if (!usedTitles.has(key)) {
+                usedTitles.add(key);
+                titles.push(title);
             }
-
-            existing.add(key);
         }
 
         setBusy(true);
 
         try {
-            await syllabusApi.bulkSections(
-                syllabusId,
-                titles
-            );
-
-            setBulkOpen(false);
+            await syllabusApi.bulkSections(syllabusId, titles);
 
             await refresh();
 
-            toast.success(
-                `${titles.length} sections created`
-            );
+            setBulkOpen(false);
+
+            toast.success(`${titles.length} sections created successfully`);
         } catch (error) {
             toast.error(errorMessage(error));
         } finally {
@@ -495,7 +468,7 @@ export default function SyllabusDetailPage() {
                     : {}),
             }}
         >
-            <div className="mx-auto max-w-6xl space-y-5">
+            <div className="mx-auto w-full max-w-[1500px] space-y-6">
                 <Button
                     asChild
                     variant="ghost"
@@ -526,31 +499,19 @@ export default function SyllabusDetailPage() {
                     </div>
                 ) : (
                     <>
-                        {/* Syllabus Info */}
-                        <div className="rounded-xl border bg-card p-5">
-                            <h1 className="text-2xl font-bold">
+                        {/* Syllabus Header */}
+                        <section className="w-full rounded-xl border bg-card p-6">
+                            <h1 className="break-words text-2xl font-bold">
                                 {syllabus.name}
                             </h1>
 
-                            <p className="text-sm text-muted-foreground">
+                            <p className="mt-2 text-sm text-muted-foreground">
                                 Code: {syllabus.code}
                             </p>
+                        </section>
 
-                            <p className="mt-3 whitespace-pre-line text-sm">
-                                {syllabus.description ||
-                                    "No description provided."}
-                            </p>
-
-                            <p className="mt-2 text-sm text-muted-foreground">
-                                {sections.length} sections ·{" "}
-                                {sections.reduce(
-                                    (sum, s) =>
-                                        sum + s.topics.length,
-                                    0
-                                )}{" "}
-                                topics
-                            </p>
-                        </div>
+                        {/* General Information */}
+                        <GeneralInformationPanel syllabusId={syllabusId} />
 
                         {/* Sections Toolbar */}
                         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -637,16 +598,12 @@ export default function SyllabusDetailPage() {
                                     <div className="flex flex-wrap items-center justify-between gap-2">
                                         <div>
                                             <h3 className="font-semibold">
-                                                Section {index + 1}:{" "}
-                                                {section.title}
+                                                Section {index + 1}
+
                                             </h3>
 
                                             <p className="text-xs text-muted-foreground">
-                                                Order:{" "}
-                                                {section.orderIndex}
-                                                {" · "}
-                                                {section.topics.length}
-                                                {" topics"}
+                                                {section.topics.length} topics
                                             </p>
                                         </div>
 
@@ -846,24 +803,20 @@ export default function SyllabusDetailPage() {
             {/* Bulk Create Sections */}
             <Modal
                 open={bulkOpen}
-                onClose={() =>
-                    !busy && setBulkOpen(false)
-                }
-                title="Create Multiple Sections"
+                onClose={() => !busy && setBulkOpen(false)}
+                title="Create Sections"
                 size="lg"
             >
                 <form
-                    onSubmit={(e) =>
-                        void saveBulk(e)
-                    }
+                    onSubmit={(e) => void saveBulk(e)}
                     className="space-y-4"
                 >
                     <div>
                         <label
                             htmlFor="section-count"
-                            className="mb-1 block text-sm"
+                            className="mb-2 block text-sm font-medium"
                         >
-                            Number of Sections (1–30)
+                            Number of Sections
                         </label>
 
                         <Input
@@ -871,62 +824,29 @@ export default function SyllabusDetailPage() {
                             type="number"
                             min={1}
                             max={30}
+                            step={1}
                             value={bulkCount}
-                            onChange={(e) =>
-                                resizeBulk(
-                                    Number(e.target.value) || 1
-                                )
-                            }
+                            onChange={(e) => resizeBulk(Number(e.target.value))}
+                            required
                         />
-                    </div>
 
-                    <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
-                        {bulkTitles
-                            .slice(0, bulkCount)
-                            .map((title, i) => (
-                                <div key={i}>
-                                    <label
-                                        htmlFor={`bulk-${i}`}
-                                        className="mb-1 block text-xs"
-                                    >
-                                        Section {i + 1}
-                                    </label>
-
-                                    <Input
-                                        id={`bulk-${i}`}
-                                        maxLength={150}
-                                        value={title}
-                                        placeholder={`Enter Section ${i + 1} title`}
-                                        onChange={(e) =>
-                                            setBulkTitles((old) =>
-                                                old.map((x, j) =>
-                                                    i === j
-                                                        ? e.target.value
-                                                        : x
-                                                )
-                                            )
-                                        }
-                                        required
-                                    />
-                                </div>
-                            ))}
+                        <p className="mt-2 text-sm text-muted-foreground">
+                            Sections will be numbered automatically.
+                            You can add topics after creating them.
+                        </p>
                     </div>
 
                     <div className="flex justify-end gap-2">
                         <Button
                             type="button"
                             variant="outline"
-                            onClick={() =>
-                                setBulkOpen(false)
-                            }
+                            disabled={busy}
+                            onClick={() => setBulkOpen(false)}
                         >
                             Cancel
                         </Button>
 
-                        <Button
-                            disabled={busy}
-                            type="submit"
-                        >
+                        <Button type="submit" disabled={busy}>
                             Create {bulkCount} Sections
                         </Button>
                     </div>

@@ -71,4 +71,31 @@ public final class SyllabusModels {
             List<String> errors
     ) {
     }
+
+    public record InformationInput(
+            String code,
+            String name,
+            String description,
+            String teachingMethods,
+            String degreeLevel,
+            String timeAllocation,
+            String studentResponsibilities,
+            String requiredTools,
+            Integer scoringScale
+    ) {
+    }
+
+    public record InformationView(
+            Long id,
+            String code,
+            String name,
+            String description,
+            String teachingMethods,
+            String degreeLevel,
+            String timeAllocation,
+            String studentResponsibilities,
+            String requiredTools,
+            Integer scoringScale
+    ) {
+    }
 }

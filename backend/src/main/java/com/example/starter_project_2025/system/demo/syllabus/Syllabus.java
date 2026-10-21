@@ -18,7 +18,7 @@ import lombok.Setter;
 @ResourcePermission("SYLLABUS")
 @ResourceMenu(
         title = "Syllabuses",
-        group = "Course Management",
+        group = "Syllabus Management",
         icon = "file-text",
         url = "/syllabuses",
         order = 0,
@@ -34,4 +34,23 @@ public class Syllabus extends BaseEntity {
 
     @Column(length = 1500)
     private String description;
+
+    @Column(name = "teaching_methods", length = 500)
+    private String teachingMethods;
+
+    @Column(name = "degree_level", length = 100)
+    private String degreeLevel;
+
+    @Column(name = "time_allocation", length = 500)
+    private String timeAllocation;
+
+    @Column(name = "student_responsibilities", length = 2000)
+    private String studentResponsibilities;
+
+    @Column(name = "required_tools", length = 1500)
+    private String requiredTools;
+
+    @Column(name = "scoring_scale")
+    private Integer scoringScale;
+
 }

@@ -29,6 +29,25 @@ public class SyllabusController {
         return service.get(id);
     }
 
+    @GetMapping("/{id}/information")
+    @PreAuthorize("hasAuthority('SYLLABUS_READ')")
+    public InformationView getInformation(
+            @PathVariable Long id
+    ) {
+        return service.getInformation(id);
+    }
+
+    @PutMapping("/{id}/information")
+    @PreAuthorize("hasAuthority('SYLLABUS_UPDATE')")
+    public InformationView updateInformation(
+            @PathVariable Long id,
+            @RequestBody InformationInput input
+    ) {
+        return service.updateInformation(id, input);
+    }
+
+
+
     @GetMapping("/{id}/validate")
     @PreAuthorize("hasAuthority('SYLLABUS_READ')")
     public ValidationResult validate(@PathVariable Long id) {

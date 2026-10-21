@@ -595,4 +595,107 @@ public class SyllabusService {
                 errors
         );
     }
+
+    private static String informationText(
+            String raw,
+            int maxLength,
+            String field
+    ) {
+        String value = raw == null ? "" : raw.strip();
+
+        if (value.length() > maxLength) {
+            fail(field, "Must not exceed " + maxLength + " characters");
+        }
+
+        return value;
+    }
+
+    private InformationView toInformationView(Syllabus s) {
+        return new InformationView(
+                s.getId(),
+                s.getCode(),
+                s.getName(),
+                s.getDescription(),
+                s.getTeachingMethods(),
+                s.getDegreeLevel(),
+                s.getTimeAllocation(),
+                s.getStudentResponsibilities(),
+                s.getRequiredTools(),
+                s.getScoringScale()
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public InformationView getInformation(Long syllabusId) {
+        return toInformationView(syllabus(syllabusId));
+    }
+
+    public InformationView updateInformation(
+            Long syllabusId,
+            InformationInput input
+    ) {
+        if (input == null) {
+            fail("information", "Request body is required");
+        }
+
+        Syllabus entity = syllabus(syllabusId);
+
+        // Reuse existing validation for code, name and duplicate values.
+        fillSyllabus(
+                entity,
+                new SyllabusInput(
+                        input.code(),
+                        input.name(),
+                        input.description()
+                )
+        );
+
+        String description = informationText(
+                input.description(), 1500, "description"
+        );
+
+        String teachingMethods = informationText(
+                input.teachingMethods(), 500, "teachingMethods"
+        );
+
+        String degreeLevel = informationText(
+                input.degreeLevel(), 100, "degreeLevel"
+        );
+
+        String timeAllocation = informationText(
+                input.timeAllocation(), 500, "timeAllocation"
+        );
+
+        String responsibilities = informationText(
+                input.studentResponsibilities(),
+                2000,
+                "studentResponsibilities"
+        );
+
+        String requiredTools = informationText(
+                input.requiredTools(), 1500, "requiredTools"
+        );
+
+        Integer score = input.scoringScale();
+
+        if (score != null && (score < 1 || score > 100)) {
+            fail(
+                    "scoringScale",
+                    "Scoring Scale must be between 1 and 100"
+            );
+        }
+
+        entity.setDescription(description);
+        entity.setTeachingMethods(teachingMethods);
+        entity.setDegreeLevel(degreeLevel);
+        entity.setTimeAllocation(timeAllocation);
+        entity.setStudentResponsibilities(responsibilities);
+        entity.setRequiredTools(requiredTools);
+        entity.setScoringScale(score);
+
+        Syllabus saved = syllabuses.saveAndFlush(entity);
+
+        return toInformationView(saved);
+    }
+
 }
