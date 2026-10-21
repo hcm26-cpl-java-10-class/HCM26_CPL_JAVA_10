@@ -83,6 +83,7 @@ public class RoleDataInitializer implements CommandLineRunner {
         role.setName(roleName);
         role.setDescription(description);
         role.setIsActive(true);
+        role.setIsSystem(true);
         role.setPermissions(new HashSet<>(permissions));
 
         roleRepository.save(role);

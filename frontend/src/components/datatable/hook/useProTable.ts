@@ -561,8 +561,26 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
     onSuccess: invalidate,
   });
 
+  const patchSystemRoleMutation = useMutation({
+    mutationFn: ({ id, value }: { id: any; value: boolean }) =>
+      api.setSystemRole(id, value),
+    onSuccess: invalidate,
+    onError: (error) => {
+      handleMutationError(error);
+      toast.error(getMutationErrorMessage(error, "Could not update system role status."));
+      invalidate();
+    },
+  });
+
   const patchField = (id: any, fieldName: string, value: any) => {
     if (!permission.canUpdate) return;
+
+    // System-role state is managed by a dedicated backend endpoint. Do not send it
+    // through generic CRUD update, where the DTO intentionally treats it read-only.
+    if (schema.entityName === "role" && fieldName === "isSystem" && typeof api.setSystemRole === "function") {
+      patchSystemRoleMutation.mutate({ id, value: Boolean(value) });
+      return;
+    }
 
     const currentData: any[] = rawData;
     const row = currentData.find((r: any) => r[schema.idField] === id);

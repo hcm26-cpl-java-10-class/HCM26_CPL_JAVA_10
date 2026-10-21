@@ -16,4 +16,8 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
     boolean existsByEmail(String email);
 
     Long countByIsActive(Boolean isActive);
+
+    boolean existsByRoles_Id(Long roleId);
+
+    long countByRoles_Id(Long roleId);
 }
