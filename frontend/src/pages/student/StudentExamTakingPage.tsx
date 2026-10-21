@@ -519,16 +519,16 @@ export default function StudentExamTakingPage() {
     if (!isFinished && currentEssay) {
         return (
             <MainLayout pathName={{ exams: 'Lịch thi', take: 'Làm bài thi' }}>
-                <main className="flex min-h-[calc(100vh-10rem)] w-full flex-col gap-4">
-                    {pinnedBar}
-
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                        <Button variant="outline" onClick={closeEssay}>
-                            <ArrowLeft className="mr-1 h-4 w-4" /> Về trang làm bài
-                        </Button>
+                {/* Trang tự luận: cố định đúng khung nhìn, không cuộn trang; chỉ ô "Bài làm" tự cuộn khi văn bản dài */}
+                <main className="flex h-[calc(100dvh-10rem)] w-full flex-col gap-4 overflow-hidden">
+                    <header className="flex shrink-0 flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                            {timerBox}
+                            <Button variant="outline" onClick={closeEssay}>
+                                <ArrowLeft className="mr-1 h-4 w-4" /> Về trang làm bài
+                            </Button>
+                        </div>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            {starButton(currentEssay.id, currentEssayIndex + 1)}
-                            <span>Câu {currentEssayIndex + 1} · {currentEssay.points} điểm</span>
                             {currentSaved && <span className="font-medium text-green-600">Đã lưu</span>}
                             {isSaving && <span>Đang lưu...</span>}
                         </div>
@@ -538,25 +538,25 @@ export default function StudentExamTakingPage() {
                         >
                             <Save className="mr-1 h-4 w-4" /> {currentSaved ? 'Đã lưu' : 'Lưu bài'}
                         </Button>
-                    </div>
+                    </header>
 
                     {hasSaveError && (
-                        <p role="alert" className="text-sm text-destructive">
+                        <p role="alert" className="shrink-0 text-sm text-destructive">
                             Có thay đổi chưa được lưu lên máy chủ.{' '}
                             <Button variant="outline" size="sm" onClick={() => void flushPendingAnswers(attempt.id)}>Thử lưu lại</Button>
                         </p>
                     )}
 
-                    <div className="grid flex-1 grid-cols-1 gap-4 md:grid-cols-5">
-                        <section className="overflow-auto rounded-xl border p-4 md:col-span-1">
+                    <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 md:grid-cols-5">
+                        <section className="min-h-0 overflow-auto rounded-xl border p-4 md:col-span-1">
                             <h2 className="font-semibold">Câu hỏi</h2>
                             <p className="mt-3 whitespace-pre-wrap text-sm">{currentEssay.content}</p>
                         </section>
-                        <section className="flex flex-col rounded-xl border p-4 md:col-span-4">
-                            <h2 className="mb-3 font-semibold">Bài làm</h2>
+                        <section className="flex min-h-0 flex-col rounded-xl border p-4 md:col-span-4">
+                            <h2 className="mb-3 shrink-0 font-semibold">Bài làm</h2>
                             <textarea
                                 aria-label={`Bài làm câu ${currentEssayIndex + 1}`}
-                                className="min-h-[50vh] w-full flex-1 resize-none rounded-md border bg-background p-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                className="min-h-0 w-full flex-1 resize-none overflow-y-auto rounded-md border bg-background p-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 placeholder="Nhập bài làm của bạn tại đây..."
                                 value={currentAnswer?.textAnswer ?? ''}
                                 onChange={(event) => updateAnswer(currentEssay.id, { textAnswer: event.target.value })}
@@ -564,7 +564,6 @@ export default function StudentExamTakingPage() {
                         </section>
                     </div>
 
-                    <footer className="flex justify-end border-t pt-4">{submitButton}</footer>
                 </main>
             </MainLayout>
         );
