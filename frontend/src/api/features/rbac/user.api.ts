@@ -1,5 +1,6 @@
 import type { UserDTO, UserFilter } from "@/types";
 import { createBaseApiService } from "../../base-service.api";
+import axiosInstance from "@/api/axios";
 
 const path = "/users";
 
@@ -54,5 +55,12 @@ export const userApi = Object.assign({}, base, {
             payload.lastName = parts.slice(1).join(" ") || "";
         }
         return base.update(id, payload);
+    },
+    lockUser: async (id: string | number) => {
+        return axiosInstance.patch(`/users/${id}/lock`);
+    },
+
+    unlockUser: async (id: string | number) => {
+        return axiosInstance.patch(`/users/${id}/unlock`);
     },
 });

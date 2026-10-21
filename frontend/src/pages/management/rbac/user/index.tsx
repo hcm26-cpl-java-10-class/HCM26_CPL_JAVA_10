@@ -6,12 +6,27 @@ import {
   type EntitySchema,
   type FieldSchema,
 } from "@/types";
+import { UserLockAction } from "./components/UserLockAction";
+import { useQueryClient } from "@tanstack/react-query";
 
 const USER_SAMPLE_ID_MAP: Record<string, string> = {
   "admin@example.com": "USR001",
   "student@example.com": "USR012",
   "teacher@example.com": "USR026",
 };
+
+function UserLockRowAction({ user }: { user: any }) {
+  const queryClient = useQueryClient();
+
+  return (
+      <UserLockAction
+          user={user}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ["user"] });
+          }}
+      />
+  );
+}
 
 const formatUserId = (row: any, index: number) => {
   if (row?.email && USER_SAMPLE_ID_MAP[row.email]) {
@@ -93,4 +108,5 @@ export const entityConfig: EntityConfig = {
   path: "/users",
   api: userApi,
   schema: userSchema,
+  extraRowActions: (row) => <UserLockRowAction user={row} />,
 };

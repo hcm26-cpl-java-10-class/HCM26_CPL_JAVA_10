@@ -70,6 +70,10 @@ public class User extends BaseEntity {
     Instant lastLoginAt;
 
     @Builder.Default
+    @Column(nullable = false)
+    Boolean locked = false;
+
+    @Builder.Default
     @ManyToMany(fetch = FetchType.LAZY)
     @ExportField(name = "Roles", relation = true, path = "name")
     @ImportField(name = "Roles", lookupEntity = Role.class, lookupField = "name", separator = ",")

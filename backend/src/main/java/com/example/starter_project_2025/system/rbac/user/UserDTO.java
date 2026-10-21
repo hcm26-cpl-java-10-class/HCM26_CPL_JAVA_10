@@ -7,6 +7,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+import static com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY;
 
 import java.util.Set;
 import java.util.UUID;
@@ -35,6 +36,9 @@ public class UserDTO extends BaseDTO {
     String lastName;
 
     String fullName;
+
+    @JsonProperty(access = READ_ONLY)
+    Boolean locked;
 
     @NotEmpty(groups = OnCreate.class, message = "At least one role is required")
     Set<Long> roleIds;

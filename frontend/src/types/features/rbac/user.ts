@@ -7,6 +7,7 @@ export interface UserDTO extends BaseDTO {
   lastName?: string;
   fullName?: string;
   roleIds?: string[];
+  locked?: boolean;
 }
 
 export interface UserFilter extends BaseFilter {

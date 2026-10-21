@@ -97,6 +97,7 @@ export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
             <ProTable
                 table={table}
                 mode={browseMode ? "browse" : "default"}
+                extraRowActions={browseMode ? undefined : entity.extraRowActions}
                 headerActions={browseMode ? undefined : headerActions}
                 hideActions={browseMode}
                 onEdit={browseMode ? undefined : onEdit}

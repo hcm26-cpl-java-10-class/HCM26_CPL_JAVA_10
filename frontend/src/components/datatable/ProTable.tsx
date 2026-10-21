@@ -53,6 +53,8 @@ interface ProTableProps<TData = any> {
     /** Optional: Complete override of row actions. If provided, you have full control */
     renderRowActions?: (row: TData) => React.ReactNode;
 
+    extraRowActions?: (row: TData, onSuccess: () => void) => React.ReactNode;
+
     /** Optional: Custom card renderer for card view */
     renderCard?: (props: EntityCardRendererProps) => React.ReactNode;
 
@@ -105,6 +107,7 @@ export function ProTable<TData = any>({
     table,
     headerActions,
     renderRowActions,
+    extraRowActions,
     renderCard,
     onView,
     onEdit,
@@ -225,22 +228,27 @@ export function ProTable<TData = any>({
     const canViewRow = table.permission?.canRead ?? true;
     const canEditRow = table.permission?.canUpdate ?? true;
     const canDeleteRow = table.permission?.canDelete ?? true;
-    const hasRowActions = canViewRow || canEditRow || canDeleteRow;
+    const hasRowActions =
+        canViewRow || canEditRow || canDeleteRow || !!extraRowActions;
 
     const showActionsColumn = !hideActions && hasRowActions;
-    const ACTION_COLUMN_WIDTH = 152;
+    const ACTION_COLUMN_WIDTH = extraRowActions ? 190 : 152;
 
     // Default row actions renderer (uses internal modal system or custom overrides)
     const defaultRenderRowActions = (row: TData) => (
-        <RowActions
-            row={row}
-            onView={onView || setDetailRow}
-            onEdit={onEdit || table.openEdit}
-            onDelete={onDelete || setDeleteItem}
-            viewPermission={table.permission?.keys?.read}
-            editPermission={table.permission?.keys?.update}
-            deletePermission={table.permission?.keys?.delete}
-        />
+        <>
+            <RowActions
+                row={row}
+                onView={onView || setDetailRow}
+                onEdit={onEdit || table.openEdit}
+                onDelete={onDelete || setDeleteItem}
+                viewPermission={table.permission?.keys?.read}
+                editPermission={table.permission?.keys?.update}
+                deletePermission={table.permission?.keys?.delete}
+            />
+
+            {extraRowActions?.(row, () => table.refetch())}
+        </>
     );
 
     // Use provided renderer or default (with individual overrides support)

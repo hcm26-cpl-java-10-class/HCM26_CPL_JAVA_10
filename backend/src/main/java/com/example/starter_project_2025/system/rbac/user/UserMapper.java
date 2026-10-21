@@ -15,7 +15,9 @@ public interface UserMapper extends BaseCrudMapper<User, UserDTO> {
     @Override
     @IgnoreAuditFields
     @Mapping(target = "passwordHash", ignore = true)
+    @Mapping(target = "locked", ignore = true)
     User toEntity(UserDTO request);
+
 
     @Override
     @Mapping(target = "roleIds", expression = "java(mapRoleIds(user))")
@@ -25,6 +27,7 @@ public interface UserMapper extends BaseCrudMapper<User, UserDTO> {
 
     @Override
     @Mapping(target = "passwordHash", ignore = true)
+    @Mapping(target = "locked", ignore = true)
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     void update(@MappingTarget User user, UserDTO dto);
 

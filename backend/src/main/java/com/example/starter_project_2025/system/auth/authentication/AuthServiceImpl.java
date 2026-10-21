@@ -86,6 +86,12 @@ public class AuthServiceImpl implements AuthService {
                 .map(existingUser -> updateUserFromGoogleProfile(existingUser, firstName, lastName))
                 .orElseGet(() -> createGoogleUser(email, firstName, lastName));
 
+        if (Boolean.TRUE.equals(user.getLocked())) {
+            throw new BadRequestException("Account is locked");
+        }
+
+        user.setLastLoginAt(Instant.now());
+
         user.setLastLoginAt(Instant.now());
         user = userRepository.save(user);
 
@@ -134,6 +140,12 @@ public class AuthServiceImpl implements AuthService {
         User user = refreshToken.getUser();
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
+
+        if (!userDetails.isAccountNonLocked() || !userDetails.isEnabled()) {
+            throw new org.springframework.security.authentication.DisabledException(
+                    "Account is locked or disabled"
+            );
+        }
 
         Authentication authentication = new UsernamePasswordAuthenticationToken(
                 userDetails, null, userDetails.getAuthorities()

@@ -12,6 +12,10 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.server.ResponseStatusException;
+
 
 import java.util.*;
 
@@ -106,5 +110,53 @@ public class UserServiceImpl
 
     private Set<Role> getRoles(Set<Long> roleIds) {
         return new HashSet<>(roleRepository.findAllById(roleIds));
+    }
+
+
+    @Override
+    public void lockUser(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "User not found with id: " + userId
+                ));
+
+        String currentEmail = SecurityContextHolder.getContext()
+                .getAuthentication()
+                .getName();
+
+        // Không cho phép tự khóa tài khoản
+        if (user.getEmail().equalsIgnoreCase(currentEmail)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "You cannot lock your own account"
+            );
+        }
+
+        // Không cho phép khóa tài khoản Admin
+        boolean isAdmin = user.getRoles().stream()
+                .anyMatch(role -> "ADMIN".equalsIgnoreCase(role.getName()));
+
+        if (isAdmin) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Admin accounts cannot be locked"
+            );
+        }
+
+        user.setLocked(true);
+        userRepository.save(user);
+    }
+
+    @Override
+    public void unlockUser(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "User not found with id: " + userId
+                ));
+
+        user.setLocked(false);
+        userRepository.save(user);
     }
 }
