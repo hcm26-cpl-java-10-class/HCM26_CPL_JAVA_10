@@ -441,7 +441,7 @@ export default function StudentExamTakingPage() {
     const activeId = currentEssay ? currentEssay.id : activeQuestionId;
 
     const timerBox = (
-        <div role="timer" aria-live="polite" className={`shrink-0 rounded-lg border px-4 py-2 font-mono text-xl ${secondsRemaining <= 60 ? 'border-red-500 text-red-500' : ''}`}>
+        <div role="timer" aria-live="polite" className={`pointer-events-auto shrink-0 rounded-lg border bg-card px-4 py-2 font-mono text-xl ${secondsRemaining <= 60 ? 'border-red-500 text-red-500' : ''}`}>
             {formatCountdown(secondsRemaining)}
         </div>
     );
@@ -463,16 +463,16 @@ export default function StudentExamTakingPage() {
     };
 
     const pinnedBar = (
-        <div className="sticky top-0 z-30 flex items-start justify-between gap-4 border-b bg-background/95 py-3 backdrop-blur">
+        <div className="pointer-events-none sticky top-0 z-30 flex items-start justify-between gap-4 py-3">
             {timerBox}
-            <div className="flex min-w-0 flex-col items-end gap-2">
-                <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                    <span className="text-sm font-semibold text-foreground">Danh sách câu hỏi</span>
+            <div className="pointer-events-auto flex w-[15.5rem] shrink-0 flex-col gap-3 rounded-xl border bg-card p-3 shadow-sm">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <span className="w-full text-sm font-semibold text-foreground">Danh sách câu hỏi</span>
                     <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-sm bg-black ring-1 ring-border" /> Chưa làm</span>
                     <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-sm bg-green-600" /> Đã làm</span>
                     <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-sm bg-yellow-400" /> Đánh dấu</span>
                 </div>
-                <div className="flex max-h-24 flex-wrap justify-end gap-2 overflow-y-auto p-1">
+                <div className="grid max-h-[8.5rem] grid-cols-5 justify-items-center gap-2 overflow-y-auto p-1">
                     {attempt.questions.map((question, index) => {
                         const isFlagged = flagged.has(question.id);
                         const color = isFlagged
