@@ -90,6 +90,7 @@ public class AuthServiceLastLoginTest {
                 .isActive(true)
                 .roles(new HashSet<>(Set.of(adminRole)))
                 .lastLoginAt(null)
+                .lastLoginDevice(null)
                 .build();
 
         principal = UserPrincipal.fromUser(sampleUser);
@@ -97,7 +98,7 @@ public class AuthServiceLastLoginTest {
     }
 
     @Test
-    @DisplayName("login - Successful authentication should update and persist lastLoginAt")
+    @DisplayName("login - Successful authentication should update and persist lastLoginAt and lastLoginDevice")
     void login_Success_ShouldUpdateLastLoginAt() {
         LoginRequest request = new LoginRequest("user@example.com", "Password123!");
 
@@ -108,33 +109,36 @@ public class AuthServiceLastLoginTest {
         when(refreshTokenService.createRefreshToken(any())).thenReturn("mock-refresh-token");
 
         assertNull(sampleUser.getLastLoginAt());
+        assertNull(sampleUser.getLastLoginDevice());
 
-        AuthenticationResponse response = authService.login(request);
+        AuthenticationResponse response = authService.login(request, "Chrome · Windows 11");
 
         assertNotNull(response);
         assertNotNull(sampleUser.getLastLoginAt());
+        assertEquals("Chrome · Windows 11", sampleUser.getLastLoginDevice());
         assertTrue(sampleUser.getLastLoginAt().isBefore(Instant.now().plusSeconds(1)));
         verify(userRepository).save(sampleUser);
         verify(refreshTokenService).revokeAllRefreshTokens(sampleUser.getId());
     }
 
     @Test
-    @DisplayName("login - Failed authentication should NOT update lastLoginAt or save user")
+    @DisplayName("login - Failed authentication should NOT update lastLoginAt or device or save user")
     void login_Failure_ShouldNotUpdateLastLoginAt() {
         LoginRequest request = new LoginRequest("user@example.com", "WrongPassword");
 
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenThrow(new BadCredentialsException("Bad credentials"));
 
-        assertThrows(BadCredentialsException.class, () -> authService.login(request));
+        assertThrows(BadCredentialsException.class, () -> authService.login(request, "Chrome · Windows 11"));
 
         assertNull(sampleUser.getLastLoginAt());
+        assertNull(sampleUser.getLastLoginDevice());
         verify(userRepository, never()).save(any());
         verify(refreshTokenService, never()).revokeAllRefreshTokens(any());
     }
 
     @Test
-    @DisplayName("loginWithGoogle - Successful Google login should update and persist lastLoginAt")
+    @DisplayName("loginWithGoogle - Successful Google login should update and persist lastLoginAt and device")
     void loginWithGoogle_Success_ShouldUpdateLastLoginAt() {
         when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(sampleUser));
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -142,11 +146,13 @@ public class AuthServiceLastLoginTest {
         when(refreshTokenService.createRefreshToken(any())).thenReturn("mock-refresh-token");
 
         assertNull(sampleUser.getLastLoginAt());
+        assertNull(sampleUser.getLastLoginDevice());
 
-        AuthenticationResponse response = authService.loginWithGoogle("user@example.com", "Test", "User");
+        AuthenticationResponse response = authService.loginWithGoogle("user@example.com", "Test", "User", "Safari · macOS");
 
         assertNotNull(response);
         assertNotNull(sampleUser.getLastLoginAt());
+        assertEquals("Safari · macOS", sampleUser.getLastLoginDevice());
         verify(userRepository).save(sampleUser);
         verify(refreshTokenService).revokeAllRefreshTokens(sampleUser.getId());
     }

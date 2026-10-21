@@ -7,7 +7,11 @@ public interface AuthService {
 
     AuthenticationResponse login(LoginRequest request);
 
+    AuthenticationResponse login(LoginRequest request, String device);
+
     AuthenticationResponse loginWithGoogle(String email, String firstName, String lastName);
+
+    AuthenticationResponse loginWithGoogle(String email, String firstName, String lastName, String device);
 
     void register(RegisterRequest request);
 

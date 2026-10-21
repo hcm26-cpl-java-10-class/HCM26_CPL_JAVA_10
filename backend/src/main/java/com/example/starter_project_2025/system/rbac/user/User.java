@@ -69,6 +69,9 @@ public class User extends BaseEntity {
     @Column(name = "last_login_at")
     Instant lastLoginAt;
 
+    @Column(name = "last_login_device", length = 150)
+    String lastLoginDevice;
+
     @Builder.Default
     @ManyToMany(fetch = FetchType.LAZY)
     @ExportField(name = "Roles", relation = true, path = "name")

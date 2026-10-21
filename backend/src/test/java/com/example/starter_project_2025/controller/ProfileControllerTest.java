@@ -122,6 +122,7 @@ public class ProfileControllerTest {
                 .fullName("Minh Anh Tran")
                 .lastLogin("2026-10-21T08:00:00Z")
                 .lastLoginAt(java.time.Instant.parse("2026-10-21T08:00:00Z"))
+                .device("Chrome · Windows 11")
                 .build();
 
         when(profileService.getProfile("admin@example.com")).thenReturn(responseWithLogin);
@@ -129,7 +130,8 @@ public class ProfileControllerTest {
         mockMvc.perform(get("/api/profile").principal(mockAuth))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.lastLogin").value("2026-10-21T08:00:00Z"))
-                .andExpect(jsonPath("$.lastLoginAt").value("2026-10-21T08:00:00Z"));
+                .andExpect(jsonPath("$.lastLoginAt").value("2026-10-21T08:00:00Z"))
+                .andExpect(jsonPath("$.device").value("Chrome · Windows 11"));
     }
 
     @Test

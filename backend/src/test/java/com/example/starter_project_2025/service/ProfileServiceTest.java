@@ -80,10 +80,11 @@ public class ProfileServiceTest {
     }
 
     @Test
-    @DisplayName("getProfile - Should return populated lastLogin when user has recorded login")
+    @DisplayName("getProfile - Should return populated lastLogin and device when user has recorded login")
     void getProfile_WithLastLogin_ShouldReturnPopulatedTimestamp() {
         Instant loginInstant = Instant.parse("2026-10-21T08:00:00Z");
         sampleUser.setLastLoginAt(loginInstant);
+        sampleUser.setLastLoginDevice("Chrome · Windows 11");
         when(userRepository.findByEmail("admin@example.com")).thenReturn(Optional.of(sampleUser));
 
         UserProfileResponse response = profileService.getProfile("admin@example.com");
@@ -91,6 +92,7 @@ public class ProfileServiceTest {
         assertNotNull(response);
         assertEquals("2026-10-21T08:00:00Z", response.lastLogin());
         assertEquals(loginInstant, response.lastLoginAt());
+        assertEquals("Chrome · Windows 11", response.device());
     }
 
     @Test

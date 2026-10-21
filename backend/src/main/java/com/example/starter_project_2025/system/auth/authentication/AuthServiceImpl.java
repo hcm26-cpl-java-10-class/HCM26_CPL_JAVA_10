@@ -55,6 +55,12 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public AuthenticationResponse login(LoginRequest request) {
+        return login(request, request != null ? request.device() : null);
+    }
+
+    @Override
+    @Transactional
+    public AuthenticationResponse login(LoginRequest request, String device) {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         request.email(),
@@ -65,6 +71,9 @@ public class AuthServiceImpl implements AuthService {
         UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
         User user = principal.getUser();
         user.setLastLoginAt(Instant.now());
+        if (StringUtils.hasText(device)) {
+            user.setLastLoginDevice(device.trim());
+        }
         user = userRepository.save(user);
 
         refreshTokenService.revokeAllRefreshTokens(principal.getUser().getId());
@@ -78,6 +87,12 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public AuthenticationResponse loginWithGoogle(String email, String firstName, String lastName) {
+        return loginWithGoogle(email, firstName, lastName, null);
+    }
+
+    @Override
+    @Transactional
+    public AuthenticationResponse loginWithGoogle(String email, String firstName, String lastName, String device) {
         if (!StringUtils.hasText(email)) {
             throw new BadRequestException("Google account email is required");
         }
@@ -87,6 +102,9 @@ public class AuthServiceImpl implements AuthService {
                 .orElseGet(() -> createGoogleUser(email, firstName, lastName));
 
         user.setLastLoginAt(Instant.now());
+        if (StringUtils.hasText(device)) {
+            user.setLastLoginDevice(device.trim());
+        }
         user = userRepository.save(user);
 
         refreshTokenService.revokeAllRefreshTokens(user.getId());
