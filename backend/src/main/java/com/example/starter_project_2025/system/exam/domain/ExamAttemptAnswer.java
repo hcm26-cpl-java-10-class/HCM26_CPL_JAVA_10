@@ -41,6 +41,10 @@ public class ExamAttemptAnswer extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     private String textAnswer;
 
+    // NEW: sinh viên đã bấm "Lưu bài" cho câu tự luận này (và chưa sửa lại sau đó)
+    @Column(name = "saved", nullable = false)
+    private boolean saved = false;
+
     @Column(name = "score")
     private Integer score;
 

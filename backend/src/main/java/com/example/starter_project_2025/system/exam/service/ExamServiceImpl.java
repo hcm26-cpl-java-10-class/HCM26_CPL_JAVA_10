@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.exam.service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection; // NEW
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -23,6 +24,7 @@ import com.example.starter_project_2025.system.exam.domain.Exam;
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptRepository;
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus;
 import com.example.starter_project_2025.system.exam.domain.ExamReminder;
+import com.example.starter_project_2025.system.exam.domain.ExamType; // NEW
 import com.example.starter_project_2025.system.exam.domain.ExamReminderRepository;
 import com.example.starter_project_2025.system.exam.domain.ExamRepository;
 import com.example.starter_project_2025.system.exam.domain.Invitation;
@@ -121,7 +123,9 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 	@Override
 	protected void beforeCreate(Exam exam, ExamDTO request, ValidationContext context) {
 		if (request.getQuestionIds() != null) {
-			exam.setQuestions(resolveQuestions(exam, request.getQuestionIds(), context));
+			// CHANGED: truyền kiểu bài thi để chỉ nhận loại câu hỏi phù hợp
+			ExamType examType = request.getExamType() != null ? request.getExamType() : exam.getExamType();
+			exam.setQuestions(resolveQuestions(exam, request.getQuestionIds(), context, examType));
 		}
 		configValidator.validate(null, request, totalPoints(exam.getQuestions()), context);
 	}
@@ -129,9 +133,14 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 	// ===== Update: Thay danh sách câu hỏi khi request gửi questionIds, rồi kiểm tra cấu hình =====
 	@Override
 	protected void beforeUpdate(Exam exam, ExamDTO request, ValidationContext context) {
+		// NEW: đổi kiểu bài thi mà không gửi lại danh sách câu hỏi -> các câu hiện có phải còn phù hợp
+		if (request.getQuestionIds() == null && request.getExamType() != null) {
+			validateTypes(request.getExamType(), exam.getQuestions(), context);
+		}
 		if (request.getQuestionIds() != null) {
+			ExamType examType = request.getExamType() != null ? request.getExamType() : exam.getExamType();
 			Set<Question> before = new LinkedHashSet<>(exam.getQuestions());
-			Set<Question> after = resolveQuestions(exam, request.getQuestionIds(), context);
+			Set<Question> after = resolveQuestions(exam, request.getQuestionIds(), context, examType);
 			if (!context.hasErrors()) {
 				exam.setQuestions(after);
 				deleteExamCopies(before, after);
@@ -151,7 +160,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		checkPermission(CrudAction.UPDATE);
 		ValidationContext context = new ValidationContext();
 		Exam exam = findExam(examId);
-		Set<Question> questions = resolveQuestions(exam, questionIds, context);
+		Set<Question> questions = resolveQuestions(exam, questionIds, context, exam.getExamType()); // CHANGED
 		context.throwIfErrors();
 
 		exam.getQuestions().addAll(questions);
@@ -193,6 +202,10 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 
 		ValidationContext context = new ValidationContext();
 		questionValidator.validateForUpdate(copy, request, false, context);
+		// NEW: đổi loại câu hỏi trong đề phải còn hợp với kiểu bài thi
+		if (request.getType() != null && !ExamTypePolicy.allows(exam.getExamType(), request.getType())) {
+			context.add("type", "Đề thi " + ExamTypePolicy.describe(exam.getExamType()) + ", không thể đổi câu hỏi sang loại này");
+		}
 		context.throwIfErrors();
 		questionMapper.update(copy, request);
 		questionRepository.save(copy);
@@ -224,7 +237,18 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		}
 	}
 
-	private Set<Question> resolveQuestions(Exam exam, List<Long> questionIds, ValidationContext context) {
+	// NEW: kiểm tra các câu hiện có trong đề có hợp với kiểu bài thi mới không
+	private void validateTypes(ExamType examType, Collection<Question> questions, ValidationContext context) {
+		for (Question q : questions) {
+			if (!ExamTypePolicy.allows(examType, q.getType())) {
+				context.add("examType", "Đề đang có câu hỏi " + q.getId() + " không hợp với kiểu bài thi "
+						+ ExamTypePolicy.describe(examType) + ". Hãy gỡ câu đó trước");
+				return;
+			}
+		}
+	}
+
+	private Set<Question> resolveQuestions(Exam exam, List<Long> questionIds, ValidationContext context, ExamType examType) {
 		Set<Long> uniqueIds = new LinkedHashSet<>();
 		if (questionIds == null || questionIds.isEmpty()) {
 			context.add("questionIds", "Cần chọn ít nhất một câu hỏi");
@@ -260,6 +284,9 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 
 		for (Long id : uniqueIds) {
 			if (inExam.containsKey(id)) {
+				if (!ExamTypePolicy.allows(examType, inExam.get(id).getType())) {
+					context.add("questionIds", "Câu hỏi " + id + " không hợp với kiểu bài thi " + ExamTypePolicy.describe(examType));
+				}
 				keptIds.add(id);
 				continue;
 			}
@@ -270,6 +297,10 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 				context.add("questionIds", "Câu hỏi " + id + " là bản sao của một đề thi, hãy chọn câu hỏi trong ngân hàng");
 			} else if (!Boolean.TRUE.equals(source.getIsActive())) {
 				context.add("questionIds", "Không thể thêm câu hỏi đã bị vô hiệu hóa: " + id);
+			} else if (!ExamTypePolicy.allows(examType, source.getType())) {
+				// NEW: đề chỉ trắc nghiệm thì không chọn câu tự luận và ngược lại
+				context.add("questionIds", "Câu hỏi " + id + " không hợp với kiểu bài thi "
+						+ ExamTypePolicy.describe(examType) + " (loại câu: " + source.getType() + ")");
 			} else if (sourcesInExam.contains(id)) {
 				context.add("questionIds", "Câu hỏi " + id + " đã có trong đề");
 			} else {

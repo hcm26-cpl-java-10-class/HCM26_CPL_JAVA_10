@@ -15,7 +15,6 @@ export interface Exam {
     updatedAt?: string;
 }
 
-/** NOT_STARTED chỉ là trạng thái hiển thị (chưa có attempt); server không trả về giá trị này. */
 export type ExamAttemptStatus =
     | 'NOT_STARTED'
     | 'IN_PROGRESS'
@@ -38,6 +37,7 @@ export interface ExamAttemptAnswer {
     questionId: number;
     selectedOptionIds: number[];
     textAnswer: string | null;
+    saved?: boolean;
 }
 
 export interface ExamAttempt {
@@ -83,6 +83,7 @@ export interface SaveExamAnswerRequest {
     questionId: number;
     selectedOptionIds?: number[];
     textAnswer?: string | null;
+    markSaved?: boolean; // NEW: true khi sinh viên bấm "Lưu bài" ở câu tự luận
 }
 
 export interface PageResponse<T> {

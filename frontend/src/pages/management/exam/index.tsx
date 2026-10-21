@@ -32,7 +32,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { ExamDTO, LatePolicy, QuestionDTO, QuestionDifficulty, QuestionFilter, QuestionType, ResultVisibility } from "@/types";
+import type { ExamDTO, ExamType, LatePolicy, QuestionDTO, QuestionDifficulty, QuestionFilter, QuestionType, ResultVisibility } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, ClipboardCheck, Mail, MoreVertical, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -54,6 +54,7 @@ interface ExamConfigForm {
   latePenaltyPercent: string;
   lateGraceMinutes: string;
   resultVisibility: ResultVisibility;
+  examType: ExamType; // NEW
   accessCode: string;
 }
 
@@ -68,6 +69,7 @@ const DEFAULT_CONFIG: ExamConfigForm = {
   latePenaltyPercent: "",
   lateGraceMinutes: "0",
   resultVisibility: "IMMEDIATE",
+  examType: "MIXED", // NEW
   accessCode: "",
 };
 
@@ -75,6 +77,13 @@ const LATE_POLICY_LABEL: Record<LatePolicy, string> = {
   NOT_ALLOWED: "Không cho nộp muộn",
   ALLOWED_WITH_PENALTY: "Cho nộp muộn, trừ điểm",
   ALLOWED: "Cho nộp muộn, không trừ điểm",
+};
+
+// NEW: nhãn kiểu bài thi
+const EXAM_TYPE_LABEL: Record<ExamType, string> = {
+  MULTIPLE_CHOICE: "Chỉ trắc nghiệm",
+  ESSAY: "Chỉ tự luận",
+  MIXED: "Trắc nghiệm + tự luận",
 };
 
 const RESULT_VISIBILITY_LABEL: Record<ResultVisibility, string> = {
@@ -96,6 +105,7 @@ const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   latePenaltyPercent: exam.latePenaltyPercent != null ? String(exam.latePenaltyPercent) : "",
   lateGraceMinutes: String(exam.lateGraceMinutes ?? 0),
   resultVisibility: exam.resultVisibility ?? "IMMEDIATE",
+  examType: exam.examType ?? "MIXED", // NEW
   accessCode: exam.accessCode ?? "",
 });
 
@@ -153,15 +163,22 @@ export default function ExamManagementPage() {
     queryFn: () => examApi.getPage({ page: examPage, size: PAGE_SIZE, sort: "createdAt,desc" }, examSearch),
   });
 
+  // NEW: đề chỉ trắc nghiệm / chỉ tự luận thì khóa bộ lọc loại câu hỏi theo kiểu đề
+  const lockedQuestionType: QuestionType | null =
+      activeExam?.examType === "MULTIPLE_CHOICE" ? "MULTIPLE_CHOICE"
+          : activeExam?.examType === "ESSAY" ? "ESSAY"
+              : null;
+  const effectiveQuestionType = lockedQuestionType ?? questionType;
+
   const questionFilter: QuestionFilter = {
     isActive: true,
-    ...(questionType !== "ALL" ? { type: questionType as QuestionType } : {}),
+    ...(effectiveQuestionType !== "ALL" ? { type: effectiveQuestionType as QuestionType } : {}),
     ...(difficulty !== "ALL" ? { difficulty: difficulty as QuestionDifficulty } : {}),
     ...(questionTopic.trim() ? { topic: questionTopic.trim().toLowerCase() } : {}),
   };
 
   const questionsQuery = useQuery({
-    queryKey: ["exam-question-picker", questionPage, questionSearch, questionType, difficulty, questionTopic],
+    queryKey: ["exam-question-picker", questionPage, questionSearch, effectiveQuestionType, difficulty, questionTopic],
     enabled: isPickerOpen && Boolean(activeExam?.id),
     queryFn: () =>
         questionApi.getPage(
@@ -193,6 +210,7 @@ export default function ExamManagementPage() {
                 : undefined,
         lateGraceMinutes: Number(cfg.lateGraceMinutes || 0),
         resultVisibility: cfg.resultVisibility,
+        examType: cfg.examType, // NEW
         accessCode: cfg.accessCode ? cfg.accessCode.trim() : "",
       };
       return editingExam?.id
@@ -374,6 +392,8 @@ export default function ExamManagementPage() {
                               ? `${exam.startTime ? exam.startTime.replace("T", " ").slice(0, 16) : "…"} → ${exam.endTime ? exam.endTime.replace("T", " ").slice(0, 16) : "…"}`
                               : "Không giới hạn thời gian mở/đóng"}
                           {" · "}tối đa {exam.maxAttempts ?? 1} lần
+                          {/* NEW: hiển thị kiểu bài thi */}
+                          {" · "}{EXAM_TYPE_LABEL[exam.examType ?? "MIXED"]}
                         </p>
                       </TableCell>
                       <TableCell>{exam.durationMinutes} phút</TableCell>
@@ -467,6 +487,21 @@ export default function ExamManagementPage() {
                 <label className="grid gap-2 text-sm font-medium">
                   Thời lượng (phút)
                   <Input required type="number" min={1} value={newDuration} onChange={(event) => setNewDuration(event.target.value)} />
+                </label>
+                {/* NEW: chọn kiểu bài thi; quyết định đề được chọn loại câu hỏi nào */}
+                <label className="grid gap-2 text-sm font-medium">
+                  Kiểu bài thi
+                  <Select value={cfg.examType} onValueChange={(value) => setCfg((c) => ({ ...c, examType: value as ExamType }))}>
+                    <SelectTrigger aria-label="Kiểu bài thi"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {(Object.keys(EXAM_TYPE_LABEL) as ExamType[]).map((key) => (
+                          <SelectItem key={key} value={key}>{EXAM_TYPE_LABEL[key]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <span className="text-xs font-normal text-muted-foreground">
+                    Chỉ chọn được câu hỏi đúng loại. Đổi kiểu khi đề đang có câu không phù hợp sẽ bị từ chối.
+                  </span>
                 </label>
                 <label className="grid gap-2 text-sm font-medium">
                   Mật khẩu đề thi (để trống nếu không yêu cầu)
@@ -579,13 +614,12 @@ export default function ExamManagementPage() {
                         }}
                     />
                   </div>
-                  <Select value={questionType} onValueChange={(value) => { setQuestionType(value); setQuestionPage(0); }}>
+                  <Select value={effectiveQuestionType} disabled={lockedQuestionType !== null} onValueChange={(value) => { setQuestionType(value); setQuestionPage(0); }}>
                     <SelectTrigger aria-label="Lọc loại câu hỏi"><SelectValue placeholder="Loại câu hỏi" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ALL">Tất cả loại</SelectItem>
                       <SelectItem value="MULTIPLE_CHOICE">Trắc nghiệm</SelectItem>
-                      <SelectItem value="SINGLE_CHOICE">Một đáp án</SelectItem>
-                      <SelectItem value="MULTI_CHOICE">Nhiều đáp án</SelectItem>
+                      {/* REMOVED: "Một đáp án" / "Nhiều đáp án" (backend không còn 2 loại này) */}
                       <SelectItem value="ESSAY">Tự luận</SelectItem>
                     </SelectContent>
                   </Select>
