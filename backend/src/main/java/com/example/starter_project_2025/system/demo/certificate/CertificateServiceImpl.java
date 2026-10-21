@@ -6,6 +6,11 @@ import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.system.demo.course.Course;
 import com.example.starter_project_2025.system.demo.course.CourseRepository;
+import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollment;
+import com.example.starter_project_2025.system.demo.lesson.Lesson;
+import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
+import com.example.starter_project_2025.system.demo.progress.LessonProgress;
+import com.example.starter_project_2025.system.demo.progress.LessonProgressRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import lombok.AccessLevel;
@@ -13,6 +18,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -26,6 +35,8 @@ public class CertificateServiceImpl
     CertificateMapper certificateMapper;
     CourseRepository courseRepository;
     UserRepository userRepository;
+    LessonRepository lessonRepository;
+    LessonProgressRepository lessonProgressRepository;
 
     @Override
     protected BaseCrudRepository<Certificate, Long> getRepository() {
@@ -64,5 +75,42 @@ public class CertificateServiceImpl
 
         certificate.setCourse(course);
         certificate.setUser(user);
+    }
+
+    @Override
+    @Transactional
+    public void issueIfCourseCompleted(CourseEnrollment courseEnrollment) {
+        Long userId = courseEnrollment.getUser().getId();
+        Long courseId = courseEnrollment.getCourse().getId();
+
+        if(certificateRepository.existByUser_IdAndCourse_Id(userId, courseId)) {
+            return;
+        }
+
+        List<Lesson> lessons = lessonRepository.findByCourseIdOrdered(courseId);
+
+        if(lessons.isEmpty()) {
+            return;
+        }
+
+        Set<Long> completedLessonIds = lessonProgressRepository
+                .findAllByEnrollment_Id(courseEnrollment.getId())
+                .stream()
+                .filter(LessonProgress::isCompleted)
+                .map(progress -> progress.getLesson().getId())
+                .collect(Collectors.toSet());
+
+        boolean allCompleted = lessons.stream()
+                .allMatch(lesson -> completedLessonIds.contains(lesson.getId()));
+
+        if (!allCompleted) {
+            return;
+        }
+        Certificate certificate = Certificate.builder()
+                .user(courseEnrollment.getUser())
+                .course(courseEnrollment.getCourse())
+                .build();
+
+        certificateRepository.save(certificate);
     }
 }
