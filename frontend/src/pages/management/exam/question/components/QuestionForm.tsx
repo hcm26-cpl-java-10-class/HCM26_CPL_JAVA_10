@@ -26,20 +26,24 @@ export interface QuestionFormValues {
     points: number;
     isActive: boolean;
     options: QuestionOptionDTO[];
+    imageUrl: string;
 }
 
-export const initialQuestionForm: QuestionFormValues = {
+const defaultInitialQuestionForm: QuestionFormValues = {
     content: "",
-    type: "MULTI_CHOICE",
+    type: "MULTIPLE_CHOICE",
     difficulty: "EASY",
     topic: "",
     points: 1,
     isActive: true,
+    imageUrl: "",
     options: [
         { content: "", correct: false },
         { content: "", correct: false },
     ],
 };
+
+export const initialQuestionForm = defaultInitialQuestionForm;
 
 interface QuestionFormProps {
     form: QuestionFormValues;
@@ -71,18 +75,16 @@ export function QuestionForm({
     const toggleCorrect = (index: number, checked: boolean) =>
         setForm((prev) => ({
             ...prev,
-            options: prev.options.map((option, i) => {
-                if (i === index) {
-                    return { ...option, correct: checked };
-                }
-                return prev.type === "SINGLE_CHOICE" && checked ? { ...option, correct: false } : option;
-            }),
+            options: prev.options.map((option, i) =>
+                i === index ? { ...option, correct: checked } : option,
+            ),
         }));
 
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
 
         const content = form.content.trim();
+        const imageUrl = form.imageUrl.trim();
         const options = form.options.map((option) => ({
             ...option,
             content: option.content.trim(),
@@ -106,7 +108,7 @@ export function QuestionForm({
             return;
         }
         if (form.type === "ESSAY") {
-            onSubmit({ ...form, content, topic: form.topic.trim(), options: [] });
+            onSubmit({ ...form, content, imageUrl, topic: form.topic.trim(), options: [] });
             return;
         }
         if (options.length < 2 || options.length > 6 || options.some((option) => !option.content)) {
@@ -123,12 +125,8 @@ export function QuestionForm({
             toast.error("Select at least one correct option.");
             return;
         }
-        if (form.type === "SINGLE_CHOICE" && correctCount !== 1) {
-            toast.error("Single choice must have exactly one correct option.");
-            return;
-        }
 
-        onSubmit({ ...form, content, topic: form.topic.trim(), options });
+        onSubmit({ ...form, content, imageUrl, topic: form.topic.trim(), options });
     };
 
     return (
@@ -143,6 +141,14 @@ export function QuestionForm({
                     placeholder="Enter question content"
                     autoFocus
                 />
+                <Input
+                    value={form.imageUrl}
+                    onChange={(event) => setForm((prev) => ({ ...prev, imageUrl: event.target.value }))}
+                    placeholder="Question image URL (optional, https://...)"
+                />
+                {form.imageUrl.trim() && (
+                    <img src={form.imageUrl} alt="" className="max-h-48 rounded border object-contain" />
+                )}
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -158,11 +164,9 @@ export function QuestionForm({
                                 options:
                                     value === "ESSAY"
                                         ? []
-                                        : value === "SINGLE_CHOICE"
-                                            ? prev.options.map((option) => ({ ...option, correct: false }))
-                                            : prev.options.length >= 2
-                                                ? prev.options
-                                                : initialQuestionForm.options,
+                                        : prev.options.length >= 2
+                                            ? prev.options
+                                            : defaultInitialQuestionForm.options,
                             }))
                         }
                     >
@@ -171,8 +175,6 @@ export function QuestionForm({
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="MULTIPLE_CHOICE">Multiple choice (Trắc nghiệm)</SelectItem>
-                            <SelectItem value="SINGLE_CHOICE">Single choice</SelectItem>
-                            <SelectItem value="MULTI_CHOICE">Multi choice</SelectItem>
                             <SelectItem value="ESSAY">Essay (Tự luận)</SelectItem>
                         </SelectContent>
                     </Select>
@@ -244,7 +246,7 @@ export function QuestionForm({
                         <div className="grid gap-1">
                             <Label>Options (tick the correct answer)</Label>
                             <p className="text-xs text-muted-foreground">
-                                One correct answer: students see round buttons (pick one). Several correct answers: students see square boxes (pick many).
+                                Select option checkbox for correct answers.
                             </p>
                         </div>
                         <Button

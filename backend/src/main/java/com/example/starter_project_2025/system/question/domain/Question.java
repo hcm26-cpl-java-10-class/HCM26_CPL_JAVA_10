@@ -40,6 +40,9 @@ public class Question extends BaseEntity {
 
     private String topic;
 
+    @Column(length = 1000)
+    private String imageUrl;
+
     @Column(nullable = false)
     private int points = 1;
 

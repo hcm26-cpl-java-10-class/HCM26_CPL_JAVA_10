@@ -450,6 +450,17 @@ export default function StudentExamTakingPage() {
                                     </h2>
                                     <p className="mt-3 whitespace-pre-wrap">{question.content}</p>
 
+                                    {/* Hiển thị hình ảnh câu hỏi nếu có */}
+                                    {question.imageUrl?.trim() && (
+                                        <div className="mt-3">
+                                            <img
+                                                src={question.imageUrl}
+                                                alt={`Hình ảnh câu ${index + 1}`}
+                                                className="max-h-64 rounded-md border object-contain"
+                                            />
+                                        </div>
+                                    )}
+
                                     {question.type === 'ESSAY' ? (
                                         <EssayAnswerDialog
                                             label={`Câu ${index + 1}`}
@@ -480,7 +491,17 @@ export default function StudentExamTakingPage() {
                                                             }}
                                                             disabled={isFinished}
                                                         />
-                                                        <span>{option.content}</span>
+                                                        <div className="flex flex-col gap-2">
+                                                            <span>{option.content}</span>
+                                                            {/* Hiển thị hình ảnh của đáp án nếu có */}
+                                                            {option.imageUrl?.trim() && (
+                                                                <img
+                                                                    src={option.imageUrl}
+                                                                    alt=""
+                                                                    className="max-h-40 rounded border object-contain"
+                                                                />
+                                                            )}
+                                                        </div>
                                                     </label>
                                                 );
                                             })}

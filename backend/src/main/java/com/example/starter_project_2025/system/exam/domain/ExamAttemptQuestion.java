@@ -34,6 +34,9 @@ public class ExamAttemptQuestion extends BaseEntity {
     @Column(nullable = false)
     private int points;
 
+    @Column(length = 1000)
+    private String imageUrl;
+
     @Column(nullable = false)
     private int displayOrder;
 

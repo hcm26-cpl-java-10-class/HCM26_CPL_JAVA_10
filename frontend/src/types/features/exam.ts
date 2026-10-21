@@ -19,6 +19,7 @@ export interface QuestionDTO {
   points: number;
   sourceQuestionId?: number | null;
   options: QuestionOptionDTO[];
+  imageUrl?: string | null; 
 }
 
 export interface QuestionFilter {
