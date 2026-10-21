@@ -51,7 +51,7 @@ export interface QuestionFormValues {
 
 const defaultInitialQuestionForm: QuestionFormValues = {
     content: "",
-    type: "MULTIPLE_CHOICE", // CHANGED: trước đây "SINGLE_CHOICE"
+    type: "MULTIPLE_CHOICE",
     difficulty: "EASY",
     topic: "",
     points: 1,
@@ -75,15 +75,11 @@ interface QuestionFormProps {
     onCancel?: () => void;
 }
 
-/**
- * Parses markdown inline syntax (**bold**, *italic*, `code`) into real React elements
- */
 function parseInlineFormatting(text: string): React.ReactNode[] {
     const parts: React.ReactNode[] = [];
     let remaining = text;
     let key = 0;
 
-    // Pattern for **bold**, *italic*, `code`
     const regex = /(\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`)/;
 
     while (remaining) {
@@ -186,17 +182,14 @@ export function QuestionForm({
                                  showActive = false,
                                  onCancel,
                              }: QuestionFormProps) {
-export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel, showActive = false, onCancel }: QuestionFormProps) {
     const navigate = useNavigate();
     const contentRef = useRef<HTMLTextAreaElement>(null);
     const [isPreview, setIsPreview] = useState(false);
 
-    // Topic state
     const [isAddingNewTopic, setIsAddingNewTopic] = useState(false);
     const [newTopicText, setNewTopicText] = useState("");
     const [localCustomTopics, setLocalCustomTopics] = useState<string[]>([]);
 
-    // Fetch existing questions to provide topic suggestions
     const { data: questionPage } = useQuery({
         queryKey: ["question-topics"],
         queryFn: () => questionApi.getPage({ page: 0, size: 200 }),
@@ -266,10 +259,6 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel, s
     const toggleCorrect = (index: number, checked: boolean) =>
         setForm((prev) => ({
             ...prev,
-            options: prev.options.map((option, i) => {
-                // CHANGED: không còn Single choice -> có thể tick nhiều đáp án đúng
-                return i === index ? { ...option, correct: checked } : option;
-            }),
             options: prev.options.map((option, i) =>
                 i === index ? { ...option, correct: checked } : option,
             ),
@@ -321,14 +310,12 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel, s
             toast.error("Select at least one correct option.");
             return;
         }
-        // REMOVED: kiểm tra "Single choice phải có đúng 1 đáp án đúng"
 
         onSubmit({ ...form, content, imageUrl, topic: form.topic.trim(), options });
     };
 
     return (
         <form className="grid gap-5" onSubmit={handleSubmit}>
-            {/* 1. TOPIC ROW (Dedicated single row with only 1 Add Topic button) */}
             {/* 1. TOPIC ROW */}
             <div className="grid gap-2">
                 <Label htmlFor="question-topic">Topic</Label>
@@ -412,7 +399,7 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel, s
                 )}
             </div>
 
-            {/* 2. TYPE & DIFFICULTY (Single row with 2 columns) */}
+            {/* 2. TYPE & DIFFICULTY */}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="grid gap-2">
                     <Label>Question Type</Label>
@@ -426,11 +413,6 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel, s
                                 options:
                                     value === "ESSAY"
                                         ? []
-                                        : value === "SINGLE_CHOICE"
-                                            ? prev.options.map((option) => ({ ...option, correct: false }))
-                                            : prev.options.length >= 2
-                                                ? prev.options
-                                                : initialQuestionForm.options,
                                         : prev.options.length >= 2
                                             ? prev.options
                                             : defaultInitialQuestionForm.options,
@@ -443,9 +425,6 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel, s
                         <SelectContent>
                             <SelectItem value="MULTIPLE_CHOICE">Multiple choice (Trắc nghiệm)</SelectItem>
                             <SelectItem value="ESSAY">Essay (Tự luận)</SelectItem>
-                            {/* CHANGED: chỉ còn 2 loại (trước đây có Single choice / Multi choice) */}
-                            <SelectItem value="MULTIPLE_CHOICE">Multiple choice (trắc nghiệm)</SelectItem>
-                            <SelectItem value="ESSAY">Essay (tự luận)</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
@@ -471,8 +450,7 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel, s
                 </div>
             </div>
 
-            {/* 3. QUESTION CONTENT (With formatting toolbar & scrollbar) */}
-            {/* 3. CONTENT (formatting toolbar, question image URL, preview) */}
+            {/* 3. QUESTION CONTENT */}
             <div className="grid gap-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <Label htmlFor="question-content">Question Content</Label>
@@ -562,7 +540,7 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel, s
                         placeholder="Enter question content (highlight text and click B to bold, I to italic, or click Preview to test)..."
                         autoFocus
                     />
-                </div>
+                )}
 
                 <Input
                     value={form.imageUrl}
@@ -579,21 +557,12 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel, s
                         }}
                     />
                 )}
-
-                {showPreview && (
-                    <div className="mt-1 rounded-md border bg-muted/40 p-3">
-                        <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                            Rendered Preview:
-                        </div>
-                        <QuestionContentPreview content={form.content} />
-                    </div>
-                )}
             </div>
 
-            {/* 4. ANSWER OPTIONS (each option can have an image URL) */}
+            {/* 4. ANSWER OPTIONS */}
             {form.type === "ESSAY" ? (
                 <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
-                    Essay questions have no options; students type their answer in a pop-up editor and the teacher grades it manually.
+                    Essay questions have no options; students type their answer in an editor and the teacher grades it manually.
                 </p>
             ) : (
                 <div className="grid gap-3 border-t pt-3">
@@ -601,7 +570,6 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel, s
                         <div className="grid gap-0.5">
                             <Label>Options (tick the correct answer)</Label>
                             <p className="text-xs text-muted-foreground">
-                                One correct answer: students see radio buttons. Multiple correct answers: students see checkboxes.
                                 Select option checkbox for correct answers.
                             </p>
                         </div>
@@ -656,13 +624,19 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel, s
                                 placeholder="Image URL (optional, https://...)"
                             />
                             {option.imageUrl?.trim() && (
-                                <img src={option.imageUrl} alt="" className="ml-8 max-h-32 rounded border object-contain" />
+                                <img
+                                    src={option.imageUrl}
+                                    alt=""
+                                    className="ml-8 max-h-32 rounded border object-contain"
+                                    onError={(e) => {
+                                        (e.target as HTMLImageElement).style.display = "none";
+                                    }}
+                                />
                             )}
                         </div>
                     ))}
                 </div>
             )}
-            {/* 5. POINTS ROW (Placed after Answer Options) */}
 
             {/* 5. POINTS ROW */}
             <div className="grid max-w-xs gap-2 border-t pt-3">
@@ -688,37 +662,32 @@ export function QuestionForm({ form, setForm, onSubmit, isSaving, submitLabel, s
                             <Switch
                                 id="question-active"
                                 checked={form.isActive}
-                                onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isActive: checked }))}
+                                onCheckedChange={(checked) =>
+                                    setForm((prev) => ({ ...prev, isActive: checked }))
+                                }
                             />
                             <Label htmlFor="question-active" className="cursor-pointer font-medium">
                                 Active
                             </Label>
                         </div>
                     )}
-            {/* 6. ACTIVE SWITCH (At the very bottom, right above footer) */}
-            {showActive && (
-                <div className="flex items-center gap-3 pt-2">
-                    <Switch
-                        id="question-active"
-                        checked={form.isActive}
-                        onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isActive: checked }))}
-                    />
-                    <Label htmlFor="question-active" className="cursor-pointer font-medium">
-                        Active
-                    </Label>
                 </div>
-            )}
 
-
-            <CardFooter className="px-0 pt-2 flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => (onCancel ? onCancel() : navigate("/questions"))} disabled={isSaving}>
-                    <ArrowLeft className="h-4 w-4" />
-                    Back
-                </Button>
-                <Button type="submit" disabled={isSaving}>
-                    <Save className="h-4 w-4" />
-                    {isSaving ? "Saving..." : submitLabel}
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => (onCancel ? onCancel() : navigate("/questions"))}
+                        disabled={isSaving}
+                    >
+                        <ArrowLeft className="mr-1 h-4 w-4" />
+                        Back
+                    </Button>
+                    <Button type="submit" disabled={isSaving}>
+                        <Save className="mr-1 h-4 w-4" />
+                        {isSaving ? "Saving..." : submitLabel}
+                    </Button>
+                </div>
             </CardFooter>
         </form>
     );
