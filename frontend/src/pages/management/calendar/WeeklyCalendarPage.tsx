@@ -10,7 +10,14 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import { useEffect, useState } from "react";
-
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { useSearchParams } from "react-router-dom";
 
 dayjs.extend(utc);
@@ -59,41 +66,100 @@ function SessionCard({ session }: { session: CalendarSessionResponse }) {
         : "bg-red-100 text-red-900";
 
   return (
-    <article className="overflow-hidden rounded-md border bg-background">
-      <div className="flex items-center gap-1 border-b bg-muted px-2 py-1">
-        <span className="text-[11px] text-muted-foreground">Phòng</span>
-        <strong className="min-w-0 break-words text-sm">
-          {session.location || "Chưa có"}
-        </strong>
-      </div>
+    <Dialog>
+      <article className="overflow-hidden rounded-md border bg-background">
+        <div className="flex items-center gap-1 border-b bg-muted px-2 py-1">
+          <span className="text-[11px] text-muted-foreground">Phòng</span>
+          <strong className="min-w-0 break-words text-sm">
+            {session.location || "Chưa có"}
+          </strong>
+        </div>
 
-      <div className="space-y-0.5 px-2 py-1 text-[11px] leading-4">
-        <p>
-          <span className="text-muted-foreground">ID chủ đề: </span>
-          <strong>{session.topicId}</strong>
-        </p>
-        <p>
-          <span className="text-muted-foreground">ID lớp: </span>
-          <strong>{session.classId}</strong>
-        </p>
-        <p>
-          <span className="text-muted-foreground">ID GV: </span>
-          {session.trainerId}
-        </p>
-        <p
-          className="font-medium"
-          title={`${formatTime(session.startTime)} đến ${formatTime(session.endTime)}`}
+        <div className="space-y-0.5 px-2 py-1 text-[11px] leading-4">
+          <p>
+            <span className="text-muted-foreground">ID chủ đề: </span>
+            <strong>{session.topicId}</strong>
+          </p>
+          <p>
+            <span className="text-muted-foreground">ID lớp: </span>
+            <strong>{session.classId}</strong>
+          </p>
+          <p>
+            <span className="text-muted-foreground">ID GV: </span>
+            {session.trainerId}
+          </p>
+          <p
+            className="font-medium"
+            title={`${formatTime(session.startTime)} đến ${formatTime(session.endTime)}`}
+          >
+            {timeLabel}
+          </p>
+        </div>
+
+        <div
+          className={`border-t px-2 py-1 text-center text-[11px] font-semibold leading-4 ${statusClass}`}
         >
-          {timeLabel}
-        </p>
-      </div>
+          {statusLabels[session.status] ?? session.status}
+        </div>
+        <DialogTrigger asChild>
+          <button
+            type="button"
+            aria-label={`Xem chi tiết buổi học ${session.title}`}
+            className="w-full border-t px-2 py-1.5 text-xs font-medium text-blue-700 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600"
+          >
+            Xem chi tiết
+          </button>
+        </DialogTrigger>
+      </article>
 
-      <div
-        className={`border-t px-2 py-1 text-center text-[11px] font-semibold leading-4 ${statusClass}`}
-      >
-        {statusLabels[session.status] ?? session.status}
-      </div>
-    </article>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="pr-8 leading-6">
+            Chi tiết buổi học
+          </DialogTitle>
+          <DialogDescription>
+            Thông tin buổi học theo giờ Việt Nam.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="rounded-lg border bg-muted/40 p-4">
+          <p className="text-sm text-muted-foreground">Phòng</p>
+          <p className="mt-1 break-words text-xl font-bold">
+            {session.location || "Chưa có"}
+          </p>
+        </div>
+
+        <dl className="space-y-3 text-sm">
+          {[
+            ["Tiêu đề", session.title || "Chưa có"],
+            ["ID chủ đề", session.topicId ?? "Chưa có"],
+            ["ID lớp", session.classId ?? "Chưa có"],
+            ["ID giảng viên", session.trainerId ?? "Chưa có"],
+            ["Bắt đầu", formatTime(session.startTime)],
+            ["Kết thúc", formatTime(session.endTime)],
+          ].map(([label, value]) => (
+            <div
+              key={String(label)}
+              className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 border-b pb-3"
+            >
+              <dt className="text-muted-foreground">{label}</dt>
+              <dd className="break-words font-medium">{value}</dd>
+            </div>
+          ))}
+
+          <div className="grid grid-cols-[120px_minmax(0,1fr)] items-center gap-3">
+            <dt className="text-muted-foreground">Trạng thái</dt>
+            <dd>
+              <span
+                className={`inline-block rounded-md px-2 py-1 text-xs font-semibold ${statusClass}`}
+              >
+                {statusLabels[session.status] ?? session.status}
+              </span>
+            </dd>
+          </div>
+        </dl>
+      </DialogContent>
+    </Dialog>
   );
 }
 
