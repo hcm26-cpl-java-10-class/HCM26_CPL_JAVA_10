@@ -1,8 +1,5 @@
-package com.example.starter_project_2025.base.crud.service;
+package com.example.starter_project_2025.system.location;
 
-import com.example.starter_project_2025.base.crud.domain.Location;
-import com.example.starter_project_2025.base.crud.domain.LocationRepository;
-import com.example.starter_project_2025.base.crud.dto.LocationDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,7 +27,11 @@ public class LocationService {
 
         Map<Long, LocationDTO> dtoMap = allLocations.stream()
                 .map(this::toDTO)
-                .collect(Collectors.toMap(LocationDTO::getId, Function.identity()));
+                .collect(Collectors.toMap(
+                        LocationDTO::getId,
+                        Function.identity(),
+                        (k1, k2) -> k1
+                ));
 
         List<LocationDTO> rootNodes = new ArrayList<>();
 
@@ -41,6 +42,8 @@ public class LocationService {
                 LocationDTO parent = dtoMap.get(dto.getParentId());
                 if (parent != null) {
                     parent.getChildren().add(dto);
+                } else {
+                    rootNodes.add(dto);
                 }
             }
         }
@@ -55,7 +58,7 @@ public class LocationService {
         dto.setName(location.getName());
         dto.setParentId(location.getParentId());
         dto.setStatus(location.getStatus());
-        dto.setIsActive(true);
+        dto.setIsActive("ACTIVE".equalsIgnoreCase(location.getStatus()));
         return dto;
     }
 

@@ -1,4 +1,4 @@
-package com.example.starter_project_2025.base.crud.domain;
+package com.example.starter_project_2025.system.location;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
+import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 
 @Entity
 @Table(name = "locations")

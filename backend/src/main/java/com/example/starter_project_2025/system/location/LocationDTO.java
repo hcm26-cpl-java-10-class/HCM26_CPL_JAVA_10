@@ -1,9 +1,8 @@
-package com.example.starter_project_2025.base.crud.dto;
+package com.example.starter_project_2025.system.location;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import com.example.starter_project_2025.base.crud.dto.BaseDTO;
+import lombok.*;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -17,4 +16,5 @@ public class LocationDTO extends BaseDTO {
     private Long parentId;
     private String status;
     private List<LocationDTO> children = new ArrayList<>();
+    private Boolean isActive;
 }

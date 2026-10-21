@@ -1,8 +1,6 @@
-package com.example.starter_project_2025.base.crud.controller;
+package com.example.starter_project_2025.system.location;
 
-import com.example.starter_project_2025.base.crud.domain.Location;
-import com.example.starter_project_2025.base.crud.dto.LocationDTO;
-import com.example.starter_project_2025.base.crud.service.LocationService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -12,6 +10,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/locations")
 @RequiredArgsConstructor
+@CrossOrigin(origins = "*")
 public class LocationController {
     private final LocationService locationService;
 
@@ -26,7 +25,7 @@ public class LocationController {
     }
 
     @PostMapping
-    public ResponseEntity<Location> create(@RequestBody Location location) {
+    public ResponseEntity<Location> create(@Valid @RequestBody Location location) { // Added @Valid
         return ResponseEntity.ok(locationService.createLocation(location));
     }
 
