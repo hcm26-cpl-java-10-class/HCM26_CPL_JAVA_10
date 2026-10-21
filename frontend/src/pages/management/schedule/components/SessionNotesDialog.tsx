@@ -38,7 +38,7 @@ const createIdempotencyKey = (): string => {
     return crypto.randomUUID();
   }
   return `session-notes-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-};
+}
 
 interface SessionNotesDialogProps {
   session: SessionDTO | null;
@@ -47,10 +47,10 @@ interface SessionNotesDialogProps {
 }
 
 /**
- * T2 / US-F15-02 — "Cập nhật notes" trên trang /sessions.
+ * T2 / US-F15-02 — "Update Notes" on /sessions page.
  *
- * Gọi `PATCH /api/v1/sessions/{id}/notes` (kèm `If-Match` + `Idempotency-Key`).
- * `updatedBy`/`updatedAt` do server ghi (BR-SES-06) nên không có input cho client.
+ * Calls `PATCH /api/v1/sessions/{id}/notes` with `If-Match` + `Idempotency-Key`.
+ * `updatedBy`/`updatedAt` set by server (BR-SES-06), no client input needed.
  */
 export function SessionNotesDialog({ session, open, onOpenChange }: SessionNotesDialogProps) {
   const queryClient = useQueryClient();
@@ -73,19 +73,19 @@ export function SessionNotesDialog({ session, open, onOpenChange }: SessionNotes
     setTarget("KEEP");
     setReason("");
     setError(null);
-    // Mỗi lần mở dialog là một thao tác mới: key mới để không replay kết quả cũ.
+    // Each dialog open is a new operation: new key to avoid replaying old results.
     idempotencyKeyRef.current = createIdempotencyKey();
   }, [open, session?.id, session?.notes]);
 
   const mutation = useMutation({
     mutationFn: () => {
-      if (!sessionId) throw new Error("Thiếu mã buổi học.");
+      if (!sessionId) throw new Error("Missing session ID.");
 
       return sessionApi.updateNotes(
         sessionId,
         {
           status: target === "KEEP" ? undefined : target,
-          // Chuỗi rỗng = chủ động xóa ghi chú (backend chuẩn hóa thành null).
+          // Empty string = actively clear notes (backend normalizes to null).
           notes: notes.trim(),
           reason: target === "CANCELLED" ? reason.trim() : null,
           version: session?.version ?? null,
@@ -95,13 +95,13 @@ export function SessionNotesDialog({ session, open, onOpenChange }: SessionNotes
     },
     onSuccess: async (result) => {
       await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
-      const replayed = result.idempotentReplay ? " (kết quả trả lại từ lần gửi trước)" : "";
+      const replayed = result.idempotentReplay ? " (replayed from previous submission)" : "";
       toast.success(
-        `Đã lưu ghi chú${result.historyId ? " và ghi nhận lịch sử trạng thái" : ""}${replayed}.`,
+        `Notes saved${result.historyId ? " and status history recorded" : ""}${replayed}.`,
         {
           description: result.updatedAt
-            ? `Cập nhật lúc ${dayjs(result.updatedAt).format("DD/MM/YYYY HH:mm:ss")}${
-                result.updatedBy ? ` · người cập nhật #${result.updatedBy}` : ""
+            ? `Updated at ${dayjs(result.updatedAt).format("MM/DD/YYYY HH:mm:ss")}${
+                result.updatedBy ? ` · updated by #${result.updatedBy}` : ""
               }`
             : undefined,
         }
@@ -109,7 +109,7 @@ export function SessionNotesDialog({ session, open, onOpenChange }: SessionNotes
       onOpenChange(false);
     },
     onError: (mutationError) => {
-      const message = getApiErrorMessage(mutationError, "Không thể cập nhật ghi chú buổi học.");
+      const message = getApiErrorMessage(mutationError, "Failed to update session notes.");
       const correlationId = getApiErrorCorrelationId(mutationError);
       setError(correlationId ? `${message} (correlationId: ${correlationId})` : message);
       toast.error(message);
@@ -121,17 +121,17 @@ export function SessionNotesDialog({ session, open, onOpenChange }: SessionNotes
     const originalNotes = (session?.notes ?? "").trim();
 
     if (trimmedNotes.length > MAX_NOTES_LENGTH) {
-      setError(`Ghi chú không được vượt quá ${MAX_NOTES_LENGTH} ký tự.`);
+      setError(`Notes must not exceed ${MAX_NOTES_LENGTH} characters.`);
       return;
     }
 
     if (target === "CANCELLED" && !reason.trim()) {
-      setError("Vui lòng nhập lý do hủy buổi học.");
+      setError("Please provide a cancellation reason.");
       return;
     }
 
     if (trimmedNotes === originalNotes && target === "KEEP") {
-      setError("Không có thay đổi nào để lưu.");
+      setError("No changes to save.");
       return;
     }
 
@@ -140,8 +140,8 @@ export function SessionNotesDialog({ session, open, onOpenChange }: SessionNotes
   };
 
   const lastUpdate = session?.updatedAt
-    ? `Cập nhật gần nhất: ${dayjs(session.updatedAt).format("DD/MM/YYYY HH:mm:ss")}${
-        session.updatedBy ? ` · người cập nhật #${session.updatedBy}` : ""
+    ? `Last updated: ${dayjs(session.updatedAt).format("MM/DD/YYYY HH:mm:ss")}${
+        session.updatedBy ? ` · updated by #${session.updatedBy}` : ""
       }`
     : null;
 
@@ -160,18 +160,18 @@ export function SessionNotesDialog({ session, open, onOpenChange }: SessionNotes
             <span className="flex size-9 items-center justify-center rounded-full bg-primary/10">
               <NotebookPen className="size-4 text-primary" />
             </span>
-            Cập nhật ghi chú
+            Update Notes
           </DialogTitle>
           <DialogDescription>
-            Ghi chú cho buổi học “{session?.title || session?.classCode || "—"}”. Có thể kèm chuyển
-            trạng thái; hệ thống tự ghi người cập nhật, thời điểm và lịch sử bất biến.
+            Notes for session "{session?.title || session?.classCode || "—"}". Optionally update
+            status; system auto-records updater, timestamp, and immutable history.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4">
           <div className="grid gap-2">
-            <Label htmlFor={`session-notes-${sessionId}`}>Ghi chú</Label>
-            {/* Chiều cao cố định: nội dung dài sẽ cuộn bên trong thay vì kéo rộng dialog. */}
+            <Label htmlFor={`session-notes-${sessionId}`}>Notes</Label>
+            {/* Fixed height: long content scrolls inside instead of expanding dialog. */}
             <Textarea
               id={`session-notes-${sessionId}`}
               value={notes}
@@ -179,7 +179,7 @@ export function SessionNotesDialog({ session, open, onOpenChange }: SessionNotes
                 setNotes(event.target.value);
                 if (error) setError(null);
               }}
-              placeholder="Ví dụ: Đã dạy bù phần OOP, lớp nghỉ giữa giờ 15 phút…"
+              placeholder="e.g. Taught make-up OOP section, class had 15-min break…"
               maxLength={MAX_NOTES_LENGTH}
               disabled={mutation.isPending}
               className="h-36 resize-none overflow-y-auto [field-sizing:fixed]"
@@ -193,7 +193,7 @@ export function SessionNotesDialog({ session, open, onOpenChange }: SessionNotes
 
           {canTransition && (
             <div className="grid gap-2">
-              <Label htmlFor={`session-status-${sessionId}`}>Trạng thái sau khi lưu</Label>
+              <Label htmlFor={`session-status-${sessionId}`}>Status After Save</Label>
               <Select
                 value={target}
                 onValueChange={(value) => {
@@ -204,12 +204,12 @@ export function SessionNotesDialog({ session, open, onOpenChange }: SessionNotes
                 disabled={mutation.isPending}
               >
                 <SelectTrigger id={`session-status-${sessionId}`} className="w-full">
-                  <SelectValue placeholder="Giữ nguyên trạng thái" />
+                  <SelectValue placeholder="Keep current status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="KEEP">Giữ nguyên trạng thái</SelectItem>
-                  <SelectItem value="COMPLETED">Hoàn thành buổi học</SelectItem>
-                  {isAdmin && <SelectItem value="CANCELLED">Hủy buổi học</SelectItem>}
+                  <SelectItem value="KEEP">Keep Current Status</SelectItem>
+                  <SelectItem value="COMPLETED">Complete Session</SelectItem>
+                  {isAdmin && <SelectItem value="CANCELLED">Cancel Session</SelectItem>}
                 </SelectContent>
               </Select>
             </div>
@@ -218,7 +218,7 @@ export function SessionNotesDialog({ session, open, onOpenChange }: SessionNotes
           {target === "CANCELLED" && (
             <div className="grid gap-2">
               <Label htmlFor={`session-reason-${sessionId}`}>
-                Lý do hủy <span className="text-destructive">*</span>
+                Cancellation Reason <span className="text-destructive">*</span>
               </Label>
               <Textarea
                 id={`session-reason-${sessionId}`}
@@ -227,7 +227,7 @@ export function SessionNotesDialog({ session, open, onOpenChange }: SessionNotes
                   setReason(event.target.value);
                   if (error) setError(null);
                 }}
-                placeholder="Ví dụ: Giảng viên bận đột xuất, lớp nghỉ lễ…"
+                placeholder="e.g. Trainer unavailable, class holiday…"
                 maxLength={MAX_REASON_LENGTH}
                 rows={3}
                 disabled={mutation.isPending}
@@ -243,7 +243,7 @@ export function SessionNotesDialog({ session, open, onOpenChange }: SessionNotes
           <div className="flex items-start gap-2 rounded-lg bg-muted p-3 text-xs text-muted-foreground">
             <Info className="mt-0.5 size-3.5 shrink-0" />
             <span>
-              Người cập nhật và thời điểm do hệ thống tự ghi (không gửi từ client).
+              Updater and timestamp are recorded by the system (not sent from client).
               {lastUpdate ? ` ${lastUpdate}.` : ""}
             </span>
           </div>
@@ -258,16 +258,16 @@ export function SessionNotesDialog({ session, open, onOpenChange }: SessionNotes
             onClick={() => onOpenChange(false)}
             disabled={mutation.isPending}
           >
-            Đóng
+            Close
           </Button>
           <Button type="button" onClick={handleSubmit} disabled={mutation.isPending}>
             {mutation.isPending ? (
               <>
                 <Loader2 className="mr-2 size-4 animate-spin" />
-                Đang lưu…
+                Saving...
               </>
             ) : (
-              "Lưu ghi chú"
+              "Save Notes"
             )}
           </Button>
         </DialogFooter>

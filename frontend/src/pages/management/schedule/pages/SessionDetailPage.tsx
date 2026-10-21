@@ -55,24 +55,24 @@ export function SessionDetailPage() {
   const errorStatus = axios.isAxiosError(sessionQuery.error)
     ? sessionQuery.error.response?.status
     : undefined;
-  let errorMessage = "Không thể tải thông tin buổi học. Vui lòng thử lại.";
-  if (!validId) errorMessage = "ID buổi học không hợp lệ.";
-  else if (errorStatus === 404) errorMessage = "Không tìm thấy buổi học hoặc buổi học đã bị xóa.";
-  else if (errorStatus === 403) errorMessage = "Bạn không có quyền xem buổi học này.";
+  let errorMessage = "Failed to load session details. Please try again.";
+  if (!validId) errorMessage = "Invalid session ID.";
+  else if (errorStatus === 404) errorMessage = "Session not found or has been deleted.";
+  else if (errorStatus === 403) errorMessage = "You do not have permission to view this session.";
   const meetingLink = session?.meetingLink?.trim();
   const canOpenMeetingLink = !!meetingLink && /^https?:\/\//i.test(meetingLink);
 
   return (
-    <MainLayout pathName={{ sessions: "Class Schedule", [id || "detail"]: "Chi tiết buổi học" }}>
+    <MainLayout pathName={{ sessions: "Class Schedule", [id || "detail"]: "Session Details" }}>
       <Card className="mx-auto w-full max-w-4xl">
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <CardTitle className="break-words">{session?.title || "Chi tiết buổi học"}</CardTitle>
+              <CardTitle className="break-words">{session?.title || "Session Details"}</CardTitle>
               <CardDescription className="mt-2">
                 {session
-                  ? `Thông tin buổi học #${session.id}`
-                  : "Thông tin lập lịch và trạng thái buổi học."}
+                  ? `Session #${session.id} details`
+                  : "Session schedule information and status."}
               </CardDescription>
             </div>
             {session && (
@@ -86,10 +86,10 @@ export function SessionDetailPage() {
                 }
               >
                 {session.status === "COMPLETED"
-                  ? "Đã hoàn thành"
+                  ? "Completed"
                   : session.status === "CANCELLED"
-                    ? "Đã hủy"
-                    : "Đã lên lịch"}
+                    ? "Cancelled"
+                    : "Scheduled"}
               </Badge>
             )}
           </div>
@@ -101,7 +101,7 @@ export function SessionDetailPage() {
               className="flex items-center gap-2 py-8 text-sm text-muted-foreground"
             >
               <Loader2 className="size-4 animate-spin" />
-              Đang tải thông tin buổi học...
+              Loading session details...
             </div>
           ) : !validId || sessionQuery.isError ? (
             <Alert variant="destructive">
@@ -117,7 +117,7 @@ export function SessionDetailPage() {
                       void sessionQuery.refetch();
                     }}
                   >
-                    Thử lại
+                    Try Again
                   </Button>
                 )}
               </AlertDescription>
@@ -125,8 +125,8 @@ export function SessionDetailPage() {
           ) : session ? (
             <div className="space-y-6 text-sm">
               <dl className="grid gap-5 sm:grid-cols-2">
-                <DetailField label="Lớp học">{session.classCode || "—"}</DetailField>
-                <DetailField label="Bản lịch">
+                <DetailField label="Class">{session.classCode || "—"}</DetailField>
+                <DetailField label="Calendar Version">
                   <span className="inline-flex flex-wrap items-center gap-2">
                     {session.calendarVersionNumber != null
                       ? `v${session.calendarVersionNumber}`
@@ -138,12 +138,12 @@ export function SessionDetailPage() {
                     )}
                   </span>
                 </DetailField>
-                <DetailField label="Chủ đề">{session.topicName || "—"}</DetailField>
-                <DetailField label="Giảng viên">{session.trainerName || "—"}</DetailField>
-                <DetailField label="Bắt đầu">{formatDate(session.startTime)}</DetailField>
-                <DetailField label="Kết thúc">{formatDate(session.endTime)}</DetailField>
-                <DetailField label="Phòng học">{session.room || "—"}</DetailField>
-                <DetailField label="Link học trực tuyến">
+                <DetailField label="Topic">{session.topicName || "—"}</DetailField>
+                <DetailField label="Trainer">{session.trainerName || "—"}</DetailField>
+                <DetailField label="Start Time">{formatDate(session.startTime)}</DetailField>
+                <DetailField label="End Time">{formatDate(session.endTime)}</DetailField>
+                <DetailField label="Room">{session.room || "—"}</DetailField>
+                <DetailField label="Online Meeting Link">
                   {canOpenMeetingLink ? (
                     <a
                       href={meetingLink}
@@ -161,14 +161,14 @@ export function SessionDetailPage() {
               </dl>
               <div className="space-y-4 border-t pt-5">
                 <div>
-                  <h3 className="mb-2 font-medium">Ghi chú</h3>
+                  <h3 className="mb-2 font-medium">Notes</h3>
                   <p className="whitespace-pre-wrap break-words text-muted-foreground">
-                    {session.notes || "Chưa có ghi chú."}
+                    {session.notes || "No notes."}
                   </p>
                 </div>
                 {session.cancelReason && (
                   <div>
-                    <h3 className="mb-2 font-medium">Lý do hủy</h3>
+                    <h3 className="mb-2 font-medium">Cancellation Reason</h3>
                     <p className="whitespace-pre-wrap break-words text-muted-foreground">
                       {session.cancelReason}
                     </p>
@@ -176,7 +176,7 @@ export function SessionDetailPage() {
                 )}
                 {session.isOverridden && (
                   <div>
-                    <h3 className="mb-2 font-medium">Lý do cho phép trùng lịch</h3>
+                    <h3 className="mb-2 font-medium">Override Reason</h3>
                     <p className="whitespace-pre-wrap break-words text-muted-foreground">
                       {session.overrideReason || "—"}
                     </p>
@@ -184,12 +184,12 @@ export function SessionDetailPage() {
                 )}
               </div>
               <dl className="grid gap-5 border-t pt-5 sm:grid-cols-2">
-                <DetailField label="Ngày tạo">{formatDate(session.createdAt)}</DetailField>
-                <DetailField label="Người tạo">
+                <DetailField label="Created At">{formatDate(session.createdAt)}</DetailField>
+                <DetailField label="Created By">
                   {session.createdBy != null ? `#${session.createdBy}` : "—"}
                 </DetailField>
-                <DetailField label="Cập nhật gần nhất">{formatDate(session.updatedAt)}</DetailField>
-                <DetailField label="Người cập nhật">
+                <DetailField label="Last Updated">{formatDate(session.updatedAt)}</DetailField>
+                <DetailField label="Updated By">
                   {session.updatedBy != null ? `#${session.updatedBy}` : "—"}
                 </DetailField>
               </dl>
@@ -199,7 +199,7 @@ export function SessionDetailPage() {
         <CardFooter className="flex flex-wrap justify-between gap-3 border-t pt-4">
           <Button type="button" variant="outline" onClick={() => navigate("/sessions")}>
             <ArrowLeft className="size-4" />
-            Quay lại danh sách
+            Back to List
           </Button>
           {canManageDraft && (
             <div className="flex flex-wrap gap-2">
@@ -210,13 +210,13 @@ export function SessionDetailPage() {
                   onClick={() => navigate("/sessions/" + id + "/edit")}
                 >
                   <Pen className="size-4" />
-                  Chỉnh sửa
+                  Edit
                 </Button>
               )}
               {hasPermission("SESSION_DELETE") && (
                 <Button type="button" variant="destructive" onClick={() => setDeleteOpen(true)}>
                   <Trash2 className="size-4" />
-                  Xóa buổi học
+                  Delete Session
                 </Button>
               )}
             </div>

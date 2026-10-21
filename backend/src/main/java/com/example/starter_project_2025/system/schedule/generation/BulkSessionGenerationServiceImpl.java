@@ -317,7 +317,45 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
             }
         }
 
-        // 3. Chuyển đổi danh sách PreviewSessionItemDTO sang Entity Session
+        // 3. Check conflicts for each session before saving (US-F16-04, BR-UNI-09)
+        for (PreviewSessionItemDTO item : request.getSessions()) {
+            List<Session> conflicts = sessionRepository.findConflictingSessions(
+                    item.getTrainerId() != null ? item.getTrainerId() : 1L,
+                    item.getRoomId(),
+                    null,
+                    item.getStartTime(),
+                    item.getEndTime(),
+                    null
+            );
+
+            if (!conflicts.isEmpty()) {
+                Session first = conflicts.get(0);
+                String conflictType = Objects.equals(first.getTrainerId(), item.getTrainerId() != null ? item.getTrainerId() : 1L)
+                        ? "TRAINER_CONFLICT"
+                        : "ROOM_CONFLICT";
+
+                String conflictMsg = String.format(
+                        "Schedule conflict: %s with class %s ('%s') from %s to %s",
+                        conflictType,
+                        first.getClassCode(),
+                        first.getTitle(),
+                        first.getStartTime().toString(),
+                        first.getEndTime().toString()
+                );
+
+                throw new ConflictException(
+                        "BULK_GENERATION_CONFLICT",
+                        String.format("Cannot save bulk sessions: %s. Session: %s (%s - %s)",
+                                conflictMsg,
+                                item.getTopicName() != null ? item.getTopicName() : "Session",
+                                item.getStartTime().toString(),
+                                item.getEndTime().toString()
+                        )
+                );
+            }
+        }
+
+        // 4. Chuyển đổi danh sách PreviewSessionItemDTO sang Entity Session
         List<Session> sessionsToSave = new ArrayList<>();
         for (PreviewSessionItemDTO item : request.getSessions()) {
             // Validate từng buổi: start time < end time (BR-02)
@@ -348,7 +386,7 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
             sessionsToSave.add(session);
         }
 
-        // 4. Batch Insert nguyên tử (All-or-Nothing qua @Transactional)
+        // 5. Batch Insert nguyên tử (All-or-Nothing qua @Transactional)
         List<Session> saved = sessionRepository.saveAll(sessionsToSave);
 
         BulkSaveSessionsResponseDTO response = BulkSaveSessionsResponseDTO.builder()
