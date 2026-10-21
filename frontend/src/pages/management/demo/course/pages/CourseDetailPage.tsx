@@ -110,7 +110,16 @@ function CourseDetailContent({ course }: { course: CourseDetail }) {
           </div>
           <div className="space-y-4 p-6">
             <div className="flex flex-wrap items-center gap-2">
-              {course.categoryName && <Badge variant="outline">{course.categoryName}</Badge>}
+              {(course.categoryNames?.length
+                ? course.categoryNames
+                : course.categoryName
+                  ? [course.categoryName]
+                  : []
+              ).map((name) => (
+                <Badge key={name} variant="outline">
+                  {name}
+                </Badge>
+              ))}
               {course.level && (
                 <Badge variant="secondary" className={LEVEL_BADGE_CLASS[course.level]}>
                   {LEVEL_LABEL[course.level]}
@@ -146,11 +155,11 @@ function CourseDetailContent({ course }: { course: CourseDetail }) {
           <h2 className="text-lg font-semibold">Skills you will achieve</h2>
           {(() => {
             const skills =
-                course.categoryNames && course.categoryNames.length > 0
-                    ? course.categoryNames
-                    : course.categoryName
-                        ? [course.categoryName]
-                        : [];
+              course.categoryNames && course.categoryNames.length > 0
+                ? course.categoryNames
+                : course.categoryName
+                  ? [course.categoryName]
+                  : [];
 
             return skills.length === 0 ? (
                 <p className="mt-3 text-sm text-muted-foreground">
@@ -163,8 +172,8 @@ function CourseDetailContent({ course }: { course: CourseDetail }) {
                           key={skill}
                           className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-[0_2px_8px_rgba(15,23,42,0.08)]"
                       >
-            {skill}
-          </span>
+                        {skill}
+                      </span>
                   ))}
                 </div>
             );

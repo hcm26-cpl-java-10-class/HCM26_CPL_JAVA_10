@@ -16,6 +16,7 @@ public record CourseDetailDTO(
         String instructor,
         Long categoryId,
         String categoryName,
+        List<String> categoryNames,
         CourseLevel level,
         boolean isFree,
         boolean enrolled,

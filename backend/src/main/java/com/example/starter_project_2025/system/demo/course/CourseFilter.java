@@ -15,7 +15,7 @@ import lombok.Setter;
 @AllArgsConstructor
 public class CourseFilter extends BaseFilter {
 
-    @FilterField(entityField = "category.id")
+    @FilterField(entityField = "categories.id")
     private Long categoryId;
 
     @FilterField(entityField = "status")
