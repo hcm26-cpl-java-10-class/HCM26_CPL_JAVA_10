@@ -19,7 +19,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-
+import java.util.List;
+import org.springframework.http.HttpStatus;
 @RestController
 @RequestMapping("/api/sections")
 @RequiredArgsConstructor
@@ -81,4 +82,26 @@ public class SectionController
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         return super.delete(id);
     }
+
+    public record BulkSectionRequest(
+            Long courseId,
+            List<String> titles
+    ) {
+    }
+
+    @PostMapping("/bulk")
+    @PreAuthorize("hasAuthority('SECTION_CREATE')")
+    public ResponseEntity<List<SectionDTO>> createBulk(
+            @RequestBody BulkSectionRequest request
+    ) {
+        List<SectionDTO> created = sectionService.createBulk(
+                request.courseId(),
+                request.titles()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(created);
+    }
+
 }
