@@ -119,7 +119,7 @@ public class CategoryServiceImpl
             throw new BadRequestException(
                     "Cannot delete category '" + category.getName() + "' because it has sub-categories");
         }
-        if (courseRepository.existsByCategoryId(category.getId())) {
+        if (courseRepository.existsByCategories_Id(category.getId())) {
             throw new BadRequestException(
                     "Cannot delete category '" + category.getName() + "' because it is used by courses");
         }
