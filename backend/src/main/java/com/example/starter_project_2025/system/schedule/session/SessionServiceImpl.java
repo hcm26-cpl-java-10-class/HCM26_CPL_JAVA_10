@@ -124,13 +124,21 @@ public class SessionServiceImpl
     }
 
     @Override
-    protected void beforeDelete(Session entity) {
+    public void delete(Long id) {
+        checkPermission(CrudAction.DELETE);
         sessionAccessPolicy.requireCreateScope();
+        if (id == null || id <= 0) {
+            throw new BadRequestException("Session ID must be positive.");
+        }
+        Session entity = sessionRepository.findByIdAndIsActiveTrue(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Session not found."));
         sessionValidator.requireDraftVersion(entity.getCalendarVersion().getId(), new ValidationContext());
         entityManager.refresh(entity);
         if (entity.getStatus() != SessionStatus.SCHEDULED) {
             throw new com.example.starter_project_2025.exception.ConflictException("Cannot delete a completed or cancelled session");
         }
+        sessionRepository.delete(entity);
+        sessionRepository.flush();
     }
 
     @Override

@@ -66,6 +66,13 @@ public class SessionController
         return ResponseEntity.created(URI.create("/api/sessions/" + response.getId())).body(response);
     }
 
+    @Override
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        sessionService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/check-conflict")
     @Operation(summary = "Check schedule conflict before saving")
     public ResponseEntity<ConflictCheckResponse> checkConflict(

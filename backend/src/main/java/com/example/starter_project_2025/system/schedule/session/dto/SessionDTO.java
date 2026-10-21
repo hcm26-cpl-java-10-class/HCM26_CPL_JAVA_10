@@ -76,7 +76,7 @@ public class SessionDTO extends BaseDTO {
     String room;
 
     @Size(max = 255, message = "Meeting link must not exceed 255 characters")
-    @URL(regexp = "https?://.+")
+    @URL(regexp = "(https?://.+)?")
     String meetingLink;
 
     SessionStatus status;

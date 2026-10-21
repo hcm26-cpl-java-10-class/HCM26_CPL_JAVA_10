@@ -1,5 +1,6 @@
-import { sessionApi } from "@/api";
+import { calendarVersionApi, sessionApi, sessionFormApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -9,379 +10,378 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { SessionDTO } from "@/types";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Calendar, Clock, Save, Sparkles } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
+import { ArrowLeft, Loader2, Save } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { ConflictWarningModal } from "../components/ConflictWarningModal";
 
-// Dữ liệu mẫu trainer để chọn nhanh lúc demo
-const DEMO_TRAINERS = [
-  { id: 1, name: "Nguyen Minh (Trainer)" },
-  { id: 2, name: "Tran Thi Lan (Trainer)" },
-  { id: 3, name: "Le Hoang An (Trainer)" },
-];
+import { SessionFormField as FormField, SessionFormFields } from "../components/SessionFormFields";
+import {
+  formatSessionTime,
+  getTrainerName as trainerName,
+  validateSessionForm,
+  type SessionFormValues,
+} from "../components/session-form.utils";
 
-const DEMO_CLASSES = ["HCM26-FSJ-01", "HN26-QAA-02", "DN26-DATA-01"];
-const DEMO_ROOMS = ["Phòng A-301", "Phòng B-202", "Phòng A-105", "Online - Microsoft Teams"];
-
-// Khởi tạo mặc định ngày mai từ 08:30 đến 11:30
-const getDefaultTimes = () => {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  const yyyy = tomorrow.getFullYear();
-  const mm = String(tomorrow.getMonth() + 1).padStart(2, "0");
-  const dd = String(tomorrow.getDate()).padStart(2, "0");
-
-  return {
-    start: `${yyyy}-${mm}-${dd}T08:30`,
-    end: `${yyyy}-${mm}-${dd}T11:30`,
-  };
-};
-
-const defaultTime = getDefaultTimes();
-
-const initialFormState: SessionDTO = {
-  classCode: DEMO_CLASSES[0],
-  topicName: "Java Spring Framework",
-  title: "RESTful API with Spring Boot",
-  trainerId: DEMO_TRAINERS[0].id,
-  trainerName: DEMO_TRAINERS[0].name,
-  startTime: defaultTime.start,
-  endTime: defaultTime.end,
-  room: DEMO_ROOMS[0],
-  meetingLink: "https://meet.google.com/demo-session",
-  status: "SCHEDULED",
-  notes: "Buổi học lý thuyết kết hợp thực hành hands-on lab.",
-  isActive: true,
-};
+interface SessionForm extends SessionFormValues {
+  calendarVersionId: string;
+}
 
 export function SessionCreatePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-
-  const [form, setForm] = useState<SessionDTO>(initialFormState);
-
-  // Trạng thái modal cảnh báo xung đột (FR-CAL-03)
-  const [conflictModalOpen, setConflictModalOpen] = useState(false);
+  const [searchParams] = useSearchParams();
+  const [calendarId, setCalendarId] = useState(searchParams.get("calendarId") || "");
+  const [form, setForm] = useState<SessionForm>({
+    calendarVersionId: searchParams.get("versionId") || "",
+    topicId: "",
+    trainerId: "",
+    title: "",
+    startTime: "",
+    endTime: "",
+    room: "",
+    meetingLink: "",
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState("");
   const [conflictMessage, setConflictMessage] = useState("");
-  const [conflictingSessions] = useState<SessionDTO[]>([]);
+  const [conflictOpen, setConflictOpen] = useState(false);
+  const [pendingRequest, setPendingRequest] = useState<SessionDTO | null>(null);
+
+  const calendarsQuery = useQuery({
+    queryKey: ["session-form", "calendars"],
+    queryFn: calendarVersionApi.list,
+  });
+  const topicsQuery = useQuery({
+    queryKey: ["session-form", "topics"],
+    queryFn: sessionFormApi.getTopics,
+  });
+  const trainersQuery = useQuery({
+    queryKey: ["session-form", "trainers"],
+    queryFn: sessionFormApi.getTrainers,
+  });
+  const selectedCalendar = calendarsQuery.data?.find(
+    (calendar) => String(calendar.id) === calendarId,
+  );
+  const versionsQuery = useQuery({
+    queryKey: ["session-form", "draft-versions", selectedCalendar?.id],
+    queryFn: () => sessionFormApi.getDraftVersions(selectedCalendar!.id),
+    enabled: !!selectedCalendar,
+  });
+  const classQuery = useQuery({
+    queryKey: ["session-form", "class", selectedCalendar?.classId],
+    queryFn: () => sessionFormApi.getClass(selectedCalendar!.classId),
+    enabled: !!selectedCalendar,
+    retry: false,
+  });
+  const selectedVersion = versionsQuery.data?.find(
+    (version) => String(version.id) === form.calendarVersionId,
+  );
+  const optionQueries = [calendarsQuery, topicsQuery, trainersQuery, versionsQuery, classQuery];
+  const failedQuery = optionQueries.find((query) => query.isError);
+  const optionsReady =
+    !!selectedCalendar &&
+    !!selectedVersion &&
+    !!classQuery.data?.code &&
+    !!topicsQuery.data?.length &&
+    !!trainersQuery.data?.length &&
+    !failedQuery;
 
   const createMutation = useMutation({
-    mutationFn: (payload: SessionDTO) => sessionApi.create(payload),
-    onSuccess: async (data) => {
-      await queryClient.invalidateQueries({ queryKey: ["session"] });
-      if (data.isOverridden) {
-        toast.warning(
-          `Đã tạo buổi học với quyền Override (BR-10): ${data.overrideReason}`
-        );
-      } else {
-        toast.success("Tạo buổi học thành công!");
-      }
-      navigate("/sessions");
+    mutationFn: (request: SessionDTO) => sessionApi.create(request),
+    onSuccess: async (session) => {
+      setConflictOpen(false);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["session"] }),
+        queryClient.invalidateQueries({ queryKey: ["version-sessions"] }),
+      ]);
+      toast.success("Tạo buổi học thành công.");
+      navigate(session.id ? `/sessions/${session.id}` : "/sessions");
     },
-    onError: (error: any) => {
-      const errorData = error?.response?.data;
-      const validationErrors = errorData?.errors;
-
-      // Kiểm tra xem lỗi có phải do xung đột lịch (FR-CAL-03) không
-      if (validationErrors?.conflict && validationErrors.conflict.length > 0) {
-        const msg = validationErrors.conflict[0];
-        setConflictMessage(msg);
-        setConflictModalOpen(true);
-        toast.error("Phát hiện xung đột lịch học!");
-        return;
+    onError: (error: unknown) => {
+      const data = axios.isAxiosError(error) ? error.response?.data : undefined;
+      const fieldErrors: Record<string, string[]> = data?.errors || data?.fieldErrors || {};
+      setErrors(
+        Object.fromEntries(
+          Object.entries(fieldErrors).map(([field, messages]) => [
+            field,
+            messages[0] || "Dữ liệu không hợp lệ.",
+          ]),
+        ),
+      );
+      if (fieldErrors.conflict?.length) {
+        setConflictMessage(fieldErrors.conflict[0]);
+        setConflictOpen(true);
+      } else {
+        setConflictOpen(false);
       }
-
-      if (validationErrors?.endTime && validationErrors.endTime.length > 0) {
-        toast.error(validationErrors.endTime[0]);
-        return;
+      setSubmitError(data?.message || "Không thể tạo buổi học. Vui lòng kiểm tra lại dữ liệu.");
+      if (axios.isAxiosError(error) && error.response?.status === 409) {
+        void versionsQuery.refetch();
       }
-
-      const fallbackMsg = errorData?.message || "Tạo buổi học thất bại.";
-      toast.error(fallbackMsg);
     },
   });
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  function updateField(field: keyof SessionForm, value: string) {
+    setForm((current) => ({ ...current, [field]: value }));
+    setErrors((current) => ({
+      ...current,
+      [field]: "",
+      ...(field === "topicId" ? { topicName: "" } : {}),
+      ...(field === "trainerId" ? { trainerName: "" } : {}),
+      conflict: "",
+    }));
+    setSubmitError("");
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    if (!form.classCode || !form.title || !form.startTime || !form.endTime) {
-      toast.error("Vui lòng nhập đầy đủ các trường bắt buộc (*).");
-      return;
-    }
-
-    // Format ISO string phù hợp với Jackson LocalDateTime
-    const formatTime = (t: string) => (t.length === 16 ? `${t}:00` : t);
-
-    createMutation.mutate({
-      ...form,
-      startTime: formatTime(form.startTime),
-      endTime: formatTime(form.endTime),
-      forceOverride: false,
-    });
-  };
-
-  // Người dùng xác nhận Override từ Modal (BR-10)
-  const handleConfirmOverride = (reason: string) => {
-    const formatTime = (t: string) => (t.length === 16 ? `${t}:00` : t);
-
-    createMutation.mutate(
-      {
-        ...form,
-        startTime: formatTime(form.startTime),
-        endTime: formatTime(form.endTime),
-        forceOverride: true,
-        overrideReason: reason,
-      },
-      {
-        onSettled: () => {
-          setConflictModalOpen(false);
-        },
-      }
+    const validation = validateSessionForm(
+      form,
+      topicsQuery.data || [],
+      trainersQuery.data || [],
+      classQuery.data,
     );
-  };
+    const topic = topicsQuery.data?.find((item) => String(item.id) === form.topicId);
+    const trainer = trainersQuery.data?.find((item) => String(item.id) === form.trainerId);
+    if (!selectedCalendar) validation.calendarId = "Vui lòng chọn lớp học.";
+    if (!selectedVersion || selectedVersion.status !== "DRAFT")
+      validation.calendarVersionId = "Vui lòng chọn bản lịch DRAFT.";
+    setErrors(validation);
+    setSubmitError("");
+    if (Object.keys(validation).length || !optionsReady || !topic?.id || !trainer?.id) return;
+
+    const request: SessionDTO = {
+      calendarVersionId: selectedVersion!.id,
+      topicId: topic.id,
+      topicName: topic.title,
+      classCode: classQuery.data!.code,
+      trainerId: trainer.id,
+      trainerName: trainerName(trainer),
+      title: form.title.trim(),
+      startTime: formatSessionTime(form.startTime),
+      endTime: formatSessionTime(form.endTime),
+      room: form.room.trim() || undefined,
+      meetingLink: form.meetingLink.trim() || undefined,
+      isActive: true,
+      forceOverride: false,
+    };
+    setPendingRequest(request);
+    createMutation.mutate(request);
+  }
 
   return (
-    <MainLayout pathName={{ sessions: "Schedules", create: "Tạo buổi học mới" }}>
-      <div className="max-w-4xl mx-auto space-y-4">
-        {/* Banner hướng dẫn test kịch bản AT-04 */}
-        <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-xs text-sky-900 flex items-start gap-3">
-          <Calendar className="h-5 w-5 text-sky-600 mt-0.5 shrink-0" />
-          <div className="space-y-1">
-            <span className="font-bold text-sm block">
-              Hướng dẫn kịch bản kiểm thử xung đột lịch (AT-04 & FR-CAL-03):
-            </span>
-            <p>
-              • Dữ liệu seed mặc định: <strong>Trainer Nguyen Minh</strong> có lịch tại <strong>Phòng A-301</strong> từ <strong>08:30 đến 11:30 sáng mai</strong>.
-            </p>
-            <p>
-              • Nếu bạn giữ nguyên thời gian hoặc chọn trùng Trainer/Phòng vào sáng mai và bấm Lưu, hệ thống sẽ <strong>tự động phát hiện xung đột và chặn lại</strong>.
-            </p>
-            <p>
-              • Sau đó bạn có thể chọn <strong>"Chỉnh sửa lại giờ"</strong> (ví dụ đổi sang 14:00) hoặc dùng quyền <strong>"Ghi đè lịch (Override)"</strong> kèm lý do (BR-10).
-            </p>
-          </div>
-        </div>
-
-        <Card className="shadow-sm">
-          <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <CardTitle className="text-xl">Lập Lịch Buổi Học (Create Session)</CardTitle>
-                <CardDescription>
-                  Tạo mới buổi học có tích hợp kiểm tra xung đột thời gian thực (Conflict Detection).
-                </CardDescription>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => navigate("/sessions/bulk-generate")}
-                className="gap-2 border-primary/30 text-primary hover:bg-primary/10 shrink-0"
-              >
-                <Sparkles className="h-4 w-4" />
-                Bulk Generator (F16)
-              </Button>
-            </div>
-          </CardHeader>
-
-          <CardContent>
-            <form id="session-form" className="grid gap-5" onSubmit={handleSubmit}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Lớp học */}
-                <div className="grid gap-2">
-                  <Label htmlFor="class-code">Mã lớp học <span className="text-red-500">*</span></Label>
-                  <Input
-                    id="class-code"
-                    value={form.classCode}
-                    onChange={(e) => setForm((p) => ({ ...p, classCode: e.target.value }))}
-                    placeholder="VD: HCM26-FSJ-01"
-                    required
-                  />
-                  <div className="flex gap-2">
-                    {DEMO_CLASSES.map((cls) => (
-                      <button
-                        key={cls}
-                        type="button"
-                        onClick={() => setForm((p) => ({ ...p, classCode: cls }))}
-                        className="text-[11px] text-sky-700 bg-sky-100 hover:bg-sky-200 rounded px-2 py-0.5"
-                      >
-                        {cls}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Topic */}
-                <div className="grid gap-2">
-                  <Label htmlFor="topic-name">Chủ đề đào tạo (Topic)</Label>
-                  <Input
-                    id="topic-name"
-                    value={form.topicName ?? ""}
-                    onChange={(e) => setForm((p) => ({ ...p, topicName: e.target.value }))}
-                    placeholder="VD: Java Spring Framework"
-                  />
-                </div>
-              </div>
-
-              {/* Tiêu đề buổi học */}
-              <div className="grid gap-2">
-                <Label htmlFor="session-title">Tiêu đề buổi học <span className="text-red-500">*</span></Label>
-                <Input
-                  id="session-title"
-                  value={form.title}
-                  onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
-                  placeholder="VD: Buổi 1: Tổng quan Spring Boot & Dependency Injection"
+    <MainLayout pathName={{ sessions: "Class Schedule", create: "Tạo buổi học" }}>
+      <Card className="mx-auto w-full max-w-4xl">
+        <CardHeader>
+          <CardTitle>Tạo buổi học</CardTitle>
+          <CardDescription>Thêm buổi học vào bản lịch nháp của lớp.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {failedQuery && (
+            <Alert variant="destructive">
+              <AlertTitle>Không tải được dữ liệu cho biểu mẫu</AlertTitle>
+              <AlertDescription>
+                <p>
+                  {axios.isAxiosError(failedQuery.error)
+                    ? failedQuery.error.response?.data?.message || "Vui lòng thử lại."
+                    : "Vui lòng thử lại."}
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => {
+                    void failedQuery.refetch();
+                  }}
+                >
+                  Thử lại
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+          {calendarsQuery.isSuccess && !calendarsQuery.data.length && (
+            <Alert>
+              <AlertTitle>Chưa có lịch của lớp</AlertTitle>
+              <AlertDescription>
+                Vui lòng tạo Calendar cho lớp trước khi thêm buổi học.
+              </AlertDescription>
+            </Alert>
+          )}
+          {selectedCalendar && versionsQuery.isSuccess && !versionsQuery.data.length && (
+            <Alert>
+              <AlertTitle>Chưa có bản lịch DRAFT</AlertTitle>
+              <AlertDescription>
+                Vui lòng tạo bản lịch nháp cho lớp này trước khi thêm buổi học.
+              </AlertDescription>
+            </Alert>
+          )}
+          {topicsQuery.isSuccess && !topicsQuery.data.length && (
+            <Alert>
+              <AlertDescription>Chưa có chủ đề đang hoạt động để lựa chọn.</AlertDescription>
+            </Alert>
+          )}
+          {trainersQuery.isSuccess && !trainersQuery.data.length && (
+            <Alert>
+              <AlertDescription>
+                Chưa có tài khoản giảng viên đang hoạt động để lựa chọn.
+              </AlertDescription>
+            </Alert>
+          )}
+          {submitError && (
+            <Alert variant="destructive">
+              <AlertDescription>{submitError}</AlertDescription>
+            </Alert>
+          )}
+          <form id="session-form" onSubmit={handleSubmit} autoComplete="off" noValidate>
+            <fieldset disabled={createMutation.isPending} className="grid min-w-0 gap-5">
+              <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+                <FormField
+                  id="calendar-id"
+                  label="Lớp học"
                   required
-                />
-              </div>
-
-              {/* Giảng viên */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="trainer-select">Giảng viên (Trainer) <span className="text-red-500">*</span></Label>
-                  <select
-                    id="trainer-select"
-                    value={form.trainerId}
-                    onChange={(e) => {
-                      const selectedId = Number(e.target.value);
-                      const t = DEMO_TRAINERS.find((item) => item.id === selectedId);
-                      setForm((p) => ({
-                        ...p,
-                        trainerId: selectedId,
-                        trainerName: t?.name ?? "Trainer",
-                      }));
+                  error={errors.calendarId || errors.classCode}
+                >
+                  <Select
+                    value={calendarId}
+                    onValueChange={(value) => {
+                      if (!value || value === calendarId) return;
+                      setCalendarId(value);
+                      updateField("calendarVersionId", "");
+                      setErrors({});
                     }}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    disabled={calendarsQuery.isPending || !calendarsQuery.data?.length}
                   >
-                    {DEMO_TRAINERS.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name} (ID: {t.id})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Phòng học */}
-                <div className="grid gap-2">
-                  <Label htmlFor="room">Phòng học (Offline)</Label>
-                  <Input
-                    id="room"
-                    value={form.room ?? ""}
-                    onChange={(e) => setForm((p) => ({ ...p, room: e.target.value }))}
-                    placeholder="VD: Phòng A-301"
-                  />
-                  <div className="flex gap-2">
-                    {DEMO_ROOMS.map((r) => (
-                      <button
-                        key={r}
-                        type="button"
-                        onClick={() => setForm((p) => ({ ...p, room: r }))}
-                        className="text-[11px] text-slate-700 bg-slate-100 hover:bg-slate-200 rounded px-2 py-0.5"
-                      >
-                        {r}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                    <SelectTrigger
+                      id="calendar-id"
+                      className="w-full min-w-0"
+                      aria-invalid={!!errors.calendarId}
+                    >
+                      <SelectValue
+                        placeholder={
+                          calendarsQuery.isPending ? "Đang tải lớp học..." : "Chọn lớp học"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {calendarsQuery.data?.map((calendar) => (
+                        <SelectItem key={calendar.id} value={String(calendar.id)}>
+                          {calendar.name} · Class #{calendar.classId}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormField>
+                <FormField
+                  id="calendar-version-id"
+                  label="Bản lịch nháp"
+                  required
+                  error={errors.calendarVersionId}
+                >
+                  <Select
+                    value={selectedVersion ? form.calendarVersionId : ""}
+                    onValueChange={(value) => {
+                      if (value) updateField("calendarVersionId", value);
+                    }}
+                    disabled={
+                      !selectedCalendar || versionsQuery.isPending || !versionsQuery.data?.length
+                    }
+                  >
+                    <SelectTrigger
+                      id="calendar-version-id"
+                      className="w-full min-w-0"
+                      aria-invalid={!!errors.calendarVersionId}
+                    >
+                      <SelectValue
+                        placeholder={
+                          selectedCalendar && versionsQuery.isPending
+                            ? "Đang tải bản lịch..."
+                            : "Chọn bản lịch DRAFT"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {versionsQuery.data?.map((version) => (
+                        <SelectItem key={version.id} value={String(version.id)}>
+                          v{version.versionNumber}
+                          {version.name ? ` · ${version.name}` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormField>
               </div>
-
-              {/* Khung thời gian: Start & End */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border border-slate-200 bg-slate-50/50 p-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="start-time" className="flex items-center gap-1.5 font-semibold text-slate-800">
-                    <Clock className="h-4 w-4 text-emerald-600" />
-                    Bắt đầu (Start time) <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="start-time"
-                    type="datetime-local"
-                    value={form.startTime}
-                    onChange={(e) => setForm((p) => ({ ...p, startTime: e.target.value }))}
-                    required
-                  />
-                </div>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="end-time" className="flex items-center gap-1.5 font-semibold text-slate-800">
-                    <Clock className="h-4 w-4 text-rose-600" />
-                    Kết thúc (End time) <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="end-time"
-                    type="datetime-local"
-                    value={form.endTime}
-                    onChange={(e) => setForm((p) => ({ ...p, endTime: e.target.value }))}
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Link họp & Ghi chú */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="meeting-link">Meeting Link (Online)</Label>
-                  <Input
-                    id="meeting-link"
-                    value={form.meetingLink ?? ""}
-                    onChange={(e) => setForm((p) => ({ ...p, meetingLink: e.target.value }))}
-                    placeholder="https://meet.google.com/..."
-                  />
-                </div>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="notes">Ghi chú buổi học</Label>
-                  <Textarea
-                    id="notes"
-                    rows={2}
-                    value={form.notes ?? ""}
-                    onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
-                    placeholder="Nội dung dặn dò, bài tập..."
-                  />
-                </div>
-              </div>
-            </form>
-          </CardContent>
-
-          <CardFooter className="flex justify-between border-t pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigate("/sessions")}
-              disabled={createMutation.isPending}
-            >
-              <ArrowLeft className="mr-1.5 h-4 w-4" />
-              Quay lại danh sách
-            </Button>
-
-            <Button
-              type="submit"
-              form="session-form"
-              disabled={createMutation.isPending}
-              className="bg-slate-900 hover:bg-slate-800 text-white"
-            >
-              <Save className="mr-1.5 h-4 w-4" />
-              {createMutation.isPending ? "Đang kiểm tra & Lưu..." : "Lưu Buổi Học"}
-            </Button>
-          </CardFooter>
-        </Card>
-      </div>
-
-      {/* Modal Cảnh báo Xung đột Lịch (FR-CAL-03) */}
+              {classQuery.data && (
+                <p className="text-sm text-muted-foreground">
+                  {classQuery.data.code}
+                  {classQuery.data.startDate && classQuery.data.endDate
+                    ? ` · Thời gian lớp: ${classQuery.data.startDate} – ${classQuery.data.endDate}`
+                    : ""}
+                </p>
+              )}
+              <SessionFormFields
+                form={form}
+                errors={errors}
+                onChange={updateField}
+                topics={topicsQuery.data || []}
+                trainers={trainersQuery.data || []}
+                classInfo={classQuery.data}
+                topicsLoading={topicsQuery.isPending}
+                trainersLoading={trainersQuery.isPending}
+              />
+            </fieldset>
+          </form>
+        </CardContent>
+        <CardFooter className="flex flex-wrap justify-between gap-3 border-t pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => navigate("/sessions")}
+            disabled={createMutation.isPending}
+          >
+            <ArrowLeft className="size-4" />
+            Quay lại danh sách
+          </Button>
+          <Button
+            type="submit"
+            form="session-form"
+            disabled={createMutation.isPending || !optionsReady}
+          >
+            {createMutation.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Save className="size-4" />
+            )}
+            {createMutation.isPending ? "Đang lưu..." : "Tạo buổi học"}
+          </Button>
+        </CardFooter>
+      </Card>
       <ConflictWarningModal
-        open={conflictModalOpen}
-        onClose={() => setConflictModalOpen(false)}
+        key={String(conflictOpen)}
+        open={conflictOpen}
+        onClose={() => setConflictOpen(false)}
         conflictMessage={conflictMessage}
-        conflictingSessions={conflictingSessions}
-        onConfirmOverride={handleConfirmOverride}
         isSubmitting={createMutation.isPending}
+        onConfirmOverride={(reason) => {
+          if (pendingRequest)
+            createMutation.mutate({
+              ...pendingRequest,
+              forceOverride: true,
+              overrideReason: reason,
+            });
+        }}
       />
     </MainLayout>
   );
