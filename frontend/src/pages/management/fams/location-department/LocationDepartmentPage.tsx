@@ -360,10 +360,10 @@ export const LocationDepartmentPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Main 2-Panel Layout */}
+        {/* Main 2-Panel Layout: Location Hierarchy (25-33%) & Departments (67-75%) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-          {/* Left Panel: Location Hierarchy (~30-35% width) */}
-          <div className="lg:col-span-4 xl:col-span-4">
+          {/* Left Panel: Location Hierarchy */}
+          <div className="lg:col-span-4 xl:col-span-3 min-w-0">
             <LocationHierarchyCard
               locations={locations}
               selectedLocationId={selectedLocationId}
@@ -376,8 +376,8 @@ export const LocationDepartmentPage: React.FC = () => {
             />
           </div>
 
-          {/* Right Panel: Departments (~65-70% width) */}
-          <div className="lg:col-span-8 xl:col-span-8">
+          {/* Right Panel: Departments */}
+          <div className="lg:col-span-8 xl:col-span-9 min-w-0">
             <DepartmentTableCard
               departments={currentDepartments}
               selectedLocationName={selectedLocationName}

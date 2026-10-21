@@ -168,7 +168,7 @@ export const LocationHierarchyCard: React.FC<LocationHierarchyCardProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-xs flex flex-col gap-3">
+    <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-xs flex flex-col gap-3 min-w-0 w-full">
       {/* Card Header */}
       <div className="flex items-center justify-between pb-3 border-b border-gray-100">
         <div>

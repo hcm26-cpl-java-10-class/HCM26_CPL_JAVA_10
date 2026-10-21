@@ -16,6 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 
 interface DepartmentTableCardProps {
   departments: DepartmentItem[];
@@ -66,14 +67,14 @@ export const DepartmentTableCard: React.FC<DepartmentTableCardProps> = ({
   const paginatedDepartments = filteredDepartments.slice(startIndex, endIndex);
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs flex flex-col gap-4">
+    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs flex flex-col gap-4 min-w-0 w-full">
       {/* Header and Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-gray-100">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900 tracking-tight flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100 min-w-0">
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold text-gray-900 tracking-tight flex items-center gap-2 flex-wrap">
             <span>Departments</span>
             {selectedLocationName && (
-              <span className="text-xs font-normal px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+              <span className="text-xs font-normal px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 truncate max-w-[200px]">
                 {selectedLocationName}
               </span>
             )}
@@ -84,9 +85,9 @@ export const DepartmentTableCard: React.FC<DepartmentTableCardProps> = ({
         </div>
 
         {/* Search & Status Filters */}
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5 sm:shrink-0">
           {/* Search Input */}
-          <div className="relative min-w-[220px] sm:min-w-[260px]">
+          <div className="relative min-w-[200px] sm:min-w-[240px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
               type="text"
@@ -99,7 +100,7 @@ export const DepartmentTableCard: React.FC<DepartmentTableCardProps> = ({
               <button
                 type="button"
                 onClick={() => setSearchQuery("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -145,27 +146,35 @@ export const DepartmentTableCard: React.FC<DepartmentTableCardProps> = ({
         </div>
       </div>
 
-      {/* Table Container */}
+      {/* Table Container with Controlled Fixed Layout */}
       <div className="overflow-x-auto rounded-lg border border-gray-200">
-        <table className="w-full text-left text-sm text-gray-700">
+        <table className="w-full table-fixed text-left text-sm text-gray-700 min-w-[540px] md:min-w-full">
+          <colgroup>
+            <col className="w-[15%] min-w-[70px]" />
+            <col className="w-[32%] min-w-[130px]" />
+            <col className="w-[20%] min-w-[95px]" />
+            <col className="w-[15%] min-w-[75px]" />
+            <col className="w-[13%] min-w-[75px]" />
+            <col className="w-[5%] min-w-[38px]" />
+          </colgroup>
           <thead className="bg-gray-50/80 text-xs uppercase text-gray-500 font-semibold border-b border-gray-200">
             <tr>
-              <th scope="col" className="px-4 py-3 min-w-[100px]">
+              <th scope="col" className="px-3.5 py-3 font-semibold truncate">
                 Mã / Code
               </th>
-              <th scope="col" className="px-4 py-3 min-w-[180px]">
+              <th scope="col" className="px-3.5 py-3 font-semibold truncate">
                 Tên / Name
               </th>
-              <th scope="col" className="px-4 py-3 min-w-[140px]">
+              <th scope="col" className="px-3.5 py-3 font-semibold truncate">
                 Location
               </th>
-              <th scope="col" className="px-4 py-3 min-w-[120px]">
+              <th scope="col" className="px-3.5 py-3 font-semibold truncate">
                 Liên kết / Linked
               </th>
-              <th scope="col" className="px-4 py-3 min-w-[110px]">
+              <th scope="col" className="px-3.5 py-3 font-semibold truncate">
                 Trạng thái / Status
               </th>
-              <th scope="col" className="px-4 py-3 text-right w-[60px]">
+              <th scope="col" className="px-2 py-3 text-right">
                 <span className="sr-only">Actions</span>
               </th>
             </tr>
@@ -203,42 +212,67 @@ export const DepartmentTableCard: React.FC<DepartmentTableCardProps> = ({
                   key={dept.id}
                   className="hover:bg-blue-50/40 transition-colors group"
                 >
-                  <td className="px-4 py-3.5 font-semibold text-gray-900 whitespace-nowrap">
+                  {/* Code */}
+                  <td className="px-3.5 py-3 font-semibold text-gray-900 truncate">
                     {dept.code}
                   </td>
-                  <td className="px-4 py-3.5 font-medium text-gray-800">
-                    <div>{dept.name}</div>
-                    {dept.description && (
-                      <div className="text-xs text-gray-400 truncate max-w-[280px]">
-                        {dept.description}
+
+                  {/* Name with Accessible Tooltip and Ellipsis */}
+                  <td className="px-3.5 py-3 font-medium text-gray-800 min-w-0">
+                    <TooltipWrapper
+                      content={`${dept.name}${dept.description ? ` — ${dept.description}` : ""}`}
+                    >
+                      <div className="min-w-0 cursor-default" title={dept.name}>
+                        <div className="truncate text-gray-900 font-medium">
+                          {dept.name}
+                        </div>
+                        {dept.description && (
+                          <div className="text-xs text-gray-400 truncate">
+                            {dept.description}
+                          </div>
+                        )}
                       </div>
-                    )}
+                    </TooltipWrapper>
                   </td>
-                  <td className="px-4 py-3.5 text-gray-600 whitespace-nowrap">
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                      {dept.locationName}
-                    </span>
+
+                  {/* Location */}
+                  <td className="px-3.5 py-3 text-gray-600 min-w-0">
+                    <div
+                      className="inline-flex items-center gap-1.5 max-w-full"
+                      title={dept.locationName}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                      <span className="truncate">{dept.locationName}</span>
+                    </div>
                   </td>
-                  <td className="px-4 py-3.5 text-gray-600 whitespace-nowrap">
-                    <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700 font-medium">
+
+                  {/* Linked Entities */}
+                  <td className="px-3.5 py-3 text-gray-600 min-w-0">
+                    <span
+                      className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-medium inline-block truncate max-w-full"
+                      title={dept.linkedEntities}
+                    >
                       {dept.linkedEntities}
                     </span>
                   </td>
-                  <td className="px-4 py-3.5 whitespace-nowrap">
+
+                  {/* Status */}
+                  <td className="px-3.5 py-3 whitespace-nowrap">
                     {dept.status === "Active" ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                         Active
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
-                        <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-gray-400 shrink-0" />
                         Inactive
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3.5 text-right whitespace-nowrap">
+
+                  {/* Actions */}
+                  <td className="px-2 py-3 text-right whitespace-nowrap">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button
@@ -275,8 +309,8 @@ export const DepartmentTableCard: React.FC<DepartmentTableCardProps> = ({
       </div>
 
       {/* Pagination & Count Footer */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 text-sm text-gray-600">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 text-sm text-gray-600 min-w-0">
+        <div className="flex flex-wrap items-center gap-3">
           <span>
             Hiển thị{" "}
             <span className="font-semibold text-gray-900">
@@ -302,12 +336,12 @@ export const DepartmentTableCard: React.FC<DepartmentTableCardProps> = ({
 
         {/* Page navigation with Blue Theme (No Orange) */}
         {totalPages > 1 && (
-          <div className="flex items-center gap-1 self-end sm:self-auto">
+          <div className="flex items-center gap-1 self-end sm:self-auto shrink-0">
             <button
               type="button"
               disabled={safePage <= 1}
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              className="inline-flex items-center justify-center h-8 w-8 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="inline-flex items-center justify-center h-8 w-8 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
               aria-label="Previous page"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -332,7 +366,7 @@ export const DepartmentTableCard: React.FC<DepartmentTableCardProps> = ({
               type="button"
               disabled={safePage >= totalPages}
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              className="inline-flex items-center justify-center h-8 w-8 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="inline-flex items-center justify-center h-8 w-8 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
               aria-label="Next page"
             >
               <ChevronRight className="h-4 w-4" />
