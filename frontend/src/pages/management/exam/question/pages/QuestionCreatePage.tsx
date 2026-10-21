@@ -19,7 +19,8 @@ export function QuestionCreatePage() {
     const [form, setForm] = useState<QuestionFormValues>(initialQuestionForm);
 
     const createMutation = useMutation({
-        mutationFn: (payload: QuestionFormValues) => questionApi.create({ ...payload, isActive: true } as any),
+        mutationFn: (payload: QuestionFormValues) =>
+            questionApi.create({ ...payload, isActive: payload.isActive ?? true } as any),
         onSuccess: async () => {
             await queryClient.invalidateQueries({ queryKey: ["question"] });
             toast.success("Question created successfully.");
@@ -44,6 +45,7 @@ export function QuestionCreatePage() {
                         onSubmit={(values) => createMutation.mutate(values)}
                         isSaving={createMutation.isPending}
                         submitLabel="Save"
+                        showActive={true}
                     />
                 </CardContent>
             </Card>

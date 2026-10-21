@@ -6,6 +6,11 @@ import com.example.starter_project_2025.system.question.dto.QuestionDTO;
 import com.opencsv.CSVReader;
 import lombok.Getter;
 import lombok.Setter;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.stereotype.Component;
 
 import java.io.InputStream;
@@ -47,16 +52,13 @@ public class QuestionCsvParser {
                 return results;
             }
 
-            // Dòng đầu tiên là header
             String[] rawHeaders = rows.get(0);
             Map<String, Integer> headerMap = buildHeaderMap(rawHeaders);
 
-            // Bắt đầu đọc từ dòng thứ 2 (index 1 -> số dòng hiển thị cho người dùng là 2)
             for (int i = 1; i < rows.size(); i++) {
                 int rowNumber = i + 1;
                 String[] rowData = rows.get(i);
 
-                // Bỏ qua dòng hoàn toàn rỗng
                 if (isRowEmpty(rowData)) {
                     continue;
                 }
@@ -76,6 +78,84 @@ public class QuestionCsvParser {
         return results;
     }
 
+    public List<ParsedRow> parseExcel(InputStream inputStream) {
+        List<ParsedRow> results = new ArrayList<>();
+
+        try (Workbook workbook = WorkbookFactory.create(inputStream)) {
+            Sheet sheet = workbook.getSheetAt(0);
+            if (sheet == null || sheet.getPhysicalNumberOfRows() == 0) {
+                return results;
+            }
+
+            Row headerRow = sheet.getRow(0);
+            if (headerRow == null) {
+                return results;
+            }
+
+            int lastCellNum = headerRow.getLastCellNum();
+            String[] headers = new String[lastCellNum];
+            for (int c = 0; c < lastCellNum; c++) {
+                headers[c] = getCellStringValue(headerRow.getCell(c));
+            }
+
+            Map<String, Integer> headerMap = buildHeaderMap(headers);
+
+            for (int r = 1; r <= sheet.getLastRowNum(); r++) {
+                Row row = sheet.getRow(r);
+                if (row == null) continue;
+
+                int rowNumber = r + 1;
+                String[] rowData = new String[lastCellNum];
+                boolean hasContent = false;
+                for (int c = 0; c < lastCellNum; c++) {
+                    String val = getCellStringValue(row.getCell(c));
+                    rowData[c] = val;
+                    if (val != null && !val.trim().isEmpty()) {
+                        hasContent = true;
+                    }
+                }
+
+                if (!hasContent) {
+                    continue;
+                }
+
+                try {
+                    QuestionDTO dto = parseRow(rowData, headerMap);
+                    results.add(new ParsedRow(rowNumber, dto));
+                } catch (Exception e) {
+                    results.add(new ParsedRow(rowNumber, e.getMessage()));
+                }
+            }
+        } catch (Exception e) {
+            results.add(new ParsedRow(1, "Lỗi đọc file Excel: " + e.getMessage()));
+        }
+
+        return results;
+    }
+
+    private String getCellStringValue(Cell cell) {
+        if (cell == null) return "";
+        return switch (cell.getCellType()) {
+            case STRING -> cell.getStringCellValue().trim();
+            case NUMERIC -> {
+                double val = cell.getNumericCellValue();
+                if (val == Math.floor(val) && !Double.isInfinite(val)) {
+                    yield String.valueOf((long) val);
+                }
+                yield String.valueOf(val);
+            }
+            case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
+            case FORMULA -> {
+                try {
+                    yield cell.getStringCellValue().trim();
+                } catch (Exception ex) {
+                    yield String.valueOf(cell.getNumericCellValue());
+                }
+            }
+            default -> "";
+        };
+    }
+
     private QuestionDTO parseRow(String[] row, Map<String, Integer> headerMap) {
         QuestionDTO dto = new QuestionDTO();
 
@@ -89,18 +169,16 @@ public class QuestionCsvParser {
         // 2. Type (Loại câu hỏi)
         String typeStr = getValue(row, headerMap, "type", "loại câu hỏi", "loại");
         if (typeStr == null || typeStr.trim().isEmpty()) {
-            throw new IllegalArgumentException("Loại câu hỏi không được để trống (SINGLE_CHOICE, MULTI_CHOICE, ESSAY)");
+            throw new IllegalArgumentException("Loại câu hỏi không được để trống (MULTIPLE_CHOICE, ESSAY)");
         }
         try {
             String normalizedType = typeStr.trim().toUpperCase();
-            // NEW: file CSV cũ còn ghi SINGLE_CHOICE / MULTI_CHOICE thì tự quy về MULTIPLE_CHOICE
             if (normalizedType.equals("SINGLE_CHOICE") || normalizedType.equals("MULTI_CHOICE")) {
                 normalizedType = "MULTIPLE_CHOICE";
             }
             dto.setType(QuestionType.valueOf(normalizedType));
-            dto.setType(QuestionType.valueOf(typeStr.trim().toUpperCase()));
         } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("Loại câu hỏi [" + typeStr.trim() + "] không hợp lệ. Cho phép: SINGLE_CHOICE, MULTI_CHOICE, ESSAY");
+            throw new IllegalArgumentException("Loại câu hỏi [" + typeStr.trim() + "] không hợp lệ. Cho phép: MULTIPLE_CHOICE, ESSAY");
         }
 
         // 3. Difficulty (Độ khó)
@@ -169,7 +247,6 @@ public class QuestionCsvParser {
 
     private String cleanHeader(String header) {
         if (header == null) return "";
-        // Loại bỏ UTF-8 BOM nếu có
         return header.replace("\uFEFF", "").trim().toLowerCase();
     }
 

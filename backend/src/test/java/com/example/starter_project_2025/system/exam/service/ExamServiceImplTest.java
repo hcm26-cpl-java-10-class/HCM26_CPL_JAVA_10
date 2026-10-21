@@ -84,6 +84,8 @@ class ExamServiceImplTest {
         when(questionRepository.findAllById(any())).thenReturn(List.of(question));
         when(examRepository.save(exam)).thenReturn(exam);
         when(examMapper.toResponse(exam)).thenReturn(response);
+        when(questionRepository.save(any(Question.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         ExamDTO result = examService.addQuestions(1L, List.of(10L, 10L));
 

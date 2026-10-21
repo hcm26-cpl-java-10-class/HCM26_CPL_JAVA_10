@@ -28,6 +28,8 @@ public interface ExamAttemptRepository extends BaseCrudRepository<ExamAttempt, L
 
     List<ExamAttempt> findAllByExam_IdAndStudent_IdOrderByAttemptNumberAsc(Long examId, Long studentId);
 
+    List<ExamAttempt> findAllByExam_Id(Long examId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select a from ExamAttempt a where a.id = :attemptId and a.student.id = :studentId")
     Optional<ExamAttempt> lockByIdAndStudentId(

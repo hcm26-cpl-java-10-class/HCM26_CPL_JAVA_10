@@ -33,10 +33,25 @@ public class QuestionExportController {
     }
 
     @GetMapping("/export/template")
-    public ResponseEntity<byte[]> downloadTemplate() {
-        byte[] csv = exportService.downloadTemplate();
+    public ResponseEntity<byte[]> downloadTemplate(
+            @RequestParam(value = "format", defaultValue = "xlsx") String format
+    ) {
+        if ("csv".equalsIgnoreCase(format)) {
+            byte[] csv = exportService.downloadTemplate();
+            return csvResponse(csv, "question-template.csv");
+        }
 
-        return csvResponse(csv, "question-template.csv");
+        byte[] excel = exportService.downloadExcelTemplate();
+        return ResponseEntity.ok()
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"question-template.xlsx\""
+                )
+                .header("Access-Control-Expose-Headers", "Content-Disposition")
+                .contentType(
+                        MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                )
+                .body(excel);
     }
 
     private ResponseEntity<byte[]> csvResponse(
@@ -48,6 +63,7 @@ public class QuestionExportController {
                         HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"" + filename + "\""
                 )
+                .header("Access-Control-Expose-Headers", "Content-Disposition")
                 .contentType(
                         MediaType.parseMediaType("text/csv; charset=UTF-8")
                 )
