@@ -97,6 +97,7 @@ export default function StudentExamTakingPage() {
 
     const attempt = attemptQuery.data;
 
+    // Đánh dấu ngôi sao (lưu localStorage theo từng lượt làm) + câu đang được chọn
     const [flagged, setFlagged] = useState<Set<number>>(new Set());
     const [activeQuestionId, setActiveQuestionId] = useState<number | null>(null);
     const flagKey = attempt ? `exam-flagged-${attempt.id}` : null;
@@ -315,7 +316,7 @@ export default function StudentExamTakingPage() {
             && !submitMutation.isPending
         ) {
             autoSubmitStarted.current = true;
-            submitCurrentAnswers();
+            void submitCurrentAnswers();
         }
     }, [attempt?.status, secondsRemaining, submitMutation.isPending]);
 
@@ -462,6 +463,8 @@ export default function StudentExamTakingPage() {
         );
     };
 
+    // Thanh ghim: đồng hồ bên trái, danh sách câu hỏi bên phải (2 ô riêng, khoảng giữa để trống)
+    // Màu ô: vàng (đánh dấu, luôn ưu tiên) > xanh (đã làm) > đen (chưa làm); viền đỏ = câu đang chọn
     const pinnedBar = (
         <div className="pointer-events-none sticky top-0 z-30 flex items-start justify-between gap-4 py-3">
             {timerBox}
@@ -562,7 +565,6 @@ export default function StudentExamTakingPage() {
                             />
                         </section>
                     </div>
-
                 </main>
             </MainLayout>
         );
@@ -686,6 +688,7 @@ export default function StudentExamTakingPage() {
                             </div>
 
                             {attempt.questions.map((question, index) => {
+                                // Câu tự luận chỉ hiện ở mục "Câu tự luận" phía trên
                                 if (question.type === 'ESSAY') return null;
                                 const answer = answers[question.id] ?? {
                                     questionId: question.id,
@@ -697,9 +700,7 @@ export default function StudentExamTakingPage() {
                                     <section
                                         key={question.id}
                                         id={`question-card-${question.id}`}
-                                        className={`rounded-xl border p-5 transition-all ${
-                                            activeId === question.id ? 'ring-2 ring-red-500' : ''
-                                        }`}
+                                        className="scroll-mt-40 rounded-xl border p-5"
                                     >
                                         <div className="flex items-center justify-between gap-2">
                                             <h2 className="font-semibold">
@@ -723,70 +724,46 @@ export default function StudentExamTakingPage() {
                                             </div>
                                         )}
 
-                                        {question.type === 'ESSAY' ? (
-                                            <div className="mt-4 flex items-center justify-between rounded-lg border bg-muted/30 p-3">
-                                                <span className="text-sm text-muted-foreground">
-                                                    {hasText(question.id)
-                                                        ? 'Đã có nội dung bài làm tự luận'
-                                                        : 'Chưa làm câu tự luận này'}
-                                                </span>
-                                                <Button
-                                                    size="sm"
-                                                    className={
-                                                        answer.saved
-                                                            ? 'bg-green-600 text-white hover:bg-green-700'
-                                                            : 'bg-blue-600 text-white hover:bg-blue-700'
-                                                    }
-                                                    onClick={() => openEssay(question.id)}
-                                                >
-                                                    {answer.saved
-                                                        ? 'Sửa bài tự luận'
-                                                        : hasText(question.id)
-                                                            ? 'Làm tiếp'
-                                                            : 'Mở bài tự luận'}
-                                                </Button>
-                                            </div>
-                                        ) : (
-                                            <div className="mt-4 grid gap-3">
-                                                {question.options.map((option) => {
-                                                    const checked = answer.selectedOptionIds.includes(option.id);
-                                                    const isMulti = question.multiSelect ?? question.type === 'MULTI_CHOICE';
-                                                    const inputType = isMulti ? 'checkbox' : 'radio';
-                                                    return (
-                                                        <label
-                                                            key={option.id}
-                                                            className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-muted/50"
-                                                        >
-                                                            <input
-                                                                type={inputType}
-                                                                name={`question-${question.id}`}
-                                                                checked={checked}
-                                                                onChange={() => {
-                                                                    const selectedOptionIds = !isMulti
-                                                                        ? [option.id]
-                                                                        : checked
-                                                                            ? answer.selectedOptionIds.filter((id) => id !== option.id)
-                                                                            : [...answer.selectedOptionIds, option.id];
-                                                                    updateAnswer(question.id, { selectedOptionIds });
-                                                                }}
-                                                                disabled={isFinished}
-                                                                className="mt-1"
-                                                            />
-                                                            <div className="flex flex-col gap-2">
-                                                                <span>{option.content}</span>
-                                                                {option.imageUrl?.trim() && (
-                                                                    <img
-                                                                        src={option.imageUrl}
-                                                                        alt=""
-                                                                        className="max-h-40 rounded border object-contain"
-                                                                    />
-                                                                )}
-                                                            </div>
-                                                        </label>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
+                                        <div className="mt-4 grid gap-3">
+                                            {question.options.map((option) => {
+                                                const checked = answer.selectedOptionIds.includes(option.id);
+                                                const isMulti = question.multiSelect ?? question.type === 'MULTI_CHOICE';
+                                                const inputType = isMulti ? 'checkbox' : 'radio';
+                                                return (
+                                                    <label
+                                                        key={option.id}
+                                                        className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-muted/50"
+                                                    >
+                                                        <input
+                                                            type={inputType}
+                                                            name={`question-${question.id}`}
+                                                            checked={checked}
+                                                            onChange={() => {
+                                                                const selectedOptionIds = !isMulti
+                                                                    ? [option.id]
+                                                                    : checked
+                                                                        ? answer.selectedOptionIds.filter((id) => id !== option.id)
+                                                                        : [...answer.selectedOptionIds, option.id];
+                                                                setActiveQuestionId(question.id);
+                                                                updateAnswer(question.id, { selectedOptionIds });
+                                                            }}
+                                                            disabled={isFinished}
+                                                            className="mt-1"
+                                                        />
+                                                        <div className="flex flex-col gap-2">
+                                                            <span>{option.content}</span>
+                                                            {option.imageUrl?.trim() && (
+                                                                <img
+                                                                    src={option.imageUrl}
+                                                                    alt=""
+                                                                    className="max-h-40 rounded border object-contain"
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
                                     </section>
                                 );
                             })}
