@@ -2,7 +2,7 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, useSidebar } fro
 import { NavMain } from "@/components/layout/NavMain";
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { Button } from "@/components/ui/button";
-import { LogOutIcon } from "lucide-react";
+import { LogOutIcon, MapPin } from "lucide-react";
 import { useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { authApi } from "@/api/features/auth.api";
@@ -23,20 +23,21 @@ export function SidebarMenu() {
             return iconMap[key];
         };
 
-        return moduleGroups
-            .map((group) => ({
-                id: group.id ?? group.name ?? "group",
-                name: group.name ?? "Menu",
-                items: group.modules
+        const groups = moduleGroups
+            .map((group) => {
+                const isUnderSystemManagement =
+                    (group.name || "").toLowerCase().includes("system");
+
+                const items = group.modules
                     .filter((module) => !!module.url)
                     // Temporarily hide standalone "Modules" navigation item under "System Management"
                     .filter((module) => {
-                        const isUnderSystemManagement =
+                        const isUnderSystem =
                             (group.name || "").toLowerCase().includes("system");
                         const isModulesMenu =
                             module.url === "/menus" || (module.title || "").toLowerCase() === "modules";
 
-                        if (isUnderSystemManagement && isModulesMenu) {
+                        if (isUnderSystem && isModulesMenu) {
                             return false;
                         }
                         return true;
@@ -48,9 +49,54 @@ export function SidebarMenu() {
                         isActive:
                             !!module.url &&
                             (location.pathname === module.url || location.pathname.startsWith(`${module.url}/`)),
-                    })),
-            }))
+                    }));
+
+                // Ensure "Location & Department" exists under System Management
+                if (isUnderSystemManagement) {
+                    const hasLocationDept = items.some(
+                        (item) =>
+                            item.url === "/fams/location-department" ||
+                            (item.title || "").toLowerCase().includes("location"),
+                    );
+                    if (!hasLocationDept) {
+                        items.push({
+                            title: "Location & Department",
+                            url: "/fams/location-department",
+                            icon: MapPin,
+                            isActive:
+                                location.pathname === "/fams/location-department" ||
+                                location.pathname.startsWith("/fams/location-department/"),
+                        });
+                    }
+                }
+
+                return {
+                    id: group.id ?? group.name ?? "group",
+                    name: group.name ?? "Menu",
+                    items,
+                };
+            })
             .filter((group) => group.items.length > 0);
+
+        const hasSystemGroup = groups.some((g) => (g.name || "").toLowerCase().includes("system"));
+        if (!hasSystemGroup) {
+            groups.push({
+                id: "group-system-management",
+                name: "System Management",
+                items: [
+                    {
+                        title: "Location & Department",
+                        url: "/fams/location-department",
+                        icon: MapPin,
+                        isActive:
+                            location.pathname === "/fams/location-department" ||
+                            location.pathname.startsWith("/fams/location-department/"),
+                    },
+                ],
+            });
+        }
+
+        return groups;
     }, [location.pathname, moduleGroups]);
 
     return (

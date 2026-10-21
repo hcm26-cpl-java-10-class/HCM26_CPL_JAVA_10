@@ -10,6 +10,7 @@ import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_grade
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
+import { LocationDepartmentPage } from "@/pages/management/fams/location-department";
 import { PersonalProfilePage } from "@/pages/management/profile";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
@@ -29,6 +30,8 @@ export const routes: RouteConfig[] = [
   { path: "/profile", component: PersonalProfilePage, isPublic: true },
   { path: "/fams/module-group-module", component: ModuleGroupModulePage, isPublic: true },
   { path: "/module-group-module", component: ModuleGroupModulePage, isPublic: true },
+  { path: "/fams/location-department", component: LocationDepartmentPage, isPublic: true },
+  { path: "/location-department", component: LocationDepartmentPage, isPublic: true },
   { path: "/dashboard", component: Dashboard, isModuleDriven: true },
   {
     path: "/topic-marks/gradebook-demo",
