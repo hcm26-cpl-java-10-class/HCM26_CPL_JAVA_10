@@ -20,7 +20,7 @@ public class ScheduleValidationController {
     private final ScheduleValidationService scheduleValidationService;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('SESSION_CREATE', 'SESSION_UPDATE')")
+    @PreAuthorize("hasAuthority('SESSION_READ') and hasAnyAuthority('SESSION_CREATE', 'SESSION_UPDATE')")
     @Operation(summary = "Validate one or more sessions for schedule conflicts")
     public ResponseEntity<ScheduleValidationResult> validate(
             @Valid @RequestBody ScheduleValidationRequest request) {
