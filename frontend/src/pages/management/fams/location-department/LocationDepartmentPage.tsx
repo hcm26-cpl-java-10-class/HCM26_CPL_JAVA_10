@@ -156,7 +156,7 @@ export const LocationDepartmentPage: React.FC = () => {
           d.locationId === editingLocation.id ? { ...d, locationName: data.name } : d
         )
       );
-      toast.success(`Cập nhật địa điểm "${data.name}" thành công!`);
+      toast.success(`Location "${data.name}" updated successfully!`);
     } else {
       // Add new node
       const newLocation: LocationNode = {
@@ -188,7 +188,7 @@ export const LocationDepartmentPage: React.FC = () => {
         };
         setLocations((prev) => insertNode(prev));
       }
-      toast.success(`Thêm mới địa điểm "${data.name}" thành công!`);
+      toast.success(`Location "${data.name}" created successfully!`);
     }
 
     setIsLocationModalOpen(false);
@@ -231,7 +231,7 @@ export const LocationDepartmentPage: React.FC = () => {
             : d
         )
       );
-      toast.success(`Cập nhật phòng ban "${data.code}" thành công!`);
+      toast.success(`Department "${data.code}" updated successfully!`);
     } else {
       const newDept: DepartmentItem = {
         id: `dept-${Date.now()}`,
@@ -241,7 +241,7 @@ export const LocationDepartmentPage: React.FC = () => {
         displayOrder: departments.length + 1,
       };
       setDepartments((prev) => [...prev, newDept]);
-      toast.success(`Thêm mới phòng ban "${data.code}" thành công!`);
+      toast.success(`Department "${data.code}" created successfully!`);
     }
 
     setIsDepartmentModalOpen(false);
@@ -274,11 +274,11 @@ export const LocationDepartmentPage: React.FC = () => {
       if (selectedLocationId === locToDelete.id) {
         setSelectedLocationId(null);
       }
-      toast.success(`Đã xóa địa điểm "${locToDelete.name}" thành công!`);
+      toast.success(`Location "${locToDelete.name}" deleted successfully!`);
     } else if (deleteDialog.type === "department" && deleteDialog.department) {
       const deptToDelete = deleteDialog.department;
       setDepartments((prev) => prev.filter((d) => d.id !== deptToDelete.id));
-      toast.success(`Đã xóa phòng ban "${deptToDelete.code}" thành công!`);
+      toast.success(`Department "${deptToDelete.code}" deleted successfully!`);
     }
 
     setDeleteDialog({ open: false, type: "department" });

@@ -160,19 +160,19 @@ export const DepartmentTableCard: React.FC<DepartmentTableCardProps> = ({
           <thead className="bg-gray-50/80 text-xs uppercase text-gray-500 font-semibold border-b border-gray-200">
             <tr>
               <th scope="col" className="px-3 py-3 font-semibold truncate">
-                Mã / Code
+                Code
               </th>
               <th scope="col" className="px-3 py-3 font-semibold truncate">
-                Tên / Name
+                Name
               </th>
               <th scope="col" className="px-3 py-3 font-semibold truncate">
                 Location
               </th>
               <th scope="col" className="px-3 py-3 font-semibold truncate">
-                Liên kết / Linked
+                Linked Entities
               </th>
               <th scope="col" className="px-3 py-3 font-semibold truncate">
-                Trạng thái / Status
+                Status
               </th>
               <th scope="col" className="px-2 py-3 text-right">
                 <span className="sr-only">Actions</span>
@@ -217,7 +217,7 @@ export const DepartmentTableCard: React.FC<DepartmentTableCardProps> = ({
                     {dept.code}
                   </td>
 
-                  {/* Name with Expanded 42% Column Width, Tooltip & Description */}
+                  {/* Name with Expanded Column Width, Tooltip & Description */}
                   <td className="px-3 py-3 font-medium text-gray-800 min-w-0">
                     <TooltipWrapper
                       content={`${dept.name}${dept.description ? ` — ${dept.description}` : ""}`}
@@ -235,7 +235,7 @@ export const DepartmentTableCard: React.FC<DepartmentTableCardProps> = ({
                     </TooltipWrapper>
                   </td>
 
-                  {/* Location - Optimized 14% Compact Column */}
+                  {/* Location - Optimized Compact Column */}
                   <td className="px-3 py-3 text-gray-600 min-w-0">
                     <div
                       className="inline-flex items-center gap-1.5 max-w-full"
@@ -289,14 +289,14 @@ export const DepartmentTableCard: React.FC<DepartmentTableCardProps> = ({
                           className="cursor-pointer text-gray-700 flex items-center gap-2"
                         >
                           <Edit2 className="h-3.5 w-3.5 text-blue-600" />
-                          <span>Chỉnh sửa</span>
+                          <span>Edit</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => onDeleteDepartment(dept)}
                           className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 flex items-center gap-2"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
-                          <span>Xóa</span>
+                          <span>Delete</span>
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -308,20 +308,20 @@ export const DepartmentTableCard: React.FC<DepartmentTableCardProps> = ({
         </table>
       </div>
 
-      {/* Pagination & Count Footer */}
+      {/* Pagination & Count Footer (English) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 text-sm text-gray-600 min-w-0">
         <div className="flex flex-wrap items-center gap-3">
           <span>
-            Hiển thị{" "}
+            Showing{" "}
             <span className="font-semibold text-gray-900">
               {totalItems === 0 ? 0 : startIndex + 1}–{endIndex}
             </span>{" "}
-            trong{" "}
-            <span className="font-semibold text-gray-900">{totalItems}</span> kết quả
+            of{" "}
+            <span className="font-semibold text-gray-900">{totalItems}</span> results
           </span>
 
           <div className="flex items-center gap-1.5 text-xs text-gray-500">
-            <span>/ trang:</span>
+            <span>/ page:</span>
             <select
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
@@ -334,7 +334,7 @@ export const DepartmentTableCard: React.FC<DepartmentTableCardProps> = ({
           </div>
         </div>
 
-        {/* Page navigation with Blue Theme (No Orange) */}
+        {/* Page navigation with Blue Theme */}
         {totalPages > 1 && (
           <div className="flex items-center gap-1 self-end sm:self-auto shrink-0">
             <button
