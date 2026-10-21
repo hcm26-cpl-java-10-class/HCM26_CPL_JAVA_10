@@ -11,6 +11,10 @@ import java.util.List;
  */
 public interface ExternalApiService {
 
+    default boolean isSampleData() {
+        return false;
+    }
+
     /**
      * Fetch list of classes from the external system.
      *

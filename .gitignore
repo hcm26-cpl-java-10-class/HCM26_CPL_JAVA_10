@@ -29,3 +29,6 @@ frontend/dist/
 docker/.env
 
 /backend.zip
+
+# === Runtime logs ===
+*.log

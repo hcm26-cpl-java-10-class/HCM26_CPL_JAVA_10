@@ -6,6 +6,7 @@ import RegisterPage from "@/pages/auth/RegisterPage";
 import NotFoundPage from "@/pages/error/NotFoundPage";
 import { Unauthorized } from "@/pages/error/Unauthorized";
 import WeeklyCalendarPage from "@/pages/management/calendar/WeeklyCalendarPage";
+import ClassSetupPage from "@/pages/management/class-setup";
 import { Dashboard } from "@/pages/management/dashboard";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
 import ExamManagementPage from "@/pages/management/exam";
@@ -27,6 +28,11 @@ export interface RouteConfig {
 }
 
 export const routes: RouteConfig[] = [
+  {
+    path: "/class-setup",
+    component: ClassSetupPage,
+    isModuleDriven: true,
+  },
   {
     path: "/calendar/preview",
     component: WeeklyCalendarPage,

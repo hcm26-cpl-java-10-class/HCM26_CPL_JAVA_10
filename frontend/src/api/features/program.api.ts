@@ -8,6 +8,7 @@ export interface ProgramSubjectRequest {
 }
 
 export interface ProgramSubjectResponse extends ProgramSubjectRequest {
+  id: number;
   code: string;
   name: string;
   version: string;

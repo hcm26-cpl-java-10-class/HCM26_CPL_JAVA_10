@@ -1,23 +1,23 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type FormEvent,
-  type CSSProperties,
-} from "react";
-import {
-  programApi,
-  type TrainingProgramRequest,
-  type TrainingProgramResponse,
-} from "@/api/features/program.api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertCircle, ArrowRight, BookOpen, CheckCircle2, ChevronLeft, ChevronRight, Clock3, CopyPlus, Download, FileText, Info, MapPin, MoreHorizontal, Pencil, Plus, RefreshCw, Search, X } from "lucide-react";
+import { programApi, type ProgramStatus, type TrainingProgramRequest, type TrainingProgramResponse } from "@/api/features/program.api";
 import { subjectApi } from "@/api/features/subject.api";
-import type { SubjectDTO } from "@/types";
-import type { EntityConfig, EntitySchema } from "@/types";
+import { MainLayout } from "@/components/layout/MainLayout";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { usePermissions } from "@/hooks/usePermissions";
+import type { EntityConfig, EntitySchema, SubjectDTO } from "@/types";
+import { ProgramEditor } from "./ProgramEditor";
+import { ProgramActionDialog, ProgramDetails, type ProgramAction } from "./ProgramDialogs";
+import { errorMessage, normalizeSearch, primaryButtonClass, ProgramStatusBadge, statusLabels } from "./program-ui";
 
 const schema: EntitySchema = {
-  entityName: "training-program",
-  idField: "id",
+  entityName: "training-program", idField: "id",
   fields: [
     { name: "code", label: "Code", type: "text", sortable: true, filterable: true, filterType: "text" },
     { name: "name", label: "Name", type: "text", sortable: true, filterable: true, filterType: "text" },
@@ -26,253 +26,152 @@ const schema: EntitySchema = {
     { name: "status", label: "Status", type: "text", sortable: true },
   ],
 };
+export const entityConfig: EntityConfig = { name: "Training Programs", path: "/programs", api: {} as EntityConfig["api"], schema };
 
-export const entityConfig = {
-  name: "Training Programs",
-  path: "/programs",
-  api: {} as any,
-  schema,
-} as EntityConfig;
-
-const inputStyle: CSSProperties = {
-  display: "block", width: "100%", boxSizing: "border-box", marginTop: 7,
-  padding: "11px 12px", border: "1px solid #cbd5e1", borderRadius: 9,
-  background: "#ffffff", color: "#0f172a", fontSize: 14, lineHeight: 1.5,
-  outlineColor: "#2563eb", boxShadow: "0 1px 2px rgba(15,23,42,.04)",
-};
-const buttonStyle: CSSProperties = {
-  display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-  padding: "10px 14px", border: "1px solid #cbd5e1", borderRadius: 9,
-  background: "#ffffff", color: "#334155", fontSize: 14, fontWeight: 600,
-  cursor: "pointer", boxShadow: "0 1px 2px rgba(15,23,42,.05)",
-};
+type StatusFilter = "ALL" | ProgramStatus;
+const filters: StatusFilter[] = ["ALL", "DRAFT", "ACTIVE", "INACTIVE"];
+const pageSize = 8;
 
 export default function TrainingProgramPage() {
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission("PROGRAM_CREATE");
+  const canUpdate = hasPermission("PROGRAM_UPDATE");
   const [programs, setPrograms] = useState<TrainingProgramResponse[]>([]);
   const [subjects, setSubjects] = useState<SubjectDTO[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingSubjects, setLoadingSubjects] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [subjectsError, setSubjectsError] = useState("");
+  const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [cloneVersions, setCloneVersions] = useState<Record<number, string>>({});
-  const [hoveredProgramId, setHoveredProgramId] = useState<number | null>(null);
-  const [selectedProgramId, setSelectedProgramId] = useState<number | null>(null);
-  const [form, setForm] = useState({
-    code: "", name: "", version: "1.0", region: "",
-    subjectIds: [] as number[],
-  });
+  const [status, setStatus] = useState<StatusFilter>("ALL");
+  const [region, setRegion] = useState("ALL");
+  const [page, setPage] = useState(1);
+  const [editor, setEditor] = useState<{ program: TrainingProgramResponse | null } | null>(null);
+  const [details, setDetails] = useState<TrainingProgramResponse | null>(null);
+  const [action, setAction] = useState<ProgramAction | null>(null);
+  const requestId = useRef(0);
 
-  const load = useCallback(async () => {
-    setBusy(true);
-    setError("");
+  const loadPrograms = useCallback(async () => {
+    const currentRequest = ++requestId.current;
+    setLoading(true); setLoadError("");
     try {
-      const [programData, activeSubjects] = await Promise.all([
-        programApi.getAll(search.trim() ? { search: search.trim() } : undefined),
-        subjectApi.getActiveSubjects(),
-      ]);
-      setPrograms(programData);
-      setSubjects(activeSubjects);
-    } catch (e: any) {
-      setError(e?.response?.data?.message || "Không tải được chương trình hoặc danh sách môn học. Hãy kiểm tra backend và quyền đăng nhập.");
-    } finally {
-      setBusy(false);
-    }
-  }, [search]);
+      const data = await programApi.getAll();
+      if (currentRequest === requestId.current) setPrograms(data);
+    } catch (error) {
+      if (currentRequest === requestId.current) setLoadError(errorMessage(error, "Không tải được chương trình. Vui lòng thử lại."));
+    } finally { if (currentRequest === requestId.current) setLoading(false); }
+  }, []);
+  const loadSubjects = useCallback(async () => {
+    setLoadingSubjects(true); setSubjectsError("");
+    try { setSubjects(await subjectApi.getActiveSubjects()); }
+    catch (error) { setSubjectsError(errorMessage(error, "Không tải được môn học. Vui lòng thử lại.")); }
+    finally { setLoadingSubjects(false); }
+  }, []);
+  useEffect(() => { void loadPrograms(); void loadSubjects(); }, [loadPrograms, loadSubjects]);
 
-  useEffect(() => { void load(); }, [load]);
-
-  const selectedSubjects = useMemo(
-    () => form.subjectIds.map((id) => subjects.find((s) => s.id === id)).filter(Boolean) as SubjectDTO[],
-    [form.subjectIds, subjects],
-  );
-  const totalHours = selectedSubjects.reduce((sum, subject) => sum + (subject.durationHours || 0), 0);
-
-  const resetForm = () => {
-    setEditingId(null);
-    setForm({ code: "", name: "", version: "1.0", region: "", subjectIds: [] });
-    setMessage("");
+  const regions = useMemo(() => [...new Set(programs.map((program) => program.region).filter((value): value is string => Boolean(value)))].sort((a, b) => a.localeCompare(b, "vi")), [programs]);
+  const filtered = useMemo(() => programs.filter((program) =>
+    normalizeSearch(`${program.code} ${program.name}`).includes(normalizeSearch(search))
+    && (status === "ALL" || program.status === status)
+    && (region === "ALL" || program.region === region)), [programs, region, search, status]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const visible = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const hasFilters = Boolean(search.trim() || status !== "ALL" || region !== "ALL");
+  const clearFilters = () => { setSearch(""); setStatus("ALL"); setRegion("ALL"); setPage(1); };
+  const openCreate = () => { setNotice(""); setEditor({ program: null }); };
+  const openAction = (type: ProgramAction["type"], program: TrainingProgramResponse) => { setDetails(null); setNotice(""); setAction({ type, program }); };
+  const openEdit = (program: TrainingProgramResponse) => { setDetails(null); setNotice(""); setEditor({ program }); };
+  const updateList = (program: TrainingProgramResponse) => setPrograms((current) => [program, ...current.filter((item) => item.id !== program.id)].sort((a, b) => b.id - a.id));
+  const saveProgram = async (request: TrainingProgramRequest) => {
+    const program = editor?.program ? await programApi.update(editor.program.id, request) : await programApi.create(request);
+    updateList(program); setEditor(null); clearFilters();
+    setNotice(`Đã ${editor?.program ? "cập nhật" : "tạo"} bản nháp ${program.code} · phiên bản ${program.version}.`);
   };
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    setError(""); setMessage("");
-    if (form.subjectIds.length === 0) {
-      setError("Hãy chọn ít nhất một môn học cho chương trình.");
-      return;
-    }
-    const payload: TrainingProgramRequest = {
-      code: form.code.trim(), name: form.name.trim(), version: form.version.trim(),
-      region: form.region.trim() || undefined,
-      subjects: form.subjectIds.map((subjectId, index) => ({ subjectId, orderIndex: index + 1 })),
+  const confirmAction = async (version: string) => {
+    if (!action) return;
+    const program = action.type === "clone" ? await programApi.cloneVersion(action.program.id, version) : await programApi.activate(action.program.id);
+    updateList(program); setAction(null); clearFilters();
+    setNotice(action.type === "clone" ? `Đã tạo bản nháp ${program.code} · phiên bản ${program.version}.` : `Đã kích hoạt ${program.code} · phiên bản ${program.version}.`);
+  };
+  const exportCsv = () => {
+    const cell = (value: unknown) => {
+      const text = String(value ?? "");
+      return `"${(/^[=+\-@\t\r]/.test(text) ? "'" + text : text).replace(/"/g, '""')}"`;
     };
-    setBusy(true);
-    try {
-      if (editingId === null) await programApi.create(payload);
-      else await programApi.update(editingId, payload);
-      setMessage(editingId === null ? "Tạo chương trình thành công." : "Cập nhật chương trình thành công.");
-      resetForm();
-      await load();
-    } catch (e: any) {
-      setError(e?.response?.data?.message || "Không thể lưu chương trình. Hãy kiểm tra dữ liệu và trạng thái môn học.");
-    } finally { setBusy(false); }
+    const rows = [["Mã chương trình", "Tên chương trình", "Phiên bản", "Khu vực", "Số môn", "Tổng giờ", "Trạng thái"],
+      ...filtered.map((program) => [program.code, program.name, program.version, program.region, program.subjects.length, program.totalDurationHours, statusLabels[program.status]])];
+    const url = URL.createObjectURL(new Blob(["\uFEFF" + rows.map((row) => row.map(cell).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a"); link.href = url; link.download = "chuong-trinh-dao-tao.csv"; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setNotice(`Đã xuất ${filtered.length} chương trình theo bộ lọc hiện tại.`);
   };
+  const programMenu = (program: TrainingProgramResponse) => (canCreate || canUpdate) && <DropdownMenu>
+    <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" aria-label={`Thao tác ${program.code} phiên bản ${program.version}`}><MoreHorizontal /></Button></DropdownMenuTrigger>
+    <DropdownMenuContent align="end" className="w-52">
+      <DropdownMenuLabel className="break-all whitespace-normal text-xs text-muted-foreground">{program.code} · v{program.version}</DropdownMenuLabel><DropdownMenuSeparator />
+      {canUpdate && program.status === "DRAFT" && <DropdownMenuItem onSelect={() => openEdit(program)}><Pencil />Chỉnh sửa bản nháp</DropdownMenuItem>}
+      {canCreate && <DropdownMenuItem onSelect={() => openAction("clone", program)}><CopyPlus />Tạo phiên bản mới</DropdownMenuItem>}
+      {canUpdate && program.status !== "ACTIVE" && <DropdownMenuItem onSelect={() => openAction("activate", program)}><CheckCircle2 />{program.status === "INACTIVE" ? "Kích hoạt lại" : "Kích hoạt chương trình"}</DropdownMenuItem>}
+    </DropdownMenuContent>
+  </DropdownMenu>;
 
-  const edit = (program: TrainingProgramResponse) => {
-    if (program.status === "ACTIVE") {
-      setError("Chương trình ACTIVE không được sửa trực tiếp. Hãy clone phiên bản mới.");
-      return;
-    }
-    setEditingId(program.id);
-    setForm({
-      code: program.code, name: program.name, version: program.version,
-      region: program.region || "", subjectIds: program.subjects.map((s) => s.subjectId),
-    });
-    setError(""); setMessage("");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const activate = async (id: number) => {
-    setError(""); setMessage("");
-    try {
-      await programApi.activate(id);
-      setMessage("Đã kích hoạt chương trình.");
-      await load();
-    } catch (e: any) {
-      setError(e?.response?.data?.message || "Không thể kích hoạt chương trình.");
-    }
-  };
-
-  const clone = async (program: TrainingProgramResponse) => {
-    const newVersion = (cloneVersions[program.id] || "").trim();
-    if (!newVersion) { setError(`Nhập phiên bản mới cho ${program.code} trước khi clone.`); return; }
-    try {
-      setError(""); setMessage("");
-      await programApi.cloneVersion(program.id, newVersion);
-      setMessage(`Đã clone ${program.code} thành phiên bản ${newVersion}.`);
-      setCloneVersions((old) => ({ ...old, [program.id]: "" }));
-      await load();
-    } catch (e: any) {
-      setError(e?.response?.data?.message || "Clone phiên bản thất bại.");
-    }
-  };
-
-  const exportCsv = async () => {
-    try {
-      const blob = await programApi.exportCsv(search || undefined);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = "training-programs.csv"; a.click();
-      URL.revokeObjectURL(url);
-    } catch (e: any) { setError(e?.response?.data?.message || "Export thất bại."); }
-  };
-
-  return (
-    <main className="training-program-page" style={{ padding: "28px clamp(16px, 2vw, 32px)", maxWidth: 1800, margin: "0 auto", minHeight: "100vh", color: "#f8fafc", background: "#090909", fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", fontSize: 14, lineHeight: 1.6 }}>
-      <style>{`
-        .training-program-page { color-scheme: dark; }
-        .training-program-page h1,.training-program-page h2 { color:#f8fafc !important; }
-        .training-program-page p { color:#a1a1aa !important; }
-        .training-program-page .program-panel { background:#141414 !important; border:1px solid #303030 !important; box-shadow:0 10px 30px rgba(0,0,0,.24) !important; }
-        .training-program-page .program-label { color:#e5e7eb !important; }
-        .training-program-page input,.training-program-page select { background:#1b1b1b !important; color:#f9fafb !important; border:1px solid #3f3f46 !important; }
-        .training-program-page input::placeholder { color:#a1a1aa !important; }
-        .training-program-page select option { background:#1b1b1b; color:#f9fafb; }
-        .training-program-page .program-button { transition:transform .18s ease, box-shadow .18s ease, filter .18s ease; }
-        .training-program-page .program-button:hover { transform:translateY(-2px) scale(1.035); filter:brightness(1.12); box-shadow:0 0 0 3px rgba(59,130,246,.18),0 0 18px rgba(59,130,246,.16); }
-        .training-program-page .program-button:active { transform:scale(.96); animation:programClickPulse .35s ease; }
-        .training-program-page .program-table-wrap { border-color:#303030 !important; background:#101010 !important; }
-        .training-program-page .program-table { color:#f3f4f6 !important; background:#101010 !important; }
-        .training-program-page .program-table thead tr { background:#252525 !important; color:#fff !important; }
-        .training-program-page .program-table th { border-bottom:1px solid #3f3f46 !important; }
-        .training-program-page .program-row { background:#111111; transition:background .2s ease, box-shadow .2s ease; cursor:pointer; }
-        .training-program-page .program-row:nth-child(even) { background:#202020; }
-        .training-program-page .program-row:hover { background:#303030 !important; box-shadow:inset 3px 0 #3b82f6,0 0 16px rgba(59,130,246,.08); }
-        .training-program-page .program-row.selected { background:#292929 !important; box-shadow:inset 3px 0 #60a5fa; }
-        .training-program-page .program-cell { color:#e5e7eb !important; border-bottom:1px solid #303030 !important; transition:font-size .18s ease,color .18s ease; }
-        .training-program-page .program-row:hover .program-cell { color:#fff !important; }
-        .training-program-page .program-code-cell { position:relative; font-weight:700; }
-        .training-program-page .program-row:hover .program-code-cell,.training-program-page .program-row.selected .program-code-cell { font-size:15px !important; }
-        .training-program-page .program-title-tooltip { position:absolute; z-index:5; left:12px; bottom:calc(100% - 4px); display:block; width:max-content; max-width:320px; padding:5px 10px; border-radius:6px; background:#fff; color:#171717; box-shadow:0 5px 18px rgba(0,0,0,.45); font-size:12px; font-weight:700; white-space:normal; pointer-events:none; animation:tooltipBlink 1.4s ease-in-out infinite; }
-        .training-program-page .program-row:hover .program-title-tooltip,.training-program-page .program-row.selected .program-title-tooltip { display:block; }
-        .training-program-page .program-summary { background:#191919 !important; color:#f3f4f6 !important; border:1px solid #303030 !important; }
-        .training-program-page .program-details { color:#93c5fd !important; }
-        @keyframes tooltipBlink { 0%,100% { opacity:1; transform:translateY(0) scale(1); } 50% { opacity:.78; transform:translateY(-2px) scale(1.025); } }
-        @keyframes programClickPulse { 0% { box-shadow:0 0 0 0 rgba(59,130,246,.5); } 100% { box-shadow:0 0 0 8px rgba(59,130,246,0); } }
-        @media (prefers-reduced-motion: reduce) { .training-program-page *, .training-program-page *::before, .training-program-page *::after { animation:none !important; transition:none !important; } }
-      `}</style>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <div>
-          <h1 style={{ fontSize: 30, fontWeight: 800, letterSpacing: "-0.03em", color: "#0f172a", margin: 0 }}>Quản lý chương trình đào tạo</h1>
-          <p style={{ color: "#64748b", marginTop: 6 }}>Chọn môn đang hoạt động từ API /api/subjects/active và tự tính tổng thời lượng.</p>
-        </div>
-        <button className="program-button" style={{ ...buttonStyle, background: "#2563eb", color: "#ffffff", borderColor: "#2563eb", padding: "11px 17px" }} onClick={() => void exportCsv()}>Export CSV</button>
+  return <MainLayout pathName={{ programs: "Chương trình đào tạo" }} defaultSidebarHidden>
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 pb-3">
+      <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
+        <div className="flex items-start gap-3.5"><div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-300"><BookOpen className="size-6" /></div>
+          <div><h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Chương trình đào tạo</h1><p className="mt-1.5 max-w-xl text-sm leading-6 text-muted-foreground">Quản lý nội dung, thời lượng và các phiên bản chương trình ở cùng một nơi.</p></div></div>
+        <div className="flex shrink-0 flex-wrap gap-2"><Button variant="outline" onClick={exportCsv} disabled={loading || Boolean(loadError) || !filtered.length}><Download />Xuất CSV</Button>
+          {canCreate && <Button className={primaryButtonClass} onClick={openCreate}><Plus />Tạo chương trình</Button>}</div>
       </header>
 
-      {error && <div role="alert" style={{ background: "#fee2e2", color: "#991b1b", padding: 12, borderRadius: 8, marginTop: 16 }}>{error}</div>}
-      {message && <div role="status" style={{ background: "#dcfce7", color: "#166534", padding: 12, borderRadius: 8, marginTop: 16 }}>{message}</div>}
+      {notice && <div role="status" className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"><CheckCircle2 className="size-4 shrink-0" /><span className="flex-1">{notice}</span><Button variant="ghost" size="icon-xs" aria-label="Đóng thông báo" onClick={() => setNotice("")}><X /></Button></div>}
 
-      <section className="program-panel" style={{ marginTop: 24, padding: 24, background: "#141414", border: "1px solid #303030", borderRadius: 16, boxShadow: "0 8px 24px rgba(0,0,0,.25)" }}>
-        <h2 style={{ fontSize: 20, fontWeight: 750, color: "#0f172a", marginTop: 0, marginBottom: 20 }}>{editingId === null ? "Tạo chương trình" : `Sửa chương trình #${editingId}`}</h2>
-        <form onSubmit={submit} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
-          <label className="program-label" style={{ display: "block", color: "#e5e7eb", fontWeight: 650 }}>Mã chương trình<input required maxLength={50} style={inputStyle} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} /></label>
-          <label className="program-label" style={{ display: "block", color: "#e5e7eb", fontWeight: 650 }}>Tên chương trình<input required maxLength={255} style={inputStyle} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
-          <label className="program-label" style={{ display: "block", color: "#e5e7eb", fontWeight: 650 }}>Phiên bản<input required maxLength={30} style={inputStyle} value={form.version} onChange={(e) => setForm({ ...form, version: e.target.value })} /></label>
-          <label className="program-label" style={{ display: "block", color: "#e5e7eb", fontWeight: 650 }}>Khu vực<input maxLength={100} style={inputStyle} value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} /></label>
-          <label className="program-label" style={{ gridColumn: "1 / -1", display: "block", color: "#e5e7eb", fontWeight: 650 }}>Môn học <span style={{ fontWeight: 400, color: "#64748b" }}>(giữ Ctrl để chọn nhiều)</span>
-            <select multiple required value={form.subjectIds.map(String)} onChange={(e) => setForm({ ...form, subjectIds: Array.from(e.target.selectedOptions).map((o) => Number(o.value)) })} style={{ ...inputStyle, minHeight: 140 }}>
-              {subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.code} — {subject.name} ({subject.durationHours} giờ)</option>)}
-            </select>
-          </label>
-          <div className="program-summary" style={{ gridColumn: "1 / -1", background: "#191919", color: "#f3f4f6", padding: 16, border: "1px solid #303030", borderRadius: 12 }}>
-            <strong>Số môn: {selectedSubjects.length}</strong> · <strong>Tổng thời lượng: {totalHours} giờ</strong>
-            <ol>{selectedSubjects.map((subject, i) => <li key={subject.id}>{i + 1}. {subject.name} — {subject.durationHours} giờ</li>)}</ol>
-          </div>
-          <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8 }}>
-            <button type="submit" disabled={busy} style={{ ...buttonStyle, background: busy ? "#93c5fd" : "#2563eb", color: "white", borderColor: "#2563eb", opacity: busy ? .75 : 1 }}>{busy ? "Đang lưu..." : "Lưu chương trình"}</button>
-            <button type="button" style={buttonStyle} onClick={resetForm}>Làm mới</button>
-          </div>
-        </form>
-      </section>
+      <section className="min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm" aria-label="Danh sách chương trình">
+        <div className="overflow-x-auto border-b px-4 pt-2 sm:px-5"><div className="flex w-max gap-4" aria-label="Lọc theo trạng thái">
+          {filters.map((item) => <button key={item} type="button" aria-pressed={status === item} className={`flex cursor-pointer items-center gap-2 border-b-2 px-1 py-3 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] ${status === item ? "border-blue-600 text-blue-700 dark:text-blue-300" : "border-transparent text-muted-foreground hover:text-foreground"}`} onClick={() => { setStatus(item); setPage(1); }}>
+            {item === "ALL" ? "Tất cả" : statusLabels[item]}<span className={`rounded-full px-1.5 py-0.5 text-[11px] tabular-nums ${status === item ? "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300" : "bg-muted"}`}>{item === "ALL" ? programs.length : programs.filter((program) => program.status === item).length}</span>
+          </button>)}
+        </div></div>
+        <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:px-5">
+          <div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" aria-hidden="true" /><Input aria-label="Tìm chương trình" className="bg-background pl-9 pr-9" placeholder="Tìm mã hoặc tên chương trình…" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} />
+            {search && <Button variant="ghost" size="icon-xs" className="absolute right-1.5 top-1.5" aria-label="Xóa tìm kiếm" onClick={() => { setSearch(""); setPage(1); }}><X /></Button>}</div>
+          <div className="flex gap-2"><Select value={region} onValueChange={(value) => { setRegion(value); setPage(1); }}><SelectTrigger aria-label="Lọc khu vực" className="w-full bg-background sm:w-44"><MapPin className="size-4" /><SelectValue placeholder="Tất cả khu vực" /></SelectTrigger><SelectContent><SelectItem value="ALL">Tất cả khu vực</SelectItem>{regions.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
+            <Button variant="outline" size="icon" aria-label="Tải lại danh sách" title="Tải lại danh sách" disabled={loading} onClick={() => void loadPrograms()}><RefreshCw className={loading ? "animate-spin" : ""} /></Button></div>
+        </div>
+        {hasFilters && <div className="flex flex-wrap items-center gap-3 border-t bg-muted/20 px-5 py-2 text-xs"><p role="status" className="text-muted-foreground">{filtered.length} chương trình phù hợp{search.trim() && <> với “{search.trim()}”</>}</p><button type="button" className="cursor-pointer font-medium text-blue-700 hover:underline dark:text-blue-300" onClick={clearFilters}>Xóa bộ lọc</button></div>}
 
-      <section className="program-panel" style={{ marginTop: 28, padding: 22, background: "#141414", border: "1px solid #303030", borderRadius: 16, boxShadow: "0 8px 24px rgba(0,0,0,.24)" }}>
-        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          <input placeholder="Tìm theo mã hoặc tên chương trình..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ ...inputStyle, maxWidth: 440 }} />
-          <button className="program-button" style={buttonStyle} onClick={() => void load()}>Tìm kiếm</button>
-          <button className="program-button" style={buttonStyle} onClick={() => { setSearch(""); }}>Xóa lọc</button>
-        </div>
-        <div className="program-table-wrap" style={{ overflowX: "auto", border: "1px solid #303030", borderRadius: 12, background: "#101010" }}>
-          <table className="program-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 950, color: "#f3f4f6", background: "#101010" }}>
-            <thead><tr style={{ background: "#eaf0f8", color: "#0f172a", textAlign: "left" }}>
-              {["Mã", "Tên", "Phiên bản", "Khu vực", "Môn học", "Tổng giờ", "Trạng thái", "Thao tác"].map((h) => <th key={h} style={{ padding: "14px 12px", borderBottom: "1px solid #dbe3ee", fontSize: 12, textTransform: "uppercase", letterSpacing: ".04em", whiteSpace: "nowrap" }}>{h}</th>)}
-            </tr></thead>
-            <tbody>
-              {programs.map((p) => <tr key={p.id} className={`program-row${selectedProgramId === p.id ? " selected" : ""}`} onMouseEnter={() => setHoveredProgramId(p.id)} onMouseLeave={() => setHoveredProgramId(null)} onClick={() => setSelectedProgramId((current) => current === p.id ? null : p.id)} aria-selected={selectedProgramId === p.id}>
-                <td className="program-cell program-code-cell" style={{ padding: 14, borderBottom: "1px solid #303030", color: "#e5e7eb", verticalAlign: "top" }}>{p.code}{(hoveredProgramId === p.id || selectedProgramId === p.id) && <span className="program-title-tooltip">{p.code}</span>}</td>
-                <td className="program-cell" style={{ padding: 14, borderBottom: "1px solid #303030", color: "#e5e7eb", verticalAlign: "top" }}>{p.name}</td>
-                <td className="program-cell" style={{ padding: 14, borderBottom: "1px solid #303030", color: "#e5e7eb", verticalAlign: "top" }}>{p.version}</td>
-                <td className="program-cell" style={{ padding: 14, borderBottom: "1px solid #303030", color: "#e5e7eb", verticalAlign: "top" }}>{p.region || "—"}</td>
-                <td className="program-cell" style={{ padding: 14, borderBottom: "1px solid #303030", color: "#e5e7eb", verticalAlign: "top" }}>{p.subjects.length}</td>
-                <td className="program-cell" style={{ padding: 14, borderBottom: "1px solid #303030", color: "#e5e7eb", verticalAlign: "top" }}>{p.totalDurationHours} h</td>
-                <td className="program-cell" style={{ padding: 14, borderBottom: "1px solid #303030", color: "#e5e7eb", verticalAlign: "top" }}>{p.status}</td>
-                <td style={{ padding: 14, borderBottom: "1px solid #edf2f7", minWidth: 300, verticalAlign: "top" }}>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    <button className="program-button" style={{ ...buttonStyle, padding: "7px 10px" }} onClick={() => edit(p)}>Sửa</button>
-                    {p.status !== "ACTIVE" && <button className="program-button" style={{ ...buttonStyle, padding: "7px 10px", color: "#166534", background: "#f0fdf4", borderColor: "#bbf7d0" }} onClick={() => void activate(p.id)}>Kích hoạt</button>}
-                    <input aria-label={`Phiên bản clone ${p.code}`} placeholder="Phiên bản mới" value={cloneVersions[p.id] || ""} onChange={(e) => setCloneVersions((old) => ({ ...old, [p.id]: e.target.value }))} style={{ ...inputStyle, width: 125, marginTop: 0, padding: "7px 9px" }} />
-                    <button className="program-button" style={{ ...buttonStyle, padding: "7px 10px", color: "#1d4ed8", background: "#eff6ff", borderColor: "#bfdbfe" }} onClick={() => void clone(p)}>Clone</button>
-                  </div>
-                  <details style={{ marginTop: 8 }}>
-                    <summary className="program-details" style={{ cursor: "pointer", color: "#93c5fd", fontWeight: 600, marginTop: 4 }}>Xem danh sách môn</summary>
-                    <ol>{p.subjects.map((s) => <li key={s.subjectId}>{s.orderIndex}. {s.code} — {s.name} ({s.durationHours} giờ)</li>)}</ol>
-                  </details>
-                </td>
-              </tr>)}
-              {!programs.length && <tr><td colSpan={8} style={{ padding: 20, textAlign: "center", color: "#64748b" }}>{busy ? "Đang tải..." : "Chưa có chương trình đào tạo."}</td></tr>}
-            </tbody>
-          </table>
-        </div>
+        {loadError ? <div className="border-t p-5"><Alert variant="destructive"><AlertCircle /><AlertDescription>{loadError}<Button variant="outline" size="sm" onClick={() => void loadPrograms()}>Thử tải lại</Button></AlertDescription></Alert></div>
+          : loading ? <div className="space-y-3 border-t p-5" role="status" aria-label="Đang tải chương trình">{[1, 2, 3].map((index) => <Skeleton key={index} className="h-16 w-full" />)}<span className="sr-only">Đang tải chương trình…</span></div>
+          : !filtered.length ? <div className="flex flex-col items-center border-t px-6 py-16 text-center"><div className="mb-4 rounded-full bg-muted p-4">{hasFilters ? <Search className="size-7 text-muted-foreground" /> : <BookOpen className="size-7 text-muted-foreground" />}</div><h2 className="font-semibold">{hasFilters ? "Không tìm thấy chương trình phù hợp" : "Chưa có chương trình đào tạo"}</h2><p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">{hasFilters ? "Thử một từ khóa khác hoặc xóa bộ lọc để xem toàn bộ danh sách." : "Tạo chương trình đầu tiên, chọn môn học và sắp xếp nội dung giảng dạy."}</p><Button className="mt-5" variant="outline" onClick={hasFilters ? clearFilters : openCreate} disabled={!hasFilters && !canCreate}>{hasFilters ? "Xóa bộ lọc" : "Tạo chương trình đầu tiên"}</Button></div>
+          : <>
+            <div className="hidden border-t sm:block"><Table className="table-fixed">
+              <TableHeader className="bg-muted/40"><TableRow className="hover:bg-transparent">
+                <TableHead className="w-[34%] pl-5 text-xs text-muted-foreground">Chương trình</TableHead><TableHead className="w-[11%] text-xs text-muted-foreground">Phiên bản</TableHead><TableHead className="hidden w-[13%] text-xs text-muted-foreground lg:table-cell">Khu vực</TableHead><TableHead className="w-[16%] text-xs text-muted-foreground">Nội dung</TableHead><TableHead className="w-[20%] text-xs text-muted-foreground">Trạng thái</TableHead><TableHead className="w-24 pr-4 text-right text-xs text-muted-foreground">Thao tác</TableHead>
+              </TableRow></TableHeader>
+              <TableBody>{visible.map((program) => <TableRow key={program.id} className="group">
+                <TableCell className="whitespace-normal py-5 pl-5"><button type="button" className="block cursor-pointer break-words text-left text-sm font-semibold leading-5 hover:text-blue-700 hover:underline dark:hover:text-blue-300" onClick={() => setDetails(program)}>{program.name}</button><p className="mt-1.5 break-all font-mono text-[11px] text-muted-foreground">{program.code}</p></TableCell>
+                <TableCell><span className="inline-flex max-w-full break-all whitespace-normal rounded-md border bg-muted/30 px-2 py-1 text-xs font-medium">v{program.version}</span></TableCell>
+                <TableCell className="hidden whitespace-normal text-xs text-muted-foreground lg:table-cell">{program.region || "Chưa đặt"}</TableCell>
+                <TableCell><p className="text-sm">{program.subjects.length} môn</p><p className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground"><Clock3 className="size-3" />{program.totalDurationHours} giờ</p></TableCell>
+                <TableCell><ProgramStatusBadge status={program.status} /></TableCell>
+                <TableCell className="pr-4"><div className="flex justify-end gap-1"><Button variant="ghost" size="icon-sm" aria-label={`Xem chi tiết ${program.code} phiên bản ${program.version}`} title="Xem chi tiết" onClick={() => setDetails(program)}><ArrowRight className="size-4 text-muted-foreground" /></Button>{programMenu(program)}</div></TableCell>
+              </TableRow>)}</TableBody>
+            </Table></div>
+            <div className="divide-y border-t sm:hidden">{visible.map((program) => <article key={program.id} className="space-y-3 p-4">
+              <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="mb-1 break-all font-mono text-xs text-muted-foreground">{program.code} · v{program.version}</p><button className="cursor-pointer break-words text-left font-semibold leading-6" onClick={() => setDetails(program)}>{program.name}</button></div>{programMenu(program)}</div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground"><span>{program.subjects.length} môn · {program.totalDurationHours} giờ</span>{program.region && <span>{program.region}</span>}<ProgramStatusBadge status={program.status} /></div>
+              <Button variant="outline" size="sm" className="w-full" onClick={() => setDetails(program)}>Xem chi tiết<ArrowRight /></Button>
+            </article>)}</div>
+          </>}
+        {!loading && !loadError && filtered.length > 0 && <div className="flex flex-wrap items-center justify-between gap-3 border-t bg-muted/15 px-5 py-3 text-xs text-muted-foreground"><p aria-live="polite">Hiển thị {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filtered.length)} trong {filtered.length} chương trình</p><div className="flex items-center gap-2"><Button variant="outline" size="icon-xs" aria-label="Trang trước" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}><ChevronLeft /></Button><span>Trang {currentPage}/{totalPages}</span><Button variant="outline" size="icon-xs" aria-label="Trang sau" disabled={currentPage === totalPages} onClick={() => setPage(currentPage + 1)}><ChevronRight /></Button></div></div>}
       </section>
-    </main>
-  );
+      <div className="flex items-start gap-2.5 rounded-lg bg-muted/40 px-4 py-3 text-xs leading-5 text-muted-foreground"><Info className="mt-0.5 size-4 shrink-0" /><p><span className="font-medium text-foreground">Bản nháp</span> có thể chỉnh sửa. Khi <span className="font-medium text-foreground">đang áp dụng</span>, hãy tạo phiên bản mới để thay đổi nội dung mà vẫn giữ lại phiên bản cũ.</p></div>
+      {!canCreate && !canUpdate && <p className="flex items-center gap-2 text-xs text-muted-foreground"><FileText className="size-3.5" />Bạn đang có quyền xem chương trình.</p>}
+    </div>
+    {editor && <ProgramEditor key={editor.program?.id ?? "new"} program={editor.program} subjects={subjects} loadingSubjects={loadingSubjects} subjectsError={subjectsError} onRetrySubjects={() => void loadSubjects()} onClose={() => setEditor(null)} onSave={saveProgram} />}
+    {details && <ProgramDetails program={details} canCreate={canCreate} canUpdate={canUpdate} onClose={() => setDetails(null)} onEdit={() => openEdit(details)} onClone={() => openAction("clone", details)} onActivate={() => openAction("activate", details)} />}
+    {action && <ProgramActionDialog key={`${action.type}-${action.program.id}`} action={action} programs={programs} onClose={() => setAction(null)} onConfirm={confirmAction} />}
+  </MainLayout>;
 }

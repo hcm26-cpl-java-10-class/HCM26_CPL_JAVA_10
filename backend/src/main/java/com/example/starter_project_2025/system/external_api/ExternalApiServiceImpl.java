@@ -9,6 +9,7 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
@@ -21,6 +22,7 @@ import java.util.List;
 
 @Slf4j
 @Service
+@Profile("!local")
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ExternalApiServiceImpl implements ExternalApiService {
 
@@ -52,7 +54,8 @@ public class ExternalApiServiceImpl implements ExternalApiService {
         }
 
         String url = uriBuilder.toUriString();
-        return executeGetList(url, new ParameterizedTypeReference<>() {}, "classes");
+        return executeGetList(url, new ParameterizedTypeReference<>() {
+        }, "classes");
     }
 
     @Override
@@ -81,7 +84,8 @@ public class ExternalApiServiceImpl implements ExternalApiService {
         }
 
         String url = uriBuilder.toUriString();
-        return executeGetList(url, new ParameterizedTypeReference<>() {}, "trainers");
+        return executeGetList(url, new ParameterizedTypeReference<>() {
+        }, "trainers");
     }
 
     @Override
@@ -93,7 +97,8 @@ public class ExternalApiServiceImpl implements ExternalApiService {
                 .path("/api/rooms")
                 .toUriString();
 
-        return executeGetList(url, new ParameterizedTypeReference<>() {}, "rooms");
+        return executeGetList(url, new ParameterizedTypeReference<>() {
+        }, "rooms");
     }
 
     // ======================== PRIVATE HELPERS ========================
@@ -159,8 +164,8 @@ public class ExternalApiServiceImpl implements ExternalApiService {
      * Execute a GET request that returns a list of objects.
      */
     private <T> List<T> executeGetList(String url,
-                                       ParameterizedTypeReference<List<T>> typeRef,
-                                       String resourceName) {
+            ParameterizedTypeReference<List<T>> typeRef,
+            String resourceName) {
         try {
             HttpEntity<Void> entity = new HttpEntity<>(buildHeaders());
 
