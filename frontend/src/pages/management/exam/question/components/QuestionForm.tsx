@@ -178,14 +178,14 @@ function QuestionContentPreview({ content }: { content: string }) {
 }
 
 export function QuestionForm({
-    form,
-    setForm,
-    onSubmit,
-    isSaving,
-    submitLabel,
-    showActive = false,
-    onCancel,
-}: QuestionFormProps) {
+                                 form,
+                                 setForm,
+                                 onSubmit,
+                                 isSaving,
+                                 submitLabel,
+                                 showActive = false,
+                                 onCancel,
+                             }: QuestionFormProps) {
     const navigate = useNavigate();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const [showPreview, setShowPreview] = useState(false);
@@ -265,7 +265,6 @@ export function QuestionForm({
     const toggleCorrect = (index: number, checked: boolean) =>
         setForm((prev) => ({
             ...prev,
-            options: prev.options.map((option, i) => (i === index ? { ...option, correct: checked } : option)),
             options: prev.options.map((option, i) =>
                 i === index ? { ...option, correct: checked } : option,
             ),
@@ -322,25 +321,8 @@ export function QuestionForm({
 
     return (
         <form className="grid gap-5" onSubmit={handleSubmit}>
-            {/* 1. TOPIC ROW (Dedicated single row) */}
+            {/* 1. TOPIC ROW */}
             <div className="grid gap-2">
-                <Label htmlFor="question-content">Content</Label>
-                <Textarea
-                    id="question-content"
-                    value={form.content}
-                    onChange={(event) => setForm((prev) => ({ ...prev, content: event.target.value }))}
-                    rows={4}
-                    placeholder="Enter question content"
-                    autoFocus
-                />
-                <Input
-                    value={form.imageUrl}
-                    onChange={(event) => setForm((prev) => ({ ...prev, imageUrl: event.target.value }))}
-                    placeholder="Question image URL (optional, https://...)"
-                />
-                {form.imageUrl.trim() && (
-                    <img src={form.imageUrl} alt="" className="max-h-48 rounded border object-contain" />
-                )}
                 <Label htmlFor="question-topic">Topic</Label>
 
                 {isAddingTopic ? (
@@ -431,9 +413,6 @@ export function QuestionForm({
                                         : prev.options.length >= 2
                                             ? prev.options
                                             : defaultInitialQuestionForm.options,
-                                        : prev.options.length >= 2
-                                            ? prev.options
-                                            : initialQuestionForm.options,
                             }))
                         }
                     >
@@ -441,8 +420,6 @@ export function QuestionForm({
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="MULTIPLE_CHOICE">Multiple choice</SelectItem>
-                            <SelectItem value="ESSAY">Essay</SelectItem>
                             <SelectItem value="MULTIPLE_CHOICE">Multiple choice (Trắc nghiệm)</SelectItem>
                             <SelectItem value="ESSAY">Essay (Tự luận)</SelectItem>
                         </SelectContent>
@@ -470,7 +447,7 @@ export function QuestionForm({
                 </div>
             </div>
 
-            {/* 3. CONTENT (With formatting toolbar, scrollbar, adjacent to options) */}
+            {/* 3. CONTENT (formatting toolbar, question image URL, preview) */}
             <div className="grid gap-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <Label htmlFor="question-content">Question Content</Label>
@@ -563,6 +540,22 @@ export function QuestionForm({
                     />
                 </div>
 
+                <Input
+                    value={form.imageUrl}
+                    onChange={(event) => setForm((prev) => ({ ...prev, imageUrl: event.target.value }))}
+                    placeholder="Question image URL (optional, https://...)"
+                />
+                {form.imageUrl.trim() && (
+                    <img
+                        src={form.imageUrl}
+                        alt=""
+                        className="max-h-48 rounded border object-contain"
+                        onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = "none";
+                        }}
+                    />
+                )}
+
                 {showPreview && (
                     <div className="mt-1 rounded-md border bg-muted/40 p-3">
                         <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -573,7 +566,7 @@ export function QuestionForm({
                 )}
             </div>
 
-            {/* 4. ANSWER OPTIONS (Adjacent to content, includes teammate's imageUrl support) */}
+            {/* 4. ANSWER OPTIONS (each option can have an image URL) */}
             {form.type === "ESSAY" ? (
                 <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
                     Essay questions have no options; students type their answer in an editor and the teacher grades it manually.
@@ -652,7 +645,7 @@ export function QuestionForm({
                 </div>
             )}
 
-            {/* 5. POINTS ROW (Placed after Answer Options) */}
+            {/* 5. POINTS ROW */}
             <div className="grid max-w-xs gap-2 border-t pt-3">
                 <Label htmlFor="question-points">Points</Label>
                 <Input
@@ -668,7 +661,7 @@ export function QuestionForm({
                 />
             </div>
 
-            {/* 6. BOTTOM ROW: Active switch (at the end) + Action buttons */}
+            {/* 6. BOTTOM ROW: Active switch + action buttons */}
             <CardFooter className="flex items-center justify-between border-t px-0 pt-4">
                 <div>
                     {showActive && (

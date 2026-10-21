@@ -300,12 +300,14 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		copy.setType(source.getType());
 		copy.setDifficulty(source.getDifficulty());
 		copy.setTopic(source.getTopic());
+		copy.setImageUrl(source.getImageUrl());
 		copy.setPoints(source.getPoints());
 		copy.setSourceQuestionId(source.getId());
 		for (QuestionOption o : source.getOptions()) {
 			QuestionOption optionCopy = new QuestionOption();
 			optionCopy.setContent(o.getContent());
 			optionCopy.setCorrect(o.isCorrect());
+			optionCopy.setImageUrl(o.getImageUrl());
 			optionCopy.setQuestion(copy);
 			copy.getOptions().add(optionCopy);
 		}
