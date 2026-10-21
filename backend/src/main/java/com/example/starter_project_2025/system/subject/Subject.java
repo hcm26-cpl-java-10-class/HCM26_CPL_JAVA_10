@@ -11,6 +11,9 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import com.example.starter_project_2025.base.dataio.importer.annotation.PostImport;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -45,6 +48,14 @@ import lombok.experimental.SuperBuilder;
     permission = "SUBJECT_READ"
 )
 public class Subject extends BaseEntity {
+
+    @PrePersist
+    @PreUpdate
+    @PostImport
+    void normalizeIdentity() {
+        code = SubjectIdentity.normalizeCode(code);
+        version = SubjectIdentity.normalizeVersion(version);
+    }
 
     @lombok.Builder.Default
     @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)

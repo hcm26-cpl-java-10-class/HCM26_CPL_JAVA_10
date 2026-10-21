@@ -89,12 +89,13 @@ export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
         table.permission?.keys?.create,
     ]);
 
-    const allHeaderActions = (
-        <div className="flex items-center gap-2">
-            {headerActions}
-            {entity.headerActions}
-        </div>
-    );
+    const allHeaderActions =
+        headerActions || entity.headerActions ? (
+            <div className="flex items-center gap-2">
+                {headerActions}
+                {entity.headerActions}
+            </div>
+        ) : undefined;
 
     const onEdit = useMemo(() => {
         if (!editPage) {

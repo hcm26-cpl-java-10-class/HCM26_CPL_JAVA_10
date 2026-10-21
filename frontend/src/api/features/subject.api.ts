@@ -1,6 +1,7 @@
 import { createBaseApiService } from "@/api/base-service.api";
 import axiosInstance from "../axios";
 import type { SubjectDTO, SubjectFilter } from "@/types";
+import { normalizeSubjectIdentity } from "@/utils/subject-identity.utils";
 
 const path = "/subjects";
 
@@ -9,6 +10,10 @@ const base = createBaseApiService<SubjectDTO, SubjectFilter>({
 });
 
 export const subjectApi = Object.assign({}, base, {
+  create: (data: SubjectDTO) => base.create(normalizeSubjectIdentity(data)),
+
+  update: (id: string, data: SubjectDTO) => base.update(id, normalizeSubjectIdentity(data)),
+
   getActiveSubjects: async (): Promise<SubjectDTO[]> => {
     const response = await axiosInstance.get<SubjectDTO[]>(`${path}/active`);
     return response.data;

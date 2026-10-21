@@ -46,9 +46,13 @@ public class SubjectServiceImpl
 
     @Override
     protected void beforeCreate(Subject subject, SubjectDTO request, ValidationContext ctx) {
-        if (subjectRepository.existsByCodeAndVersion(request.getCode(), request.getVersion())) {
-            ctx.add("code", "Subject with code '" + request.getCode() + "' and version '" + request.getVersion() + "' already exists");
-        }
+        String code = SubjectIdentity.normalizeCode(request.getCode());
+        String version = SubjectIdentity.normalizeVersion(request.getVersion());
+        request.setCode(code);
+        request.setVersion(version);
+        subject.setCode(code);
+        subject.setVersion(version);
+        validateIdentity(code, version, null, ctx);
 
         if (request.getDurationHours() != null && request.getDurationHours() <= 0) {
             ctx.add("durationHours", "Subject duration must be greater than 0");
@@ -57,15 +61,26 @@ public class SubjectServiceImpl
 
     @Override
     protected void beforeUpdate(Subject subject, SubjectDTO request, ValidationContext ctx) {
-        String checkCode = request.getCode() != null ? request.getCode() : subject.getCode();
-        String checkVersion = request.getVersion() != null ? request.getVersion() : subject.getVersion();
-
-        if (subjectRepository.existsByCodeAndVersionAndIdNot(checkCode, checkVersion, subject.getId())) {
-            ctx.add("code", "Subject with code '" + checkCode + "' and version '" + checkVersion + "' already exists");
-        }
+        String checkCode = SubjectIdentity.normalizeCode(
+                request.getCode() != null ? request.getCode() : subject.getCode());
+        String checkVersion = SubjectIdentity.normalizeVersion(
+                request.getVersion() != null ? request.getVersion() : subject.getVersion());
+        validateIdentity(checkCode, checkVersion, subject.getId(), ctx);
+        request.setCode(checkCode);
+        request.setVersion(checkVersion);
 
         if (request.getDurationHours() != null && request.getDurationHours() <= 0) {
             ctx.add("durationHours", "Subject duration must be greater than 0");
+        }
+    }
+
+    private void validateIdentity(String code, String version, Long excludedId, ValidationContext ctx) {
+        if (code == null || code.isBlank()) ctx.add("code", "Subject code is required");
+        if (version == null || version.isBlank()) ctx.add("version", "Version is required");
+        if (code == null || code.isBlank() || version == null || version.isBlank()) return;
+        if (subjectRepository.existsByNormalizedIdentity(code, SubjectIdentity.versionAliases(version), excludedId)) {
+            ctx.add("code", "Subject with code '" + code + "' and version '" + version
+                    + "' already exists (codes are case-insensitive; v1.0 and 1.0 are the same version)");
         }
     }
 

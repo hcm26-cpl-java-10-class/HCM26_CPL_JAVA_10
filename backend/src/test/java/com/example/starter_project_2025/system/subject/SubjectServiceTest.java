@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcOperations;
 
 import java.util.Optional;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -103,7 +104,7 @@ class SubjectServiceTest {
     @Test
     @DisplayName("beforeCreate: Thêm lỗi validation khi trùng mã và phiên bản")
     void beforeCreate_ShouldAddError_WhenCodeAndVersionDuplicate() {
-        when(subjectRepository.existsByCodeAndVersion("JAVA_CORE", "1.0")).thenReturn(true);
+        when(subjectRepository.existsByNormalizedIdentity("JAVA_CORE", List.of("1.0", "v1.0"), null)).thenReturn(true);
 
         ValidationContext ctx = new ValidationContext();
         subjectService.beforeCreate(mockSubject, mockSubjectDTO, ctx);
@@ -124,5 +125,60 @@ class SubjectServiceTest {
         assertNotNull(result);
         assertFalse(mockSubject.getIsActive());
         verify(subjectRepository).save(mockSubject);
+    }
+
+    @Test
+    void createNormalizesCodeAndVersionBeforeDuplicateCheck() {
+        mockSubjectDTO.setCode(" java_core ");
+        mockSubjectDTO.setVersion(" V1.0 ");
+        when(subjectRepository.existsByNormalizedIdentity("JAVA_CORE", List.of("1.0", "v1.0"), null)).thenReturn(true);
+        ValidationContext ctx = new ValidationContext();
+        subjectService.beforeCreate(mockSubject, mockSubjectDTO, ctx);
+        assertTrue(ctx.getErrors().containsKey("code"));
+        assertEquals("JAVA_CORE", mockSubject.getCode());
+        assertEquals("1.0", mockSubject.getVersion());
+        assertEquals("JAVA_CORE", mockSubjectDTO.getCode());
+    }
+
+    @Test
+    void updateChecksNormalizedIdentityAndExcludesTheCurrentRecord() {
+        mockSubjectDTO.setCode("java_core");
+        mockSubjectDTO.setVersion("v1.0");
+        ValidationContext ctx = new ValidationContext();
+        subjectService.beforeUpdate(mockSubject, mockSubjectDTO, ctx);
+        verify(subjectRepository).existsByNormalizedIdentity("JAVA_CORE", List.of("1.0", "v1.0"), 10L);
+        assertFalse(ctx.hasErrors());
+        assertEquals("1.0", mockSubjectDTO.getVersion());
+    }
+
+    @Test
+    void updateRejectsAnotherRecordWithTheSameNormalizedIdentity() {
+        when(subjectRepository.existsByNormalizedIdentity("JAVA_CORE", List.of("1.0", "v1.0"), 10L)).thenReturn(true);
+        ValidationContext ctx = new ValidationContext();
+        subjectService.beforeUpdate(mockSubject, mockSubjectDTO, ctx);
+        assertTrue(ctx.getErrors().containsKey("code"));
+    }
+
+    @Test
+    void partialUpdateChecksExistingIdentityAndRejectsBlankIdentity() {
+        SubjectDTO partial = new SubjectDTO();
+        ValidationContext ctx = new ValidationContext();
+        subjectService.beforeUpdate(mockSubject, partial, ctx);
+        assertFalse(ctx.hasErrors());
+        assertEquals("JAVA_CORE", partial.getCode());
+        assertEquals("1.0", partial.getVersion());
+        partial.setCode(" ");
+        ValidationContext blank = new ValidationContext();
+        subjectService.beforeUpdate(mockSubject, partial, blank);
+        assertTrue(blank.getErrors().containsKey("code"));
+    }
+
+    @Test
+    void sameCodeWithADifferentVersionRemainsAllowed() {
+        mockSubjectDTO.setVersion("v2.0");
+        ValidationContext ctx = new ValidationContext();
+        subjectService.beforeCreate(mockSubject, mockSubjectDTO, ctx);
+        assertFalse(ctx.hasErrors());
+        assertEquals("2.0", mockSubject.getVersion());
     }
 }
