@@ -97,7 +97,7 @@ export default function HeaderRight() {
           className="flex items-center gap-2 p-1 pl-1.5 pr-2 rounded-full hover:bg-gray-100 dark:hover:bg-muted transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="User Account Menu"
         >
-          <div className="size-8 rounded-full bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400 font-bold text-xs flex items-center justify-center border border-orange-200/60 dark:border-orange-900/50 select-none shadow-2xs">
+          <div className="size-8 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-bold text-xs flex items-center justify-center border border-blue-200/60 dark:border-blue-900/50 select-none shadow-2xs">
             {userInitials}
           </div>
           <div className="hidden sm:flex flex-col text-left leading-tight">
@@ -125,7 +125,7 @@ export default function HeaderRight() {
           onClick={() => navigate("/fams/ho-so-ca-nhan-oi-mat-khau")}
           className="cursor-pointer gap-2.5 py-2"
         >
-          <User className="size-4 text-orange-600 dark:text-orange-400" />
+          <User className="size-4 text-blue-600 dark:text-blue-400" />
           <span>My Profile</span>
         </DropdownMenuItem>
 

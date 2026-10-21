@@ -12,7 +12,7 @@ export const ProfileSummaryCard: React.FC<ProfileSummaryCardProps> = ({ profile 
       <div className="flex items-center gap-5">
         {/* Avatar with initials or photo */}
         <div className="relative">
-          <div className="size-16 rounded-full bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400 font-bold text-xl flex items-center justify-center tracking-wider select-none shadow-xs border border-orange-200/60 dark:border-orange-900/50">
+          <div className="size-16 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-bold text-xl flex items-center justify-center tracking-wider select-none shadow-xs border border-blue-200/60 dark:border-blue-900/50">
             {profile.initials || "TA"}
           </div>
         </div>

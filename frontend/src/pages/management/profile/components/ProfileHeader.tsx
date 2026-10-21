@@ -49,7 +49,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
           <Button
             type="button"
             onClick={onTriggerUpdateProfile}
-            className="bg-orange-500 hover:bg-orange-600 text-white font-medium shadow-xs transition-colors cursor-pointer"
+            className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-xs transition-colors cursor-pointer"
           >
             <UserCheck className="h-4 w-4 mr-1" />
             {isEditing ? "Editing Profile..." : "Update Profile"}

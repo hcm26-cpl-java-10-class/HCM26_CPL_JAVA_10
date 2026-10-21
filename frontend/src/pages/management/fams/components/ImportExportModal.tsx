@@ -100,7 +100,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
                     {/* Export section */}
                     <div className="rounded-lg border border-gray-200 p-4 bg-gray-50/50 dark:bg-gray-900/50">
                         <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-100 text-orange-600">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
                                 <Download className="h-5 w-5" />
                             </div>
                             <div className="flex-1">
@@ -150,7 +150,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
                                         setUploadedFile(e.target.files[0]);
                                     }
                                 }}
-                                className="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 cursor-pointer"
+                                className="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
                             />
                             {uploadedFile && (
                                 <p className="mt-2 text-xs text-green-600 flex items-center gap-1 font-medium">

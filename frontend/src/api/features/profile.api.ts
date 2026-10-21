@@ -57,12 +57,12 @@ export const profileApi = {
       skills: (data.skills && data.skills.length > 0
         ? data.skills.map((s, idx) => ({
             name: s,
-            color: idx === 0 ? "blue" : idx === 1 ? "green" : "orange",
+            color: idx === 0 ? "blue" : idx === 1 ? "green" : "blue",
           }))
         : [
             { name: "Java", color: "blue" },
             { name: "Curriculum", color: "green" },
-            { name: "Agile", color: "orange" },
+            { name: "Agile", color: "blue" },
           ]) as UserProfileData["skills"],
     };
   },
@@ -87,7 +87,7 @@ export const profileApi = {
       skills: [
         { name: "Java", color: "blue" },
         { name: "Curriculum", color: "green" },
-        { name: "Agile", color: "orange" },
+        { name: "Agile", color: "blue" },
       ],
     };
   },

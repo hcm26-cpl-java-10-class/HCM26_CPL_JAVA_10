@@ -33,7 +33,7 @@ export const ModuleGroupList: React.FC<ModuleGroupListProps> = ({
                     <button
                         type="button"
                         onClick={onAddGroup}
-                        className="h-7 w-7 rounded-lg border border-gray-200 dark:border-border flex items-center justify-center text-gray-500 hover:text-orange-600 hover:border-orange-300 hover:bg-orange-50/50 transition-colors cursor-pointer"
+                        className="h-7 w-7 rounded-lg border border-gray-200 dark:border-border flex items-center justify-center text-gray-500 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50/50 transition-colors cursor-pointer"
                         aria-label="Add Group"
                     >
                         <Plus className="h-4 w-4" />
@@ -45,7 +45,7 @@ export const ModuleGroupList: React.FC<ModuleGroupListProps> = ({
             <div className="space-y-1.5 flex-1 overflow-y-auto pr-1">
                 {isLoading ? (
                     <div className="py-8 flex flex-col items-center justify-center text-gray-400 gap-2">
-                        <div className="h-5 w-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                        <div className="h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                         <span className="text-xs">Đang tải danh sách...</span>
                     </div>
                 ) : groups.length === 0 ? (
@@ -62,7 +62,7 @@ export const ModuleGroupList: React.FC<ModuleGroupListProps> = ({
                                 onClick={() => onSelectGroup(group.id)}
                                 className={`group relative flex items-center justify-between px-3.5 py-3 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                                     isSelected
-                                        ? "bg-orange-50 text-orange-600 dark:bg-orange-950/40 dark:text-orange-400 font-semibold"
+                                        ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400 font-semibold"
                                         : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-accent/60"
                                 }`}
                             >

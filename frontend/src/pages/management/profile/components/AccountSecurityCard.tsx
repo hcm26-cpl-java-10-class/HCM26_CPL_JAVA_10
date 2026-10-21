@@ -23,7 +23,7 @@ export const AccountSecurityCard: React.FC<AccountSecurityCardProps> = ({ profil
       <div className="bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-border shadow-xs p-6 flex flex-col justify-between transition-all">
         <div>
           <div className="flex items-center gap-2 pb-4 border-b border-gray-100 dark:border-border mb-4">
-            <Shield className="size-4 text-orange-500" />
+            <Shield className="size-4 text-blue-600 dark:text-blue-400" />
             <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">
               Account Security
             </h3>
@@ -71,7 +71,7 @@ export const AccountSecurityCard: React.FC<AccountSecurityCardProps> = ({ profil
       <Dialog open={showSessionModal} onOpenChange={setShowSessionModal}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <div className="flex items-center gap-2 text-orange-600">
+            <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
               <ShieldAlert className="size-5" />
               <DialogTitle>Session Management</DialogTitle>
             </div>

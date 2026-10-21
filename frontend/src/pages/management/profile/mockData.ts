@@ -14,6 +14,6 @@ export const initialProfileData: UserProfileData = {
   skills: [
     { name: "Java", color: "blue" },
     { name: "Curriculum", color: "green" },
-    { name: "Agile", color: "orange" },
+    { name: "Agile", color: "blue" },
   ],
 };

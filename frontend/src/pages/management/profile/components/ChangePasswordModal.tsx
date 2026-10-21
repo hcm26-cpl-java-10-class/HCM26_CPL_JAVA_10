@@ -128,7 +128,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
     <Dialog open={open} onOpenChange={(val) => (!isSubmitting ? onOpenChange(val) : null)}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <div className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
+          <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
             <Lock className="size-5" />
             <DialogTitle className="text-lg font-bold">Change Password</DialogTitle>
           </div>
@@ -313,7 +313,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
             <Button
               type="submit"
               disabled={isSubmitting || !hasMinLength || !hasLetter || !hasNumber || !passwordsMatch}
-              className="bg-orange-500 hover:bg-orange-600 text-white font-medium cursor-pointer disabled:opacity-50"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-medium cursor-pointer disabled:opacity-50"
             >
               {isSubmitting ? (
                 <>

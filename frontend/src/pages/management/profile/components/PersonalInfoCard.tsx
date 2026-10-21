@@ -97,7 +97,7 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
             variant="ghost"
             size="sm"
             onClick={onStartEditing}
-            className="text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/40 cursor-pointer font-medium"
+            className="text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer font-medium"
           >
             Edit Information
           </Button>
@@ -126,7 +126,7 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
                   }
                 }}
                 className={`bg-white dark:bg-card ${
-                  !isEditing ? "bg-gray-50/50 text-gray-700 dark:bg-muted/20" : "focus:border-orange-500 focus:ring-orange-500/20"
+                  !isEditing ? "bg-gray-50/50 text-gray-700 dark:bg-muted/20" : "focus:border-blue-500 focus:ring-blue-500/20"
                 } ${errors.fullName ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
                 placeholder="Enter full name"
               />
@@ -197,7 +197,7 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
                 }
               }}
               className={`bg-white dark:bg-card ${
-                !isEditing ? "bg-gray-50/50 text-gray-700 dark:bg-muted/20" : "focus:border-orange-500 focus:ring-orange-500/20"
+                !isEditing ? "bg-gray-50/50 text-gray-700 dark:bg-muted/20" : "focus:border-blue-500 focus:ring-blue-500/20"
               } ${errors.phoneNumber ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
               placeholder="e.g. 0903 221 879"
             />
@@ -266,7 +266,7 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
             <Button
               type="submit"
               disabled={isSaving || !isFormChanged}
-              className="bg-orange-500 hover:bg-orange-600 text-white cursor-pointer font-medium disabled:opacity-50"
+              className="bg-blue-600 hover:bg-blue-700 text-white cursor-pointer font-medium disabled:opacity-50"
             >
               {isSaving ? (
                 <>
