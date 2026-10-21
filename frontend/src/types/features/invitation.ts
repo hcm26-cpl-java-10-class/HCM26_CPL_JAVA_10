@@ -34,6 +34,13 @@ export interface InvitationDTO extends BaseDTO {
     maxAccessTime?: string | null;
     maxAccessAttempts?: number;
     accessAttemptCount?: number;
+
+    // Thông tin đề thi cho phía student (enriched từ server)
+    examStartTime?: string | null;
+    examEndTime?: string | null;
+    examDurationMinutes?: number;
+    examMaxAttempts?: number;
+    examHasPassword?: boolean;
 }
 
 export interface StudentInvitationDTO extends InvitationDTO {

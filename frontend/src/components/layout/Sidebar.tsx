@@ -28,8 +28,9 @@ export function SidebarMenu() {
             .map((group) => ({
                 id: group.id ?? group.name ?? "group",
                 name: group.name ?? "Menu",
+                hiddenInMenu: group.hiddenInMenu,
                 items: group.modules
-                    .filter((module) => !!module.url)
+                    .filter((module) => !!module.url && !module.hiddenInMenu)
                     .map((module) => ({
                         title: module.title ?? "Untitled",
                         url: module.url ?? "#",
@@ -39,7 +40,7 @@ export function SidebarMenu() {
                             (location.pathname === module.url || location.pathname.startsWith(`${module.url}/`)),
                     })),
             }))
-            .filter((group) => group.items.length > 0);
+            .filter((group) => !group.hiddenInMenu && group.items.length > 0);
     }, [location.pathname, moduleGroups]);
 
     return (

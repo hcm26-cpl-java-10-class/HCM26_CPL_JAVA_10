@@ -469,8 +469,10 @@ public class InvitationService {
         dto.setCreatedBy(invitation.getCreatedBy());
         dto.setUpdatedBy(invitation.getUpdatedBy());
 
-        dto.setExamId(invitation.getExam() != null ? invitation.getExam().getId() : null);
-        dto.setExamTitle(invitation.getExam() != null ? invitation.getExam().getTitle() : null);
+        Exam exam = invitation.getExam();
+
+        dto.setExamId(exam != null ? exam.getId() : null);
+        dto.setExamTitle(exam != null ? exam.getTitle() : null);
 
         dto.setUserId(invitation.getUser() != null ? invitation.getUser().getId() : null);
         dto.setUserFullName(invitation.getUser() != null ? invitation.getUser().getFullName() : invitation.getGuestName());
@@ -494,6 +496,18 @@ public class InvitationService {
         dto.setMaxAccessTime(invitation.getMaxAccessTime());
         dto.setMaxAccessAttempts(invitation.getMaxAccessAttempts());
         dto.setAccessAttemptCount(invitation.getAccessAttemptCount());
+
+        // Thông tin đề thi cho phía student: dùng để render notification,
+        // kiểm tra time window và biết đề có mật khẩu hay không.
+        if (exam != null) {
+            dto.setExamStartTime(exam.getStartTime());
+            dto.setExamEndTime(exam.getEndTime());
+            dto.setExamDurationMinutes(exam.getDurationMinutes());
+            dto.setExamMaxAttempts(exam.getMaxAttempts());
+            dto.setExamHasPassword(
+                    exam.getAccessCode() != null && !exam.getAccessCode().trim().isEmpty()
+            );
+        }
 
         return dto;
     }

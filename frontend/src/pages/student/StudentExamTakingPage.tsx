@@ -251,7 +251,7 @@ export default function StudentExamTakingPage() {
             return;
         }
 
-        navigate('/student/exams');
+        navigate('/invitations');
     };
 
     const submitCurrentAnswers = async (requireConfirmation = false) => {
@@ -426,7 +426,7 @@ export default function StudentExamTakingPage() {
             <MainLayout>
                 <div role="alert" className="space-y-4 rounded-lg border border-destructive p-6 text-destructive">
                     <p>{getStartErrorMessage(attemptQuery.error)}</p>
-                    <Button variant="outline" onClick={() => navigate('/student/exams')}>Quay lại lịch thi</Button>
+                    <Button variant="outline" onClick={() => navigate('/invitations')}>Quay lại lời mời thi</Button>
                 </div>
             </MainLayout>
         );
@@ -628,8 +628,8 @@ export default function StudentExamTakingPage() {
                                     Điểm cuối cùng sẽ được cập nhật sau khi giáo viên chấm câu tự luận.
                                 </p>
                             )}
-                            <Button className="mt-5" variant="outline" onClick={() => navigate('/student/exams')}>
-                                Quay lại lịch thi
+                            <Button className="mt-5" variant="outline" onClick={() => navigate('/invitations')}>
+                                Quay lại lời mời thi
                             </Button>
                         </section>
                     ) : (

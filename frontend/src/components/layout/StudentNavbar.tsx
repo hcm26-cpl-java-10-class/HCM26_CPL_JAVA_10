@@ -39,22 +39,23 @@ export function StudentNavbar() {
     };
 
     return moduleGroups
-      .map((group) => ({
-        id: group.id ?? group.name ?? "group",
-        name: group.name ?? "Menu",
-        items: group.modules
-          .filter((module) => !!module.url)
-          .map((module) => ({
-            id: module.id ?? `${group.id ?? group.name}-module`,
-            title: module.title ?? "Untitled",
-            url: module.url ?? "#",
-            icon: resolveIcon(module.icon),
-            isActive:
-              !!module.url &&
-              (pathname === normalizePath(module.url) || pathname.startsWith(`${normalizePath(module.url)}/`)),
-          })),
-      }))
-      .filter((group) => group.items.length > 0);
+            .map((group) => ({
+                id: group.id ?? group.name ?? "group",
+                name: group.name ?? "Menu",
+                hiddenInMenu: group.hiddenInMenu,
+                items: group.modules
+                    .filter((module) => !!module.url && !module.hiddenInMenu)
+                    .map((module) => ({
+                        id: module.id ?? `${group.id ?? group.name}-module`,
+                        title: module.title ?? "Untitled",
+                        url: module.url ?? "#",
+                        icon: resolveIcon(module.icon),
+                        isActive:
+                            !!module.url &&
+                            (pathname === normalizePath(module.url) || pathname.startsWith(`${normalizePath(module.url)}/`)),
+                    })),
+            }))
+            .filter((group) => !group.hiddenInMenu && group.items.length > 0);
 
   }, [moduleGroups, pathname]);
 

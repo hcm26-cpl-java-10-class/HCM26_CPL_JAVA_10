@@ -77,4 +77,23 @@ public class InvitationDTO extends BaseDTO {
 
     @JsonProperty(access = READ_ONLY)
     private Integer accessAttemptCount;
+
+    // ===== Thông tin đề thi cho phía student (read-only) =====
+    // Frontend dùng các field này để render notification và quyết định
+    // có mở dialog mật khẩu / có cho vào thi hay không.
+
+    @JsonProperty(access = READ_ONLY)
+    private LocalDateTime examStartTime;
+
+    @JsonProperty(access = READ_ONLY)
+    private LocalDateTime examEndTime;
+
+    @JsonProperty(access = READ_ONLY)
+    private Integer examDurationMinutes;
+
+    @JsonProperty(access = READ_ONLY)
+    private Integer examMaxAttempts;
+
+    @JsonProperty(access = READ_ONLY)
+    private Boolean examHasPassword;
 }

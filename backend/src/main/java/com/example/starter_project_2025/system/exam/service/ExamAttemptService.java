@@ -34,6 +34,7 @@ public class ExamAttemptService {
     private final ExamAttemptRepository attemptRepository;
     private final UserRepository userRepository;
     private final QuestionTakerMapper questionTakerMapper;
+    private final InvitationRepository invitationRepository;
 
     public ExamAttemptDTO startOrResume(Long examId, Long studentId) {
         return startOrResume(examId, studentId, null);
@@ -57,6 +58,7 @@ public class ExamAttemptService {
         }
 
         ensureExamWindowOpen(exam, nowLocal);
+        ensureInvitationAccepted(examId, studentId);
         ensureExamPasswordValid(exam, password);
 
         int maxAttempts = exam.getMaxAttempts() == null ? 1 : exam.getMaxAttempts();
@@ -142,6 +144,31 @@ public class ExamAttemptService {
         }
         if (exam.getEndTime() != null && !now.isBefore(exam.getEndTime())) {
             throw new BadRequestException("Kỳ thi đã đóng");
+        }
+    }
+
+    /**
+     * Chỉ cho phép làm bài khi sinh viên đã chấp nhận lời mời của đề thi đó.
+     *
+     * Quy tắc phản hồi ngược (backward compatible):
+     * - Nếu đề thi KHÔNG có lời mời nào -> vẫn cho thi (giữ tương thích dữ liệu cũ,
+     *   nơi đề thi được publish cho toàn bộ sinh viên chứ không qua lời mời).
+     * - Nếu đề thi CÓ lời mời -> sinh viên phải có lời mời ở trạng thái ACCEPTED
+     *   mới được bắt đầu làm bài.
+     */
+    private void ensureInvitationAccepted(Long examId, Long studentId) {
+        List<Invitation> invitations = invitationRepository.findByExamId(examId);
+        if (invitations.isEmpty()) {
+            return;
+        }
+
+        boolean hasAccepted = invitations.stream()
+                .anyMatch(invitation -> invitation.getUser() != null
+                        && studentId.equals(invitation.getUser().getId())
+                        && invitation.getStatus() == InvitationStatus.ACCEPTED);
+
+        if (!hasAccepted) {
+            throw new BadRequestException("Bạn cần chấp nhận lời mời trước khi làm bài");
         }
     }
 

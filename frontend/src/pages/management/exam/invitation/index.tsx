@@ -49,8 +49,11 @@ import {
     XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, Navigate } from "react-router-dom";
 import { toast } from "sonner";
+
+import { usePermissions } from "@/hooks/usePermissions";
+import { STUDENT_ROLE, normalizeRole } from "@/utils/rbac.utils";
 
 const PAGE_SIZE = 20;
 
@@ -82,6 +85,8 @@ export default function InvitationsPage() {
 
     const navigate = useNavigate();
     const queryClient = useQueryClient();
+    const { activeRole } = usePermissions();
+
     const [statusFilter, setStatusFilter] = useState<InvitationStatus | "ALL">("ALL");
     const [typeFilter, setTypeFilter] = useState<"ALL" | "authenticated" | "anonymous">("ALL");
     const [isCreateOpen, setCreateOpen] = useState(false);
@@ -142,6 +147,12 @@ export default function InvitationsPage() {
         },
         onError: () => toast.error("Không thể thu hồi."),
     });
+
+    // STUDENT không có quyền quản lý invitation -> đẩy về /invitations để xem notification.
+    // Hook đã gọi hết ở trên nên return sớm ở đây không vi phạm Rules of Hooks.
+    if (normalizeRole(activeRole) === STUDENT_ROLE) {
+        return <Navigate to="/invitations" replace />;
+    }
 
     return (
         <MainLayout pathName={{ exams: "Quản lý đề thi", invitations: "Lời mời" }}>

@@ -26,6 +26,11 @@ function AppRoutes() {
     // Get non-module routes (frontend-controlled)
     const staticRoutes = routes.filter((r) => !r.isModuleDriven);
 
+    // Các path đã được đăng ký bằng static route. Module trong DB có thể trùng
+    // path này (ví dụ /invitations) -> phải bỏ qua khi render dynamic route để
+    // tránh đăng ký route hai lần (React Router match bản đầu tiên).
+    const staticRoutePaths = new Set(staticRoutes.map((r) => r.path));
+
     return (
         <Routes>
             {/* Root redirect */}
@@ -57,6 +62,7 @@ function AppRoutes() {
             {moduleGroups.flatMap((group) =>
                 group.modules.map((m) => {
                     if (!m.url) return null;
+                    if (staticRoutePaths.has(m.url)) return null;
                     const Component = componentRegistry[m.url];
 
                     if (!Component) {
