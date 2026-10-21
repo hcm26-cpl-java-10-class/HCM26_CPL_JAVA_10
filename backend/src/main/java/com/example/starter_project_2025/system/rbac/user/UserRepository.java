@@ -10,7 +10,6 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
 public interface UserRepository extends BaseCrudRepository<User, Long> {
@@ -21,21 +20,21 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
 
     Long countByIsActive(Boolean isActive);
 
-    boolean existsByDepartment_Id(Long departmentId);
+    List<User> findAllByDepartments_Id(Long departmentId);
 
-    List<User> findAllByDepartment_IdAndIsActiveTrue(
-            Long departmentId
-    );
+    List<User> findAllByDepartments_IdAndIsActiveTrue(Long departmentId);
 
     @Query("select distinct u from User u join u.roles role "
-            + "where u.department.id = :departmentId and u.isActive = true "
+            + "join u.departments department "
+            + "where department.id = :departmentId and u.isActive = true "
             + "and role.name = 'STUDENT' order by u.firstName, u.lastName")
     List<User> findActiveStudentsByDepartmentId(
             @Param("departmentId") Long departmentId
     );
 
     @Query("select count(distinct u.id) from User u join u.roles role "
-            + "where u.department.id = :departmentId and u.isActive = true "
+            + "join u.departments department "
+            + "where department.id = :departmentId and u.isActive = true "
             + "and role.name = 'STUDENT'")
     long countActiveStudentsByDepartmentId(
             @Param("departmentId") Long departmentId
@@ -44,7 +43,7 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
     @Query(
             value = "select new com.example.starter_project_2025.system.demo.department.DepartmentMemberDTO("
                     + "u.id, u.email, u.firstName, u.lastName, department.id, department.name) "
-                    + "from User u left join u.department department "
+                    + "from User u join u.departments department "
                     + "where department.id = :departmentId and u.isActive = true "
                     + "and exists (select role.id from User member join member.roles role "
                     + "where member.id = u.id and role.name = 'STUDENT') "
@@ -53,9 +52,12 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
                     + "like lower(concat('%', :search, '%')) "
                     + "or lower(coalesce(u.lastName, '')) "
                     + "like lower(concat('%', :search, '%')))",
-            countQuery = "select count(u) from User u where u.department.id = :departmentId "
-                    + "and u.isActive = true and exists (select role.id from User member "
-                    + "join member.roles role where member.id = u.id and role.name = 'STUDENT') "
+            countQuery = "select count(u) from User u where u.isActive = true "
+                    + "and exists (select department.id from User member "
+                    + "join member.departments department where member.id = u.id "
+                    + "and department.id = :departmentId) "
+                    + "and exists (select role.id from User member join member.roles role "
+                    + "where member.id = u.id and role.name = 'STUDENT') "
                     + "and (:search is null or lower(u.email) like lower(concat('%', :search, '%')) "
                     + "or lower(coalesce(u.firstName, '')) "
                     + "like lower(concat('%', :search, '%')) "
@@ -70,9 +72,11 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
 
     @Query(
             value = "select new com.example.starter_project_2025.system.demo.department.DepartmentMemberDTO("
-                    + "u.id, u.email, u.firstName, u.lastName, department.id, department.name) "
-                    + "from User u left join u.department department "
-                    + "where (department is null or department.id <> :departmentId) "
+                    + "u.id, u.email, u.firstName, u.lastName, null, null) "
+                    + "from User u "
+                    + "where not exists (select department.id from User member "
+                    + "join member.departments department where member.id = u.id "
+                    + "and department.id = :departmentId) "
                     + "and u.isActive = true and exists (select role.id from User member "
                     + "join member.roles role where member.id = u.id and role.name = 'STUDENT') "
                     + "and (:search is null or lower(u.email) like lower(concat('%', :search, '%')) "
@@ -80,8 +84,10 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
                     + "like lower(concat('%', :search, '%')) "
                     + "or lower(coalesce(u.lastName, '')) "
                     + "like lower(concat('%', :search, '%')))",
-            countQuery = "select count(u) from User u left join u.department department "
-                    + "where (department is null or department.id <> :departmentId) "
+            countQuery = "select count(u) from User u "
+                    + "where not exists (select department.id from User member "
+                    + "join member.departments department where member.id = u.id "
+                    + "and department.id = :departmentId) "
                     + "and u.isActive = true and exists (select role.id from User member "
                     + "join member.roles role where member.id = u.id and role.name = 'STUDENT') "
                     + "and (:search is null or lower(u.email) like lower(concat('%', :search, '%')) "

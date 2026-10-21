@@ -57,9 +57,14 @@ public class User extends BaseEntity {
     @Column(length = 100)
     String lastName;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "department_id")
-    Department department;
+    @Builder.Default
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "user_departments",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "department_id")
+    )
+    Set<Department> departments = new HashSet<>();
 
     @Builder.Default
     @ManyToMany(fetch = FetchType.LAZY)

@@ -141,12 +141,15 @@ export default function DepartmentManagementPage() {
             name: name.trim(),
             code: code.trim(),
             description: description.trim(),
+            isActive: editingDepartment?.isActive ?? true,
         });
     };
 
     const confirmDelete = (department: DepartmentDTO) => {
         if (department.id === undefined) return;
-        if (window.confirm(`Delete department "${department.name}"?`)) {
+        if (window.confirm(
+            `Delete department "${department.name}"? Students will only be removed from this department.`,
+        )) {
             deleteMutation.mutate(department.id);
         }
     };

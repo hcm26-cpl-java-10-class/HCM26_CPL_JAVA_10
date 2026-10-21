@@ -22,6 +22,16 @@ export const enrollmentApi = {
         return response.data;
     },
 
+    getDepartmentStudentCourses: async (
+        departmentId: number,
+        studentId: number,
+    ): Promise<Enrollment[]> => {
+        const response = await axiosInstance.get<Enrollment[]>(
+            `/departments/${departmentId}/members/${studentId}/courses`,
+        );
+        return response.data;
+    },
+
     cancel: async (enrollmentId: number): Promise<void> => {
         await axiosInstance.delete(`/enrollments/${enrollmentId}`);
     },
