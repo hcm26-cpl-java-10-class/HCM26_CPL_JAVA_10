@@ -1,4 +1,4 @@
-﻿import { questionApi } from "@/api";
+import { questionApi } from "@/api";
 import { Button } from "@/components/ui/button";
 import { CardFooter } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -46,7 +46,7 @@ export interface QuestionFormValues {
     points: number;
     isActive: boolean;
     options: QuestionOptionDTO[];
-    imageUrl: string;
+    imageUrl?: string;
 }
 
 const defaultInitialQuestionForm: QuestionFormValues = {
@@ -64,16 +64,6 @@ const defaultInitialQuestionForm: QuestionFormValues = {
 };
 
 export const initialQuestionForm = defaultInitialQuestionForm;
-
-interface QuestionFormProps {
-    form: QuestionFormValues;
-    setForm: Dispatch<SetStateAction<QuestionFormValues>>;
-    onSubmit: (values: QuestionFormValues) => void;
-    isSaving: boolean;
-    submitLabel: string;
-    showActive?: boolean;
-    onCancel?: () => void;
-}
 
 function parseInlineFormatting(text: string): React.ReactNode[] {
     const parts: React.ReactNode[] = [];
@@ -173,23 +163,35 @@ function QuestionContentPreview({ content }: { content: string }) {
     );
 }
 
+interface QuestionFormProps {
+    form: QuestionFormValues;
+    setForm: Dispatch<SetStateAction<QuestionFormValues>>;
+    onSubmit: (values: QuestionFormValues) => void;
+    isSaving: boolean;
+    submitLabel: string;
+    showActive?: boolean;
+    onCancel?: () => void;
+}
+
 export function QuestionForm({
-                                 form,
-                                 setForm,
-                                 onSubmit,
-                                 isSaving,
-                                 submitLabel,
-                                 showActive = false,
-                                 onCancel,
-                             }: QuestionFormProps) {
+    form,
+    setForm,
+    onSubmit,
+    isSaving,
+    submitLabel,
+    showActive = false,
+    onCancel,
+}: QuestionFormProps) {
     const navigate = useNavigate();
     const contentRef = useRef<HTMLTextAreaElement>(null);
     const [isPreview, setIsPreview] = useState(false);
 
+    // Topic state
     const [isAddingNewTopic, setIsAddingNewTopic] = useState(false);
     const [newTopicText, setNewTopicText] = useState("");
     const [localCustomTopics, setLocalCustomTopics] = useState<string[]>([]);
 
+    // Fetch existing questions to provide topic suggestions
     const { data: questionPage } = useQuery({
         queryKey: ["question-topics"],
         queryFn: () => questionApi.getPage({ page: 0, size: 200 }),
@@ -228,16 +230,14 @@ export function QuestionForm({
         const selected = currentVal.substring(start, end) || defaultText;
 
         const replacement = `${prefix}${selected}${suffix}`;
-        const nextVal = currentVal.substring(0, start) + replacement + currentVal.substring(end);
+        const nextContent = currentVal.substring(0, start) + replacement + currentVal.substring(end);
 
-        setForm((prev) => ({ ...prev, content: nextVal }));
+        setForm((prev) => ({ ...prev, content: nextContent }));
 
         setTimeout(() => {
             textarea.focus();
-            textarea.setSelectionRange(
-                start + prefix.length,
-                start + prefix.length + selected.length,
-            );
+            const cursorPos = start + prefix.length + selected.length;
+            textarea.setSelectionRange(cursorPos, cursorPos);
         }, 0);
     };
 
@@ -268,7 +268,7 @@ export function QuestionForm({
         event.preventDefault();
 
         const content = form.content.trim();
-        const imageUrl = form.imageUrl.trim();
+        const imageUrl = form.imageUrl?.trim() || "";
         const options = form.options.map((option) => ({
             ...option,
             content: option.content.trim(),
@@ -543,11 +543,11 @@ export function QuestionForm({
                 )}
 
                 <Input
-                    value={form.imageUrl}
+                    value={form.imageUrl ?? ""}
                     onChange={(event) => setForm((prev) => ({ ...prev, imageUrl: event.target.value }))}
                     placeholder="Question image URL (optional, https://...)"
                 />
-                {form.imageUrl.trim() && (
+                {form.imageUrl?.trim() && (
                     <img
                         src={form.imageUrl}
                         alt=""

@@ -2,6 +2,7 @@ import { questionApi } from "@/api";
 import { QuestionCreatePage } from "./pages/QuestionCreatePage";
 import { QuestionDetailPage } from "./pages/QuestionDetailPage";
 import { QuestionEditPage } from "./pages/QuestionEditPage";
+import QuestionListPage from "./pages/QuestionListPage";
 import {
   auditableFieldsSchema,
   type EntityConfig,
@@ -85,3 +86,5 @@ export const entityConfig: EntityConfig = {
     detail: { path: "/questions/:id/detail", component: QuestionDetailPage },
   },
 };
+
+export default QuestionListPage;
