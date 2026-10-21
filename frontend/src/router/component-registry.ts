@@ -15,6 +15,9 @@ import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
+import TrainingCalendarDemoPage from "@/pages/management/training-calendar/TrainingCalendarDemoPage";
+
+
 
 
 export interface RouteConfig {
@@ -26,6 +29,11 @@ export interface RouteConfig {
 }
 
 export const routes: RouteConfig[] = [
+  {
+    path: "/training-calendar/demo",
+    component: TrainingCalendarDemoPage,
+    isModuleDriven: false,
+  },
   { path: "/fams/module-group-module", component: ModuleGroupModulePage, isPublic: true },
   { path: "/module-group-module", component: ModuleGroupModulePage, isPublic: true },
   { path: "/dashboard", component: Dashboard, isModuleDriven: true },
