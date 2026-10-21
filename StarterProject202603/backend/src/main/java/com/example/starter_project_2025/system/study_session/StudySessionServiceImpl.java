@@ -33,6 +33,27 @@ public class StudySessionServiceImpl
     StudySessionValidator studySessionValidator;
 
     @Override
+    @Transactional(readOnly = true)
+    public StudySessionStatistics statistics(Long subjectId, java.time.LocalDate dateFrom, java.time.LocalDate dateTo) {
+        check("STUDY_SESSION_READ");
+        ValidationContext ctx = new ValidationContext();
+        if (subjectId != null && subjectId <= 0) ctx.add("subjectId", "Subject ID must be positive");
+        if (dateFrom != null && dateTo != null && dateFrom.isAfter(dateTo)) {
+            ctx.add("sessionDateTo", "End date must be on or after start date");
+        }
+        ctx.throwIfErrors();
+        long scheduled = 0, completed = 0, cancelled = 0;
+        for (var row : studySessionRepository.countByStatus(subjectId, dateFrom, dateTo)) {
+            switch (row.getStatus()) {
+                case SCHEDULED -> scheduled = row.getCount();
+                case COMPLETED -> completed = row.getCount();
+                case CANCELLED -> cancelled = row.getCount();
+            }
+        }
+        return StudySessionStatistics.of(scheduled, completed, cancelled);
+    }
+
+    @Override
     protected BaseCrudRepository<StudySession, Long> getRepository() {
         return studySessionRepository;
     }

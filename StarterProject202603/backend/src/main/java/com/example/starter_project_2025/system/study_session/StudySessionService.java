@@ -4,6 +4,8 @@ import com.example.starter_project_2025.base.crud.service.BaseCrudService;
 
 public interface StudySessionService
         extends BaseCrudService<Long, StudySessionDTO, StudySessionFilter> {
+    StudySessionStatistics statistics(Long subjectId, java.time.LocalDate dateFrom, java.time.LocalDate dateTo);
+
 
         StudySessionDTO updateStatus(Long id, Boolean isActive);
 

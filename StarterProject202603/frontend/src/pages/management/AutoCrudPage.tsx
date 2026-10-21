@@ -91,9 +91,11 @@ export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
         !table.permission?.canExport;
 
     const browseMode = isStudentRole || isReadOnlyLikeRole;
+    const ListHeader = entity.listHeader;
 
     return (
         <MainLayout pathName={{ [breadcrumbKey]: entity.name }}>
+            {ListHeader && table.permission?.canRead && <ListHeader />}
             <ProTable
                 table={table}
                 mode={browseMode ? "browse" : "default"}

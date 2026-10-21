@@ -4,6 +4,21 @@ import type { Pagination, StudySessionDTO, StudySessionFilter } from "@/types";
 
 const path = "/study-sessions";
 
+export interface StudySessionStatistics {
+  total: number;
+  scheduled: number;
+  completed: number;
+  cancelled: number;
+  completionRate: number;
+  cancellationRate: number;
+}
+
+export interface StudySessionStatisticsFilter {
+  subjectId?: number;
+  sessionDateFrom?: string;
+  sessionDateTo?: string;
+}
+
 const base = createBaseApiService<StudySessionDTO, StudySessionFilter>({ path });
 
 function normalizeSubjectId(value: unknown): number {
@@ -18,6 +33,11 @@ function normalizeSubjectId(value: unknown): number {
 }
 
 export const studySessionApi = Object.assign({}, base, {
+  statistics: async (filter: StudySessionStatisticsFilter = {}) => {
+    const response = await axiosInstance.get<StudySessionStatistics>(`${path}/statistics`, { params: filter });
+    return response.data;
+  },
+
   create: (data: StudySessionDTO) =>
     base.create({
       ...data,

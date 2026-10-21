@@ -110,11 +110,14 @@ const studySessionSchema: EntitySchema = {
   ],
 };
 
+import { StudySessionStatisticsPanel } from "./StudySessionStatisticsPanel";
+
 export const entityConfig: EntityConfig = {
   name: "Study Session",
   path: "/study-sessions",
   api: studySessionApi,
   schema: studySessionSchema,
+  listHeader: StudySessionStatisticsPanel,
   actionPages: {
     detail: {
       path: "/study-sessions/:id/detail",

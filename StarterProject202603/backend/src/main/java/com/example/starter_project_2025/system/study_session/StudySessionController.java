@@ -38,6 +38,14 @@ public class StudySessionController
     SubjectRepository subjectRepository;
     StudySessionValidator studySessionValidator;
 
+    @org.springframework.web.bind.annotation.GetMapping("/statistics")
+    public StudySessionStatistics statistics(
+            @RequestParam(required = false) Long subjectId,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate sessionDateFrom,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate sessionDateTo) {
+        return studySessionService.statistics(subjectId, sessionDateFrom, sessionDateTo);
+    }
+
     @Override
     @PostMapping(value = "/import", consumes = "multipart/form-data")
     public ImportResult importFile(@RequestParam("file") MultipartFile file) {
