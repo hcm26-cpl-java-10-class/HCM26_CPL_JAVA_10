@@ -16,9 +16,10 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { normalizeRole } from "@/utils/rbac.utils";
 import axios from "axios";
 import dayjs from "dayjs";
-import { ArrowLeft, ExternalLink, Loader2, Pen, Trash2 } from "lucide-react";
+import { ArrowLeft, ClipboardList, ExternalLink, Loader2, Pen, Trash2 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { AttendanceSheetDialog } from "../components/AttendanceSheetDialog";
 import { SessionDeleteDialog } from "../components/SessionDeleteDialog";
 
 function DetailField({ label, children }: { label: string; children: ReactNode }) {
@@ -39,6 +40,7 @@ export function SessionDetailPage() {
   const navigate = useNavigate();
   const { activeRole, hasPermission } = usePermissions();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [attendanceOpen, setAttendanceOpen] = useState(false);
   const validId = !!id && /^\d+$/.test(id) && Number.isSafeInteger(Number(id)) && Number(id) > 0;
   const sessionQuery = useQuery({
     queryKey: ["session", "detail", id],
@@ -197,10 +199,18 @@ export function SessionDetailPage() {
           ) : null}
         </CardContent>
         <CardFooter className="flex flex-wrap justify-between gap-3 border-t pt-4">
-          <Button type="button" variant="outline" onClick={() => navigate("/sessions")}>
-            <ArrowLeft className="size-4" />
-            Quay lại danh sách
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={() => navigate("/sessions")}>
+              <ArrowLeft className="size-4" />
+              Quay lại danh sách
+            </Button>
+            {session && hasPermission("ATTENDANCE_READ") && (
+              <Button type="button" variant="outline" onClick={() => setAttendanceOpen(true)}>
+                <ClipboardList className="size-4" />
+                Attendance
+              </Button>
+            )}
+          </div>
           {canManageDraft && (
             <div className="flex flex-wrap gap-2">
               {hasPermission("SESSION_UPDATE") && (
@@ -233,6 +243,11 @@ export function SessionDetailPage() {
           }}
         />
       )}
+      <AttendanceSheetDialog
+        session={session ?? null}
+        open={attendanceOpen}
+        onOpenChange={setAttendanceOpen}
+      />
     </MainLayout>
   );
 }

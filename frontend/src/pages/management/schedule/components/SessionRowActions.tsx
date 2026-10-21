@@ -26,6 +26,7 @@ import { ADMIN_ROLE } from "@/utils/rbac.utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
+  ClipboardList,
   History,
   Loader2,
   MoreHorizontal,
@@ -34,6 +35,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { AttendanceSheetDialog } from "./AttendanceSheetDialog";
 import { SessionHistoryDialog } from "./SessionHistoryDialog";
 import { SessionNotesDialog } from "./SessionNotesDialog";
 
@@ -60,6 +62,7 @@ export function SessionRowActions({ session }: SessionRowActionsProps) {
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [notesOpen, setNotesOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [attendanceOpen, setAttendanceOpen] = useState(false);
 
   const sessionId = session.id;
   const status = session.status ?? "SCHEDULED";
@@ -125,7 +128,7 @@ export function SessionRowActions({ session }: SessionRowActionsProps) {
   const isBusy = completeMutation.isPending || cancelMutation.isPending;
 
   return (
-    <PermissionGate permission="SESSION_UPDATE">
+    <PermissionGate permission="SESSION_UPDATE" permissions={["ATTENDANCE_READ"]}>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -161,6 +164,11 @@ export function SessionRowActions({ session }: SessionRowActionsProps) {
           <DropdownMenuItem onSelect={() => setNotesOpen(true)}>
             <NotebookPen className="mr-2 size-4 text-primary" />
             Cập nhật ghi chú…
+          </DropdownMenuItem>
+
+          <DropdownMenuItem onSelect={() => setAttendanceOpen(true)}>
+            <ClipboardList className="mr-2 size-4 text-primary" />
+            Attendance…
           </DropdownMenuItem>
 
           {status === "COMPLETED" && (
@@ -200,6 +208,11 @@ export function SessionRowActions({ session }: SessionRowActionsProps) {
 
       <SessionNotesDialog session={session} open={notesOpen} onOpenChange={setNotesOpen} />
       <SessionHistoryDialog session={session} open={historyOpen} onOpenChange={setHistoryOpen} />
+      <AttendanceSheetDialog
+        session={session}
+        open={attendanceOpen}
+        onOpenChange={setAttendanceOpen}
+      />
 
       <Dialog
         open={cancelOpen}
