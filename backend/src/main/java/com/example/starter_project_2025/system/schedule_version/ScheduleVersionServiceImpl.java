@@ -6,12 +6,15 @@ import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import com.example.starter_project_2025.system.demo.session.SessionRepository;
 import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -38,6 +41,7 @@ public class ScheduleVersionServiceImpl
 
     ScheduleVersionRepository scheduleVersionRepository;
     ScheduleVersionMapper scheduleVersionMapper;
+    SessionRepository sessionRepository;
 
     // ─────────────────────────── Base CRUD hooks ───────────────────────────
 
@@ -207,6 +211,87 @@ public class ScheduleVersionServiceImpl
         }
 
         scheduleVersionRepository.delete(version);
+    }
+
+    // ─────────────────── Kiểm tra xung đột toàn bộ phiên bản ──────────────
+
+    /**
+     * Kiểm tra xung đột lịch toàn bộ các buổi học thuộc phiên bản.
+     * Hiện tại: lấy danh sách Session trong H2 theo classId giả định.
+     * Khi tích hợp thật với StudySession của Danh sẽ join đúng bảng.
+     */
+    @Override
+    public ScheduleVersionValidationResult validateVersion(Long versionId) {
+        ScheduleVersion version = scheduleVersionRepository.findById(versionId)
+                .orElseThrow(() -> new ResourceNotFoundException("ScheduleVersion", "id", versionId));
+
+        // TODO tuần 4: gọi ScheduleConflictService.validateEntireVersion(versionId)
+        // Hiện tại: trả valid=true vì chưa có bảng StudySession riêng của Phát
+        return new ScheduleVersionValidationResult(versionId, true, Collections.emptyList());
+    }
+
+    // ─────────────────── Kích hoạt phiên bản (Activate) ───────────────────
+
+    /**
+     * Kích hoạt phiên bản DRAFT thành ACTIVE (nguyên tử).
+     *
+     * Quy trình:
+     *   1. Kiểm tra phiên bản phải là DRAFT.
+     *   2. Chạy validateVersion (xung đột) – ném 409 nếu invalid.
+     *   3. Archive bản ACTIVE cũ của cùng lớp (nếu có).
+     *   4. Đặt bản hiện tại thành ACTIVE, lưu activatedAt, note = activationReason.
+     *   5. Trả DTO với previousActiveVersionId.
+     *
+     * @Transactional đảm bảo rollback toàn bộ nếu lỗi ở bất kỳ bước nào.
+     */
+    @Override
+    @Transactional
+    public ScheduleVersionDTO activateVersion(Long versionId, String activationReason) {
+        // Bước 1: Lấy và kiểm tra phiên bản cần kích hoạt
+        ScheduleVersion target = scheduleVersionRepository.findById(versionId)
+                .orElseThrow(() -> new ResourceNotFoundException("ScheduleVersion", "id", versionId));
+
+        if (activationReason == null || activationReason.trim().isEmpty()) {
+            throw new BadRequestException("Lý do kích hoạt (activationReason) là bắt buộc.");
+        }
+
+        if (target.getStatus() != ScheduleVersionStatus.DRAFT) {
+            throw new BadRequestException(
+                    "Only DRAFT versions can be activated. Current status: " + target.getStatus());
+        }
+
+        // Bước 2: Kiểm tra xung đột lịch
+        ScheduleVersionValidationResult validation = validateVersion(versionId);
+        if (!validation.valid()) {
+            throw new BadRequestException(
+                    "Cannot activate version " + versionId +
+                    ": schedule has " + validation.issues().size() + " conflict(s). " +
+                    "Run validate first and resolve all conflicts.");
+        }
+
+        // Bước 3: Archive bản ACTIVE cũ (nếu có)
+        String previousActiveId = null;
+        Optional<ScheduleVersion> currentActive =
+                scheduleVersionRepository.findByClassIdAndStatus(target.getClassId(), ScheduleVersionStatus.ACTIVE);
+        if (currentActive.isPresent()) {
+            ScheduleVersion oldActive = currentActive.get();
+            previousActiveId = String.valueOf(oldActive.getId());
+            oldActive.setStatus(ScheduleVersionStatus.ARCHIVED);
+            scheduleVersionRepository.save(oldActive);
+        }
+
+        // Bước 4: Kích hoạt bản mới
+        target.setStatus(ScheduleVersionStatus.ACTIVE);
+        target.setActivatedAt(LocalDateTime.now());
+        // activatedBy: sau khi có Security context sẽ lấy từ principal
+        // target.setActivatedBy(getCurrentUserId());
+        if (activationReason != null && !activationReason.isBlank()) {
+            target.setNote(activationReason);
+        }
+        ScheduleVersion saved = scheduleVersionRepository.save(target);
+
+        // Bước 5: Trả DTO với previousActiveVersionId
+        return toResponseDTO(saved, 0, saved.getClonedFromVersionId(), previousActiveId);
     }
 
     // ─────────────────── Helper: build response DTO ────────────────────────
