@@ -145,7 +145,7 @@ function apiError(error: unknown): {
 // MAIN COMPONENT
 // ======================================
 
-export default function SectionManagementPage() {
+export default function CurriculumManagementPage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const queryClient = useQueryClient();
 
@@ -501,7 +501,7 @@ export default function SectionManagementPage() {
     return (
         <MainLayout
             pathName={{
-                "course-sections": "Curriculum Builder",
+                curriculum: "Curriculum",
             }}
         >
             <div className="mx-auto w-full max-w-6xl space-y-6">

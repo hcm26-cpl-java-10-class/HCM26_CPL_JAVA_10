@@ -20,10 +20,10 @@ import lombok.experimental.SuperBuilder;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ResourcePermission("SECTION")
 @ResourceMenu(
-        title = "Sections",
+        title = "Curriculum",
         group = "Course Management",
         icon = "layers",
-        url = "/sections",
+        url = "/curriculum",
         order = 3,
         permission = "SECTION_READ"
 )

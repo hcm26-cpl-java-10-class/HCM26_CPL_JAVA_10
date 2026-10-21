@@ -6,7 +6,7 @@ import RegisterPage from "@/pages/auth/RegisterPage";
 import NotFoundPage from "@/pages/error/NotFoundPage";
 import { Unauthorized } from "@/pages/error/Unauthorized";
 import { Dashboard } from "@/pages/management/dashboard";
-import SectionManagementPage from "@/pages/management/demo/section";
+import CurriculumManagementPage from "@/pages/management/demo/curriculum";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
@@ -42,8 +42,8 @@ export const routes: RouteConfig[] = [
   { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true },
   { path: "/unauthorized", component: Unauthorized, isPublic: true },
   {
-    path: "/sections",
-    component: SectionManagementPage,
+    path: "/curriculum",
+    component: CurriculumManagementPage,
     requiredPermission: "SECTION_READ",
     isModuleDriven: true,
   },

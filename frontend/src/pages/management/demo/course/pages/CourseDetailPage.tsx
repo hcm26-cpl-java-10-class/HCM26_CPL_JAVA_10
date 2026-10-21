@@ -330,7 +330,7 @@ function Syllabus({ course }: { course: CourseDetail }) {
               requireAll
           >
             <Button asChild variant="outline" size="sm">
-              <Link to={`/sections?courseId=${course.id}`}>
+              <Link to={`/curriculum?courseId=${course.id}`}>
                 <BookOpen className="size-4" />
                 Manage Curriculum
               </Link>
