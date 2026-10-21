@@ -150,28 +150,28 @@ export const DepartmentTableCard: React.FC<DepartmentTableCardProps> = ({
       <div className="overflow-x-auto rounded-lg border border-gray-200">
         <table className="w-full table-fixed text-left text-sm text-gray-700 min-w-[540px] md:min-w-full">
           <colgroup>
-            <col className="w-[15%] min-w-[70px]" />
-            <col className="w-[32%] min-w-[130px]" />
-            <col className="w-[20%] min-w-[95px]" />
-            <col className="w-[15%] min-w-[75px]" />
-            <col className="w-[13%] min-w-[75px]" />
-            <col className="w-[5%] min-w-[38px]" />
+            <col className="w-[13%] min-w-[70px]" />
+            <col className="w-[42%] min-w-[150px]" />
+            <col className="w-[14%] min-w-[85px]" />
+            <col className="w-[13%] min-w-[80px]" />
+            <col className="w-[12%] min-w-[78px]" />
+            <col className="w-[6%] min-w-[40px]" />
           </colgroup>
           <thead className="bg-gray-50/80 text-xs uppercase text-gray-500 font-semibold border-b border-gray-200">
             <tr>
-              <th scope="col" className="px-3.5 py-3 font-semibold truncate">
+              <th scope="col" className="px-3 py-3 font-semibold truncate">
                 Mã / Code
               </th>
-              <th scope="col" className="px-3.5 py-3 font-semibold truncate">
+              <th scope="col" className="px-3 py-3 font-semibold truncate">
                 Tên / Name
               </th>
-              <th scope="col" className="px-3.5 py-3 font-semibold truncate">
+              <th scope="col" className="px-3 py-3 font-semibold truncate">
                 Location
               </th>
-              <th scope="col" className="px-3.5 py-3 font-semibold truncate">
+              <th scope="col" className="px-3 py-3 font-semibold truncate">
                 Liên kết / Linked
               </th>
-              <th scope="col" className="px-3.5 py-3 font-semibold truncate">
+              <th scope="col" className="px-3 py-3 font-semibold truncate">
                 Trạng thái / Status
               </th>
               <th scope="col" className="px-2 py-3 text-right">
@@ -213,12 +213,12 @@ export const DepartmentTableCard: React.FC<DepartmentTableCardProps> = ({
                   className="hover:bg-blue-50/40 transition-colors group"
                 >
                   {/* Code */}
-                  <td className="px-3.5 py-3 font-semibold text-gray-900 truncate">
+                  <td className="px-3 py-3 font-semibold text-gray-900 truncate">
                     {dept.code}
                   </td>
 
-                  {/* Name with Accessible Tooltip and Ellipsis */}
-                  <td className="px-3.5 py-3 font-medium text-gray-800 min-w-0">
+                  {/* Name with Expanded 42% Column Width, Tooltip & Description */}
+                  <td className="px-3 py-3 font-medium text-gray-800 min-w-0">
                     <TooltipWrapper
                       content={`${dept.name}${dept.description ? ` — ${dept.description}` : ""}`}
                     >
@@ -235,8 +235,8 @@ export const DepartmentTableCard: React.FC<DepartmentTableCardProps> = ({
                     </TooltipWrapper>
                   </td>
 
-                  {/* Location */}
-                  <td className="px-3.5 py-3 text-gray-600 min-w-0">
+                  {/* Location - Optimized 14% Compact Column */}
+                  <td className="px-3 py-3 text-gray-600 min-w-0">
                     <div
                       className="inline-flex items-center gap-1.5 max-w-full"
                       title={dept.locationName}
@@ -247,7 +247,7 @@ export const DepartmentTableCard: React.FC<DepartmentTableCardProps> = ({
                   </td>
 
                   {/* Linked Entities */}
-                  <td className="px-3.5 py-3 text-gray-600 min-w-0">
+                  <td className="px-3 py-3 text-gray-600 min-w-0">
                     <span
                       className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-medium inline-block truncate max-w-full"
                       title={dept.linkedEntities}
@@ -257,14 +257,14 @@ export const DepartmentTableCard: React.FC<DepartmentTableCardProps> = ({
                   </td>
 
                   {/* Status */}
-                  <td className="px-3.5 py-3 whitespace-nowrap">
+                  <td className="px-3 py-3 whitespace-nowrap">
                     {dept.status === "Active" ? (
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                         Active
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
                         <span className="w-1.5 h-1.5 rounded-full bg-gray-400 shrink-0" />
                         Inactive
                       </span>

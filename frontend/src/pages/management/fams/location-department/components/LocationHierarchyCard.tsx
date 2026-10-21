@@ -66,6 +66,9 @@ export const LocationHierarchyCard: React.FC<LocationHierarchyCardProps> = ({
     const isSelected = selectedLocationId === node.id;
     const count = getNodeTotalCount(node);
 
+    // Streamlined indentation: 8px base + 14px per depth level
+    const indentPadding = depth * 14 + 8;
+
     return (
       <div key={node.id} className="flex flex-col">
         <div
@@ -82,20 +85,21 @@ export const LocationHierarchyCard: React.FC<LocationHierarchyCardProps> = ({
               ? "bg-blue-50 text-blue-700 font-semibold border-l-4 border-blue-600 shadow-xs"
               : "text-gray-700 hover:bg-gray-100/70 border-l-4 border-transparent"
           }`}
-          style={{ paddingLeft: `${Math.max(10, depth * 20 + 10)}px` }}
+          style={{ paddingLeft: `${indentPadding}px` }}
         >
+          {/* Node Icon & Label Container */}
           <div className="flex items-center gap-2 min-w-0 flex-1 pr-2">
             {hasChildren ? (
               <button
                 type="button"
                 onClick={(e) => toggleExpand(node.id, e)}
-                className="p-0.5 rounded text-gray-400 hover:text-gray-700 transition-colors cursor-pointer"
+                className="p-0.5 rounded text-gray-400 hover:text-gray-700 transition-colors cursor-pointer shrink-0"
                 aria-label={isExpanded ? "Collapse" : "Expand"}
               >
                 {isExpanded ? (
-                  <ChevronDown className="h-4 w-4 shrink-0 text-gray-500" />
+                  <ChevronDown className="h-4 w-4 text-gray-500" />
                 ) : (
-                  <ChevronRight className="h-4 w-4 shrink-0 text-gray-500" />
+                  <ChevronRight className="h-4 w-4 text-gray-500" />
                 )}
               </button>
             ) : (
@@ -112,25 +116,15 @@ export const LocationHierarchyCard: React.FC<LocationHierarchyCardProps> = ({
               <MapPin className="h-4 w-4 shrink-0 text-blue-400" />
             )}
 
-            <span className="truncate" title={node.name}>
+            <span className="truncate text-sm" title={node.name}>
               {node.name}
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
-            {/* Count Badge */}
-            <span
-              className={`text-xs px-2 py-0.5 rounded-full font-medium transition-colors ${
-                isSelected
-                  ? "bg-blue-200/80 text-blue-800"
-                  : "bg-gray-100 text-gray-600 group-hover:bg-gray-200"
-              }`}
-            >
-              {count}
-            </span>
-
-            {/* Quick action buttons on hover */}
-            <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity">
+          {/* Right Action Icons & Count Badge - Aligned near right edge */}
+          <div className="flex items-center gap-1.5 shrink-0 ml-auto pl-2">
+            {/* Quick action buttons on hover (positioned to the left of the badge so badge never shifts) */}
+            <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity">
               <button
                 type="button"
                 title="Edit location"
@@ -154,6 +148,17 @@ export const LocationHierarchyCard: React.FC<LocationHierarchyCardProps> = ({
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
             </div>
+
+            {/* Count Badge */}
+            <span
+              className={`text-xs min-w-[24px] px-2 py-0.5 rounded-full font-medium text-center transition-colors ${
+                isSelected
+                  ? "bg-blue-200/80 text-blue-800"
+                  : "bg-gray-100 text-gray-600 group-hover:bg-gray-200"
+              }`}
+            >
+              {count}
+            </span>
           </div>
         </div>
 
@@ -200,18 +205,19 @@ export const LocationHierarchyCard: React.FC<LocationHierarchyCardProps> = ({
               onSelectLocation(null);
             }
           }}
-          className={`flex items-center justify-between py-2 px-3 rounded-lg text-sm transition-all cursor-pointer ${
+          className={`flex items-center justify-between py-2 px-2.5 rounded-lg text-sm transition-all cursor-pointer ${
             selectedLocationId === null
               ? "bg-blue-50 text-blue-700 font-semibold border-l-4 border-blue-600 shadow-xs"
               : "text-gray-700 hover:bg-gray-100/70 border-l-4 border-transparent"
           }`}
+          style={{ paddingLeft: "8px" }}
         >
-          <div className="flex items-center gap-2">
-            <Layers className="h-4 w-4 text-blue-600" />
-            <span>All Locations</span>
+          <div className="flex items-center gap-2 min-w-0 pr-2">
+            <Layers className="h-4 w-4 text-blue-600 shrink-0" />
+            <span className="truncate">All Locations</span>
           </div>
           <span
-            className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+            className={`text-xs min-w-[24px] px-2 py-0.5 rounded-full font-medium text-center ml-auto shrink-0 ${
               selectedLocationId === null
                 ? "bg-blue-200/80 text-blue-800"
                 : "bg-gray-100 text-gray-600"
