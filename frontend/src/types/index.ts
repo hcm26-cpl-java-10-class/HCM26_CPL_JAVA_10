@@ -22,4 +22,5 @@ export * from "./features/rbac/user";
 export * from "./features/demo/lesson";
 export * from "./features/schedule/session";
 export * from "./features/schedule/calendar-version";
+export * from "./features/schedule/attendance";
 export * from "./features/bulk-session-generation";
