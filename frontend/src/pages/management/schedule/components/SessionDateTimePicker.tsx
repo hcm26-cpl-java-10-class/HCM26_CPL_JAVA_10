@@ -77,7 +77,7 @@ export function SessionDateTimePicker({
             !value && "text-muted-foreground",
           )}
         >
-          <span>{value ? dayjs(value).format("DD/MM/YYYY HH:mm") : "Chọn ngày và giờ"}</span>
+          <span>{value ? dayjs(value).format("DD/MM/YYYY HH:mm") : "Select date and time"}</span>
           <CalendarDays className="size-4 shrink-0 text-muted-foreground" />
         </Button>
       </PopoverTrigger>
@@ -92,20 +92,20 @@ export function SessionDateTimePicker({
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label="Tháng trước"
+            aria-label="Previous month"
             disabled={!!minDate && month.format("YYYY-MM") <= minDate.slice(0, 7)}
             onClick={() => setMonth(month.subtract(1, "month"))}
           >
             <ChevronLeft className="size-4" />
           </Button>
           <p className="text-sm font-medium" aria-live="polite">
-            Tháng {month.month() + 1}/{month.year()}
+            {month.format("MMMM YYYY")}
           </p>
           <Button
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label="Tháng sau"
+            aria-label="Next month"
             disabled={!!maxDate && month.format("YYYY-MM") >= maxDate.slice(0, 7)}
             onClick={() => setMonth(month.add(1, "month"))}
           >
@@ -113,7 +113,7 @@ export function SessionDateTimePicker({
           </Button>
         </div>
         <div className="grid grid-cols-7 gap-1 text-center text-xs">
-          {["CN", "T2", "T3", "T4", "T5", "T6", "T7"].map((day) => (
+          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
             <span key={day} className="py-1 text-muted-foreground">
               {day}
             </span>
@@ -146,7 +146,7 @@ export function SessionDateTimePicker({
           })}
         </div>
         <div className="grid gap-2 border-t pt-3">
-          <Label htmlFor={id + "-picker-time"}>Giờ và phút</Label>
+          <Label htmlFor={id + "-picker-time"}>Hour & Minute</Label>
           <Input
             id={id + "-picker-time"}
             type="time"
@@ -164,7 +164,7 @@ export function SessionDateTimePicker({
           />
           {candidate && !inRange && (
             <p role="alert" className="text-xs text-destructive">
-              Thời gian đã chọn nằm ngoài khoảng cho phép.
+              Selected time is outside the allowed range.
             </p>
           )}
         </div>
@@ -178,11 +178,11 @@ export function SessionDateTimePicker({
               setOpen(false);
             }}
           >
-            Xóa
+            Clear
           </Button>
           <div className="flex gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
-              Đóng
+              Close
             </Button>
             <Button type="button" size="sm" disabled={!inRange} onClick={confirm}>
               OK

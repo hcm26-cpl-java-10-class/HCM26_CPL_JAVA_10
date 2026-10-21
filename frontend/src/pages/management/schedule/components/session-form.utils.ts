@@ -42,34 +42,34 @@ export function validateSessionForm(
   classInfo?: SessionClassInfo,
 ) {
   const errors: Record<string, string> = {};
-  if (!form.title.trim()) errors.title = "Vui lòng nhập tiêu đề buổi học.";
-  if (form.title.trim().length > 150) errors.title = "Tiêu đề không được vượt quá 150 ký tự.";
+  if (!form.title.trim()) errors.title = "Please enter a session title.";
+  if (form.title.trim().length > 150) errors.title = "Title must not exceed 150 characters.";
   if (!topics.some((topic) => String(topic.id) === form.topicId))
-    errors.topicId = "Vui lòng chọn chủ đề đang hoạt động.";
+    errors.topicId = "Please select an active topic.";
   if (!trainers.some((trainer) => String(trainer.id) === form.trainerId))
-    errors.trainerId = "Vui lòng chọn giảng viên đang hoạt động.";
-  if (!form.startTime) errors.startTime = "Vui lòng chọn thời gian bắt đầu.";
-  if (!form.endTime) errors.endTime = "Vui lòng chọn thời gian kết thúc.";
+    errors.trainerId = "Please select an active trainer.";
+  if (!form.startTime) errors.startTime = "Please select a start time.";
+  if (!form.endTime) errors.endTime = "Please select an end time.";
   if (
     form.startTime &&
     form.endTime &&
     formatSessionTime(form.endTime) <= formatSessionTime(form.startTime)
   )
-    errors.endTime = "Thời gian kết thúc phải sau thời gian bắt đầu.";
+    errors.endTime = "End time must be after start time.";
   if (classInfo?.startDate && form.startTime && form.startTime.slice(0, 10) < classInfo.startDate)
-    errors.startTime = "Buổi học bắt đầu trước ngày bắt đầu của lớp.";
+    errors.startTime = "Session starts before the class start date.";
   if (classInfo?.endDate && form.endTime && form.endTime.slice(0, 10) > classInfo.endDate)
-    errors.endTime = "Buổi học kết thúc sau ngày kết thúc của lớp.";
-  if (form.room.trim().length > 80) errors.room = "Phòng học không được vượt quá 80 ký tự.";
+    errors.endTime = "Session ends after the class end date.";
+  if (form.room.trim().length > 80) errors.room = "Room must not exceed 80 characters.";
   if (form.meetingLink.trim().length > 255)
-    errors.meetingLink = "Link học không được vượt quá 255 ký tự.";
+    errors.meetingLink = "Meeting link must not exceed 255 characters.";
   if (form.meetingLink.trim()) {
     try {
       const link = new URL(form.meetingLink.trim());
       if (!["http:", "https:"].includes(link.protocol))
-        errors.meetingLink = "Link học phải bắt đầu bằng http:// hoặc https://.";
+        errors.meetingLink = "Meeting link must start with http:// or https://.";
     } catch {
-      errors.meetingLink = "Link học không hợp lệ.";
+      errors.meetingLink = "Invalid meeting link.";
     }
   }
   return errors;
@@ -81,16 +81,16 @@ export function getSessionFieldErrors(error: unknown): Record<string, string> {
   return Object.fromEntries(
     Object.entries(fields).map(([field, messages]) => [
       field,
-      (Array.isArray(messages) ? messages[0] : messages) || "Dữ liệu không hợp lệ.",
+      (Array.isArray(messages) ? messages[0] : messages) || "Invalid data.",
     ]),
   );
 }
 
 export function getSessionErrorMessage(error: unknown, fallback: string) {
   if (!axios.isAxiosError(error)) return fallback;
-  if (error.response?.status === 403) return "Bạn không có quyền thực hiện thao tác này.";
-  if (error.response?.status === 404) return "Không tìm thấy buổi học hoặc buổi học đã bị xóa.";
+  if (error.response?.status === 403) return "You do not have permission to perform this action.";
+  if (error.response?.status === 404) return "Session not found or has been deleted.";
   if (error.response?.status === 409)
-    return "Dữ liệu đã thay đổi hoặc bản lịch không còn ở trạng thái DRAFT. Vui lòng tải lại.";
+    return "Data has changed or the calendar version is no longer DRAFT. Please reload.";
   return error.response?.data?.message || fallback;
 }

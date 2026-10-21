@@ -64,7 +64,7 @@ export function SessionFormFields({
 }: SessionFormFieldsProps) {
   return (
     <>
-      <SessionFormField id="session-title" label="Tiêu đề buổi học" required error={errors.title}>
+      <SessionFormField id="session-title" label="Session Title" required error={errors.title}>
         <Input
           id="session-title"
           value={form.title}
@@ -72,13 +72,13 @@ export function SessionFormFields({
           maxLength={150}
           aria-invalid={!!errors.title}
           aria-describedby={errors.title ? "session-title-error" : undefined}
-          placeholder="Nhập tiêu đề buổi học"
+          placeholder="Enter session title"
         />
       </SessionFormField>
       <div className="grid min-w-0 gap-4 sm:grid-cols-2">
         <SessionFormField
           id="topic-id"
-          label="Chủ đề"
+          label="Topic"
           required
           error={errors.topicId || errors.topicName}
         >
@@ -90,7 +90,7 @@ export function SessionFormFields({
             disabled={topicsLoading || !topics.length}
           >
             <SelectTrigger id="topic-id" className="w-full min-w-0" aria-invalid={!!errors.topicId}>
-              <SelectValue placeholder={topicsLoading ? "Đang tải chủ đề..." : "Chọn chủ đề"} />
+              <SelectValue placeholder={topicsLoading ? "Loading topics..." : "Select a topic"} />
             </SelectTrigger>
             <SelectContent>
               {topics.map((topic) => (
@@ -104,7 +104,7 @@ export function SessionFormFields({
         </SessionFormField>
         <SessionFormField
           id="trainer-id"
-          label="Giảng viên"
+          label="Trainer"
           required
           error={errors.trainerId || errors.trainerName}
         >
@@ -125,7 +125,7 @@ export function SessionFormFields({
               aria-invalid={!!errors.trainerId}
             >
               <SelectValue
-                placeholder={trainersLoading ? "Đang tải giảng viên..." : "Chọn giảng viên"}
+                placeholder={trainersLoading ? "Loading trainers..." : "Select a trainer"}
               />
             </SelectTrigger>
             <SelectContent>
@@ -139,10 +139,10 @@ export function SessionFormFields({
         </SessionFormField>
       </div>
       <div className="grid min-w-0 gap-4 rounded-lg border bg-muted/30 p-4 sm:grid-cols-2">
-        <SessionFormField id="start-time" label="Bắt đầu" required error={errors.startTime}>
+        <SessionFormField id="start-time" label="Start Time" required error={errors.startTime}>
           <SessionDateTimePicker
             id="start-time"
-            label="Chọn thời gian bắt đầu"
+            label="Select start time"
             value={form.startTime}
             onChange={(value) => onChange("startTime", value)}
             min={classInfo?.startDate ? classInfo.startDate + "T00:00" : undefined}
@@ -150,10 +150,10 @@ export function SessionFormFields({
             invalid={!!errors.startTime}
           />
         </SessionFormField>
-        <SessionFormField id="end-time" label="Kết thúc" required error={errors.endTime}>
+        <SessionFormField id="end-time" label="End Time" required error={errors.endTime}>
           <SessionDateTimePicker
             id="end-time"
-            label="Chọn thời gian kết thúc"
+            label="Select end time"
             value={form.endTime}
             onChange={(value) => onChange("endTime", value)}
             min={form.startTime || undefined}
@@ -163,17 +163,17 @@ export function SessionFormFields({
         </SessionFormField>
       </div>
       <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-        <SessionFormField id="room" label="Phòng học" error={errors.room}>
+        <SessionFormField id="room" label="Room" error={errors.room}>
           <Input
             id="room"
             value={form.room}
             onChange={(event) => onChange("room", event.target.value)}
             maxLength={80}
-            placeholder="Nhập phòng học"
+            placeholder="Enter room"
             aria-invalid={!!errors.room}
           />
         </SessionFormField>
-        <SessionFormField id="meeting-link" label="Link học trực tuyến" error={errors.meetingLink}>
+        <SessionFormField id="meeting-link" label="Online Meeting Link" error={errors.meetingLink}>
           <Input
             id="meeting-link"
             type="url"
