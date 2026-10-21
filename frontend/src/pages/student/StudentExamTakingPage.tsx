@@ -686,6 +686,7 @@ export default function StudentExamTakingPage() {
                             </div>
 
                             {attempt.questions.map((question, index) => {
+                                if (question.type === 'ESSAY') return null;
                                 const answer = answers[question.id] ?? {
                                     questionId: question.id,
                                     selectedOptionIds: [],
