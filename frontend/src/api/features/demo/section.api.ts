@@ -9,6 +9,23 @@ import type {
 const path = "/sections";
 
 export const sectionApi = {
+
+    createBulk: async (
+        courseId: number,
+        titles: string[]
+    ): Promise<SectionDTO[]> => {
+        const response = await axiosInstance.post<SectionDTO[]>(
+            `${path}/bulk`,
+            {
+                courseId,
+                titles,
+            }
+        );
+
+        return response.data;
+    },
+
+
     getByCourse: async (courseId: number) => {
         const response = await axiosInstance.get<PageResponse<SectionDTO>>(
             path,
