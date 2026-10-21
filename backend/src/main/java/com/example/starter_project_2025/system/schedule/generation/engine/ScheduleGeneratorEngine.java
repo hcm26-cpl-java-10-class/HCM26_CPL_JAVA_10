@@ -6,20 +6,14 @@ import com.example.starter_project_2025.system.schedule.generation.dto.ScheduleG
 import org.springframework.stereotype.Component;
 
 import java.time.DayOfWeek;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.*;
+import java.util.Objects;
+import java.util.Comparator;
 
-/**
- * Thuật toán phân bổ lịch học tự động từ cấu trúc Topic của Program (US-F16-02).
- * Tuân thủ quy tắc:
- * 1. Duyệt tuần tự các Topic theo sequence_order (RTM-BSG-01).
- * 2. Phân bổ theo các ngày trong tuần được chọn (daysOfWeek) và khung ca học (slotTime).
- * 3. Tự động bỏ qua các ngày nghỉ lễ (holidays) nếu skipHolidays = true (RTM-BSG-02).
- * 4. Xử lý chia giờ lẻ chính xác theo quyết định OD-F16-01.
- * 5. Tính toán hoàn toàn trên RAM, chưa lưu CSDL (RTM-BSG-03).
- */
 @Component
 public class ScheduleGeneratorEngine {
 
@@ -43,12 +37,15 @@ public class ScheduleGeneratorEngine {
             return Collections.emptyList();
         }
 
+        // Validate slot time
+        validateSlotTime(request.getSlotTime());
+
         List<PreviewSessionItemDTO> result = new ArrayList<>();
         LocalDate currentDate = request.getStartDate();
         Set<DayOfWeek> daysOfWeek = request.getDaysOfWeek();
         BulkPreviewRequestDTO.SlotTimeDTO slot = request.getSlotTime();
-        double hoursPerSession = slot.getHoursPerSession() != null && slot.getHoursPerSession() > 0 
-                ? slot.getHoursPerSession() 
+        double hoursPerSession = slot.getHoursPerSession() != null && slot.getHoursPerSession() > 0
+                ? slot.getHoursPerSession()
                 : 4.0;
 
         // Map topic override nếu người dùng có tùy chỉnh trước
@@ -107,13 +104,31 @@ public class ScheduleGeneratorEngine {
                 long minutesToAdd = Math.round(actualHours * 60);
                 LocalTime endTime = startTime.plusMinutes(minutesToAdd);
 
+                // Validate end time không vượt quá slot.endTime
+                if (slot.getEndTime() != null && endTime.isAfter(slot.getEndTime())) {
+                    endTime = slot.getEndTime();
+                    actualHours = Duration.between(startTime, endTime).toMinutes() / 60.0;
+                    if (actualHours <= 0) {
+                        throw new IllegalArgumentException("Slot time too short for session");
+                    }
+                }
+
                 LocalDateTime sessionStart = LocalDateTime.of(currentDate, startTime);
                 LocalDateTime sessionEnd = LocalDateTime.of(currentDate, endTime);
 
                 String tempId = String.format("tmp-%03d", globalSessionCounter);
 
+                // Check intra-batch conflict with already generated sessions in this preview
+                if (hasIntraBatchConflict(result, trainerId, roomId, sessionStart, sessionEnd)) {
+                    throw new IllegalStateException(
+                            String.format("Intra-batch conflict detected: trainer=%s, room=%s at %s - %s. " +
+                                            "Adjust trainer/room in topic overrides or change slot/days.",
+                                    trainerId, roomId, sessionStart, sessionEnd)
+                    );
+                }
+
                 PreviewSessionItemDTO sessionItem = PreviewSessionItemDTO.builder()
-                        .tempId(tempId)
+                        .tempId(String.format("tmp-%03d", globalSessionCounter))
                         .topicId(topic.getTopicId())
                         .topicName(topic.getTopicName())
                         .sessionNumber(sessionIndexForTopic)
@@ -138,6 +153,53 @@ public class ScheduleGeneratorEngine {
         }
 
         return result;
+    }
+
+    /**
+     * Check intra-batch conflict: pairwise comparison within the same generated batch.
+     */
+    private boolean hasIntraBatchConflict(
+            List<PreviewSessionItemDTO> existingSessions,
+            Long trainerId,
+            String roomId,
+            LocalDateTime startTime,
+            LocalDateTime endTime
+    ) {
+        for (PreviewSessionItemDTO existing : existingSessions) {
+            if (overlaps(existing.getStartTime(), existing.getEndTime(), startTime, endTime)) {
+                boolean trainerConflict = Objects.equals(existing.getTrainerId(), trainerId);
+                boolean roomConflict = sameNonBlankRoom(existing.getRoomId(), roomId);
+                if (trainerConflict || roomConflict) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Validate slot time configuration.
+     */
+    private void validateSlotTime(BulkPreviewRequestDTO.SlotTimeDTO slot) {
+        if (slot == null) {
+            throw new IllegalArgumentException("Slot time is required");
+        }
+        if (slot.getStartTime() == null || slot.getEndTime() == null) {
+            throw new IllegalArgumentException("Slot startTime and endTime are required");
+        }
+        if (!slot.getEndTime().isAfter(slot.getStartTime())) {
+            throw new IllegalArgumentException("Slot endTime must be after startTime");
+        }
+        Double hours = slot.getHoursPerSession();
+        if (hours == null || hours <= 0) {
+            throw new IllegalArgumentException("hoursPerSession must be positive");
+        }
+        long slotMinutes = Duration.between(slot.getStartTime(), slot.getEndTime()).toMinutes();
+        double maxHours = slotMinutes / 60.0;
+        if (hours > maxHours) {
+            throw new IllegalArgumentException(
+                    String.format("hoursPerSession (%.2f) exceeds slot duration (%.2f hours)", hours, maxHours));
+        }
     }
 
     private boolean isValidTeachingDay(
@@ -167,5 +229,17 @@ public class ScheduleGeneratorEngine {
     private boolean isNationalHoliday(LocalDate date) {
         String mmDd = String.format("%02d-%02d", date.getMonthValue(), date.getDayOfMonth());
         return DEFAULT_NATIONAL_HOLIDAYS.contains(mmDd);
+    }
+
+    private boolean overlaps(LocalDateTime start1, LocalDateTime end1, LocalDateTime start2, LocalDateTime end2) {
+        return start1.isBefore(end2) && end1.isAfter(start2);
+    }
+
+    private boolean sameNonBlankRoom(String firstRoom, String secondRoom) {
+        return firstRoom != null
+                && secondRoom != null
+                && !firstRoom.isBlank()
+                && !secondRoom.isBlank()
+                && firstRoom.trim().equalsIgnoreCase(secondRoom.trim());
     }
 }
