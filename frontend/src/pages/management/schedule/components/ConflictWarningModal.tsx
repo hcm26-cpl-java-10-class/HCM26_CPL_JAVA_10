@@ -36,7 +36,7 @@ export function ConflictWarningModal({
 
   const handleOverrideSubmit = () => {
     if (!overrideReason.trim()) {
-      setReasonError("Vui lòng nhập lý do ghi đè lịch.");
+      setReasonError("Please provide a valid reason to override the schedule per rule BR-10.");
       return;
     }
     setReasonError("");
@@ -60,24 +60,26 @@ export function ConflictWarningModal({
             </div>
             <div>
               <DialogTitle className="text-xl font-bold text-slate-900">
-                Cảnh báo Xung đột Lịch học
+                Schedule Conflict Warning
               </DialogTitle>
               <DialogDescription className="text-sm text-slate-500">
-                Kiểm tra các buổi học trùng thời gian trước khi tiếp tục.
+                Schedule Conflict Detection (FR-CAL-03 &amp; AT-04)
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
         <div className="mt-2 space-y-4 text-sm">
+          {/* Detailed message from backend */}
           <div className="rounded-lg border border-red-200 bg-red-50/80 p-3.5 text-red-800">
             <p className="font-medium">{conflictMessage}</p>
           </div>
 
+          {/* List of conflicting sessions if any */}
           {conflictingSessions && conflictingSessions.length > 0 && (
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                Chi tiết buổi học đang bị trùng:
+                Conflicting session details:
               </span>
               {conflictingSessions.map((session, idx) => (
                 <div
@@ -108,45 +110,53 @@ export function ConflictWarningModal({
             </div>
           )}
 
+          {/* Override reason form (BR-10) */}
           {showOverrideForm ? (
             <div className="rounded-lg border border-amber-300 bg-amber-50/60 p-4 space-y-3">
               <div className="flex items-center gap-2 font-semibold text-amber-900">
                 <ShieldAlert className="h-4 w-4" />
-                <span>Ghi đè lịch trùng</span>
+                <span>Operator / Admin Override Permission (BR-10)</span>
               </div>
               <p className="text-xs text-slate-600">
-                Chỉ tiếp tục khi bạn có quyền ghi đè lịch và đã xác nhận lý do.
+                Per business rule BR-10, overriding a schedule conflict requires proper authority and
+                a reason that will be recorded in the Audit Log.
               </p>
               <div className="space-y-1.5">
                 <Label htmlFor="override-reason" className="text-xs font-medium text-slate-800">
-                  Lý do ghi đè (bắt buộc) <span className="text-red-500">*</span>:
+                  Override Reason (required) <span className="text-red-500">*</span>:
                 </Label>
                 <Textarea
                   id="override-reason"
-                  maxLength={255}
                   rows={3}
                   value={overrideReason}
                   onChange={(e) => {
                     setOverrideReason(e.target.value);
                     if (e.target.value.trim()) setReasonError("");
                   }}
-                  placeholder="Ví dụ: Học bù đột xuất theo yêu cầu Ban Đào tạo đã được duyệt..."
+                  placeholder="e.g. Make-up class per Training Department approval..."
                   className="text-xs"
                 />
-                {reasonError && <p className="text-xs text-red-600 font-medium">{reasonError}</p>}
+                {reasonError && (
+                  <p className="text-xs text-red-600 font-medium">{reasonError}</p>
+                )}
               </div>
             </div>
           ) : (
             <div className="text-xs text-slate-500 italic">
-              Bạn có thể chọn <strong>"Chỉnh sửa lại giờ"</strong> hoặc xác nhận{" "}
-              <strong>"Ghi đè lịch"</strong> kèm lý do.
+              * Tip: You can choose <strong>"Edit Time"</strong> to pick a different time slot (AT-04),
+              or use Operator permission to <strong>"Override Schedule"</strong> (BR-10).
             </div>
           )}
         </div>
 
         <DialogFooter className="mt-3 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-          <Button type="button" variant="outline" onClick={handleClose} disabled={isSubmitting}>
-            Chỉnh sửa lại giờ
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleClose}
+            disabled={isSubmitting}
+          >
+            Edit Time
           </Button>
 
           {!showOverrideForm ? (
@@ -157,7 +167,7 @@ export function ConflictWarningModal({
               disabled={isSubmitting}
             >
               <ShieldAlert className="mr-1.5 h-4 w-4" />
-              Ghi đè lịch (Override)
+              Override Schedule
             </Button>
           ) : (
             <Button
@@ -166,7 +176,7 @@ export function ConflictWarningModal({
               onClick={handleOverrideSubmit}
               disabled={isSubmitting}
             >
-              {isSubmitting ? "Đang xử lý..." : "Xác nhận Override & Lưu"}
+              {isSubmitting ? "Processing..." : "Confirm Override & Save"}
             </Button>
           )}
         </DialogFooter>

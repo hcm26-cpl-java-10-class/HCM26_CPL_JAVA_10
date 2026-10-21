@@ -1,7 +1,5 @@
-import { sessionApi, sessionFormApi } from "@/api";
+import { sessionApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -11,340 +9,306 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { usePermissions } from "@/hooks/usePermissions";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import type { SessionDTO } from "@/types";
-import { normalizeRole } from "@/utils/rbac.utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import axios from "axios";
-import { ArrowLeft, Loader2, Save } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { ArrowLeft, Clock, Save, ShieldAlert } from "lucide-react";
+import { type FormEvent, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { ConflictWarningModal } from "../components/ConflictWarningModal";
-import { SessionFormFields } from "../components/SessionFormFields";
-import {
-  formatSessionTime,
-  getSessionErrorMessage,
-  getSessionFieldErrors,
-  getTrainerName,
-  toSessionForm,
-  validateSessionForm,
-  type SessionFormValues,
-} from "../components/session-form.utils";
 
-function SessionEditor({ session }: { session: SessionDTO }) {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const [form, setForm] = useState(() => toSessionForm(session));
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [submitError, setSubmitError] = useState("");
-  const [conflictOpen, setConflictOpen] = useState(false);
-  const [conflictMessage, setConflictMessage] = useState("");
-  const [pendingRequest, setPendingRequest] = useState<SessionDTO | null>(null);
-
-  const topicsQuery = useQuery({
-    queryKey: ["session-form", "topics"],
-    queryFn: sessionFormApi.getTopics,
-  });
-  const trainersQuery = useQuery({
-    queryKey: ["session-form", "trainers"],
-    queryFn: sessionFormApi.getTrainers,
-  });
-  const classQuery = useQuery({
-    queryKey: ["session-form", "class", session.classId],
-    queryFn: () => sessionFormApi.getClass(session.classId!),
-    enabled: !!session.classId,
-    retry: false,
-  });
-  const failedQuery = [topicsQuery, trainersQuery, classQuery].find((query) => query.isError);
-  const optionsReady =
-    !!classQuery.data?.code &&
-    !!topicsQuery.data?.length &&
-    !!trainersQuery.data?.length &&
-    !failedQuery;
-
-  const updateMutation = useMutation({
-    mutationFn: (request: SessionDTO) => sessionApi.update(String(session.id), request),
-    onSuccess: async (updated) => {
-      setConflictOpen(false);
-      queryClient.setQueryData(["session", "detail", String(session.id)], updated);
-      navigate("/sessions/" + session.id);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["session"] }),
-        queryClient.invalidateQueries({ queryKey: ["version-sessions"] }),
-      ]);
-      toast.success("Cập nhật buổi học thành công.");
-    },
-    onError: (error: unknown) => {
-      const fields = getSessionFieldErrors(error);
-      setErrors(fields);
-      setSubmitError(
-        getSessionErrorMessage(error, "Không thể cập nhật buổi học. Vui lòng thử lại."),
-      );
-      setConflictMessage(fields.conflict || "");
-      setConflictOpen(!!fields.conflict);
-      if (axios.isAxiosError(error) && error.response?.status === 409)
-        void queryClient.invalidateQueries({ queryKey: ["session", "detail", String(session.id)] });
-    },
-  });
-
-  function updateField(field: keyof SessionFormValues, value: string) {
-    setForm((current) => ({ ...current, [field]: value }));
-    setErrors((current) => ({
-      ...current,
-      [field]: "",
-      ...(field === "topicId" ? { topicName: "" } : {}),
-      ...(field === "trainerId" ? { trainerName: "" } : {}),
-      conflict: "",
-    }));
-    setSubmitError("");
-  }
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const validation = validateSessionForm(
-      form,
-      topicsQuery.data || [],
-      trainersQuery.data || [],
-      classQuery.data,
-    );
-    setErrors(validation);
-    setSubmitError("");
-    if (Object.keys(validation).length || !optionsReady) return;
-    const topic = topicsQuery.data!.find((item) => String(item.id) === form.topicId)!;
-    const trainer = trainersQuery.data!.find((item) => String(item.id) === form.trainerId)!;
-    const request: SessionDTO = {
-      calendarVersionId: session.calendarVersionId,
-      classCode: classQuery.data!.code,
-      title: form.title.trim(),
-      topicId: topic.id,
-      topicName: topic.title,
-      trainerId: trainer.id!,
-      trainerName: getTrainerName(trainer),
-      startTime: formatSessionTime(form.startTime),
-      endTime: formatSessionTime(form.endTime),
-      room: form.room.trim(),
-      meetingLink: form.meetingLink.trim(),
-      forceOverride: false,
-    };
-    setPendingRequest(request);
-    updateMutation.mutate(request);
-  }
-
-  return (
-    <>
-      <Card className="mx-auto w-full max-w-4xl">
-        <CardHeader>
-          <CardTitle>Chỉnh sửa buổi học</CardTitle>
-          <CardDescription>Cập nhật thông tin buổi học trong bản lịch nháp.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 p-4 text-sm">
-            <span className="font-medium">{session.classCode}</span>
-            <span>
-              · Bản lịch{" "}
-              {session.calendarVersionNumber != null
-                ? "v" + session.calendarVersionNumber
-                : "#" + session.calendarVersionId}
-            </span>
-            <Badge variant="outline">DRAFT</Badge>
-          </div>
-          {classQuery.data && (
-            <p className="text-sm text-muted-foreground">
-              Thời gian lớp: {classQuery.data.startDate} – {classQuery.data.endDate}
-            </p>
-          )}
-          {!session.classId && (
-            <Alert variant="destructive">
-              <AlertDescription>Không xác định được lớp học của buổi học này.</AlertDescription>
-            </Alert>
-          )}
-          {failedQuery && (
-            <Alert variant="destructive">
-              <AlertTitle>Không tải được dữ liệu cho biểu mẫu</AlertTitle>
-              <AlertDescription>
-                <p>Vui lòng thử lại trước khi lưu thay đổi.</p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="mt-2"
-                  onClick={() => {
-                    void failedQuery.refetch();
-                  }}
-                >
-                  Thử lại
-                </Button>
-              </AlertDescription>
-            </Alert>
-          )}
-          {topicsQuery.isSuccess && !topicsQuery.data.length && (
-            <Alert>
-              <AlertDescription>Chưa có chủ đề đang hoạt động để lựa chọn.</AlertDescription>
-            </Alert>
-          )}
-          {trainersQuery.isSuccess && !trainersQuery.data.length && (
-            <Alert>
-              <AlertDescription>
-                Chưa có tài khoản giảng viên đang hoạt động để lựa chọn.
-              </AlertDescription>
-            </Alert>
-          )}
-          {optionsReady &&
-            (!topicsQuery.data!.some((topic) => String(topic.id) === form.topicId) ||
-              !trainersQuery.data!.some((trainer) => String(trainer.id) === form.trainerId)) && (
-              <Alert>
-                <AlertDescription>
-                  Chủ đề hoặc giảng viên hiện tại không còn trong danh sách đang hoạt động. Vui lòng
-                  chọn lại trước khi lưu.
-                </AlertDescription>
-              </Alert>
-            )}
-          {submitError && (
-            <Alert variant="destructive">
-              <AlertDescription>{submitError}</AlertDescription>
-            </Alert>
-          )}
-          <form id="edit-session-form" onSubmit={handleSubmit} autoComplete="off" noValidate>
-            <fieldset disabled={updateMutation.isPending} className="grid min-w-0 gap-5">
-              <SessionFormFields
-                form={form}
-                errors={errors}
-                onChange={updateField}
-                topics={topicsQuery.data || []}
-                trainers={trainersQuery.data || []}
-                classInfo={classQuery.data}
-                topicsLoading={topicsQuery.isPending}
-                trainersLoading={trainersQuery.isPending}
-              />
-            </fieldset>
-          </form>
-        </CardContent>
-        <CardFooter className="flex flex-wrap justify-between gap-3 border-t pt-4">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => navigate("/sessions/" + session.id)}
-            disabled={updateMutation.isPending}
-          >
-            <ArrowLeft className="size-4" />
-            Quay lại chi tiết
-          </Button>
-          <Button
-            type="submit"
-            form="edit-session-form"
-            disabled={updateMutation.isPending || !optionsReady}
-          >
-            {updateMutation.isPending ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Save className="size-4" />
-            )}
-            {updateMutation.isPending ? "Đang lưu..." : "Lưu thay đổi"}
-          </Button>
-        </CardFooter>
-      </Card>
-      <ConflictWarningModal
-        key={String(conflictOpen)}
-        open={conflictOpen}
-        onClose={() => setConflictOpen(false)}
-        conflictMessage={conflictMessage}
-        isSubmitting={updateMutation.isPending}
-        onConfirmOverride={(reason) => {
-          if (pendingRequest)
-            updateMutation.mutate({
-              ...pendingRequest,
-              forceOverride: true,
-              overrideReason: reason,
-            });
-        }}
-      />
-    </>
-  );
-}
+const DEMO_TRAINERS = [
+  { id: 1, name: "Nguyen Minh (Trainer)" },
+  { id: 2, name: "Tran Thi Lan (Trainer)" },
+  { id: 3, name: "Le Hoang An (Trainer)" },
+];
 
 export function SessionEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { activeRole } = usePermissions();
-  const validId = !!id && /^\d+$/.test(id) && Number.isSafeInteger(Number(id)) && Number(id) > 0;
-  const sessionQuery = useQuery({
-    queryKey: ["session", "detail", id],
-    queryFn: () => sessionApi.getById(id!),
-    enabled: validId,
-    retry: false,
+  const queryClient = useQueryClient();
+
+  const [form, setForm] = useState<SessionDTO | null>(null);
+  const [conflictModalOpen, setConflictModalOpen] = useState(false);
+  const [conflictMessage, setConflictMessage] = useState("");
+
+  const { data: sessionData, isLoading } = useQuery({
+    queryKey: ["session", id],
+    queryFn: () => sessionApi.getById(String(id)),
+    enabled: !!id,
   });
-  const session = sessionQuery.data;
-  const canEdit =
-    normalizeRole(activeRole) === "ADMIN" &&
-    session?.calendarVersionStatus === "DRAFT" &&
-    session.status === "SCHEDULED";
-  let errorMessage = getSessionErrorMessage(
-    sessionQuery.error,
-    "Không thể tải thông tin buổi học. Vui lòng thử lại.",
-  );
-  if (!validId) errorMessage = "ID buổi học không hợp lệ.";
-  else if (session && !canEdit)
-    errorMessage =
-      session.calendarVersionStatus !== "DRAFT"
-        ? "Chỉ có thể sửa buổi học thuộc bản lịch DRAFT."
-        : session.status !== "SCHEDULED"
-          ? "Chỉ có thể sửa buổi học đang ở trạng thái SCHEDULED."
-          : "Bạn không có quyền chỉnh sửa buổi học này.";
+
+  useEffect(() => {
+    if (sessionData) {
+      setForm({
+        ...sessionData,
+        startTime: sessionData.startTime ? sessionData.startTime.substring(0, 16) : "",
+        endTime: sessionData.endTime ? sessionData.endTime.substring(0, 16) : "",
+      });
+    }
+  }, [sessionData]);
+
+  const updateMutation = useMutation({
+    mutationFn: (payload: SessionDTO) => sessionApi.update(String(id), payload),
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ["session"] });
+      if (data.isOverridden) {
+        toast.warning(`Schedule updated with Override permission (BR-10): ${data.overrideReason}`);
+      } else {
+        toast.success("Session updated successfully!");
+      }
+      navigate("/sessions");
+    },
+    onError: (error: any) => {
+      const errorData = error?.response?.data;
+      const validationErrors = errorData?.errors;
+
+      if (validationErrors?.conflict && validationErrors.conflict.length > 0) {
+        setConflictMessage(validationErrors.conflict[0]);
+        setConflictModalOpen(true);
+        toast.error("Schedule conflict detected on update!");
+        return;
+      }
+
+      if (validationErrors?.endTime && validationErrors.endTime.length > 0) {
+        toast.error(validationErrors.endTime[0]);
+        return;
+      }
+
+      toast.error(errorData?.message || "Failed to update session.");
+    },
+  });
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!form) return;
+
+    const formatTime = (t: string) => (t.length === 16 ? `${t}:00` : t);
+
+    updateMutation.mutate({
+      ...form,
+      startTime: formatTime(form.startTime),
+      endTime: formatTime(form.endTime),
+      forceOverride: false,
+    });
+  };
+
+  const handleConfirmOverride = (reason: string) => {
+    if (!form) return;
+    const formatTime = (t: string) => (t.length === 16 ? `${t}:00` : t);
+
+    updateMutation.mutate(
+      {
+        ...form,
+        startTime: formatTime(form.startTime),
+        endTime: formatTime(form.endTime),
+        forceOverride: true,
+        overrideReason: reason,
+      },
+      {
+        onSettled: () => setConflictModalOpen(false),
+      }
+    );
+  };
+
+  if (isLoading || !form) {
+    return (
+      <MainLayout pathName={{ sessions: "Schedules", edit: "Edit Session" }}>
+        <div className="p-8 text-center text-slate-500">Loading session data...</div>
+      </MainLayout>
+    );
+  }
 
   return (
-    <MainLayout
-      pathName={{
-        sessions: "Class Schedule",
-        [id || "detail"]: "Chi tiết buổi học",
-        edit: "Chỉnh sửa",
-      }}
-    >
-      {validId && session && !sessionQuery.isError && canEdit ? (
-        <SessionEditor key={session.id} session={session} />
-      ) : (
-        <Card className="mx-auto w-full max-w-4xl">
+    <MainLayout pathName={{ sessions: "Schedules", edit: "Edit Session" }}>
+      <div className="max-w-4xl mx-auto space-y-4">
+        {form.isOverridden && (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-900 flex items-center gap-2">
+            <ShieldAlert className="h-5 w-5 text-amber-600 shrink-0" />
+            <div>
+              <span className="font-bold">This session is in Override status:</span>{" "}
+              {form.overrideReason}
+            </div>
+          </div>
+        )}
+
+        <Card className="shadow-sm">
           <CardHeader>
-            <CardTitle>Chỉnh sửa buổi học</CardTitle>
+            <CardTitle className="text-xl">Edit Session #{id}</CardTitle>
+            <CardDescription>
+              Update session details — conflicts with other classes are checked automatically.
+            </CardDescription>
           </CardHeader>
+
           <CardContent>
-            {validId && sessionQuery.isPending ? (
-              <div
-                role="status"
-                className="flex items-center gap-2 py-8 text-sm text-muted-foreground"
-              >
-                <Loader2 className="size-4 animate-spin" />
-                Đang tải thông tin buổi học...
+            <form id="edit-session-form" className="grid gap-5" onSubmit={handleSubmit}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="class-code">Class Code</Label>
+                  <Input
+                    id="class-code"
+                    value={form.classCode}
+                    onChange={(e) => setForm((p) => p && { ...p, classCode: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="topic-name">Topic</Label>
+                  <Input
+                    id="topic-name"
+                    value={form.topicName ?? ""}
+                    onChange={(e) => setForm((p) => p && { ...p, topicName: e.target.value })}
+                  />
+                </div>
               </div>
-            ) : (
-              <Alert variant="destructive">
-                <AlertDescription>
-                  <p>{errorMessage}</p>
-                  {validId && sessionQuery.isError && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="mt-3"
-                      onClick={() => {
-                        void sessionQuery.refetch();
-                      }}
-                    >
-                      Thử lại
-                    </Button>
-                  )}
-                </AlertDescription>
-              </Alert>
-            )}
+
+              <div className="grid gap-2">
+                <Label htmlFor="session-title">Session Title</Label>
+                <Input
+                  id="session-title"
+                  value={form.title}
+                  onChange={(e) => setForm((p) => p && { ...p, title: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="trainer-select">Trainer</Label>
+                  <select
+                    id="trainer-select"
+                    value={form.trainerId}
+                    onChange={(e) => {
+                      const selectedId = Number(e.target.value);
+                      const t = DEMO_TRAINERS.find((item) => item.id === selectedId);
+                      setForm((p) => p && {
+                        ...p,
+                        trainerId: selectedId,
+                        trainerName: t?.name ?? "Trainer",
+                      });
+                    }}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                  >
+                    {DEMO_TRAINERS.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="room">Room</Label>
+                  <Input
+                    id="room"
+                    value={form.room ?? ""}
+                    onChange={(e) => setForm((p) => p && { ...p, room: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border border-slate-200 bg-slate-50/50 p-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="start-time" className="flex items-center gap-1.5 font-semibold">
+                    <Clock className="h-4 w-4 text-emerald-600" />
+                    Start Time
+                  </Label>
+                  <Input
+                    id="start-time"
+                    type="datetime-local"
+                    value={form.startTime}
+                    onChange={(e) => setForm((p) => p && { ...p, startTime: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="end-time" className="flex items-center gap-1.5 font-semibold">
+                    <Clock className="h-4 w-4 text-rose-600" />
+                    End Time
+                  </Label>
+                  <Input
+                    id="end-time"
+                    type="datetime-local"
+                    value={form.endTime}
+                    onChange={(e) => setForm((p) => p && { ...p, endTime: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="status">Session Status</Label>
+                  <Input
+                    id="status"
+                    value={form.status ?? "SCHEDULED"}
+                    disabled
+                    readOnly
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Status can only be changed via "Mark Complete" / "Cancel Session"
+                    actions (API v1 sessions).
+                  </p>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="meeting-link">Meeting Link</Label>
+                  <Input
+                    id="meeting-link"
+                    value={form.meetingLink ?? ""}
+                    onChange={(e) => setForm((p) => p && { ...p, meetingLink: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="notes">Post-session Notes</Label>
+                <Textarea
+                  id="notes"
+                  rows={2}
+                  value={form.notes ?? ""}
+                  onChange={(e) => setForm((p) => p && { ...p, notes: e.target.value })}
+                />
+              </div>
+            </form>
           </CardContent>
-          <CardFooter className="justify-end border-t pt-4">
-            <Button type="button" variant="outline" onClick={() => navigate("/sessions")}>
-              <ArrowLeft className="size-4" />
-              Quay lại danh sách
+
+          <CardFooter className="flex justify-between border-t pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => navigate("/sessions")}
+              disabled={updateMutation.isPending}
+            >
+              <ArrowLeft className="mr-1.5 h-4 w-4" />
+              Back
+            </Button>
+
+            <Button
+              type="submit"
+              form="edit-session-form"
+              disabled={updateMutation.isPending}
+              className="bg-slate-900 hover:bg-slate-800 text-white"
+            >
+              <Save className="mr-1.5 h-4 w-4" />
+              {updateMutation.isPending ? "Saving..." : "Update Session"}
             </Button>
           </CardFooter>
         </Card>
-      )}
+      </div>
+
+      <ConflictWarningModal
+        open={conflictModalOpen}
+        onClose={() => setConflictModalOpen(false)}
+        conflictMessage={conflictMessage}
+        onConfirmOverride={handleConfirmOverride}
+        isSubmitting={updateMutation.isPending}
+      />
     </MainLayout>
   );
 }
