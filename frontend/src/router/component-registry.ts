@@ -7,6 +7,7 @@ import NotFoundPage from "@/pages/error/NotFoundPage";
 import { Unauthorized } from "@/pages/error/Unauthorized";
 import { Dashboard } from "@/pages/management/dashboard";
 import ExamManagementPage from "@/pages/management/exam";
+import ResultStatisticsPage from "@/pages/management/exam/ResultStatisticsPage";
 // NEW: trang giáo viên xem bài tự luận
 import EssayAttemptListPage from "@/pages/management/exam/grading/EssayAttemptListPage";
 import EssayAttemptDetailPage from "@/pages/management/exam/grading/EssayAttemptDetailPage";
@@ -46,6 +47,11 @@ export const routes: RouteConfig[] = [
   { path: "/exams/:examId/grading/:attemptId", component: EssayAttemptDetailPage, requiredPermission: "EXAM_UPDATE" },
   { path: "/anonymous-exam", component: AnonymousAccessPage, isPublic: true },
   { path: "/student/invitations", component: StudentInvitationsRedirect, requiredPermission: "INVITATION_READ" },
+  {
+    path: "/exams/:examId/result-statistics",
+    component: ResultStatisticsPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
 
   {
     path: "/topic-marks/gradebook-demo",

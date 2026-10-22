@@ -443,9 +443,29 @@ export default function ExamManagementPage() {
                             <Mail className="size-4" />
                             Invitations
                           </Button>
-                          <Button variant="ghost" size="icon-sm" aria-label="Edit exam" title="Edit exam" onClick={() => openEditExam(exam)}>
-                            <Pencil />
+
+                          <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label="Edit exam"
+                              title="Edit exam"
+                              onClick={() => openEditExam(exam)}
+                          >
+                            <Pencil className="size-4" />
                           </Button>
+
+                          <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                  exam.id && navigate(`/exams/${exam.id}/result-statistics`)
+                              }
+                              disabled={!exam.id}
+                          >
+                            <ClipboardCheck className="size-4" />
+                            Statistics
+                          </Button>
+
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
