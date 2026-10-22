@@ -14,7 +14,10 @@ import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 import SyllabusesPage from "@/pages/management/demo/syllabus";
 import SyllabusDetailPage from "@/pages/management/demo/syllabus/detail";
+
 import StudentSyllabusPage from "@/pages/student/StudentSyllabusPage";
+import CourseReportPage from "@/pages/management/demo/report";
+
 
 export interface RouteConfig {
   path: string;
@@ -68,6 +71,12 @@ export const routes: RouteConfig[] = [
     path: "/curriculum",
     component: CurriculumManagementPage,
     requiredPermission: "SECTION_READ",
+    isModuleDriven: true,
+  },
+  {
+    path: "/course-report",
+    component: CourseReportPage,
+    requiredPermission: "COURSE_REPORT_READ",
     isModuleDriven: true,
   },
 ];

@@ -35,6 +35,8 @@ public class RoleDataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
+        ensurePermission("COURSE_REPORT", "READ");
+
         List<Permission> allPermissions = permissionRepository.findAll();
 
         upsertRole(
@@ -76,6 +78,7 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "CATEGORY_READ",
                         "CATEGORY_UPDATE",
                         "CATEGORY_DELETE",
+                        "COURSE_REPORT_READ",
 
                         // Course - Section CRUD - GR1
                         "SECTION_CREATE",
@@ -100,6 +103,18 @@ public class RoleDataInitializer implements CommandLineRunner {
         log.info("Ensured roles and permission mappings: ADMIN, STUDENT, TEACHER.");
     }
 
+    private void ensurePermission(String resource, String action) {
+        String name = resource + "_" + action;
+        if (permissionRepository.existsByName(name)) return;
+
+        permissionRepository.save(Permission.builder()
+                .name(name)
+                .resource(resource)
+                .action(action)
+                .description("Manually defined permission")
+                .build());
+    }
+
     private void upsertRole(String roleName, String description, Collection<Permission> permissions) {
         Role role = roleRepository.findByName(roleName).orElseGet(Role::new);
 
@@ -120,4 +135,5 @@ public class RoleDataInitializer implements CommandLineRunner {
 
         return permissions;
     }
+
 }
