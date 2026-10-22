@@ -62,6 +62,7 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "EXAM_TAKE",
                         "INVITATION_READ",
                         "STUDENT_SCORE_VIEW_OWN"
+                        "EXAM_TAKE"
                 )
         );
 
@@ -106,6 +107,7 @@ public class RoleDataInitializer implements CommandLineRunner {
 
         role.setName(roleName);
         role.setDescription(description);
+        role.setIsSystem(true);
         role.setIsActive(true);
         role.setPermissions(new HashSet<>(permissions));
 

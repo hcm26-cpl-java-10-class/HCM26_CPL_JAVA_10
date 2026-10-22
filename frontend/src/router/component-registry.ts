@@ -22,6 +22,7 @@ import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import MyScoresPage from "@/pages/student/MyScoresPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import AnonymousAccessPage from "@/pages/exam/AnonymousAccessPage";
+import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 
@@ -35,6 +36,8 @@ export interface RouteConfig {
 }
 
 export const routes: RouteConfig[] = [
+  { path: "/fams/module-group-module", component: ModuleGroupModulePage, isPublic: true },
+  { path: "/module-group-module", component: ModuleGroupModulePage, isPublic: true },
   { path: "/dashboard", component: Dashboard, isModuleDriven: true },
   { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
   // /invitations là static route (KHÔNG isModuleDriven) vì đây là entry point chính

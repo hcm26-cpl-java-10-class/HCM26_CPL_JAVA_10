@@ -1,7 +1,5 @@
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, useSidebar } from "@/components/ui/sidebar";
-
 import { NavMain } from "@/components/layout/NavMain";
-
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { Button } from "@/components/ui/button";
 import { LogOutIcon } from "lucide-react";

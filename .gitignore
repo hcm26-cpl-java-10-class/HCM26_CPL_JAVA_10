@@ -1,4 +1,4 @@
- === IDE ===
+# === IDE ===
 .idea/
 *.iml
 .vscode/
@@ -14,6 +14,7 @@ HCM26_CPL_JAVA_10/
 backend/target/
 backend/*.jar
 backend/*.war
+backend/data/
 
 # === Backend .env (secrets) ===
 backend/.env
@@ -24,6 +25,5 @@ frontend/dist/
 
 # === Docker .env (secrets) ===
 docker/.env
-
 
 /backend.zip
