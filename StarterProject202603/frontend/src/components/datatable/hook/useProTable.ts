@@ -177,6 +177,8 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
   const [selected, setSelected] = useState<any[]>([]);
 
   const [editingRow, setEditingRow] = useState<any | null>(null);
+  const [createInitial, setCreateInitial] = useState<Record<string, unknown> | null>(null);
+  const [isDuplicating, setDuplicating] = useState(false);
   const [isFormOpen, setFormOpen] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
 
@@ -670,8 +672,26 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
     if (!permission.canCreate) return;
 
     setEditingRow(null);
+    setCreateInitial(null);
     setFieldErrors({});
     setFormOpen(true);
+  };
+
+  const openDuplicate = async (row: any) => {
+    if (!permission.canCreate || !schema.duplicateInitial || isDuplicating) return;
+    setDuplicating(true);
+    try {
+      const source = await api.getById(String(row[schema.idField]));
+      const initial = await schema.duplicateInitial(source);
+      setEditingRow(null);
+      setCreateInitial(initial);
+      setFieldErrors({});
+      setFormOpen(true);
+    } catch (error) {
+      toast.error(getMutationErrorMessage(error, "Unable to duplicate Study Session."));
+    } finally {
+      setDuplicating(false);
+    }
   };
 
   const openEdit = (row: any) => {
@@ -809,6 +829,9 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
     toggleFieldVisibility,
 
     openCreate,
+    openDuplicate,
+    createInitial,
+    isDuplicating,
     openEdit,
 
     create,

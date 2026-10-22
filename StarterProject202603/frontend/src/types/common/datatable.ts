@@ -92,6 +92,7 @@ export interface FieldSchema {
 }
 
 export interface EntitySchema {
+  duplicateInitial?: (row: any) => Promise<Record<string, unknown>>;
   entityName: string;
   idField: string;
   fields: FieldSchema[];

@@ -234,6 +234,9 @@ export function ProTable<TData = any>({
     const defaultRenderRowActions = (row: TData) => (
         <RowActions
             row={row}
+            onDuplicate={schema.duplicateInitial && table.permission?.canCreate ? table.openDuplicate : undefined}
+            duplicatePermission={table.permission?.keys?.create}
+            duplicateDisabled={table.isDuplicating}
             onView={onView || setDetailRow}
             onEdit={onEdit || table.openEdit}
             onDelete={onDelete || setDeleteItem}
@@ -556,7 +559,7 @@ export function ProTable<TData = any>({
                         table.setFormOpen(open);
                     },
                     schema,
-                    initial: table.editingRow,
+                    initial: table.editingRow ?? table.createInitial,
                     onSubmit: (data) => {
                         if (table.editingRow) {
                             table.update({ id: table.editingRow[schema.idField], data });
@@ -573,7 +576,7 @@ export function ProTable<TData = any>({
                         table.setFormOpen(open);
                     }}
                     schema={schema}
-                    initial={table.editingRow}
+                    initial={table.editingRow ?? table.createInitial}
                     title={table.editingRow ? "Edit" : "Create"}
                     isSubmitting={table.isSubmitting}
                     relationOptions={table.relationOptions}
