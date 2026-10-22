@@ -122,7 +122,10 @@ export function CardItem({
                   field={f}
                   value={row[f.name]}
                   relationOptions={relationOptions}
-                  disableBooleanToggle={disableBooleanToggle}
+                  disableBooleanToggle={
+                    disableBooleanToggle ||
+                    (f.name === "isSystem" && ["ADMIN", "STUDENT", "TEACHER"].includes(String(row.name ?? "").toUpperCase()))
+                  }
                   onBooleanToggle={(fieldName, newValue) =>
                     onBooleanToggle(id, fieldName, newValue)
                   }

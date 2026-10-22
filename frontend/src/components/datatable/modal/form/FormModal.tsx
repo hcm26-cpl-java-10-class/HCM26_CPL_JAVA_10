@@ -106,6 +106,7 @@ export function FormModal({
   fieldErrors = {},
 }: FormModalProps) {
   const [form, setForm] = useState<Record<string, any>>({});
+  const [clientErrors, setClientErrors] = useState<Record<string, string[]>>({});
 
   const editableFields: FieldSchema[] = schema.fields.filter(
     (f: FieldSchema) =>
@@ -119,6 +120,7 @@ export function FormModal({
   );
 
   useEffect(() => {
+    setClientErrors({});
     if (initial) {
       const next: Record<string, any> = {};
 
@@ -151,14 +153,30 @@ export function FormModal({
 
   const updateField = (name: string, value: any) => {
     setForm((prev) => ({ ...prev, [name]: value }));
+    if (name === "email") setClientErrors((prev) => ({ ...prev, email: [] }));
   };
 
   const handleSubmit = () => {
-    onSubmit(form);
+    if (schema.entityName === "student") {
+      const email = String(form.email ?? "").trim();
+      if (!email) {
+        setClientErrors({ email: ["Email là bắt buộc."] });
+        return;
+      }
+      if (!/^[A-Za-z0-9._%+-]+@gmail\.com$/i.test(email)) {
+        setClientErrors({ email: ["Email phải có định dạng @gmail.com."] });
+        return;
+      }
+    }
+    setClientErrors({});
+    onSubmit({ ...form, ...(schema.entityName === "student" ? { email: String(form.email).trim() } : {}) });
   };
 
+  const getFieldErrors = (fieldName: string) =>
+    clientErrors[fieldName]?.length ? clientErrors[fieldName] : fieldErrors[fieldName];
+
   const hasError = (fieldName: string) =>
-    fieldErrors[fieldName] && fieldErrors[fieldName].length > 0;
+    (clientErrors[fieldName]?.length ?? 0) > 0 || (fieldErrors[fieldName]?.length ?? 0) > 0;
 
   const renderField = (field: FieldSchema) => (
     <FormFieldRenderer
@@ -170,7 +188,7 @@ export function FormModal({
           ? "border-destructive focus-visible:ring-destructive"
           : ""
       }
-      fieldErrors={fieldErrors[field.name]}
+      fieldErrors={getFieldErrors(field.name)}
       relationOptions={relationOptions}
       onChange={updateField}
     />

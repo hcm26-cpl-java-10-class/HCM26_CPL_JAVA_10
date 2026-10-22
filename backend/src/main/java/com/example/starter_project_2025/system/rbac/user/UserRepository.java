@@ -21,5 +21,11 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
 
     Long countByIsActive(Boolean isActive);
 
+ feature/permission
+    boolean existsByRoles_Id(Long roleId);
+
+    long countByRoles_Id(Long roleId);
+
     long countByRolesId(Long roleId);
+ dev
 }

@@ -7,16 +7,17 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Set;
 
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/roles")
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Tag(name = "Role", description = "APIs for managing roles")
-public class RoleController
-        extends BaseCrudDataIoController<Role, Long, RoleDTO, RoleFilter> {
+public class RoleController extends BaseCrudDataIoController<Role, Long, RoleDTO, RoleFilter> {
 
     RoleService roleService;
     RoleRepository roleRepository;
@@ -34,5 +35,25 @@ public class RoleController
     @Override
     protected Class<Role> getEntityClass() {
         return Role.class;
+    }
+
+    @GetMapping("/{id}/permissions")
+    public ResponseEntity<Set<Long>> getRolePermissionIds(@PathVariable Long id) {
+        return ResponseEntity.ok(roleService.getPermissionIds(id));
+    }
+
+    @PutMapping("/{id}/permissions")
+    public ResponseEntity<RoleDTO> updateRolePermissions(
+            @PathVariable Long id,
+            @RequestBody Set<Long> permissionIds) {
+        return ResponseEntity.ok(roleService.updatePermissions(id, permissionIds));
+    }
+
+    /** Toggle the system-role flag through a dedicated, permission-checked endpoint. */
+    @PatchMapping("/{id}/system-role")
+    public ResponseEntity<RoleDTO> setSystemRole(
+            @PathVariable Long id,
+            @RequestParam boolean isSystem) {
+        return ResponseEntity.ok(roleService.setSystemRole(id, isSystem));
     }
 }

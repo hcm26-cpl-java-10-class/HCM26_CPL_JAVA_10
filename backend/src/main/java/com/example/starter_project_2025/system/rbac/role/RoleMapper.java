@@ -14,6 +14,7 @@ public interface RoleMapper extends BaseCrudMapper<Role, RoleDTO> {
 
     @Override
     @Mapping(target = "permissions", ignore = true)
+    @Mapping(target = "isSystem", ignore = true)
     Role toEntity(RoleDTO request);
 
     @Override
@@ -23,6 +24,7 @@ public interface RoleMapper extends BaseCrudMapper<Role, RoleDTO> {
 
     @Override
     @Mapping(target = "permissions", ignore = true)
+    @Mapping(target = "isSystem", ignore = true)
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     void update(@MappingTarget Role role, RoleDTO request);
 
