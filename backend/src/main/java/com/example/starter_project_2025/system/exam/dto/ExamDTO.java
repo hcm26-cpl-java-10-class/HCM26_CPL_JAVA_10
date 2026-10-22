@@ -43,6 +43,8 @@ public class ExamDTO extends BaseDTO {
 
     private Boolean shuffleOptions;
 
+    private Boolean showAnswersAfterExam;
+
     @Min(value = 0, groups = {OnCreate.class, OnUpdate.class}, message = "passScore phải >= 0")
     private Integer passScore;
 

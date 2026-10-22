@@ -4,6 +4,7 @@ import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.exam.domain.*;
 import com.example.starter_project_2025.system.exam.dto.ExamAttemptDTO;
+import com.example.starter_project_2025.system.exam.dto.ExamAttemptReviewDTO;
 import com.example.starter_project_2025.system.exam.dto.ExamAttemptSummaryDTO;
 import com.example.starter_project_2025.system.exam.dto.SaveExamAnswerRequest;
 
@@ -14,6 +15,7 @@ import com.example.starter_project_2025.system.question.mapper.QuestionTakerMapp
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +37,7 @@ public class ExamAttemptService {
     private final UserRepository userRepository;
     private final QuestionTakerMapper questionTakerMapper;
     private final InvitationRepository invitationRepository;
+    private final ExamResultAccessService resultAccessService;
 
     public ExamAttemptDTO startOrResume(Long examId, Long studentId) {
         return startOrResume(examId, studentId, null);
@@ -183,6 +186,85 @@ public class ExamAttemptService {
         return attempts.stream()
                 .map(this::toSummary)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ExamAttemptReviewDTO reviewAttempt(Long attemptId, Long studentId) {
+        ExamAttempt attempt = attemptRepository.findByIdAndStudent_Id(attemptId, studentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Exam attempt not found"));
+        Exam exam = attempt.getExam();
+        int attemptsUsed = Math.max(
+                attempt.getAttemptNumber(),
+                attemptRepository.findAllByExam_IdAndStudent_IdOrderByAttemptNumberAsc(exam.getId(), studentId).size());
+        int attemptsRemaining = Math.max(0, maxAttempts(exam) - attemptsUsed);
+        if (!resultAccessService.canStudentViewAnswers(exam, attempt.getStatus(), attemptsRemaining)) {
+            throw new AccessDeniedException("Chưa thể xem đáp án của bài thi này");
+        }
+
+        Map<Long, ExamAttemptAnswer> answerByQuestion = new HashMap<>();
+        for (ExamAttemptAnswer answer : attempt.getAnswers()) {
+            answerByQuestion.put(answer.getQuestion().getId(), answer);
+        }
+
+        ExamAttemptReviewDTO response = new ExamAttemptReviewDTO();
+        response.setAttemptId(attempt.getId());
+        response.setExamId(exam.getId());
+        response.setTitle(exam.getTitle());
+        response.setAttemptNumber(attempt.getAttemptNumber());
+        response.setStatus(attempt.getStatus());
+        response.setTotalPoints(attempt.getTotalPoints());
+        response.setObjectiveScore(attempt.getObjectiveScore());
+        response.setFinalScore(attempt.getFinalScore());
+        response.setSubmittedAt(attempt.getSubmittedAt());
+        response.setQuestions(attempt.getQuestions().stream()
+                .sorted(Comparator.comparingInt(ExamAttemptQuestion::getDisplayOrder))
+                .map(question -> toQuestionReview(question, answerByQuestion.get(question.getId())))
+                .toList());
+        return response;
+    }
+
+    private ExamAttemptReviewDTO.QuestionReviewDTO toQuestionReview(ExamAttemptQuestion question, ExamAttemptAnswer answer) {
+        Set<Long> selectedIds = answer == null
+                ? Set.of()
+                : answer.getSelectedOptions().stream()
+                .map(ExamAttemptOption::getSourceOptionId)
+                .collect(Collectors.toSet());
+
+        ExamAttemptReviewDTO.QuestionReviewDTO dto = new ExamAttemptReviewDTO.QuestionReviewDTO();
+        dto.setQuestionId(question.getSourceQuestionId());
+        dto.setContent(question.getContent());
+        dto.setImageUrl(question.getImageUrl());
+        dto.setType(question.getType());
+        dto.setPoints(question.getPoints());
+
+        if (question.getType() == QuestionType.ESSAY) {
+            dto.setOptions(List.of());
+            if (answer != null) {
+                dto.setTextAnswer(answer.getTextAnswer());
+                dto.setScore(answer.getScore());
+                dto.setFeedback(answer.getFeedback());
+            }
+            return dto;
+        }
+
+        Set<Long> correctIds = question.getOptions().stream()
+                .filter(ExamAttemptOption::isCorrect)
+                .map(ExamAttemptOption::getSourceOptionId)
+                .collect(Collectors.toSet());
+        dto.setCorrect(correctIds.equals(selectedIds));
+        dto.setOptions(question.getOptions().stream()
+                .sorted(Comparator.comparingInt(ExamAttemptOption::getDisplayOrder))
+                .map(option -> {
+                    ExamAttemptReviewDTO.OptionReviewDTO o = new ExamAttemptReviewDTO.OptionReviewDTO();
+                    o.setId(option.getSourceOptionId());
+                    o.setContent(option.getContent());
+                    o.setImageUrl(option.getImageUrl());
+                    o.setCorrect(option.isCorrect());
+                    o.setSelected(selectedIds.contains(option.getSourceOptionId()));
+                    return o;
+                })
+                .toList());
+        return dto;
     }
 
     public ExamAttemptDTO saveAnswers(

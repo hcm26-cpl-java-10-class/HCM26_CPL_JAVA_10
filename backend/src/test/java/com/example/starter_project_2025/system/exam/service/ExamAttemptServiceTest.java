@@ -29,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -49,6 +50,9 @@ class ExamAttemptServiceTest {
 
     @Mock
     private QuestionTakerMapper questionTakerMapper;
+
+    @Mock
+    private ExamResultAccessService resultAccessService;
 
     @InjectMocks
     private ExamAttemptService service;
@@ -230,6 +234,58 @@ class ExamAttemptServiceTest {
         assertEquals(0, result.getObjectiveScore());
         assertNull(result.getFinalScore());
         assertEquals(ExamAttemptStatus.PENDING_REVIEW, result.getStatus());
+    }
+
+    @Test
+    void reviewAttemptReturnsCorrectAndSelectedOptionsWhenAllowed() {
+        attempt.setStatus(ExamAttemptStatus.SUBMITTED);
+        ExamAttemptQuestion question = snapshotQuestion(1L, QuestionType.MULTIPLE_CHOICE, 5);
+        ExamAttemptOption correct = snapshotOption(11L, question, true);
+        snapshotOption(12L, question, false);
+        attempt.setAnswers(new HashSet<>(List.of(answer(question, correct))));
+        when(attemptRepository.findByIdAndStudent_Id(30L, 40L)).thenReturn(Optional.of(attempt));
+        when(resultAccessService.canStudentViewAnswers(attempt.getExam(), ExamAttemptStatus.SUBMITTED, 0))
+                .thenReturn(true);
+
+        var review = service.reviewAttempt(30L, 40L);
+
+        var q = review.getQuestions().get(0);
+        assertEquals(true, q.getCorrect());
+        assertEquals(2, q.getOptions().size());
+        assertTrue(q.getOptions().get(0).isCorrect());
+        assertTrue(q.getOptions().get(0).isSelected());
+        assertEquals(false, q.getOptions().get(1).isSelected());
+    }
+
+    @Test
+    void reviewAttemptMarksWrongAnswerAsIncorrect() {
+        attempt.setStatus(ExamAttemptStatus.SUBMITTED);
+        ExamAttemptQuestion question = snapshotQuestion(1L, QuestionType.MULTIPLE_CHOICE, 5);
+        snapshotOption(11L, question, true);
+        ExamAttemptOption wrong = snapshotOption(12L, question, false);
+        attempt.setAnswers(new HashSet<>(List.of(answer(question, wrong))));
+        when(attemptRepository.findByIdAndStudent_Id(30L, 40L)).thenReturn(Optional.of(attempt));
+        when(resultAccessService.canStudentViewAnswers(any(), any(), anyInt())).thenReturn(true);
+
+        assertEquals(false, service.reviewAttempt(30L, 40L).getQuestions().get(0).getCorrect());
+    }
+
+    @Test
+    void reviewAttemptIsForbiddenWhenNotAllowed() {
+        attempt.setStatus(ExamAttemptStatus.SUBMITTED);
+        when(attemptRepository.findByIdAndStudent_Id(30L, 40L)).thenReturn(Optional.of(attempt));
+        when(resultAccessService.canStudentViewAnswers(any(), any(), anyInt())).thenReturn(false);
+
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> service.reviewAttempt(30L, 40L));
+    }
+
+    @Test
+    void reviewAttemptIsNotFoundForAnotherStudent() {
+        when(attemptRepository.findByIdAndStudent_Id(30L, 99L)).thenReturn(Optional.empty());
+
+        assertThrows(com.example.starter_project_2025.exception.ResourceNotFoundException.class,
+                () -> service.reviewAttempt(30L, 99L));
     }
 
     // ----- live entities (used by the start-attempt tests) -----

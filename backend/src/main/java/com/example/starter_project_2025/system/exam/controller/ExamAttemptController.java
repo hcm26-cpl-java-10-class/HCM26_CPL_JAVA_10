@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.exam.controller;
 
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.exam.dto.ExamAttemptDTO;
+import com.example.starter_project_2025.system.exam.dto.ExamAttemptReviewDTO;
 import com.example.starter_project_2025.system.exam.dto.ExamAttemptSummaryDTO;
 import com.example.starter_project_2025.system.exam.dto.SaveExamAnswerRequest;
 import com.example.starter_project_2025.system.exam.service.ExamAttemptService;
@@ -36,6 +37,14 @@ public class ExamAttemptController {
             @AuthenticationPrincipal UserPrincipal principal
     ) {
         return ResponseEntity.ok(service.findStudentAttempts(principal.getUser().getId()));
+    }
+
+    @GetMapping("/attempts/{attemptId}/review")
+    public ResponseEntity<ExamAttemptReviewDTO> review(
+            @PathVariable Long attemptId,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(service.reviewAttempt(attemptId, principal.getUser().getId()));
     }
 
     @PutMapping("/attempts/{attemptId}/answers")

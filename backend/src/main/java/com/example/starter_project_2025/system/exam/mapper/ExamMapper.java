@@ -43,6 +43,7 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setMaxAttempts(e.getMaxAttempts());
         d.setShuffleQuestions(e.getShuffleQuestions());
         d.setShuffleOptions(e.getShuffleOptions());
+        d.setShowAnswersAfterExam(e.getShowAnswersAfterExam());
         d.setPassScore(e.getPassScore());
         d.setLatePolicy(e.getLatePolicy());
         d.setLatePenaltyPercent(e.getLatePenaltyPercent());
@@ -75,6 +76,7 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         if (d.getMaxAttempts() != null) e.setMaxAttempts(d.getMaxAttempts());
         if (d.getShuffleQuestions() != null) e.setShuffleQuestions(d.getShuffleQuestions());
         if (d.getShuffleOptions() != null) e.setShuffleOptions(d.getShuffleOptions());
+        if (d.getShowAnswersAfterExam() != null) e.setShowAnswersAfterExam(d.getShowAnswersAfterExam());
         if (d.getPassScore() != null) e.setPassScore(d.getPassScore());
         if (d.getLatePolicy() != null) e.setLatePolicy(d.getLatePolicy());
         if (d.getLatePenaltyPercent() != null) e.setLatePenaltyPercent(d.getLatePenaltyPercent());

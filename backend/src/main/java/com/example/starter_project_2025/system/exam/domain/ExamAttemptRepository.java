@@ -19,6 +19,8 @@ public interface ExamAttemptRepository extends BaseCrudRepository<ExamAttempt, L
 
     List<ExamAttempt> findAllByStudent_IdOrderByStartedAtDesc(Long studentId);
 
+    Optional<ExamAttempt> findByIdAndStudent_Id(Long attemptId, Long studentId);
+
     @Query("select a.id from ExamAttempt a where a.status = :status")
     List<Long> findIdsByStatus(@Param("status") ExamAttemptStatus status);
 

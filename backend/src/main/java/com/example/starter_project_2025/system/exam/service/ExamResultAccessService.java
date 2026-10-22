@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.exam.service;
 
 import com.example.starter_project_2025.system.exam.domain.Exam;
+import com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus;
 import com.example.starter_project_2025.system.exam.domain.ExamResultPublication;
 import com.example.starter_project_2025.system.exam.domain.ExamResultPublicationRepository;
 import com.example.starter_project_2025.system.exam.domain.ResultVisibility;
@@ -37,6 +38,24 @@ public class ExamResultAccessService {
         }
 
         return isVisibilitySatisfied(exam);
+    }
+
+    // Đáp án chỉ lộ khi: cờ bật, bài đã kết thúc, điểm đã công bố, và sinh viên không còn lượt làm lại hoặc đề đã đóng
+    @Transactional(readOnly = true)
+    public boolean canStudentViewAnswers(Exam exam, ExamAttemptStatus attemptStatus, int attemptsRemaining) {
+        if (exam == null || !Boolean.TRUE.equals(exam.getShowAnswersAfterExam())) {
+            return false;
+        }
+        if (attemptStatus == null
+                || attemptStatus == ExamAttemptStatus.NOT_STARTED
+                || attemptStatus == ExamAttemptStatus.IN_PROGRESS) {
+            return false;
+        }
+        if (!canStudentViewScore(exam)) {
+            return false;
+        }
+        boolean examClosed = exam.getEndTime() != null && !LocalDateTime.now().isBefore(exam.getEndTime());
+        return attemptsRemaining <= 0 || examClosed;
     }
 
     @Transactional(readOnly = true)

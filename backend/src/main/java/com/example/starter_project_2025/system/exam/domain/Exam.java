@@ -47,6 +47,10 @@ public class Exam extends BaseEntity {
     @Column(nullable = false)
     private Boolean shuffleOptions = false;
 
+    // Cho phép sinh viên xem lại đáp án đúng sau khi thi (vẫn phải thỏa điều kiện ở ExamResultAccessService)
+    @Column(nullable = false)
+    private Boolean showAnswersAfterExam = false;
+
     private Integer passScore;
 
     @Enumerated(EnumType.STRING)
