@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
+import TrainingCalendarAdjustDemo from "./TrainingCalendarAdjustDemo";
+import { DropdownMenu } from "radix-ui";
 import { scheduleVersionApi } from "@/api/features/demo/schedule_version.api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
@@ -28,13 +30,12 @@ import {
   Rocket,
   Trash2,
   RotateCcw,
-  Search,
   History,
   FileEdit,
   AlertTriangle,
   Info,
-  CalendarDays,
-  Layers,
+  Eye,
+  MoreVertical,
 } from "lucide-react";
 import { toast } from "sonner";
 import type {
@@ -56,6 +57,46 @@ const PRESET_CLASSES = [
   { id: "Java-10", name: "Lớp Java-10 (Lập trình Java core)" },
 ];
 
+// Tên hiển thị tạm ghép từ mã lớp và số phiên bản; API chưa có calendarName.
+function getCalendarName(version: ScheduleVersionDTO) {
+  return `${version.classId}_TrainingCalendar_v${version.versionNumber}`;
+}
+
+// Dùng dữ liệu audit nếu backend trả về, không thay thế bằng ngày kích hoạt.
+function getAuditText(version: ScheduleVersionDTO, field: "updatedAt" | "updatedBy") {
+  const value: unknown = Reflect.get(version, field);
+  if (typeof value === "string" && value.trim()) return value;
+  if (typeof value === "number") return String(value);
+  return "—";
+}
+
+function formatCalendarDate(value: string | undefined) {
+  if (!value || value === "—") return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("en-GB", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getSourceVersionLabel(
+  version: ScheduleVersionDTO,
+  versions: ScheduleVersionDTO[],
+) {
+  if (version.clonedFromVersionId == null) return "Created from an empty draft";
+  const source = versions.find(
+    (item) => String(item.id) === String(version.clonedFromVersionId),
+  );
+  return source
+    ? `Version ${source.versionNumber}`
+    : `Source version ID: ${version.clonedFromVersionId}`;
+}
+
 export default function ScheduleVersionManagementPage() {
   // Trạng thái chọn lớp (Feature 1)
   const [selectedClassId, setSelectedClassId] = useState<string>("CLASS-01");
@@ -63,6 +104,25 @@ export default function ScheduleVersionManagementPage() {
   
   // Dữ liệu phiên bản của lớp
   const [versions, setVersions] = useState<ScheduleVersionDTO[]>([]);
+
+  // Bộ lọc danh sách và hộp thông tin phiên bản cho giao diện Training Calendar.
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [detailVersion, setDetailVersion] = useState<ScheduleVersionDTO | null>(null);
+  const [adjustVersion, setAdjustVersion] = useState<ScheduleVersionDTO | null>(null);
+
+  const visibleVersions = useMemo(
+    () => versions
+      .filter((version) => statusFilter === "ALL" || version.status === statusFilter)
+      .slice()
+      .sort((left, right) => right.versionNumber - left.versionNumber),
+    [versions, statusFilter],
+  );
+
+  useEffect(() => {
+    setStatusFilter("ALL");
+    setDetailVersion(null);
+  }, [selectedClassId]);
+
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
@@ -296,21 +356,21 @@ export default function ScheduleVersionManagementPage() {
           <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 font-semibold px-2.5 py-1 gap-1.5 shadow-xs">
             <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
             <CheckCircle2 className="size-3.5" />
-            ACTIVE (Chính thức)
+            Active
           </Badge>
         );
       case "DRAFT":
         return (
           <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 font-semibold px-2.5 py-1 gap-1.5 shadow-xs">
             <Clock className="size-3.5 text-amber-600 dark:text-amber-400" />
-            DRAFT (Bản nháp)
+            Draft
           </Badge>
         );
       case "ARCHIVED":
         return (
           <Badge className="bg-slate-500/15 text-slate-700 dark:text-slate-400 border-slate-500/30 font-medium px-2.5 py-1 gap-1.5 shadow-xs">
             <Archive className="size-3.5 text-slate-500" />
-            ARCHIVED (Lưu trữ)
+            Archived
           </Badge>
         );
       default:
@@ -318,275 +378,131 @@ export default function ScheduleVersionManagementPage() {
     }
   };
 
+  if (adjustVersion) {
+    return (
+      <TrainingCalendarAdjustDemo
+        version={adjustVersion}
+        onBack={() => {
+          setAdjustVersion(null);
+          loadVersions(selectedClassId);
+        }}
+        onSave={() => {
+          setAdjustVersion(null);
+          loadVersions(selectedClassId, true);
+        }}
+      />
+    );
+  }
+
   return (
     <MainLayout pathName={{ "schedule-versions": "Quản lý Phiên bản Lịch học" }}>
-      <div className="mx-auto max-w-7xl space-y-6 pb-12">
-        {/* Header & Tiêu đề */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b pb-5">
+      <div className="mx-auto w-full max-w-7xl space-y-4 pb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
           <div>
-            <div className="flex items-center gap-2.5 text-primary">
-              <CalendarDays className="size-7 text-indigo-600 dark:text-indigo-400" />
-              <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">
-                Quản lý Phiên bản Lịch học
-              </h1>
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Vòng đời lịch học: Soạn thảo <span className="font-semibold text-amber-600">DRAFT</span> ➔ Kiểm tra xung đột <span className="font-semibold text-blue-600">Validate</span> ➔ Kích hoạt chính thức <span className="font-semibold text-emerald-600">ACTIVE</span> & Lưu trữ <span className="font-semibold text-slate-500">ARCHIVED</span>
-            </p>
+            <h1 className="text-xl font-semibold">Training Calendar</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Class: {selectedClassId}</p>
           </div>
-
-          <div className="flex flex-wrap items-center gap-2.5">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleOpenHistory}
-              className="gap-1.5 cursor-pointer"
-            >
-              <History className="size-4 text-muted-foreground" />
-              Lịch sử phiên bản
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleOpenHistory}>
+              <History className="size-4" /> Version history
             </Button>
             <Button
               variant="outline"
               size="sm"
+              disabled={isLoading || isRefreshing}
               onClick={() => {
                 setIsRefreshing(true);
-                loadVersions(selectedClassId, true);
+                void loadVersions(selectedClassId, true);
               }}
-              disabled={isLoading || isRefreshing}
-              className="gap-1.5 cursor-pointer"
             >
               <RotateCcw className={`size-4 ${isRefreshing ? "animate-spin" : ""}`} />
-              Làm mới
+              Refresh
             </Button>
             <Button
+              size="sm"
+              disabled={isLoading || Boolean(draftVersion)}
               onClick={() => {
                 setDraftNote("");
                 setCreateDraftOpen(true);
               }}
-              disabled={Boolean(draftVersion)}
-              className="gap-1.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white shadow-sm cursor-pointer"
-              title={draftVersion ? "Lớp đã có bản DRAFT đang soạn" : "Tạo bản DRAFT mới cho lớp"}
+              title={draftVersion ? "This class already has an open draft" : "Create an empty draft"}
             >
-              <Plus className="size-4" />
-              Tạo nháp rỗng (Create Draft)
+              <Plus className="size-4" /> Create draft
             </Button>
           </div>
         </div>
 
+        <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-4">
+          <div className="min-w-56 flex-1 space-y-1.5">
+            <Label htmlFor="classSelect">Class</Label>
+            <select
+              id="classSelect"
+              value={selectedClassId}
+              onChange={(event) => setSelectedClassId(event.target.value)}
+              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {PRESET_CLASSES.map((cls) => (
+                <option key={cls.id} value={cls.id}>{cls.name}</option>
+              ))}
+              {!PRESET_CLASSES.some((cls) => cls.id === selectedClassId) && (
+                <option value={selectedClassId}>{selectedClassId}</option>
+              )}
+            </select>
+          </div>
+          <div className="min-w-48 flex-1 space-y-1.5">
+            <Label htmlFor="customClass">Other class ID</Label>
+            <div className="flex gap-2">
+              <Input
+                id="customClass"
+                className="h-9"
+                placeholder="Enter class ID"
+                value={customClassInput}
+                onChange={(event) => setCustomClassInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") handleApplyCustomClass();
+                }}
+              />
+              <Button variant="outline" size="sm" onClick={handleApplyCustomClass}>Apply</Button>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="version-status">Status</Label>
+            <select
+              id="version-status"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              className="h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="ALL">All statuses</option>
+              <option value="ACTIVE">Active</option>
+              <option value="DRAFT">Draft</option>
+              <option value="ARCHIVED">Archived</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
+          <span>Active: <strong className="text-foreground">{activeVersion ? `v${activeVersion.versionNumber}` : "None"}</strong></span>
+          <span>Draft: <strong className="text-foreground">{draftVersion ? `v${draftVersion.versionNumber}` : "None"}</strong></span>
+          <span>Archived: {archivedVersions.length}</span>
+        </div>
+
+        {/* Header & Tiêu đề */}
         {/* FEATURE 1: Bộ chọn Lớp học (classId) */}
-        <Card className="border-border/60 shadow-xs bg-card/60 backdrop-blur-xs">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Search className="size-4 text-indigo-600" />
-                <CardTitle className="text-base font-semibold">1. Bộ chọn Lớp học (Class Selector)</CardTitle>
-              </div>
-              <Badge variant="outline" className="text-xs font-mono">
-                GET /classes/{selectedClassId}
-              </Badge>
-            </div>
-            <CardDescription>
-              Chọn lớp học trong danh sách hoặc nhập mã lớp để lọc toàn bộ các phiên bản lịch học thuộc lớp đó.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-              {/* Dropdown các lớp mẫu */}
-              <div className="md:col-span-6 space-y-1.5">
-                <Label htmlFor="classSelect" className="text-xs font-medium text-muted-foreground">
-                  Chọn lớp học sẵn có:
-                </Label>
-                <select
-                  id="classSelect"
-                  value={selectedClassId}
-                  onChange={(e) => setSelectedClassId(e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {PRESET_CLASSES.map((cls) => (
-                    <option key={cls.id} value={cls.id}>
-                      {cls.name}
-                    </option>
-                  ))}
-                  {!PRESET_CLASSES.some((c) => c.id === selectedClassId) && (
-                    <option value={selectedClassId}>Lớp tùy chỉnh: {selectedClassId}</option>
-                  )}
-                </select>
-              </div>
-
-              {/* Nhập mã lớp tùy chỉnh */}
-              <div className="md:col-span-4 space-y-1.5">
-                <Label htmlFor="customClass" className="text-xs font-medium text-muted-foreground">
-                  Hoặc nhập mã lớp bất kỳ:
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="customClass"
-                    placeholder="VD: SE-102, CPL-05..."
-                    value={customClassInput}
-                    onChange={(e) => setCustomClassInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleApplyCustomClass();
-                    }}
-                  />
-                  <Button
-                    variant="secondary"
-                    type="button"
-                    onClick={handleApplyCustomClass}
-                    className="shrink-0 cursor-pointer"
-                  >
-                    Xem
-                  </Button>
-                </div>
-              </div>
-
-              {/* Thông tin thống kê nhanh */}
-              <div className="md:col-span-2 flex items-center justify-end">
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground">Tổng phiên bản</p>
-                  <p className="text-xl font-bold text-foreground">{versions.length}</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
+        {/* Dropdown các lớp mẫu */}
+        {/* Nhập mã lớp tùy chỉnh */}
+        {/* Thông tin thống kê nhanh */}
         {/* FEATURE 2: Thẻ hiển thị Nổi bật Phiên bản ACTIVE hiện hành */}
-        {activeVersion ? (
-          <Card className="border-2 border-emerald-500/40 bg-gradient-to-r from-emerald-500/5 via-teal-500/5 to-transparent shadow-md">
-            <CardContent className="p-5 md:p-6">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    {renderStatusBadge(activeVersion.status)}
-                    <span className="text-xs text-muted-foreground font-mono">
-                      (ID: {activeVersion.id} | Class: {activeVersion.classId})
-                    </span>
-                    <Badge variant="outline" className="text-emerald-700 dark:text-emerald-300 border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/30">
-                      Lịch chính thức áp dụng
-                    </Badge>
-                  </div>
-
-                  <div className="flex items-baseline gap-3">
-                    <h2 className="text-2xl font-bold tracking-tight text-foreground">
-                      Phiên bản v{activeVersion.versionNumber}
-                    </h2>
-                    {activeVersion.clonedFromVersionId && (
-                      <span className="text-xs text-muted-foreground">
-                        (Kế thừa từ bản v{activeVersion.clonedFromVersionId})
-                      </span>
-                    )}
-                  </div>
-
-                  <p className="text-sm text-foreground/80 font-medium">
-                    {activeVersion.note ? (
-                      <span>Ghi chú kích hoạt: "{activeVersion.note}"</span>
-                    ) : (
-                      <span className="italic text-muted-foreground">Không có ghi chú kích hoạt.</span>
-                    )}
-                  </p>
-
-                  <div className="flex flex-wrap gap-4 text-xs text-muted-foreground pt-1">
-                    {activeVersion.activatedAt && (
-                      <span className="flex items-center gap-1.5">
-                        <Clock className="size-3.5 text-emerald-600" />
-                        Thời điểm kích hoạt: {new Date(activeVersion.activatedAt).toLocaleString("vi-VN")}
-                      </span>
-                    )}
-                    {activeVersion.activatedBy && (
-                      <span>Người kích hoạt: {activeVersion.activatedBy}</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Thao tác nhanh với bản ACTIVE */}
-                <div className="flex flex-wrap md:flex-col gap-2 shrink-0">
-                  <Button
-                    onClick={() => openCloneModal(activeVersion)}
-                    disabled={Boolean(draftVersion)}
-                    className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer shadow-xs"
-                    title={draftVersion ? "Đang có bản nháp mở, không thể clone thêm" : "Tạo bản nháp mới kế thừa lịch hiện hành này"}
-                  >
-                    <Copy className="size-4" />
-                    Clone sang DRAFT mới (Feature 4)
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <Alert className="border-amber-500/40 bg-amber-500/5 text-amber-800 dark:text-amber-200">
-            <AlertTriangle className="size-4 text-amber-600" />
-            <AlertTitle className="font-semibold">Lớp {selectedClassId} chưa có phiên bản ACTIVE nào!</AlertTitle>
-            <AlertDescription className="text-sm">
-              Học viên và giảng viên hiện chưa có lịch chính thức. Vui lòng tạo bản nháp DRAFT, thêm buổi học, kiểm tra xung đột và kích hoạt để lịch có hiệu lực.
-            </AlertDescription>
-          </Alert>
-        )}
-
+        {/* Thao tác nhanh với bản ACTIVE */}
         {/* Thông tin cảnh báo nếu lớp đang có bản DRAFT */}
-        {draftVersion && (
-          <Alert className="border-blue-500/30 bg-blue-500/5 text-blue-900 dark:text-blue-100">
-            <Info className="size-4 text-blue-600" />
-            <AlertTitle className="font-semibold flex items-center justify-between">
-              <span>Đang có bản nháp DRAFT (v{draftVersion.versionNumber}) chờ kiểm tra & kích hoạt</span>
-              <span className="text-xs font-normal text-muted-foreground">Quy tắc: Tối đa 1 DRAFT / lớp</span>
-            </AlertTitle>
-            <AlertDescription className="text-sm mt-1 flex flex-col md:flex-row md:items-center justify-between gap-3">
-              <div>
-                Ghi chú: {draftVersion.note || "Không có ghi chú"}
-                {draftVersion.clonedFromVersionId && ` (Kế thừa từ v${draftVersion.clonedFromVersionId})`}
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleOpenValidate(draftVersion)}
-                  className="gap-1.5 cursor-pointer bg-background"
-                >
-                  <ShieldCheck className="size-4 text-blue-600" />
-                  Kiểm tra xung đột
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => handleOpenActivate(draftVersion)}
-                  className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
-                >
-                  <Rocket className="size-4" />
-                  Kích hoạt ngay (Activate)
-                </Button>
-              </div>
-            </AlertDescription>
-          </Alert>
-        )}
 
         {/* DANH SÁCH TẤT CẢ PHIÊN BẢN CỦA LỚP */}
-        <Card className="shadow-xs">
-          <CardHeader className="border-b pb-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <CardTitle className="text-lg font-bold flex items-center gap-2">
-                  <Layers className="size-5 text-indigo-600" />
-                  Danh sách Phiên bản của lớp {selectedClassId}
-                </CardTitle>
-                <CardDescription>
-                  Sắp xếp theo số phiên bản (Version Number). Chỉ bản ACTIVE mới là thời khóa biểu chính thức.
-                </CardDescription>
-              </div>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-emerald-500" />
-                  ACTIVE: {activeVersion ? 1 : 0}
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-amber-500" />
-                  DRAFT: {draftVersion ? 1 : 0}
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-slate-400" />
-                  ARCHIVED: {archivedVersions.length}
-                </span>
-              </div>
-            </div>
+        <Card className="overflow-hidden shadow-xs">
+          <CardHeader className="border-b py-4">
+            <CardTitle className="text-base">Calendar versions — {selectedClassId}</CardTitle>
+            <CardDescription>
+              {visibleVersions.length} of {versions.length} versions · Latest version first
+            </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             {isLoading ? (
@@ -615,158 +531,123 @@ export default function ScheduleVersionManagementPage() {
                 </Button>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto">              {/* Phiên bản */}
+              {/* Trạng thái Badge (Feature 2) */}
+              {/* Ghi chú / Lý do */}
+              {/* Nguồn kế thừa */}
+              {/* Ngày kích hoạt */}
+              {/* Các nút thao tác nghiệp vụ */}
+              {/* Đối với bản DRAFT: có nút Validate (5), Activate (6), Delete */}
+              {/* Đối với bản ACTIVE hoặc ARCHIVED: có nút Clone (Feature 4) */}
+
                 <table className="w-full text-left text-sm">
-                  <thead className="bg-muted/50 text-xs uppercase font-semibold text-muted-foreground border-b">
+                  <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
                     <tr>
-                      <th className="px-5 py-3.5">Phiên bản</th>
-                      <th className="px-5 py-3.5">Trạng thái (Feature 2)</th>
-                      <th className="px-5 py-3.5">Ghi chú / Lý do</th>
-                      <th className="px-5 py-3.5">Nguồn kế thừa</th>
-                      <th className="px-5 py-3.5">Ngày kích hoạt</th>
-                      <th className="px-5 py-3.5 text-right">Thao tác nghiệp vụ</th>
+                      <th scope="col" className="px-4 py-3">No.</th>
+                      <th scope="col" className="px-4 py-3">Calendar name</th>
+                      <th scope="col" className="px-4 py-3">Change note</th>
+                      <th scope="col" className="px-4 py-3">Last modified date</th>
+                      <th scope="col" className="px-4 py-3">Last modified by</th>
+                      <th scope="col" className="px-4 py-3">Status</th>
+                      <th scope="col" className="px-4 py-3 text-right">Action</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {versions.map((ver) => {
-                      const isActive = ver.status === "ACTIVE";
-                      const isDraft = ver.status === "DRAFT";
-                      const isArchived = ver.status === "ARCHIVED";
-
-                      return (
-                        <tr
-                          key={ver.id}
-                          className={`transition-colors hover:bg-muted/40 ${
-                            isActive ? "bg-emerald-500/5 font-medium" : ""
-                          }`}
-                        >
-                          {/* Phiên bản */}
-                          <td className="px-5 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={`flex size-8 items-center justify-center rounded-lg font-bold text-sm ${
-                                  isActive
-                                    ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
-                                    : isDraft
-                                    ? "bg-amber-500/20 text-amber-700 dark:text-amber-300"
-                                    : "bg-muted text-muted-foreground"
-                                }`}
+                  <tbody className="divide-y divide-border">
+                    {visibleVersions.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                          No calendar versions match the selected status.
+                        </td>
+                      </tr>
+                    )}
+                    {visibleVersions.map((ver, index) => (
+                      <tr key={ver.id} className="hover:bg-muted/30">
+                        <td className="px-4 py-3 text-muted-foreground">{index + 1}</td>
+                        <td className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => setDetailVersion(ver)}
+                            className="break-words text-left font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            {getCalendarName(ver)}
+                          </button>
+                        </td>
+                        <td className="max-w-64 px-4 py-3">
+                          <p className="line-clamp-2" title={ver.note || undefined}>{ver.note || "—"}</p>
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
+                          {formatCalendarDate(getAuditText(ver, "updatedAt"))}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">{getAuditText(ver, "updatedBy")}</td>
+                        <td className="whitespace-nowrap px-4 py-3">{renderStatusBadge(ver.status)}</td>
+                        <td className="px-4 py-3 text-right">
+                          <DropdownMenu.Root>
+                            <DropdownMenu.Trigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                aria-label={`Actions for version ${ver.versionNumber}`}
                               >
-                                v{ver.versionNumber}
-                              </span>
-                              <div>
-                                <span className="font-semibold text-foreground">
-                                  Version {ver.versionNumber}
-                                </span>
-                                <div className="text-xs text-muted-foreground font-mono">
-                                  ID: {ver.id}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-
-                          {/* Trạng thái Badge (Feature 2) */}
-                          <td className="px-5 py-4 whitespace-nowrap">
-                            {renderStatusBadge(ver.status)}
-                          </td>
-
-                          {/* Ghi chú / Lý do */}
-                          <td className="px-5 py-4 max-w-xs">
-                            <p className="line-clamp-2 text-foreground/90">
-                              {ver.note || <span className="text-muted-foreground italic">Không có ghi chú</span>}
-                            </p>
-                          </td>
-
-                          {/* Nguồn kế thừa */}
-                          <td className="px-5 py-4 whitespace-nowrap text-muted-foreground text-xs">
-                            {ver.clonedFromVersionId ? (
-                              <Badge variant="outline" className="gap-1 font-mono text-xs">
-                                <Copy className="size-3 text-muted-foreground" />
-                                Kế thừa v{ver.clonedFromVersionId}
-                              </Badge>
-                            ) : (
-                              <span className="text-muted-foreground">Tạo mới rỗng</span>
-                            )}
-                          </td>
-
-                          {/* Ngày kích hoạt */}
-                          <td className="px-5 py-4 whitespace-nowrap text-xs text-muted-foreground">
-                            {ver.activatedAt ? (
-                              <div>
-                                <p className="font-medium text-foreground">
-                                  {new Date(ver.activatedAt).toLocaleDateString("vi-VN")}
-                                </p>
-                                <p className="text-[11px] text-muted-foreground">
-                                  {new Date(ver.activatedAt).toLocaleTimeString("vi-VN")}
-                                </p>
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground/60">—</span>
-                            )}
-                          </td>
-
-                          {/* Các nút thao tác nghiệp vụ */}
-                          <td className="px-5 py-4 whitespace-nowrap text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              {/* Đối với bản DRAFT: có nút Validate (5), Activate (6), Delete */}
-                              {isDraft && (
-                                <>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => handleOpenValidate(ver)}
-                                    className="gap-1.5 text-blue-600 dark:text-blue-400 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer"
-                                    title="Kiểm tra xung đột trùng giờ, trùng phòng, trùng giảng viên (Feature 5)"
-                                  >
-                                    <ShieldCheck className="size-4" />
-                                    Validate (Feature 5)
-                                  </Button>
-
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleOpenActivate(ver)}
-                                    className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-xs"
-                                    title="Kích hoạt thành lịch chính thức ACTIVE (Feature 6)"
-                                  >
-                                    <Rocket className="size-4" />
-                                    Activate (Feature 6)
-                                  </Button>
-
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => handleDeleteDraft(ver)}
-                                    className="text-destructive hover:bg-destructive/10 cursor-pointer"
-                                    title="Xóa bản nháp này"
-                                  >
-                                    <Trash2 className="size-4" />
-                                  </Button>
-                                </>
-                              )}
-
-                              {/* Đối với bản ACTIVE hoặc ARCHIVED: có nút Clone (Feature 4) */}
-                              {(isActive || isArchived) && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => openCloneModal(ver)}
-                                  disabled={Boolean(draftVersion)}
-                                  className="gap-1.5 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:text-indigo-600"
-                                  title={
-                                    draftVersion
-                                      ? "Đang có bản nháp DRAFT, hãy kích hoạt hoặc xóa trước khi clone tiếp"
-                                      : "Clone phiên bản này sang bản DRAFT mới (Feature 4)"
-                                  }
+                                <MoreVertical className="size-4" />
+                              </Button>
+                            </DropdownMenu.Trigger>
+                            <DropdownMenu.Portal>
+                              <DropdownMenu.Content
+                                align="end"
+                                sideOffset={6}
+                                className="z-50 min-w-52 rounded-md border bg-popover p-1 text-sm text-popover-foreground shadow-md"
+                              >
+                                <DropdownMenu.Item
+                                  className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 outline-none data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground"
+                                  onSelect={() => setDetailVersion(ver)}
                                 >
-                                  <Copy className="size-4 text-muted-foreground" />
-                                  Clone (Feature 4)
-                                </Button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                                  <Eye className="size-4" /> Version information
+                                </DropdownMenu.Item>
+                                <DropdownMenu.Separator className="my-1 h-px bg-border" />
+                                {ver.status === "DRAFT" && (
+                                  <>
+                                    <DropdownMenu.Item
+                                      className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 outline-none data-[highlighted]:bg-accent"
+                                      onSelect={() => setAdjustVersion(ver)}
+                                    >
+                                      <FileEdit className="size-4" /> Adjust Training Calendar
+                                    </DropdownMenu.Item>
+                                    <DropdownMenu.Item
+                                      className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 outline-none data-[highlighted]:bg-accent"
+                                      onSelect={() => { void handleOpenValidate(ver); }}
+                                    >
+                                      <ShieldCheck className="size-4" /> Validate
+                                    </DropdownMenu.Item>
+                                    <DropdownMenu.Item
+                                      className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 outline-none data-[highlighted]:bg-accent"
+                                      onSelect={() => handleOpenActivate(ver)}
+                                    >
+                                      <Rocket className="size-4" /> Activate
+                                    </DropdownMenu.Item>
+                                    <DropdownMenu.Item
+                                      className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-destructive outline-none data-[highlighted]:bg-destructive/10"
+                                      onSelect={() => { void handleDeleteDraft(ver); }}
+                                    >
+                                      <Trash2 className="size-4" /> Delete draft
+                                    </DropdownMenu.Item>
+                                  </>
+                                )}
+                                {(ver.status === "ACTIVE" || ver.status === "ARCHIVED") && (
+                                  <DropdownMenu.Item
+                                    disabled={Boolean(draftVersion)}
+                                    className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 outline-none data-[highlighted]:bg-accent data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                                    onSelect={() => openCloneModal(ver)}
+                                  >
+                                    <Copy className="size-4" /> Clone to draft
+                                  </DropdownMenu.Item>
+                                )}
+                              </DropdownMenu.Content>
+                            </DropdownMenu.Portal>
+                          </DropdownMenu.Root>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -775,6 +656,44 @@ export default function ScheduleVersionManagementPage() {
         </Card>
 
         {/* ══════════════════════════════════════════════════════════════════════ */}
+        {/* Thông tin metadata của phiên bản; nội dung lịch sẽ tích hợp ở bước sau. */}
+        <Dialog open={detailVersion !== null} onOpenChange={(open) => { if (!open) setDetailVersion(null); }}>
+          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+            <DialogHeader>
+              <DialogTitle>Calendar version information</DialogTitle>
+              <DialogDescription className="break-words">
+                {detailVersion ? getCalendarName(detailVersion) : ""}
+              </DialogDescription>
+            </DialogHeader>
+            {detailVersion && (
+              <dl className="space-y-3 text-sm">
+                {[
+                  ["Class", String(detailVersion.classId)],
+                  ["Version", String(detailVersion.versionNumber)],
+                  ["Last modified", formatCalendarDate(getAuditText(detailVersion, "updatedAt"))],
+                  ["Modified by", getAuditText(detailVersion, "updatedBy")],
+                  ["Cloned from", getSourceVersionLabel(detailVersion, versions)],
+                  ["Activated at", formatCalendarDate(detailVersion.activatedAt)],
+                  ["Activated by", detailVersion.activatedBy || "—"],
+                ].map(([label, value]) => (
+                  <div key={label} className="grid grid-cols-[130px_minmax(0,1fr)] gap-3 border-b pb-2">
+                    <dt className="text-muted-foreground">{label}</dt>
+                    <dd className="break-words font-medium">{value}</dd>
+                  </div>
+                ))}
+                <div className="grid grid-cols-[130px_minmax(0,1fr)] items-center gap-3">
+                  <dt className="text-muted-foreground">Status</dt>
+                  <dd>{renderStatusBadge(detailVersion.status)}</dd>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <dt className="font-medium">Change note</dt>
+                  <dd className="mt-2 whitespace-pre-wrap break-words text-muted-foreground">{detailVersion.note || "No change note"}</dd>
+                </div>
+              </dl>
+            )}
+          </DialogContent>
+        </Dialog>
+
         {/* FEATURE 3: MODAL TẠO BẢN NHÁP RỖNG (Create Draft) */}
         {/* ══════════════════════════════════════════════════════════════════════ */}
         <Dialog open={createDraftOpen} onOpenChange={setCreateDraftOpen}>
@@ -782,7 +701,7 @@ export default function ScheduleVersionManagementPage() {
             <DialogHeader>
               <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
                 <FileEdit className="size-5" />
-                <DialogTitle>Tạo phiên bản nháp rỗng mới (Feature 3)</DialogTitle>
+                <DialogTitle>Tạo phiên bản nháp rỗng mới</DialogTitle>
               </div>
               <DialogDescription>
                 Tạo bản DRAFT mới cho lớp <strong>{selectedClassId}</strong>. Sau khi tạo, giáo vụ có thể bắt đầu xếp lịch các buổi học (Study Sessions).
@@ -844,7 +763,7 @@ export default function ScheduleVersionManagementPage() {
             <DialogHeader>
               <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
                 <Copy className="size-5" />
-                <DialogTitle>Clone phiên bản sang DRAFT mới (Feature 4)</DialogTitle>
+                <DialogTitle>Clone phiên bản sang DRAFT mới</DialogTitle>
               </div>
               <DialogDescription>
                 Sao chép lịch học từ phiên bản nguồn <strong>v{sourceVersionToClone?.versionNumber}</strong> ({sourceVersionToClone?.status}) sang bản DRAFT mới cho lớp <strong>{selectedClassId}</strong>.
@@ -912,7 +831,7 @@ export default function ScheduleVersionManagementPage() {
             <DialogHeader>
               <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
                 <ShieldCheck className="size-5" />
-                <DialogTitle>Kiểm tra Xung đột Lịch học (Feature 5)</DialogTitle>
+                <DialogTitle>Kiểm tra Xung đột Lịch học</DialogTitle>
               </div>
               <DialogDescription>
                 Đối soát toàn bộ các buổi học trong bản nháp <strong>v{validatingVersion?.versionNumber}</strong> với toàn bộ lịch học, phòng học và giảng viên trong hệ thống.
@@ -1021,7 +940,7 @@ export default function ScheduleVersionManagementPage() {
             <DialogHeader>
               <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
                 <Rocket className="size-5" />
-                <DialogTitle>Xác nhận Kích hoạt Phiên bản Lịch (Feature 6)</DialogTitle>
+                <DialogTitle>Xác nhận Kích hoạt Phiên bản Lịch</DialogTitle>
               </div>
               <DialogDescription>
                 Kích hoạt bản nháp <strong>v{versionToActivate?.versionNumber}</strong> thành lịch chính thức hiện hành của lớp <strong>{selectedClassId}</strong>.
@@ -1039,7 +958,7 @@ export default function ScheduleVersionManagementPage() {
                   </p>
                   {activeVersion && (
                     <p>
-                      • Bản ACTIVE hiện tại (<strong>v{activeVersion.versionNumber}</strong>) sẽ tự động chuyển sang trạng thái <strong className="text-slate-500">ARCHIVED (Lưu trữ)</strong>.
+                      • Bản ACTIVE hiện tại (<strong>v{activeVersion.versionNumber}</strong>) sẽ tự động chuyển sang trạng thái <strong className="text-slate-500">Archived</strong>.
                     </p>
                   )}
                 </AlertDescription>
@@ -1173,7 +1092,7 @@ export default function ScheduleVersionManagementPage() {
                         </p>
                         {item.clonedFromVersionId && (
                           <p className="text-[11px] text-muted-foreground font-mono">
-                            Clone từ bản: v{item.clonedFromVersionId}
+                            Clone từ ID phiên bản: {item.clonedFromVersionId}
                           </p>
                         )}
                       </div>
