@@ -187,7 +187,7 @@ export function ImportTab({ loading, onImport, entityName }: ImportTabProps) {
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <Button
-            className="w-full bg-primary hover:bg-primary/80 text-white mt-auto"
+            className="mt-auto w-full"
             onClick={handleImportClick}
             disabled={!file || loading}
             size="lg"

@@ -123,11 +123,7 @@ export function CourseLearningPage() {
             <LessonProgressSidebar
               progress={progressQuery.data}
               activeLessonId={activeLessonId}
-              updatingLessonId={updateMutation.isPending ? updateMutation.variables?.lessonId : undefined}
               onLessonSelect={selectLesson}
-              onCompletedChange={(lesson, completed) =>
-                updateMutation.mutate({ lessonId: lesson.lessonId, completed })
-              }
             />
             <main className="min-w-0 rounded-2xl border bg-card p-5 sm:p-7">
               <p className="text-sm text-muted-foreground">{progressQuery.data.courseName}</p>

@@ -1,4 +1,3 @@
-import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import type { EnrollmentProgress, LessonProgressItem } from "@/types";
 import { CheckCircle2, Circle } from "lucide-react";
@@ -6,17 +5,13 @@ import { CheckCircle2, Circle } from "lucide-react";
 interface LessonProgressSidebarProps {
   progress: EnrollmentProgress;
   activeLessonId?: number;
-  updatingLessonId?: number;
   onLessonSelect: (lesson: LessonProgressItem) => void;
-  onCompletedChange: (lesson: LessonProgressItem, completed: boolean) => void;
 }
 
 export function LessonProgressSidebar({
   progress,
   activeLessonId,
-  updatingLessonId,
   onLessonSelect,
-  onCompletedChange,
 }: LessonProgressSidebarProps) {
   const sections = progress.lessons.reduce<Map<number, LessonProgressItem[]>>((groups, lesson) => {
     const group = groups.get(lesson.sectionId) ?? [];
@@ -54,12 +49,6 @@ export function LessonProgressSidebar({
                       active ? "border-primary bg-primary/5" : "border-transparent hover:bg-muted/60"
                     }`}
                   >
-                    <Checkbox
-                      checked={lesson.completed}
-                      disabled={updatingLessonId === lesson.lessonId}
-                      aria-label={`Mark ${lesson.title} complete`}
-                      onCheckedChange={(checked) => onCompletedChange(lesson, checked === true)}
-                    />
                     <button
                       type="button"
                       className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm"

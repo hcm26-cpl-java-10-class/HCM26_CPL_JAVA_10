@@ -50,8 +50,10 @@ public class LessonProgressService {
 
         LocalDateTime now = LocalDateTime.now();
         progress.setLastAccessedAt(now);
-        progress.setCompleted(completed);
-        progress.setCompletedAt(completed ? now : null);
+        if (completed && !progress.isCompleted()) {
+            progress.setCompleted(true);
+            progress.setCompletedAt(now);
+        }
         progressRepository.save(progress);
         updateLastAccess(enrollment, lessonId, now);
 
