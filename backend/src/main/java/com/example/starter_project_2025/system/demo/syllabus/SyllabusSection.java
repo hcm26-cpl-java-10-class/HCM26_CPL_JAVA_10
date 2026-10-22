@@ -22,4 +22,6 @@ public class SyllabusSection extends BaseEntity {
 
     @Column(name = "order_index", nullable = false)
     private Integer orderIndex;
+    @Column(length = 2000)
+    private String mission;
 }

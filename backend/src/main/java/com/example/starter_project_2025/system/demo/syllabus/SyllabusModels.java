@@ -16,7 +16,8 @@ public final class SyllabusModels {
 
     public record SectionInput(
             String title,
-            Integer orderIndex
+            Integer orderIndex,
+            String mission
     ) {
     }
 
@@ -52,6 +53,7 @@ public final class SyllabusModels {
             Long id,
             String title,
             Integer orderIndex,
+            String mission,
             List<TopicView> topics
     ) {
     }

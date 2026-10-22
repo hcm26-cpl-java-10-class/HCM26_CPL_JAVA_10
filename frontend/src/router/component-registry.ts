@@ -14,6 +14,8 @@ import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 import SyllabusesPage from "@/pages/management/demo/syllabus";
 import SyllabusDetailPage from "@/pages/management/demo/syllabus/detail";
+
+import StudentSyllabusPage from "@/pages/student/StudentSyllabusPage";
 import CourseReportPage from "@/pages/management/demo/report";
 
 
@@ -50,6 +52,13 @@ export const routes: RouteConfig[] = [
     requiredPermission: "SYLLABUS_READ",
     isModuleDriven: false,
   },
+  {
+    path: "/syllabuses/:id/preview",
+    component: StudentSyllabusPage,
+    requiredPermission: "SYLLABUS_READ",
+    isModuleDriven: false,
+  },
+
   ...buildEntityRoutes(),
   { path: "/not-found-page", component: NotFoundPage, isPublic: true },
   { path: "/login", component: Login, isPublic: true },
