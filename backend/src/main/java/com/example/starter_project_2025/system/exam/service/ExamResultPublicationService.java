@@ -22,6 +22,7 @@ public class ExamResultPublicationService {
     private final ExamRepository examRepository;
     private final ExamResultPublicationRepository publicationRepository;
     private final ExamResultEmailDispatcher emailDispatcher;
+    private final ExamResultReadinessService readinessService;
 
     @Transactional(readOnly = true)
     public ExamResultPublicationDTO getStatus(Long examId) {
@@ -44,6 +45,7 @@ public class ExamResultPublicationService {
 
         Exam exam = requireExam(examId);
         Long userId = requireAuthorizedUser();
+        readinessService.assertReadyToPublish(examId);
 
         ExamResultPublication publication = publicationRepository
                 .findByExam_Id(examId)
