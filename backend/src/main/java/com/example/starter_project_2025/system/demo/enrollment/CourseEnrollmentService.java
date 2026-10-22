@@ -6,6 +6,8 @@ import com.example.starter_project_2025.system.demo.course.CourseRepository;
 import com.example.starter_project_2025.system.demo.course.CourseStatus;
 import com.example.starter_project_2025.system.demo.department.Department;
 import com.example.starter_project_2025.system.demo.department.DepartmentRepository;
+import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
+import com.example.starter_project_2025.system.demo.progress.LessonProgressRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
@@ -26,6 +28,8 @@ public class CourseEnrollmentService {
     private final CourseRepository courseRepository;
     private final UserRepository userRepository;
     private final DepartmentRepository departmentRepository;
+    private final LessonRepository lessonRepository;
+    private final LessonProgressRepository progressRepository;
 
     @Transactional
     public CourseEnrollment enroll(Long userId, Long courseId) {
@@ -68,6 +72,20 @@ public class CourseEnrollmentService {
                 .orElseThrow(() ->
                         new RuntimeException(
                                 "Enrollment not found"));
+
+        long totalLessons = lessonRepository
+                .findByCourseIdOrdered(enrollment.getCourse().getId())
+                .size();
+        long completedLessons = progressRepository
+                .findAllByEnrollment_Id(enrollmentId)
+                .stream()
+                .filter(progress -> progress.isCompleted())
+                .count();
+        if (totalLessons > 0 && completedLessons * 100 > totalLessons * 20) {
+            throw new BadRequestException(
+                    "Enrollment cannot be cancelled after completing more than 20% of the course"
+            );
+        }
 
         enrollmentRepository.delete(enrollment);
     }
