@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Clock3, KeyRound, Mail, RefreshCw } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -39,6 +39,12 @@ function getStatus(invitation: InvitationDTO) {
 type ButtonGate = {
     label: string;
     disabled: boolean;
+    /** true khi đề chưa tới giờ mở (dùng để hiện đồng hồ đếm ngược). */
+    waiting: boolean;
+    /** true khi kỳ thi đã đóng. */
+    closed: boolean;
+    /** Số mili giây còn lại trước khi đề mở. */
+    remainingMs: number;
 };
 
 function computeExamWindow(invitation: InvitationDTO, now: number): ButtonGate {
@@ -46,18 +52,49 @@ function computeExamWindow(invitation: InvitationDTO, now: number): ButtonGate {
     const end = invitation.examEndTime ? new Date(invitation.examEndTime).getTime() : null;
 
     if (start != null && now < start) {
-        return { label: "Chưa đến giờ mở", disabled: true };
+        return {
+            label: "Vào thi",
+            disabled: true,
+            waiting: true,
+            closed: false,
+            remainingMs: start - now,
+        };
     }
     if (end != null && now >= end) {
-        return { label: "Kỳ thi đã đóng", disabled: true };
+        return {
+            label: "Kỳ thi đã đóng",
+            disabled: true,
+            waiting: false,
+            closed: true,
+            remainingMs: 0,
+        };
     }
-    return { label: "Vào thi", disabled: false };
+    return { label: "Vào thi", disabled: false, waiting: false, closed: false, remainingMs: 0 };
+}
+
+/** Định dạng khoảng thời gian còn lại trước khi đề mở. */
+function formatRemaining(ms: number): string {
+    const total = Math.max(0, Math.floor(ms / 1000));
+    const days = Math.floor(total / 86400);
+    const hours = Math.floor((total % 86400) / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const seconds = total % 60;
+    if (days > 0) return `${days} ngày ${hours} giờ ${minutes} phút`;
+    if (hours > 0) return `${hours} giờ ${minutes} phút ${seconds} giây`;
+    return `${minutes} phút ${seconds} giây`;
 }
 
 export default function StudentInvitationList() {
     const queryClient = useQueryClient();
     const navigate = useNavigate();
-    const [now] = useState(() => Date.now());
+    // Đồng hồ chạy liên tục: nhờ vậy nút "Vào thi" tự bật khi tới giờ mở đề
+    // mà không cần tải lại trang.
+    const [now, setNow] = useState(() => Date.now());
+
+    useEffect(() => {
+        const timer = window.setInterval(() => setNow(Date.now()), 1000);
+        return () => window.clearInterval(timer);
+    }, []);
 
     // Dialog xác nhận sau khi accept / vào thi
     const [passwordPrompt, setPasswordPrompt] = useState<{
@@ -77,6 +114,21 @@ export default function StudentInvitationList() {
             queryClient.setQueryData<InvitationDTO[]>(invitationsQueryKey, (current) =>
                 current?.map((invitation) => (invitation.id === updated.id ? updated : invitation)),
             );
+
+            // Chỉ vào thi ngay khi cửa sổ thi đang mở. Nếu chưa tới giờ thì ở lại
+            // trang này, đồng hồ đếm ngược sẽ tự bật nút "Vào thi" khi đến giờ.
+            const gate = computeExamWindow(updated, Date.now());
+
+            if (gate.disabled) {
+                setNow(Date.now());
+                toast.success(
+                    gate.closed
+                        ? "Đã chấp nhận lời mời, nhưng kỳ thi đã đóng."
+                        : `Đã chấp nhận lời mời. Đề thi mở lúc ${formatDate(updated.examStartTime ?? null)}.`,
+                );
+                return;
+            }
+
             toast.success("Đã chấp nhận lời mời.");
 
             // Sau accept: nếu đề có mật khẩu -> mở dialog; không thì vào thi thẳng.
@@ -94,7 +146,7 @@ export default function StudentInvitationList() {
             toast.error("Không thể chấp nhận lời mời. Hãy tải lại để kiểm tra trạng thái."),
     });
 
-    const invitations = invitationsQuery.data ?? [];
+    const invitations = useMemo(() => invitationsQuery.data ?? [], [invitationsQuery.data]);
     const sortedInvitations = useMemo(
         () =>
             [...invitations].sort((a, b) => {
@@ -236,6 +288,27 @@ export default function StudentInvitationList() {
                                         </p>
                                     )}
 
+                                    {/* Trường hợp đã chấp nhận lời mời nhưng đề chưa tới giờ mở:
+                                        hiện đồng hồ đếm ngược, nút "Vào thi" tự bật khi đến giờ. */}
+                                    {canTake && windowGate.waiting && (
+                                        <div
+                                            aria-live="polite"
+                                            className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+                                        >
+                                            <p className="font-medium">
+                                                Đề thi mở sau{" "}
+                                                <span className="font-mono tabular-nums">
+                                                    {formatRemaining(windowGate.remainingMs)}
+                                                </span>
+                                            </p>
+                                            <p className="mt-0.5 text-xs text-amber-800">
+                                                {invitation.examHasPassword
+                                                    ? "Nút Vào thi sẽ tự bật, khi đó bạn nhập mật khẩu để bắt đầu."
+                                                    : "Nút Vào thi sẽ tự bật khi đến giờ, bạn không cần tải lại trang."}
+                                            </p>
+                                        </div>
+                                    )}
+
                                     <footer className="mt-auto flex flex-wrap gap-2">
                                         {canAccept ? (
                                             <Button
@@ -254,7 +327,13 @@ export default function StudentInvitationList() {
                                                     )
                                                 }
                                                 disabled={windowGate.disabled}
-                                                title={windowGate.disabled ? windowGate.label : undefined}
+                                                title={
+                                                    windowGate.waiting
+                                                        ? `Đề thi mở sau ${formatRemaining(windowGate.remainingMs)}`
+                                                        : windowGate.disabled
+                                                            ? windowGate.label
+                                                            : undefined
+                                                }
                                             >
                                                 {windowGate.label}
                                             </Button>
