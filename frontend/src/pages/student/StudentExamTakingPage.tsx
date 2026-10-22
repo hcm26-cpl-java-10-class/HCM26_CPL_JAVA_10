@@ -16,7 +16,15 @@ import { toast } from 'sonner';
 
 const attemptQueryKey = (examId: number) => ['student-exam-attempt', examId] as const;
 
-function toAnswerRequests(answers: Record<number, ExamAttemptAnswer>): SaveExamAnswerRequest[] {
+interface ExtendedAnswer extends ExamAttemptAnswer {
+    saved?: boolean;
+}
+
+interface ExtendedSaveRequest extends SaveExamAnswerRequest {
+    markSaved?: boolean;
+}
+
+function toAnswerRequests(answers: Record<number, ExtendedAnswer>): SaveExamAnswerRequest[] {
     return Object.values(answers).map((answer) => ({
         questionId: answer.questionId,
         selectedOptionIds: answer.selectedOptionIds,
@@ -26,13 +34,13 @@ function toAnswerRequests(answers: Record<number, ExamAttemptAnswer>): SaveExamA
 
 function getStartErrorMessage(error: unknown): string {
     if (axios.isAxiosError(error)) {
-        if (!error.response) return 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại.';
+        if (!error.response) return 'Cannot connect to server. Please check your network connection and try again.';
         const message = (error.response.data as { message?: string } | undefined)?.message;
-        if (error.response.status === 403) return 'Bạn không có quyền làm bài thi này.';
-        if (error.response.status === 404) return 'Không tìm thấy đề thi hoặc đề thi đã bị tắt.';
+        if (error.response.status === 403) return 'You do not have permission to take this exam.';
+        if (error.response.status === 404) return 'Exam not found or has been disabled.';
         if (message) return message;
     }
-    return 'Không thể mở đề thi. Vui lòng thử lại.';
+    return 'Unable to open exam. Please try again.';
 }
 
 function getCountdown(deadlineAt: string, now: number): number {
@@ -58,13 +66,13 @@ export default function StudentExamTakingPage() {
     const submitStartedRef = useRef(false);
 
     const pendingAnswersRef = useRef(
-        new Map<number, SaveExamAnswerRequest>(),
+        new Map<number, ExtendedSaveRequest>(),
     );
     const savingRef = useRef(false);
     const [isSaving, setIsSaving] = useState(false);
     const [hasSaveError, setHasSaveError] = useState(false);
 
-    const [answers, setAnswers] = useState<Record<number, ExamAttemptAnswer>>({});
+    const [answers, setAnswers] = useState<Record<number, ExtendedAnswer>>({});
     const answersRef = useRef(answers);
     answersRef.current = answers;
 
@@ -87,17 +95,16 @@ export default function StudentExamTakingPage() {
             queryClient.setQueryData(attemptQueryKey(examId), attempt);
             clearAllPendingSaves();
             if (attempt.status === 'EXPIRED') {
-                toast.warning('Đã hết giờ, bài của bạn được tự động nộp.');
+                toast.warning('Time is up! Your exam has been automatically submitted.');
             } else {
-                toast.success(attempt.status === 'PENDING_REVIEW' ? 'Đã nộp bài, phần tự luận đang chờ chấm.' : 'Đã nộp bài.');
+                toast.success(attempt.status === 'PENDING_REVIEW' ? 'Submitted successfully! Essay questions are pending review.' : 'Submitted successfully!');
             }
         },
-        onError: () => toast.error('Không thể nộp bài. Vui lòng thử lại.'),
+        onError: () => toast.error('Failed to submit exam. Please try again.'),
     });
 
     const attempt = attemptQuery.data;
 
-    // Đánh dấu ngôi sao (lưu localStorage theo từng lượt làm) + câu đang được chọn
     const [flagged, setFlagged] = useState<Set<number>>(new Set());
     const [activeQuestionId, setActiveQuestionId] = useState<number | null>(null);
     const flagKey = attempt ? `exam-flagged-${attempt.id}` : null;
@@ -121,7 +128,7 @@ export default function StudentExamTakingPage() {
                 try {
                     localStorage.setItem(flagKey, JSON.stringify([...next]));
                 } catch {
-                    // Bỏ qua nếu trình duyệt chặn localStorage
+                    // Ignore if localStorage is blocked
                 }
             }
             return next;
@@ -154,7 +161,7 @@ export default function StudentExamTakingPage() {
         try {
             while (pendingAnswersRef.current.size > 0) {
                 const entry = pendingAnswersRef.current.entries().next().value as
-                    | [number, SaveExamAnswerRequest]
+                    | [number, ExtendedSaveRequest]
                     | undefined;
 
                 if (!entry) break;
@@ -169,8 +176,8 @@ export default function StudentExamTakingPage() {
                         queryClient.setQueryData(attemptQueryKey(examId), saved);
                         toast.warning(
                             saved.status === 'EXPIRED'
-                                ? 'Đã hết giờ, bài của bạn được tự động nộp.'
-                                : 'Bài thi này đã được nộp (có thể từ tab khác). Thay đổi mới nhất không được lưu.',
+                                ? 'Time is up! Your exam has been automatically submitted.'
+                                : 'This exam has already been submitted (possibly from another tab). Latest changes were not saved.',
                         );
                         setHasSaveError(false);
                         return true;
@@ -245,7 +252,7 @@ export default function StudentExamTakingPage() {
         if (
             attempt?.status === 'IN_PROGRESS' &&
             !window.confirm(
-                'Bạn đang làm bài thi. Bạn có chắc chắn muốn rời trang không?',
+                'You are currently taking the exam. Are you sure you want to leave?',
             )
         ) {
             return;
@@ -267,10 +274,10 @@ export default function StudentExamTakingPage() {
         if (
             requireConfirmation &&
             !window.confirm(
-                'Bạn có chắc chắn muốn nộp bài? Hãy kiểm tra lại câu trả lời trước khi tiếp tục.' +
+                'Are you sure you want to submit your exam? Please double-check your answers before proceeding.' +
                 (() => {
                     const unsaved = attempt.questions.filter((q) => q.type === 'ESSAY' && !answersRef.current[q.id]?.saved).length;
-                    return unsaved > 0 ? `\n\nCòn ${unsaved} câu tự luận chưa bấm "Lưu bài" (nội dung đang soạn vẫn được nộp).` : '';
+                    return unsaved > 0 ? `\n\nThere are ${unsaved} essay question(s) that have not been saved (unsaved content will still be submitted).` : '';
                 })()
             )
         ) {
@@ -287,7 +294,7 @@ export default function StudentExamTakingPage() {
 
             if (!saved && requireConfirmation) {
                 toast.error(
-                    'Một số câu trả lời chưa lưu được. Hãy kiểm tra kết nối mạng rồi thử lại.',
+                    'Failed to save some answers. Please check your network connection and try again.',
                 );
                 return;
             }
@@ -300,7 +307,7 @@ export default function StudentExamTakingPage() {
             pendingAnswersRef.current.clear();
             setHasSaveError(false);
         } catch {
-            // submitMutation đã xử lý thông báo lỗi.
+            // submitMutation handled error message
         } finally {
             submitStartedRef.current = false;
         }
@@ -322,7 +329,7 @@ export default function StudentExamTakingPage() {
 
     const scheduleAnswerSave = (
         questionId: number,
-        answer: ExamAttemptAnswer,
+        answer: ExtendedAnswer,
     ) => {
         if (!attempt || attempt.status !== 'IN_PROGRESS') return;
 
@@ -346,7 +353,7 @@ export default function StudentExamTakingPage() {
         timerRefs.current.set(questionId, timer);
     };
 
-    const updateAnswer = (questionId: number, update: Partial<ExamAttemptAnswer>) => {
+    const updateAnswer = (questionId: number, update: Partial<ExtendedAnswer>) => {
         const current = answers[questionId] ?? {
             questionId,
             selectedOptionIds: [],
@@ -372,7 +379,7 @@ export default function StudentExamTakingPage() {
     const saveEssay = async (questionId: number) => {
         if (!attempt || attempt.status !== 'IN_PROGRESS') return;
         if (!hasText(questionId)) {
-            toast.error('Hãy nhập nội dung bài làm trước khi lưu.');
+            toast.error('Please enter your answer content before saving.');
             return;
         }
         const timer = timerRefs.current.get(questionId);
@@ -389,11 +396,11 @@ export default function StudentExamTakingPage() {
         });
         const ok = await flushPendingAnswers(attempt.id);
         if (!ok) {
-            toast.error('Chưa lưu được bài. Kiểm tra kết nối mạng rồi bấm Lưu bài lại.');
+            toast.error('Could not save answer. Please check your network connection and click Save again.');
             return;
         }
-        setAnswers((all) => ({ ...all, [questionId]: { ...all[questionId], questionId, saved: true } as ExamAttemptAnswer }));
-        toast.success('Đã lưu bài tự luận.');
+        setAnswers((all) => ({ ...all, [questionId]: { ...all[questionId], questionId, saved: true } as ExtendedAnswer }));
+        toast.success('Essay answer saved successfully.');
         closeEssay();
     };
 
@@ -411,14 +418,14 @@ export default function StudentExamTakingPage() {
         return (
             <MainLayout>
                 <div role="alert" className="rounded-lg border border-destructive p-6 text-destructive">
-                    Mã đề thi không hợp lệ.
+                    Invalid exam ID.
                 </div>
             </MainLayout>
         );
     }
 
     if (attemptQuery.isLoading) {
-        return <MainLayout><p className="p-6">Đang tải đề thi...</p></MainLayout>;
+        return <MainLayout><p className="p-6">Loading exam...</p></MainLayout>;
     }
 
     if (attemptQuery.isError || !attempt) {
@@ -426,7 +433,7 @@ export default function StudentExamTakingPage() {
             <MainLayout>
                 <div role="alert" className="space-y-4 rounded-lg border border-destructive p-6 text-destructive">
                     <p>{getStartErrorMessage(attemptQuery.error)}</p>
-                    <Button variant="outline" onClick={() => navigate('/invitations')}>Quay lại lời mời thi</Button>
+                    <Button variant="outline" onClick={() => navigate('/invitations')}>Back to Invitations</Button>
                 </div>
             </MainLayout>
         );
@@ -454,8 +461,8 @@ export default function StudentExamTakingPage() {
                 type="button"
                 onClick={() => toggleFlag(questionId)}
                 aria-pressed={isFlagged}
-                aria-label={isFlagged ? `Bỏ đánh dấu câu ${number}` : `Đánh dấu câu ${number}`}
-                title={isFlagged ? 'Bỏ đánh dấu' : 'Đánh dấu câu này'}
+                aria-label={isFlagged ? `Unflag question ${number}` : `Flag question ${number}`}
+                title={isFlagged ? 'Unflag' : 'Flag this question'}
                 className="rounded-md p-1 transition-colors hover:bg-muted"
             >
                 <Star className={`h-5 w-5 ${isFlagged ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}`} />
@@ -463,17 +470,15 @@ export default function StudentExamTakingPage() {
         );
     };
 
-    // Thanh ghim: đồng hồ bên trái, danh sách câu hỏi bên phải (2 ô riêng, khoảng giữa để trống)
-    // Màu ô: vàng (đánh dấu, luôn ưu tiên) > xanh (đã làm) > đen (chưa làm); viền đỏ = câu đang chọn
     const pinnedBar = (
         <div className="pointer-events-none sticky top-0 z-30 flex items-start justify-between gap-4 py-3">
             {timerBox}
             <div className="pointer-events-auto flex w-[15.5rem] shrink-0 flex-col gap-3 rounded-xl border bg-card p-3 shadow-sm">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                    <span className="w-full text-sm font-semibold text-foreground">Danh sách câu hỏi</span>
-                    <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-sm bg-black ring-1 ring-border" /> Chưa làm</span>
-                    <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-sm bg-green-600" /> Đã làm</span>
-                    <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-sm bg-yellow-400" /> Đánh dấu</span>
+                    <span className="w-full text-sm font-semibold text-foreground">Questions Navigation</span>
+                    <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-sm bg-black ring-1 ring-border" /> Unanswered</span>
+                    <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-sm bg-green-600" /> Answered</span>
+                    <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-sm bg-yellow-400" /> Flagged</span>
                 </div>
                 <div className="grid max-h-[8.5rem] grid-cols-5 justify-items-center gap-2 overflow-y-auto p-1">
                     {attempt.questions.map((question, index) => {
@@ -488,8 +493,8 @@ export default function StudentExamTakingPage() {
                             <button
                                 key={question.id}
                                 type="button"
-                                title={`Câu ${index + 1}${question.type === 'ESSAY' ? ' (tự luận)' : ''}${isFlagged ? ' · đã đánh dấu' : ''}`}
-                                aria-label={`Câu ${index + 1}: ${isAnswered(question) ? 'đã làm' : 'chưa làm'}${isFlagged ? ', đã đánh dấu' : ''}`}
+                                title={`Question ${index + 1}${question.type === 'ESSAY' ? ' (Essay)' : ''}${isFlagged ? ' · Flagged' : ''}`}
+                                aria-label={`Question ${index + 1}: ${isAnswered(question) ? 'Answered' : 'Unanswered'}${isFlagged ? ', Flagged' : ''}`}
                                 aria-current={activeId === question.id ? 'true' : undefined}
                                 onClick={() => jumpToQuestion(question)}
                                 className={`flex h-8 w-8 items-center justify-center rounded-sm text-xs font-medium ${color} ${ring}`}
@@ -505,61 +510,60 @@ export default function StudentExamTakingPage() {
 
     const submitButton = (
         <Button onClick={() => void submitCurrentAnswers(true)} disabled={submitMutation.isPending}>
-            {submitMutation.isPending ? 'Đang nộp...' : 'Nộp bài thi'}
+            {submitMutation.isPending ? 'Submitting...' : 'Submit Exam'}
         </Button>
     );
 
     if (!isFinished && currentEssay) {
         return (
-            <MainLayout pathName={{ exams: 'Lịch thi', take: 'Làm bài thi' }}>
-                {/* Trang tự luận: cố định đúng khung nhìn, không cuộn trang; chỉ ô "Bài làm" tự cuộn khi văn bản dài */}
+            <MainLayout pathName={{ exams: 'Exam Schedule', take: 'Take Exam' }}>
                 <main className="flex h-[calc(100dvh-10rem)] w-full flex-col gap-4 overflow-hidden">
                     <header className="flex shrink-0 flex-wrap items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
                             {timerBox}
                             <Button variant="outline" onClick={closeEssay}>
-                                <ArrowLeft className="mr-1 h-4 w-4" /> Về trang làm bài
+                                <ArrowLeft className="mr-1 h-4 w-4" /> Back to Exam
                             </Button>
                         </div>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            {currentSaved && <span className="font-medium text-green-600">Đã lưu</span>}
-                            {isSaving && <span>Đang lưu...</span>}
+                            {currentSaved && <span className="font-medium text-green-600">Saved</span>}
+                            {isSaving && <span>Saving...</span>}
                         </div>
                         <Button
                             onClick={() => void saveEssay(currentEssay.id)}
                             className={currentSaved ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-blue-600 text-white hover:bg-blue-700'}
                         >
-                            <Save className="mr-1 h-4 w-4" /> {currentSaved ? 'Đã lưu' : 'Lưu bài'}
+                            <Save className="mr-1 h-4 w-4" /> {currentSaved ? 'Saved' : 'Save Answer'}
                         </Button>
                     </header>
 
                     {hasSaveError && (
                         <p role="alert" className="shrink-0 text-sm text-destructive">
-                            Có thay đổi chưa được lưu lên máy chủ.{' '}
-                            <Button variant="outline" size="sm" onClick={() => void flushPendingAnswers(attempt.id)}>Thử lưu lại</Button>
+                            Some changes have not been saved to the server.{' '}
+                            <Button variant="outline" size="sm" onClick={() => void flushPendingAnswers(attempt.id)}>Retry Saving</Button>
                         </p>
                     )}
 
                     <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 md:grid-cols-5">
                         <section className="min-h-0 overflow-auto rounded-xl border p-4 md:col-span-1">
-                            <h2 className="font-semibold">Câu hỏi</h2>
+                            <h2 className="font-semibold">Question Prompt</h2>
                             <p className="mt-3 whitespace-pre-wrap text-sm">{currentEssay.content}</p>
                             {currentEssay.imageUrl?.trim() && (
                                 <div className="mt-3">
                                     <img
                                         src={currentEssay.imageUrl}
-                                        alt={`Hình ảnh câu ${currentEssayIndex + 1}`}
+                                        alt={`Question ${currentEssayIndex + 1} image`}
                                         className="max-h-64 rounded-md border object-contain shadow-sm"
                                     />
                                 </div>
                             )}
                         </section>
                         <section className="flex min-h-0 flex-col rounded-xl border p-4 md:col-span-4">
-                            <h2 className="mb-3 shrink-0 font-semibold">Bài làm</h2>
+                            <h2 className="mb-3 shrink-0 font-semibold">Your Answer</h2>
                             <textarea
-                                aria-label={`Bài làm câu ${currentEssayIndex + 1}`}
+                                aria-label={`Answer for question ${currentEssayIndex + 1}`}
                                 className="min-h-0 w-full flex-1 resize-none overflow-y-auto rounded-md border bg-background p-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                placeholder="Nhập bài làm của bạn tại đây..."
+                                placeholder="Type your answer here..."
                                 value={currentAnswer?.textAnswer ?? ''}
                                 onChange={(event) => updateAnswer(currentEssay.id, { textAnswer: event.target.value })}
                             />
@@ -571,23 +575,23 @@ export default function StudentExamTakingPage() {
     }
 
     return (
-        <MainLayout pathName={{ exams: 'Lịch thi', take: 'Làm bài thi' }}>
+        <MainLayout pathName={{ exams: 'Exam Schedule', take: 'Take Exam' }}>
             <main className="flex w-full flex-col gap-5">
                 {!isFinished && pinnedBar}
                 <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
                     <header className="flex flex-wrap items-start justify-between gap-4 border-b pb-4">
                         <div>
-                            <p className="text-sm text-muted-foreground">Bài thi</p>
+                            <p className="text-sm text-muted-foreground">Exam</p>
                             <h1 className="mt-1 text-2xl font-semibold">{attempt.title}</h1>
                             <p className="mt-2 text-sm text-muted-foreground">
-                                Lượt làm {attempt.attemptNumber} · Thời lượng {attempt.durationMinutes} phút · Tổng điểm {attempt.totalPoints}
+                                Attempt #{attempt.attemptNumber} · Duration: {attempt.durationMinutes} mins · Total Points: {attempt.totalPoints}
                             </p>
                             <p className="mt-1 text-xs text-muted-foreground">
-                                Hạn chính thức: {attempt.officialDeadlineAt
+                                Official Deadline: {attempt.officialDeadlineAt
                                 ? new Date(attempt.officialDeadlineAt).toLocaleString()
-                                : 'Theo thời lượng bài thi'}
+                                : 'Based on exam duration'}
                                 {attempt.officialDeadlineAt && attempt.deadlineAt !== attempt.officialDeadlineAt
-                                    ? ` · Hạn gia hạn: ${new Date(attempt.deadlineAt).toLocaleString()}`
+                                    ? ` · Extended Deadline: ${new Date(attempt.deadlineAt).toLocaleString()}`
                                     : ''}
                             </p>
                         </div>
@@ -596,47 +600,47 @@ export default function StudentExamTakingPage() {
                     {isFinished ? (
                         <section className="rounded-xl border p-6">
                             <h2 className="text-xl font-semibold">
-                                {attempt.status === 'EXPIRED' && 'Hết giờ — bài đã được tự động nộp'}
-                                {attempt.status === 'PENDING_REVIEW' && 'Đã nộp bài — chờ chấm tự luận'}
-                                {attempt.status === 'SUBMITTED' && 'Đã hoàn thành bài thi'}
+                                {attempt.status === 'EXPIRED' && 'Time is up — Exam auto-submitted'}
+                                {attempt.status === 'PENDING_REVIEW' && 'Submitted — Pending essay review'}
+                                {attempt.status === 'SUBMITTED' && 'Exam Completed'}
                             </h2>
                             <p className="mt-3 text-lg">
                                 {attempt.finalScore === null
-                                    ? `Điểm trắc nghiệm tạm thời: ${attempt.objectiveScore ?? 0}/${attempt.totalPoints}`
-                                    : `Điểm: ${attempt.finalScore}/${attempt.totalPoints}`}
+                                    ? `Provisional Objective Score: ${attempt.objectiveScore ?? 0}/${attempt.totalPoints}`
+                                    : `Score: ${attempt.finalScore}/${attempt.totalPoints}`}
                             </p>
                             {attempt.status === 'EXPIRED' && (
                                 <p className="mt-2 text-sm text-muted-foreground">
-                                    Thời gian làm bài đã kết thúc. Hệ thống chỉ chấm những câu bạn đã trả lời trước khi hết giờ.
+                                    Exam time has ended. Only answers provided before the deadline were graded.
                                 </p>
                             )}
                             {attempt.bestScore != null && (
                                 <p className="mt-2 text-sm font-medium text-emerald-700">
-                                    Điểm cao nhất: {attempt.bestScore}/{attempt.totalPoints}
+                                    Highest Score: {attempt.bestScore}/{attempt.totalPoints}
                                 </p>
                             )}
                             {attempt.late && (
                                 <p className="mt-2 text-sm text-amber-700">
-                                    Bài được nộp trong thời gian gia hạn.
+                                    Submitted during extended deadline.
                                     {attempt.latePenaltyPercentApplied != null
-                                        ? ` Đã trừ ${attempt.latePenaltyPercentApplied}% điểm.`
+                                        ? ` Applied penalty: -${attempt.latePenaltyPercentApplied}%.`
                                         : ''}
                                 </p>
                             )}
                             {attempt.finalScore === null && attempt.status !== 'SUBMITTED' && (
                                 <p className="mt-2 text-sm text-muted-foreground">
-                                    Điểm cuối cùng sẽ được cập nhật sau khi giáo viên chấm câu tự luận.
+                                    Final score will be updated once your teacher finishes grading the essay questions.
                                 </p>
                             )}
                             <Button className="mt-5" variant="outline" onClick={() => navigate('/invitations')}>
-                                Quay lại lời mời thi
+                                Back to Invitations
                             </Button>
                         </section>
                     ) : (
                         <>
                             {essayQuestions.length > 0 && (
                                 <section className="rounded-xl border p-4">
-                                    <h2 className="mb-3 font-semibold">Câu tự luận</h2>
+                                    <h2 className="mb-3 font-semibold">Essay Questions</h2>
                                     <div className="grid gap-2">
                                         {essayQuestions.map((question) => {
                                             const saved = Boolean(answers[question.id]?.saved);
@@ -644,21 +648,21 @@ export default function StudentExamTakingPage() {
                                                 <div key={question.id} className="flex items-center justify-between gap-3 rounded-md border p-3">
                                                     <div className="min-w-0">
                                                         <p className="text-sm font-medium">
-                                                            Câu {attempt.questions.indexOf(question) + 1}
-                                                            <span className="ml-2 font-normal text-muted-foreground">{question.points} điểm</span>
+                                                            Question {attempt.questions.indexOf(question) + 1}
+                                                            <span className="ml-2 font-normal text-muted-foreground">{question.points} pts</span>
                                                         </p>
                                                         <p className="truncate text-sm text-muted-foreground">{question.content}</p>
                                                     </div>
                                                     <div className="flex shrink-0 items-center gap-3">
                                                         {starButton(question.id, attempt.questions.indexOf(question) + 1)}
-                                                        {saved && <span className="text-sm font-medium text-green-600">Đã lưu</span>}
-                                                        {!saved && hasText(question.id) && <span className="text-sm text-muted-foreground">Đang soạn</span>}
+                                                        {saved && <span className="text-sm font-medium text-green-600">Saved</span>}
+                                                        {!saved && hasText(question.id) && <span className="text-sm text-muted-foreground">Drafting</span>}
                                                         <Button
                                                             size="sm"
                                                             className={saved ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-blue-600 text-white hover:bg-blue-700'}
                                                             onClick={() => openEssay(question.id)}
                                                         >
-                                                            {saved ? 'Sửa bài' : hasText(question.id) ? 'Làm tiếp' : 'Làm bài'}
+                                                            {saved ? 'Edit Answer' : hasText(question.id) ? 'Continue' : 'Start Answer'}
                                                         </Button>
                                                     </div>
                                                 </div>
@@ -669,27 +673,25 @@ export default function StudentExamTakingPage() {
                             )}
 
                             <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
-                                <span>Câu trả lời được tự động lưu khi bạn thay đổi.</span>
+                                <span>Your answers are automatically saved as you make changes.</span>
 
-                                {isSaving && <span>Đang lưu...</span>}
+                                {isSaving && <span>Saving...</span>}
 
                                 {hasSaveError && (
                                     <span role="alert" className="text-destructive">
-                                        Có câu trả lời chưa được lưu.
+                                        Some answers were not saved.
                                         <Button
                                             variant="outline"
                                             size="sm"
                                             onClick={() => void flushPendingAnswers(attempt.id)}
                                         >
-                                            Thử lưu lại
+                                            Retry Saving
                                         </Button>
                                     </span>
                                 )}
                             </div>
 
                             {attempt.questions.map((question, index) => {
-                                // Câu tự luận chỉ hiện ở mục "Câu tự luận" phía trên
-                                if (question.type === 'ESSAY') return null;
                                 const answer = answers[question.id] ?? {
                                     questionId: question.id,
                                     selectedOptionIds: [],
@@ -700,13 +702,15 @@ export default function StudentExamTakingPage() {
                                     <section
                                         key={question.id}
                                         id={`question-card-${question.id}`}
-                                        className="scroll-mt-40 rounded-xl border p-5"
+                                        className={`rounded-xl border p-5 transition-all ${
+                                            activeId === question.id ? 'ring-2 ring-red-500' : ''
+                                        }`}
                                     >
                                         <div className="flex items-center justify-between gap-2">
                                             <h2 className="font-semibold">
-                                                Câu {index + 1}
+                                                Question {index + 1}
                                                 <span className="ml-2 text-sm font-normal text-muted-foreground">
-                                                    {question.points} điểm
+                                                    {question.points} pts
                                                 </span>
                                             </h2>
                                             {starButton(question.id, index + 1)}
@@ -718,59 +722,83 @@ export default function StudentExamTakingPage() {
                                             <div className="mt-3">
                                                 <img
                                                     src={question.imageUrl}
-                                                    alt={`Hình ảnh câu ${index + 1}`}
+                                                    alt={`Question ${index + 1} image`}
                                                     className="max-h-64 rounded-md border object-contain shadow-sm"
                                                 />
                                             </div>
                                         )}
 
-                                        <div className="mt-4 grid gap-3">
-                                            {question.options.map((option) => {
-                                                const checked = answer.selectedOptionIds.includes(option.id);
-                                                const isMulti = question.multiSelect ?? question.type === 'MULTI_CHOICE';
-                                                const inputType = isMulti ? 'checkbox' : 'radio';
-                                                return (
-                                                    <label
-                                                        key={option.id}
-                                                        className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-muted/50"
-                                                    >
-                                                        <input
-                                                            type={inputType}
-                                                            name={`question-${question.id}`}
-                                                            checked={checked}
-                                                            onChange={() => {
-                                                                const selectedOptionIds = !isMulti
-                                                                    ? [option.id]
-                                                                    : checked
-                                                                        ? answer.selectedOptionIds.filter((id) => id !== option.id)
-                                                                        : [...answer.selectedOptionIds, option.id];
-                                                                setActiveQuestionId(question.id);
-                                                                updateAnswer(question.id, { selectedOptionIds });
-                                                            }}
-                                                            disabled={isFinished}
-                                                            className="mt-1"
-                                                        />
-                                                        <div className="flex flex-col gap-2">
-                                                            <span>{option.content}</span>
-                                                            {option.imageUrl?.trim() && (
-                                                                <img
-                                                                    src={option.imageUrl}
-                                                                    alt=""
-                                                                    className="max-h-40 rounded border object-contain"
-                                                                />
-                                                            )}
-                                                        </div>
-                                                    </label>
-                                                );
-                                            })}
-                                        </div>
+                                        {question.type === 'ESSAY' ? (
+                                            <div className="mt-4 flex items-center justify-between rounded-lg border bg-muted/30 p-3">
+                                                <span className="text-sm text-muted-foreground">
+                                                    {hasText(question.id)
+                                                        ? 'Essay content available'
+                                                        : 'No answer provided yet'}
+                                                </span>
+                                                <Button
+                                                    size="sm"
+                                                    className={
+                                                        answer.saved
+                                                            ? 'bg-green-600 text-white hover:bg-green-700'
+                                                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                                                    }
+                                                    onClick={() => openEssay(question.id)}
+                                                >
+                                                    {answer.saved
+                                                        ? 'Edit Essay Answer'
+                                                        : hasText(question.id)
+                                                            ? 'Continue Answer'
+                                                            : 'Open Essay Answer'}
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            <div className="mt-4 grid gap-3">
+                                                {question.options.map((option) => {
+                                                    const checked = answer.selectedOptionIds.includes(option.id);
+                                                    const isMulti = question.multiSelect ?? question.type === 'MULTI_CHOICE';
+                                                    const inputType = isMulti ? 'checkbox' : 'radio';
+                                                    return (
+                                                        <label
+                                                            key={option.id}
+                                                            className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-muted/50"
+                                                        >
+                                                            <input
+                                                                type={inputType}
+                                                                name={`question-${question.id}`}
+                                                                checked={checked}
+                                                                onChange={() => {
+                                                                    const selectedOptionIds = !isMulti
+                                                                        ? [option.id]
+                                                                        : checked
+                                                                            ? answer.selectedOptionIds.filter((id) => id !== option.id)
+                                                                            : [...answer.selectedOptionIds, option.id];
+                                                                    updateAnswer(question.id, { selectedOptionIds });
+                                                                }}
+                                                                disabled={isFinished}
+                                                                className="mt-1"
+                                                            />
+                                                            <div className="flex flex-col gap-2">
+                                                                <span>{option.content}</span>
+                                                                {option.imageUrl?.trim() && (
+                                                                    <img
+                                                                        src={option.imageUrl}
+                                                                        alt=""
+                                                                        className="max-h-40 rounded border object-contain"
+                                                                    />
+                                                                )}
+                                                            </div>
+                                                        </label>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
                                     </section>
                                 );
                             })}
 
                             <footer className="flex flex-wrap justify-between gap-3 border-t pt-4">
                                 <Button variant="outline" onClick={handleLeaveExam}>
-                                    Rời bài thi
+                                    Leave Exam
                                 </Button>
                                 {submitButton}
                             </footer>

@@ -19,14 +19,8 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 import {
     Table,
     TableBody,
@@ -55,16 +49,14 @@ import { toast } from "sonner";
 import { usePermissions } from "@/hooks/usePermissions";
 import { STUDENT_ROLE, normalizeRole } from "@/utils/rbac.utils";
 
-const PAGE_SIZE = 20;
-
 const STATUS_LABEL: Record<InvitationStatus, string> = {
-    PENDING: "Chờ",
-    SENT: "Đã gửi",
-    ACCEPTED: "Đã chấp nhận",
-    REJECTED: "Từ chối",
-    EXPIRED: "Hết hạn",
-    REVOKED: "Thu hồi",
-    COMPLETED: "Hoàn tất",
+    PENDING: "Pending",
+    SENT: "Sent",
+    ACCEPTED: "Accepted",
+    REJECTED: "Rejected",
+    EXPIRED: "Expired",
+    REVOKED: "Revoked",
+    COMPLETED: "Completed",
 };
 
 const STATUS_VARIANT: Record<InvitationStatus, "default" | "secondary" | "destructive" | "outline"> = {
@@ -93,7 +85,7 @@ export default function InvitationsPage() {
     const [revokeTarget, setRevokeTarget] = useState<InvitationDTO | null>(null);
     const [revokeReason, setRevokeReason] = useState("");
     const [qrTarget, setQrTarget] = useState<InvitationDTO | null>(null);
-    const [examTitle, setExamTitle] = useState("Kỳ thi");
+    const [examTitle, setExamTitle] = useState("Exam");
 
     const queryKey = ["exam-invitations", numericExamId, statusFilter, typeFilter] as const;
 
@@ -118,10 +110,10 @@ export default function InvitationsPage() {
                 const exam = await examApi.getById(String(numericExamId));
                 if (exam.title) setExamTitle(exam.title);
             } catch {
-                // ignore - will show examId in header instead
+                // ignore - fallback to default exam title
             }
         };
-        loadExamTitle();
+        void loadExamTitle();
     }, [numericExamId, isValidExamId]);
 
     const rows = invitationsQuery.data ?? [];
@@ -130,32 +122,30 @@ export default function InvitationsPage() {
     const resendMutation = useMutation({
         mutationFn: (id: number) => invitationApi.resend(id),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["exam-invitations", examId] });
-            toast.success("Đã gửi lại email.");
+            void queryClient.invalidateQueries({ queryKey: ["exam-invitations", numericExamId] });
+            toast.success("Resent invitation email.");
         },
-        onError: () => toast.error("Không thể gửi lại."),
+        onError: () => toast.error("Failed to resend invitation email."),
     });
 
     const revokeMutation = useMutation({
         mutationFn: ({ id, reason }: { id: number; reason?: string }) =>
             invitationApi.revoke(id, reason),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["exam-invitations", examId] });
-            toast.success("Đã thu hồi lời mời.");
+            void queryClient.invalidateQueries({ queryKey: ["exam-invitations", numericExamId] });
+            toast.success("Invitation revoked successfully.");
             setRevokeTarget(null);
             setRevokeReason("");
         },
-        onError: () => toast.error("Không thể thu hồi."),
+        onError: () => toast.error("Failed to revoke invitation."),
     });
 
-    // STUDENT không có quyền quản lý invitation -> đẩy về /invitations để xem notification.
-    // Hook đã gọi hết ở trên nên return sớm ở đây không vi phạm Rules of Hooks.
     if (normalizeRole(activeRole) === STUDENT_ROLE) {
         return <Navigate to="/invitations" replace />;
     }
 
     return (
-        <MainLayout pathName={{ exams: "Quản lý đề thi", invitations: "Lời mời" }}>
+        <MainLayout pathName={{ exams: "Exam Management", invitations: "Invitations" }}>
             <section className="flex flex-col gap-5">
                 {/* Header */}
                 <header className="flex flex-wrap items-end justify-between gap-4 border-b pb-4">
@@ -163,20 +153,20 @@ export default function InvitationsPage() {
                         <p className="text-sm text-muted-foreground">
                             <ChevronLeft
                                 className="mr-1 inline size-3.5 cursor-pointer"
-                                onClick={() => window.history.back()}
+                                onClick={() => navigate("/exams")}
                             />{" "}
-                            Quản lý đề thi
+                            Exam Management
                         </p>
                         <h1 className="mt-1 text-2xl font-semibold">
-                            Lời mời thi: <span className="text-primary">{examTitle}</span>
+                            Exam Invitations: <span className="text-primary">{examTitle}</span>
                         </h1>
                         <p className="mt-1 text-sm text-muted-foreground">
-                            {total} lời mời
+                            {total} invitation(s)
                         </p>
                     </div>
                     <Button onClick={() => setCreateOpen(true)}>
                         <Mail className="size-4" />
-                        Tạo lời mời
+                        Create Invitation
                     </Button>
                 </header>
 
@@ -187,10 +177,10 @@ export default function InvitationsPage() {
                         onValueChange={(v) => { setStatusFilter(v as typeof statusFilter); }}
                     >
                         <SelectTrigger className="w-44">
-                            <SelectValue placeholder="Trạng thái" />
+                            <SelectValue placeholder="Status" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
+                            <SelectItem value="ALL">All Statuses</SelectItem>
                             {(Object.keys(STATUS_LABEL) as InvitationStatus[]).map((s) => (
                                 <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>
                             ))}
@@ -202,19 +192,19 @@ export default function InvitationsPage() {
                         onValueChange={(v) => { setTypeFilter(v as typeof typeFilter); }}
                     >
                         <SelectTrigger className="w-44">
-                            <SelectValue placeholder="Loại" />
+                            <SelectValue placeholder="Type" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="ALL">Tất cả</SelectItem>
-                            <SelectItem value="authenticated">Có tài khoản</SelectItem>
-                            <SelectItem value="anonymous">Không tài khoản</SelectItem>
+                            <SelectItem value="ALL">All Types</SelectItem>
+                            <SelectItem value="authenticated">With Account</SelectItem>
+                            <SelectItem value="anonymous">Without Account</SelectItem>
                         </SelectContent>
                     </Select>
 
                     {invitationsQuery.isFetching && (
                         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
                             <RefreshCw className="size-3.5 animate-spin" />
-                            Đang tải...
+                            Loading...
                         </span>
                     )}
                 </div>
@@ -224,33 +214,33 @@ export default function InvitationsPage() {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Người nhận</TableHead>
-                                <TableHead className="w-32">Loại</TableHead>
-                                <TableHead className="w-32">Trạng thái</TableHead>
-                                <TableHead className="w-44">Mã truy cập</TableHead>
-                                <TableHead className="w-40">Ngày gửi</TableHead>
-                                <TableHead className="w-24 text-right">Thao tác</TableHead>
+                                <TableHead>Recipient</TableHead>
+                                <TableHead className="w-32">Type</TableHead>
+                                <TableHead className="w-32">Status</TableHead>
+                                <TableHead className="w-44">Access Code</TableHead>
+                                <TableHead className="w-40">Sent Date</TableHead>
+                                <TableHead className="w-24 text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {invitationsQuery.isLoading && (
                                 <TableRow>
                                     <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                                        Đang tải...
+                                        Loading invitations...
                                     </TableCell>
                                 </TableRow>
                             )}
                             {invitationsQuery.isError && (
                                 <TableRow>
                                     <TableCell colSpan={6} className="h-24 text-center text-destructive">
-                                        Không tải được danh sách.
+                                        Failed to load invitations list.
                                     </TableCell>
                                 </TableRow>
                             )}
                             {!invitationsQuery.isLoading && !invitationsQuery.isError && rows.length === 0 && (
                                 <TableRow>
                                     <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                                        Chưa có lời mời nào.
+                                        No invitations created yet.
                                     </TableCell>
                                 </TableRow>
                             )}
@@ -260,7 +250,7 @@ export default function InvitationsPage() {
                                         <div className="min-w-0">
                                             <p className="font-medium truncate">
                                                 {inv.anonymous
-                                                    ? inv.guestName ?? "Khách vãng lai"
+                                                    ? inv.guestName ?? "Guest User"
                                                     : inv.userFullName ?? "—"}
                                             </p>
                                             <p className="text-xs text-muted-foreground truncate">
@@ -272,11 +262,11 @@ export default function InvitationsPage() {
                                         <Badge variant="outline" className="gap-1">
                                             {inv.anonymous ? (
                                                 <>
-                                                    <Users className="size-3" /> Không account
+                                                    <Users className="size-3" /> No Account
                                                 </>
                                             ) : (
                                                 <>
-                                                    <Mail className="size-3" /> Có account
+                                                    <Mail className="size-3" /> Account
                                                 </>
                                             )}
                                         </Badge>
@@ -295,10 +285,12 @@ export default function InvitationsPage() {
                                                 <Button
                                                     variant="ghost"
                                                     size="icon-sm"
-                                                    title="Copy"
+                                                    title="Copy Access Code"
                                                     onClick={() => {
-                                                        navigator.clipboard.writeText(inv.accessCode!);
-                                                        toast.success("Đã copy!");
+                                                        if (inv.accessCode) {
+                                                            void navigator.clipboard.writeText(inv.accessCode);
+                                                            toast.success("Code copied!");
+                                                        }
                                                     }}
                                                 >
                                                     <Copy className="size-3" />
@@ -328,11 +320,11 @@ export default function InvitationsPage() {
                                             <DropdownMenuContent align="end">
                                                 {!inv.anonymous && (
                                                     <DropdownMenuItem
-                                                        onClick={() => resendMutation.mutate(inv.id!)}
+                                                        onClick={() => inv.id && resendMutation.mutate(inv.id)}
                                                         disabled={resendMutation.isPending}
                                                     >
                                                         <Send className="size-3.5" />
-                                                        Gửi lại email
+                                                        Resend Email
                                                     </DropdownMenuItem>
                                                 )}
                                                 {inv.anonymous && (
@@ -340,18 +332,20 @@ export default function InvitationsPage() {
                                                         onClick={() => setQrTarget(inv)}
                                                     >
                                                         <QrCode className="size-3.5" />
-                                                        Xem QR Code
+                                                        View QR Code
                                                     </DropdownMenuItem>
                                                 )}
                                                 {inv.accessCode && (
                                                     <DropdownMenuItem
                                                         onClick={() => {
-                                                            navigator.clipboard.writeText(inv.accessCode!);
-                                                            toast.success("Đã copy mã!");
+                                                            if (inv.accessCode) {
+                                                                void navigator.clipboard.writeText(inv.accessCode);
+                                                                toast.success("Code copied!");
+                                                            }
                                                         }}
                                                     >
                                                         <Copy className="size-3.5" />
-                                                        Copy mã truy cập
+                                                        Copy Access Code
                                                     </DropdownMenuItem>
                                                 )}
                                                 <DropdownMenuSeparator />
@@ -364,7 +358,7 @@ export default function InvitationsPage() {
                                                     }
                                                 >
                                                     <XCircle className="size-3.5" />
-                                                    Thu hồi lời mời
+                                                    Revoke Invitation
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
@@ -377,39 +371,41 @@ export default function InvitationsPage() {
             </section>
 
             {/* Create Modal */}
-            <CreateInvitationModal
-                examId={examId}
-                examTitle={examTitle}
-                open={isCreateOpen}
-                onOpenChange={setCreateOpen}
-            />
+            {isValidExamId && (
+                <CreateInvitationModal
+                    examId={numericExamId}
+                    examTitle={examTitle}
+                    open={isCreateOpen}
+                    onOpenChange={setCreateOpen}
+                />
+            )}
 
             {/* Revoke Dialog */}
             <Dialog open={!!revokeTarget} onOpenChange={(o) => { if (!o) setRevokeTarget(null); }}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Thu hồi lời mời</DialogTitle>
+                        <DialogTitle>Revoke Invitation</DialogTitle>
                         <DialogDescription>
-                            Thu hồi lời mời của{" "}
+                            Revoke invitation for{" "}
                             <strong>
                                 {revokeTarget?.anonymous
                                     ? revokeTarget?.guestName
                                     : revokeTarget?.userFullName}
                             </strong>
-                            ?. Người nhận sẽ nhận email thông báo.
+                            ? The recipient will receive a notification email.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">Lý do (tùy chọn)</label>
+                        <label className="text-sm font-medium">Reason (optional)</label>
                         <Input
-                            placeholder="Ví dụ: Thay đổi đề thi..."
+                            placeholder="e.g., Exam rescheduled..."
                             value={revokeReason}
                             onChange={(e) => setRevokeReason(e.target.value)}
                         />
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setRevokeTarget(null)}>
-                            Hủy
+                            Cancel
                         </Button>
                         <Button
                             variant="destructive"
@@ -423,7 +419,7 @@ export default function InvitationsPage() {
                                 }
                             }}
                         >
-                            {revokeMutation.isPending ? "Đang thu hồi..." : "Thu hồi"}
+                            {revokeMutation.isPending ? "Revoking..." : "Revoke"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -433,9 +429,9 @@ export default function InvitationsPage() {
             <Dialog open={!!qrTarget} onOpenChange={(o) => { if (!o) setQrTarget(null); }}>
                 <DialogContent className="sm:max-w-sm">
                     <DialogHeader>
-                        <DialogTitle>QR Code truy cập</DialogTitle>
+                        <DialogTitle>Access QR Code</DialogTitle>
                         <DialogDescription>
-                            Mã: <strong>{qrTarget?.accessCode}</strong>
+                            Code: <strong>{qrTarget?.accessCode}</strong>
                         </DialogDescription>
                     </DialogHeader>
                     <div className="flex flex-col items-center gap-4 py-2">
@@ -449,15 +445,20 @@ export default function InvitationsPage() {
                         />
                         <Button
                             variant="outline"
-                            onClick={() => qrTarget?.accessCode && navigator.clipboard.writeText(qrTarget.accessCode)}
+                            onClick={() => {
+                                if (qrTarget?.accessCode) {
+                                    void navigator.clipboard.writeText(qrTarget.accessCode);
+                                    toast.success("Code copied!");
+                                }
+                            }}
                         >
                             <Copy className="size-4" />
-                            Copy mã truy cập
+                            Copy Access Code
                         </Button>
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setQrTarget(null)}>
-                            Đóng
+                            Close
                         </Button>
                     </DialogFooter>
                 </DialogContent>

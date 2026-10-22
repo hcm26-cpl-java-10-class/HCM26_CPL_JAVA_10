@@ -33,9 +33,10 @@ interface DraftGrade {
     feedback: string;
 }
 
-const getErrorMessage = (error: any, fallback: string): string => {
-    const data = error?.response?.data;
-    const fieldError = data?.errors ? (Object.values(data.errors).flat()[0] as string | undefined) : undefined;
+const getErrorMessage = (error: unknown, fallback: string): string => {
+    const err = error as { response?: { data?: { errors?: Record<string, string[]>; message?: string } } };
+    const data = err?.response?.data;
+    const fieldError = data?.errors ? (Object.values(data.errors).flat()[0]) : undefined;
     return fieldError || data?.message || fallback;
 };
 
@@ -167,7 +168,7 @@ export default function EssayAttemptDetailPage() {
     };
 
     return (
-        <MainLayout pathName={{ exams: "Quản lý đề thi", grading: "Essay Grading", detail: "Submission Review" }}>
+        <MainLayout pathName={{ exams: "Exam Management", grading: "Essay Grading", detail: "Submission Review" }}>
             <section className="mx-auto flex w-full max-w-4xl flex-col gap-6 pb-12">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                     <Button variant="ghost" size="sm" className="-ml-2 w-fit" onClick={backToList}>
@@ -293,7 +294,7 @@ export default function EssayAttemptDetailPage() {
                                         )}
                                     </div>
 
-                                    {/* Requirement 3: Display AI-proposed score and feedback separately from official grade */}
+                                    {/* Display AI-proposed score and feedback separately from official grade */}
                                     {proposal && (
                                         <div className="rounded-lg border border-purple-200 bg-purple-50/50 p-4 dark:border-purple-900/50 dark:bg-purple-950/20">
                                             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -338,7 +339,7 @@ export default function EssayAttemptDetailPage() {
                                         </div>
                                     )}
 
-                                    {/* Requirement 1 & 4: Manual official grading review and edit inputs */}
+                                    {/* Manual official grading review and edit inputs */}
                                     <div className="grid gap-4 rounded-lg border bg-background p-4 sm:grid-cols-4">
                                         <div className="sm:col-span-1">
                                             <label className="text-xs font-medium uppercase text-muted-foreground">
@@ -385,7 +386,7 @@ export default function EssayAttemptDetailPage() {
                     </>
                 )}
 
-                {/* Requirement 6: Do not silently overwrite an existing confirmed grade */}
+                {/* Confirm overwrite modal */}
                 <Dialog open={isOverwriteModalOpen} onOpenChange={setIsOverwriteModalOpen}>
                     <DialogContent className="sm:max-w-md">
                         <DialogHeader>

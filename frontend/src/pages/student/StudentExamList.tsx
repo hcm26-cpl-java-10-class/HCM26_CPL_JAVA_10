@@ -55,11 +55,11 @@ function getAttemptStatus(attempt?: ExamAttemptSummary) {
 
     switch (attempt.status) {
         case 'IN_PROGRESS':
-            return { label: 'Đang làm', variant: 'secondary' as const };
+            return { label: 'In Progress', variant: 'secondary' as const };
         case 'PENDING_REVIEW':
-            return { label: 'Chờ chấm tự luận', variant: 'outline' as const };
+            return { label: 'Pending Essay Grading', variant: 'outline' as const };
         case 'SUBMITTED':
-            return { label: 'Đã hoàn thành', variant: 'default' as const };
+            return { label: 'Completed', variant: 'default' as const };
         default:
             return null;
     }
@@ -88,14 +88,14 @@ function ExamCard({
     const disabledBySchedule = (beforeOpen || afterClose) && !isInProgress;
     const isDisabled = externallyDisabled || outOfAttempts || disabledBySchedule;
     const buttonLabel = isInProgress
-        ? 'Tiếp tục làm bài'
+        ? 'Continue Exam'
         : outOfAttempts
-            ? 'Đã hết lượt'
+            ? 'No Attempts Left'
             : beforeOpen
-                ? 'Chưa đến giờ mở'
+                ? 'Not Opened Yet'
                 : afterClose
-                    ? 'Kỳ thi đã đóng'
-                    : 'Vào thi';
+                    ? 'Exam Closed'
+                    : 'Start Exam';
 
     return (
         <Card
@@ -107,16 +107,16 @@ function ExamCard({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <Badge variant="secondary" className="gap-1 bg-sky-50 text-sky-700">
                         <Clock3 className="size-3" />
-                        {exam.durationMinutes} phút
+                        {exam.durationMinutes} mins
                     </Badge>
-                    {open && <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">Đang mở</Badge>}
+                    {open && <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">Open</Badge>}
                     {status && <Badge variant={status.variant}>{status.label}</Badge>}
                 </div>
                 <CardTitle className="pt-2 text-lg text-slate-900">{exam.title}</CardTitle>
                 <CardDescription>
-                    Tổng điểm:{' '}
+                    Total Points:{' '}
                     <span className="font-medium text-slate-700">
-                        {attempt?.totalPoints ?? exam.totalPoints ?? 'Chưa cập nhật'}
+                        {attempt?.totalPoints ?? exam.totalPoints ?? 'Not updated'}
                     </span>
                 </CardDescription>
             </CardHeader>
@@ -124,31 +124,31 @@ function ExamCard({
             <CardContent className="flex-1">
                 {attempt?.status === 'PENDING_REVIEW' && (
                     <p className="text-sm text-amber-700">
-                        Điểm trắc nghiệm tạm thời: {attempt.objectiveScore ?? 0}/{attempt.totalPoints}.
+                        Provisional Objective Score: {attempt.objectiveScore ?? 0}/{attempt.totalPoints}.
                     </p>
                 )}
                 {attempt?.status === 'SUBMITTED' && (
                     <p className="text-sm text-emerald-700">
-                        Điểm cao nhất: {attempt.bestScore ?? attempt.finalScore ?? 0}/{attempt.totalPoints}.
+                        Highest Score: {attempt.bestScore ?? attempt.finalScore ?? 0}/{attempt.totalPoints}.
                     </p>
                 )}
                 {hasAttempts && attempt?.status !== 'SUBMITTED' && attempt?.bestScore != null && (
-                    <p className="text-sm text-emerald-700">Điểm cao nhất: {attempt.bestScore}/{attempt.totalPoints}.</p>
+                    <p className="text-sm text-emerald-700">Highest Score: {attempt.bestScore}/{attempt.totalPoints}.</p>
                 )}
                 {attempt && (
                     <p className="mt-2 text-sm text-slate-600">
-                        Lượt {attempt.attemptNumber} · Đã dùng {attempt.attemptsUsed}/{exam.maxAttempts ?? 1} lượt
+                        Attempt #{attempt.attemptNumber} · Used {attempt.attemptsUsed}/{exam.maxAttempts ?? 1} attempt(s)
                     </p>
                 )}
 
                 {attempt?.status === 'IN_PROGRESS' && (
                     <p className="text-sm text-sky-700">
-                        Bài làm của bạn đã được lưu. Bạn có thể tiếp tục bài thi.
+                        Your draft has been saved. You can resume your exam.
                     </p>
                 )}
                 {!attempt && (
                     <p className="text-sm text-slate-500">
-                        Bạn chưa bắt đầu bài thi này.
+                        You have not started this exam yet.
                     </p>
                 )}
             </CardContent>
@@ -166,7 +166,7 @@ function ExamCard({
 export default function StudentExamList() {
     const navigate = useNavigate();
     const [passwordExam, setPasswordExam] = useState<Exam | null>(null);
-    const [now] = useState(() => Date.now()); // Lấy thời gian khi component mount, tuân thủ Purity Rule
+    const [now] = useState(() => Date.now());
 
     const examsQuery = useQuery({
         queryKey: examsQueryKey,
@@ -195,7 +195,6 @@ export default function StudentExamList() {
     const openExam = (examId: number) => {
         const exam = exams.find((item) => item.id === examId);
         const isInProgress = attempts.some((item) => item.examId === examId && item.status === 'IN_PROGRESS');
-        // Bài đang làm dở thì server cho vào tiếp, không cần nhập lại mật khẩu.
         if (exam?.hasPassword && !isInProgress) {
             setPasswordExam(exam);
             return;
@@ -204,25 +203,25 @@ export default function StudentExamList() {
     };
 
     return (
-        <MainLayout pathName={{ exams: 'Lịch thi' }}>
+        <MainLayout pathName={{ exams: 'Exam Schedule' }}>
             <div className="mx-auto w-full max-w-6xl space-y-6">
                 <header className="flex flex-wrap items-end justify-between gap-4">
                     <div>
                         <div className="mb-2 flex items-center gap-2 text-cyan-700">
                             <CalendarDays className="size-5" />
-                            <span className="text-sm font-medium">Khu vực sinh viên</span>
+                            <span className="text-sm font-medium">Student Portal</span>
                         </div>
                         <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                            Lịch thi của tôi
+                            My Exam Schedule
                         </h1>
                         <p className="mt-2 text-sm text-slate-600">
-                            Theo dõi các kỳ thi, tiếp tục bài đang làm hoặc xem kết quả.
+                            Track your exams, resume ongoing attempts, or review past results.
                         </p>
                     </div>
                     {hasError && (
                         <Button variant="outline" onClick={retry}>
                             <RefreshCw className="size-4" />
-                            Tải lại
+                            Reload
                         </Button>
                     )}
                 </header>
@@ -235,10 +234,10 @@ export default function StudentExamList() {
                         <AlertCircle className="mt-0.5 size-4 shrink-0" />
                         <p>
                             {examsQuery.isError && attemptsQuery.isError
-                                ? 'Không thể tải lịch thi và trạng thái bài làm.'
+                                ? 'Unable to load exam schedule and attempt statuses.'
                                 : examsQuery.isError
-                                    ? 'Không thể tải danh sách kỳ thi.'
-                                    : 'Không thể tải trạng thái các bài thi đã làm. Tải lại để xác nhận trạng thái trước khi vào thi.'}
+                                    ? 'Unable to load exams list.'
+                                    : 'Unable to load attempt statuses. Reload to verify your status before starting.'}
                         </p>
                     </div>
                 )}
@@ -260,9 +259,9 @@ export default function StudentExamList() {
                     <Card className="items-center border-dashed border-slate-300 bg-white py-10 text-center">
                         <CardContent className="space-y-2">
                             <CalendarDays className="mx-auto size-8 text-slate-400" />
-                            <CardTitle className="text-slate-900">Chưa có kỳ thi nào</CardTitle>
+                            <CardTitle className="text-slate-900">No Scheduled Exams</CardTitle>
                             <CardDescription>
-                                Hiện tại chưa có kỳ thi nào được xếp lịch dành cho bạn.
+                                There are currently no exams scheduled for you.
                             </CardDescription>
                         </CardContent>
                     </Card>

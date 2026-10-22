@@ -174,14 +174,14 @@ interface QuestionFormProps {
 }
 
 export function QuestionForm({
-    form,
-    setForm,
-    onSubmit,
-    isSaving,
-    submitLabel,
-    showActive = false,
-    onCancel,
-}: QuestionFormProps) {
+                                 form,
+                                 setForm,
+                                 onSubmit,
+                                 isSaving,
+                                 submitLabel,
+                                 showActive = false,
+                                 onCancel,
+                             }: QuestionFormProps) {
     const navigate = useNavigate();
     const contentRef = useRef<HTMLTextAreaElement>(null);
     const [isPreview, setIsPreview] = useState(false);
@@ -423,8 +423,8 @@ export function QuestionForm({
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="MULTIPLE_CHOICE">Multiple choice (Trắc nghiệm)</SelectItem>
-                            <SelectItem value="ESSAY">Essay (Tự luận)</SelectItem>
+                            <SelectItem value="MULTIPLE_CHOICE">Multiple Choice</SelectItem>
+                            <SelectItem value="ESSAY">Essay</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
