@@ -47,21 +47,6 @@ const buttonStyle: CSSProperties = {
   cursor: "pointer", boxShadow: "0 1px 2px rgba(15,23,42,.05)",
 };
 
-export default function TrainingProgramPage() {
-  const [programs, setPrograms] = useState<TrainingProgramResponse[]>([]);
-  const [subjects, setSubjects] = useState<SubjectDTO[]>([]);
-  const [search, setSearch] = useState("");
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [cloneVersions, setCloneVersions] = useState<Record<number, string>>({});
-  const [hoveredProgramId, setHoveredProgramId] = useState<number | null>(null);
-  const [selectedProgramId, setSelectedProgramId] = useState<number | null>(null);
-  const [form, setForm] = useState({
-    code: "", name: "", version: "1.0", region: "",
-    subjectIds: [] as number[],
-  });
 
   const load = useCallback(async () => {
     setBusy(true);
