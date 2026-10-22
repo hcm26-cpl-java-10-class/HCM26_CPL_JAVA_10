@@ -16,11 +16,14 @@ import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -77,8 +80,8 @@ public class CertificateServiceImpl
         certificate.setUser(user);
     }
 
-    @Override
     @Transactional
+    @Override
     public void issueIfCourseCompleted(CourseEnrollment courseEnrollment) {
         Long userId = courseEnrollment.getUser().getId();
         Long courseId = courseEnrollment.getCourse().getId();
@@ -112,5 +115,33 @@ public class CertificateServiceImpl
                 .build();
 
         certificateRepository.save(certificate);
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public CertificateVerificationDTO verify(UUID verificationToken) {
+        Certificate certificate = certificateRepository
+                .findByVerificationToken(verificationToken)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Certificate not found"
+                ));
+
+        return new CertificateVerificationDTO(
+                certificate.getVerificationToken(),
+                certificate.getCourse().getName(),
+                certificate.getUser().getFullName(),
+                certificate.getIssuedAt(),
+                true
+        );
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public List<CertificateDTO> getMyCertificates(Long userId) {
+        return certificateRepository.findAllByUser_Id(userId)
+                .stream()
+                .map(certificateMapper::toResponse)
+                .toList();
     }
 }
