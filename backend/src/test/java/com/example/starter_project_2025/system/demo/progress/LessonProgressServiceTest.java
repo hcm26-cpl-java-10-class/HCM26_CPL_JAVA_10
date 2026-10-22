@@ -101,6 +101,26 @@ class LessonProgressServiceTest {
     }
 
     @Test
+    void completedLessonCannotBeReset() {
+        LessonProgress progress = LessonProgress.builder()
+                .enrollment(enrollment)
+                .lesson(lesson)
+                .completed(true)
+                .build();
+        when(enrollmentRepository.findByIdAndUser_Id(40L, 7L)).thenReturn(Optional.of(enrollment));
+        when(lessonRepository.findById(30L)).thenReturn(Optional.of(lesson));
+        when(progressRepository.findByEnrollment_IdAndLesson_Id(40L, 30L))
+                .thenReturn(Optional.of(progress));
+        when(lessonRepository.findByCourseIdOrdered(10L)).thenReturn(List.of(lesson));
+        when(progressRepository.findAllByEnrollment_Id(40L)).thenReturn(List.of(progress));
+
+        LessonProgressDTO result = service.setCompleted(7L, 40L, 30L, false);
+
+        assertTrue(progress.isCompleted());
+        assertEquals(100, result.progressPercentage());
+    }
+
+    @Test
     void recordsAndReturnsLastAccessedLesson() {
         when(enrollmentRepository.findByIdAndUser_Id(40L, 7L)).thenReturn(Optional.of(enrollment));
         when(lessonRepository.findById(30L)).thenReturn(Optional.of(lesson));
