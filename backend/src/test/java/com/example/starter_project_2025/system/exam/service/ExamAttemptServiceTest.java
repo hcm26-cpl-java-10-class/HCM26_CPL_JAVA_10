@@ -54,6 +54,9 @@ class ExamAttemptServiceTest {
     @Mock
     private ExamResultAccessService resultAccessService;
 
+    @Mock
+    private InvitationRepository invitationRepository;
+
     @InjectMocks
     private ExamAttemptService service;
 
@@ -90,7 +93,7 @@ class ExamAttemptServiceTest {
     void startOrResumeRejectsStudentWithoutAcceptedInvitation() {
         Exam exam = attempt.getExam();
         exam.setIsActive(true);
-        exam.setQuestions(Set.of(question(1L, QuestionType.SINGLE_CHOICE, 5)));
+        exam.setQuestions(Set.of(question(1L, QuestionType.MULTIPLE_CHOICE, 5)));
         when(examRepository.lockForAttemptStart(20L)).thenReturn(Optional.of(exam));
 
         assertThrows(BadRequestException.class, () -> service.startOrResume(20L, 40L));
@@ -126,7 +129,7 @@ class ExamAttemptServiceTest {
         exam.setLatePenaltyPercent(20);
         exam.setLateGraceMinutes(15);
         exam.setEndTime(LocalDateTime.now().plusMinutes(10));
-        exam.setQuestions(Set.of(question(1L, QuestionType.SINGLE_CHOICE, 5)));
+        exam.setQuestions(Set.of(question(1L, QuestionType.MULTIPLE_CHOICE, 5)));
         when(examRepository.lockForAttemptStart(20L)).thenReturn(Optional.of(exam));
         when(attemptRepository.findAllByExam_IdAndStudent_IdOrderByAttemptNumberAsc(20L, 40L))
                 .thenReturn(List.of());
@@ -143,7 +146,7 @@ class ExamAttemptServiceTest {
     @Test
     void startOrResumeSnapshotsQuestionsAndOptionsAtStart() {
         Exam exam = attempt.getExam();
-        Question live = question(1L, QuestionType.SINGLE_CHOICE, 5);
+        Question live = question(1L, QuestionType.MULTIPLE_CHOICE, 5);
         live.setContent("Original");
         option(11L, live, true);
         exam.setQuestions(Set.of(live));
@@ -176,7 +179,7 @@ class ExamAttemptServiceTest {
 
     @Test
     void submitAwardsPointsOnlyWhenEveryCorrectOptionIsSelected() {
-        ExamAttemptQuestion question = snapshotQuestion(1L, QuestionType.MULTI_CHOICE, 5);
+        ExamAttemptQuestion question = snapshotQuestion(1L, QuestionType.MULTIPLE_CHOICE, 5);
         ExamAttemptOption firstCorrect = snapshotOption(11L, question, true);
         ExamAttemptOption secondCorrect = snapshotOption(12L, question, true);
         snapshotOption(13L, question, false);
@@ -191,7 +194,7 @@ class ExamAttemptServiceTest {
 
     @Test
     void submitDoesNotAwardPartialPointsForMultiChoiceAnswers() {
-        ExamAttemptQuestion question = snapshotQuestion(1L, QuestionType.MULTI_CHOICE, 5);
+        ExamAttemptQuestion question = snapshotQuestion(1L, QuestionType.MULTIPLE_CHOICE, 5);
         ExamAttemptOption firstCorrect = snapshotOption(11L, question, true);
         snapshotOption(12L, question, true);
         attempt.setAnswers(new HashSet<>(List.of(answer(question, firstCorrect))));
@@ -204,7 +207,7 @@ class ExamAttemptServiceTest {
 
     @Test
     void submitAppliesPenaltyWhenSubmittedDuringGracePeriod() {
-        ExamAttemptQuestion question = snapshotQuestion(1L, QuestionType.SINGLE_CHOICE, 5);
+        ExamAttemptQuestion question = snapshotQuestion(1L, QuestionType.MULTIPLE_CHOICE, 5);
         ExamAttemptOption correct = snapshotOption(11L, question, true);
         attempt.setAnswers(new HashSet<>(List.of(answer(question, correct))));
         attempt.setOfficialDeadlineAt(Instant.now().minusSeconds(60));

@@ -68,7 +68,7 @@ class ExamServiceImplTest {
         question.setId(10L);
         question.setIsActive(true);
         question.setContent("Question content");
-        question.setType(QuestionType.SINGLE_CHOICE);
+        question.setType(QuestionType.MULTIPLE_CHOICE);
         question.setDifficulty(Difficulty.EASY);
     }
 
