@@ -1,3 +1,19 @@
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type CSSProperties,
+} from "react";
+import {
+  programApi,
+  type TrainingProgramRequest,
+  type TrainingProgramResponse,
+} from "@/api/features/program.api";
+import { subjectApi } from "@/api/features/subject.api";
+import type { SubjectDTO } from "@/types";
+import type { EntityConfig, EntitySchema } from "@/types";
 
 const schema: EntitySchema = {
   entityName: "training-program",
