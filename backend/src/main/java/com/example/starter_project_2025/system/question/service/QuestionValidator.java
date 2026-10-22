@@ -114,9 +114,8 @@ public class QuestionValidator {
 
         long correct = options.stream().filter(OptionDTO::isCorrect).count();
         if (correct < 1)
-        if (type == QuestionType.SINGLE_CHOICE && correct != 1)
-            ctx.add("options", "Câu 1 đáp án phải có đúng 1 đáp án đúng");
-        if (type == QuestionType.MULTI_CHOICE && correct < 1)
+
+        if (type == QuestionType.MULTIPLE_CHOICE && correct < 1)
             ctx.add("options", "Cần ít nhất 1 đáp án đúng");
     }
 }
