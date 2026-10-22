@@ -6,7 +6,6 @@ import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
-import com.example.starter_project_2025.system.demo.session.SessionRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -28,7 +27,6 @@ public class SubjectServiceImpl
 
     SubjectMapper subjectMapper;
     SubjectRepository subjectRepository;
-    SessionRepository sessionRepository;
     JdbcOperations jdbcTemplate;
 
     @Override
@@ -55,6 +53,14 @@ public class SubjectServiceImpl
         if (request.getDurationHours() != null && request.getDurationHours() <= 0) {
             ctx.add("durationHours", "Subject duration must be greater than 0");
         }
+
+        // Đồng bộ status và isActive khi tạo mới
+        boolean active = request.getIsActive() == null || Boolean.TRUE.equals(request.getIsActive());
+        if (request.getStatus() != null) {
+            active = request.getStatus() == SubjectStatus.ACTIVE;
+        }
+        subject.setIsActive(active);
+        subject.setStatus(active ? SubjectStatus.ACTIVE : SubjectStatus.INACTIVE);
     }
 
     @Override
@@ -68,6 +74,17 @@ public class SubjectServiceImpl
 
         if (request.getDurationHours() != null && request.getDurationHours() <= 0) {
             ctx.add("durationHours", "Subject duration must be greater than 0");
+        }
+
+        // Đồng bộ status và isActive khi cập nhật
+        if (request.getIsActive() != null) {
+            boolean active = Boolean.TRUE.equals(request.getIsActive());
+            subject.setIsActive(active);
+            subject.setStatus(active ? SubjectStatus.ACTIVE : SubjectStatus.INACTIVE);
+        } else if (request.getStatus() != null) {
+            boolean active = request.getStatus() == SubjectStatus.ACTIVE;
+            subject.setStatus(request.getStatus());
+            subject.setIsActive(active);
         }
     }
 
@@ -85,7 +102,9 @@ public class SubjectServiceImpl
         Subject subject = subjectRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Subject not found with ID: " + id));
 
-        subject.setIsActive(Boolean.TRUE.equals(isActive));
+        boolean active = Boolean.TRUE.equals(isActive);
+        subject.setIsActive(active);
+        subject.setStatus(active ? SubjectStatus.ACTIVE : SubjectStatus.INACTIVE);
         Subject saved = subjectRepository.save(subject);
         return subjectMapper.toResponse(saved);
     }
@@ -108,16 +127,12 @@ public class SubjectServiceImpl
             return false;
         }
 
-        // 1. Kiểm tra trong bảng sessions (Topic ID)
-        if (sessionRepository != null && sessionRepository.existsByTopicId(id)) {
-            return true;
-        }
-
-        // 2. Kiểm tra động các bảng liên kết từ các module khác (program_subjects, study_sessions, teaching_assignments)
+        // Kiểm tra động các bảng liên kết từ các module khác (program_subjects, teaching_assignments, study_sessions, sessions)
         String[] checkQueries = {
                 "SELECT COUNT(*) FROM program_subjects WHERE subject_id = ?",
                 "SELECT COUNT(*) FROM teaching_assignments WHERE subject_id = ?",
-                "SELECT COUNT(*) FROM study_sessions WHERE subject_id = ? OR topic_id = ?"
+                "SELECT COUNT(*) FROM study_sessions WHERE subject_id = ? OR topic_id = ?",
+                "SELECT COUNT(*) FROM sessions WHERE topic_id = ?"
         };
 
         if (jdbcTemplate != null) {

@@ -3,7 +3,6 @@ package com.example.starter_project_2025.system.subject;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
-import com.example.starter_project_2025.system.demo.session.SessionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,8 +16,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -29,9 +27,6 @@ class SubjectServiceTest {
 
     @Mock
     private SubjectMapper subjectMapper;
-
-    @Mock
-    private SessionRepository sessionRepository;
 
     @Mock
     private JdbcOperations jdbcTemplate;
@@ -51,6 +46,7 @@ class SubjectServiceTest {
                 .technicalGroup("Backend")
                 .durationHours(40)
                 .isActive(true)
+                .status(SubjectStatus.ACTIVE)
                 .build();
         mockSubject.setId(10L);
 
@@ -60,12 +56,15 @@ class SubjectServiceTest {
         mockSubjectDTO.setName("Java Core Fundamentals");
         mockSubjectDTO.setVersion("1.0");
         mockSubjectDTO.setDurationHours(40);
+        mockSubjectDTO.setIsActive(true);
+        mockSubjectDTO.setStatus(SubjectStatus.ACTIVE);
     }
 
     @Test
-    @DisplayName("beforeDelete: Ném BadRequestException khi môn học đã được tham chiếu trong Session")
+    @DisplayName("beforeDelete: Ném BadRequestException khi môn học đã được tham chiếu trong hệ thống")
     void beforeDelete_ShouldThrowBadRequestException_WhenSubjectIsReferencedInSessions() {
-        when(sessionRepository.existsByTopicId(10L)).thenReturn(true);
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), any(Object[].class)))
+                .thenReturn(1);
 
         BadRequestException ex = assertThrows(BadRequestException.class, () -> {
             subjectService.beforeDelete(mockSubject);
@@ -79,7 +78,8 @@ class SubjectServiceTest {
     @Test
     @DisplayName("beforeDelete: Thành công không ném lỗi khi môn học chưa từng được tham chiếu")
     void beforeDelete_ShouldPass_WhenSubjectIsNotReferenced() {
-        when(sessionRepository.existsByTopicId(10L)).thenReturn(false);
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), any(Object[].class)))
+                .thenReturn(0);
 
         assertDoesNotThrow(() -> {
             subjectService.beforeDelete(mockSubject);
@@ -87,9 +87,10 @@ class SubjectServiceTest {
     }
 
     @Test
-    @DisplayName("isSubjectReferenced: Trả về true khi tìm thấy tham chiếu trong session")
+    @DisplayName("isSubjectReferenced: Trả về true khi tìm thấy tham chiếu trong database")
     void isSubjectReferenced_ShouldReturnTrue_WhenSessionExists() {
-        when(sessionRepository.existsByTopicId(10L)).thenReturn(true);
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), any(Object[].class)))
+                .thenReturn(2);
 
         boolean referenced = subjectService.isSubjectReferenced(10L);
         assertTrue(referenced);
@@ -114,7 +115,7 @@ class SubjectServiceTest {
     }
 
     @Test
-    @DisplayName("changeStatus: Cập nhật trạng thái thành công")
+    @DisplayName("changeStatus: Cập nhật trạng thái và đồng bộ cả status lẫn isActive")
     void changeStatus_ShouldUpdateStatus() {
         when(subjectRepository.findById(10L)).thenReturn(Optional.of(mockSubject));
         when(subjectRepository.save(any(Subject.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -124,6 +125,7 @@ class SubjectServiceTest {
 
         assertNotNull(result);
         assertFalse(mockSubject.getIsActive());
+        assertEquals(SubjectStatus.INACTIVE, mockSubject.getStatus());
         verify(subjectRepository).save(mockSubject);
     }
 
