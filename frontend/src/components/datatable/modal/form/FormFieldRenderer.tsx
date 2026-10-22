@@ -248,10 +248,11 @@ export function FormFieldRenderer({
           <Label htmlFor={field.name}>{field.label}</Label>
           <Input
             id={field.name}
+            type={field.name === "email" ? "email" : "text"}
             className={errorClass}
             value={value || ""}
             onChange={(e) => onChange(field.name, e.target.value)}
-            placeholder={`Enter ${field.label.toLowerCase()}...`}
+            placeholder={field.name === "email" ? "name@gmail.com" : `Enter ${field.label.toLowerCase()}...`}
           />
           <FieldError errors={fieldErrors} />
         </div>
