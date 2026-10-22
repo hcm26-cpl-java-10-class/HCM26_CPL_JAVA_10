@@ -13,7 +13,8 @@ import java.util.*;
 @RequiredArgsConstructor
 @Transactional
 public class SyllabusService {
-
+    private final SyllabusCloRepository clos;
+    private final SyllabusMaterialRepository materials;
     private final SyllabusRepository syllabuses;
     private final SyllabusSectionRepository sections;
     private final SyllabusTopicRepository topics;
@@ -148,6 +149,7 @@ public class SyllabusService {
                                 sec.getId(),
                                 sec.getTitle(),
                                 sec.getOrderIndex(),
+                                sec.getMission(),
                                 topics.findBySection_IdOrderByOrderIndexAsc(
                                                 sec.getId()
                                         )
@@ -251,7 +253,16 @@ public class SyllabusService {
 
     public void delete(Long id) {
         Syllabus entity = syllabus(id);
+        if (clos.countBySyllabus_Id(id) > 0) {
+            fail("clos", "Delete all CLOs before deleting this Syllabus");
+        }
 
+        if (materials.countBySyllabus_Id(id) > 0) {
+            fail(
+                    "materials",
+                    "Delete all Learning Materials before deleting this Syllabus"
+            );
+        }
         if (sections.countBySyllabus_Id(id) > 0) {
             fail(
                     "sections",
@@ -330,6 +341,7 @@ public class SyllabusService {
         entity.setSyllabus(parent);
         entity.setTitle(title);
         entity.setOrderIndex(order);
+        entity.setMission(validMission(input.mission()));
 
         sections.save(entity);
 
@@ -368,6 +380,9 @@ public class SyllabusService {
 
         entity.setTitle(title);
         entity.setOrderIndex(order);
+        if (input.mission() != null) {
+            entity.setMission(validMission(input.mission()));
+        }
 
         sections.save(entity);
 
@@ -565,6 +580,12 @@ public class SyllabusService {
                 sectionId,
                 topicId
         );
+        if (materials.countByTopic_Id(topicId) > 0) {
+            fail(
+                    "materials",
+                    "Remove or unlink Learning Materials before deleting this Topic"
+            );
+        }
 
         topics.delete(entity);
     }
@@ -696,6 +717,19 @@ public class SyllabusService {
         Syllabus saved = syllabuses.saveAndFlush(entity);
 
         return toInformationView(saved);
+    }
+    private static String validMission(String raw) {
+        if (raw == null) {
+            return "";
+        }
+
+        String value = raw.strip();
+
+        if (value.length() > 2000) {
+            fail("mission", "Mission must not exceed 2000 characters");
+        }
+
+        return value;
     }
 
 }

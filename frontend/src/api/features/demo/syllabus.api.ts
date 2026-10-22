@@ -22,6 +22,7 @@ export type SyllabusSection = {
     id: number;
     title: string;
     orderIndex: number;
+    mission: string | null;
     topics: Topic[];
 };
 
@@ -48,6 +49,36 @@ export type SyllabusInformationInput = {
     scoringScale: number | null;
 };
 
+export type SyllabusClo = {
+    id: number;
+    code: string;
+    details: string;
+    orderIndex: number;
+};
+
+export type SyllabusMaterialType =
+    | "DOCUMENT"
+    | "SLIDE"
+    | "VIDEO"
+    | "BOOK"
+    | "LINK";
+
+export type SyllabusMaterialInput = {
+    title: string;
+    type: SyllabusMaterialType;
+    url: string;
+    author: string;
+    publisher: string;
+    mainMaterial: boolean;
+    note: string;
+    topicId: number | null;
+};
+
+export type SyllabusMaterial = SyllabusMaterialInput & {
+    id: number;
+};
+
+
 export type SyllabusInformation = SyllabusInformationInput & {
     id: number;
 };
@@ -56,6 +87,85 @@ export type SyllabusInformation = SyllabusInformationInput & {
 const root = "/syllabuses";
 
 export const syllabusApi = {
+
+    // CLO Management
+    listClos: async (syllabusId: number) =>
+        (
+            await api.get<SyllabusClo[]>(
+                `${root}/${syllabusId}/clos`
+            )
+        ).data,
+
+    createClo: async (
+        syllabusId: number,
+        details: string
+    ) =>
+        (
+            await api.post<SyllabusClo>(
+                `${root}/${syllabusId}/clos`,
+                { details }
+            )
+        ).data,
+
+    updateClo: async (
+        syllabusId: number,
+        cloId: number,
+        details: string
+    ) =>
+        (
+            await api.put<SyllabusClo>(
+                `${root}/${syllabusId}/clos/${cloId}`,
+                { details }
+            )
+        ).data,
+
+    deleteClo: async (
+        syllabusId: number,
+        cloId: number
+    ) =>
+        api.delete(
+            `${root}/${syllabusId}/clos/${cloId}`
+        ),
+
+// Learning Materials
+
+    listMaterials: async (syllabusId: number) =>
+        (
+            await api.get<SyllabusMaterial[]>(
+                `${root}/${syllabusId}/materials`
+            )
+        ).data,
+
+    createMaterial: async (
+        syllabusId: number,
+        body: SyllabusMaterialInput
+    ) =>
+        (
+            await api.post<SyllabusMaterial>(
+                `${root}/${syllabusId}/materials`,
+                body
+            )
+        ).data,
+
+    updateMaterial: async (
+        syllabusId: number,
+        materialId: number,
+        body: SyllabusMaterialInput
+    ) =>
+        (
+            await api.put<SyllabusMaterial>(
+                `${root}/${syllabusId}/materials/${materialId}`,
+                body
+            )
+        ).data,
+
+    deleteMaterial: async (
+        syllabusId: number,
+        materialId: number
+    ) =>
+        api.delete(
+            `${root}/${syllabusId}/materials/${materialId}`
+        ),
     getInformation: async (id: number) =>
         (
             await api.get<SyllabusInformation>(
@@ -124,15 +234,29 @@ export const syllabusApi = {
     addSection: async (
         id: number,
         title: string,
-        orderIndex: number
+        orderIndex: number,
+        mission = ""
     ) =>
         (
             await api.post<SyllabusDetail>(
                 `${root}/${id}/sections`,
-                { title, orderIndex }
+                { title, orderIndex, mission }
             )
         ).data,
 
+    editSection: async (
+        id: number,
+        sectionId: number,
+        title: string,
+        orderIndex: number,
+        mission = ""
+    ) =>
+        (
+            await api.put<SyllabusDetail>(
+                `${root}/${id}/sections/${sectionId}`,
+                { title, orderIndex, mission }
+            )
+        ).data,
     bulkSections: async (
         id: number,
         titles: string[]
@@ -144,18 +268,7 @@ export const syllabusApi = {
             )
         ).data,
 
-    editSection: async (
-        id: number,
-        sectionId: number,
-        title: string,
-        orderIndex: number
-    ) =>
-        (
-            await api.put<SyllabusDetail>(
-                `${root}/${id}/sections/${sectionId}`,
-                { title, orderIndex }
-            )
-        ).data,
+
 
     deleteSection: async (
         id: number,
