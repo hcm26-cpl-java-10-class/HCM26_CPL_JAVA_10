@@ -237,9 +237,9 @@ export const ModuleGroupModulePage: React.FC = () => {
 
     return (
         <MainLayout>
-            <div className="flex flex-col gap-5 font-sans">
+            <div className="flex flex-col flex-1 min-h-0 gap-3.5 font-sans">
                 {/* Page Header Area */}
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-1.5 shrink-0">
                     {/* Breadcrumbs */}
                     <div className="flex items-center text-xs text-gray-500 font-medium">
                         <span className="text-gray-500">FAMS &amp; LMS</span>
@@ -252,21 +252,21 @@ export const ModuleGroupModulePage: React.FC = () => {
                     </div>
 
                     {/* Title and Top Actions */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-0.5">
                         <div>
-                            <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
+                            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
                                 Module Group &amp; Module
                             </h1>
-                            <p className="text-sm text-gray-500 mt-1">
+                            <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
                                 Quản lý dữ liệu và quy trình theo quyền được cấp
                             </p>
                         </div>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2.5">
                             <button
                                 type="button"
                                 onClick={() => setIsImportExportOpen(true)}
-                                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 dark:border-border bg-white dark:bg-card text-gray-700 dark:text-gray-200 text-sm font-medium hover:bg-gray-50 dark:hover:bg-accent shadow-xs transition-colors cursor-pointer"
+                                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg border border-gray-200 dark:border-border bg-white dark:bg-card text-gray-700 dark:text-gray-200 text-xs sm:text-sm font-medium hover:bg-gray-50 dark:hover:bg-accent shadow-xs transition-colors cursor-pointer"
                             >
                                 <Download className="h-4 w-4 text-gray-500" />
                                 <span>Import / Export</span>
@@ -275,7 +275,7 @@ export const ModuleGroupModulePage: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={handleAddModule}
-                                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium shadow-xs transition-colors cursor-pointer"
+                                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs sm:text-sm font-medium shadow-xs transition-colors cursor-pointer"
                             >
                                 <Plus className="h-4 w-4" />
                                 <span>+ Thêm mới</span>
@@ -285,9 +285,9 @@ export const ModuleGroupModulePage: React.FC = () => {
                 </div>
 
                 {/* Main 2-Panel Layout */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
                     {/* Left Panel: Module Groups (~28-30% width) */}
-                    <div className="lg:col-span-4 xl:col-span-3">
+                    <div className="lg:col-span-4 xl:col-span-3 h-full flex flex-col min-h-0">
                         <ModuleGroupList
                             groups={groups}
                             selectedGroupId={selectedGroupId}
@@ -300,7 +300,7 @@ export const ModuleGroupModulePage: React.FC = () => {
                     </div>
 
                     {/* Right Panel: Modules (~70-72% width) */}
-                    <div className="lg:col-span-8 xl:col-span-9">
+                    <div className="lg:col-span-8 xl:col-span-9 h-full flex flex-col min-h-0">
                         <ModuleTable
                             modules={currentGroupModules}
                             onEditModule={handleEditModule}
