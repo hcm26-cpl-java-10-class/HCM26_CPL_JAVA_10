@@ -24,14 +24,14 @@ const courseSchema: EntitySchema = {
     {
       name: "name",
       label: "Course Name",
+      hint: "Unique course title, e.g. Java Programming Basics",
       type: "text",
       sortable: true,
       bold: true,
       validation: {
         required: true,
         requiredMessage: "Course name is required",
-        minLength: 3,
-        maxLength: 150,
+        maxLength: 150, // khớp CourseDTO @Size(max = 150)
       },
     },
     {
@@ -44,6 +44,7 @@ const courseSchema: EntitySchema = {
     {
       name: "instructorId",
       label: "Instructor (User)",
+      hint: "Pick the teacher account that owns this course",
       type: "relation",
       sortable: false,
       visible: false,
@@ -56,6 +57,7 @@ const courseSchema: EntitySchema = {
     {
       name: "categoryIds",
       label: "Categories",
+      hint: "Choose one or more active categories",
       type: "relation",
       relation: {
         api: categoryApi,
@@ -67,13 +69,23 @@ const courseSchema: EntitySchema = {
     {
       name: "status",
       label: "Publication status",
+      hint: "New courses must start as Draft; publish after adding sections and lessons",
       type: "select",
       sortable: true,
       options: courseStatusOptions,
+      validation: {
+        // Backend (CourseServiceImpl.beforeCreate) từ chối tạo mới với status PUBLISHED.
+        // Khi sửa sang PUBLISHED, backend sẽ kiểm tra giáo trình (>=1 section, mỗi section >=1 lesson).
+        custom: (value, _form, { isEdit }) =>
+          !isEdit && value === "PUBLISHED"
+            ? "A new course has no sections or lessons yet. Save it as Draft, add content, then publish."
+            : null,
+      },
     },
     {
       name: "level",
       label: "Course level",
+      hint: "Difficulty of the course",
       type: "select",
       sortable: true,
       filterable: true,
@@ -86,14 +98,18 @@ const courseSchema: EntitySchema = {
     {
       name: "description",
       label: "Description",
+      hint: "Short summary shown to students",
       type: "textarea",
       sortable: false,
+      validation: { maxLength: 500 }, // khớp CourseDTO @Size(max = 500)
     },
     {
       name: "thumbnailUrl",
       label: "Thumbnail URL",
+      hint: "Link to the cover image, e.g. https://example.com/cover.jpg",
       type: "text",
       sortable: false,
+      validation: { url: true, maxLength: 255 }, // khớp CourseDTO @Size(max = 255)
     },
     ...(auditableFieldsSchema as FieldSchema[]),
   ],

@@ -1,4 +1,3 @@
-
 import { useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -1054,8 +1053,8 @@ export default function CurriculumManagementPage() {
                         </div>
 
                         <p className="text-xs text-muted-foreground">
-                            Sections will be added after the last section
-                            in the selected course.
+                            Each title: required · 3–150 characters · must contain letters · no duplicates.
+                            Sections will be added after the last section in the selected course.
                         </p>
 
                         <div className="flex justify-end gap-2">
@@ -1174,7 +1173,7 @@ export default function CurriculumManagementPage() {
                             )}
 
                             <p className="mt-1 text-xs text-muted-foreground">
-                                {title.length}/150 characters (minimum 3)
+                                Required · 3–150 characters · must contain letters · unique in this course ({title.length}/150)
                             </p>
                         </div>
 
@@ -1226,8 +1225,7 @@ export default function CurriculumManagementPage() {
                             )}
 
                             <p className="mt-1 text-xs text-muted-foreground">
-                                Each section needs a unique order
-                                within this course.
+                                Required · whole number ≥ 0 · unique within this course.
                             </p>
                         </div>
 
