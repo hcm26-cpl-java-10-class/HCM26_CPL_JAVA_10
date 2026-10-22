@@ -14,6 +14,7 @@ import { iconMap } from "@/components/datatable/iconMap";
 import type { FieldSchema } from "@/types";
 import { FieldError } from "./FieldError";
 import { getEffectiveRule } from "./validateForm";
+import { FieldHint } from "./FieldHint";
 import { MultiRelationSelect } from "./MultiRelationSelect";
 
 // Textarea mặc định có field-sizing: content (tự giãn theo nội dung) -> ép về kích thước cố định, nội dung dài sẽ cuộn.
@@ -122,6 +123,7 @@ export function FormFieldRenderer({
               })}
             </SelectContent>
           </Select>
+          <FieldHint field={field} rule={rule} />
           <FieldError errors={fieldErrors} />
         </div>
       );
@@ -177,6 +179,7 @@ export function FormFieldRenderer({
               ))}
             </SelectContent>
           </Select>
+          <FieldHint field={field} rule={rule} />
           <FieldError errors={fieldErrors} />
         </div>
       );
@@ -210,6 +213,7 @@ export function FormFieldRenderer({
             }}
             placeholder={`Enter ${field.label.toLowerCase()}...`}
           />
+          <FieldHint field={field} rule={rule} />
           <FieldError errors={fieldErrors} />
         </div>
       );
@@ -225,6 +229,7 @@ export function FormFieldRenderer({
             value={value || ""}
             onChange={(e) => onChange(field.name, e.target.value)}
           />
+          <FieldHint field={field} rule={rule} />
           <FieldError errors={fieldErrors} />
         </div>
       );
@@ -240,6 +245,7 @@ export function FormFieldRenderer({
             value={value || ""}
             onChange={(e) => onChange(field.name, e.target.value)}
           />
+          <FieldHint field={field} rule={rule} />
           <FieldError errors={fieldErrors} />
         </div>
       );
@@ -258,6 +264,7 @@ export function FormFieldRenderer({
             autoComplete="new-password"
             maxLength={rule.maxLength}
           />
+          <FieldHint field={field} rule={rule} />
           <FieldError errors={fieldErrors} />
         </div>
       );
@@ -281,6 +288,7 @@ export function FormFieldRenderer({
               {(value || "").length}/{rule.maxLength}
             </p>
           ) : null}
+          <FieldHint field={field} rule={rule} />
           <FieldError errors={fieldErrors} />
         </div>
       );
@@ -298,6 +306,7 @@ export function FormFieldRenderer({
             placeholder={`Enter ${field.label.toLowerCase()}...`}
             maxLength={rule.maxLength}
           />
+          <FieldHint field={field} rule={rule} />
           <FieldError errors={fieldErrors} />
         </div>
       );

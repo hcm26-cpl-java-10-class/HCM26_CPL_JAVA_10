@@ -1,4 +1,3 @@
-
 import { useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -779,6 +778,119 @@ export default function SectionManagementPage() {
                     )}
                 </div>
 
+<<<<<<< Updated upstream:frontend/src/pages/management/demo/section/index.tsx
+=======
+                {/* CREATE MULTIPLE SECTIONS MODAL */}
+                <Modal
+                    open={bulkOpen}
+                    onClose={() => {
+                        if (!bulkSaving) {
+                            setBulkOpen(false);
+                        }
+                    }}
+                    title="Create Multiple Sections"
+                    size="lg"
+                >
+                    <form
+                        onSubmit={(event) => void handleBulkSave(event)}
+                        className="space-y-4"
+                        noValidate
+                    >
+                        <div>
+                            <label
+                                htmlFor="bulk-section-count"
+                                className="mb-2 block text-sm font-medium"
+                            >
+                                Number of Sections (1-30)
+                            </label>
+
+                            <Input
+                                id="bulk-section-count"
+                                type="number"
+                                min={1}
+                                max={30}
+                                step={1}
+                                value={bulkCountInput}
+                                disabled={bulkSaving}
+                                onChange={(event) =>
+                                    changeBulkCount(event.target.value)
+                                }
+                            />
+                        </div>
+
+                        <div className="max-h-[45vh] space-y-3 overflow-y-auto pr-2">
+                            {bulkTitles.map((sectionTitle, index) => (
+                                <div key={index} className="space-y-1">
+                                    <label
+                                        htmlFor={`bulk-title-${index}`}
+                                        className="text-sm font-medium"
+                                    >
+                                        Section {index + 1} Title
+                                    </label>
+
+                                    <Input
+                                        id={`bulk-title-${index}`}
+                                        value={sectionTitle}
+                                        maxLength={150}
+                                        disabled={bulkSaving}
+                                        placeholder={`Enter Section ${index + 1} title`}
+                                        aria-invalid={!!bulkErrors[index]}
+                                        onChange={(event) =>
+                                            changeBulkTitle(
+                                                index,
+                                                event.target.value
+                                            )
+                                        }
+                                    />
+
+                                    {bulkErrors[index] && (
+                                        <p
+                                            role="alert"
+                                            className="text-sm text-destructive"
+                                        >
+                                            {bulkErrors[index]}
+                                        </p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+
+                        <p className="text-xs text-muted-foreground">
+                            Each title: required · 3–150 characters · must contain letters · no duplicates.
+                            Sections will be added after the last section in the selected course.
+                        </p>
+
+                        <div className="flex justify-end gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                disabled={bulkSaving}
+                                onClick={() => setBulkOpen(false)}
+                            >
+                                Cancel
+                            </Button>
+
+                            <Button
+                                type="submit"
+                                disabled={
+                                    bulkSaving ||
+                                    !courseId ||
+                                    sectionsQuery.isLoading ||
+                                    sectionsQuery.isError
+                                }
+                            >
+                                {bulkSaving
+                                    ? "Creating..."
+                                    : `Create ${bulkCountInput || "0"} Sections`}
+                            </Button>
+                        </div>
+                    </form>
+                </Modal>
+
+
+
+
+>>>>>>> Stashed changes:frontend/src/pages/management/demo/curriculum/index.tsx
                 {/* ADD / EDIT MODAL */}
                 <Modal
                     open={formOpen}
@@ -865,7 +977,7 @@ export default function SectionManagementPage() {
                             )}
 
                             <p className="mt-1 text-xs text-muted-foreground">
-                                {title.length}/150 characters (minimum 3)
+                                Required · 3–150 characters · must contain letters · unique in this course ({title.length}/150)
                             </p>
                         </div>
 
@@ -917,8 +1029,7 @@ export default function SectionManagementPage() {
                             )}
 
                             <p className="mt-1 text-xs text-muted-foreground">
-                                Each section needs a unique order
-                                within this course.
+                                Required · whole number ≥ 0 · unique within this course.
                             </p>
                         </div>
 

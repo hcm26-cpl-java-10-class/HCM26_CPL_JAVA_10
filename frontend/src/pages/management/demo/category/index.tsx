@@ -9,6 +9,7 @@ const categorySchema: EntitySchema = {
     {
       name: "name",
       label: "Category Name",
+      hint: "Must be unique under the same parent, e.g. Programming",
       type: "text",
       sortable: true,
       bold: true,
@@ -22,6 +23,7 @@ const categorySchema: EntitySchema = {
     {
       name: "code",
       label: "Code",
+      hint: "Unique code: letters, digits, _ or - only, e.g. PROG-01",
       type: "text",
       sortable: true,
       filterable: true,
@@ -46,6 +48,7 @@ const categorySchema: EntitySchema = {
       // Chỉ dùng trong form: chọn danh mục cha ở modal thêm/sửa
       name: "parentId",
       label: "Parent Category",
+      hint: "Leave empty to create a top-level category",
       type: "relation",
       sortable: false,
       visible: false,
@@ -82,6 +85,7 @@ const categorySchema: EntitySchema = {
     {
       name: "displayOrder",
       label: "Display Order",
+      hint: "Whole number, smaller shows first",
       type: "number",
       sortable: false,
       validation: {
@@ -91,6 +95,7 @@ const categorySchema: EntitySchema = {
     {
       name: "iconUrl",
       label: "Icon URL",
+      hint: "Link to an icon image, e.g. https://example.com/icon.png",
       type: "text",
       sortable: false,
       visible: false,
@@ -101,6 +106,7 @@ const categorySchema: EntitySchema = {
     {
       name: "description",
       label: "Description",
+      hint: "What this category covers",
       type: "textarea",
       sortable: false,
       validation: {
