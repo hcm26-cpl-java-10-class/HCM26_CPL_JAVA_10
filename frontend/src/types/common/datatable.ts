@@ -107,6 +107,9 @@ export interface FieldSchema {
 
   validation?: FieldValidation;
 
+  /** Gợi ý hiển thị dưới ô nhập (vd: "Ví dụ: Java Basics"). Tự động ghép thêm với các rule validation. */
+  hint?: string;
+
   expandable?: boolean;
 
   renderExpanded?: (value: any, row: any) => React.ReactNode;

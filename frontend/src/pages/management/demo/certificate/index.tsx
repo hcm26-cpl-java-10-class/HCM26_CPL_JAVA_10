@@ -54,9 +54,16 @@ const certificateSchema: EntitySchema = {
     {
       name: "certificateNumber",
       label: "Certificate Number",
+      hint: "Unique number, cannot be changed after creation, e.g. CERT-2026-0001",
       type: "text",
       sortable: true,
       bold: true,
+      validation: {
+        // CertificateDTO: @NotNull(OnCreate) — DB unique, không đổi được sau khi tạo
+        required: true,
+        requiredMessage: "Certificate Number is required",
+        maxLength: 255,
+      },
     },
     // Hiển thị tên học viên trên bảng list AutoCrudPage
     {
@@ -77,9 +84,11 @@ const certificateSchema: EntitySchema = {
     {
       name: "userId",
       label: "Student",
+      hint: "Select the student who receives the certificate",
       type: "relation",
       sortable: false,
       visible: false,
+      validation: { required: true, requiredMessage: "User is required" },
       relation: {
         api: userApi,
         valueField: "id",
@@ -98,9 +107,11 @@ const certificateSchema: EntitySchema = {
     {
       name: "courseId",
       label: "Course",
+      hint: "Select the completed course",
       type: "relation",
       sortable: false,
       visible: false,
+      validation: { required: true, requiredMessage: "Course is required" },
       relation: {
         api: courseApi,
         valueField: "id",

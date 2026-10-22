@@ -230,6 +230,7 @@ export function LessonFormModal({
               onChange={(e) => setField("title", e.target.value)}
               placeholder="e.g. Introduction to variables"
             />
+            <p className="text-xs text-muted-foreground">Required · max 200 characters ({form.title.length}/200)</p>
             <FieldMessage message={errors.title} />
           </div>
 
@@ -267,7 +268,7 @@ export function LessonFormModal({
               {errors.duration ? (
                 <FieldMessage message={errors.duration} />
               ) : (
-                <p className="text-xs text-muted-foreground">{durationHint}</p>
+                <p className="text-xs text-muted-foreground">Optional · whole seconds ≥ 0 {durationHint !== "In seconds" ? durationHint : ""}</p>
               )}
             </div>
 
@@ -282,7 +283,11 @@ export function LessonFormModal({
                 aria-invalid={!!errors.orderIndex}
                 onChange={(e) => setField("orderIndex", e.target.value)}
               />
-              <FieldMessage message={errors.orderIndex} />
+              {errors.orderIndex ? (
+                <FieldMessage message={errors.orderIndex} />
+              ) : (
+                <p className="text-xs text-muted-foreground">Whole number ≥ 0, unique in this section</p>
+              )}
             </div>
           </div>
 
@@ -303,6 +308,9 @@ export function LessonFormModal({
                     : "https://example.com/material.pdf"
                 }
               />
+              <p className="text-xs text-muted-foreground">
+                Required · must start with http:// or https:// · max 500 characters
+              </p>
               <FieldMessage message={errors.contentUrl} />
             </div>
           ) : (
@@ -316,6 +324,7 @@ export function LessonFormModal({
                 onChange={(e) => setField("textContent", e.target.value)}
                 placeholder="Write the lesson content here..."
               />
+              <p className="text-xs text-muted-foreground">Required for Text lessons</p>
               <FieldMessage message={errors.textContent} />
             </div>
           )}
