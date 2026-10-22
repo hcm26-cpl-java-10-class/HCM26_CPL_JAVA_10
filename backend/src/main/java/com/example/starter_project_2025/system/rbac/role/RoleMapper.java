@@ -19,6 +19,7 @@ public interface RoleMapper extends BaseCrudMapper<Role, RoleDTO> {
 
     @Override
     @Mapping(target = "permissionIds", source = "permissions")
+    @Mapping(target = "userCount", ignore = true)
     RoleDTO toResponse(Role role);
 
     @Override
