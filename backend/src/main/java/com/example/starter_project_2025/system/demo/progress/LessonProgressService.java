@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.demo.progress;
 
+import com.example.starter_project_2025.system.demo.certificate.CertificateService;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollment;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentRepository;
 import com.example.starter_project_2025.system.demo.lesson.Lesson;
@@ -24,6 +25,7 @@ public class LessonProgressService {
     private final LessonProgressRepository progressRepository;
     private final CourseEnrollmentRepository enrollmentRepository;
     private final LessonRepository lessonRepository;
+    private final CertificateService certificateService;
 
     @Transactional(readOnly = true)
     public LessonProgressDTO getProgress(Long userId, Long enrollmentId) {
@@ -54,6 +56,10 @@ public class LessonProgressService {
         progress.setCompletedAt(completed ? now : null);
         progressRepository.save(progress);
         updateLastAccess(enrollment, lessonId, now);
+
+        if (completed) {
+            certificateService.issueIfCourseCompleted(enrollment);
+        }
 
         return buildProgress(enrollment);
     }
