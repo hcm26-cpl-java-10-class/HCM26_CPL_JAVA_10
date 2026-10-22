@@ -70,23 +70,11 @@ export function DepartmentMembersDialog({
             toast.success(
                 variables.remove
                     ? "Student removed from the department."
-                    : variables.student.departmentId
-                        ? "Student moved to the department."
-                        : "Student added to the department.",
+                    : "Student added to the department.",
             );
             await Promise.all([
                 queryClient.invalidateQueries({ queryKey: ["department-members", departmentId] }),
                 queryClient.invalidateQueries({ queryKey: ["department-available-students", departmentId] }),
-                ...(variables.student.departmentId
-                    ? [
-                        queryClient.invalidateQueries({
-                            queryKey: ["department-members", variables.student.departmentId],
-                        }),
-                        queryClient.invalidateQueries({
-                            queryKey: ["department-available-students", variables.student.departmentId],
-                        }),
-                    ]
-                    : []),
                 queryClient.invalidateQueries({ queryKey: ["department-overview"] }),
             ]);
         },
@@ -101,7 +89,7 @@ export function DepartmentMembersDialog({
                 <DialogHeader>
                     <DialogTitle>Manage members — {department.name}</DialogTitle>
                     <DialogDescription>
-                        Add students, move them from another department, or remove current members.
+                        Add students to this department or remove them without affecting their other departments.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -159,7 +147,7 @@ export function DepartmentMembersDialog({
                         </span>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                        Adding a student who belongs to another department will move them here.
+                        Students can belong to multiple departments.
                     </p>
                     <StudentList
                         page={availableQuery.data ?? EMPTY_PAGE}
@@ -179,7 +167,7 @@ export function DepartmentMembersDialog({
                                     onClick={() => membershipMutation.mutate({ student, remove: false })}
                                 >
                                     <UserRoundPlus className="size-4" />
-                                    {student.departmentId ? "Move here" : "Add"}
+                                    Add
                                 </Button>
                             </PermissionGate>
                         )}

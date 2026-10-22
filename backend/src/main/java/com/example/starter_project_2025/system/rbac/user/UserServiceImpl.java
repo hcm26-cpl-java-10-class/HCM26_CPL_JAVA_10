@@ -87,7 +87,18 @@ public class UserServiceImpl
 
     private void assignDepartment(User user, UserDTO request, ValidationContext ctx) {
         if (request.isClearDepartment()) {
-            user.setDepartment(null);
+            user.getDepartments().clear();
+            return;
+        }
+
+        if (request.getDepartmentIds() != null) {
+            Set<Department> departments = new HashSet<>(
+                    departmentRepository.findAllById(request.getDepartmentIds()));
+            if (departments.size() != request.getDepartmentIds().size()) {
+                ctx.add("departmentIds", "One or more departments do not exist");
+                return;
+            }
+            user.setDepartments(departments);
             return;
         }
 
@@ -102,7 +113,7 @@ public class UserServiceImpl
             return;
         }
 
-        user.setDepartment(department);
+        user.setDepartments(new HashSet<>(Set.of(department)));
     }
 
     private void validateEmailUnique(String email, Long currentUserId, ValidationContext ctx) {

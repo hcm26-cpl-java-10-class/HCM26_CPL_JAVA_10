@@ -10,6 +10,8 @@ import com.example.starter_project_2025.base.dataio.common.FileFormat;
 import com.example.starter_project_2025.base.dataio.importer.result.ImportResult;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollment;
+import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentDTO;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
@@ -29,6 +31,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -81,6 +84,29 @@ public class DepartmentController
                 id, normalizeSearch(search), pageable));
     }
 
+    @GetMapping("/{id}/members/{userId}/courses")
+    @PreAuthorize("hasAuthority('DEPARTMENT_READ')")
+    public ResponseEntity<List<CourseEnrollmentDTO>> getMemberCourses(
+            @PathVariable Long id,
+            @PathVariable Long userId) {
+        Department department = requireDepartment(id);
+        User student = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Student not found"));
+        if (!Boolean.TRUE.equals(student.getIsActive())
+                || student.getRoles().stream().noneMatch(role -> "STUDENT".equalsIgnoreCase(role.getName()))
+                || student.getDepartments().stream()
+                .noneMatch(memberDepartment -> department.getId().equals(memberDepartment.getId()))) {
+            throw new BadRequestException("Student is not an active member of this department");
+        }
+
+        List<CourseEnrollmentDTO> courses = enrollmentRepository
+                .findAllByUser_IdOrderByCreatedAtDesc(student.getId())
+                .stream()
+                .map(this::toEnrollmentDTO)
+                .toList();
+        return ResponseEntity.ok(courses);
+    }
+
     @GetMapping("/{id}/available-students")
     @PreAuthorize("hasAuthority('DEPARTMENT_READ')")
     public ResponseEntity<Page<DepartmentMemberDTO>> getAvailableStudents(
@@ -106,7 +132,7 @@ public class DepartmentController
             throw new BadRequestException("Only active students can be assigned to a department");
         }
 
-        user.setDepartment(department);
+        user.getDepartments().add(department);
         userRepository.save(user);
         return ResponseEntity.noContent().build();
     }
@@ -120,11 +146,11 @@ public class DepartmentController
         requireDepartment(id);
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found"));
-        if (user.getDepartment() == null || !id.equals(user.getDepartment().getId())) {
+        Department department = requireDepartment(id);
+        if (!user.getDepartments().remove(department)) {
             throw new BadRequestException("Student is not a member of this department");
         }
 
-        user.setDepartment(null);
         userRepository.save(user);
         return ResponseEntity.noContent().build();
     }
@@ -136,6 +162,17 @@ public class DepartmentController
 
     private String normalizeSearch(String search) {
         return search == null || search.isBlank() ? null : search.trim();
+    }
+
+    private CourseEnrollmentDTO toEnrollmentDTO(CourseEnrollment enrollment) {
+        return CourseEnrollmentDTO.builder()
+                .id(enrollment.getId())
+                .courseId(enrollment.getCourse().getId())
+                .courseName(enrollment.getCourse().getName())
+                .thumbnailUrl(enrollment.getCourse().getThumbnailUrl())
+                .instructor(enrollment.getCourse().getInstructor())
+                .enrolledAt(enrollment.getCreatedAt())
+                .build();
     }
 
     @Override

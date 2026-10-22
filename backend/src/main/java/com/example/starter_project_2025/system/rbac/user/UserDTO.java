@@ -38,6 +38,10 @@ public class UserDTO extends BaseDTO {
 
     String departmentName;
 
+    Set<Long> departmentIds;
+
+    Set<String> departmentNames;
+
     boolean clearDepartment;
 
     @NotEmpty(groups = OnCreate.class, message = "At least one role is required")

@@ -104,7 +104,7 @@ public class DepartmentStudentDataInitializer
                     return newUser;
                 });
 
-        user.setDepartment(department);
+        user.getDepartments().add(department);
         user.setIsActive(true);
         user.getRoles().add(studentRole);
 

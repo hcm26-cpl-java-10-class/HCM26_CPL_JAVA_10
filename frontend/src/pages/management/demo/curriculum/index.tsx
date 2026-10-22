@@ -145,7 +145,7 @@ function apiError(error: unknown): {
 // MAIN COMPONENT
 // ======================================
 
-export default function SectionManagementPage() {
+export default function CurriculumManagementPage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const queryClient = useQueryClient();
 
@@ -166,6 +166,23 @@ export default function SectionManagementPage() {
 
     // State
     const [formOpen, setFormOpen] = useState(false);
+
+    const [bulkOpen, setBulkOpen] = useState(false);
+
+    const [bulkCountInput, setBulkCountInput] = useState("3");
+
+    const [bulkTitles, setBulkTitles] = useState<string[]>([
+        "",
+        "",
+        "",
+    ]);
+
+    const [bulkErrors, setBulkErrors] = useState<string[]>([]);
+
+    const [bulkSaving, setBulkSaving] = useState(false);
+
+
+
     const [editing, setEditing] = useState<SectionDTO | null>(null);
 
     const [deleteTarget, setDeleteTarget] =
@@ -327,6 +344,170 @@ export default function SectionManagementPage() {
         setEditing(null);
         setFormErrors({});
     }
+
+
+
+    // ======================================
+    // CREATE MULTIPLE SECTIONS
+    // ======================================
+
+    function openBulkCreate() {
+        if (
+            !courseId ||
+            !canCreate ||
+            saving ||
+            bulkSaving ||
+            sectionsQuery.isLoading ||
+            sectionsQuery.isError
+        ) {
+            return;
+        }
+
+        setBulkCountInput("3");
+        setBulkTitles(["", "", ""]);
+        setBulkErrors([]);
+        setBulkOpen(true);
+    }
+
+    function changeBulkCount(value: string) {
+        setBulkCountInput(value);
+
+        const count = Number(value);
+
+        if (
+            /^\d+$/.test(value) &&
+            Number.isInteger(count) &&
+            count >= 1 &&
+            count <= 30
+        ) {
+            setBulkTitles((previous) =>
+                Array.from(
+                    { length: count },
+                    (_, index) => previous[index] ?? ""
+                )
+            );
+
+            setBulkErrors([]);
+        }
+    }
+
+    function changeBulkTitle(
+        index: number,
+        value: string
+    ) {
+        setBulkTitles((previous) =>
+            previous.map((title, i) =>
+                i === index ? value : title
+            )
+        );
+
+        setBulkErrors((previous) =>
+            previous.map((error, i) =>
+                i === index ? "" : error
+            )
+        );
+    }
+
+    async function handleBulkSave(
+        event: FormEvent<HTMLFormElement>
+    ) {
+        event.preventDefault();
+
+        if (
+            bulkSaving ||
+            !canCreate ||
+            !courseId
+        ) {
+            return;
+        }
+
+        const count = Number(bulkCountInput);
+
+        if (
+            !/^\d+$/.test(bulkCountInput) ||
+            !Number.isInteger(count) ||
+            count < 1 ||
+            count > 30 ||
+            bulkTitles.length !== count
+        ) {
+            toast.error(
+                "Number of sections must be between 1 and 30."
+            );
+            return;
+        }
+
+        const usedTitles = new Set(
+            sections.map((section) =>
+                titleKey(section.title)
+            )
+        );
+
+        const errors: string[] = [];
+        const cleanedTitles: string[] = [];
+
+        for (let i = 0; i < bulkTitles.length; i++) {
+            const clean = normalizeTitle(bulkTitles[i]);
+
+            let error = "";
+
+            if (!clean) {
+                error = "Section title is required.";
+            } else if (clean.length < 3) {
+                error = "Title must contain at least 3 characters.";
+            } else if (clean.length > 150) {
+                error = "Title must not exceed 150 characters.";
+            } else if (!/\p{L}/u.test(clean)) {
+                error = "Title must contain letters.";
+            } else if (usedTitles.has(titleKey(clean))) {
+                error = "Section title already exists.";
+            }
+
+            errors.push(error);
+
+            if (!error) {
+                usedTitles.add(titleKey(clean));
+            }
+
+            cleanedTitles.push(clean);
+        }
+
+        setBulkErrors(errors);
+
+        const firstError = errors.find(Boolean);
+
+        if (firstError) {
+            toast.error(firstError);
+            return;
+        }
+
+        setBulkSaving(true);
+
+        try {
+            await sectionApi.createBulk(
+                courseId,
+                cleanedTitles
+            );
+
+            setBulkOpen(false);
+            setBulkErrors([]);
+
+            toast.success(
+                `${cleanedTitles.length} sections created successfully.`
+            );
+
+            await sectionsQuery.refetch();
+
+            await queryClient.invalidateQueries({
+                queryKey: ["course-detail", courseId],
+            });
+        } catch (error) {
+            toast.error(apiError(error).message);
+        } finally {
+            setBulkSaving(false);
+        }
+    }
+
+
 
     // ======================================
     // ADD SECTION
@@ -501,7 +682,7 @@ export default function SectionManagementPage() {
     return (
         <MainLayout
             pathName={{
-                "course-sections": "Curriculum Builder",
+                curriculum: "Curriculum",
             }}
         >
             <div className="mx-auto w-full max-w-6xl space-y-6">
@@ -534,18 +715,36 @@ export default function SectionManagementPage() {
                     </div>
 
                     {canCreate && (
-                        <Button
-                            onClick={openCreate}
-                            disabled={
-                                !courseId ||
-                                saving ||
-                                sectionsQuery.isLoading ||
-                                sectionsQuery.isError
-                            }
-                        >
-                            <Plus className="size-4" />
-                            Add Section
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                            <Button
+                                onClick={openCreate}
+                                disabled={
+                                    !courseId ||
+                                    saving ||
+                                    bulkSaving ||
+                                    sectionsQuery.isLoading ||
+                                    sectionsQuery.isError
+                                }
+                            >
+                                <Plus className="size-4" />
+                                Add Section
+                            </Button>
+
+                            <Button
+                                variant="outline"
+                                onClick={openBulkCreate}
+                                disabled={
+                                    !courseId ||
+                                    saving ||
+                                    bulkSaving ||
+                                    sectionsQuery.isLoading ||
+                                    sectionsQuery.isError
+                                }
+                            >
+                                <Plus className="size-4" />
+                                Create Multiple Sections
+                            </Button>
+                        </div>
                     )}
                 </div>
 
@@ -778,6 +977,116 @@ export default function SectionManagementPage() {
                         })
                     )}
                 </div>
+
+                {/* CREATE MULTIPLE SECTIONS MODAL */}
+                <Modal
+                    open={bulkOpen}
+                    onClose={() => {
+                        if (!bulkSaving) {
+                            setBulkOpen(false);
+                        }
+                    }}
+                    title="Create Multiple Sections"
+                    size="lg"
+                >
+                    <form
+                        onSubmit={(event) => void handleBulkSave(event)}
+                        className="space-y-4"
+                        noValidate
+                    >
+                        <div>
+                            <label
+                                htmlFor="bulk-section-count"
+                                className="mb-2 block text-sm font-medium"
+                            >
+                                Number of Sections (1-30)
+                            </label>
+
+                            <Input
+                                id="bulk-section-count"
+                                type="number"
+                                min={1}
+                                max={30}
+                                step={1}
+                                value={bulkCountInput}
+                                disabled={bulkSaving}
+                                onChange={(event) =>
+                                    changeBulkCount(event.target.value)
+                                }
+                            />
+                        </div>
+
+                        <div className="max-h-[45vh] space-y-3 overflow-y-auto pr-2">
+                            {bulkTitles.map((sectionTitle, index) => (
+                                <div key={index} className="space-y-1">
+                                    <label
+                                        htmlFor={`bulk-title-${index}`}
+                                        className="text-sm font-medium"
+                                    >
+                                        Section {index + 1} Title
+                                    </label>
+
+                                    <Input
+                                        id={`bulk-title-${index}`}
+                                        value={sectionTitle}
+                                        maxLength={150}
+                                        disabled={bulkSaving}
+                                        placeholder={`Enter Section ${index + 1} title`}
+                                        aria-invalid={!!bulkErrors[index]}
+                                        onChange={(event) =>
+                                            changeBulkTitle(
+                                                index,
+                                                event.target.value
+                                            )
+                                        }
+                                    />
+
+                                    {bulkErrors[index] && (
+                                        <p
+                                            role="alert"
+                                            className="text-sm text-destructive"
+                                        >
+                                            {bulkErrors[index]}
+                                        </p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+
+                        <p className="text-xs text-muted-foreground">
+                            Sections will be added after the last section
+                            in the selected course.
+                        </p>
+
+                        <div className="flex justify-end gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                disabled={bulkSaving}
+                                onClick={() => setBulkOpen(false)}
+                            >
+                                Cancel
+                            </Button>
+
+                            <Button
+                                type="submit"
+                                disabled={
+                                    bulkSaving ||
+                                    !courseId ||
+                                    sectionsQuery.isLoading ||
+                                    sectionsQuery.isError
+                                }
+                            >
+                                {bulkSaving
+                                    ? "Creating..."
+                                    : `Create ${bulkCountInput || "0"} Sections`}
+                            </Button>
+                        </div>
+                    </form>
+                </Modal>
+
+
+
 
                 {/* ADD / EDIT MODAL */}
                 <Modal

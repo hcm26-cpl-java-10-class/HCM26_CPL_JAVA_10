@@ -13,6 +13,6 @@ public class UserFilter extends BaseFilter {
         @FilterField(entityField = "userRoles.role.id", operator = FilterOperator.IN)
         List<Long> roleIds;
 
-        @FilterField(entityField = "department.id")
+        @FilterField(entityField = "departments.id")
         Long departmentId;
 }

@@ -6,16 +6,18 @@ import RegisterPage from "@/pages/auth/RegisterPage";
 import NotFoundPage from "@/pages/error/NotFoundPage";
 import { Unauthorized } from "@/pages/error/Unauthorized";
 import { Dashboard } from "@/pages/management/dashboard";
-import SectionManagementPage from "@/pages/management/demo/section";
+import CurriculumManagementPage from "@/pages/management/demo/curriculum";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
+import SyllabusesPage from "@/pages/management/demo/syllabus";
+import SyllabusDetailPage from "@/pages/management/demo/syllabus/detail";
 
 export interface RouteConfig {
   path: string;
-  component: ComponentType<any>;
+  component: ComponentType;
   requiredPermission?: string;
   isPublic?: boolean;
   isModuleDriven?: boolean;
@@ -33,6 +35,19 @@ export const routes: RouteConfig[] = [
     requiredPermission: "STUDENT_SCORE_READ",
     isModuleDriven: true,
   },
+
+  {
+    path: "/syllabuses",
+    component: SyllabusesPage,
+    requiredPermission: "SYLLABUS_READ",
+    isModuleDriven: true,
+  },
+  {
+    path: "/syllabuses/:id",
+    component: SyllabusDetailPage,
+    requiredPermission: "SYLLABUS_READ",
+    isModuleDriven: false,
+  },
   ...buildEntityRoutes(),
   { path: "/not-found-page", component: NotFoundPage, isPublic: true },
   { path: "/login", component: Login, isPublic: true },
@@ -42,8 +57,8 @@ export const routes: RouteConfig[] = [
   { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true },
   { path: "/unauthorized", component: Unauthorized, isPublic: true },
   {
-    path: "/sections",
-    component: SectionManagementPage,
+    path: "/curriculum",
+    component: CurriculumManagementPage,
     requiredPermission: "SECTION_READ",
     isModuleDriven: true,
   },

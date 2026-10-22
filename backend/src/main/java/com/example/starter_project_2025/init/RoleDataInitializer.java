@@ -83,6 +83,13 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "SECTION_UPDATE",
                         "SECTION_DELETE",
 
+                        // M3 - Syllabus Management
+                        "SYLLABUS_CREATE",
+                        "SYLLABUS_READ",
+                        "SYLLABUS_UPDATE",
+                        "SYLLABUS_DELETE",
+
+
                         // Lesson CRUD
                         "LESSON_CREATE",
                         "LESSON_READ",

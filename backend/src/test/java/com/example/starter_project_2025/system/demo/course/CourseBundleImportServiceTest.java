@@ -14,6 +14,7 @@ import java.io.ByteArrayOutputStream;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -40,14 +41,14 @@ class CourseBundleImportServiceTest {
         var savedCourse = org.mockito.ArgumentCaptor.forClass(Course.class);
         verify(courses).save(savedCourse.capture());
         assertSame(teacher, savedCourse.getValue().getInstructorUser());
-        assertSame(category, savedCourse.getValue().getCategory());
+        assertTrue(savedCourse.getValue().getCategories().contains(category));
     }
 
     private MockMultipartFile workbook() throws Exception {
         try (var workbook = new XSSFWorkbook(); var output = new ByteArrayOutputStream()) {
             var courses = workbook.createSheet("Courses");
             var header = courses.createRow(0);
-            String[] columns = {"Name", "Description", "Instructor", "Thumbnail URL", "Status", "Level", "Active", "Instructor Email", "Category Code"};
+            String[] columns = {"Name", "Description", "Instructor", "Thumbnail URL", "Status", "Level", "Active", "Instructor Email", "Category Codes"};
             for (int i = 0; i < columns.length; i++) header.createCell(i).setCellValue(columns[i]);
             var row = courses.createRow(1);
             String[] values = {"Java 21 Fundamentals", "Description", "Teacher User", "", "PUBLISHED", "BEGINNER", "true", "teacher@example.com", "JAVA"};

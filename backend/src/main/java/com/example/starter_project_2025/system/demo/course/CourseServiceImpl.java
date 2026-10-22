@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.demo.course;
 
+import com.example.starter_project_2025.system.demo.category.Category;
 import com.example.starter_project_2025.system.demo.category.CategoryRepository;
 import com.example.starter_project_2025.system.demo.curriculum.CurriculumValidationResult;
 import com.example.starter_project_2025.system.demo.curriculum.CurriculumValidator;
@@ -18,6 +19,10 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 @Service
 @Transactional
@@ -64,7 +69,7 @@ public class CourseServiceImpl
             course.setIsFree(true);
         }
         resolveInstructor(course, request);
-        resolveCategory(course, request, ctx);
+        resolveCategories(course, request, ctx);
     }
 
     @Override
@@ -78,9 +83,9 @@ public class CourseServiceImpl
             resolveInstructor(course, request);
         }
         if (Boolean.TRUE.equals(request.getClearCategory())) {
-            course.setCategory(null);
-        } else if (request.getCategoryId() != null) {
-            resolveCategory(course, request, ctx);
+            course.setCategories(null);
+        } else if (request.getCategoryIds() != null) {
+            resolveCategories(course, request, ctx);
         }
         if (request.getIsFree() == null) {
             request.setIsFree(course.getIsFree());
@@ -146,23 +151,33 @@ public class CourseServiceImpl
     }
 
     /** categoryId lấy từ request; null = không thuộc danh mục nào. */
-    private void resolveCategory(Course course, CourseDTO request, ValidationContext ctx) {
-        Long categoryId = request.getCategoryId();
-        if (categoryId == null) {
-            course.setCategory(null);
+    private void resolveCategories(Course course, CourseDTO request, ValidationContext ctx) {
+        List<Long> categoryIds = request.getCategoryIds();
+
+        if (categoryIds == null || categoryIds.isEmpty()) {
+            course.getCategories().clear();
             return;
         }
-        categoryRepository.findById(categoryId).ifPresentOrElse(
-                category -> {
-                    boolean unchanged = course.getCategory() != null
-                            && categoryId.equals(course.getCategory().getId());
-                    if (!unchanged && !Boolean.TRUE.equals(category.getIsActive())) {
-                        ctx.add("categoryId", "Category is inactive");
-                        return;
-                    }
-                    course.setCategory(category);
-                },
-                () -> ctx.add("categoryId", "Category not found")
-        );
+
+        Set<Category> categories = new LinkedHashSet<>();
+
+        for (Long categoryId : categoryIds) {
+            if (categoryId == null) {
+                continue;
+            }
+
+            categoryRepository.findById(categoryId).ifPresentOrElse(
+                    category -> {
+                        if (!Boolean.TRUE.equals(category.getIsActive())) {
+                            ctx.add("categoryIds", "Category is inactive: " + category.getName());
+                            return;
+                        }
+                        categories.add(category);
+                    },
+                    () -> ctx.add("categoryIds", "Category not found: " + categoryId)
+            );
+        }
+
+        course.setCategories(categories);
     }
 }

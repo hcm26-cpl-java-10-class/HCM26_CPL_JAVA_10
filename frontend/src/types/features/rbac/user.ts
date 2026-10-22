@@ -7,6 +7,8 @@ export interface UserDTO extends BaseDTO {
   lastName?: string;
   departmentId?: number | null;
   departmentName?: string | null;
+  departmentIds?: number[];
+  departmentNames?: string[];
   clearDepartment?: boolean;
   roleIds?: number[];
 }

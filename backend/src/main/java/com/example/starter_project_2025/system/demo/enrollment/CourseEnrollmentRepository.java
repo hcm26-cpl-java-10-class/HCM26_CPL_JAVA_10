@@ -23,14 +23,16 @@ public interface CourseEnrollmentRepository
     );
 
     @Query("select count(distinct e.course.id) from CourseEnrollment e "
-            + "join e.user.roles role where e.user.department.id = :departmentId "
+            + "join e.user.roles role join e.user.departments department "
+            + "where department.id = :departmentId "
             + "and e.user.isActive = true and role.name = 'STUDENT'")
     long countDistinctCoursesByDepartmentId(
             @Param("departmentId") Long departmentId
     );
 
     @Query("select count(distinct e.user.id) from CourseEnrollment e "
-            + "join e.user.roles role where e.user.department.id = :departmentId "
+            + "join e.user.roles role join e.user.departments department "
+            + "where department.id = :departmentId "
             + "and e.user.isActive = true and role.name = 'STUDENT' "
             + "and e.course.id = :courseId")
     long countEnrolledStudentsByDepartmentAndCourse(
@@ -39,7 +41,8 @@ public interface CourseEnrollmentRepository
     );
 
     @Query("select distinct e.user.id from CourseEnrollment e "
-            + "join e.user.roles role where e.user.department.id = :departmentId "
+            + "join e.user.roles role join e.user.departments department "
+            + "where department.id = :departmentId "
             + "and e.user.isActive = true and role.name = 'STUDENT' "
             + "and e.course.id = :courseId")
     List<Long> findEnrolledUserIdsByDepartmentAndCourse(
