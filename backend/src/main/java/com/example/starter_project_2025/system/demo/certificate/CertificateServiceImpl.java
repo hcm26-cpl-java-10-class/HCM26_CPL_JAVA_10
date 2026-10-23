@@ -53,7 +53,7 @@ public class CertificateServiceImpl
 
     @Override
     protected String[] searchableFields() {
-        return new String[]{"name", "description"};
+        return new String[]{"verificationToken"};
     }
 
     @Override
@@ -86,7 +86,7 @@ public class CertificateServiceImpl
         Long userId = courseEnrollment.getUser().getId();
         Long courseId = courseEnrollment.getCourse().getId();
 
-        if(certificateRepository.existByUser_IdAndCourse_Id(userId, courseId)) {
+        if(certificateRepository.existsByUser_IdAndCourse_Id(userId, courseId)) {
             return;
         }
 

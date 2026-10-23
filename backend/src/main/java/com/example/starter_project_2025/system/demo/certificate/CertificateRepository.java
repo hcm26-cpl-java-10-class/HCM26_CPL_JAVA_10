@@ -9,7 +9,7 @@ import java.util.UUID;
 
 @Repository
 public interface CertificateRepository extends BaseCrudRepository<Certificate, Long> {
-    boolean existByUser_IdAndCourse_Id(Long userId, Long courseId);
+    boolean existsByUser_IdAndCourse_Id(Long userId, Long courseId);
     Optional<Certificate> findByVerificationToken(UUID verificationToken);
     List<Certificate> findAllByUser_Id(Long userId);
 }
