@@ -2,26 +2,53 @@ package com.example.starter_project_2025.system.question.service;
 
 import com.example.starter_project_2025.system.question.dto.QuestionDTO;
 import com.example.starter_project_2025.system.question.dto.QuestionFilter;
-import com.example.starter_project_2025.system.question.domain.Difficulty;
-import com.example.starter_project_2025.system.question.domain.QuestionType;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.itextpdf.io.font.PdfEncodings;
+import com.itextpdf.io.font.constants.StandardFonts;
+import com.itextpdf.kernel.font.PdfFont;
+import com.itextpdf.kernel.font.PdfFontFactory;
+import com.itextpdf.kernel.geom.PageSize;
+import com.itextpdf.kernel.pdf.PdfDocument;
+import com.itextpdf.kernel.pdf.PdfWriter;
+import com.itextpdf.layout.Document;
+import com.itextpdf.layout.element.Cell;
+import com.itextpdf.layout.element.Paragraph;
+import com.itextpdf.layout.element.Table;
+import com.itextpdf.layout.properties.UnitValue;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @Service
 public class QuestionExportService {
 
+    private static final int PAGE_SIZE = 500;
+    private static final int MAX_OPTIONS = 6;
+
+    // Headers used by the new CSV and Excel exports.
     private static final List<String> HEADERS = List.of(
+            "content", "type", "difficulty", "topic", "points",
+            "option 1", "correct 1",
+            "option 2", "correct 2",
+            "option 3", "correct 3",
+            "option 4", "correct 4",
+            "option 5", "correct 5",
+            "option 6", "correct 6"
+    );
+
+    // Original export headers retained for compatibility.
+    private static final List<String> LEGACY_HEADERS = List.of(
             "content",
             "type",
             "difficulty",
@@ -29,6 +56,15 @@ public class QuestionExportService {
             "points",
             "options",
             "isActive"
+    );
+
+    // Original import template headers retained without changing its layout.
+    private static final List<String> TEMPLATE_HEADERS = List.of(
+            "content", "type", "difficulty", "topic", "points",
+            "option 1", "correct 1",
+            "option 2", "correct 2",
+            "option 3", "correct 3",
+            "option 4", "correct 4"
     );
 
     private final QuestionServiceImpl questionService;
@@ -42,189 +78,303 @@ public class QuestionExportService {
         this.objectMapper = objectMapper;
     }
 
-    // Export all questions matching the filter, across every page.
-    public byte[] exportCsv(QuestionFilter filter) throws IOException {
-        StringBuilder csv = new StringBuilder();
-        appendRow(csv, HEADERS);
-
+    /**
+     * Load every page matching the existing QuestionFilter.
+     * The existing service continues to enforce its normal permissions.
+     */
+    private List<QuestionDTO> getQuestions(QuestionFilter filter) {
+        List<QuestionDTO> questions = new ArrayList<>();
         int pageNumber = 0;
         Page<QuestionDTO> page;
 
         do {
             page = questionService.getAll(
-                    PageRequest.of(pageNumber, 500),
+                    PageRequest.of(pageNumber, PAGE_SIZE),
                     null,
                     filter
             );
 
-            for (QuestionDTO question : page.getContent()) {
-                String optionsJson = objectMapper.writeValueAsString(
-                        question.getOptions() == null
-                                ? List.of()
-                                : question.getOptions()
-                );
-
-                appendRow(csv, List.of(
-                        safe(question.getContent()),
-                        safe(question.getType()),
-                        safe(question.getDifficulty()),
-                        safe(question.getTopic()),
-                        safe(question.getPoints()),
-                        optionsJson,
-                        safe(question.getIsActive())
-                ));
-            }
-
+            questions.addAll(page.getContent());
             pageNumber++;
         } while (page.hasNext());
 
+        return questions;
+    }
+
+    /**
+     * Legacy CSV export.
+     * Retains the original "options" JSON and "isActive" columns.
+     */
+    public byte[] exportLegacyCsv(QuestionFilter filter)
+            throws IOException {
+        StringBuilder csv = new StringBuilder();
+        appendCsvRow(csv, LEGACY_HEADERS);
+
+        for (QuestionDTO question : getQuestions(filter)) {
+            String optionsJson = objectMapper.writeValueAsString(
+                    question.getOptions() == null
+                            ? List.of()
+                            : question.getOptions()
+            );
+
+            appendCsvRow(csv, List.of(
+                    safe(question.getContent()),
+                    safe(question.getType()),
+                    safe(question.getDifficulty()),
+                    safe(question.getTopic()),
+                    safe(question.getPoints()),
+                    optionsJson,
+                    safe(question.getIsActive())
+            ));
+        }
+
         return withUtf8Bom(csv);
     }
 
-    // Downloadable CSV template with headers only.
+    /**
+     * New CSV export with separate columns for each option.
+     */
+    public byte[] exportCsv(QuestionFilter filter) throws IOException {
+        StringBuilder csv = new StringBuilder();
+        appendCsvRow(csv, HEADERS);
+
+        for (QuestionDTO question : getQuestions(filter)) {
+            appendCsvRow(csv, toExportRow(question));
+        }
+
+        return withUtf8Bom(csv);
+    }
+
+    /**
+     * New Excel export with separate columns for each option.
+     */
+    public byte[] exportExcel(QuestionFilter filter) throws IOException {
+        try (Workbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+
+            Sheet sheet = workbook.createSheet("Questions");
+
+            Row header = sheet.createRow(0);
+            for (int column = 0; column < HEADERS.size(); column++) {
+                header.createCell(column).setCellValue(HEADERS.get(column));
+            }
+
+            int rowNumber = 1;
+
+            for (QuestionDTO question : getQuestions(filter)) {
+                List<String> values = toExportRow(question);
+                Row row = sheet.createRow(rowNumber++);
+
+                for (int column = 0; column < values.size(); column++) {
+                    row.createCell(column).setCellValue(values.get(column));
+                }
+            }
+
+            for (int column = 0; column < HEADERS.size(); column++) {
+                sheet.autoSizeColumn(column);
+            }
+
+            workbook.write(output);
+            return output.toByteArray();
+        }
+    }
+
+    /**
+     * New PDF export.
+     */
+    public byte[] exportPdf(QuestionFilter filter) throws IOException {
+        try (ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            PdfWriter writer = new PdfWriter(output);
+            PdfDocument pdf = new PdfDocument(writer);
+
+            try (Document document = new Document(pdf, PageSize.A4.rotate())) {
+                document.setMargins(24, 24, 24, 24);
+
+                PdfFont font = createVietnameseFont();
+                document.setFont(font);
+
+                document.add(new Paragraph("Question Export")
+                        .setFontSize(18)
+                        .setBold());
+
+                List<QuestionDTO> questions = getQuestions(filter);
+
+                document.add(new Paragraph(
+                        "Total questions: " + questions.size()
+                ).setFontSize(10));
+
+                float[] widths = {4, 1.4f, 1.4f, 2, 0.8f, 5};
+                Table table = new Table(UnitValue.createPercentArray(widths))
+                        .useAllAvailableWidth();
+
+                for (String heading : List.of(
+                        "Content", "Type", "Difficulty",
+                        "Topic", "Points", "Options"
+                )) {
+                    table.addHeaderCell(new Cell().add(
+                            new Paragraph(heading).setBold()
+                    ));
+                }
+
+                for (QuestionDTO question : questions) {
+                    table.addCell(pdfCell(question.getContent()));
+                    table.addCell(pdfCell(question.getType()));
+                    table.addCell(pdfCell(question.getDifficulty()));
+                    table.addCell(pdfCell(question.getTopic()));
+                    table.addCell(pdfCell(question.getPoints()));
+                    table.addCell(pdfCell(formatOptions(question)));
+                }
+
+                document.add(table);
+            }
+
+            return output.toByteArray();
+        }
+    }
+
+    /**
+     * Original CSV import template, including its sample rows.
+     */
     public byte[] downloadTemplate() {
         StringBuilder csv = new StringBuilder();
-        appendRow(csv, HEADERS);
+        appendCsvRow(csv, TEMPLATE_HEADERS);
+
+        appendCsvRow(csv, List.of(
+                "Java là ngôn ngữ lập trình loại nào?",
+                "MULTIPLE_CHOICE", "EASY", "Java", "1",
+                "Hướng đối tượng", "true",
+                "Hướng thủ tục", "false",
+                "Hợp ngữ", "false",
+                "Kịch bản", "false"
+        ));
+
+        appendCsvRow(csv, List.of(
+                "Trình bày các tính chất cơ bản của lập trình hướng đối tượng (OOP).",
+                "ESSAY", "HARD", "OOP", "5",
+                "", "", "", "", "", "", "", ""
+        ));
+
         return withUtf8Bom(csv);
     }
 
-    // Import each CSV record through the existing create service.
-    public int importCsv(MultipartFile file) throws IOException {
-        if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("Please upload a non-empty CSV file.");
+    /**
+     * Original Excel import template, including its sample rows.
+     */
+    public byte[] downloadExcelTemplate() {
+        try (Workbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+
+            Sheet sheet = workbook.createSheet("Questions");
+
+            Row headerRow = sheet.createRow(0);
+            for (int i = 0; i < TEMPLATE_HEADERS.size(); i++) {
+                headerRow.createCell(i).setCellValue(TEMPLATE_HEADERS.get(i));
+            }
+
+            // Sample 1: MULTIPLE_CHOICE
+            Row s1 = sheet.createRow(1);
+            s1.createCell(0).setCellValue(
+                    "Java là ngôn ngữ lập trình loại nào?"
+            );
+            s1.createCell(1).setCellValue("MULTIPLE_CHOICE");
+            s1.createCell(2).setCellValue("EASY");
+            s1.createCell(3).setCellValue("Java");
+            s1.createCell(4).setCellValue(1);
+            s1.createCell(5).setCellValue("Hướng đối tượng");
+            s1.createCell(6).setCellValue(true);
+            s1.createCell(7).setCellValue("Hướng thủ tục");
+            s1.createCell(8).setCellValue(false);
+            s1.createCell(9).setCellValue("Hợp ngữ");
+            s1.createCell(10).setCellValue(false);
+            s1.createCell(11).setCellValue("Kịch bản");
+            s1.createCell(12).setCellValue(false);
+
+            // Sample 2: ESSAY
+            Row s2 = sheet.createRow(2);
+            s2.createCell(0).setCellValue(
+                    "Trình bày các tính chất cơ bản của lập trình hướng đối tượng (OOP)."
+            );
+            s2.createCell(1).setCellValue("ESSAY");
+            s2.createCell(2).setCellValue("HARD");
+            s2.createCell(3).setCellValue("OOP");
+            s2.createCell(4).setCellValue(5);
+
+            for (int i = 0; i < TEMPLATE_HEADERS.size(); i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            workbook.write(output);
+            return output.toByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException(
+                    "Failed to generate Excel template", e
+            );
         }
+    }
 
-        String content = new String(
-                file.getBytes(),
-                StandardCharsets.UTF_8
-        );
+    private List<String> toExportRow(QuestionDTO question) {
+        List<String> values = new ArrayList<>();
 
-        // Remove UTF-8 BOM if present.
-        if (!content.isEmpty() && content.charAt(0) == '\uFEFF') {
-            content = content.substring(1);
-        }
+        values.add(safe(question.getContent()));
+        values.add(safe(question.getType()));
+        values.add(safe(question.getDifficulty()));
+        values.add(safe(question.getTopic()));
+        values.add(safe(question.getPoints()));
 
-        List<List<String>> rows = parseCsv(content);
+        List<QuestionDTO.OptionDTO> options = question.getOptions();
 
-        if (rows.isEmpty()) {
-            throw new IllegalArgumentException("The CSV file is empty.");
-        }
-
-        List<String> headers = rows.get(0).stream()
-                .map(String::trim)
-                .map(String::toLowerCase)
-                .toList();
-
-        for (String required : List.of(
-                "content", "type", "difficulty", "points", "options"
-        )) {
-            if (!headers.contains(required)) {
-                throw new IllegalArgumentException(
-                        "Missing required CSV column: " + required
-                );
+        for (int i = 0; i < MAX_OPTIONS; i++) {
+            if (options != null
+                    && i < options.size()
+                    && options.get(i) != null) {
+                QuestionDTO.OptionDTO option = options.get(i);
+                values.add(safe(option.getContent()));
+                values.add(Boolean.toString(option.isCorrect()));
+            } else {
+                values.add("");
+                values.add("");
             }
         }
 
-        Map<String, Integer> columns = new HashMap<>();
-        for (int i = 0; i < headers.size(); i++) {
-            columns.put(headers.get(i), i);
+        return values;
+    }
+
+    private String formatOptions(QuestionDTO question) {
+        List<QuestionDTO.OptionDTO> options = question.getOptions();
+
+        if (options == null || options.isEmpty()) {
+            return "";
         }
 
-        int imported = 0;
+        StringBuilder result = new StringBuilder();
 
-        for (int rowIndex = 1; rowIndex < rows.size(); rowIndex++) {
-            List<String> row = rows.get(rowIndex);
+        for (int i = 0; i < options.size(); i++) {
+            QuestionDTO.OptionDTO option = options.get(i);
 
-            if (row.stream().allMatch(String::isBlank)) {
+            if (option == null) {
                 continue;
             }
 
-            int csvLine = rowIndex + 1;
+            if (result.length() > 0) {
+                result.append("\n");
+            }
 
-            try {
-                QuestionDTO dto = new QuestionDTO();
+            result.append(i + 1)
+                    .append(". ")
+                    .append(safe(option.getContent()));
 
-                dto.setContent(value(row, columns, "content"));
-                dto.setType(QuestionType.valueOf(
-                        value(row, columns, "type").trim()
-                ));
-                dto.setDifficulty(Difficulty.valueOf(
-                        value(row, columns, "difficulty").trim()
-                ));
-                dto.setTopic(blankToNull(
-                        value(row, columns, "topic")
-                ));
-
-                dto.setPoints(Integer.valueOf(
-                        value(row, columns, "points").trim()
-                ));
-
-                String optionsJson = value(row, columns, "options").trim();
-
-                List<QuestionDTO.OptionDTO> options =
-                        optionsJson.isEmpty()
-                                ? new ArrayList<>()
-                                : objectMapper.readValue(
-                                optionsJson,
-                                new TypeReference<
-                                                 List<QuestionDTO.OptionDTO>
-                                                 >() {}
-                        );
-
-                // Do not reuse old option IDs from an exported file.
-                options.forEach(option -> option.setId(null));
-                dto.setOptions(options);
-
-                String active = value(row, columns, "isActive").trim();
-                if (!active.isEmpty()) {
-                    if (!active.equalsIgnoreCase("true")
-                            && !active.equalsIgnoreCase("false")) {
-                        throw new IllegalArgumentException(
-                                "isActive must be true or false."
-                        );
-                    }
-                    dto.setIsActive(Boolean.valueOf(active));
-                }
-
-                // Reuse existing mapping, validation and permission checks.
-                questionService.create(dto);
-                imported++;
-
-            } catch (Exception ex) {
-                throw new IllegalArgumentException(
-                        "Import failed at CSV row " + csvLine
-                                + ": " + ex.getMessage(),
-                        ex
-                );
+            if (option.isCorrect()) {
+                result.append(" (Correct)");
             }
         }
 
-        return imported;
+        return result.toString();
     }
 
-    private String value(
-            List<String> row,
-            Map<String, Integer> columns,
-            String name
+    private void appendCsvRow(
+            StringBuilder csv,
+            List<String> values
     ) {
-        Integer index = columns.get(name);
-        if (index == null || index >= row.size()) {
-            return "";
-        }
-        return row.get(index);
-    }
-
-    private String blankToNull(String value) {
-        return value == null || value.isBlank()
-                ? null
-                : value.trim();
-    }
-
-    private String safe(Object value) {
-        return value == null ? "" : value.toString();
-    }
-
-    private void appendRow(StringBuilder csv, List<String> values) {
         for (int i = 0; i < values.size(); i++) {
             if (i > 0) {
                 csv.append(',');
@@ -232,7 +382,6 @@ public class QuestionExportService {
 
             String value = values.get(i) == null ? "" : values.get(i);
 
-            // Escape CSV fields containing commas, quotes or line breaks.
             csv.append('"')
                     .append(value.replace("\"", "\"\""))
                     .append('"');
@@ -245,60 +394,39 @@ public class QuestionExportService {
         return ("\uFEFF" + csv).getBytes(StandardCharsets.UTF_8);
     }
 
-    // Handles quoted fields, escaped quotes, commas and embedded newlines.
-    private List<List<String>> parseCsv(String csv) {
-        List<List<String>> rows = new ArrayList<>();
-        List<String> row = new ArrayList<>();
-        StringBuilder field = new StringBuilder();
-        boolean quoted = false;
+    private Cell pdfCell(Object value) {
+        return new Cell().add(
+                new Paragraph(safe(value)).setFontSize(9)
+        );
+    }
 
-        for (int i = 0; i < csv.length(); i++) {
-            char c = csv.charAt(i);
+    private String safe(Object value) {
+        return value == null ? "" : value.toString();
+    }
 
-            if (quoted) {
-                if (c == '"') {
-                    if (i + 1 < csv.length()
-                            && csv.charAt(i + 1) == '"') {
-                        field.append('"');
-                        i++;
-                    } else {
-                        quoted = false;
-                    }
-                } else {
-                    field.append(c);
-                }
-            } else if (c == '"' && field.isEmpty()) {
-                quoted = true;
-            } else if (c == ',') {
-                row.add(field.toString());
-                field.setLength(0);
-            } else if (c == '\n' || c == '\r') {
-                if (c == '\r' && i + 1 < csv.length()
-                        && csv.charAt(i + 1) == '\n') {
-                    i++;
-                }
-
-                row.add(field.toString());
-                field.setLength(0);
-
-                rows.add(row);
-                row = new ArrayList<>();
-            } else {
-                field.append(c);
+    /**
+     * Prefer a bundled Unicode font. Arial is the Windows fallback.
+     */
+    private PdfFont createVietnameseFont() throws IOException {
+        try (InputStream fontStream = getClass().getResourceAsStream(
+                "/fonts/DejaVuSans.ttf"
+        )) {
+            if (fontStream != null) {
+                return PdfFontFactory.createFont(
+                        fontStream.readAllBytes(),
+                        PdfEncodings.IDENTITY_H
+                );
             }
         }
 
-        if (quoted) {
-            throw new IllegalArgumentException(
-                    "CSV contains an unclosed quoted field."
+        try {
+            return PdfFontFactory.createFont(
+                    "C:/Windows/Fonts/arial.ttf",
+                    PdfEncodings.IDENTITY_H
             );
+        } catch (IOException ignored) {
+            // Last resort; Vietnamese glyph coverage may be limited.
+            return PdfFontFactory.createFont(StandardFonts.HELVETICA);
         }
-
-        if (!row.isEmpty() || !field.isEmpty()) {
-            row.add(field.toString());
-            rows.add(row);
-        }
-
-        return rows;
     }
 }

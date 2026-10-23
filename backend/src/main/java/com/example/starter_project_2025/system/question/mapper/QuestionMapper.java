@@ -33,15 +33,19 @@ public class QuestionMapper implements BaseCrudMapper<Question, QuestionDTO> {
         d.setCreatedBy(q.getCreatedBy());
         d.setUpdatedBy(q.getUpdatedBy());
         d.setContent(q.getContent());
+        d.setImageUrl(q.getImageUrl());
         d.setType(q.getType());
         d.setDifficulty(q.getDifficulty());
         d.setTopic(q.getTopic());
         d.setPoints(q.getPoints());
+        d.setSourceQuestionId(q.getSourceQuestionId());
         d.setOptions(q.getOptions().stream().map(o -> {
             QuestionDTO.OptionDTO od = new QuestionDTO.OptionDTO();
             od.setId(o.getId());
             od.setContent(o.getContent());
             od.setCorrect(o.isCorrect());
+            od.setImageUrl(o.getImageUrl());
+            od.setImageUrl(o.getImageUrl());
             return od;
         }).toList());
         return d;
@@ -55,6 +59,7 @@ public class QuestionMapper implements BaseCrudMapper<Question, QuestionDTO> {
 
     private void apply(Question q, QuestionDTO d) {
         if (d.getContent() != null) q.setContent(d.getContent().trim());
+        if (d.getImageUrl() != null) q.setImageUrl(d.getImageUrl().isBlank() ? null : d.getImageUrl().trim());
         if (d.getType() != null) q.setType(d.getType());
         if (d.getDifficulty() != null) q.setDifficulty(d.getDifficulty());
         if (d.getTopic() != null) {
@@ -78,6 +83,8 @@ public class QuestionMapper implements BaseCrudMapper<Question, QuestionDTO> {
                 }
                 o.setContent(od.getContent().trim());
                 o.setCorrect(od.isCorrect());
+                o.setImageUrl(od.getImageUrl() == null || od.getImageUrl().isBlank() ? null : od.getImageUrl().trim());
+                o.setImageUrl(od.getImageUrl() == null || od.getImageUrl().isBlank() ? null : od.getImageUrl().trim());
                 kept.add(o);
             }
             q.getOptions().removeIf(o -> kept.stream().noneMatch(k -> k == o)); // orphanRemoval xóa đáp án không còn

@@ -1,7 +1,8 @@
-import { questionApi } from "@/api";
+import { questionExportApi } from "@/api/features/question-export.api";
 import { QuestionCreatePage } from "./pages/QuestionCreatePage";
 import { QuestionDetailPage } from "./pages/QuestionDetailPage";
 import { QuestionEditPage } from "./pages/QuestionEditPage";
+import QuestionListPage from "./pages/QuestionListPage";
 import {
   auditableFieldsSchema,
   type EntityConfig,
@@ -10,8 +11,11 @@ import {
 } from "@/types";
 
 const typeOptions = [
+  // CHANGED: gộp Single/Multi choice thành "Trắc nghiệm"
+  { label: "Multiple choice", value: "MULTIPLE_CHOICE" },
   { label: "Single choice", value: "SINGLE_CHOICE" },
   { label: "Multi choice", value: "MULTI_CHOICE" },
+  { label: "Essay", value: "ESSAY" },
 ];
 
 const difficultyOptions = [
@@ -74,7 +78,7 @@ const questionSchema: EntitySchema = {
 export const entityConfig: EntityConfig = {
   name: "Questions",
   path: "/questions",
-  api: questionApi,
+  api: questionExportApi,
   schema: questionSchema,
   actionPages: {
     create: { path: "/questions/create", component: QuestionCreatePage },
@@ -82,3 +86,5 @@ export const entityConfig: EntityConfig = {
     detail: { path: "/questions/:id/detail", component: QuestionDetailPage },
   },
 };
+
+export default QuestionListPage;

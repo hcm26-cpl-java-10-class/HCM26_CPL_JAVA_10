@@ -1,8 +1,13 @@
 package com.example.starter_project_2025.system.exam.service;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection; // NEW
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
@@ -13,14 +18,27 @@ import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.exam.domain.Exam;
+import com.example.starter_project_2025.system.exam.domain.ExamAttemptRepository;
+import com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus;
+import com.example.starter_project_2025.system.exam.domain.ExamReminder;
+import com.example.starter_project_2025.system.exam.domain.ExamType; // NEW
+import com.example.starter_project_2025.system.exam.domain.ExamReminderRepository;
 import com.example.starter_project_2025.system.exam.domain.ExamRepository;
+import com.example.starter_project_2025.system.exam.domain.Invitation;
+import com.example.starter_project_2025.system.exam.domain.InvitationRepository;
+import com.example.starter_project_2025.system.exam.domain.InvitationStatus;
 import com.example.starter_project_2025.system.exam.dto.ExamDTO;
 import com.example.starter_project_2025.system.exam.dto.ExamFilter;
 import com.example.starter_project_2025.system.exam.mapper.ExamMapper;
 import com.example.starter_project_2025.system.question.domain.Question;
+import com.example.starter_project_2025.system.question.domain.QuestionOption;
 import com.example.starter_project_2025.system.question.domain.QuestionRepository;
+import com.example.starter_project_2025.system.question.dto.QuestionDTO;
+import com.example.starter_project_2025.system.question.mapper.QuestionMapper;
+import com.example.starter_project_2025.system.question.service.QuestionValidator;
 
 import lombok.RequiredArgsConstructor;
 
@@ -32,6 +50,12 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 	private final ExamRepository examRepository;
 	private final QuestionRepository questionRepository;
 	private final ExamMapper examMapper;
+	private final ExamConfigValidator configValidator;
+	private final ExamAttemptRepository examAttemptRepository;
+	private final InvitationRepository invitationRepository;
+	private final ExamReminderRepository examReminderRepository;
+	private final QuestionMapper questionMapper;
+	private final QuestionValidator questionValidator;
 
 	@Override
 	protected BaseCrudRepository<Exam, Long> getRepository() {
@@ -48,20 +72,87 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		return new String[]{"title"};
 	}
 
-	// ===== Create: Gắn câu hỏi nếu request có questionIds =====
 	@Override
-	protected void beforeCreate(Exam exam, ExamDTO request, ValidationContext context) {
-		if (request.getQuestionIds() != null) {
-			exam.setQuestions(resolveQuestions(request.getQuestionIds(), context));
+	public void delete(Long id) {
+		checkPermission(CrudAction.DELETE);
+
+		Exam exam = examRepository.lockForAttemptStart(id)
+				.orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
+
+		beforeDelete(exam);
+
+		examRepository.delete(exam);
+
+		afterDelete(exam);
+	}
+
+	@Override
+	protected void beforeDelete(Exam exam) {
+		LocalDateTime now = LocalDateTime.now();
+		if (exam.getStartTime() != null && now.isAfter(exam.getStartTime())
+				&& (exam.getEndTime() == null || now.isBefore(exam.getEndTime()))) {
+			throw new BadRequestException("Cannot delete an exam that is currently in progress");
+		}
+		if (examAttemptRepository.existsByExam_IdAndStatusIn(
+				exam.getId(),
+				List.of(ExamAttemptStatus.NOT_STARTED, ExamAttemptStatus.IN_PROGRESS))) {
+			throw new BadRequestException("Cannot delete an exam that is currently in progress with active student attempts");
+		}
+		if (examAttemptRepository.existsByExam_Id(exam.getId())) {
+			throw new BadRequestException("Cannot delete exam with existing student attempts. Historical records must be preserved.");
+		}
+		List<Invitation> invitations = invitationRepository.findByExamId(exam.getId());
+		boolean hasActiveInvitations = invitations.stream().anyMatch(i ->
+				i.getStatus() == InvitationStatus.PENDING
+						|| i.getStatus() == InvitationStatus.SENT
+						|| i.getStatus() == InvitationStatus.ACCEPTED
+		);
+		if (hasActiveInvitations) {
+			throw new BadRequestException("Cannot delete exam with active invitations. Revoke or remove invitations first.");
+		}
+		List<ExamReminder> reminders = examReminderRepository.findByExamId(exam.getId());
+		if (!reminders.isEmpty()) {
+			examReminderRepository.deleteAll(reminders);
+		}
+		if (!invitations.isEmpty()) {
+			invitationRepository.deleteAll(invitations);
 		}
 	}
 
-	// ===== Update: Thay danh sách câu hỏi khi request gửi questionIds =====
+	// ===== Create: Gắn câu hỏi nếu request có questionIds, rồi kiểm tra cấu hình kỳ thi =====
+	@Override
+	protected void beforeCreate(Exam exam, ExamDTO request, ValidationContext context) {
+		if (request.getQuestionIds() != null) {
+			// CHANGED: truyền kiểu bài thi để chỉ nhận loại câu hỏi phù hợp
+			ExamType examType = request.getExamType() != null ? request.getExamType() : exam.getExamType();
+			exam.setQuestions(resolveQuestions(exam, request.getQuestionIds(), context, examType));
+		}
+		configValidator.validate(null, request, totalPoints(exam.getQuestions()), context);
+	}
+
+	// ===== Update: Thay danh sách câu hỏi khi request gửi questionIds, rồi kiểm tra cấu hình =====
 	@Override
 	protected void beforeUpdate(Exam exam, ExamDTO request, ValidationContext context) {
-		if (request.getQuestionIds() != null) {
-			exam.setQuestions(resolveQuestions(request.getQuestionIds(), context));
+		// NEW: đổi kiểu bài thi mà không gửi lại danh sách câu hỏi -> các câu hiện có phải còn phù hợp
+		if (request.getQuestionIds() == null && request.getExamType() != null) {
+			validateTypes(request.getExamType(), exam.getQuestions(), context);
 		}
+		if (request.getQuestionIds() != null) {
+			ExamType examType = request.getExamType() != null ? request.getExamType() : exam.getExamType();
+			Set<Question> before = new LinkedHashSet<>(exam.getQuestions());
+			Set<Question> after = resolveQuestions(exam, request.getQuestionIds(), context, examType);
+			if (!context.hasErrors()) {
+				exam.setQuestions(after);
+				deleteExamCopies(before, after);
+			}
+		}
+		configValidator.validate(exam, request, totalPoints(exam.getQuestions()), context);
+	}
+
+	// Xoá đề thì xoá luôn các bản sao câu hỏi của đề đó
+	@Override
+	protected void afterDelete(Exam exam) {
+		deleteExamCopies(exam.getQuestions(), Set.of());
 	}
 
 	// ===== POST /api/exams/{id}/questions =====
@@ -69,7 +160,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		checkPermission(CrudAction.UPDATE);
 		ValidationContext context = new ValidationContext();
 		Exam exam = findExam(examId);
-		Set<Question> questions = resolveQuestions(questionIds, context);
+		Set<Question> questions = resolveQuestions(exam, questionIds, context, exam.getExamType()); // CHANGED
 		context.throwIfErrors();
 
 		exam.getQuestions().addAll(questions);
@@ -80,8 +171,56 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 	public ExamDTO removeQuestion(Long examId, Long questionId) {
 		checkPermission(CrudAction.UPDATE);
 		Exam exam = findExam(examId);
+		Set<Question> before = new LinkedHashSet<>(exam.getQuestions());
 		exam.getQuestions().removeIf(question -> question.getId().equals(questionId));
+		int remaining = totalPoints(exam.getQuestions());
+		if (exam.getPassScore() != null && remaining > 0 && exam.getPassScore() > remaining) {
+			ValidationContext context = new ValidationContext();
+			context.add("passScore", "Sau khi bỏ câu hỏi, tổng điểm (" + remaining
+					+ ") nhỏ hơn điểm đạt (" + exam.getPassScore() + "). Hãy hạ điểm đạt trước");
+			context.throwIfErrors();
+		}
+		Exam saved = examRepository.save(exam);
+		deleteExamCopies(before, exam.getQuestions());
+		return examMapper.toResponse(saved);
+	}
+
+	// ===== PUT /api/exams/{id}/questions/{questionId} =====
+	public ExamDTO updateQuestion(Long examId, Long questionId, QuestionDTO request) {
+		checkPermission(CrudAction.UPDATE);
+		Exam exam = findExam(examId);
+		Question copy = exam.getQuestions().stream()
+				.filter(q -> q.getId().equals(questionId))
+				.findFirst()
+				.orElseThrow(() -> new ResourceNotFoundException("Câu hỏi không thuộc đề thi này"));
+		if (copy.getSourceQuestionId() == null) {
+			throw new BadRequestException("Đây không phải bản sao của đề thi, không thể sửa trong đề");
+		}
+		if (exam.getStartTime() != null && !LocalDateTime.now().isBefore(exam.getStartTime())) {
+			throw new BadRequestException("Đề thi đã bắt đầu, không thể sửa câu hỏi");
+		}
+
+		ValidationContext context = new ValidationContext();
+		questionValidator.validateForUpdate(copy, request, false, context);
+		// NEW: đổi loại câu hỏi trong đề phải còn hợp với kiểu bài thi
+		if (request.getType() != null && !ExamTypePolicy.allows(exam.getExamType(), request.getType())) {
+			context.add("type", "Đề thi " + ExamTypePolicy.describe(exam.getExamType()) + ", không thể đổi câu hỏi sang loại này");
+		}
+		context.throwIfErrors();
+		questionMapper.update(copy, request);
+		questionRepository.save(copy);
+
+		int total = totalPoints(exam.getQuestions());
+		if (exam.getPassScore() != null && total > 0 && exam.getPassScore() > total) {
+			context.add("points", "Sau khi đổi điểm, tổng điểm (" + total
+					+ ") nhỏ hơn điểm đạt (" + exam.getPassScore() + "). Hãy hạ điểm đạt trước");
+			context.throwIfErrors();
+		}
 		return examMapper.toResponse(examRepository.save(exam));
+	}
+
+	private int totalPoints(Set<Question> questions) {
+		return questions == null ? 0 : questions.stream().mapToInt(Question::getPoints).sum();
 	}
 
 	private Exam findExam(Long examId) {
@@ -89,7 +228,27 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 				.orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
 	}
 
-	private Set<Question> resolveQuestions(List<Long> questionIds, ValidationContext context) {
+	private void deleteExamCopies(Set<Question> before, Set<Question> after) {
+		List<Question> removed = before.stream()
+				.filter(q -> q.getSourceQuestionId() != null && !after.contains(q))
+				.toList();
+		if (!removed.isEmpty()) {
+			questionRepository.deleteAll(removed);
+		}
+	}
+
+	// NEW: kiểm tra các câu hiện có trong đề có hợp với kiểu bài thi mới không
+	private void validateTypes(ExamType examType, Collection<Question> questions, ValidationContext context) {
+		for (Question q : questions) {
+			if (!ExamTypePolicy.allows(examType, q.getType())) {
+				context.add("examType", "Đề đang có câu hỏi " + q.getId() + " không hợp với kiểu bài thi "
+						+ ExamTypePolicy.describe(examType) + ". Hãy gỡ câu đó trước");
+				return;
+			}
+		}
+	}
+
+	private Set<Question> resolveQuestions(Exam exam, List<Long> questionIds, ValidationContext context, ExamType examType) {
 		Set<Long> uniqueIds = new LinkedHashSet<>();
 		if (questionIds == null || questionIds.isEmpty()) {
 			context.add("questionIds", "Cần chọn ít nhất một câu hỏi");
@@ -104,25 +263,85 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 			}
 		}
 
-		List<Question> foundQuestions = questionRepository.findAllById(uniqueIds);
-		Set<Long> foundIds = new LinkedHashSet<>();
-		List<Question> activeQuestions = new ArrayList<>();
+		Map<Long, Question> inExam = new HashMap<>();
+		Set<Long> sourcesInExam = new HashSet<>();
+		if (exam != null && exam.getQuestions() != null) {
+			for (Question q : exam.getQuestions()) {
+				inExam.put(q.getId(), q);
+				if (q.getSourceQuestionId() != null) {
+					sourcesInExam.add(q.getSourceQuestionId());
+				}
+			}
+		}
 
-		for (Question question : foundQuestions) {
-			foundIds.add(question.getId());
-			if (Boolean.TRUE.equals(question.getIsActive())) {
-				activeQuestions.add(question);
+		Map<Long, Question> found = new HashMap<>();
+		for (Question q : questionRepository.findAllById(uniqueIds)) {
+			found.put(q.getId(), q);
+		}
+
+		List<Question> toClone = new ArrayList<>();
+		Set<Long> keptIds = new HashSet<>();
+
+		for (Long id : uniqueIds) {
+			if (inExam.containsKey(id)) {
+				if (!ExamTypePolicy.allows(examType, inExam.get(id).getType())) {
+					context.add("questionIds", "Câu hỏi " + id + " không hợp với kiểu bài thi " + ExamTypePolicy.describe(examType));
+				}
+				keptIds.add(id);
+				continue;
+			}
+			Question source = found.get(id);
+			if (source == null) {
+				context.add("questionIds", "Không tìm thấy câu hỏi: " + id);
+			} else if (source.getSourceQuestionId() != null) {
+				context.add("questionIds", "Câu hỏi " + id + " là bản sao của một đề thi, hãy chọn câu hỏi trong ngân hàng");
+			} else if (!Boolean.TRUE.equals(source.getIsActive())) {
+				context.add("questionIds", "Không thể thêm câu hỏi đã bị vô hiệu hóa: " + id);
+			} else if (!ExamTypePolicy.allows(examType, source.getType())) {
+				// NEW: đề chỉ trắc nghiệm thì không chọn câu tự luận và ngược lại
+				context.add("questionIds", "Câu hỏi " + id + " không hợp với kiểu bài thi "
+						+ ExamTypePolicy.describe(examType) + " (loại câu: " + source.getType() + ")");
+			} else if (sourcesInExam.contains(id)) {
+				context.add("questionIds", "Câu hỏi " + id + " đã có trong đề");
 			} else {
-				context.add("questionIds", "Không thể thêm câu hỏi đã bị vô hiệu hóa: " + question.getId());
+				toClone.add(source);
 			}
 		}
 
-		for (Long questionId : uniqueIds) {
-			if (!foundIds.contains(questionId)) {
-				context.add("questionIds", "Không tìm thấy câu hỏi: " + questionId);
-			}
+		Set<Question> result = new LinkedHashSet<>();
+		if (context.hasErrors()) {
+			return result;
 		}
 
-		return new LinkedHashSet<>(activeQuestions);
+		for (Long id : uniqueIds) {
+			if (keptIds.contains(id)) {
+				result.add(inExam.get(id));
+			}
+		}
+		for (Question source : toClone) {
+			result.add(questionRepository.save(copyOf(source)));
+		}
+		return result;
+	}
+
+	private Question copyOf(Question source) {
+		Question copy = new Question();
+		copy.setIsActive(Boolean.TRUE);
+		copy.setContent(source.getContent());
+		copy.setType(source.getType());
+		copy.setDifficulty(source.getDifficulty());
+		copy.setTopic(source.getTopic());
+		copy.setImageUrl(source.getImageUrl());
+		copy.setPoints(source.getPoints());
+		copy.setSourceQuestionId(source.getId());
+		for (QuestionOption o : source.getOptions()) {
+			QuestionOption optionCopy = new QuestionOption();
+			optionCopy.setContent(o.getContent());
+			optionCopy.setCorrect(o.isCorrect());
+			optionCopy.setImageUrl(o.getImageUrl());
+			optionCopy.setQuestion(copy);
+			copy.getOptions().add(optionCopy);
+		}
+		return copy;
 	}
 }

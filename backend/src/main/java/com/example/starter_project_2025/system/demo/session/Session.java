@@ -10,6 +10,7 @@ import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+import lombok.experimental.SuperBuilder;
 import java.time.LocalDateTime;
 import lombok.experimental.SuperBuilder;
 

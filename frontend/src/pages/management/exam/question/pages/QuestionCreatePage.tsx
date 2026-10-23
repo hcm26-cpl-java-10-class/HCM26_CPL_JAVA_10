@@ -3,7 +3,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { initialQuestionForm, QuestionForm, type QuestionFormValues } from "../components/QuestionForm";
 
@@ -15,15 +15,23 @@ function getErrorMessage(error: any, fallback: string): string {
 
 export function QuestionCreatePage() {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const queryClient = useQueryClient();
-    const [form, setForm] = useState<QuestionFormValues>(initialQuestionForm);
+    const paramTopic = searchParams.get("topic") || "";
+
+    const [form, setForm] = useState<QuestionFormValues>(() => ({
+        ...initialQuestionForm,
+        topic: paramTopic || initialQuestionForm.topic,
+    }));
 
     const createMutation = useMutation({
-        mutationFn: (payload: QuestionFormValues) => questionApi.create(payload as any),
+        mutationFn: (payload: QuestionFormValues) =>
+            questionApi.create({ ...payload, isActive: payload.isActive ?? true } as any),
         onSuccess: async () => {
             await queryClient.invalidateQueries({ queryKey: ["question"] });
             toast.success("Question created successfully.");
-            navigate("/questions");
+            const redirectUrl = form.topic ? `/questions?topic=${encodeURIComponent(form.topic)}` : "/questions";
+            navigate(redirectUrl);
         },
         onError: (error: any) => {
             toast.error(getErrorMessage(error, "Create question failed."));
@@ -44,6 +52,7 @@ export function QuestionCreatePage() {
                         onSubmit={(values) => createMutation.mutate(values)}
                         isSaving={createMutation.isPending}
                         submitLabel="Save"
+                        showActive={true}
                     />
                 </CardContent>
             </Card>

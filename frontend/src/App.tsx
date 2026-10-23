@@ -26,19 +26,49 @@ function AppRoutes() {
     // Get non-module routes (frontend-controlled)
     const staticRoutes = routes.filter((r) => !r.isModuleDriven);
 
+    // Các path đã được đăng ký bằng static route. Module trong DB có thể trùng
+    // path này (ví dụ /invitations) -> phải bỏ qua khi render dynamic route để
+    // tránh đăng ký route hai lần (React Router match bản đầu tiên).
+    const staticRoutePaths = new Set(staticRoutes.map((r) => r.path));
+
     return (
         <Routes>
             {/* Root redirect */}
             <Route path="/" element={<Navigate to={homePath} replace />} />
 
+            {/* ============ STATIC ROUTES FIRST (higher priority in matching) ============ */}
+            {staticRoutes.map((route, index) => {
+                const Component = route.component;
+
+                if (route.isPublic) {
+                    return <Route key={index} path={route.path} element={<Component />} />;
+                }
+
+                return (
+                    <Route
+                        key={index}
+                        path={route.path}
+                        element={
+                            <ProtectedRoute requiredPermission={route.requiredPermission}>
+                                <Component />
+                            </ProtectedRoute>
+                        }
+                    />
+                );
+            })}
+
+            {/* ============ DYNAMIC ROUTES from backend Module table ============ */}
             {/* Dynamic routes from backend Module table */}
             {moduleGroups.flatMap((group) =>
                 group.modules.map((m) => {
                     if (!m.url) return null;
+                    if (staticRoutePaths.has(m.url)) return null;
                     const Component = componentRegistry[m.url];
 
                     if (!Component) {
                         return <Route key={`missing-${m.id ?? m.url}`} path={m.url} element={<Navigate to="/not-found-page" replace />} />;
+                        // Skip routes without a component - let them fall through to static routes or 404
+                        return null;
                     }
 
                     return (

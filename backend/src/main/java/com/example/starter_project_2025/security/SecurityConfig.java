@@ -52,6 +52,7 @@ public class SecurityConfig {
             "/actuator/health",
             "/swagger-ui.html",
             "/swagger-ui/**",
+            "/uploads/**",
             "/v3/api-docs/**",
             "/ws/**",
             "/public/**",
@@ -60,6 +61,11 @@ public class SecurityConfig {
             "/login/oauth2/**",
             "/verify/**",
             "/api/auth/**",
+            "/h2-console/**",
+            // Anonymous exam access - students without a platform account
+            "/api/exams/verify-access/**",
+            "/api/exams/anonymous-session",
+            "/api/exams/anonymous/**",
             "/h2-console/**"
     };
 

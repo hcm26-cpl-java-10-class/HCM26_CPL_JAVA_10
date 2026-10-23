@@ -46,6 +46,7 @@ export function QuestionDetailPage() {
                         <div className="grid gap-1">
                             <span className="font-medium text-muted-foreground">Content</span>
                             <p className="text-base font-semibold leading-6">{data?.content || "-"}</p>
+                            {data?.imageUrl && <img src={data.imageUrl} alt="" className="mt-2 max-h-48 rounded border object-contain" />}
                         </div>
 
                         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">

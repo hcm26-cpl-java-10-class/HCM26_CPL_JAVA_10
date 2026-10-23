@@ -81,6 +81,15 @@ public class User extends BaseEntity {
     @Column(nullable = false)
     Boolean locked = false;
 
+    /**
+     * True = tài khoản "khách" được tạo tự động cho học sinh thi qua link
+     * anonymous (không có tài khoản RBAC thật). Tài khoản này bị khoá, không
+     * thể đăng nhập, chỉ dùng để gắn kết quả bài thi.
+     */
+    @Builder.Default
+    @Column(name = "is_guest", nullable = false)
+    Boolean isGuest = false;
+
     @Builder.Default
     @ManyToMany(fetch = FetchType.LAZY)
     @ExportField(name = "Roles", relation = true, path = "name")

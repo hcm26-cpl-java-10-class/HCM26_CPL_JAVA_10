@@ -38,6 +38,8 @@ public class RoleDataInitializer implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
         ensurePermission("EXAM", "TAKE");
+        ensurePermission("STUDENT_SCORE", "RELEASE");
+        ensurePermission("STUDENT_SCORE", "VIEW_OWN");
         List<Permission> allPermissions = permissionRepository.findAll();
 
         upsertRole(
@@ -56,21 +58,44 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "ENROLLMENT_READ",
                         "ENROLLMENT_CREATE",
                         "LESSON_READ",
+                        "EXAM_READ",
+                        "EXAM_TAKE",
+                        "INVITATION_READ",
+                        "STUDENT_SCORE_VIEW_OWN",
                         "EXAM_TAKE"
                 )
         );
 
         upsertRole(
                 TEACHER_ROLE,
-                "Teacher with book, course and exam management permissions",
+                "Teacher with book, course, and exam management permissions",
                 findPermissions(
                         "MENU_READ",
-                        "BOOK_CREATE", "BOOK_READ", "BOOK_UPDATE", "BOOK_DELETE",
-                        "COURSE_CREATE", "COURSE_READ", "COURSE_UPDATE", "COURSE_DELETE",
-                        "LESSON_CREATE", "LESSON_READ", "LESSON_UPDATE", "LESSON_DELETE",
-                        "EXAM_CREATE", "EXAM_READ", "EXAM_UPDATE", "EXAM_DELETE",
-                        "QUESTION_CREATE", "QUESTION_READ", "QUESTION_UPDATE", "QUESTION_DELETE",
-                        "INVITATION_CREATE", "INVITATION_READ", "INVITATION_UPDATE", "INVITATION_DELETE"
+                        "BOOK_CREATE",
+                        "BOOK_READ",
+                        "BOOK_UPDATE",
+                        "BOOK_DELETE",
+                        "EXAM_CREATE",
+                        "EXAM_READ",
+                        "EXAM_UPDATE",
+                        "EXAM_DELETE",
+                        "QUESTION_CREATE",
+                        "QUESTION_READ",
+                        "QUESTION_UPDATE",
+                        "QUESTION_DELETE",
+                        "INVITATION_CREATE",
+                        "INVITATION_READ",
+                        "INVITATION_UPDATE",
+                        "INVITATION_DELETE",
+                        "USER_READ",
+                        "COURSE_CREATE",
+                        "COURSE_READ",
+                        "COURSE_UPDATE",
+                        "COURSE_DELETE",
+                        "LESSON_CREATE",
+                        "LESSON_READ",
+                        "LESSON_UPDATE",
+                        "LESSON_DELETE"
                 )
         );
 

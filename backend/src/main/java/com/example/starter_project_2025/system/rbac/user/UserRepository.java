@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -22,4 +23,17 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
     Long countByIsActive(Boolean isActive);
 
     long countByRolesId(Long roleId);
+
+    /**
+     * Lấy các user đang hoạt động có role cụ thể (ví dụ STUDENT), sắp xếp theo email.
+     * Dùng cho danh sách chọn nhanh khi tạo lời mời hàng loạt.
+     */
+    @Query("""
+            select distinct u from User u
+            join u.roles r
+            where r.name = :roleName
+              and u.isActive = true
+            order by u.email asc
+            """)
+    List<User> findActiveUsersByRoleName(@Param("roleName") String roleName);
 }

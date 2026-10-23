@@ -182,3 +182,85 @@ export const canAccessByPermission = (
 
   return hasPermission(requiredPermission);
 };
+
+/**
+ * Các module bị ẩn khỏi menu theo từng role.
+ *
+ * Lưu ý: module bị ẩn ở đây vẫn được giữ trong `moduleGroups` để route tương ứng
+ * tiếp tục được đăng ký trong App.tsx. Chỉ phần hiển thị trong menu bị loại bỏ.
+ */
+export const ROLE_HIDDEN_MODULE_URLS: Record<string, string[]> = {
+  [STUDENT_ROLE]: ["/exams", "/student/exams"],
+};
+
+/**
+ * Các menu group bị ẩn hoàn toàn theo từng role.
+ *
+ * Group bị ẩn ở đây vẫn được giữ trong `moduleGroups` (đánh dấu `hiddenInMenu`) để
+ * các route của module bên trong vẫn được đăng ký trong App.tsx. Chỉ phần hiển
+ * thị trong menu bị loại bỏ.
+ */
+export const ROLE_HIDDEN_MENU_GROUP_NAMES: Record<string, string[]> = {
+  [STUDENT_ROLE]: ["Exam Management"],
+};
+
+/**
+ * Di chuyển module sang group khác theo từng role.
+ *
+ * Key: url của module (đã normalize). Value: tên group đích.
+ * Việc di chuyển chỉ có hiệu lực khi hiển thị menu — route của module không đổi.
+ *
+ * Ví dụ: STUDENT không có group "Exam Management" nên module "Invitations" được
+ * đưa sang group "Student" cho gọn, trong khi TEACHER/ADMIN giữ nguyên.
+ */
+export const ROLE_MOVED_MENU_MODULES: Record<string, Record<string, string>> = {
+  [STUDENT_ROLE]: {
+    "/invitations": "Student",
+  },
+};
+
+export const normalizeModulePath = (url?: string | null): string =>
+  (url ?? "").trim().toLowerCase().replace(/\/+$/, "");
+
+export const normalizeMenuGroupName = (name?: string | null): string =>
+  (name ?? "").trim().toLowerCase();
+
+export const isModuleHiddenInMenu = (
+  url: string | undefined,
+  role: string | null | undefined,
+): boolean => {
+  if (!url) {
+    return false;
+  }
+
+  const hidden = ROLE_HIDDEN_MODULE_URLS[normalizeRole(role)] ?? [];
+  return hidden.includes(normalizeModulePath(url));
+};
+
+export const isMenuGroupHiddenInMenu = (
+  groupName: string | undefined,
+  role: string | null | undefined,
+): boolean => {
+  if (!groupName) {
+    return false;
+  }
+
+  const hidden = ROLE_HIDDEN_MENU_GROUP_NAMES[normalizeRole(role)] ?? [];
+  return hidden.some((name) => normalizeMenuGroupName(name) === normalizeMenuGroupName(groupName));
+};
+
+/**
+ * Trả về tên group đích cho module theo role hiện tại, hoặc undefined nếu
+ * module không cần di chuyển.
+ */
+export const getMovedMenuGroupName = (
+  url: string | undefined,
+  role: string | null | undefined,
+): string | undefined => {
+  if (!url) {
+    return undefined;
+  }
+
+  const moves = ROLE_MOVED_MENU_MODULES[normalizeRole(role)] ?? {};
+  return moves[normalizeModulePath(url)];
+};

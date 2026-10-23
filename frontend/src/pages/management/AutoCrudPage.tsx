@@ -40,54 +40,79 @@ export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
     const isUserManagement = entity.path === "/users";
     const isStudentRole = normalizedActiveRole === STUDENT_ROLE;
 
-    const headerActions = useMemo(() => {
-        if (!createPage) {
-            return undefined;
-        }
+    
+const headerActions = useMemo(() => {
+    const customActions = entity.headerActions?.({ table });
 
-        const createPath = normalizeEntityActionPath(
-            entity.path,
-            createPage.path
+    if (!createPage) {
+        return customActions ? (
+            <div className="flex items-center gap-2">
+                {customActions}
+            </div>
+        ) : undefined;
+    }
+
+    const createPath = normalizeEntityActionPath(
+        entity.path,
+        createPage.path
+    );
+
+    // Ưu tiên hiển thị nút tạo tài khoản ở trang Users cho Admin
+    if (isUserManagement && isAdminRole) {
+        const createAccountAction = (
+            <ActionButton
+                onClick={() => navigate(createPath)}
+                tooltip="Tạo tài khoản học sinh / giáo viên"
+                title="Tạo tài khoản"
+                variant="default"
+                icon={<Plus size={16} />}
+            />
         );
-
-        // Ưu tiên hiển thị nút tạo tài khoản ở trang Users cho Admin
-        if (isUserManagement && isAdminRole) {
-            return (
-                <ActionButton
-                    onClick={() => navigate(createPath)}
-                    tooltip="Tạo tài khoản học sinh / giáo viên"
-                    title="Tạo tài khoản"
-                    variant="default"
-                    icon={<Plus size={16} />}
-                />
-            );
-        }
 
         return (
-            <PermissionGate
-                permission={
-                    createPage.requiredPermission ||
-                    table.permission?.keys?.create
-                }
-            >
-                <ActionButton
-                    onClick={() => navigate(createPath)}
-                    tooltip={`Create ${entity.name}`}
-                    title="Create"
-                    variant="default"
-                    icon={<Plus size={16} />}
-                />
-            </PermissionGate>
+            <div className="flex items-center gap-2">
+                {customActions}
+                {createAccountAction}
+            </div>
         );
-    }, [
-        createPage,
-        entity.name,
-        entity.path,
-        isAdminRole,
-        isUserManagement,
-        navigate,
-        table.permission?.keys?.create,
-    ]);
+    }
+
+    const createAction = (
+        <PermissionGate
+            permission={
+                createPage.requiredPermission ||
+                table.permission?.keys?.create
+            }
+        >
+            <ActionButton
+                onClick={() => navigate(createPath)}
+                tooltip={`Create ${entity.name}`}
+                title="Create"
+                variant="default"
+                icon={<Plus size={16} />}
+            />
+        </PermissionGate>
+    );
+
+    if (!customActions && !createAction) {
+        return undefined;
+    }
+
+    return (
+        <div className="flex items-center gap-2">
+            {customActions}
+            {createAction}
+        </div>
+    );
+}, [
+    createPage,
+    entity,
+    table,
+    isAdminRole,
+    isUserManagement,
+    navigate,
+]);
+
 
     const onEdit = useMemo(() => {
         if (!editPage) {

@@ -60,4 +60,11 @@ public class UserDTO extends BaseDTO {
     /** Chỉ đọc: ACTIVE / LOCKED / INACTIVE, suy ra từ isActive + locked. */
     @JsonProperty(access = READ_ONLY)
     String status;
+
+    /**
+     * Chỉ đọc: tài khoản "khách" được tạo tự động cho học sinh thi bằng link
+     * anonymous (không có tài khoản RBAC thật).
+     */
+    @JsonProperty(access = READ_ONLY)
+    Boolean isGuest;
 }

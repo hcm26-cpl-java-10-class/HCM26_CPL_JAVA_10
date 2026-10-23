@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { LogOutIcon } from "lucide-react";
 import { useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { authApi } from "@/api/features/auth.api";
 import { useActiveModuleGroups } from "@/hooks/useSidebarMenus";
 import { iconMap } from "@/components/datatable/iconMap";
 
@@ -27,20 +26,9 @@ export function SidebarMenu() {
             .map((group) => ({
                 id: group.id ?? group.name ?? "group",
                 name: group.name ?? "Menu",
+                hiddenInMenu: group.hiddenInMenu,
                 items: group.modules
-                    .filter((module) => !!module.url)
-                    // Temporarily hide standalone "Modules" navigation item under "System Management"
-                    .filter((module) => {
-                        const isUnderSystemManagement =
-                            (group.name || "").toLowerCase().includes("system");
-                        const isModulesMenu =
-                            module.url === "/menus" || (module.title || "").toLowerCase() === "modules";
-
-                        if (isUnderSystemManagement && isModulesMenu) {
-                            return false;
-                        }
-                        return true;
-                    })
+                    .filter((module) => !!module.url && !module.hiddenInMenu)
                     .map((module) => ({
                         title: module.title ?? "Untitled",
                         url: module.url ?? "#",
@@ -50,7 +38,7 @@ export function SidebarMenu() {
                             (location.pathname === module.url || location.pathname.startsWith(`${module.url}/`)),
                     })),
             }))
-            .filter((group) => group.items.length > 0);
+            .filter((group) => !group.hiddenInMenu && group.items.length > 0);
     }, [location.pathname, moduleGroups]);
 
     return (
@@ -94,10 +82,7 @@ export function SidebarMenu() {
                     <Button
                         size="icon"
                         variant="ghost"
-                        onClick={async () => {
-                            await authApi.logout();
-                            navigate("/login");
-                        }}
+                        onClick={() => navigate("/logout")}
                     >
                         <LogOutIcon className="size-4" />
                     </Button>

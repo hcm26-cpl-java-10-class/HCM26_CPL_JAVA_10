@@ -40,8 +40,15 @@ public class Question extends BaseEntity {
 
     private String topic;
 
+    @Column(length = 1000)
+    private String imageUrl;
+
     @Column(nullable = false)
     private int points = 1;
+
+    // Khác null nghĩa là đây là bản sao thuộc riêng một đề thi; giá trị là id câu hỏi gốc trong ngân hàng
+    @Column(name = "source_question_id")
+    private Long sourceQuestionId;
 
     @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<QuestionOption> options = new ArrayList<>();

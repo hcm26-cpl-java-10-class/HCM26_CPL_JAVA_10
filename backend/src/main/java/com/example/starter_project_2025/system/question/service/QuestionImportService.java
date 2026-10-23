@@ -48,24 +48,31 @@ public class QuestionImportService {
         }
 
         String originalFilename = file.getOriginalFilename();
-        if (originalFilename != null && !originalFilename.toLowerCase().endsWith(".csv")) {
-            result.getErrors().add(new RowError(0, "Hệ thống chỉ hỗ trợ định dạng file CSV (.csv)"));
+        boolean isCsv = originalFilename != null && originalFilename.toLowerCase().endsWith(".csv");
+        boolean isExcel = originalFilename != null && (originalFilename.toLowerCase().endsWith(".xlsx") || originalFilename.toLowerCase().endsWith(".xls"));
+
+        if (!isCsv && !isExcel) {
+            result.getErrors().add(new RowError(0, "Hệ thống hỗ trợ định dạng file Excel (.xlsx, .xls) và CSV (.csv)"));
             result.setFailureCount(1);
             return result;
         }
 
         List<QuestionCsvParser.ParsedRow> rows;
         try {
-            rows = csvParser.parse(file.getInputStream());
+            if (isExcel) {
+                rows = csvParser.parseExcel(file.getInputStream());
+            } else {
+                rows = csvParser.parse(file.getInputStream());
+            }
         } catch (Exception e) {
-            log.error("Lỗi khi đọc file CSV câu hỏi", e);
-            result.getErrors().add(new RowError(0, "Không thể đọc nội dung file CSV: " + e.getMessage()));
+            log.error("Lỗi khi đọc file câu hỏi", e);
+            result.getErrors().add(new RowError(0, "Không thể đọc nội dung file: " + e.getMessage()));
             result.setFailureCount(1);
             return result;
         }
 
         if (rows.isEmpty()) {
-            result.getErrors().add(new RowError(1, "File CSV không chứa dòng dữ liệu nào hợp lệ"));
+            result.getErrors().add(new RowError(1, "File không chứa dòng dữ liệu nào hợp lệ"));
             result.setFailureCount(1);
             return result;
         }
@@ -136,7 +143,8 @@ public class QuestionImportService {
         String normalizedTopic = (topic != null && !topic.isBlank()) ? topic.trim().toLowerCase() : null;
 
         return questionRepository.exists((root, query, cb) -> {
-            Predicate contentPredicate = cb.equal(cb.lower(cb.trim(root.get("content"))), trimmedContent);
+            Predicate bankOnly = cb.isNull(root.get("sourceQuestionId"));
+            Predicate contentPredicate = cb.and(bankOnly, cb.equal(cb.lower(cb.trim(root.get("content"))), trimmedContent));
             if (normalizedTopic != null) {
                 Predicate topicPredicate = cb.equal(cb.lower(cb.trim(root.get("topic"))), normalizedTopic);
                 return cb.and(contentPredicate, topicPredicate);

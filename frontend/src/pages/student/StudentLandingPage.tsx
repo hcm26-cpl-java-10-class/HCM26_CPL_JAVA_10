@@ -13,8 +13,8 @@ const checklistItems = [
     text: "Xem nhanh cac dau sach dang co trong he thong.",
   },
   {
-    title: "Lich thi sinh vien",
-    text: "Theo doi danh sach va thoi gian cac ky thi duoc xep lich.",
+    title: "Loi moi thi moi",
+    text: "Chap nhan loi moi va vao thi ngay khi den gio.",
   },
 ];
 
@@ -50,15 +50,15 @@ export default function StudentLandingPage() {
               Chao mung tro lai, {displayName}
             </h1>
             <p className="mt-3 max-w-2xl text-sm text-slate-700 sm:text-base">
-              Thuc hien xem danh sach books va truy cap vao trang Lich thi de kiem tra cac ky thi sap toi.
+              Xem cac loi moi thi moi nhat va truy cap vao de thi khi giao vien mo.
             </p>
 
             <div className="mt-6 flex flex-wrap gap-3">
-              {/* Nút Xem Lịch Thi Mới */}
+              {/* Nút xem lời mời thi */}
               <Button asChild className="bg-cyan-600 text-white hover:bg-cyan-500">
-                <Link to="/student/exams">
+                <Link to="/invitations">
                   <Calendar className="mr-2 size-4" />
-                  Xem lịch thi
+                  Loi moi thi
                 </Link>
               </Button>
 

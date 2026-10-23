@@ -6,6 +6,7 @@ import {
   type EntitySchema,
   type FieldSchema,
 } from "@/types";
+import { ScoreReleaseActions } from "./ScoreReleaseActions";
 
 const scoreColumnOrder = ["quiz1", "quiz2", "assignment", "midterm", "final"];
 
@@ -16,6 +17,13 @@ const scoreColumnLabels: Record<string, string> = {
   midterm: "Midterm",
   final: "Final",
 };
+
+const statusOptions = [
+  { label: "Draft", value: "DRAFT" },
+  { label: "Reviewed", value: "REVIEWED" },
+  { label: "Released", value: "RELEASED" },
+  { label: "Adjusted", value: "ADJUSTED" },
+];
 
 const studentScoreSchema: EntitySchema = {
   entityName: "student-score",
@@ -61,6 +69,26 @@ const studentScoreSchema: EntitySchema = {
       filterType: "numberRange",
       editable: false,
     },
+    {
+      name: "status",
+      label: "Status",
+      type: "select",
+      options: statusOptions,
+      sortable: true,
+      filterable: true,
+      filterType: "select",
+      filterOptions: statusOptions,
+      editable: false,
+    },
+    { name: "releasedAt", label: "Released At", type: "datetime", editable: false },
+    { name: "approvedBy", label: "Approved By", type: "text", editable: false },
+    {
+      name: "adjustmentLog",
+      label: "Adjustment Log",
+      type: "textarea",
+      editable: false,
+      visible: false,
+    },
     ...(auditableFieldsSchema as FieldSchema[]),
   ],
 };
@@ -70,4 +98,5 @@ export const entityConfig: EntityConfig = {
   path: "/student-scores",
   api: studentScoreApi,
   schema: studentScoreSchema,
+  headerActions: ({ table }) => <ScoreReleaseActions table={table} />,
 };

@@ -3,6 +3,9 @@ package com.example.starter_project_2025.system.exam.controller;
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.base.crud.controller.BaseCrudController;
 import com.example.starter_project_2025.base.crud.service.BaseCrudService;
+import com.example.starter_project_2025.base.crud.dto.OnUpdate;
+import com.example.starter_project_2025.system.question.dto.QuestionDTO;
+import org.springframework.validation.annotation.Validated;
 import com.example.starter_project_2025.system.exam.dto.ExamDTO;
 import com.example.starter_project_2025.system.exam.dto.ExamFilter;
 import com.example.starter_project_2025.system.exam.service.ExamServiceImpl;
@@ -24,7 +27,7 @@ import java.util.List;
         group = "Student",
         icon = "calendar",
         order = 2,
-        permission = "BOOK_READ"
+        permission = "EXAM_READ"
 )
 public class ExamController extends BaseCrudController<Long, ExamDTO, ExamFilter> {
 
@@ -45,6 +48,13 @@ public class ExamController extends BaseCrudController<Long, ExamDTO, ExamFilter
     public ResponseEntity<ExamDTO> removeQuestion(@PathVariable Long id,
                                                   @PathVariable Long questionId) {
         return ResponseEntity.ok(service.removeQuestion(id, questionId));
+    }
+
+    @PutMapping("/{id}/questions/{questionId}")
+    public ResponseEntity<ExamDTO> updateQuestion(@PathVariable Long id,
+                                                  @PathVariable Long questionId,
+                                                  @Validated(OnUpdate.class) @RequestBody QuestionDTO request) {
+        return ResponseEntity.ok(service.updateQuestion(id, questionId, request));
     }
 
 }
