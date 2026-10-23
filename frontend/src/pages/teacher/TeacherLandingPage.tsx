@@ -70,10 +70,10 @@ export default function TeacherLandingPage() {
               <BookOpen className="mr-2 size-4" /> Manage books
             </Link>
           </Button>
-          {hasPermission("MILESTONE_CREATE") ? (
+          {hasPermission("MILESTONE_READ") ? (
             <Button asChild variant="outline" className="mt-3 border-slate-300 bg-white/80 sm:ml-3 sm:mt-0">
-              <Link to={`/projects/${mockProjectId}/milestones/new`}>
-                <Flag className="mr-2 size-4" /> Create milestone
+              <Link to={`/projects/${mockProjectId}/milestones`}>
+                <Flag className="mr-2 size-4" /> Manage milestones
               </Link>
             </Button>
           ) : null}

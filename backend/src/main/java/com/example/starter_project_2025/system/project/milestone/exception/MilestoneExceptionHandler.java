@@ -11,6 +11,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -55,12 +56,25 @@ public class MilestoneExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<MilestoneErrorResponse> handleAccessDenied(AccessDeniedException ex) {
         return error(HttpStatus.FORBIDDEN, "ACCESS_DENIED",
-                "You no longer have permission to create this milestone", Map.of());
+                "You do not have permission to access this project", Map.of());
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<MilestoneErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        String field = ex.getName();
+        return error(HttpStatus.UNPROCESSABLE_ENTITY, "VALIDATION_FAILED",
+                "Milestone query is invalid", Map.of(field, List.of(field + " has an invalid value")));
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<MilestoneErrorResponse> handleNotFound(ResourceNotFoundException ex) {
         return error(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", ex.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(MilestoneDependencyException.class)
+    public ResponseEntity<MilestoneErrorResponse> handleDependencyError(MilestoneDependencyException ex) {
+        return error(HttpStatus.INTERNAL_SERVER_ERROR, "MILESTONE_DEPENDENCY_ERROR",
+                "Milestone detail could not be loaded", Map.of());
     }
 
     private ResponseEntity<MilestoneErrorResponse> error(

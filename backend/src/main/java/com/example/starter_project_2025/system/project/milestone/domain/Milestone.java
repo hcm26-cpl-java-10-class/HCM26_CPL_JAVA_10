@@ -30,10 +30,10 @@ public class Milestone {
     @Column(name = "project_id", nullable = false, updatable = false)
     private UUID projectId;
 
-    @Column(nullable = false, length = 200)
+    @Column(nullable = false, length = 120)
     private String title;
 
-    @Column(length = 2000)
+    @Column(length = 1000)
     private String description;
 
     @Column(nullable = false)

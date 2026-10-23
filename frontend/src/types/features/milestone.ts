@@ -1,4 +1,6 @@
 export type LatePolicyType = "NO_LATE" | "ALLOW_LATE";
+export type MilestoneStatus = "PLANNED" | "OPEN" | "CLOSED" | "CANCELLED";
+export type MilestoneProjectStatus = "ACTIVE" | "COMPLETED" | "CANCELLED";
 
 export interface MilestoneChecklistItemRequest {
   content: string;
@@ -26,7 +28,7 @@ export interface CreateMilestoneRequest {
 export interface MilestoneProjectOption {
   id: string;
   name: string;
-  status: string;
+  status: MilestoneProjectStatus;
 }
 
 export interface MilestoneRubricOption {
@@ -61,7 +63,7 @@ export interface MilestoneResponse {
   description?: string | null;
   deadline: string;
   mandatory: boolean;
-  status: string;
+  status: MilestoneStatus;
   rubricSnapshotId: string;
   reviewerId: string;
   latePolicyType: LatePolicyType;
@@ -71,6 +73,49 @@ export interface MilestoneResponse {
   createdAt: string;
   createdBy: string;
   checklist: MilestoneChecklistItemResponse[];
+}
+
+export interface MilestoneRubricCriterion {
+  code: string;
+  name: string;
+  weight: number;
+  maxScore: number;
+}
+
+export interface MilestoneRubricDetail {
+  snapshotId: string;
+  name: string;
+  version: string;
+  criteria: MilestoneRubricCriterion[];
+}
+
+export interface MilestoneReviewerDetail {
+  id: string;
+  displayName: string;
+}
+
+export interface MilestoneLatePolicyDetail {
+  type: LatePolicyType;
+  lateUntil?: string | null;
+  penaltyPercent?: number | null;
+}
+
+export interface MilestoneDetailResponse {
+  id: string;
+  project: MilestoneProjectOption;
+  title: string;
+  description?: string | null;
+  deadline: string;
+  tenantTimeZone: string;
+  mandatory: boolean;
+  status: MilestoneStatus;
+  checklist: MilestoneChecklistItemResponse[];
+  rubric: MilestoneRubricDetail;
+  reviewer: MilestoneReviewerDetail;
+  latePolicy: MilestoneLatePolicyDetail;
+  version: number;
+  createdAt: string;
+  createdBy: string;
 }
 
 export interface MilestoneApiError {
@@ -87,4 +132,37 @@ export interface MilestoneDetailRouteState {
   rubricName?: string;
   rubricVersion?: string;
   reviewerName?: string;
+  returnTo?: string;
+}
+
+export interface MilestoneListItem {
+  id: string;
+  title: string;
+  description?: string | null;
+  deadline: string;
+  status: MilestoneStatus;
+  mandatory: boolean;
+  rubricSnapshotId: string;
+  reviewerId: string;
+  latePolicyType: LatePolicyType;
+  lateUntil?: string | null;
+  latePenaltyPercent?: number | null;
+  version: number;
+  createdAt: string;
+}
+
+export interface MilestonePageResponse {
+  project: MilestoneProjectOption;
+  content: MilestoneListItem[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+}
+
+export interface MilestoneListParams {
+  page: number;
+  size: number;
 }

@@ -9,4 +9,6 @@ public interface ReviewerDirectoryPort {
     List<ReviewerData> findEligibleReviewers(UUID projectId, UUID actorId, UUID tenantId);
 
     ReviewerData requireEligibleReviewer(UUID reviewerId, UUID projectId, UUID actorId, UUID tenantId);
+
+    ReviewerData requireReviewerForRead(UUID reviewerId, UUID projectId, UUID tenantId);
 }

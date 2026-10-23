@@ -12,10 +12,10 @@ import java.util.UUID;
 
 public record CreateMilestoneRequest(
         @NotBlank(message = "Milestone title is required")
-        @Size(max = 200, message = "Milestone title must not exceed 200 characters")
+        @Size(max = 120, message = "Milestone title must not exceed 120 characters")
         String title,
 
-        @Size(max = 2000, message = "Milestone description must not exceed 2000 characters")
+        @Size(max = 1000, message = "Milestone description must not exceed 1000 characters")
         String description,
 
         @NotNull(message = "Deadline is required")

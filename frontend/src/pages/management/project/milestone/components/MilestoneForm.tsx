@@ -150,21 +150,21 @@ export function MilestoneForm({
               <div className="grid gap-2">
                 <div className="flex items-center justify-between gap-3">
                   <Label htmlFor="milestone-title">Milestone name <span className="text-destructive">*</span></Label>
-                  <span className="text-xs text-muted-foreground">{values.title?.length ?? 0}/200</span>
+                  <span className="text-xs text-muted-foreground">{values.title?.length ?? 0}/120</span>
                 </div>
-                <Input id="milestone-title" autoFocus required maxLength={200} placeholder="For example: Sprint 1 Delivery" aria-invalid={!!errors.title} {...register("title")} />
+                <Input id="milestone-title" autoFocus required maxLength={120} placeholder="For example: Sprint 1 Delivery" aria-invalid={!!errors.title} {...register("title")} />
                 <FieldMessage message={errors.title?.message} />
               </div>
 
               <div className="grid gap-2">
                 <div className="flex items-center justify-between gap-3">
                   <Label htmlFor="milestone-description">Description</Label>
-                  <span className="text-xs text-muted-foreground">{values.description?.length ?? 0}/2.000</span>
+                  <span className="text-xs text-muted-foreground">{values.description?.length ?? 0}/1,000</span>
                 </div>
                 <Textarea
                   id="milestone-description"
                   rows={4}
-                  maxLength={2000}
+                  maxLength={1000}
                   className="h-32 min-h-32 max-h-32 resize-none overflow-y-auto !field-sizing-fixed"
                   placeholder="Describe the expected deliverables and outcome"
                   aria-invalid={!!errors.description}

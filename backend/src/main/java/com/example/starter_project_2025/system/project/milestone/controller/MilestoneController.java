@@ -2,6 +2,8 @@ package com.example.starter_project_2025.system.project.milestone.controller;
 
 import com.example.starter_project_2025.system.project.milestone.dto.request.CreateMilestoneRequest;
 import com.example.starter_project_2025.system.project.milestone.dto.response.MilestoneCreateOptionsResponse;
+import com.example.starter_project_2025.system.project.milestone.dto.response.MilestoneDetailResponse;
+import com.example.starter_project_2025.system.project.milestone.dto.response.MilestonePageResponse;
 import com.example.starter_project_2025.system.project.milestone.dto.response.MilestoneResponse;
 import com.example.starter_project_2025.system.project.milestone.service.MilestoneCommandService;
 import com.example.starter_project_2025.system.project.milestone.service.MilestoneCreateOptionsService;
@@ -24,6 +26,16 @@ public class MilestoneController {
     private final MilestoneCreateOptionsService optionsService;
     private final MilestoneQueryService queryService;
 
+    @GetMapping
+    @PreAuthorize("hasAuthority('MILESTONE_READ')")
+    public ResponseEntity<MilestonePageResponse> getList(
+            @PathVariable UUID projectId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return ResponseEntity.ok(queryService.getList(projectId, page, size));
+    }
+
     @GetMapping("/create-options")
     @PreAuthorize("hasAuthority('MILESTONE_CREATE')")
     public ResponseEntity<MilestoneCreateOptionsResponse> getCreateOptions(@PathVariable UUID projectId) {
@@ -45,7 +57,7 @@ public class MilestoneController {
 
     @GetMapping("/{milestoneId}")
     @PreAuthorize("hasAuthority('MILESTONE_READ')")
-    public ResponseEntity<MilestoneResponse> getDetail(
+    public ResponseEntity<MilestoneDetailResponse> getDetail(
             @PathVariable UUID projectId,
             @PathVariable UUID milestoneId
     ) {

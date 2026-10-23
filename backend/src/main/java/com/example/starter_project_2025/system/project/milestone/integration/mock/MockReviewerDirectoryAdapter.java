@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.project.milestone.integration.mock;
 
 import com.example.starter_project_2025.system.project.milestone.exception.MilestoneValidationException;
+import com.example.starter_project_2025.system.project.milestone.exception.MilestoneDependencyException;
 import com.example.starter_project_2025.system.project.milestone.integration.model.ReviewerData;
 import com.example.starter_project_2025.system.project.milestone.integration.port.ReviewerDirectoryPort;
 import org.springframework.context.annotation.Profile;
@@ -33,6 +34,15 @@ public class MockReviewerDirectoryAdapter implements ReviewerDirectoryPort {
             throw new MilestoneValidationException(Map.of(
                     "reviewerId", List.of("Reviewer is not available")
             ));
+        }
+        return reviewer;
+    }
+
+    @Override
+    public ReviewerData requireReviewerForRead(UUID reviewerId, UUID projectId, UUID tenantId) {
+        if (!reviewer.id().equals(reviewerId)
+                || !MockMilestoneData.TENANT_ID.equals(tenantId)) {
+            throw new MilestoneDependencyException("Milestone reviewer could not be loaded");
         }
         return reviewer;
     }

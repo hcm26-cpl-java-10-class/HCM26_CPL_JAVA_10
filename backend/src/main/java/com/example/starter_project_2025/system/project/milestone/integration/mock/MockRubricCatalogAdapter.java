@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.project.milestone.integration.mock;
 
 import com.example.starter_project_2025.system.project.milestone.exception.MilestoneValidationException;
+import com.example.starter_project_2025.system.project.milestone.exception.MilestoneDependencyException;
 import com.example.starter_project_2025.system.project.milestone.integration.model.RubricCriterionData;
 import com.example.starter_project_2025.system.project.milestone.integration.model.RubricSnapshotData;
 import com.example.starter_project_2025.system.project.milestone.integration.port.RubricCatalogPort;
@@ -40,6 +41,16 @@ public class MockRubricCatalogAdapter implements RubricCatalogPort {
             throw new MilestoneValidationException(Map.of(
                     "rubricSnapshotId", List.of("Rubric is not available")
             ));
+        }
+        return rubric;
+    }
+
+    @Override
+    public RubricSnapshotData requireSnapshotForRead(
+            UUID rubricSnapshotId, UUID projectId, UUID tenantId) {
+        if (!rubric.id().equals(rubricSnapshotId)
+                || !MockMilestoneData.TENANT_ID.equals(tenantId)) {
+            throw new MilestoneDependencyException("Milestone rubric snapshot could not be loaded");
         }
         return rubric;
     }

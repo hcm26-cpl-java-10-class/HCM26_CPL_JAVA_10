@@ -3,8 +3,8 @@ import type { LatePolicyType } from "@/types";
 
 export const milestoneFormSchema = z
   .object({
-    title: z.string().trim().min(1, "Milestone name is required").max(200, "Milestone name must not exceed 200 characters"),
-    description: z.string().max(2000, "Description must not exceed 2,000 characters"),
+    title: z.string().trim().min(1, "Milestone name is required").max(120, "Milestone name must not exceed 120 characters"),
+    description: z.string().max(1000, "Description must not exceed 1,000 characters"),
     deadline: z.string().min(1, "Deadline is required"),
     mandatory: z.boolean(),
     checklist: z

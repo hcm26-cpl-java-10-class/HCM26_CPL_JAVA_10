@@ -18,6 +18,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +26,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -43,6 +45,7 @@ class MilestoneIntegrationTest {
     @Autowired IdempotencyRepository idempotencyRepository;
 
     private String teacherToken;
+    private String studentToken;
 
     @BeforeEach
     void setUp() {
@@ -54,6 +57,9 @@ class MilestoneIntegrationTest {
         var teacher = userDetailsService.loadUserByUsername("teacher@example.com");
         teacherToken = tokenService.generateAccessToken(
                 new UsernamePasswordAuthenticationToken(teacher, null, teacher.getAuthorities()));
+        var student = userDetailsService.loadUserByUsername("student@example.com");
+        studentToken = tokenService.generateAccessToken(
+                new UsernamePasswordAuthenticationToken(student, null, student.getAuthorities()));
     }
 
     @Test
@@ -161,14 +167,203 @@ class MilestoneIntegrationTest {
         org.junit.jupiter.api.Assertions.assertEquals(1, idempotencyRepository.count());
     }
 
+    @Test
+    void returnsEmptyPageForProjectWithoutMilestones() throws Exception {
+        mockMvc.perform(get(endpoint())
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(header().exists("X-Correlation-ID"))
+                .andExpect(jsonPath("$.project.id").value(MockMilestoneData.PROJECT_ID.toString()))
+                .andExpect(jsonPath("$.project.name").value("OJT Management System"))
+                .andExpect(jsonPath("$.content").isEmpty())
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalElements").value(0))
+                .andExpect(jsonPath("$.totalPages").value(0))
+                .andExpect(jsonPath("$.hasNext").value(false))
+                .andExpect(jsonPath("$.hasPrevious").value(false));
+    }
+
+    @Test
+    void returnsOnlyRequestedPageOrderedByDeadlineAscending() throws Exception {
+        createMilestone("Third milestone", Instant.now().plusSeconds(3 * 86400L), "list-third");
+        createMilestone("First milestone", Instant.now().plusSeconds(86400L), "list-first");
+        createMilestone("Second milestone", Instant.now().plusSeconds(2 * 86400L), "list-second");
+
+        mockMvc.perform(get(endpoint())
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .param("page", "0")
+                        .param("size", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(2))
+                .andExpect(jsonPath("$.content[0].title").value("First milestone"))
+                .andExpect(jsonPath("$.content[1].title").value("Second milestone"))
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.hasNext").value(true))
+                .andExpect(jsonPath("$.hasPrevious").value(false));
+
+        mockMvc.perform(get(endpoint())
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .param("page", "1")
+                        .param("size", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].title").value("Third milestone"))
+                .andExpect(jsonPath("$.hasNext").value(false))
+                .andExpect(jsonPath("$.hasPrevious").value(true));
+    }
+
+    @Test
+    void rejectsInvalidPaginationWithFieldErrors() throws Exception {
+        mockMvc.perform(get(endpoint())
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .param("size", "0"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors.size").isArray());
+
+        mockMvc.perform(get(endpoint())
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .param("size", "101"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors.size").isArray());
+
+        mockMvc.perform(get(endpoint())
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .param("page", "-1"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors.page").isArray());
+
+        mockMvc.perform(get(endpoint())
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .param("size", "not-a-number"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors.size").isArray());
+    }
+
+    @Test
+    void rejectsUnauthenticatedListRequest() throws Exception {
+        mockMvc.perform(get(endpoint()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void rejectsListRequestWithoutReadPermission() throws Exception {
+        mockMvc.perform(get(endpoint())
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void rejectsProjectOutsideCurrentScopeWithoutReturningProjectData() throws Exception {
+        mockMvc.perform(get("/api/projects/" + MockMilestoneData.OUT_OF_SCOPE_PROJECT_ID + "/milestones")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+                .andExpect(jsonPath("$.project").doesNotExist());
+    }
+
+    @Test
+    void returnsNotFoundForUnknownProject() throws Exception {
+        mockMvc.perform(get("/api/projects/99999999-9999-9999-9999-999999999999/milestones")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
+    }
+
+    @Test
+    void returnsCompleteMilestoneDetailWithStoredOrderAndTenantTimeZone() throws Exception {
+        Instant deadline = Instant.now().plusSeconds(86400).truncatedTo(ChronoUnit.MILLIS);
+        String milestoneId = createMilestoneAndGetId(
+                "Detailed milestone", deadline, "detail-complete"
+        );
+
+        mockMvc.perform(get(endpoint() + "/" + milestoneId)
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(milestoneId))
+                .andExpect(jsonPath("$.project.id").value(MockMilestoneData.PROJECT_ID.toString()))
+                .andExpect(jsonPath("$.project.name").value("OJT Management System"))
+                .andExpect(jsonPath("$.title").value("Detailed milestone"))
+                .andExpect(jsonPath("$.deadline").value(deadline.toString()))
+                .andExpect(jsonPath("$.tenantTimeZone").value("Asia/Ho_Chi_Minh"))
+                .andExpect(jsonPath("$.checklist.length()").value(2))
+                .andExpect(jsonPath("$.checklist[0].orderIndex").value(0))
+                .andExpect(jsonPath("$.checklist[0].content").value("Source code is pushed"))
+                .andExpect(jsonPath("$.checklist[1].orderIndex").value(1))
+                .andExpect(jsonPath("$.rubric.name").value("Milestone Delivery Rubric"))
+                .andExpect(jsonPath("$.rubric.version").value("1.0"))
+                .andExpect(jsonPath("$.rubric.criteria.length()").value(3))
+                .andExpect(jsonPath("$.rubric.criteria[0].code").value("FUNCTIONALITY"))
+                .andExpect(jsonPath("$.rubric.criteria[0].weight").value(50.00))
+                .andExpect(jsonPath("$.rubric.criteria[0].maxScore").value(5.00))
+                .andExpect(jsonPath("$.reviewer.displayName").value("Mentor Reviewer"))
+                .andExpect(jsonPath("$.latePolicy.type").value("ALLOW_LATE"))
+                .andExpect(jsonPath("$.latePolicy.penaltyPercent").value(10.00));
+    }
+
+    @Test
+    void returnsNotFoundWhenMilestoneIsRequestedThroughAnotherInScopeProject() throws Exception {
+        String milestoneId = createMilestoneAndGetId(
+                "Project A milestone", Instant.now().plusSeconds(86400), "detail-wrong-project"
+        );
+
+        mockMvc.perform(get("/api/projects/" + MockMilestoneData.SECOND_PROJECT_ID
+                        + "/milestones/" + milestoneId)
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.title").doesNotExist())
+                .andExpect(jsonPath("$.checklist").doesNotExist())
+                .andExpect(jsonPath("$.rubric").doesNotExist());
+    }
+
+    @Test
+    void returnsNotFoundForUnknownMilestoneInsidePermittedProject() throws Exception {
+        mockMvc.perform(get(endpoint() + "/99999999-9999-9999-9999-999999999999")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.title").doesNotExist());
+    }
+
+    @Test
+    void returnsForbiddenBeforeLookingUpMilestoneForOutOfScopeProject() throws Exception {
+        String milestoneId = createMilestoneAndGetId(
+                "Protected milestone", Instant.now().plusSeconds(86400), "detail-out-of-scope"
+        );
+
+        mockMvc.perform(get("/api/projects/" + MockMilestoneData.OUT_OF_SCOPE_PROJECT_ID
+                        + "/milestones/" + milestoneId)
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+                .andExpect(jsonPath("$.title").doesNotExist());
+    }
+
+    @Test
+    void rejectsMilestoneDetailWithoutReadPermission() throws Exception {
+        String milestoneId = createMilestoneAndGetId(
+                "Teacher milestone", Instant.now().plusSeconds(86400), "detail-no-permission"
+        );
+
+        mockMvc.perform(get(endpoint() + "/" + milestoneId)
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isForbidden());
+    }
+
     private String endpoint() {
         return "/api/projects/" + MockMilestoneData.PROJECT_ID + "/milestones";
     }
 
     private Map<String, Object> validRequest() {
         Instant deadline = Instant.now().plusSeconds(86400);
+        return validRequest("Sprint 1 Delivery", deadline);
+    }
+
+    private Map<String, Object> validRequest(String title, Instant deadline) {
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("title", "Sprint 1 Delivery");
+        body.put("title", title);
         body.put("description", "First milestone");
         body.put("deadline", deadline.toString());
         body.put("mandatory", true);
@@ -185,4 +380,20 @@ class MilestoneIntegrationTest {
         ));
         return body;
     }
+
+    private void createMilestone(String title, Instant deadline, String key) throws Exception {
+        createMilestoneAndGetId(title, deadline, key);
+    }
+
+    private String createMilestoneAndGetId(String title, Instant deadline, String key) throws Exception {
+        String response = mockMvc.perform(post(endpoint())
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .header("Idempotency-Key", key)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(validRequest(title, deadline))))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(response).get("id").asText();
+    }
+
 }

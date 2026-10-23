@@ -53,6 +53,7 @@ function CreatePageSkeleton() {
 export function MilestoneCreatePage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
+  const listUrl = projectId ? `/projects/${projectId}/milestones` : "/teacher";
   const queryClient = useQueryClient();
   const [isDirty, setDirty] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -91,6 +92,7 @@ export function MilestoneCreatePage() {
         rubricName: rubric?.name,
         rubricVersion: rubric?.version,
         reviewerName: reviewer?.displayName,
+        returnTo: listUrl,
       };
       toast.success("Milestone created successfully.");
       navigate(`/projects/${projectId}/milestones/${milestone.id}`, { replace: true, state: routeState });
@@ -137,7 +139,7 @@ export function MilestoneCreatePage() {
 
   const requestCancel = () => {
     if (isDirty) setCancelOpen(true);
-    else navigate(-1);
+    else navigate(listUrl);
   };
 
   if (!projectId) {
@@ -164,7 +166,7 @@ export function MilestoneCreatePage() {
         <Card className="mx-auto w-full max-w-2xl">
           <CardHeader><CardTitle>Could not open the milestone form</CardTitle><CardDescription>{description}</CardDescription></CardHeader>
           <CardContent className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => navigate(-1)}><ArrowLeft className="size-4" /> Go back</Button>
+            <Button variant="outline" onClick={() => navigate(listUrl)}><ArrowLeft className="size-4" /> Back to milestones</Button>
             {error.status !== 403 ? <Button onClick={() => optionsQuery.refetch()}><RefreshCw className="size-4" /> Reload</Button> : null}
           </CardContent>
         </Card>
@@ -208,7 +210,7 @@ export function MilestoneCreatePage() {
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCancelOpen(false)}>Continue editing</Button>
-            <Button variant="destructive" onClick={() => navigate(-1)}>Discard changes</Button>
+            <Button variant="destructive" onClick={() => navigate(listUrl)}>Discard changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

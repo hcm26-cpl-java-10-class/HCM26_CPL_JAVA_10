@@ -10,4 +10,7 @@ public interface RubricCatalogPort {
 
     RubricSnapshotData requireAllowedSnapshot(
             UUID rubricSnapshotId, UUID projectId, UUID actorId, UUID tenantId);
+
+    RubricSnapshotData requireSnapshotForRead(
+            UUID rubricSnapshotId, UUID projectId, UUID tenantId);
 }
