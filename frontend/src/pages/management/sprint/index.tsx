@@ -5,6 +5,7 @@ import {
   type EntitySchema,
   type FieldSchema,
 } from "@/types";
+import { SprintCard } from "./components/SprintCard";
 
 const statusOptions = [
   { label: "Planned", value: "PLANNED" },
@@ -99,4 +100,18 @@ export const entityConfig: EntityConfig = {
   path: "/sprints",
   api: sprintApi,
   schema: sprintSchema,
+  /**
+   * Sprints are rendered as stacked full-width rows so status, start time and
+   * end time stay readable for the student browse view.
+   */
+  cardRenderer: (props) => <SprintCard {...props} />,
+  cardLayout: "list",
+  /**
+   * UFR-PRJ-003-01 is owned by the student persona: let students browse in the
+   * read-only card layout, but keep full CRUD on the sprint they can see
+   * (create via the inline form modal, plus edit / delete / active toggle).
+   * Each action stays gated by the matching SPRINT_* permission.
+   */
+  browseModeCreate: true,
+  browseModeActions: true,
 };

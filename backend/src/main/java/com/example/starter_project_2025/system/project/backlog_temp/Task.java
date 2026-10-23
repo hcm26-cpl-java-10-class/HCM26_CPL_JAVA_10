@@ -86,6 +86,14 @@ public class Task extends BaseEntity {
     @ExportField(name = "Sprint Id")
     Long sprintId;
 
+    /**
+     * Position of the item inside its Sprint Backlog (1-based), used by
+     * UFR-PRJ-003-03 to keep the priority order chosen during Sprint Planning.
+     * {@code null} while the item lives in the product backlog.
+     */
+    @Column(name = "sprint_order")
+    Integer sprintOrder;
+
     @Column(name = "milestone_id")
     @ImportField(name = "Milestone Id")
     @ExportField(name = "Milestone Id")

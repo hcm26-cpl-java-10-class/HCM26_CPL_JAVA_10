@@ -15,5 +15,22 @@ public interface TaskRepository extends BaseCrudRepository<Task, Long> {
 
     List<Task> findBySprintId(Long sprintId);
 
+    /**
+     * Sprint Backlog of a sprint, already ordered by the priority position set
+     * during Sprint Planning (UFR-PRJ-003-03).
+     */
+    List<Task> findBySprintIdOrderBySprintOrderAscIdAsc(Long sprintId);
+
+    /**
+     * Items that still live in the product backlog of a project.
+     */
+    List<Task> findByProjectIdAndSprintIdIsNull(Long projectId);
+
+    /**
+     * Items that are not assigned to any sprint (used when the sprint has no
+     * project scope yet).
+     */
+    List<Task> findBySprintIdIsNull();
+
     long countByStatus(TaskStatus status);
 }
