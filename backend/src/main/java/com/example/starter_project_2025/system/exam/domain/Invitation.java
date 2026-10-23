@@ -74,12 +74,17 @@ public class Invitation extends BaseEntity {
     @Column(length = 150)
     private String guestEmail;
 
+    /**
+     * User "khách" được tạo tự động khi học sinh mở link anonymous và nhập
+     * tên/email. Dùng để gắn kết quả bài thi về đúng người nhận email.
+     */
+    @Column(name = "guest_user_id")
+    private Long guestUserId;
+
     @Column(length = 10)
     private String accessCode;
 
-    @Column(length = 64)
-    private String oneTimeToken;
-
+    /** Mốc cuối để mở link (khác {@code expiresAt} là hạn của lời mời). */
     private LocalDateTime maxAccessTime;
 
     @Builder.Default

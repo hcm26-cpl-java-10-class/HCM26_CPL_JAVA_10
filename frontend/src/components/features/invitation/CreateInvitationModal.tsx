@@ -1,6 +1,7 @@
 import { invitationApi } from "@/api";
 import type {
     AnonymousInvitationRequest,
+    BatchInvitationRequest,
     InvitationCreateRequest,
     InvitationDTO,
     ReminderRequest,
@@ -22,7 +23,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Link2, Mail, QrCode, RefreshCw, Share2, Users, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 interface CreateInvitationModalProps {
@@ -37,6 +38,13 @@ interface AuthForm {
     userId: string;
     note: string;
     expiresAt: string;
+}
+
+/** Danh sách sinh viên được chọn để tạo lời mời hàng loạt. */
+interface SelectedStudent {
+    id: string;
+    email: string;
+    fullName: string;
 }
 
 interface AnonForm {
@@ -65,10 +73,14 @@ function toIso(value: string) {
 
 function UserPicker({
                         value,
+                        selected,
                         onChange,
+                        onSelectionChange,
                     }: {
     value: string;
+    selected: SelectedStudent[];
     onChange: (id: string) => void;
+    onSelectionChange: (students: SelectedStudent[]) => void;
 }) {
     const [search, setSearch] = useState("");
 
@@ -81,11 +93,105 @@ function UserPicker({
         enabled: search.length >= 2,
     });
 
+    // Danh sách student role STUDENT - dùng để chọn nhanh nhiều người.
+    const { data: students, isLoading: isLoadingStudents } = useQuery({
+        queryKey: ["student-list"],
+        queryFn: async () => {
+            const { userApi } = await import("@/api");
+            return userApi.getStudents();
+        },
+    });
+
+    const selectedIds = new Set(selected.map((s) => s.id));
+
+    const toggleStudent = (student: SelectedStudent) => {
+        if (selectedIds.has(student.id)) {
+            onSelectionChange(selected.filter((s) => s.id !== student.id));
+        } else {
+            onSelectionChange([...selected, student]);
+        }
+    };
+
+    const selectAllStudents = () => {
+        if (!students) return;
+        onSelectionChange(
+            students.map((s) => ({ id: String(s.id), email: s.email, fullName: s.fullName })),
+        );
+    };
+
+    const clearSelection = () => onSelectionChange([]);
+
     return (
         <div className="space-y-2">
-            <Label>Student</Label>
+            <div className="flex items-center justify-between">
+                <Label>Student</Label>
+                {students && students.length > 0 && (
+                    <div className="flex gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={selectAllStudents}>
+                            Select all ({students.length})
+                        </Button>
+                        {selected.length > 0 && (
+                            <Button type="button" variant="ghost" size="sm" onClick={clearSelection}>
+                                Clear
+                            </Button>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {selected.length > 0 && (
+                <div className="rounded-md border border-green-200 bg-green-50 p-2">
+                    <p className="mb-1 text-xs font-medium text-green-800">
+                        Selected {selected.length} student(s)
+                    </p>
+                    <div className="max-h-24 space-y-0.5 overflow-y-auto">
+                        {selected.map((s) => (
+                            <div key={s.id} className="flex items-center justify-between text-xs text-green-800">
+                                <span className="truncate">
+                                    {s.fullName} <span className="text-green-700">({s.email})</span>
+                                </span>
+                                <button
+                                    type="button"
+                                    className="ml-2 text-green-700 hover:text-red-600"
+                                    onClick={() => toggleStudent({ id: s.id, email: s.email, fullName: s.fullName })}
+                                >
+                                    ×
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {isLoadingStudents && <p className="text-sm text-muted-foreground">Loading students...</p>}
+
+            {students && students.length > 0 && (
+                <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border p-2">
+                    {students.map((s) => {
+                        const id = String(s.id);
+                        const isSelected = selectedIds.has(id);
+                        return (
+                            <button
+                                key={s.id}
+                                type="button"
+                                className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-muted ${
+                                    isSelected ? "bg-muted font-medium" : ""
+                                }`}
+                                onClick={() =>
+                                    toggleStudent({ id, email: s.email, fullName: s.fullName })
+                                }
+                            >
+                                <span className="w-4 shrink-0">{isSelected ? "✓" : ""}</span>
+                                <span>{s.fullName}</span>
+                                <span className="text-muted-foreground">({s.email})</span>
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+
             <Input
-                placeholder="Type name or email to search..."
+                placeholder="Type name or email to search (other users)..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
             />
@@ -133,6 +239,9 @@ export function CreateInvitationModal({
     // Auth form
     const [auth, setAuth] = useState<AuthForm>(DEFAULT_AUTH);
 
+    // Danh sách student được chọn để tạo lời mời hàng loạt
+    const [selectedStudents, setSelectedStudents] = useState<SelectedStudent[]>([]);
+
     // Anon form
     const [anon, setAnon] = useState<AnonForm>(DEFAULT_ANON);
 
@@ -140,16 +249,15 @@ export function CreateInvitationModal({
     const [authInvitations, setAuthInvitations] = useState<InvitationDTO[]>([]);
     const [anonInvitations, setAnonInvitations] = useState<Map<number, { inv: InvitationDTO; qr: string | null }>>(new Map());
 
-    useEffect(() => {
-        if (!open) {
-            setAuth(DEFAULT_AUTH);
-            setAnon(DEFAULT_ANON);
-            setReminderType("NONE");
-            setCustomReminder("");
-            setAuthInvitations([]);
-            setAnonInvitations(new Map());
-        }
-    }, [open]);
+    const resetForm = () => {
+        setAuth(DEFAULT_AUTH);
+        setAnon(DEFAULT_ANON);
+        setReminderType("NONE");
+        setCustomReminder("");
+        setAuthInvitations([]);
+        setAnonInvitations(new Map());
+        setSelectedStudents([]);
+    };
 
     // Create authenticated invitation
     const createAuthMutation = useMutation({
@@ -188,12 +296,60 @@ export function CreateInvitationModal({
         },
     });
 
+    // Tạo lời mời hàng loạt cho nhiều student đã chọn
+    const createBatchMutation = useMutation({
+        mutationFn: async () => {
+            const request: BatchInvitationRequest = {
+                invitations: selectedStudents.map((s) => ({
+                    userId: Number(s.id),
+                    note: auth.note || undefined,
+                    expiresAt: toIso(auth.expiresAt) || undefined,
+                })),
+                sendEmail: true,
+            };
+            return invitationApi.createBatch(examId, request);
+        },
+        onSuccess: async (res) => {
+            if (res.successfulInvitations?.length) {
+                setAuthInvitations((prev) => [...prev, ...res.successfulInvitations!]);
+            }
+            const success = res.successCount ?? res.successfulInvitations?.length ?? 0;
+            const failed = res.failureCount ?? res.errors?.length ?? 0;
+
+            if (failed > 0) {
+                toast.warning(`Created ${success}, failed ${failed}.`, {
+                    description: res.errors?.slice(0, 3).join(" | "),
+                });
+            } else {
+                toast.success(`Created ${success} invitation(s).`);
+            }
+
+            if (reminderType !== "NONE") {
+                const req: ReminderRequest = {
+                    reminderType: reminderType as ReminderType,
+                    scheduledAt: reminderType === "CUSTOM" ? toIso(customReminder) : undefined,
+                };
+                try {
+                    await invitationApi.scheduleReminder(examId, req);
+                } catch {
+                    // ignore
+                }
+            }
+
+            setSelectedStudents([]);
+            setAuth(DEFAULT_AUTH);
+            onSuccess?.();
+            void queryClient.invalidateQueries({ queryKey: ["exam-invitations", examId] });
+        },
+        onError: (error: unknown) => {
+            toast.error(getErrorMessage(error, "Failed to create invitations."));
+        },
+    });
+
     // Create anonymous invitation (share link)
     const createAnonMutation = useMutation({
         mutationFn: async () => {
             const request: AnonymousInvitationRequest = {
-                studentName: undefined,
-                studentEmail: undefined,
                 maxAccessAttempts: Number(anon.maxAccessAttempts) || 1,
             };
             return invitationApi.createAnonymous(examId, request);
@@ -223,6 +379,8 @@ export function CreateInvitationModal({
     const canSubmitAuth = Boolean(auth.userId);
 
     const handleClose = () => {
+        // Reset khi đóng dialog, không cần effect.
+        resetForm();
         onOpenChange(false);
     };
 
@@ -257,7 +415,9 @@ export function CreateInvitationModal({
                         >
                             <UserPicker
                                 value={auth.userId}
+                                selected={selectedStudents}
                                 onChange={(id) => setAuth((f) => ({ ...f, userId: id }))}
+                                onSelectionChange={setSelectedStudents}
                             />
 
                             <div className="space-y-2">
@@ -314,6 +474,26 @@ export function CreateInvitationModal({
                             </div>
 
                             <DialogFooter>
+                                {selectedStudents.length > 0 && (
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        disabled={createBatchMutation.isPending}
+                                        onClick={() => createBatchMutation.mutate()}
+                                    >
+                                        {createBatchMutation.isPending ? (
+                                            <>
+                                                <RefreshCw className="size-4 animate-spin" />
+                                                Creating {selectedStudents.length}...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Users className="size-4" />
+                                                Create for {selectedStudents.length} student(s)
+                                            </>
+                                        )}
+                                    </Button>
+                                )}
                                 <Button
                                     type="submit"
                                     disabled={!canSubmitAuth || createAuthMutation.isPending}
@@ -362,7 +542,7 @@ export function CreateInvitationModal({
                                 <div>
                                     <p className="font-medium">Share Exam Link</p>
                                     <p className="text-sm text-muted-foreground mt-1">
-                                        Generate a public link to share with students — no account is required to take the exam.
+                                        Generate a public link to share with students — no account is required to take the exam. Students enter their own name and email when opening the link.
                                     </p>
                                 </div>
                             </div>
@@ -445,9 +625,12 @@ interface ShareLinkCardProps {
 }
 
 function ShareLinkCard({ invitation, qrDataUrl }: ShareLinkCardProps) {
-    const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8080";
+    // Link share phải trỏ về FRONTEND (route /anonymous-exam), không phải về
+    // backend. Dùng VITE_API_URL ở đây sẽ sinh ra http://localhost:8080/...
+    // và người dùng thấy trang trắng.
+    const FRONTEND_BASE = import.meta.env.VITE_FRONTEND_URL || "http://localhost:5173";
     const shareableUrl = invitation.accessCode
-        ? `${API_BASE}/anonymous-exam?code=${invitation.accessCode}`
+        ? `${FRONTEND_BASE}/anonymous-exam?code=${invitation.accessCode}`
         : null;
 
     const copyCode = () => {

@@ -255,4 +255,16 @@ public class UserServiceImpl
         user.setLocked(false);
         userRepository.save(user);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<StudentSummaryDTO> findStudents() {
+        return userRepository.findActiveUsersByRoleName("STUDENT").stream()
+                .map(user -> new StudentSummaryDTO(
+                        user.getId(),
+                        user.getEmail(),
+                        user.getFullName()
+                ))
+                .toList();
+    }
 }

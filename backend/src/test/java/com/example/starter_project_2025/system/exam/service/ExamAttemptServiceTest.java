@@ -96,7 +96,24 @@ class ExamAttemptServiceTest {
         exam.setQuestions(Set.of(question(1L, QuestionType.MULTIPLE_CHOICE, 5)));
         when(examRepository.lockForAttemptStart(20L)).thenReturn(Optional.of(exam));
 
-        assertThrows(BadRequestException.class, () -> service.startOrResume(20L, 40L));
+        // Không được có attempt IN_PROGRESS sẵn, nếu không service resume
+        // attempt cũ và không tới bước kiểm tra lời mời.
+        attempt.setStatus(ExamAttemptStatus.SUBMITTED);
+        when(attemptRepository.findAllByExam_IdAndStudent_IdOrderByAttemptNumberAsc(20L, 40L))
+                .thenReturn(List.of(attempt));
+
+        // Đề CÓ lời mời, nhưng sinh viên này chưa accept lời mời nào -> phải bị chặn.
+        Invitation pending = Invitation.builder()
+                .id(77L)
+                .exam(exam)
+                .user(attempt.getStudent())
+                .status(InvitationStatus.SENT)
+                .build();
+        when(invitationRepository.findByExamId(20L)).thenReturn(List.of(pending));
+
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> service.startOrResume(20L, 40L));
+        assertEquals("Bạn cần chấp nhận lời mời trước khi làm bài", ex.getMessage());
     }
 
 

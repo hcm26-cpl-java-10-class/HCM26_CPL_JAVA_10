@@ -31,11 +31,15 @@ public class AnonymousSession extends BaseEntity {
 
     private LocalDateTime completedAt;
 
-    @Column(length = 50)
-    private String ipAddress;
+    @Column(length = 100)
+    private String guestName;
 
-    @Column(length = 200)
-    private String userAgent;
+    @Column(length = 150)
+    private String guestEmail;
+
+    /** User "khách" được tạo tự động cho học sinh này (null nếu chưa xác định). */
+    @Column(name = "guest_user_id")
+    private Long guestUserId;
 
     @Builder.Default
     @Column(nullable = false)

@@ -68,9 +68,6 @@ public class InvitationDTO extends BaseDTO {
     @JsonProperty(access = READ_ONLY)
     private String accessCode;
 
-    @JsonProperty(access = READ_ONLY)
-    private String oneTimeToken;
-
     private LocalDateTime maxAccessTime;
 
     private Integer maxAccessAttempts;

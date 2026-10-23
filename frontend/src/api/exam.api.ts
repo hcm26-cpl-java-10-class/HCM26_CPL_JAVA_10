@@ -25,7 +25,8 @@ export type ExamAttemptStatus =
 export interface ExamAttemptQuestion {
     id: number;
     content: string;
-    type: 'SINGLE_CHOICE' | 'MULTI_CHOICE' | 'MULTIPLE_CHOICE' | 'ESSAY';
+    /** Khớp với enum QuestionType của backend (MULTIPLE_CHOICE | ESSAY). */
+    type: 'MULTIPLE_CHOICE' | 'ESSAY';
     points: number;
     /** true = nhiều đáp án đúng -> ô vuông (checkbox); false = ô tròn (radio). */
     multiSelect: boolean;
@@ -129,5 +130,46 @@ export const saveExamAnswers = async (attemptId: number, answers: SaveExamAnswer
 
 export const submitExamAttempt = async (attemptId: number, answers: SaveExamAnswerRequest[]) => {
     const response = await api.post<ExamAttempt>(`/exams/attempts/${attemptId}/submit`, answers);
+    return response.data;
+};
+
+// ============ HỌC SINH THI QUA LINK (KHÔNG CÓ TÀI KHOẢN) ============
+
+export const SESSION_TOKEN_KEY = 'anonymous_session_token';
+export const SESSION_EMAIL_KEY = 'anonymous_student_email';
+export const SESSION_NAME_KEY = 'anonymous_student_name';
+
+/** Bắt đầu/tiếp tục làm bài bằng phiên anonymous. */
+export const startAnonymousExam = async (sessionToken: string, password?: string) => {
+    const response = await api.post<ExamAttempt>('/exams/anonymous/attempt', {
+        sessionToken,
+        password: password || undefined,
+    });
+    return response.data;
+};
+
+export const saveAnonymousAnswers = async (
+    attemptId: number,
+    sessionToken: string,
+    answers: SaveExamAnswerRequest[],
+) => {
+    const response = await api.put<ExamAttempt>(
+        `/exams/anonymous/attempts/${attemptId}/answers`,
+        answers,
+        { headers: { 'X-Anonymous-Session': sessionToken } },
+    );
+    return response.data;
+};
+
+export const submitAnonymousExam = async (
+    attemptId: number,
+    sessionToken: string,
+    answers: SaveExamAnswerRequest[],
+) => {
+    const response = await api.post<ExamAttempt>(
+        `/exams/anonymous/attempts/${attemptId}/submit`,
+        answers,
+        { headers: { 'X-Anonymous-Session': sessionToken } },
+    );
     return response.data;
 };

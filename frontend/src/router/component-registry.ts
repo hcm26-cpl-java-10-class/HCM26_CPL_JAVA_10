@@ -22,6 +22,7 @@ import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import MyScoresPage from "@/pages/student/MyScoresPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import AnonymousAccessPage from "@/pages/exam/AnonymousAccessPage";
+import AnonymousExamTakingPage from "@/pages/exam/AnonymousExamTakingPage";
 import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
@@ -49,6 +50,8 @@ export const routes: RouteConfig[] = [
   { path: "/exams/:examId/grading", component: EssayAttemptListPage, requiredPermission: "EXAM_UPDATE" },
   { path: "/exams/:examId/grading/:attemptId", component: EssayAttemptDetailPage, requiredPermission: "EXAM_UPDATE" },
   { path: "/anonymous-exam", component: AnonymousAccessPage, isPublic: true },
+  // Trang làm bài cho học sinh không có tài khoản RBAC (dùng sessionToken)
+  { path: "/anonymous-exam/take", component: AnonymousExamTakingPage, isPublic: true },
   { path: "/student/invitations", component: StudentInvitationsRedirect, requiredPermission: "INVITATION_READ" },
   {
     path: "/exams/:examId/result-statistics",

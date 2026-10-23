@@ -30,10 +30,8 @@ export interface InvitationDTO extends BaseDTO {
     guestName?: string | null;
     guestEmail?: string | null;
     accessCode?: string | null;
-    oneTimeToken?: string | null;
     maxAccessTime?: string | null;
     maxAccessAttempts?: number;
-    accessAttemptCount?: number;
 
     // Thông tin đề thi cho phía student (enriched từ server)
     examStartTime?: string | null;
@@ -41,16 +39,6 @@ export interface InvitationDTO extends BaseDTO {
     examDurationMinutes?: number;
     examMaxAttempts?: number;
     examHasPassword?: boolean;
-}
-
-export interface StudentInvitationDTO extends InvitationDTO {
-    examTitle: string;
-    durationMinutes?: number;
-    startTime?: string | null;
-    endTime?: string | null;
-    maxAttempts?: number;
-    totalPoints?: number;
-    hasPassword?: boolean;
 }
 
 export interface InvitationCreateRequest {
@@ -90,8 +78,10 @@ export interface BatchInvitationResponse {
 }
 
 export interface AnonymousInvitationRequest {
-    studentName: string;
-    studentEmail: string;
+    /** Tuỳ chọn — giáo viên có thể nhập trước, hoặc để học sinh tự khai khi mở link. */
+    studentName?: string;
+    /** Tuỳ chọn — nếu có email thì link được gửi qua email cho học sinh. */
+    studentEmail?: string;
     note?: string;
     /** ISO-8601 datetime string */
     expiresAt?: string;
@@ -111,14 +101,21 @@ export interface AnonymousAccessResponse {
 
 export interface AnonymousSessionRequest {
     accessCode: string;
+    /** Họ tên - phải khớp với lời mời đã cấp. */
+    studentName: string;
+    /** Email - phải khớp với lời mời, dùng để gửi kết quả bài thi. */
+    studentEmail: string;
     fingerprint?: string;
 }
 
 export interface AnonymousSessionResponse {
     valid: boolean;
     sessionToken?: string;
+    examId?: number;
     examTitle?: string;
     durationMinutes?: number;
+    studentName?: string;
+    studentEmail?: string;
     message?: string;
 }
 
@@ -147,18 +144,4 @@ export interface ReminderRequest {
     scheduledAt?: string;
     /** Omit to target every active invitation of the exam */
     invitationId?: number;
-}
-
-export interface InvitationFilter {
-    ids?: number[];
-    isActive?: boolean;
-    examId?: number;
-    userId?: number;
-    status?: InvitationStatus;
-    userEmail?: string;
-    examTitle?: string;
-}
-
-export interface RevokeInvitationRequest {
-    reason?: string;
 }

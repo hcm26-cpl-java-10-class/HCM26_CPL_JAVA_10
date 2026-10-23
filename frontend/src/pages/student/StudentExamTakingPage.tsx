@@ -755,7 +755,7 @@ export default function StudentExamTakingPage() {
                                             <div className="mt-4 grid gap-3">
                                                 {question.options.map((option) => {
                                                     const checked = answer.selectedOptionIds.includes(option.id);
-                                                    const isMulti = question.multiSelect ?? question.type === 'MULTI_CHOICE';
+                                                    const isMulti = question.multiSelect;
                                                     const inputType = isMulti ? 'checkbox' : 'radio';
                                                     return (
                                                         <label

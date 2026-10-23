@@ -8,7 +8,10 @@ import lombok.Data;
 public class AnonymousSessionResponse {
     private boolean valid;
     private String sessionToken;
+    private Long examId;
     private String examTitle;
     private int durationMinutes;
+    private String studentName;
+    private String studentEmail;
     private String message;
 }
