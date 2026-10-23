@@ -161,7 +161,15 @@ export function MilestoneForm({
                   <Label htmlFor="milestone-description">Description</Label>
                   <span className="text-xs text-muted-foreground">{values.description?.length ?? 0}/2.000</span>
                 </div>
-                <Textarea id="milestone-description" rows={4} maxLength={2000} placeholder="Describe the expected deliverables and outcome" aria-invalid={!!errors.description} {...register("description")} />
+                <Textarea
+                  id="milestone-description"
+                  rows={4}
+                  maxLength={2000}
+                  className="h-32 min-h-32 max-h-32 resize-none overflow-y-auto !field-sizing-fixed"
+                  placeholder="Describe the expected deliverables and outcome"
+                  aria-invalid={!!errors.description}
+                  {...register("description")}
+                />
                 <FieldMessage message={errors.description?.message} />
               </div>
 
