@@ -12,6 +12,8 @@ import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_grade
 import StudentExamList from "@/pages/student/StudentExamList";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
+import TaskManagementPage from "@/pages/management/task";
+import { TaskFormPage } from "@/pages/management/task/pages/TaskFormPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 
@@ -27,6 +29,9 @@ export interface RouteConfig {
 export const routes: RouteConfig[] = [
   { path: "/dashboard", component: Dashboard, isModuleDriven: true },
   { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
+  { path: "/tasks", component: TaskManagementPage, requiredPermission: "TASK_READ", isModuleDriven: true },
+  { path: "/tasks/create", component: TaskFormPage, requiredPermission: "TASK_CREATE" },
+  { path: "/tasks/:id/edit", component: TaskFormPage, requiredPermission: "TASK_UPDATE" },
   {
     path: "/invitations",
     component: InvitationManagementPage,

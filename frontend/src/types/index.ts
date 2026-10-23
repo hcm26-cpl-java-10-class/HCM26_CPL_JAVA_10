@@ -18,6 +18,7 @@ export * from "./features/invitation";
 export * from "./features/menu/module";
 export * from "./features/menu/module_group";
 export * from "./features/sprint";
+export * from "./features/task";
 export * from "./features/rbac/department";
 export * from "./features/rbac/permission";
 export * from "./features/rbac/role";
