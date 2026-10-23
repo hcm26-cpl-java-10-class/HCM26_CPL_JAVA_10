@@ -13,6 +13,21 @@ import static org.mockito.Mockito.*;
 
 class StudySessionStatisticsTest {
     @Test
+    void countsSumToTotalAndRatesAreRoundedWithEmptyDataSafe() {
+        var statistics = StudySessionStatistics.of(10, 1, 1);
+        assertEquals(12, statistics.total());
+        assertEquals(statistics.total(), statistics.scheduled() + statistics.completed() + statistics.cancelled());
+        assertEquals(8.33, statistics.completionRate());
+        assertEquals(8.33, statistics.cancellationRate());
+        var empty = StudySessionStatistics.of(0, 0, 0);
+        assertEquals(0, empty.total());
+        assertEquals(0, empty.completionRate());
+        assertEquals(0, empty.cancellationRate());
+        assertEquals(100, StudySessionStatistics.of(0, 5, 0).completionRate());
+        assertEquals(100, StudySessionStatistics.of(0, 0, 5).cancellationRate());
+    }
+
+    @Test
     void requiresReadPermissionBeforeQueryingDatabase() {
         var repository = mock(StudySessionRepository.class);
         var service = new StudySessionServiceImpl(mock(StudySessionMapper.class), repository, mock(SubjectRepository.class), null, null, null);

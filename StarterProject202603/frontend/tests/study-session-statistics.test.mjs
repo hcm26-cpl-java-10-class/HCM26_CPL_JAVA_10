@@ -49,3 +49,24 @@ test("statistics panel renders zero values, empty state, loading and errors", ()
     if (state.data) assert.ok(html.includes("0.00%"));
   }
 });
+
+test("statistics chart renders all status proportions from backend counts", () => {
+  const { renderToStaticMarkup } = require("react-dom/server");
+  for (const data of [
+    { total: 8, scheduled: 4, completed: 3, cancelled: 1, completionRate: 37.5, cancellationRate: 12.5 },
+    { total: 0, scheduled: 0, completed: 0, cancelled: 0, completionRate: 0, cancellationRate: 0 },
+  ]) {
+    const { StudySessionStatisticsPanel } = load("src/pages/management/academic/study_session/StudySessionStatisticsPanel.tsx", {
+      "@tanstack/react-query": { useQuery: ({ queryKey }) => queryKey[0] === "relation" ? { data: [] } : { data } },
+      "@/api": {},
+    });
+    const html = renderToStaticMarkup(require("react").createElement(StudySessionStatisticsPanel));
+    assert.equal((html.match(/role="meter"/g) || []).length, 3);
+    for (const status of ["scheduled", "completed", "cancelled"]) {
+      const percentage = data.total ? data[status] * 100 / data.total : 0;
+      assert.ok(html.includes(`aria-label="${status.toUpperCase()}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percentage}"`));
+      assert.ok(html.includes(`${data[status]} (${percentage.toFixed(2)}%)`));
+    }
+    assert.ok(!html.includes("NaN"));
+  }
+});
