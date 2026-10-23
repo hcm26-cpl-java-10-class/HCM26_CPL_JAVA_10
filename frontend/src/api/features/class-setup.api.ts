@@ -1,4 +1,5 @@
 import axiosInstance from "../axios";
+import type { ImportResult } from "@/types";
 
 export type AssignmentRole = "MAIN" | "ASSISTANT";
 
@@ -7,7 +8,41 @@ export interface SharedClass {
   code: string;
   name: string;
   programId?: number | null;
+  startDate?: string | null;
+  endDate?: string | null;
   status?: string;
+  plannedSize?: number | null;
+  deliveryType?: string | null;
+  traineeType?: string | null;
+  formatType?: string | null;
+  skills?: string | null;
+  site?: string | null;
+  location?: string | null;
+  subjectType?: string | null;
+  scope?: string | null;
+  supplierPartner?: string | null;
+  keyProgram?: string | null;
+  jobRecommendation?: boolean | null;
+}
+
+export interface SharedClassRequest {
+  code: string;
+  name: string;
+  startDate: string | null;
+  endDate: string | null;
+  status: "active" | "inactive";
+  plannedSize: number | null;
+  deliveryType?: string | null;
+  traineeType?: string | null;
+  formatType?: string | null;
+  skills?: string | null;
+  site?: string | null;
+  location?: string | null;
+  subjectType?: string | null;
+  scope?: string | null;
+  supplierPartner?: string | null;
+  keyProgram?: string | null;
+  jobRecommendation?: boolean | null;
 }
 
 export interface SharedTrainer {
@@ -74,8 +109,20 @@ interface AssignmentPage<T> {
 export const classSetupApi = {
   getDataSource: async () =>
     (await axiosInstance.get<{ sampleData: boolean }>("/external/data-source")).data,
-  getActiveClasses: async () =>
-    (await axiosInstance.get<SharedClass[]>("/external/classes", { params: { status: "active" } })).data,
+  getClasses: async () =>
+    (await axiosInstance.get<SharedClass[]>("/external/classes", { params: { status: "all" } })).data,
+  createClass: async (request: SharedClassRequest) =>
+    (await axiosInstance.post<SharedClass>("/classes", request)).data,
+  importClasses: async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return (await axiosInstance.post<ImportResult>("/classes/import", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    })).data;
+  },
+  updateClass: async (classId: number, request: SharedClassRequest) =>
+    (await axiosInstance.put<SharedClass>(`/classes/${classId}`, request)).data,
+  deleteClass: async (classId: number) => axiosInstance.delete(`/classes/${classId}`),
   getActiveTrainers: async () =>
     (await axiosInstance.get<SharedTrainer[]>("/external/trainers", { params: { status: "active" } })).data,
   assignProgram: async (classId: number, programId: number) =>

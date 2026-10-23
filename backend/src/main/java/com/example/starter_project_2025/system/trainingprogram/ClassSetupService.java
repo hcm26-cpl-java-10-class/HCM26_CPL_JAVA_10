@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.trainingprogram;
 
+import com.example.starter_project_2025.system.external_api.dto.ExternalClassDTO;
+import com.example.starter_project_2025.system.external_api.dto.ExternalClassRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -7,6 +9,12 @@ import java.time.LocalDate;
 import java.util.List;
 
 public interface ClassSetupService {
+    ExternalClassDTO createClass(ExternalClassRequest request);
+
+    ExternalClassDTO updateClass(Long classId, ExternalClassRequest request);
+
+    void deleteClass(Long classId);
+
     ClassProgramSubjectsResponse assignProgram(Long classId, Long programId);
 
     ClassProgramSubjectsResponse getClassProgramSubjects(Long classId);

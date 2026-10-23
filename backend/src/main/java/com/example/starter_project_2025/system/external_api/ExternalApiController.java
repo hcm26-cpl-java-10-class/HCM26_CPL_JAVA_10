@@ -34,7 +34,7 @@ public class ExternalApiController {
     @Operation(summary = "Fetch classes from external system")
     public ResponseEntity<List<ExternalClassDTO>> getClasses(
             @RequestParam(required = false, defaultValue = "active") String status) {
-        return ResponseEntity.ok(externalApiService.fetchClasses(status));
+        return ResponseEntity.ok(externalApiService.fetchClasses("all".equalsIgnoreCase(status) ? null : status));
     }
 
     @GetMapping("/classes/{id}")

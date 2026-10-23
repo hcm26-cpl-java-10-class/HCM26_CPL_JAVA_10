@@ -17,9 +17,10 @@ import {
   Plus,
   RefreshCw,
   Trash2,
+  Upload,
   Users,
 } from "lucide-react";
-import { classSetupApi, type AssignmentRole, type ClassProgramSubjects, type SharedClass, type SharedTrainer, type TeachingAssignment, type TeachingAssignmentRequest } from "@/api/features/class-setup.api";
+import { classSetupApi, type AssignmentRole, type ClassProgramSubjects, type SharedClass, type SharedClassRequest, type SharedTrainer, type TeachingAssignment, type TeachingAssignmentRequest } from "@/api/features/class-setup.api";
 import { programApi, type TrainingProgramResponse } from "@/api/features/program.api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import ConfirmDialog from "@/components/ui/confirmdialog";
@@ -33,6 +34,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { usePermissions } from "@/hooks/usePermissions";
+import { ClassDetails } from "./ClassDetails";
+import { ImportModal } from "@/components/datatable/dataio/ImportModal";
+import { ImportResultModal } from "@/components/datatable/dataio/ImportResultModal";
+import type { ImportResult } from "@/types";
 
 type AssignmentForm = {
   programSubjectId: string;
@@ -55,6 +60,14 @@ const emptyForm = (): AssignmentForm => ({
   effectiveFrom: today(),
   effectiveTo: "",
 });
+
+const isClassActive = (classData: SharedClass) =>
+  !classData.status || classData.status.toLowerCase() === "active";
+
+const classImportTable = {
+  schema: { entityName: "class-setup" },
+  importFile: classSetupApi.importClasses,
+};
 
 function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
@@ -110,6 +123,9 @@ export default function ClassSetupPage() {
   const canUpdateAssignment = hasPermission("ASSIGNMENT_UPDATE");
   const canDeleteAssignment = hasPermission("ASSIGNMENT_DELETE");
   const canManageAssignments = canCreateAssignment || canUpdateAssignment;
+  const canCreateClass = hasPermission("CLASS_CREATE");
+  const canUpdateClass = hasPermission("CLASS_UPDATE");
+  const canDeleteClass = hasPermission("CLASS_DELETE");
 
   const [classes, setClasses] = useState<SharedClass[]>([]);
   const [trainers, setTrainers] = useState<SharedTrainer[]>([]);
@@ -127,13 +143,20 @@ export default function ClassSetupPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [pendingDelete, setPendingDelete] = useState<TeachingAssignment | null>(null);
   const [form, setForm] = useState<AssignmentForm>(emptyForm);
+  const [classEditor, setClassEditor] = useState<{ data: SharedClass | null } | null>(null);
+  const [classError, setClassError] = useState("");
+  const [classSaving, setClassSaving] = useState(false);
+  const [pendingClassDelete, setPendingClassDelete] = useState<SharedClass | null>(null);
+  const [classImportOpen, setClassImportOpen] = useState(false);
+  const [classImportResult, setClassImportResult] = useState<ImportResult | null>(null);
+  const [classImportResultOpen, setClassImportResultOpen] = useState(false);
 
   const loadResources = useCallback(async () => {
     setLoadingResources(true);
     setResourceErrors({ classes: "", programs: "", trainers: "" });
     try {
       const [classResult, programResult, trainerResult, sourceResult] = await Promise.allSettled([
-        classSetupApi.getActiveClasses(),
+        classSetupApi.getClasses(),
         canAssignProgram ? programApi.getAll({ status: "ACTIVE" }) : Promise.resolve([]),
         canManageAssignments ? classSetupApi.getActiveTrainers() : Promise.resolve([]),
         classSetupApi.getDataSource(),
@@ -148,8 +171,11 @@ export default function ClassSetupPage() {
         programs: programResult.status === "rejected" ? getErrorMessage(programResult.reason) : "",
         trainers: trainerResult.status === "rejected" ? getErrorMessage(trainerResult.reason) : "",
       });
-      setSelectedClassId((current) => classList.some((item) => String(item.id) === current)
-        ? current : (classList[0] ? String(classList[0].id) : ""));
+      setSelectedClassId((current) => {
+        const currentClass = classList.find((item) => String(item.id) === current);
+        const firstActiveClass = classList.find(isClassActive);
+        return currentClass && isClassActive(currentClass) ? current : firstActiveClass ? String(firstActiveClass.id) : "";
+      });
       return classList;
     } finally {
       setLoadingResources(false);
@@ -193,6 +219,7 @@ export default function ClassSetupPage() {
     [classData],
   );
   const selectedClass = classes.find((item) => String(item.id) === selectedClassId);
+  const activeClasses = classes.filter(isClassActive);
   const programChangeBlocked = Boolean(
     classData?.program && Number(programId) !== classData.program.id && assignments.length,
   );
@@ -281,8 +308,66 @@ export default function ClassSetupPage() {
     }
   };
 
+  const saveClass = async (request: SharedClassRequest, selectedProgramId: string, programChanged: boolean) => {
+    if (!classEditor) return;
+    setClassError("");
+    setClassSaving(true);
+    try {
+      const editing = classEditor.data;
+      const saved = editing
+        ? await classSetupApi.updateClass(editing.id, request)
+        : await classSetupApi.createClass(request);
+      setClasses((current) => [saved, ...current.filter((item) => item.id !== saved.id)].sort((a, b) => a.id - b.id));
+      setClassEditor({ data: saved });
+      setSelectedClassId(isClassActive(saved) ? String(saved.id) : "");
+      setError("");
+      if (selectedProgramId && canAssignProgram && (!editing || programChanged)) {
+        await classSetupApi.assignProgram(saved.id, Number(selectedProgramId));
+      }
+      if (isClassActive(saved)) await loadClass(saved.id);
+      setNotice(editing ? `Đã cập nhật lớp ${saved.code}.` : `Đã tạo lớp ${saved.code}.`);
+    } catch (saveError) {
+      setClassError(getErrorMessage(saveError));
+    } finally {
+      setClassSaving(false);
+    }
+  };
+
+  const deleteClass = async () => {
+    if (!pendingClassDelete) return;
+    setClassSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      await classSetupApi.deleteClass(pendingClassDelete.id);
+      const remaining = classes.filter((item) => item.id !== pendingClassDelete.id);
+      setClasses(remaining);
+      if (String(pendingClassDelete.id) === selectedClassId) {
+        const nextClass = remaining.find(isClassActive);
+        setSelectedClassId(nextClass ? String(nextClass.id) : "");
+      }
+      setNotice(`Đã xóa lớp ${pendingClassDelete.code}.`);
+      setPendingClassDelete(null);
+    } catch (deleteError) {
+      setError(getErrorMessage(deleteError));
+      setPendingClassDelete(null);
+    } finally {
+      setClassSaving(false);
+    }
+  };
+
+  const handleClassImportSuccess = (result: ImportResult) => {
+    setClassImportResult(result);
+    setClassImportResultOpen(true);
+    if (result.successCount > 0) {
+      setError("");
+      setNotice(`Đã import thành công ${result.successCount} lớp học.`);
+      void loadResources();
+    }
+  };
+
   return (
-    <MainLayout pathName={{ "class-setup": "Gán chương trình" }}>
+    <MainLayout pathName={{ "class-setup": "Quản lý lớp học" }}>
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-3">
@@ -290,9 +375,9 @@ export default function ClassSetupPage() {
               <GraduationCap className="size-6" aria-hidden="true" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Gán chương trình & phân công giảng dạy</h1>
+              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Quản lý lớp học</h1>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-                Gắn chương trình đào tạo cho lớp và phân công giảng viên theo từng môn, vai trò, thời hạn.
+                Tạo lớp, gán một chương trình đào tạo và phân công giảng viên theo từng môn.
               </p>
             </div>
           </div>
@@ -319,21 +404,68 @@ export default function ClassSetupPage() {
         ].filter(Boolean).join(" ")} notice="" />
 
         <Card>
+          <CardHeader className="gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1.5">
+              <CardTitle className="flex items-center gap-2 text-lg"><Users className="size-5 text-primary" aria-hidden="true" /> Danh sách lớp học</CardTitle>
+              <CardDescription>Mã lớp được dùng chung với chương trình, lịch học và các chức năng khác.</CardDescription>
+            </div>
+            {canCreateClass && <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => setClassImportOpen(true)} disabled={loadingResources || classSaving}><Upload />Import từ Excel</Button>
+              <Button onClick={() => { setClassError(""); setClassEditor({ data: null }); }} disabled={loadingResources || classSaving}><Plus />Tạo lớp</Button>
+            </div>}
+          </CardHeader>
+          <CardContent>
+            {loadingResources ? <Skeleton className="h-24 w-full" /> : resourceErrors.classes ? (
+              <EmptyState title="Không tải được danh sách lớp" detail="Kiểm tra kết nối với hệ thống dùng chung rồi tải lại dữ liệu." />
+            ) : classes.length ? (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader><TableRow>
+                    <TableHead>Lớp học</TableHead>
+                    <TableHead>Thời gian</TableHead>
+                    <TableHead>Sĩ số</TableHead>
+                    <TableHead>Trạng thái</TableHead>
+                    <TableHead className="text-right">Thao tác</TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>{classes.map((item) => {
+                    const active = isClassActive(item);
+                    const statusLabel = active ? "Đang hoạt động" : item.status?.toLowerCase() === "inactive" ? "Ngừng hoạt động" : item.status;
+                    return <TableRow key={item.id}>
+                      <TableCell><p className="font-medium">{item.name}</p><p className="mt-1 font-mono text-xs text-muted-foreground">{item.code} · ID {item.id}</p></TableCell>
+                      <TableCell className="whitespace-nowrap text-sm text-muted-foreground">{item.startDate || "—"} <span aria-hidden="true">→</span> {item.endDate || "—"}</TableCell>
+                      <TableCell>{item.plannedSize ?? "—"}</TableCell>
+                      <TableCell><Badge variant={active ? "secondary" : "outline"}>{statusLabel}</Badge></TableCell>
+                      <TableCell><div className="flex justify-end gap-1">
+                        {canUpdateClass && <Button variant="ghost" size="icon-sm" aria-label={`Sửa lớp ${item.code}`} disabled={classSaving} onClick={() => { setClassError(""); setClassEditor({ data: item }); }}><Pencil className="size-4" /></Button>}
+                        {canDeleteClass && <Button variant="ghost" size="icon-sm" aria-label={`Xóa lớp ${item.code}`} className="text-destructive hover:text-destructive" disabled={classSaving} onClick={() => setPendingClassDelete(item)}><Trash2 className="size-4" /></Button>}
+                        {!canUpdateClass && !canDeleteClass && <span className="px-2 text-sm text-muted-foreground">Chỉ xem</span>}
+                      </div></TableCell>
+                    </TableRow>;
+                  })}</TableBody>
+                </Table>
+              </div>
+            ) : (
+              <EmptyState title="Chưa có lớp học" detail="Tạo lớp đầu tiên, sau đó chọn một chương trình ACTIVE để gán cho lớp." />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
           <CardHeader className="pb-4">
-            <CardTitle className="flex items-center gap-2 text-lg"><Users className="size-5 text-primary" aria-hidden="true" /> Chọn lớp</CardTitle>
-            <CardDescription>Danh sách lớp đang hoạt động được tải từ hệ thống dùng chung.</CardDescription>
+            <CardTitle className="flex items-center gap-2 text-lg"><Users className="size-5 text-primary" aria-hidden="true" /> Chọn lớp để gán chương trình</CardTitle>
+            <CardDescription>Mỗi lớp chỉ liên kết với một chương trình đào tạo tại một thời điểm.</CardDescription>
           </CardHeader>
           <CardContent>
             {loadingResources ? (
               <Skeleton className="h-10 w-full max-w-2xl" />
-            ) : classes.length ? (
+            ) : activeClasses.length ? (
               <div className="grid gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] sm:items-end">
                 <div className="space-y-2">
                   <Label htmlFor="class-select">Lớp đang hoạt động</Label>
                   <Select value={selectedClassId} disabled={loadingResources || loadingClass || saving} onValueChange={(value) => { setSelectedClassId(value); setNotice(""); setError(""); }}>
                     <SelectTrigger id="class-select" className="w-full"><SelectValue placeholder="Chọn lớp" /></SelectTrigger>
                     <SelectContent>
-                      {classes.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.code} — {item.name}</SelectItem>)}
+                      {activeClasses.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.code} — {item.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -344,7 +476,7 @@ export default function ClassSetupPage() {
             ) : resourceErrors.classes ? (
               <EmptyState title="Không tải được danh sách lớp" detail="Dữ liệu lớp hiện chưa tải được. Nhấn Làm mới dữ liệu để thử lại." />
             ) : (
-              <EmptyState title="Chưa có lớp đang hoạt động" detail="Kiểm tra dữ liệu lớp trên hệ thống dùng chung rồi tải lại danh sách." />
+              <EmptyState title="Chưa có lớp đang hoạt động" detail="Tạo lớp mới hoặc kích hoạt một lớp từ danh sách phía trên." />
             )}
           </CardContent>
         </Card>
@@ -570,6 +702,47 @@ export default function ClassSetupPage() {
         loading={saving}
         onCancel={() => setPendingDelete(null)}
         onConfirm={() => void deleteAssignment()}
+      />
+      <ConfirmDialog
+        open={pendingClassDelete !== null}
+        title="Xóa lớp học?"
+        description={pendingClassDelete ? `Bạn sắp xóa lớp ${pendingClassDelete.code} — ${pendingClassDelete.name}. Lớp có phân công giảng dạy không thể bị xóa.` : undefined}
+        confirmLabel="Xóa lớp"
+        cancelLabel="Giữ lại"
+        loading={classSaving}
+        onCancel={() => setPendingClassDelete(null)}
+        onConfirm={() => void deleteClass()}
+      />
+      {classEditor && <ClassDetails
+        key={classEditor.data?.id ?? "new-class"}
+        classData={classEditor.data}
+        programs={programs}
+        canUpdate={classEditor.data ? canUpdateClass : canCreateClass}
+        canAssignProgram={canAssignProgram}
+        sampleData={sampleData}
+        saving={classSaving}
+        error={classError}
+        notice={notice}
+        onBack={() => setClassEditor(null)}
+        onSave={(request, programId, programChanged) => void saveClass(request, programId, programChanged)}
+      />}
+      <ImportModal
+        open={classImportOpen}
+        onOpenChange={setClassImportOpen}
+        table={classImportTable}
+        title="Import lớp học từ Excel"
+        description="Tải mẫu Excel, điền dữ liệu lớp và tải file lên để tạo nhiều lớp cùng lúc."
+        onImportSuccess={handleClassImportSuccess}
+        canImport={canCreateClass}
+      />
+      <ImportResultModal
+        open={classImportResultOpen}
+        onOpenChange={setClassImportResultOpen}
+        result={classImportResult}
+        onBackToImport={() => {
+          setClassImportResultOpen(false);
+          setClassImportOpen(true);
+        }}
       />
     </MainLayout>
   );

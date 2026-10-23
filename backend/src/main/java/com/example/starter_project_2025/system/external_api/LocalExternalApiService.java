@@ -3,17 +3,32 @@ package com.example.starter_project_2025.system.external_api;
 import com.example.starter_project_2025.system.external_api.dto.ExternalClassDTO;
 import com.example.starter_project_2025.system.external_api.dto.ExternalRoomDTO;
 import com.example.starter_project_2025.system.external_api.dto.ExternalTrainerDTO;
+import com.example.starter_project_2025.system.external_api.dto.ExternalClassRequest;
 import com.example.starter_project_2025.system.external_api.exception.ExternalApiException;
+import com.example.starter_project_2025.exception.ConflictException;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Locale;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /** Standalone development data; never used as a fallback for a failed remote API. */
 @Service
 @Profile("local")
 public class LocalExternalApiService implements ExternalApiService {
+    private final ConcurrentHashMap<Long, ExternalClassDTO> classes = new ConcurrentHashMap<>();
+    private final AtomicLong classIds = new AtomicLong(3);
+
+    public LocalExternalApiService() {
+        classes.put(1L, sampleClass(1L, "LOCAL_JAVA_01", "Lớp Java mẫu 01", "active"));
+        classes.put(2L, sampleClass(2L, "LOCAL_JAVA_02", "Lớp Java mẫu 02", "active"));
+        classes.put(3L, sampleClass(3L, "LOCAL_JAVA_OLD", "Lớp Java mẫu đã kết thúc", "inactive"));
+    }
 
     @Override
     public boolean isSampleData() {
@@ -22,19 +37,38 @@ public class LocalExternalApiService implements ExternalApiService {
 
     @Override
     public List<ExternalClassDTO> fetchClasses(String status) {
-        return List.of(
-                sampleClass(1L, "LOCAL_JAVA_01", "Lớp Java mẫu 01", "active"),
-                sampleClass(2L, "LOCAL_JAVA_02", "Lớp Java mẫu 02", "active"),
-                sampleClass(3L, "LOCAL_JAVA_OLD", "Lớp Java mẫu đã kết thúc", "inactive")
-        ).stream().filter(item -> matchesStatus(status, item.getStatus())).toList();
+        return new ArrayList<>(classes.values()).stream().sorted(Comparator.comparing(ExternalClassDTO::getId))
+                .filter(item -> matchesStatus(status, item.getStatus())).toList();
     }
 
     @Override
     public ExternalClassDTO fetchClassById(Long id) {
-        return fetchClasses(null).stream()
-                .filter(item -> Objects.equals(item.getId(), id))
-                .findFirst()
-                .orElseThrow(() -> new ExternalApiException("Sample class not found: " + id, 404, null));
+        ExternalClassDTO classData = classes.get(id);
+        if (classData == null) throw new ExternalApiException("Sample class not found: " + id, 404, null);
+        return classData;
+    }
+
+    @Override
+    public synchronized ExternalClassDTO createClass(ExternalClassRequest request) {
+        ensureUniqueCode(request.code(), null);
+        long id = classIds.incrementAndGet();
+        ExternalClassDTO classData = toClass(id, request, null);
+        classes.put(id, classData);
+        return classData;
+    }
+
+    @Override
+    public synchronized ExternalClassDTO updateClass(Long id, ExternalClassRequest request) {
+        ExternalClassDTO current = fetchClassById(id);
+        ensureUniqueCode(request.code(), id);
+        ExternalClassDTO updated = toClass(id, request, current.getProgramId());
+        classes.put(id, updated);
+        return updated;
+    }
+
+    @Override
+    public synchronized void deleteClass(Long id) {
+        if (classes.remove(id) == null) throw new ExternalApiException("Sample class not found: " + id, 404, null);
     }
 
     @Override
@@ -53,7 +87,31 @@ public class LocalExternalApiService implements ExternalApiService {
     }
 
     private ExternalClassDTO sampleClass(Long id, String code, String name, String status) {
-        return ExternalClassDTO.builder().id(id).code(code).name(name).status(status).plannedSize(25).build();
+        return ExternalClassDTO.builder().id(id).code(code).name(name).status(status).plannedSize(25)
+                .deliveryType("Class").traineeType("Fresher").formatType("Offline").skills("Java")
+                .site("TP. Ho Chi Minh").location("Center Building, HCM").subjectType("IT Technical")
+                .scope("Unit").supplierPartner("SCM").jobRecommendation(false).build();
+    }
+
+    private ExternalClassDTO toClass(Long id, ExternalClassRequest request, Long programId) {
+        return ExternalClassDTO.builder().id(id).code(request.code().trim()).name(request.name().trim())
+                .programId(programId).startDate(blankToNull(request.startDate())).endDate(blankToNull(request.endDate()))
+                .status(request.status().toLowerCase(Locale.ROOT)).plannedSize(request.plannedSize())
+                .deliveryType(request.deliveryType()).traineeType(request.traineeType())
+                .formatType(request.formatType()).skills(request.skills()).site(request.site())
+                .location(request.location()).subjectType(request.subjectType()).scope(request.scope())
+                .supplierPartner(request.supplierPartner()).keyProgram(request.keyProgram())
+                .jobRecommendation(request.jobRecommendation()).build();
+    }
+
+    private void ensureUniqueCode(String code, Long ignoredId) {
+        boolean duplicate = classes.values().stream().anyMatch(item -> !Objects.equals(item.getId(), ignoredId)
+                && item.getCode().equalsIgnoreCase(code.trim()));
+        if (duplicate) throw new ConflictException("Mã lớp đã tồn tại: " + code.trim());
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
     }
 
     private boolean matchesStatus(String requested, String actual) {

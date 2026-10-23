@@ -22,12 +22,9 @@ export function ImportTab({ loading, onImport, entityName }: ImportTabProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const validateFile = (file: File): boolean => {
-    if (
-      !file.name.endsWith(".xlsx") &&
-      !file.name.endsWith(".xls") &&
-      !file.name.endsWith(".csv")
-    ) {
-      setError("Only Excel or CSV files (.xlsx, .xls, .csv) are allowed");
+    const filename = file.name.toLowerCase();
+    if (!filename.endsWith(".xlsx") && !filename.endsWith(".csv")) {
+      setError("Only Excel or CSV files (.xlsx, .csv) are allowed");
       return false;
     }
 
@@ -147,13 +144,13 @@ export function ImportTab({ loading, onImport, entityName }: ImportTabProps) {
           </div>
           <p className="text-sm font-medium">Click to upload or drag and drop</p>
           <p className="text-xs text-muted-foreground">
-            Excel or CSV files (.xlsx, .xls, .csv) up to 50MB
+            Excel or CSV files (.xlsx, .csv) up to 50MB
           </p>
 
           <Input
             ref={fileInputRef}
             type="file"
-            accept=".xlsx,.xls,.csv"
+            accept=".xlsx,.csv"
             className="hidden"
             disabled={loading}
             onChange={(e) => handleFileSelect(e.target.files?.[0] ?? null)}

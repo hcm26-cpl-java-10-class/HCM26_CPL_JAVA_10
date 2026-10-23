@@ -30,12 +30,17 @@ public class ExcelParser implements FileParser {
             Sheet sheet = workbook.getSheetAt(0);
 
             Row headerRow = sheet.getRow(0);
+            if (headerRow == null) throw new IllegalArgumentException("Import file has no header row");
             List<String> headers = new ArrayList<>();
 
             headerRow.forEach(cell -> headers.add(cell.getStringCellValue()));
 
             for (int i = 1; i <= sheet.getLastRowNum(); i++) {
                 Row row = sheet.getRow(i);
+                if (row == null) {
+                    rows.add(new HashMap<>());
+                    continue;
+                }
 
                 Map<String, String> map = new HashMap<>();
 

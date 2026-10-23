@@ -4,6 +4,7 @@ import com.example.starter_project_2025.exception.ConflictException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.external_api.ExternalApiService;
 import com.example.starter_project_2025.system.external_api.dto.ExternalClassDTO;
+import com.example.starter_project_2025.system.external_api.dto.ExternalClassRequest;
 import com.example.starter_project_2025.system.external_api.dto.ExternalTrainerDTO;
 import com.example.starter_project_2025.system.external_api.exception.ExternalApiException;
 import com.example.starter_project_2025.system.subject.Subject;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -35,6 +37,46 @@ public class ClassSetupServiceImpl implements ClassSetupService {
     private final TrainingProgramRepository trainingProgramRepository;
     private final ProgramSubjectRepository programSubjectRepository;
     private final ExternalApiService externalApiService;
+
+    @Override
+    public ExternalClassDTO createClass(ExternalClassRequest request) {
+        validateClassDates(request);
+        return externalApiService.createClass(request);
+    }
+
+    @Override
+    public ExternalClassDTO updateClass(Long classId, ExternalClassRequest request) {
+        requireClass(classId);
+        validateClassDates(request);
+        return externalApiService.updateClass(classId, request);
+    }
+
+    @Override
+    public void deleteClass(Long classId) {
+        requireClass(classId);
+        if (teachingAssignmentRepository.existsByClassId(classId)) {
+            throw new ConflictException("Không thể xóa lớp đang có phân công giảng dạy. Hãy gỡ các phân công trước.");
+        }
+        externalApiService.deleteClass(classId);
+        classTrainingProgramRepository.findByClassId(classId).ifPresent(classTrainingProgramRepository::delete);
+    }
+
+    private void validateClassDates(ExternalClassRequest request) {
+        try {
+            LocalDate startDate = request.startDate() == null || request.startDate().isBlank()
+                    ? null : LocalDate.parse(request.startDate());
+            LocalDate endDate = request.endDate() == null || request.endDate().isBlank()
+                    ? null : LocalDate.parse(request.endDate());
+            if (startDate != null && startDate.isBefore(LocalDate.now())) {
+                throw new IllegalArgumentException("Expected start date cannot be in the past.");
+            }
+            if (startDate != null && endDate != null && endDate.isBefore(startDate)) {
+                throw new IllegalArgumentException("Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.");
+            }
+        } catch (DateTimeParseException exception) {
+            throw new IllegalArgumentException("Ngày bắt đầu và kết thúc phải là ngày hợp lệ theo định dạng yyyy-MM-dd.");
+        }
+    }
 
     @Override
     public ClassProgramSubjectsResponse assignProgram(Long classId, Long programId) {

@@ -1,5 +1,8 @@
 package com.example.starter_project_2025.system.trainingprogram;
 
+import com.example.starter_project_2025.system.external_api.dto.ExternalClassDTO;
+import com.example.starter_project_2025.system.external_api.dto.ExternalClassRequest;
+import com.example.starter_project_2025.base.dataio.importer.result.ImportResult;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -17,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -26,6 +30,33 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ClassSetupController {
     private final ClassSetupService service;
+    private final ClassImportService classImportService;
+
+    @PostMapping(value = "/classes/import", consumes = "multipart/form-data")
+    @PreAuthorize("hasAuthority('CLASS_CREATE')")
+    public ResponseEntity<ImportResult> importClasses(@RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(classImportService.importFile(file));
+    }
+
+    @PostMapping("/classes")
+    @PreAuthorize("hasAuthority('CLASS_CREATE')")
+    public ResponseEntity<ExternalClassDTO> createClass(@Valid @RequestBody ExternalClassRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.createClass(request));
+    }
+
+    @PutMapping("/classes/{classId}")
+    @PreAuthorize("hasAuthority('CLASS_UPDATE')")
+    public ResponseEntity<ExternalClassDTO> updateClass(@PathVariable Long classId,
+                                                         @Valid @RequestBody ExternalClassRequest request) {
+        return ResponseEntity.ok(service.updateClass(classId, request));
+    }
+
+    @DeleteMapping("/classes/{classId}")
+    @PreAuthorize("hasAuthority('CLASS_DELETE')")
+    public ResponseEntity<Void> deleteClass(@PathVariable Long classId) {
+        service.deleteClass(classId);
+        return ResponseEntity.noContent().build();
+    }
 
     @PutMapping("/classes/{classId}/training-program")
     @PreAuthorize("hasAuthority('CLASS_UPDATE_PROGRAM')")
