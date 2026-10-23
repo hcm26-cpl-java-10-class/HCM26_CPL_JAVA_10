@@ -7,6 +7,8 @@ export * from "./features/exam.api";
 export * from "./features/invitation.api";
 export * from "./features/menu/module.api";
 export * from "./features/menu/module_group.api";
+export * from "./features/project/sprint.api";
+export * from "./features/project/project.api";
 export * from "./features/rbac/permission.api";
 export * from "./features/rbac/role.api";
 export * from "./features/rbac/user.api";
