@@ -48,6 +48,7 @@ interface FormState {
 
 const LESSON_CONTENT_TYPE_OPTIONS: { value: LessonContentType; label: string }[] = [
   { value: "VIDEO", label: "Video" },
+  { value: "AUDIO", label: "Audio" },
   { value: "TEXT", label: "Text" },
   { value: "DOCUMENT", label: "Document" },
   { value: "LINK", label: "Link" },
@@ -234,8 +235,8 @@ export function LessonFormModal({
             <FieldMessage message={errors.title} />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="grid gap-1.5 sm:col-span-1">
+          <div className="grid items-start gap-4 sm:grid-cols-3">
+            <div className="grid grid-rows-[1.25rem_2.25rem_auto] gap-1.5">
               <Label>Content type</Label>
               <Select
                 value={form.contentType}
@@ -254,7 +255,7 @@ export function LessonFormModal({
               </Select>
             </div>
 
-            <div className="grid gap-1.5">
+            <div className="grid grid-rows-[1.25rem_2.25rem_auto] gap-1.5">
               <Label htmlFor="lesson-duration">Duration</Label>
               <Input
                 id="lesson-duration"
@@ -272,7 +273,7 @@ export function LessonFormModal({
               )}
             </div>
 
-            <div className="grid gap-1.5">
+            <div className="grid grid-rows-[1.25rem_2.25rem_auto] gap-1.5">
               <Label htmlFor="lesson-order">Order index</Label>
               <Input
                 id="lesson-order"
@@ -294,7 +295,11 @@ export function LessonFormModal({
           {needsUrl(form.contentType) ? (
             <div className="grid gap-1.5">
               <Label htmlFor="lesson-url">
-                {form.contentType === "VIDEO" ? "Video URL" : "Resource URL"}
+                {form.contentType === "VIDEO"
+                  ? "Video URL"
+                  : form.contentType === "AUDIO"
+                    ? "Audio URL"
+                    : "Resource URL"}
               </Label>
               <Input
                 id="lesson-url"
@@ -305,7 +310,9 @@ export function LessonFormModal({
                 placeholder={
                   form.contentType === "VIDEO"
                     ? "https://www.youtube.com/watch?v=..."
-                    : "https://example.com/material.pdf"
+                    : form.contentType === "AUDIO"
+                      ? "https://example.com/audio.mp3"
+                      : "https://example.com/material.pdf"
                 }
               />
               <p className="text-xs text-muted-foreground">

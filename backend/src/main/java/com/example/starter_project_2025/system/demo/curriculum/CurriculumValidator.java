@@ -19,7 +19,7 @@ import java.util.Map;
 
 /**
  * Validate Publish (2.5): >=1 Section, mỗi Section >=1 Lesson,
- * VIDEO/DOCUMENT/LINK có URL http/https hợp lệ, TEXT có textContent.
+ * VIDEO/AUDIO/DOCUMENT/LINK có URL http/https hợp lệ, TEXT có textContent.
  * Section/Lesson inactive không được tính.
  */
 @Component
@@ -78,7 +78,7 @@ public class CurriculumValidator {
         }
 
         switch (type) {
-            case VIDEO, DOCUMENT, LINK -> {
+            case VIDEO, AUDIO, DOCUMENT, LINK -> {
                 String url = lesson.getContentUrl();
                 if (url == null || url.isBlank()) {
                     errors.add(new Issue("LESSON_URL_MISSING", section.getId(), lesson.getId(),

@@ -28,6 +28,7 @@ import {
   Link2,
   Lock,
   LoaderCircle,
+  Music2,
   PlayCircle,
   Video,
   type LucideIcon,
@@ -46,6 +47,7 @@ import {
 
 const CONTENT_ICON: Record<LessonContentType, LucideIcon> = {
   VIDEO: Video,
+  AUDIO: Music2,
   TEXT: FileText,
   DOCUMENT: FileText,
   LINK: Link2,
