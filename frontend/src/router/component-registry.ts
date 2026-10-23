@@ -15,6 +15,7 @@ import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
+import AuditLogPage from "@/pages/management/audit-log";
 
 
 export interface RouteConfig {
@@ -55,4 +56,10 @@ export const routes: RouteConfig[] = [
   { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true },
   { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true,},
   { path: "/unauthorized", component: Unauthorized, isPublic: true },
+
+  {
+    path: "/admin/audit-log",
+    component: AuditLogPage,
+    isPublic: true,
+  },
 ];

@@ -12,3 +12,4 @@ export * from "./features/rbac/role.api";
 export * from "./features/rbac/user.api";
 export * from "./features/demo/enrollment.api";
 export * from "./features/demo/lesson.api";export * from "./features/rbac/department.api";
+export * from "./features/audit/audit-log.api";
