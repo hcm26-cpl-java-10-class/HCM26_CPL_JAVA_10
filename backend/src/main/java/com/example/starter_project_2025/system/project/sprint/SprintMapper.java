@@ -12,17 +12,10 @@ import org.mapstruct.NullValuePropertyMappingStrategy;
 public interface SprintMapper extends BaseCrudMapper<Sprint, SprintDTO> {
 
     @Override
-    @Mapping(target = "project", ignore = true)
     @Mapping(target = "version", ignore = true)
     Sprint toEntity(SprintDTO request);
 
     @Override
-    @Mapping(target = "projectId", source = "project.id")
-    @Mapping(target = "projectName", source = "project.name")
-    SprintDTO toResponse(Sprint sprint);
-
-    @Override
-    @Mapping(target = "project", ignore = true)
     @Mapping(target = "version", ignore = true)
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     void update(@MappingTarget Sprint sprint, SprintDTO request);

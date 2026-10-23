@@ -24,8 +24,8 @@ import java.util.Set;
  * RBAC bootstrap.
  * <p>
  * Runs after {@code RoleDataInitializer} (@Order(2)) so the STUDENT role exists
- * and after {@code PermissionInitializer} (@Order(1)) so the SPRINT_* /
- * PROJECT_* permissions have been generated from the entity annotations.
+ * and after {@code PermissionInitializer} (@Order(1)) so the SPRINT_*
+ * permissions have been generated from the entity annotations.
  */
 @Slf4j
 @Order(4)
@@ -37,7 +37,6 @@ public class SprintAccessInitializer implements CommandLineRunner {
     private static final String STUDENT_ROLE = "STUDENT";
 
     private static final List<String> SPRINT_PERMISSIONS = List.of(
-            "PROJECT_READ",
             "SPRINT_CREATE",
             "SPRINT_READ",
             "SPRINT_UPDATE",

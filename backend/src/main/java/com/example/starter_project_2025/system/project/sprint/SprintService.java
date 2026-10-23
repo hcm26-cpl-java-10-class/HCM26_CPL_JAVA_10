@@ -14,7 +14,7 @@ public interface SprintService
     List<SprintAuditLogDTO> getAuditLogs(Long sprintId);
 
     /**
-     * Flattened rows for the Excel/CSV export (PROJECT-RELATION-SAFE).
+     * Flattened rows for the Excel/CSV export.
      */
     List<SprintExportRow> getExportRows();
 }

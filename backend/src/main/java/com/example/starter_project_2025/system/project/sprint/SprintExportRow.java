@@ -12,21 +12,14 @@ import java.time.LocalDateTime;
 /**
  * Flat export row for the sprint Excel/CSV export.
  * <p>
- * The generic exporter resolves relation fields through reflection on the
- * entity instance. Hibernate returns a lazy {@code Project} proxy for
- * {@code Sprint.project}, and reflection on that proxy class cannot find the
- * {@code name} field, which made the export fail. Materialising the row first
- * keeps the export working and produces exactly the headers required by the
- * import template, so an exported file can be re-imported as-is.
+ * Materialising the row keeps the export headers aligned with the import
+ * template, so an exported file can be re-imported as-is.
  */
 @Getter
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @ExportEntity(fileName = "sprints", sheetName = "Sprints")
 public class SprintExportRow {
-
-    @ExportField(name = "Project")
-    String project;
 
     @ExportField(name = "Name")
     String name;
@@ -45,7 +38,6 @@ public class SprintExportRow {
 
     public static SprintExportRow from(Sprint sprint) {
         return new SprintExportRow(
-                sprint.getProject() == null ? "" : sprint.getProject().getName(),
                 sprint.getName(),
                 sprint.getSprintGoal(),
                 formatDateTime(sprint.getStartDate()),

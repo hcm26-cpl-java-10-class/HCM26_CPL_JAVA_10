@@ -68,8 +68,8 @@ public class SprintController
     }
 
     /**
-     * Export uses flattened rows because the generic exporter cannot resolve
-     * the lazy {@code Project} proxy of a sprint.
+     * Export uses flattened rows so the exported headers match the import
+     * template of the sprint module.
      */
     @Override
     @GetMapping("/export")

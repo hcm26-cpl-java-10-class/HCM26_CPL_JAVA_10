@@ -7,8 +7,6 @@ import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserPrincipal;
-import com.example.starter_project_2025.system.project.Project;
-import com.example.starter_project_2025.system.project.ProjectRepository;
 import com.example.starter_project_2025.system.project.sprint.audit.SprintAuditLogDTO;
 import com.example.starter_project_2025.system.project.sprint.audit.SprintAuditService;
 import com.example.starter_project_2025.system.project.sprint.event.SprintOutboxService;
@@ -20,7 +18,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -31,12 +28,16 @@ import java.util.Map;
  * <p>
  * Business rules covered:
  * <ul>
- *     <li>start date &lt; end date and both inside the project operating window (422)</li>
- *     <li>sprint name unique per project (409)</li>
+ *     <li>start date &lt; end date (422)</li>
+ *     <li>sprint name unique (409)</li>
  *     <li>sprint goal 1..500 characters (422)</li>
  *     <li>a new sprint can only be Planned or Active</li>
  *     <li>audit log (actor, timestamp, before/after, correlation id) + outbox event (idempotent)</li>
  * </ul>
+ * <p>
+ * The project relationship is intentionally not used: the project module is
+ * owned by another team, so {@code projectId} is only carried along (when
+ * provided) and never validated or resolved here.
  */
 @Service
 @Transactional
@@ -54,7 +55,6 @@ public class SprintServiceImpl
     static final String START_DATE_FIELD = "startDate";
     static final String END_DATE_FIELD = "endDate";
     static final String STATUS_FIELD = "status";
-    static final String PROJECT_FIELD = "projectId";
 
     static final String EVENT_CREATED = "SPRINT_CREATED";
     static final String EVENT_UPDATED = "SPRINT_UPDATED";
@@ -62,7 +62,6 @@ public class SprintServiceImpl
 
     SprintMapper sprintMapper;
     SprintRepository sprintRepository;
-    ProjectRepository projectRepository;
     SprintAuditService sprintAuditService;
     SprintOutboxService sprintOutboxService;
 
@@ -88,20 +87,18 @@ public class SprintServiceImpl
     @Override
     protected void beforeCreate(Sprint sprint, SprintDTO request, ValidationContext ctx) {
 
-        Project project = resolveProject(request.getProjectId());
-
         normalize(sprint);
 
         Map<String, List<String>> errors = new LinkedHashMap<>();
 
         validateName(sprint.getName(), errors);
         validateGoal(sprint.getSprintGoal(), errors);
-        validateDates(sprint.getStartDate(), sprint.getEndDate(), project, errors);
+        validateDates(sprint.getStartDate(), sprint.getEndDate(), errors);
         validateCreateStatus(sprint.getStatus(), errors);
 
         throwIfInvalid(errors);
 
-        ensureUniqueName(project, sprint.getName(), null);
+        ensureUniqueName(sprint.getName(), null);
 
         if (sprint.getStatus() == null) {
             sprint.setStatus(SprintStatus.PLANNED);
@@ -110,15 +107,13 @@ public class SprintServiceImpl
         if (sprint.getIsActive() == null) {
             sprint.setIsActive(true);
         }
-
-        sprint.setProject(project);
     }
 
     @Override
     protected void afterCreate(Sprint saved, SprintDTO request) {
 
         Map<String, Object> after = snapshot(saved);
-        Long projectId = saved.getProject() == null ? null : saved.getProject().getId();
+        Long projectId = saved.getProjectId();
 
         sprintAuditService.record("CREATE", saved.getId(), projectId, null, after);
         sprintOutboxService.enqueue(EVENT_CREATED, saved.getId(), projectId, currentActorEmail(), after);
@@ -141,12 +136,6 @@ public class SprintServiceImpl
         Sprint sprint = sprintRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Sprint", "id", id));
 
-        Project project = sprint.getProject();
-
-        if (request.getProjectId() != null && !request.getProjectId().equals(project.getId())) {
-            project = resolveProject(request.getProjectId());
-        }
-
         String name = request.getName() != null ? request.getName().trim() : sprint.getName();
         String goal = request.getSprintGoal() != null ? request.getSprintGoal().trim() : sprint.getSprintGoal();
         LocalDateTime startDate = request.getStartDate() != null ? request.getStartDate() : sprint.getStartDate();
@@ -156,17 +145,16 @@ public class SprintServiceImpl
 
         validateName(name, errors);
         validateGoal(goal, errors);
-        validateDates(startDate, endDate, project, errors);
+        validateDates(startDate, endDate, errors);
 
         throwIfInvalid(errors);
 
         if (request.getName() != null) {
-            ensureUniqueName(project, name, sprint.getId());
+            ensureUniqueName(name, sprint.getId());
         }
 
         Map<String, Object> before = snapshot(sprint);
 
-        sprint.setProject(project);
         request.setName(name);
         request.setSprintGoal(goal);
 
@@ -175,7 +163,7 @@ public class SprintServiceImpl
         Sprint saved = sprintRepository.save(sprint);
 
         Map<String, Object> after = snapshot(saved);
-        Long projectId = project.getId();
+        Long projectId = saved.getProjectId();
 
         sprintAuditService.record("UPDATE", saved.getId(), projectId, before, after);
         sprintOutboxService.enqueue(EVENT_UPDATED, saved.getId(), projectId, currentActorEmail(), after);
@@ -196,7 +184,7 @@ public class SprintServiceImpl
                 .orElseThrow(() -> new ResourceNotFoundException("Sprint", "id", id));
 
         Map<String, Object> before = snapshot(sprint);
-        Long projectId = sprint.getProject() == null ? null : sprint.getProject().getId();
+        Long projectId = sprint.getProjectId();
 
         sprintAuditService.record("DELETE", id, projectId, before, null);
         sprintOutboxService.enqueue(EVENT_DELETED, id, projectId, currentActorEmail(), before);
@@ -221,8 +209,8 @@ public class SprintServiceImpl
     }
 
     /**
-     * Materialises sprint rows (including the project name) inside the
-     * transaction so the generic exporter never sees a lazy proxy.
+     * Materialises sprint rows into flat export rows inside the transaction so
+     * the generic exporter never touches a lazy association.
      */
     @Override
     @Transactional(readOnly = true)
@@ -239,17 +227,6 @@ public class SprintServiceImpl
     // ---------------------------------------------------------------------
     // Validation helpers
     // ---------------------------------------------------------------------
-
-    private Project resolveProject(Long projectId) {
-
-        if (projectId == null) {
-            throw new SprintValidationException(PROJECT_FIELD, "Vui lòng chọn Project cho Sprint");
-        }
-
-        return projectRepository.findById(projectId)
-                .orElseThrow(() -> new SprintValidationException(PROJECT_FIELD,
-                        "Project không tồn tại hoặc bạn không có quyền truy cập"));
-    }
 
     private void validateName(String name, Map<String, List<String>> errors) {
 
@@ -277,7 +254,6 @@ public class SprintServiceImpl
 
     private void validateDates(LocalDateTime startDate,
                                LocalDateTime endDate,
-                               Project project,
                                Map<String, List<String>> errors) {
 
         if (startDate == null) {
@@ -290,25 +266,6 @@ public class SprintServiceImpl
 
         if (startDate != null && endDate != null && !startDate.isBefore(endDate)) {
             errors.put(END_DATE_FIELD, List.of("Thời gian kết thúc phải sau thời gian bắt đầu"));
-        }
-
-        if (project == null) {
-            return;
-        }
-
-        LocalDate windowStart = project.getStartDate();
-        LocalDate windowEnd = project.getEndDate();
-
-        if (windowStart != null && startDate != null && startDate.toLocalDate().isBefore(windowStart)) {
-            errors.put(START_DATE_FIELD, List.of(
-                    "Thời gian bắt đầu phải nằm trong khoảng thời gian vận hành của Project (từ "
-                            + windowStart + ")"));
-        }
-
-        if (windowEnd != null && endDate != null && endDate.toLocalDate().isAfter(windowEnd)) {
-            errors.put(END_DATE_FIELD, List.of(
-                    "Thời gian kết thúc phải nằm trong khoảng thời gian vận hành của Project (đến "
-                            + windowEnd + ")"));
         }
     }
 
@@ -323,11 +280,11 @@ public class SprintServiceImpl
         }
     }
 
-    private void ensureUniqueName(Project project, String name, Long excludedId) {
+    private void ensureUniqueName(String name, Long excludedId) {
 
         boolean exists = excludedId == null
-                ? sprintRepository.existsByProjectIdAndName(project.getId(), name)
-                : sprintRepository.existsByProjectIdAndNameAndIdNot(project.getId(), name, excludedId);
+                ? sprintRepository.existsByName(name)
+                : sprintRepository.existsByNameAndIdNot(name, excludedId);
 
         if (exists) {
             throw SprintConflictException.duplicateName();
@@ -360,7 +317,7 @@ public class SprintServiceImpl
 
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("id", sprint.getId());
-        snapshot.put("projectId", sprint.getProject() == null ? null : sprint.getProject().getId());
+        snapshot.put("projectId", sprint.getProjectId());
         snapshot.put("name", sprint.getName());
         snapshot.put("sprintGoal", sprint.getSprintGoal());
         snapshot.put("startDate", sprint.getStartDate());

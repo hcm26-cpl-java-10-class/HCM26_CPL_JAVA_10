@@ -1,7 +1,5 @@
 package com.example.starter_project_2025.init;
 
-import com.example.starter_project_2025.system.project.Project;
-import com.example.starter_project_2025.system.project.ProjectRepository;
 import com.example.starter_project_2025.system.project.sprint.Sprint;
 import com.example.starter_project_2025.system.project.sprint.SprintRepository;
 import com.example.starter_project_2025.system.project.sprint.SprintStatus;
@@ -17,8 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 
 /**
- * Seeds sample {@link Project} and {@link Sprint} rows, following the same
- * idempotent upsert pattern used by {@link RoleDataInitializer}.
+ * Seeds sample {@link Sprint} rows, following the same idempotent upsert
+ * pattern used by {@link RoleDataInitializer}.
  * <p>
  * Runs after the RBAC/user seeders so the data is available as soon as the
  * application starts, and can safely run on every startup (existing rows are
@@ -31,19 +29,13 @@ import java.time.LocalDate;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class SprintDataInitializer implements CommandLineRunner {
 
-    ProjectRepository projectRepository;
     SprintRepository sprintRepository;
 
     @Override
     @Transactional
     public void run(String... args) {
 
-        Project websiteRedesign = ensureProject("Website Redesign");
-        Project mobileBanking = ensureProject("Mobile Banking App");
-        Project hrPortal = ensureProject("Internal HR Portal");
-
         upsertSprint(
-                websiteRedesign,
                 "Sprint 1 - Discovery",
                 "Map current user journeys and gather stakeholder requirements",
                 LocalDate.of(2026, 1, 5),
@@ -52,7 +44,6 @@ public class SprintDataInitializer implements CommandLineRunner {
         );
 
         upsertSprint(
-                websiteRedesign,
                 "Sprint 2 - Design System",
                 "Deliver the shared component library and updated brand guidelines",
                 LocalDate.of(2026, 1, 19),
@@ -61,7 +52,6 @@ public class SprintDataInitializer implements CommandLineRunner {
         );
 
         upsertSprint(
-                websiteRedesign,
                 "Sprint 3 - Build",
                 "Implement the new landing and product pages",
                 LocalDate.of(2026, 2, 2),
@@ -70,7 +60,6 @@ public class SprintDataInitializer implements CommandLineRunner {
         );
 
         upsertSprint(
-                mobileBanking,
                 "Sprint 1 - Authentication",
                 "Implement biometric login and OTP fallback",
                 LocalDate.of(2026, 3, 2),
@@ -79,7 +68,6 @@ public class SprintDataInitializer implements CommandLineRunner {
         );
 
         upsertSprint(
-                mobileBanking,
                 "Sprint 2 - Payments",
                 "Add domestic transfers and bill payment flows",
                 LocalDate.of(2026, 3, 16),
@@ -88,7 +76,6 @@ public class SprintDataInitializer implements CommandLineRunner {
         );
 
         upsertSprint(
-                mobileBanking,
                 "Sprint 3 - Notifications",
                 "Push notification centre and device management",
                 LocalDate.of(2026, 3, 30),
@@ -97,7 +84,6 @@ public class SprintDataInitializer implements CommandLineRunner {
         );
 
         upsertSprint(
-                hrPortal,
                 "Sprint 1 - Employee Directory",
                 "Searchable directory with org chart view",
                 LocalDate.of(2026, 4, 6),
@@ -105,21 +91,10 @@ public class SprintDataInitializer implements CommandLineRunner {
                 SprintStatus.PLANNED
         );
 
-        log.info("Ensured sample project and sprint data.");
-    }
-
-    private Project ensureProject(String name) {
-
-        Project project = projectRepository.findByName(name).orElseGet(Project::new);
-
-        project.setName(name);
-        project.setIsActive(true);
-
-        return projectRepository.save(project);
+        log.info("Ensured sample sprint data.");
     }
 
     private void upsertSprint(
-            Project project,
             String name,
             String sprintGoal,
             LocalDate startDate,
@@ -127,10 +102,9 @@ public class SprintDataInitializer implements CommandLineRunner {
             SprintStatus status
     ) {
 
-        Sprint sprint = sprintRepository.findByProjectAndName(project, name)
+        Sprint sprint = sprintRepository.findByName(name)
                 .orElseGet(Sprint::new);
 
-        sprint.setProject(project);
         sprint.setName(name);
         sprint.setSprintGoal(sprintGoal);
         sprint.setStartDate(startDate.atStartOfDay());
