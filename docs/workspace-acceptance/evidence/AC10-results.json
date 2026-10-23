@@ -1,0 +1,25 @@
+{
+  "scope": "AC10",
+  "exportedAt": "2026-10-23T19:27:17.5552615+07:00",
+  "sourceReportModifiedAt": "2026-10-23T19:17:40.9910839+07:00",
+  "sourceReport": "backend/target/surefire-reports/TEST-com.example.starter_project_2025.system.project.WorkspaceAcceptanceIntegrationTest.xml",
+  "layer": "Spring Boot + MockMvc integration tests; these are not Postman network captures.",
+  "database": "Unique in-memory H2 test database. Fresh tenant/project/team/member per case; workspace records cleaned after each case.",
+  "total": 2,
+  "passed": 2,
+  "failedOrSkipped": 0,
+  "cases": [
+    {
+      "ac": "AC10",
+      "test": "ac10ConcurrentRequestsProduceOnlyOneLogicalCreation(boolean)[1]",
+      "result": "PASS",
+      "seconds": "0.06"
+    },
+    {
+      "ac": "AC10",
+      "test": "ac10ConcurrentRequestsProduceOnlyOneLogicalCreation(boolean)[2]",
+      "result": "PASS",
+      "seconds": "0.055"
+    }
+  ]
+}

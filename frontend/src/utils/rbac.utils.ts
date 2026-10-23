@@ -14,8 +14,10 @@ type AuthRolePayload = {
 export const normalizeRole = (role?: string | null): string =>
   (role ?? "").trim().toUpperCase();
 
-export const normalizePermission = (permission?: string | null): string =>
-  (permission ?? "").trim().toUpperCase();
+export const normalizePermission = (permission?: string | null): string => {
+  const normalized = (permission ?? "").trim().toUpperCase();
+  return ({ VIEW_PROJECT_WORKSPACE: "WORKSPACE_READ", CREATE_PROJECT_WORKSPACE: "WORKSPACE_CREATE" } as Record<string, string>)[normalized] ?? normalized;
+};
 
 export const uniquePermissions = (permissions?: string[] | null): string[] => {
   const seen = new Set<string>();

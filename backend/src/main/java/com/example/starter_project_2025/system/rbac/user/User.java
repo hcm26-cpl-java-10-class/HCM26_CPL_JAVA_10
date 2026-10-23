@@ -9,6 +9,7 @@ import com.example.starter_project_2025.base.dataio.template.annotation.ImportEn
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import com.example.starter_project_2025.system.rbac.role.Role;
+import com.example.starter_project_2025.system.project.Tenant;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -55,6 +56,10 @@ public class User extends BaseEntity {
 
     @Column(length = 100)
     String lastName;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tenant_id")
+    Tenant tenant;
 
     @Builder.Default
     @Column(nullable = false)

@@ -1,0 +1,55 @@
+{
+  "scope": "AC12",
+  "exportedAt": "2026-10-23T19:27:17.6153061+07:00",
+  "sourceReportModifiedAt": "2026-10-23T19:17:40.9910839+07:00",
+  "sourceReport": "backend/target/surefire-reports/TEST-com.example.starter_project_2025.system.project.WorkspaceAcceptanceIntegrationTest.xml",
+  "layer": "Spring Boot + MockMvc integration tests; these are not Postman network captures.",
+  "database": "Unique in-memory H2 test database. Fresh tenant/project/team/member per case; workspace records cleaned after each case.",
+  "total": 7,
+  "passed": 7,
+  "failedOrSkipped": 0,
+  "cases": [
+    {
+      "ac": "AC12",
+      "test": "ac12MandatorySaveFailureRollsEverythingBackAndSameKeyCanRetry(String)[1]",
+      "result": "PASS",
+      "seconds": "0.153"
+    },
+    {
+      "ac": "AC12",
+      "test": "ac12MandatorySaveFailureRollsEverythingBackAndSameKeyCanRetry(String)[2]",
+      "result": "PASS",
+      "seconds": "0.127"
+    },
+    {
+      "ac": "AC12",
+      "test": "ac12MandatorySaveFailureRollsEverythingBackAndSameKeyCanRetry(String)[3]",
+      "result": "PASS",
+      "seconds": "0.114"
+    },
+    {
+      "ac": "AC12",
+      "test": "ac12MandatorySaveFailureRollsEverythingBackAndSameKeyCanRetry(String)[4]",
+      "result": "PASS",
+      "seconds": "0.109"
+    },
+    {
+      "ac": "AC12",
+      "test": "ac12MandatorySaveFailureRollsEverythingBackAndSameKeyCanRetry(String)[5]",
+      "result": "PASS",
+      "seconds": "0.099"
+    },
+    {
+      "ac": "AC12",
+      "test": "ac12MandatorySaveFailureRollsEverythingBackAndSameKeyCanRetry(String)[6]",
+      "result": "PASS",
+      "seconds": "0.124"
+    },
+    {
+      "ac": "AC12",
+      "test": "ac12AuditHasFullContextAndOutboxRedeliveryNeverDuplicatesActivity",
+      "result": "PASS",
+      "seconds": "0.141"
+    }
+  ]
+}

@@ -12,6 +12,9 @@ import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_grade
 import StudentExamList from "@/pages/student/StudentExamList";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
+import WorkspaceCandidatePage from "@/pages/management/workspace/WorkspaceCandidatePage";
+import WorkspaceDetailPage from "@/pages/management/workspace/WorkspaceDetailPage";
+import TeamsMentorsPage from "@/pages/management/workspace/TeamsMentorsPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 
@@ -42,6 +45,10 @@ export const routes: RouteConfig[] = [
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
   { path: "/student/exams", component: StudentExamList,requiredPermission: "EXAM_READ", isModuleDriven: true },
   { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
+  { path: "/workspaces/candidates", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
+  { path: "/management/workspaces/candidates", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
+  { path: "/management/workspaces/:id", component: WorkspaceDetailPage, requiredPermission: "WORKSPACE_READ" },
+  { path: "/management/project-teams", component: TeamsMentorsPage, requiredPermission: "TEAM_READ" },
   ...buildEntityRoutes(),
 
   { path: "/not-found-page", component: NotFoundPage, isPublic: true },
