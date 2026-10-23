@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
@@ -32,9 +32,9 @@ public class SprintDTO extends BaseDTO {
 
     String sprintGoal;
 
-    LocalDate startDate;
+    LocalDateTime startDate;
 
-    LocalDate endDate;
+    LocalDateTime endDate;
 
     SprintStatus status;
 

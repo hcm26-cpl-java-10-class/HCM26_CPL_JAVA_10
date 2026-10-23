@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -148,8 +149,8 @@ public class SprintServiceImpl
 
         String name = request.getName() != null ? request.getName().trim() : sprint.getName();
         String goal = request.getSprintGoal() != null ? request.getSprintGoal().trim() : sprint.getSprintGoal();
-        LocalDate startDate = request.getStartDate() != null ? request.getStartDate() : sprint.getStartDate();
-        LocalDate endDate = request.getEndDate() != null ? request.getEndDate() : sprint.getEndDate();
+        LocalDateTime startDate = request.getStartDate() != null ? request.getStartDate() : sprint.getStartDate();
+        LocalDateTime endDate = request.getEndDate() != null ? request.getEndDate() : sprint.getEndDate();
 
         Map<String, List<String>> errors = new LinkedHashMap<>();
 
@@ -219,6 +220,22 @@ public class SprintServiceImpl
         return sprintAuditService.getAuditLogs(sprintId);
     }
 
+    /**
+     * Materialises sprint rows (including the project name) inside the
+     * transaction so the generic exporter never sees a lazy proxy.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<SprintExportRow> getExportRows() {
+
+        check("SPRINT_READ");
+
+        return sprintRepository.findAll()
+                .stream()
+                .map(SprintExportRow::from)
+                .toList();
+    }
+
     // ---------------------------------------------------------------------
     // Validation helpers
     // ---------------------------------------------------------------------
@@ -258,21 +275,21 @@ public class SprintServiceImpl
         }
     }
 
-    private void validateDates(LocalDate startDate,
-                               LocalDate endDate,
+    private void validateDates(LocalDateTime startDate,
+                               LocalDateTime endDate,
                                Project project,
                                Map<String, List<String>> errors) {
 
         if (startDate == null) {
-            errors.put(START_DATE_FIELD, List.of("Vui lòng chọn ngày bắt đầu"));
+            errors.put(START_DATE_FIELD, List.of("Vui lòng chọn thời gian bắt đầu"));
         }
 
         if (endDate == null) {
-            errors.put(END_DATE_FIELD, List.of("Vui lòng chọn ngày kết thúc"));
+            errors.put(END_DATE_FIELD, List.of("Vui lòng chọn thời gian kết thúc"));
         }
 
         if (startDate != null && endDate != null && !startDate.isBefore(endDate)) {
-            errors.put(END_DATE_FIELD, List.of("Ngày kết thúc phải sau ngày bắt đầu"));
+            errors.put(END_DATE_FIELD, List.of("Thời gian kết thúc phải sau thời gian bắt đầu"));
         }
 
         if (project == null) {
@@ -282,15 +299,15 @@ public class SprintServiceImpl
         LocalDate windowStart = project.getStartDate();
         LocalDate windowEnd = project.getEndDate();
 
-        if (windowStart != null && startDate != null && startDate.isBefore(windowStart)) {
+        if (windowStart != null && startDate != null && startDate.toLocalDate().isBefore(windowStart)) {
             errors.put(START_DATE_FIELD, List.of(
-                    "Ngày bắt đầu phải nằm trong khoảng thời gian vận hành của Project (từ "
+                    "Thời gian bắt đầu phải nằm trong khoảng thời gian vận hành của Project (từ "
                             + windowStart + ")"));
         }
 
-        if (windowEnd != null && endDate != null && endDate.isAfter(windowEnd)) {
+        if (windowEnd != null && endDate != null && endDate.toLocalDate().isAfter(windowEnd)) {
             errors.put(END_DATE_FIELD, List.of(
-                    "Ngày kết thúc phải nằm trong khoảng thời gian vận hành của Project (đến "
+                    "Thời gian kết thúc phải nằm trong khoảng thời gian vận hành của Project (đến "
                             + windowEnd + ")"));
         }
     }

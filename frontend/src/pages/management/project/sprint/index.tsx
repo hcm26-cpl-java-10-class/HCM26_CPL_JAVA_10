@@ -15,7 +15,9 @@ const statusOptions = [
 
 /** New sprints are active by default; boolean fields would otherwise start as false. */
 const auditFields = (auditableFieldsSchema as FieldSchema[]).map((field) =>
-  field.name === "isActive" ? { ...field, defaultValue: true } : field,
+  field.name === "isActive"
+    ? { ...field, defaultValue: true, label: "Active" }
+    : field,
 );
 
 const sprintSchema: EntitySchema = {
@@ -45,7 +47,7 @@ const sprintSchema: EntitySchema = {
     },
     {
       name: "name",
-      label: "Tên Sprint",
+      label: "Sprint Name",
       type: "text",
       sortable: true,
       bold: true,
@@ -56,7 +58,7 @@ const sprintSchema: EntitySchema = {
     },
     {
       name: "sprintGoal",
-      label: "Mục tiêu Sprint",
+      label: "Sprint Goal",
       type: "textarea",
       sortable: true,
       required: true,
@@ -69,23 +71,23 @@ const sprintSchema: EntitySchema = {
     },
     {
       name: "startDate",
-      label: "Ngày bắt đầu",
-      type: "date",
+      label: "Start Time",
+      type: "datetime",
       sortable: true,
       required: true,
-      requiredMessage: "Vui lòng chọn ngày bắt đầu",
+      requiredMessage: "Vui lòng chọn thời gian bắt đầu",
     },
     {
       name: "endDate",
-      label: "Ngày kết thúc",
-      type: "date",
+      label: "End Time",
+      type: "datetime",
       sortable: true,
       required: true,
-      requiredMessage: "Vui lòng chọn ngày kết thúc",
+      requiredMessage: "Vui lòng chọn thời gian kết thúc",
     },
     {
       name: "status",
-      label: "Trạng thái",
+      label: "Sprint Status",
       type: "select",
       sortable: true,
       options: statusOptions,
@@ -99,14 +101,14 @@ const sprintSchema: EntitySchema = {
     ...auditFields,
   ],
   /**
-   * Cross-field validation (AC02). Dates are `yyyy-MM-dd` strings so the
-   * lexical comparison matches the chronological one.
+   * Cross-field validation (AC02). Values from `datetime-local` are
+   * `yyyy-MM-ddTHH:mm` strings so lexical comparison matches chronology.
    */
   validate: (values) => {
     const errors: Record<string, string[]> = {};
 
     if (values.startDate && values.endDate && values.endDate <= values.startDate) {
-      errors.endDate = ["Ngày kết thúc phải sau ngày bắt đầu"];
+      errors.endDate = ["Thời gian kết thúc phải sau thời gian bắt đầu"];
     }
 
     return errors;

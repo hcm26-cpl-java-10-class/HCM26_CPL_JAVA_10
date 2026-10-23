@@ -3,11 +3,14 @@ package com.example.starter_project_2025.system.project.sprint;
 import com.example.starter_project_2025.base.crud.controller.BaseCrudDataIoController;
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.service.BaseCrudService;
+import com.example.starter_project_2025.base.dataio.common.FileFormat;
+import com.example.starter_project_2025.base.dataio.importer.result.ImportResult;
 import com.example.starter_project_2025.exception.error.ErrorResponse;
 import com.example.starter_project_2025.exception.error.ValidationErrorResponse;
 import com.example.starter_project_2025.system.project.sprint.audit.SprintAuditLogDTO;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.persistence.OptimisticLockException;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -15,12 +18,17 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -57,6 +65,30 @@ public class SprintController
     @GetMapping("/{id}/audit-logs")
     public ResponseEntity<List<SprintAuditLogDTO>> getAuditLogs(@PathVariable Long id) {
         return ResponseEntity.ok(sprintService.getAuditLogs(id));
+    }
+
+    /**
+     * Export uses flattened rows because the generic exporter cannot resolve
+     * the lazy {@code Project} proxy of a sprint.
+     */
+    @Override
+    @GetMapping("/export")
+    @PreAuthorize("hasAuthority('SPRINT_READ')")
+    public void exportFile(
+            @RequestParam(defaultValue = "EXCEL") FileFormat format,
+            HttpServletResponse response
+    ) throws IOException {
+        exportService.export(format, sprintService.getExportRows(), SprintExportRow.class, response);
+    }
+
+    /**
+     * Import requires the create permission of the resource.
+     */
+    @Override
+    @PostMapping(value = "/import", consumes = "multipart/form-data")
+    @PreAuthorize("hasAuthority('SPRINT_CREATE')")
+    public ImportResult importFile(@RequestParam("file") MultipartFile file) {
+        return super.importFile(file);
     }
 
     // ---------------------------------------------------------------------

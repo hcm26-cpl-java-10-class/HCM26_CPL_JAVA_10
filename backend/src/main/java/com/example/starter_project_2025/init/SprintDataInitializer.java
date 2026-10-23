@@ -133,8 +133,8 @@ public class SprintDataInitializer implements CommandLineRunner {
         sprint.setProject(project);
         sprint.setName(name);
         sprint.setSprintGoal(sprintGoal);
-        sprint.setStartDate(startDate);
-        sprint.setEndDate(endDate);
+        sprint.setStartDate(startDate.atStartOfDay());
+        sprint.setEndDate(endDate.atStartOfDay());
         sprint.setStatus(status);
         sprint.setIsActive(true);
 
