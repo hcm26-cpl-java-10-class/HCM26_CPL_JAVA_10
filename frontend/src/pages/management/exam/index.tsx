@@ -445,16 +445,6 @@ export default function ExamManagementPage() {
                           </Button>
 
                           <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label="Edit exam"
-                              title="Edit exam"
-                              onClick={() => openEditExam(exam)}
-                          >
-                            <Pencil className="size-4" />
-                          </Button>
-
-                          <Button
                               variant="outline"
                               size="sm"
                               onClick={() =>
@@ -464,6 +454,16 @@ export default function ExamManagementPage() {
                           >
                             <ClipboardCheck className="size-4" />
                             Statistics
+                          </Button>
+
+                          <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label="Edit exam"
+                              title="Edit exam"
+                              onClick={() => openEditExam(exam)}
+                          >
+                            <Pencil className="size-4" />
                           </Button>
 
                           <DropdownMenu>
