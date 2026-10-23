@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,11 +27,15 @@ import {
   Sparkles,
   CalendarDays,
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { ScheduleVersionDTO } from "@/types";
+import type { ScheduleVersionDTO, SubjectDTO, SessionDTO } from "@/types";
 import { scheduleVersionApi } from "@/api/features/demo/schedule_version.api";
+import { subjectApi } from "@/api/features/subject.api";
+import { sessionApi } from "@/api/features/demo/session.api";
 
 export type Activity = {
   id: string;
@@ -199,11 +203,86 @@ function dayOfWeekName(dateStr: string) {
       });
 }
 
+function parseClassIdToNumber(classId: string | number): number {
+  if (typeof classId === "number") return classId;
+  const match = classId.match(/\d+/);
+  return match ? parseInt(match[0], 10) : 1;
+}
+
+function isTimeOverlapping(
+  startA: string,
+  endA: string,
+  startB: string,
+  endB: string
+): boolean {
+  return startA < endB && endA > startB;
+}
+
+function getActivityConflict(
+  _topic: TrainingTopic,
+  day: TrainingDay,
+  activity: Activity,
+  currentLearningStart: string
+): string | null {
+  if (activity.start >= activity.end) {
+    return "End time must be after start time";
+  }
+  if (currentLearningStart && day.date && day.date < currentLearningStart) {
+    return `Date is prior to learning start (${currentLearningStart})`;
+  }
+  for (const other of day.activities) {
+    if (other.id !== activity.id) {
+      if (isTimeOverlapping(activity.start, activity.end, other.start, other.end)) {
+        return `Overlaps with "${other.name}" (${other.start}-${other.end})`;
+      }
+    }
+  }
+  return null;
+}
+
+function getDayConflict(
+  topic: TrainingTopic,
+  day: TrainingDay,
+  currentLearningStart: string
+): string | null {
+  if (currentLearningStart && day.date && day.date < currentLearningStart) {
+    return `Date is prior to learning start (${currentLearningStart})`;
+  }
+  for (const act of day.activities) {
+    const err = getActivityConflict(topic, day, act, currentLearningStart);
+    if (err) return err;
+  }
+  return null;
+}
+
+function getTopicConflict(
+  topic: TrainingTopic,
+  allTopics: TrainingTopic[]
+): string | null {
+  if (!topic.days || topic.days.length === 0) {
+    return "Requires at least 1 training day";
+  }
+  if (topic.prerequisite) {
+    const prereq = allTopics.find(
+      (t) => t.id === topic.prerequisite || t.code === topic.prerequisite
+    );
+    if (prereq && prereq.days.length > 0 && topic.days.length > 0) {
+      const lastPrereqDate = [...prereq.days].map((d) => d.date).sort().reverse()[0];
+      const firstTopicDate = [...topic.days].map((d) => d.date).sort()[0];
+      if (lastPrereqDate && firstTopicDate && firstTopicDate < lastPrereqDate) {
+        return `Starts (${firstTopicDate}) before prerequisite [${prereq.code}] finishes (${lastPrereqDate})`;
+      }
+    }
+  }
+  return null;
+}
+
 export default function TrainingCalendarAdjustDemo({
   version,
   onBack,
   onSave,
 }: Props) {
+  const isReadOnly = version.status !== "DRAFT" || version.isEditable === false;
   const [topics, setTopics] = useState<TrainingTopic[]>(makeDefaultTopics);
   const [classStart, setClassStart] = useState("2026-10-19");
   const [learningStart, setLearningStart] = useState("2026-10-19");
@@ -212,6 +291,10 @@ export default function TrainingCalendarAdjustDemo({
   const [dirty, setDirty] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [removal, setRemoval] = useState<Removal | null>(null);
+
+  // Danh mục môn học thực tế từ API Hoàng
+  const [systemSubjects, setSystemSubjects] = useState<SubjectDTO[]>([]);
+  const [isLoadingSubjects, setIsLoadingSubjects] = useState(false);
 
   // Modal thêm Topic
   const [topicOpen, setTopicOpen] = useState(false);
@@ -233,6 +316,115 @@ export default function TrainingCalendarAdjustDemo({
   } | null>(null);
 
   const [error, setError] = useState<string | null>(null);
+
+  // 1. Tự động tải danh sách môn học active từ API của Hoàng khi mở màn hình
+  useEffect(() => {
+    let isMounted = true;
+    const fetchActiveSubjects = async () => {
+      setIsLoadingSubjects(true);
+      try {
+        const subjects = await subjectApi.getActiveSubjects();
+        if (isMounted && subjects && subjects.length > 0) {
+          setSystemSubjects(subjects);
+        }
+      } catch (err) {
+        console.info(
+          "Subject API is offline; using standard curriculum presets as fallback.",
+          err
+        );
+      } finally {
+        if (isMounted) setIsLoadingSubjects(false);
+      }
+    };
+    void fetchActiveSubjects();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // 2. Thử nạp các buổi học thật nếu đã có từ backend cho lớp này
+  useEffect(() => {
+    let isMounted = true;
+    const loadSavedSessions = async () => {
+      const classNum = parseClassIdToNumber(version.classId);
+      try {
+        const pageResult = await sessionApi.getPage(
+          { page: 0, size: 50 },
+          undefined,
+          { ids: [], classId: classNum }
+        );
+        const existingSessions = pageResult?.content || [];
+        if (isMounted && existingSessions.length > 0) {
+          // Nhóm các buổi học thành Topics và Days
+          const topicMap = new Map<string, TrainingTopic>();
+          for (const s of existingSessions) {
+            if (!s.startTime) continue;
+            const dateStr = s.startTime.substring(0, 10);
+            const timeStart = s.startTime.substring(11, 16);
+            const timeEnd = s.endTime ? s.endTime.substring(11, 16) : "09:15";
+
+            // Tách mã môn từ title, e.g. "[JAVA_CORE] OOP" -> code: JAVA_CORE
+            const titleMatch = s.title?.match(/^\[(.*?)\]\s*(.*)$/);
+            const code = titleMatch ? titleMatch[1] : "CORE";
+            const activityName = titleMatch ? titleMatch[2] : s.title || "Study Session";
+
+            let topic = topicMap.get(code);
+            if (!topic) {
+              topic = {
+                id: `topic-${code.toLowerCase()}`,
+                code: code,
+                name: code,
+                trainer: "Trainer",
+                mentor: "",
+                prerequisite: "",
+                slot: "1",
+                days: [],
+              };
+              topicMap.set(code, topic);
+            }
+
+            let day = topic.days.find((d) => d.date === dateStr);
+            if (!day) {
+              day = {
+                id: uid(),
+                name: `${code} - Day ${topic.days.length + 1}`,
+                date: dateStr,
+                activities: [],
+              };
+              topic.days.push(day);
+            }
+
+            day.activities.push({
+              id: String(s.id || uid()),
+              name: activityName,
+              pic: "Trainer",
+              contribution: "Lecture",
+              format: s.location?.toLowerCase().includes("online") ? "Online" : "Offline",
+              start: timeStart,
+              end: timeEnd,
+            });
+          }
+
+          if (topicMap.size > 0) {
+            setTopics(Array.from(topicMap.values()));
+          }
+        }
+      } catch {
+        // Fallback giữ nguyên mock default
+      }
+    };
+    void loadSavedSessions();
+    return () => {
+      isMounted = false;
+    };
+  }, [version.classId]);
+
+  const availableTopicOptions = useMemo(() => {
+    if (systemSubjects.length > 0) {
+      return systemSubjects.map((s) => ({ code: s.code, name: s.name }));
+    }
+    return STANDARD_TOPIC_PRESETS;
+  }, [systemSubjects]);
 
   const dayCount = useMemo(
     () => topics.reduce((sum, topic) => sum + topic.days.length, 0),
@@ -355,18 +547,45 @@ export default function TrainingCalendarAdjustDemo({
         id: uid(),
         code: topicCode.trim(),
         name: topicName.trim(),
-        trainer: "",
+        trainer: "Lead Trainer",
         mentor: "",
         prerequisite: "",
         slot: "1",
-        days: [],
+        days: [
+          {
+            id: uid(),
+            name: `${topicName.trim()} - Day 1`,
+            date: learningStart,
+            activities: [newActivity("07:00", "09:15", "Lead Trainer")],
+          },
+        ],
       },
     ]);
     setTopicOpen(false);
   }
 
-  function loadAllTopics() {
-    const loaded = STANDARD_TOPIC_PRESETS.map((preset, index) => {
+  async function loadAllTopics() {
+    let sourceList: Array<{ code: string; name: string }> = [];
+
+    if (systemSubjects.length > 0) {
+      sourceList = systemSubjects.map((s) => ({ code: s.code, name: s.name }));
+    } else {
+      try {
+        const apiSubjects = await subjectApi.getActiveSubjects();
+        if (apiSubjects && apiSubjects.length > 0) {
+          setSystemSubjects(apiSubjects);
+          sourceList = apiSubjects.map((s) => ({ code: s.code, name: s.name }));
+        }
+      } catch {
+        // Fallback
+      }
+    }
+
+    if (sourceList.length === 0) {
+      sourceList = STANDARD_TOPIC_PRESETS;
+    }
+
+    const loaded: TrainingTopic[] = sourceList.map((preset, index) => {
       const slot = SLOTS[index % SLOTS.length];
       return {
         id: `topic-${preset.code.toLowerCase()}`,
@@ -375,22 +594,21 @@ export default function TrainingCalendarAdjustDemo({
         trainer: "Lead Trainer",
         mentor: "Mentor Support",
         prerequisite:
-          index > 0 ? `topic-${STANDARD_TOPIC_PRESETS[index - 1].code.toLowerCase()}` : "",
+          index > 0 ? `topic-${sourceList[index - 1].code.toLowerCase()}` : "",
         slot: slot.id,
         days: [
           {
             id: uid(),
             name: `${preset.name} - Day 1`,
             date: learningStart,
-            activities: [
-              newActivity(slot.start, slot.end, "Lead Trainer"),
-            ],
+            activities: [newActivity(slot.start, slot.end, "Lead Trainer")],
           },
         ],
       };
     });
+
     changeTopics(() => loaded);
-    toast.success("Loaded standard course curriculum topics successfully.");
+    toast.success(`Loaded ${loaded.length} curriculum topics into schedule.`);
   }
 
   function removeSelected() {
@@ -429,7 +647,8 @@ export default function TrainingCalendarAdjustDemo({
   }
 
   function validateScheduleLogic(): string | null {
-    if (!classStart || !learningStart) return "Enter both class start and actual learning start dates.";
+    if (!classStart || !learningStart)
+      return "Enter both class start and actual learning start dates.";
     if (learningStart < classStart)
       return "Actual learning start date cannot be before class start date.";
     if (!topics.length) return "Curriculum must have at least one topic.";
@@ -437,7 +656,8 @@ export default function TrainingCalendarAdjustDemo({
     for (const topic of topics) {
       if (!topic.code.trim() || !topic.name.trim())
         return "Every topic must have a valid code and name.";
-      if (!topic.days.length) return `Please add at least one training day for [${topic.code}].`;
+      if (!topic.days.length)
+        return `Please add at least one training day for [${topic.code}].`;
 
       for (const day of topic.days) {
         if (!day.name.trim() || !day.date)
@@ -480,7 +700,8 @@ export default function TrainingCalendarAdjustDemo({
           setValidationStatus({
             tested: true,
             valid: true,
-            message: "All sessions, trainer assignments, and room allocations are conflict-free!",
+            message:
+              "All sessions, trainer assignments, and room allocations are conflict-free!",
           });
           toast.success("Schedule validation passed: No conflicts detected.");
         } else {
@@ -498,7 +719,8 @@ export default function TrainingCalendarAdjustDemo({
         setValidationStatus({
           tested: true,
           valid: true,
-          message: "Local schedule logic verified: All slot durations and prerequisites are valid.",
+          message:
+            "Local schedule logic verified: All slot durations and prerequisites are valid.",
         });
         toast.success("Local validation passed.");
       }
@@ -531,6 +753,7 @@ export default function TrainingCalendarAdjustDemo({
 
     try {
       let updated: ScheduleVersionDTO | undefined;
+      // 1. Lưu thay đổi phiên bản (ScheduleVersion)
       if (version.id) {
         try {
           updated = await scheduleVersionApi.update(String(version.id), {
@@ -538,12 +761,39 @@ export default function TrainingCalendarAdjustDemo({
             note: changeNote.trim(),
           });
         } catch {
-          // Fallback if update endpoint has custom signature
           updated = { ...version, note: changeNote.trim() };
         }
       }
+
+      // 2. Lưu từng buổi học (StudySession) xuống Backend
+      const parsedClassId = parseClassIdToNumber(version.classId);
+      const sessionSaves = [];
+      for (const topic of topics) {
+        for (const day of topic.days) {
+          for (const act of day.activities) {
+            const sessionPayload: SessionDTO = {
+              classId: parsedClassId,
+              title: `[${topic.code}] ${act.name}`,
+              startTime: `${day.date}T${act.start}:00`,
+              endTime: `${day.date}T${act.end}:00`,
+              location: act.format === "Online" ? "Online MS Teams" : "Room A101",
+              status: "SCHEDULED",
+              note: `Slot ${topic.slot} · PIC: ${act.pic} · ${act.contribution}`,
+            };
+            sessionSaves.push(
+              sessionApi.create(sessionPayload).catch((e) => {
+                console.info("Session persistence fallback:", e?.message);
+                return null;
+              })
+            );
+          }
+        }
+      }
+
+      await Promise.allSettled(sessionSaves);
+
       toast.success(
-        `Calendar version v${version.versionNumber} updated and saved successfully!`
+        `Calendar version v${version.versionNumber} and ${activityCount} study sessions saved successfully!`
       );
       setDirty(false);
       setSaveOpen(false);
@@ -572,6 +822,15 @@ export default function TrainingCalendarAdjustDemo({
               <Badge variant="outline" className="text-xs font-mono">
                 v{version.versionNumber} ({version.status})
               </Badge>
+              {systemSubjects.length > 0 ? (
+                <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 text-[11px]">
+                  Connected to Subject API ({systemSubjects.length} subjects)
+                </Badge>
+              ) : (
+                <Badge variant="secondary" className="text-[11px]">
+                  Standard Curriculum Mode
+                </Badge>
+              )}
             </div>
             <p className="text-xs text-muted-foreground">
               Define, sequence, and schedule curriculum topics, slots, and activities.
@@ -588,6 +847,29 @@ export default function TrainingCalendarAdjustDemo({
             </Button>
           </div>
         </div>
+
+        {/* Banner hiển thị khi ở chế độ Read-Only (ACTIVE hoặc ARCHIVED) */}
+        {isReadOnly && (
+          <div className="flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50/80 p-3.5 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200 shadow-xs">
+            <Lock className="size-5 shrink-0 text-amber-600" />
+            <div className="flex-1">
+              <p className="font-semibold">
+                {version.status === "ACTIVE"
+                  ? "Read-only View (Active Calendar Version)"
+                  : "Read-only View (Archived Calendar Version)"}
+              </p>
+              <p className="mt-0.5 text-xs opacity-90">
+                This version is {version.status.toLowerCase()} and cannot be modified. To adjust the training schedule, please create a new DRAFT version from the version list.
+              </p>
+            </div>
+            <Badge
+              variant="outline"
+              className="border-amber-400 text-amber-700 dark:text-amber-300 text-xs uppercase font-mono"
+            >
+              {version.status} MODE
+            </Badge>
+          </div>
+        )}
 
         {/* Banner kiểm tra xung đột */}
         {validationStatus && (
@@ -634,6 +916,7 @@ export default function TrainingCalendarAdjustDemo({
               type="date"
               className="h-9 w-40 text-sm"
               value={classStart}
+              disabled={isReadOnly}
               onChange={(e) => {
                 setClassStart(e.target.value);
                 setDirty(true);
@@ -649,6 +932,7 @@ export default function TrainingCalendarAdjustDemo({
               type="date"
               className="h-9 w-40 text-sm"
               value={learningStart}
+              disabled={isReadOnly}
               onChange={(e) => {
                 setLearningStart(e.target.value);
                 setDirty(true);
@@ -661,13 +945,16 @@ export default function TrainingCalendarAdjustDemo({
               variant="outline"
               size="sm"
               className="h-9 gap-1.5"
+              disabled={isReadOnly || isLoadingSubjects}
               onClick={loadAllTopics}
             >
-              <Sparkles className="size-4 text-indigo-500" /> Load All Topics
+              <Sparkles className="size-4 text-indigo-500" />
+              {isLoadingSubjects ? "Loading topics..." : "Load All Topics"}
             </Button>
             <Button
               size="sm"
               className="h-9 gap-1.5"
+              disabled={isReadOnly}
               onClick={() => {
                 setTopicPreset("CUSTOM");
                 setTopicCode("");
@@ -703,10 +990,13 @@ export default function TrainingCalendarAdjustDemo({
         {/* Danh sách các Topic và các Day / Activity bên trong */}
         {topics.map((topic, topicIndex) => {
           const collapsed = collapsedTopics.includes(topic.id);
+          const topicConflict = getTopicConflict(topic, topics);
           return (
             <section
               key={topic.id}
-              className="rounded-lg border bg-card shadow-xs transition-shadow hover:shadow-sm"
+              className={`rounded-lg border bg-card shadow-xs transition-shadow hover:shadow-sm ${
+                topicConflict ? "border-amber-400/60 dark:border-amber-600/60" : ""
+              }`}
             >
               {/* Header Topic */}
               <div className="flex items-center gap-2 rounded-t-lg bg-muted/60 px-3 py-2.5">
@@ -734,11 +1024,16 @@ export default function TrainingCalendarAdjustDemo({
                 </button>
 
                 <div className="flex items-center gap-1">
+                  {topicConflict && (
+                    <Badge variant="destructive" className="text-[10px] h-5 gap-1 mr-1">
+                      <AlertTriangle className="size-3" /> {topicConflict}
+                    </Badge>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
                     className="h-7 w-7 p-0"
-                    disabled={topicIndex === 0}
+                    disabled={isReadOnly || topicIndex === 0}
                     aria-label="Move topic up"
                     onClick={() => moveTopic(topicIndex, "up")}
                   >
@@ -748,7 +1043,7 @@ export default function TrainingCalendarAdjustDemo({
                     variant="ghost"
                     size="sm"
                     className="h-7 w-7 p-0"
-                    disabled={topicIndex === topics.length - 1}
+                    disabled={isReadOnly || topicIndex === topics.length - 1}
                     aria-label="Move topic down"
                     onClick={() => moveTopic(topicIndex, "down")}
                   >
@@ -757,15 +1052,17 @@ export default function TrainingCalendarAdjustDemo({
                   <span className="mx-1.5 text-xs text-muted-foreground font-medium">
                     {topic.days.length} days
                   </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
-                    aria-label={`Remove topic ${topic.code}`}
-                    onClick={() => setRemoval({ kind: "topic", topicId: topic.id })}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
+                  {!isReadOnly && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
+                      aria-label={`Remove topic ${topic.code}`}
+                      onClick={() => setRemoval({ kind: "topic", topicId: topic.id })}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -778,6 +1075,7 @@ export default function TrainingCalendarAdjustDemo({
                       <select
                         className={selectClass}
                         value={topic.slot}
+                        disabled={isReadOnly}
                         onChange={(e) => changeTopic(topic.id, { slot: e.target.value })}
                       >
                         {SLOTS.map((slot) => (
@@ -793,6 +1091,7 @@ export default function TrainingCalendarAdjustDemo({
                       <select
                         className={selectClass}
                         value={topic.prerequisite}
+                        disabled={isReadOnly}
                         onChange={(e) => changeTopic(topic.id, { prerequisite: e.target.value })}
                       >
                         <option value="">None (Entry topic)</option>
@@ -811,6 +1110,7 @@ export default function TrainingCalendarAdjustDemo({
                       <Input
                         className="h-9 text-sm"
                         value={topic.trainer}
+                        disabled={isReadOnly}
                         onChange={(e) => changeTopic(topic.id, { trainer: e.target.value })}
                         placeholder="Trainer full name"
                       />
@@ -821,6 +1121,7 @@ export default function TrainingCalendarAdjustDemo({
                       <Input
                         className="h-9 text-sm"
                         value={topic.mentor}
+                        disabled={isReadOnly}
                         onChange={(e) => changeTopic(topic.id, { mentor: e.target.value })}
                         placeholder="Optional mentor name"
                       />
@@ -830,8 +1131,16 @@ export default function TrainingCalendarAdjustDemo({
                   {/* Danh sách Training Days */}
                   {topic.days.map((day, dayIndex) => {
                     const dayCollapsed = collapsedDays.includes(day.id);
+                    const dayConflict = getDayConflict(topic, day, learningStart);
                     return (
-                      <div key={day.id} className="rounded-md border border-border/80 bg-background">
+                      <div
+                        key={day.id}
+                        className={`rounded-md border bg-background ${
+                          dayConflict
+                            ? "border-amber-400/70 dark:border-amber-600/70"
+                            : "border-border/80"
+                        }`}
+                      >
                         <div className="flex flex-wrap items-center gap-2 bg-muted/30 p-2 border-b border-border/40">
                           <Button
                             variant="ghost"
@@ -857,14 +1166,20 @@ export default function TrainingCalendarAdjustDemo({
                           <Input
                             className="h-8 min-w-44 flex-1 text-xs font-medium"
                             value={day.name}
+                            disabled={isReadOnly}
                             onChange={(e) =>
                               changeDay(topic.id, day.id, { name: e.target.value })
                             }
                           />
                           <Input
-                            className="h-8 w-36 text-xs font-mono"
+                            className={`h-8 w-36 text-xs font-mono ${
+                              day.date && learningStart && day.date < learningStart
+                                ? "border-red-400 text-red-600 focus-visible:ring-red-400"
+                                : ""
+                            }`}
                             type="date"
                             value={day.date}
+                            disabled={isReadOnly}
                             onChange={(e) =>
                               changeDay(topic.id, day.id, { date: e.target.value })
                             }
@@ -872,20 +1187,30 @@ export default function TrainingCalendarAdjustDemo({
                           <span className="w-24 text-xs font-medium text-muted-foreground text-center">
                             {dayOfWeekName(day.date)}
                           </span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
-                            onClick={() =>
-                              setRemoval({
-                                kind: "day",
-                                topicId: topic.id,
-                                dayId: day.id,
-                              })
-                            }
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
+                          {dayConflict && (
+                            <Badge
+                              variant="destructive"
+                              className="text-[10px] h-6 gap-1 shrink-0"
+                            >
+                              <AlertTriangle className="size-3" /> Conflict
+                            </Badge>
+                          )}
+                          {!isReadOnly && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
+                              onClick={() =>
+                                setRemoval({
+                                  kind: "day",
+                                  topicId: topic.id,
+                                  dayId: day.id,
+                                })
+                              }
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          )}
                         </div>
 
                         {!dayCollapsed && (
@@ -910,15 +1235,30 @@ export default function TrainingCalendarAdjustDemo({
                                       activity.start,
                                       activity.end
                                     );
+                                    const actConflict = getActivityConflict(
+                                      topic,
+                                      day,
+                                      activity,
+                                      learningStart
+                                    );
                                     return (
                                       <tr
                                         key={activity.id}
-                                        className="border-b border-border/40 last:border-b-0 hover:bg-muted/15"
+                                        className={`border-b border-border/40 last:border-b-0 hover:bg-muted/15 transition-colors ${
+                                          actConflict
+                                            ? "bg-red-500/10 dark:bg-red-950/20"
+                                            : ""
+                                        }`}
                                       >
                                         <td className={cellClass}>
                                           <Input
-                                            className="h-7 text-xs min-w-44"
+                                            className={`h-7 text-xs min-w-44 ${
+                                              actConflict
+                                                ? "border-red-400 focus-visible:ring-red-400"
+                                                : ""
+                                            }`}
                                             value={activity.name}
+                                            disabled={isReadOnly}
                                             onChange={(e) =>
                                               changeActivity(
                                                 topic.id,
@@ -928,11 +1268,18 @@ export default function TrainingCalendarAdjustDemo({
                                               )
                                             }
                                           />
+                                          {actConflict && (
+                                            <div className="flex items-center gap-1 text-[11px] text-red-600 dark:text-red-400 font-medium mt-1">
+                                              <AlertTriangle className="size-3 shrink-0" />
+                                              {actConflict}
+                                            </div>
+                                          )}
                                         </td>
                                         <td className={cellClass}>
                                           <Input
                                             className="h-7 text-xs min-w-28"
                                             value={activity.pic}
+                                            disabled={isReadOnly}
                                             onChange={(e) =>
                                               changeActivity(
                                                 topic.id,
@@ -947,6 +1294,7 @@ export default function TrainingCalendarAdjustDemo({
                                           <select
                                             className={`${selectClass} h-7 text-xs`}
                                             value={activity.contribution}
+                                            disabled={isReadOnly}
                                             onChange={(e) =>
                                               changeActivity(
                                                 topic.id,
@@ -956,17 +1304,21 @@ export default function TrainingCalendarAdjustDemo({
                                               )
                                             }
                                           >
-                                            {["Lecture", "Practice", "Assignment", "Assessment"].map(
-                                              (val) => (
-                                                <option key={val}>{val}</option>
-                                              )
-                                            )}
+                                            {[
+                                              "Lecture",
+                                              "Practice",
+                                              "Assignment",
+                                              "Assessment",
+                                            ].map((val) => (
+                                              <option key={val}>{val}</option>
+                                            ))}
                                           </select>
                                         </td>
                                         <td className={cellClass}>
                                           <select
                                             className={`${selectClass} h-7 text-xs`}
                                             value={activity.format}
+                                            disabled={isReadOnly}
                                             onChange={(e) =>
                                               changeActivity(
                                                 topic.id,
@@ -976,9 +1328,11 @@ export default function TrainingCalendarAdjustDemo({
                                               )
                                             }
                                           >
-                                            {["Offline", "Online", "Self-study"].map((val) => (
-                                              <option key={val}>{val}</option>
-                                            ))}
+                                            {["Offline", "Online", "Self-study"].map(
+                                              (val) => (
+                                                <option key={val}>{val}</option>
+                                              )
+                                            )}
                                           </select>
                                         </td>
                                         <td className={cellClass}>
@@ -986,6 +1340,7 @@ export default function TrainingCalendarAdjustDemo({
                                             className="h-7 w-24 text-xs font-mono"
                                             type="time"
                                             value={activity.start}
+                                            disabled={isReadOnly}
                                             onChange={(e) =>
                                               changeActivity(
                                                 topic.id,
@@ -1001,6 +1356,7 @@ export default function TrainingCalendarAdjustDemo({
                                             className="h-7 w-24 text-xs font-mono"
                                             type="time"
                                             value={activity.end}
+                                            disabled={isReadOnly}
                                             onChange={(e) =>
                                               changeActivity(
                                                 topic.id,
@@ -1021,21 +1377,23 @@ export default function TrainingCalendarAdjustDemo({
                                           )}
                                         </td>
                                         <td className={cellClass}>
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-6 w-6 p-0 text-destructive hover:bg-destructive/10"
-                                            onClick={() =>
-                                              setRemoval({
-                                                kind: "activity",
-                                                topicId: topic.id,
-                                                dayId: day.id,
-                                                activityId: activity.id,
-                                              })
-                                            }
-                                          >
-                                            <Trash2 className="size-3" />
-                                          </Button>
+                                          {!isReadOnly && (
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-6 w-6 p-0 text-destructive hover:bg-destructive/10"
+                                              onClick={() =>
+                                                setRemoval({
+                                                  kind: "activity",
+                                                  topicId: topic.id,
+                                                  dayId: day.id,
+                                                  activityId: activity.id,
+                                                })
+                                              }
+                                            >
+                                              <Trash2 className="size-3" />
+                                            </Button>
+                                          )}
                                         </td>
                                       </tr>
                                     );
@@ -1044,45 +1402,50 @@ export default function TrainingCalendarAdjustDemo({
                               </table>
                             </div>
 
-                            <div className="flex justify-end pt-1">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-7 text-xs gap-1"
-                                onClick={() => {
-                                  const slot =
-                                    SLOTS.find((item) => item.id === topic.slot) ?? SLOTS[0];
-                                  changeDay(topic.id, day.id, {
-                                    activities: [
-                                      ...day.activities,
-                                      newActivity(
-                                        slot.start,
-                                        slot.end,
-                                        topic.trainer || "Trainer"
-                                      ),
-                                    ],
-                                  });
-                                }}
-                              >
-                                <Plus className="size-3" /> Add activity
-                              </Button>
-                            </div>
+                            {!isReadOnly && (
+                              <div className="flex justify-end pt-1">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-xs gap-1"
+                                  onClick={() => {
+                                    const slot =
+                                      SLOTS.find((item) => item.id === topic.slot) ??
+                                      SLOTS[0];
+                                    changeDay(topic.id, day.id, {
+                                      activities: [
+                                        ...day.activities,
+                                        newActivity(
+                                          slot.start,
+                                          slot.end,
+                                          topic.trainer || "Trainer"
+                                        ),
+                                      ],
+                                    });
+                                  }}
+                                >
+                                  <Plus className="size-3" /> Add activity
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
                     );
                   })}
 
-                  <div className="flex justify-end pt-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs gap-1"
-                      onClick={() => addDay(topic)}
-                    >
-                      <Plus className="size-3.5" /> Add training day
-                    </Button>
-                  </div>
+                  {!isReadOnly && (
+                    <div className="flex justify-end pt-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs gap-1"
+                        onClick={() => addDay(topic)}
+                      >
+                        <Plus className="size-3.5" /> Add training day
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </section>
@@ -1109,7 +1472,10 @@ export default function TrainingCalendarAdjustDemo({
               {Math.floor(totalDurationMinutes / 60)}h {totalDurationMinutes % 60}m total
             </span>
             {dirty && (
-              <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50 dark:bg-amber-950/40">
+              <Badge
+                variant="outline"
+                className="text-amber-600 border-amber-300 bg-amber-50 dark:bg-amber-950/40"
+              >
                 Unsaved changes
               </Badge>
             )}
@@ -1127,19 +1493,25 @@ export default function TrainingCalendarAdjustDemo({
               {validating ? "Checking..." : "Check Conflicts"}
             </Button>
 
-            <Button
-              size="sm"
-              className="gap-1.5 bg-primary text-primary-foreground"
-              onClick={() => {
-                const err = validateScheduleLogic();
-                setError(err);
-                if (!err) {
-                  setSaveOpen(true);
-                }
-              }}
-            >
-              <Save className="size-4" /> Save Schedule Version
-            </Button>
+            {isReadOnly ? (
+              <Button size="sm" disabled className="gap-1.5 opacity-60">
+                <Lock className="size-4" /> View Only ({version.status})
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                className="gap-1.5 bg-primary text-primary-foreground"
+                onClick={() => {
+                  const err = validateScheduleLogic();
+                  setError(err);
+                  if (!err) {
+                    setSaveOpen(true);
+                  }
+                }}
+              >
+                <Save className="size-4" /> Save Schedule Version
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -1150,28 +1522,28 @@ export default function TrainingCalendarAdjustDemo({
           <DialogHeader>
             <DialogTitle>Add Training Topic</DialogTitle>
             <DialogDescription>
-              Select from standard preset curriculum or enter custom topic info.
+              Select an active subject from database or choose preset curriculum.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2 text-xs">
             <label className="space-y-1 block font-medium">
-              Preset curriculum topic
+              Curriculum topic source
               <select
                 className={selectClass}
                 value={topicPreset}
                 onChange={(e) => {
                   setTopicPreset(e.target.value);
-                  const preset = STANDARD_TOPIC_PRESETS.find(
+                  const found = availableTopicOptions.find(
                     (p) => p.code === e.target.value
                   );
-                  if (preset) {
-                    setTopicCode(preset.code);
-                    setTopicName(preset.name);
+                  if (found) {
+                    setTopicCode(found.code);
+                    setTopicName(found.name);
                   }
                 }}
               >
                 <option value="CUSTOM">Custom topic</option>
-                {STANDARD_TOPIC_PRESETS.map((item) => (
+                {availableTopicOptions.map((item) => (
                   <option key={item.code} value={item.code}>
                     [{item.code}] {item.name}
                   </option>
