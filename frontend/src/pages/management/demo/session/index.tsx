@@ -1,10 +1,26 @@
 import { sessionApi } from "@/api/features/demo/session.api";
+import { SessionScheduleEditor } from "@/pages/management/schedule-validation/SessionScheduleEditor";
+import { PermissionGate } from "@/components/PermissionGate";
+import { Button } from "@/components/ui/button";
 import {
     auditableFieldsSchema,
     type EntityConfig,
     type EntitySchema,
     type FieldSchema,
 } from "@/types";
+import { CalendarClock } from "lucide-react";
+import { Link } from "react-router-dom";
+
+const scheduleValidationAction = (
+    <PermissionGate permissions={["SESSION_CREATE", "SESSION_UPDATE"]}>
+        <Button asChild variant="outline">
+            <Link to="/schedule-validation">
+                <CalendarClock className="size-4" aria-hidden="true" />
+                Validate schedule
+            </Link>
+        </Button>
+    </PermissionGate>
+);
 
 const statusOptions = [
     { value: "SCHEDULED", label: "Scheduled", color: "blue" },
@@ -102,4 +118,9 @@ export const entityConfig: EntityConfig = {
     path: "/sessions",
     api: sessionApi,
     schema: sessionSchema,
+    headerActions: scheduleValidationAction,
+    actionPages: {
+        create: { path: "create", component: SessionScheduleEditor, requiredPermission: "SESSION_CREATE" },
+        edit: { path: ":id/edit", component: SessionScheduleEditor, requiredPermission: "SESSION_UPDATE" },
+    },
 };

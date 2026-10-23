@@ -12,6 +12,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import com.example.starter_project_2025.system.schedule.*;
+import com.example.starter_project_2025.base.crud.CrudAction;
 
 @Service
 @Transactional
@@ -23,6 +26,48 @@ public class SessionServiceImpl
 
     SessionMapper sessionMapper;
     SessionRepository sessionRepository;
+    ScheduleValidationEngine conflicts;
+
+    @Override
+    public SessionDTO create(SessionDTO request) {
+        checkPermission(CrudAction.CREATE);
+        checkPermission(CrudAction.READ);
+        conflicts.lockForWrite();
+        request.setId(null);
+        return super.create(request);
+    }
+
+    @Override
+    public SessionDTO update(Long id, SessionDTO request) {
+        checkPermission(CrudAction.UPDATE);
+        checkPermission(CrudAction.READ);
+        conflicts.lockForWrite();
+        request.setId(id);
+        return super.update(id, request);
+    }
+
+    @Override
+    public List<SessionDTO> createValidatedBatch(List<SessionDTO> requests) {
+        checkPermission(CrudAction.CREATE);
+        checkPermission(CrudAction.READ);
+        conflicts.lockForWrite();
+        conflicts.requireValid(requests.stream().map(r -> candidate(null, r)).toList());
+        return requests.stream().map(this::create).toList();
+    }
+
+    private ScheduleCandidate candidate(Session current, SessionDTO r) {
+        return new ScheduleCandidate(current == null ? null : current.getId(),
+                r.getClassId() != null ? r.getClassId() : current == null ? null : current.getClassId(),
+                r.getTopicId() != null ? r.getTopicId() : current == null ? null : current.getTopicId(),
+                r.getTrainerId() != null ? r.getTrainerId() : current == null ? null : current.getTrainerId(),
+                r.getTeachingAssignmentId() != null ? r.getTeachingAssignmentId() : current == null ? null : current.getTeachingAssignmentId(),
+                r.getRoomId() != null ? r.getRoomId() : r.getLocation() != null && r.getLocation().isBlank() ? null : current == null ? null : current.getRoomId(),
+                r.getLocation() != null ? r.getLocation() : current == null ? null : current.getLocation(),
+                r.getMeetingUrl() != null ? r.getMeetingUrl() : current == null ? null : current.getMeetingUrl(),
+                r.getTitle() != null ? r.getTitle() : current == null ? null : current.getTitle(),
+                r.getStartTime() != null ? r.getStartTime() : current == null ? null : current.getStartTime(),
+                r.getEndTime() != null ? r.getEndTime() : current == null ? null : current.getEndTime());
+    }
 
     @Override
     protected BaseCrudRepository<Session, Long> getRepository() {
@@ -42,6 +87,7 @@ public class SessionServiceImpl
 
     @Override
     protected void beforeCreate(Session session, SessionDTO request, ValidationContext ctx) {
+        conflicts.requireValid(List.of(candidate(null, request)));
         // 1. Kiểm tra thời gian: end_time phải sau start_time (BR-02, FR-CAL-01)
         validateSessionTime(request.getStartTime(), request.getEndTime(), ctx);
 
@@ -53,12 +99,12 @@ public class SessionServiceImpl
     protected void beforeUpdate(Session session, SessionDTO request, ValidationContext ctx) {
         // Không cho phép sửa nếu buổi học đã hoàn thành hoặc đã bị hủy
         if (session.getStatus() == Session.SessionStatus.COMPLETED) {
-            ctx.add("status", "Cannot update a completed session");
+            ctx.add("status", "Completed sessions cannot be edited.");
             return;
         }
 
         if (session.getStatus() == Session.SessionStatus.CANCELLED) {
-            ctx.add("status", "Cannot update a cancelled session");
+            ctx.add("status", "Cancelled sessions cannot be edited.");
             return;
         }
 
@@ -67,21 +113,29 @@ public class SessionServiceImpl
         LocalDateTime newEnd = request.getEndTime() != null ? request.getEndTime() : session.getEndTime();
 
         validateSessionTime(newStart, newEnd, ctx);
+        conflicts.requireValid(List.of(candidate(session, request)));
+        // An explicit empty location clears a previously selected physical room.
+        if (request.getRoomId() == null && request.getLocation() != null && request.getLocation().isBlank()) {
+            session.setRoomId(null);
+        }
     }
 
     @Override
     public SessionDTO cancelSession(Long id, SessionCancelDTO cancelDTO) {
+        checkPermission(CrudAction.UPDATE);
+        checkPermission(CrudAction.READ);
+        conflicts.lockForWrite();
         // Lấy session từ DB
         Session session = sessionRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Session not found with id: " + id));
+                .orElseThrow(() -> new IllegalArgumentException("Session not found. Session ID: " + id));
 
         // Kiểm tra điều kiện nghiệp vụ: Không hủy buổi học đã hoàn thành
         if (session.getStatus() == Session.SessionStatus.COMPLETED) {
-            throw new IllegalStateException("Cannot cancel an already completed session");
+            throw new IllegalStateException("Completed sessions cannot be cancelled.");
         }
 
         if (session.getStatus() == Session.SessionStatus.CANCELLED) {
-            throw new IllegalStateException("Session is already cancelled");
+            throw new IllegalStateException("This session has already been cancelled.");
         }
 
         // Cập nhật trạng thái và lý do hủy (Soft cancel theo BR-03)
@@ -97,7 +151,7 @@ public class SessionServiceImpl
      */
     private void validateSessionTime(LocalDateTime start, LocalDateTime end, ValidationContext ctx) {
         if (start != null && end != null && !end.isAfter(start)) {
-            ctx.add("endTime", "End time must be after start time");
+            ctx.add("endTime", "The end time must be later than the start time.");
         }
     }
 }

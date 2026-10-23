@@ -55,6 +55,8 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "COURSE_READ",
                         "ENROLLMENT_READ",
                         "ENROLLMENT_CREATE",
+                        "SCHEDULE_VERSION_READ",
+                        "SUBJECT_READ",
                         "LESSON_READ",
                         "EXAM_TAKE"
                 )
@@ -65,12 +67,38 @@ public class RoleDataInitializer implements CommandLineRunner {
                 "Teacher with book, course and exam management permissions",
                 findPermissions(
                         "MENU_READ",
-                        "BOOK_CREATE", "BOOK_READ", "BOOK_UPDATE", "BOOK_DELETE",
-                        "COURSE_CREATE", "COURSE_READ", "COURSE_UPDATE", "COURSE_DELETE",
-                        "LESSON_CREATE", "LESSON_READ", "LESSON_UPDATE", "LESSON_DELETE",
-                        "EXAM_CREATE", "EXAM_READ", "EXAM_UPDATE", "EXAM_DELETE",
-                        "QUESTION_CREATE", "QUESTION_READ", "QUESTION_UPDATE", "QUESTION_DELETE",
-                        "INVITATION_CREATE", "INVITATION_READ", "INVITATION_UPDATE", "INVITATION_DELETE"
+                        "BOOK_CREATE",
+                        "BOOK_READ",
+                        "BOOK_UPDATE",
+                        "BOOK_DELETE",
+                        "COURSE_CREATE",
+                        "COURSE_READ",
+                        "COURSE_UPDATE",
+                        "COURSE_DELETE",
+                        "SCHEDULE_VERSION_CREATE",
+                        "SCHEDULE_VERSION_READ",
+                        "SCHEDULE_VERSION_UPDATE",
+                        "SCHEDULE_VERSION_DELETE",
+                        "SUBJECT_CREATE",
+                        "SUBJECT_READ",
+                        "SUBJECT_UPDATE",
+                        "SUBJECT_DELETE",
+                        "LESSON_CREATE",
+                        "LESSON_READ",
+                        "LESSON_UPDATE",
+                        "LESSON_DELETE",
+                        "EXAM_CREATE",
+                        "EXAM_READ",
+                        "EXAM_UPDATE",
+                        "EXAM_DELETE",
+                        "QUESTION_CREATE",
+                        "QUESTION_READ",
+                        "QUESTION_UPDATE",
+                        "QUESTION_DELETE",
+                        "INVITATION_CREATE",
+                        "INVITATION_READ",
+                        "INVITATION_UPDATE",
+                        "INVITATION_DELETE"
                 )
         );
 
