@@ -48,6 +48,7 @@ interface FormState {
 
 const LESSON_CONTENT_TYPE_OPTIONS: { value: LessonContentType; label: string }[] = [
   { value: "VIDEO", label: "Video" },
+  { value: "AUDIO", label: "Audio" },
   { value: "TEXT", label: "Text" },
   { value: "DOCUMENT", label: "Document" },
   { value: "LINK", label: "Link" },
@@ -294,7 +295,11 @@ export function LessonFormModal({
           {needsUrl(form.contentType) ? (
             <div className="grid gap-1.5">
               <Label htmlFor="lesson-url">
-                {form.contentType === "VIDEO" ? "Video URL" : "Resource URL"}
+                {form.contentType === "VIDEO"
+                  ? "Video URL"
+                  : form.contentType === "AUDIO"
+                    ? "Audio URL"
+                    : "Resource URL"}
               </Label>
               <Input
                 id="lesson-url"
@@ -305,7 +310,9 @@ export function LessonFormModal({
                 placeholder={
                   form.contentType === "VIDEO"
                     ? "https://www.youtube.com/watch?v=..."
-                    : "https://example.com/material.pdf"
+                    : form.contentType === "AUDIO"
+                      ? "https://example.com/audio.mp3"
+                      : "https://example.com/material.pdf"
                 }
               />
               <p className="text-xs text-muted-foreground">

@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, FileText, Link2, PlayCircle } from "lucide-react";
+import { ExternalLink, FileText, Link2, Music2, PlayCircle } from "lucide-react";
 
 type LessonDTO = {
   title?: string | null;
@@ -134,6 +134,24 @@ function TextPreview({ lesson }: { lesson: LessonDTO }) {
   );
 }
 
+function AudioPreview({ lesson }: { lesson: LessonDTO }) {
+  const url = toSafeUrl(lesson.contentUrl);
+  if (!url) return <InvalidContent message="Audio URL is missing or invalid." />;
+
+  return (
+    <div className="flex items-center gap-4 rounded-xl border bg-muted/30 p-4">
+      <Music2 className="size-8 shrink-0 text-muted-foreground" />
+      <audio
+        key={url.toString()}
+        src={url.toString()}
+        controls
+        preload="metadata"
+        className="w-full"
+      />
+    </div>
+  );
+}
+
 function ResourcePreview({ lesson }: { lesson: LessonDTO }) {
   const url = toSafeUrl(lesson.contentUrl);
   if (!url) return <InvalidContent message="Resource link is missing or invalid." />;
@@ -174,6 +192,7 @@ interface LessonPreviewProps {
 /**
  * Preview nội dung bài học theo contentType:
  * - VIDEO            -> video (YouTube/Vimeo embed hoặc file mp4/webm)
+ * - AUDIO            -> native audio player
  * - TEXT             -> nội dung văn bản
  * - DOCUMENT / LINK  -> resource link
  */
@@ -191,6 +210,7 @@ export function LessonPreview({ lesson, hideHeader = false }: LessonPreviewProps
       )}
 
       {lesson.contentType === "VIDEO" && <VideoPreview lesson={lesson} />}
+      {lesson.contentType === "AUDIO" && <AudioPreview lesson={lesson} />}
       {lesson.contentType === "TEXT" && <TextPreview lesson={lesson} />}
       {(lesson.contentType === "DOCUMENT" || lesson.contentType === "LINK") && (
         <ResourcePreview lesson={lesson} />
