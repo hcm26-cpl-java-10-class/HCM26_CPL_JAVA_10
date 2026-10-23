@@ -12,6 +12,8 @@ import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_grade
 import StudentExamList from "@/pages/student/StudentExamList";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
+import { MilestoneCreatePage } from "@/pages/management/project/milestone/pages/MilestoneCreatePage";
+import { MilestoneDetailPage } from "@/pages/management/project/milestone/pages/MilestoneDetailPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 
@@ -42,6 +44,16 @@ export const routes: RouteConfig[] = [
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
   { path: "/student/exams", component: StudentExamList,requiredPermission: "EXAM_READ", isModuleDriven: true },
   { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
+  {
+    path: "/projects/:projectId/milestones/new",
+    component: MilestoneCreatePage,
+    requiredPermission: "MILESTONE_CREATE",
+  },
+  {
+    path: "/projects/:projectId/milestones/:milestoneId",
+    component: MilestoneDetailPage,
+    requiredPermission: "MILESTONE_READ",
+  },
   ...buildEntityRoutes(),
 
   { path: "/not-found-page", component: NotFoundPage, isPublic: true },

@@ -117,19 +117,9 @@ export const resolveEffectivePermissions = (
 ): string[] => {
   const role = normalizeRole(activeRole);
 
-  if (role && rolePermissions[role]?.length) {
-    return uniquePermissions(rolePermissions[role]);
-  }
-
-  if (role === STUDENT_ROLE) {
-    return uniquePermissions(
-      allPermissions.filter(
-        (permission) =>
-          permission.endsWith("_READ") || permission === "ENROLL_COURSE",
-      ),
-    );
-  }
-
+  // Milestone creation is a core Teacher capability in the current project flow.
+  // Keep it available in the UI even when localStorage still contains an older
+  // rolePermissions snapshot; the backend remains the final authorization layer.
   if (role === TEACHER_ROLE) {
     const teacherDefaults = new Set([
       "MENU_READ",
@@ -143,8 +133,24 @@ export const resolveEffectivePermissions = (
       "EXAM_DELETE",
     ]);
 
+    return uniquePermissions([
+      ...(rolePermissions[role] ?? []),
+      ...allPermissions.filter((permission) => teacherDefaults.has(permission)),
+      "MILESTONE_CREATE",
+      "MILESTONE_READ",
+    ]);
+  }
+
+  if (role && rolePermissions[role]?.length) {
+    return uniquePermissions(rolePermissions[role]);
+  }
+
+  if (role === STUDENT_ROLE) {
     return uniquePermissions(
-      allPermissions.filter((permission) => teacherDefaults.has(permission)),
+      allPermissions.filter(
+        (permission) =>
+          permission.endsWith("_READ") || permission === "ENROLL_COURSE",
+      ),
     );
   }
 
