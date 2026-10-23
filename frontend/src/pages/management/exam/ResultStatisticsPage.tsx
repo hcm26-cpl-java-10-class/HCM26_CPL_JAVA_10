@@ -41,15 +41,15 @@ type PublicationStatus = {
 const policies: { value: ReleasePolicy; label: string }[] = [
     {
         value: "MY_SCORES_ONLY",
-        label: "Chỉ hiển thị điểm trong My Scores",
+        label: "Show scores on My Scores only",
     },
     {
         value: "MY_SCORES_AND_EMAIL",
-        label: "Hiển thị điểm và gửi email",
+        label: "Show scores on My Scores and send email",
     },
     {
         value: "HIDDEN",
-        label: "Không công bố điểm cho học viên",
+        label: "Do not disclose scores to students",
     },
 ];
 
@@ -67,7 +67,6 @@ function StatCard({
     detail?: string;
 }) {
     return (
-
         <div className="rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
             <p className="text-sm text-muted-foreground">{label}</p>
             <p className="mt-2 text-2xl font-bold">{value}</p>
@@ -94,7 +93,7 @@ function ScoreDistributionChart({ bands }: { bands: ScoreBand[] }) {
     if (bands.length === 0) {
         return (
             <p className="py-12 text-center text-sm text-muted-foreground">
-                Chưa có dữ liệu phân bố điểm.
+                No score distribution data available.
             </p>
         );
     }
@@ -105,7 +104,7 @@ function ScoreDistributionChart({ bands }: { bands: ScoreBand[] }) {
                 viewBox={`0 0 ${width} ${height}`}
                 className="w-full min-w-[460px]"
                 role="img"
-                aria-label="Biểu đồ cột phân bố điểm"
+                aria-label="Score distribution bar chart"
             >
                 {[0, 0.25, 0.5, 0.75, 1].map((fraction) => {
                     const y = top + chartHeight * (1 - fraction);
@@ -198,10 +197,7 @@ function AttemptStatusChart({
     return (
         <div className="flex flex-col items-center justify-center gap-6 py-4 sm:flex-row sm:gap-8">
             <div className="relative w-full max-w-[280px] shrink-0">
-                <svg
-                    viewBox="0 0 160 160"
-                    className="h-auto w-full"
-                >
+                <svg viewBox="0 0 160 160" className="h-auto w-full">
                     <circle
                         cx="80"
                         cy="80"
@@ -258,7 +254,7 @@ function AttemptStatusChart({
                         fill="currentColor"
                         className="text-muted-foreground"
                     >
-                        lượt thi
+                        attempts
                     </text>
                 </svg>
             </div>
@@ -267,15 +263,15 @@ function AttemptStatusChart({
                 <div className="flex items-center gap-3">
                     <span className="h-3 w-3 rounded-sm bg-green-600" />
                     <div>
-                        <p className="text-muted-foreground">Đã chấm hoàn tất</p>
-                        <p className="font-semibold">{completed} lượt</p>
+                        <p className="text-muted-foreground">Fully Graded</p>
+                        <p className="font-semibold">{completed} attempts</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
                     <span className="h-3 w-3 rounded-sm bg-amber-500" />
                     <div>
-                        <p className="text-muted-foreground">Chưa chấm hoàn tất</p>
-                        <p className="font-semibold">{pending} lượt</p>
+                        <p className="text-muted-foreground">Pending Grading</p>
+                        <p className="font-semibold">{pending} attempts</p>
                     </div>
                 </div>
             </div>
@@ -301,7 +297,7 @@ function getErrorMessage(error: unknown): string {
         if (message) return message;
     }
 
-    return "Đã xảy ra lỗi khi gọi API. Hãy kiểm tra backend và quyền truy cập.";
+    return "An error occurred while calling the API. Please check the backend and your access permissions.";
 }
 
 export default function ResultStatisticsPage() {
@@ -345,7 +341,7 @@ export default function ResultStatisticsPage() {
             return response.data;
         },
         onSuccess: async () => {
-            toast.success("Đã cập nhật công bố kết quả.");
+            toast.success("Result publication settings updated successfully.");
             await queryClient.invalidateQueries({
                 queryKey: ["exam-result-publication", examId],
             });
@@ -363,7 +359,7 @@ export default function ResultStatisticsPage() {
             return response.data;
         },
         onSuccess: async () => {
-            toast.success("Đã hủy công bố kết quả.");
+            toast.success("Results have been unpublished successfully.");
             await queryClient.invalidateQueries({
                 queryKey: ["exam-result-publication", examId],
             });
@@ -381,32 +377,32 @@ export default function ResultStatisticsPage() {
             <div className="space-y-6 p-4 md:p-6">
                 <div>
                     <p className="text-sm text-muted-foreground">
-                        Quản lý kỳ thi / Thống kê kết quả
+                        Exam Management / Result Statistics
                     </p>
                     <h1 className="mt-1 text-2xl font-bold text-foreground">
-                        Thống kê kết quả kỳ thi
+                        Exam Result Statistics
                     </h1>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        ID kỳ thi: {validExamId ? examId : "Không hợp lệ"}
+                        Exam ID: {validExamId ? examId : "Invalid"}
                     </p>
                 </div>
 
                 {!validExamId && (
                     <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
-                        ID kỳ thi không hợp lệ. Hãy mở trang bằng URL
+                        Invalid exam ID. Please open this page using the URL
                         /exams/ID/result-statistics.
                     </div>
                 )}
 
                 {statisticsQuery.isLoading && (
                     <p className="rounded-lg border border-border bg-card p-6 text-muted-foreground">
-                        Đang tải dữ liệu thống kê...
+                        Loading statistics...
                     </p>
                 )}
 
                 {statisticsQuery.isError && (
                     <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
-                        Không tải được thống kê:{" "}
+                        Failed to load statistics:{" "}
                         {getErrorMessage(statisticsQuery.error)}
                     </div>
                 )}
@@ -419,28 +415,28 @@ export default function ResultStatisticsPage() {
                             </h2>
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                                 <StatCard
-                                    label="Tổng lượt thi"
+                                    label="Total Attempts"
                                     value={statistics.totalAttempts}
                                 />
                                 <StatCard
-                                    label="Học viên tham gia"
+                                    label="Participating Students"
                                     value={statistics.uniqueStudents}
                                 />
                                 <StatCard
-                                    label="Điểm trung bình"
+                                    label="Average Score"
                                     value={formatScore(statistics.averageFinalScore)}
                                 />
                                 <StatCard
-                                    label="Lượt chờ chấm"
+                                    label="Pending Grading"
                                     value={statistics.pendingGradingAttempts}
-                                    detail={`${statistics.fullyGradedAttempts} lượt đã chấm hoàn tất`}
+                                    detail={`${statistics.fullyGradedAttempts} fully graded attempts`}
                                 />
                                 <StatCard
-                                    label="Điểm cao nhất"
+                                    label="Highest Score"
                                     value={formatScore(statistics.highestFinalScore)}
                                 />
                                 <StatCard
-                                    label="Điểm thấp nhất"
+                                    label="Lowest Score"
                                     value={formatScore(statistics.lowestFinalScore)}
                                 />
                             </div>
@@ -449,10 +445,10 @@ export default function ResultStatisticsPage() {
                         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
                             <section className="min-w-0 rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
                                 <h2 className="text-lg font-semibold">
-                                    Phân bố điểm
+                                    Score Distribution
                                 </h2>
                                 <p className="mt-1 text-sm text-muted-foreground">
-                                    Số lượt thi trong từng khoảng điểm.
+                                    Number of attempts in each score range.
                                 </p>
                                 <div className="mt-4">
                                     <ScoreDistributionChart
@@ -463,10 +459,10 @@ export default function ResultStatisticsPage() {
 
                             <section className="min-w-0 rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
                                 <h2 className="text-lg font-semibold">
-                                    Trạng thái chấm điểm
+                                    Grading Status
                                 </h2>
                                 <p className="mt-1 text-sm text-muted-foreground">
-                                    Tình trạng hoàn tất chấm của các lượt thi.
+                                    Grading completion status for all attempts.
                                 </p>
                                 <AttemptStatusChart
                                     completed={statistics.fullyGradedAttempts}
@@ -479,21 +475,21 @@ export default function ResultStatisticsPage() {
 
                 <section className="rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
                     <h2 className="text-lg font-semibold">
-                        Công bố kết quả
+                        Result Publication
                     </h2>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        Chỉ người có quyền EXAM_UPDATE mới sử dụng được chức năng này.
+                        Only users with the EXAM_UPDATE permission can manage result publication.
                     </p>
 
                     {publicationQuery.isLoading && (
                         <p className="mt-4 text-sm text-muted-foreground">
-                            Đang tải trạng thái công bố...
+                            Loading publication status...
                         </p>
                     )}
 
                     {publicationQuery.isError && (
                         <p className="mt-4 text-sm text-red-600 dark:text-red-400">
-                            Không tải được trạng thái công bố:{" "}
+                            Failed to load publication status:{" "}
                             {getErrorMessage(publicationQuery.error)}
                         </p>
                     )}
@@ -501,7 +497,7 @@ export default function ResultStatisticsPage() {
                     {publication && (
                         <div className="mt-4 rounded-lg bg-muted p-4 text-sm text-foreground">
                             <p>
-                                Trạng thái:{" "}
+                                Status:{" "}
                                 <strong
                                     className={
                                         publication.published
@@ -510,20 +506,20 @@ export default function ResultStatisticsPage() {
                                     }
                                 >
                                     {publication.published
-                                        ? "Đã công bố"
-                                        : "Chưa công bố"}
+                                        ? "Published"
+                                        : "Not Published"}
                                 </strong>
                             </p>
                             <p className="mt-1">
-                                Chính sách hiện tại:{" "}
+                                Current Policy:{" "}
                                 {policies.find(
                                     (policy) =>
                                         policy.value === publication.releasePolicy,
-                                )?.label ?? "Chưa thiết lập"}
+                                )?.label ?? "Not configured"}
                             </p>
                             {publication.publishedAt && (
                                 <p className="mt-1">
-                                    Thời điểm công bố:{" "}
+                                    Published At:{" "}
                                     {new Date(publication.publishedAt).toLocaleString()}
                                 </p>
                             )}
@@ -535,7 +531,7 @@ export default function ResultStatisticsPage() {
                             htmlFor="release-policy"
                             className="block text-sm font-medium text-foreground"
                         >
-                            Chính sách công bố
+                            Result Release Policy
                         </label>
                         <select
                             id="release-policy"
@@ -564,8 +560,8 @@ export default function ResultStatisticsPage() {
                                 className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {publishMutation.isPending
-                                    ? "Đang xử lý..."
-                                    : "Công bố kết quả"}
+                                    ? "Processing..."
+                                    : "Publish Results"}
                             </button>
 
                             <button
@@ -580,8 +576,8 @@ export default function ResultStatisticsPage() {
                                 className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {unpublishMutation.isPending
-                                    ? "Đang xử lý..."
-                                    : "Hủy công bố"}
+                                    ? "Processing..."
+                                    : "Unpublish Results"}
                             </button>
                         </div>
                     </div>
