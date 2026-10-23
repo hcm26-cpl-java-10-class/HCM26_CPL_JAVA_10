@@ -56,9 +56,9 @@ public class TaskDataInitializer implements CommandLineRunner {
         Long discoverySprint = sprintId("Sprint 1 - Discovery");
         Long designSprint = sprintId("Sprint 2 - Design System");
         Long buildSprint = sprintId("Sprint 3 - Build");
-        Long authSprint = sprintId("Sprint 1 - Authentication");
-        Long paymentsSprint = sprintId("Sprint 2 - Payments");
-        Long directorySprint = sprintId("Sprint 1 - Employee Directory");
+
+        // Only three sprints are seeded, so the items of the other sample
+        // projects stay unassigned and show up in the product backlog.
 
         // Project 1 - Discovery / Design / Build
         upsertTask(PROJECT_1, discoverySprint, milestoneId(PROJECT_1, "M1 - Discovery"), MEMBER_1,
@@ -69,12 +69,12 @@ public class TaskDataInitializer implements CommandLineRunner {
         upsertTask(PROJECT_1, discoverySprint, null, MEMBER_2,
                 "Gather stakeholder requirements",
                 "Consolidate the requirement backlog with the product owner",
-                12.0, TaskPriority.HIGH, TaskStatus.DONE);
+                12.0, TaskPriority.HIGH, TaskStatus.IN_PROGRESS);
 
-        upsertTask(PROJECT_1, designSprint, milestoneId(PROJECT_1, "M1 - Discovery"), MEMBER_2,
+        upsertTask(PROJECT_1, designSprint, milestoneId(PROJECT_1, "M2 - Design System"), MEMBER_2,
                 "Deliver shared component library",
                 "Buttons, inputs, table and modal primitives with theming support",
-                24.0, TaskPriority.HIGH, TaskStatus.IN_PROGRESS);
+                24.0, TaskPriority.HIGH, TaskStatus.SPRINT_BACKLOG);
 
         upsertTask(PROJECT_1, designSprint, null, MEMBER_1,
                 "Update brand guidelines",
@@ -91,34 +91,34 @@ public class TaskDataInitializer implements CommandLineRunner {
                 "Run axe checks and fix critical findings before release",
                 5.0, TaskPriority.LOW, TaskStatus.SPRINT_BACKLOG);
 
-        // Project 2 - Authentication / Payments
-        upsertTask(PROJECT_2, authSprint, milestoneId(PROJECT_2, "M1 - Authentication"), MEMBER_1,
+        // Project 2 - Authentication / Payments (no sprint: product backlog)
+        upsertTask(PROJECT_2, null, milestoneId(PROJECT_2, "M1 - Authentication"), MEMBER_1,
                 "Implement biometric login",
                 "Fingerprint and face unlock with device fallback",
-                20.0, TaskPriority.HIGH, TaskStatus.DONE);
+                20.0, TaskPriority.HIGH, TaskStatus.BACKLOG);
 
-        upsertTask(PROJECT_2, authSprint, milestoneId(PROJECT_2, "M1 - Authentication"), MEMBER_2,
+        upsertTask(PROJECT_2, null, milestoneId(PROJECT_2, "M1 - Authentication"), MEMBER_2,
                 "Add OTP fallback flow",
                 "Six digit one time password with resend throttling",
-                10.0, TaskPriority.MEDIUM, TaskStatus.IN_PROGRESS);
+                10.0, TaskPriority.MEDIUM, TaskStatus.BACKLOG);
 
-        upsertTask(PROJECT_2, paymentsSprint, milestoneId(PROJECT_2, "M2 - Payments"), MEMBER_2,
+        upsertTask(PROJECT_2, null, milestoneId(PROJECT_2, "M2 - Payments"), MEMBER_2,
                 "Domestic transfer flow",
                 "Beneficiary selection, limits and confirmation screens",
-                18.5, TaskPriority.URGENT, TaskStatus.IN_PROGRESS);
+                18.5, TaskPriority.URGENT, TaskStatus.BACKLOG);
 
-        upsertTask(PROJECT_2, paymentsSprint, null, MEMBER_3,
+        upsertTask(PROJECT_2, null, null, MEMBER_3,
                 "Bill payment integration",
                 "Connect the billing provider sandbox and map error codes",
                 14.0, TaskPriority.HIGH, TaskStatus.BACKLOG);
 
-        // Project 3 - Employee Directory
-        upsertTask(PROJECT_3, directorySprint, milestoneId(PROJECT_3, "M1 - Employee Directory"), MEMBER_3,
+        // Project 3 - Employee Directory (no sprint: product backlog)
+        upsertTask(PROJECT_3, null, milestoneId(PROJECT_3, "M1 - Employee Directory"), MEMBER_3,
                 "Employee directory search",
                 "Server side search with pagination and filters",
-                12.0, TaskPriority.MEDIUM, TaskStatus.SPRINT_BACKLOG);
+                12.0, TaskPriority.MEDIUM, TaskStatus.BACKLOG);
 
-        upsertTask(PROJECT_3, directorySprint, null, MEMBER_1,
+        upsertTask(PROJECT_3, null, null, MEMBER_1,
                 "Org chart widget",
                 "Collapsible organisation tree with lazy loading",
                 9.0, TaskPriority.HIGH, TaskStatus.BACKLOG);

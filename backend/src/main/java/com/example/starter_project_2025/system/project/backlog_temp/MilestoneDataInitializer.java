@@ -31,16 +31,16 @@ public class MilestoneDataInitializer implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
 
-        // Project 1 - Discovery / Design / Build
+        // Project 1 - Discovery / Design / Build (aligned with the sprint seed)
         upsertMilestone(1L, "M1 - Discovery",
                 "Research, interviews and requirement consolidation",
-                LocalDate.of(2026, 1, 16), MilestoneStatus.COMPLETED);
+                LocalDate.of(2026, 10, 30), MilestoneStatus.ACTIVE);
         upsertMilestone(1L, "M2 - Design System",
                 "Shared component library and brand guidelines",
-                LocalDate.of(2026, 1, 30), MilestoneStatus.ACTIVE);
+                LocalDate.of(2026, 11, 13), MilestoneStatus.PLANNED);
         upsertMilestone(1L, "M3 - Legacy Rollout",
                 "Migration of the legacy pages (cancelled)",
-                LocalDate.of(2026, 2, 27), MilestoneStatus.CANCELLED);
+                LocalDate.of(2026, 12, 4), MilestoneStatus.CANCELLED);
 
         // Project 2 - Authentication / Payments
         upsertMilestone(2L, "M1 - Authentication",

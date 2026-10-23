@@ -1,4 +1,3 @@
-import { sprintApi } from "@/api";
 import Loading from "@/components/datatable/common/Loading";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -7,8 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { usePermissions } from "@/hooks/usePermissions";
 import { cn } from "@/lib/utils";
-import type { SprintPlanning, SprintPlanningItem } from "@/types";
-import axios from "axios";
+import type { SprintPlanningItem } from "@/types";
 import {
   ArrowLeft,
   ArrowRight,
@@ -22,20 +20,9 @@ import {
   RefreshCw,
   TriangleAlert,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { toast } from "sonner";
-
-const SCOPE_LOCKED_FALLBACK =
-  "Không thể thay đổi phạm vi công việc do Sprint đã hoàn thành/đã đóng";
-
-const PRIORITY_RANK: Record<string, number> = {
-  LOW: 1,
-  MEDIUM: 2,
-  HIGH: 3,
-  URGENT: 4,
-};
+import { useSprintPlanningBoard } from "../hooks/useSprintPlanningBoard";
 
 const PRIORITY_STYLES: Record<string, string> = {
   LOW: "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-300",
@@ -74,50 +61,6 @@ const formatDateTime = (value?: string | null) => {
     hour12: false,
   });
 };
-
-const priorityRank = (priority?: string | null) =>
-  (priority && PRIORITY_RANK[priority]) || 0;
-
-const sortByPriority = (items: SprintPlanningItem[]) =>
-  [...items].sort((a, b) => priorityRank(b.priority) - priorityRank(a.priority));
-
-/**
- * Extracts the first business message from a 422/409/404 response so the UI can
- * show exactly what the Sprint Planning API rejected (AC02/AC03).
- */
-const extractErrorMessage = (error: unknown, fallback: string): string => {
-  if (!axios.isAxiosError(error)) {
-    return fallback;
-  }
-
-  const status = error.response?.status;
-  const data = error.response?.data as
-    | { message?: string; errors?: Record<string, string[]> }
-    | undefined;
-
-  const firstFieldError = data?.errors
-    ? Object.values(data.errors)
-        .flat()
-        .find((message) => Boolean(message && message.trim()))
-    : undefined;
-
-  if (firstFieldError) {
-    return String(firstFieldError);
-  }
-
-  if (typeof data?.message === "string" && data.message.trim()) {
-    return data.message;
-  }
-
-  if (status === 422) {
-    return SCOPE_LOCKED_FALLBACK;
-  }
-
-  return fallback;
-};
-
-const isScopeLockedError = (error: unknown) =>
-  axios.isAxiosError(error) && error.response?.status === 422;
 
 interface PlanItemCardProps {
   item: SprintPlanningItem;
@@ -244,215 +187,31 @@ export default function SprintPlanningPage() {
 
   const canEdit = hasAllPermissions(["SPRINT_UPDATE", "TASK_UPDATE"]);
 
-  const [plan, setPlan] = useState<SprintPlanning | null>(null);
-  const [sprintItems, setSprintItems] = useState<SprintPlanningItem[]>([]);
-  const [productItems, setProductItems] = useState<SprintPlanningItem[]>([]);
-
-  const [selectedProduct, setSelectedProduct] = useState<number[]>([]);
-  const [selectedSprint, setSelectedSprint] = useState<number[]>([]);
-
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  const [dragged, setDragged] = useState<{
-    id: number;
-    from: "product" | "sprint";
-  } | null>(null);
-  const [dragTarget, setDragTarget] = useState<"product" | "sprint" | null>(
-    null,
-  );
-
-  const load = useCallback(async () => {
-    if (!sprintId) {
-      setLoading(false);
-      setLoadError("Không tìm thấy Sprint cần lập kế hoạch.");
-      return;
-    }
-
-    setLoading(true);
-    setLoadError(null);
-
-    try {
-      const data = await sprintApi.getPlanning(sprintId);
-      setPlan(data);
-      setSprintItems(data.sprintItems ?? []);
-      setProductItems(data.productBacklogItems ?? []);
-      setSelectedProduct([]);
-      setSelectedSprint([]);
-    } catch (error) {
-      setLoadError(
-        extractErrorMessage(error, "Không thể tải dữ liệu Sprint Planning."),
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [sprintId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const locked = plan ? !plan.canPlan : false;
-  const interactionDisabled = saving || loading || !canEdit;
-
-  const serverSprintIds = (plan?.sprintItems ?? []).map((item) => item.id);
-  const currentSprintIds = sprintItems.map((item) => item.id);
-  const dirty =
-    currentSprintIds.length !== serverSprintIds.length ||
-    currentSprintIds.some((id, index) => id !== serverSprintIds[index]);
-
-  const moveToSprint = (ids: number[]) => {
-    if (!ids.length || interactionDisabled) {
-      return;
-    }
-
-    const existing = new Set(currentSprintIds);
-    const moving = ids
-      .map((id) => productItems.find((item) => item.id === id))
-      .filter(
-        (item): item is SprintPlanningItem => !!item && !existing.has(item.id),
-      );
-
-    if (!moving.length) {
-      return;
-    }
-
-    setSprintItems((previous) => [...previous, ...moving]);
-    setProductItems((previous) =>
-      previous.filter((item) => !ids.includes(item.id)),
-    );
-    setSelectedProduct((previous) =>
-      previous.filter((id) => !ids.includes(id)),
-    );
-  };
-
-  const moveToProduct = (ids: number[]) => {
-    if (!ids.length || interactionDisabled) {
-      return;
-    }
-
-    const moving = sprintItems.filter((item) => ids.includes(item.id));
-
-    if (!moving.length) {
-      return;
-    }
-
-    setSprintItems((previous) =>
-      previous.filter((item) => !ids.includes(item.id)),
-    );
-    setProductItems((previous) =>
-      sortByPriority([
-        ...previous.filter((item) => !ids.includes(item.id)),
-        ...moving,
-      ]),
-    );
-    setSelectedSprint((previous) =>
-      previous.filter((id) => !ids.includes(id)),
-    );
-  };
-
-  const reorderBefore = (draggedId: number, targetId: number) => {
-    setSprintItems((previous) => {
-      const from = previous.findIndex((item) => item.id === draggedId);
-      const to = previous.findIndex((item) => item.id === targetId);
-
-      if (from < 0 || to < 0 || from === to) {
-        return previous;
-      }
-
-      const next = [...previous];
-      const [moved] = next.splice(from, 1);
-      next.splice(from < to ? to - 1 : to, 0, moved);
-
-      return next;
-    });
-  };
-
-  const moveWithinSprint = (id: number, offset: number) => {
-    if (interactionDisabled) {
-      return;
-    }
-
-    setSprintItems((previous) => {
-      const index = previous.findIndex((item) => item.id === id);
-      const target = index + offset;
-
-      if (index < 0 || target < 0 || target >= previous.length) {
-        return previous;
-      }
-
-      const next = [...previous];
-      const [moved] = next.splice(index, 1);
-      next.splice(target, 0, moved);
-
-      return next;
-    });
-  };
-
-  const toggleProductSelection = (id: number) => {
-    setSelectedProduct((previous) =>
-      previous.includes(id)
-        ? previous.filter((value) => value !== id)
-        : [...previous, id],
-    );
-  };
-
-  const toggleSprintSelection = (id: number) => {
-    setSelectedSprint((previous) =>
-      previous.includes(id)
-        ? previous.filter((value) => value !== id)
-        : [...previous, id],
-    );
-  };
-
-  /**
-   * AC01: one atomic call assigns, unassigns and saves the priority order.
-   */
-  const confirmPlan = async () => {
-    if (!sprintId || saving || !canEdit) {
-      return;
-    }
-
-    setSaving(true);
-
-    try {
-      const result = await sprintApi.updateBacklog(
-        sprintId,
-        sprintItems.map((item) => item.id),
-      );
-
-      setPlan(result);
-      setSprintItems(result.sprintItems ?? []);
-      setProductItems(result.productBacklogItems ?? []);
-      setSelectedProduct([]);
-      setSelectedSprint([]);
-
-      toast.success("Đã cập nhật Sprint Backlog và thứ tự ưu tiên.");
-    } catch (error) {
-      // AC02: the server rejected the scope change (e.g. the sprint was
-      // completed meanwhile) -> revert every moved item to its previous place.
-      if (plan) {
-        setSprintItems(plan.sprintItems ?? []);
-        setProductItems(plan.productBacklogItems ?? []);
-      }
-
-      setSelectedProduct([]);
-      setSelectedSprint([]);
-
-      toast.error(
-        extractErrorMessage(error, "Không thể cập nhật Sprint Backlog."),
-      );
-
-      if (isScopeLockedError(error)) {
-        void load();
-      }
-    } finally {
-      setSaving(false);
-      setDragged(null);
-      setDragTarget(null);
-    }
-  };
+  const {
+    plan,
+    sprintItems,
+    productItems,
+    selectedProduct,
+    selectedSprint,
+    loading,
+    saving,
+    loadError,
+    dragged,
+    dragTarget,
+    locked,
+    interactionDisabled,
+    dirty,
+    load,
+    moveToSprint,
+    moveToProduct,
+    reorderBefore,
+    moveWithinSprint,
+    toggleProductSelection,
+    toggleSprintSelection,
+    confirmPlan,
+    setDragged,
+    setDragTarget,
+  } = useSprintPlanningBoard({ sprintId, canEdit });
 
   return (
     <MainLayout pathName={{ planning: "Sprint Planning", sprints: "Sprints" }}>

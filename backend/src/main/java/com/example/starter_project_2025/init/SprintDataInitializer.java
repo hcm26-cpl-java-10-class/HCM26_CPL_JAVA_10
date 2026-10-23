@@ -35,59 +35,29 @@ public class SprintDataInitializer implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
 
+        // Only one demo project timeline: Sprint 1 is running right now, the
+        // next two sprints are still planned.
         upsertSprint(
                 "Sprint 1 - Discovery",
                 "Map current user journeys and gather stakeholder requirements",
-                LocalDate.of(2026, 1, 5),
-                LocalDate.of(2026, 1, 16),
-                SprintStatus.COMPLETED
+                LocalDate.of(2026, 10, 19),
+                LocalDate.of(2026, 10, 30),
+                SprintStatus.ACTIVE
         );
 
         upsertSprint(
                 "Sprint 2 - Design System",
                 "Deliver the shared component library and updated brand guidelines",
-                LocalDate.of(2026, 1, 19),
-                LocalDate.of(2026, 1, 30),
-                SprintStatus.ACTIVE
+                LocalDate.of(2026, 11, 2),
+                LocalDate.of(2026, 11, 13),
+                SprintStatus.PLANNED
         );
 
         upsertSprint(
                 "Sprint 3 - Build",
                 "Implement the new landing and product pages",
-                LocalDate.of(2026, 2, 2),
-                LocalDate.of(2026, 2, 13),
-                SprintStatus.PLANNED
-        );
-
-        upsertSprint(
-                "Sprint 1 - Authentication",
-                "Implement biometric login and OTP fallback",
-                LocalDate.of(2026, 3, 2),
-                LocalDate.of(2026, 3, 13),
-                SprintStatus.COMPLETED
-        );
-
-        upsertSprint(
-                "Sprint 2 - Payments",
-                "Add domestic transfers and bill payment flows",
-                LocalDate.of(2026, 3, 16),
-                LocalDate.of(2026, 3, 27),
-                SprintStatus.ACTIVE
-        );
-
-        upsertSprint(
-                "Sprint 3 - Notifications",
-                "Push notification centre and device management",
-                LocalDate.of(2026, 3, 30),
-                LocalDate.of(2026, 4, 10),
-                SprintStatus.CANCELLED
-        );
-
-        upsertSprint(
-                "Sprint 1 - Employee Directory",
-                "Searchable directory with org chart view",
-                LocalDate.of(2026, 4, 6),
-                LocalDate.of(2026, 4, 17),
+                LocalDate.of(2026, 11, 16),
+                LocalDate.of(2026, 11, 27),
                 SprintStatus.PLANNED
         );
 
