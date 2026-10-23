@@ -31,3 +31,10 @@ export interface UserFilter extends BaseFilter {
   departmentIds?: string[];
   status?: UserStatus;
 }
+
+/** Danh sách sinh viên rút gọn - dùng cho chức năng chọn nhiều sinh viên khi tạo lời mời. */
+export interface StudentSummaryDTO {
+  id: number;
+  email: string;
+  fullName: string;
+}

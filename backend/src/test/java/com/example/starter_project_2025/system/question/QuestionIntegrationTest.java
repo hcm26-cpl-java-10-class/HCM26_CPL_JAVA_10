@@ -83,7 +83,6 @@ public class QuestionIntegrationTest {
     void createSingleChoiceQuestion_Success() throws Exception {
         QuestionDTO dto = new QuestionDTO();
         dto.setContent("Ngon ngu Java ra doi nam nao?");
-        dto.setType(QuestionType.SINGLE_CHOICE);
         dto.setType(QuestionType.MULTIPLE_CHOICE);
         dto.setDifficulty(Difficulty.EASY);
         dto.setTopic("Java Basics");
@@ -119,7 +118,6 @@ public class QuestionIntegrationTest {
     void createSingleChoice_InvalidCorrectOptionCount_ReturnsBadRequest() throws Exception {
         QuestionDTO dto = new QuestionDTO();
         dto.setContent("Cau hoi 1 dap an nhung khong co dap an dung");
-        dto.setType(QuestionType.SINGLE_CHOICE);
         dto.setType(QuestionType.MULTIPLE_CHOICE);
         dto.setDifficulty(Difficulty.MEDIUM);
         dto.setTopic("Testing");
@@ -140,7 +138,7 @@ public class QuestionIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors.options", hasItem("Câu 1 đáp án phải có đúng 1 đáp án đúng")));
+                .andExpect(jsonPath("$.errors.options", hasItem("Cần ít nhất 1 đáp án đúng")));
     }
 
     @Test
@@ -149,7 +147,6 @@ public class QuestionIntegrationTest {
         QuestionDTO dto = new QuestionDTO();
         dto.setContent("Cau hoi chi co 1 dap an");
         dto.setType(QuestionType.MULTIPLE_CHOICE);
-        dto.setType(QuestionType.SINGLE_CHOICE);
         dto.setDifficulty(Difficulty.EASY);
         dto.setTopic("Testing");
         dto.setIsActive(true);
@@ -174,7 +171,6 @@ public class QuestionIntegrationTest {
         QuestionDTO dto = new QuestionDTO();
         dto.setContent("Cau hoi co dap an trung nhau");
         dto.setType(QuestionType.MULTIPLE_CHOICE);
-        dto.setType(QuestionType.SINGLE_CHOICE);
         dto.setDifficulty(Difficulty.EASY);
         dto.setTopic("Testing");
         dto.setIsActive(true);
@@ -203,7 +199,6 @@ public class QuestionIntegrationTest {
         Question q = new Question();
         q.setContent("Tim kiem tu khoa SpringBootDatabases");
         q.setType(QuestionType.MULTIPLE_CHOICE);
-        q.setType(QuestionType.SINGLE_CHOICE);
         q.setDifficulty(Difficulty.HARD);
         q.setTopic("Spring Framework");
         q.setPoints(2);
@@ -236,7 +231,6 @@ public class QuestionIntegrationTest {
         Question q = new Question();
         q.setContent("Cau hoi thuoc ve de thi");
         q.setType(QuestionType.MULTIPLE_CHOICE);
-        q.setType(QuestionType.SINGLE_CHOICE);
         q.setDifficulty(Difficulty.EASY);
         q.setPoints(1);
         q.setIsActive(true);
@@ -264,7 +258,7 @@ public class QuestionIntegrationTest {
         mockMvc.perform(delete("/api/questions/" + savedQ.getId())
                         .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors.question", hasItem("Câu hỏi đang được dùng trong đề thi, không thể xóa")));
+                .andExpect(jsonPath("$.errors.question", hasItem("Câu hỏi đang được dùng trong đề thi, không thể xóa. ")));
     }
 
     @Test
@@ -272,7 +266,6 @@ public class QuestionIntegrationTest {
     void createQuestion_AsStudent_ReturnsForbidden() throws Exception {
         QuestionDTO dto = new QuestionDTO();
         dto.setContent("Cau hoi do hoc sinh tao");
-        dto.setType(QuestionType.SINGLE_CHOICE);
         dto.setType(QuestionType.MULTIPLE_CHOICE);
         dto.setDifficulty(Difficulty.EASY);
         dto.setIsActive(true);

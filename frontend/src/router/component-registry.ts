@@ -20,8 +20,10 @@ import StudentExamList from "@/pages/student/StudentExamList";
 import StudentExamTakingPage from "@/pages/student/StudentExamTakingPage";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import MyScoresPage from "@/pages/student/MyScoresPage";
+import ExamReviewPage from "@/pages/student/ExamReviewPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import AnonymousAccessPage from "@/pages/exam/AnonymousAccessPage";
+import AnonymousExamTakingPage from "@/pages/exam/AnonymousExamTakingPage";
 import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
@@ -49,6 +51,8 @@ export const routes: RouteConfig[] = [
   { path: "/exams/:examId/grading", component: EssayAttemptListPage, requiredPermission: "EXAM_UPDATE" },
   { path: "/exams/:examId/grading/:attemptId", component: EssayAttemptDetailPage, requiredPermission: "EXAM_UPDATE" },
   { path: "/anonymous-exam", component: AnonymousAccessPage, isPublic: true },
+  // Trang làm bài cho học sinh không có tài khoản RBAC (dùng sessionToken)
+  { path: "/anonymous-exam/take", component: AnonymousExamTakingPage, isPublic: true },
   { path: "/student/invitations", component: StudentInvitationsRedirect, requiredPermission: "INVITATION_READ" },
   {
     path: "/exams/:examId/result-statistics",
@@ -65,6 +69,7 @@ export const routes: RouteConfig[] = [
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
   { path: "/student/exams", component: StudentExamList, requiredPermission: "EXAM_READ", isModuleDriven: true },
   { path: "/student/exams/:examId/take", component: StudentExamTakingPage, requiredPermission: "EXAM_TAKE" },
+  { path: "/student/exams/attempts/:attemptId/review", component: ExamReviewPage, requiredPermission: "EXAM_TAKE" },
   { path: "/my-scores", component: MyScoresPage, requiredPermission: "STUDENT_SCORE_VIEW_OWN", isModuleDriven: true },
   { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
   ...buildEntityRoutes(),

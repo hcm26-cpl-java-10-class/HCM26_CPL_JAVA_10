@@ -44,6 +44,29 @@ public class ExamAttemptService {
     }
 
     public ExamAttemptDTO startOrResume(Long examId, Long studentId, String password) {
+        return startOrResumeInternal(examId, studentId, password, false);
+    }
+
+    /**
+     * Bắt đầu làm bài cho học sinh thi bằng link anonymous.
+     * <p>
+     * Khác với học sinh có tài khoản RBAC, học sinh anonymous không có lời mời
+     * gắn với user nên bỏ qua bước kiểm tra "đã accept lời mời".
+     */
+    public ExamAttemptDTO startOrResumeForGuest(Long examId, Long guestUserId) {
+        return startOrResumeForGuest(examId, guestUserId, null);
+    }
+
+    public ExamAttemptDTO startOrResumeForGuest(Long examId, Long guestUserId, String password) {
+        return startOrResumeInternal(examId, guestUserId, password, true);
+    }
+
+    private ExamAttemptDTO startOrResumeInternal(
+            Long examId,
+            Long studentId,
+            String password,
+            boolean anonymousGuest
+    ) {
         Exam exam = examRepository.lockForAttemptStart(examId)
                 .filter(candidate -> Boolean.TRUE.equals(candidate.getIsActive()))
                 .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
@@ -61,7 +84,9 @@ public class ExamAttemptService {
         }
 
         ensureExamWindowOpen(exam, nowLocal);
-        ensureInvitationAccepted(examId, studentId);
+        if (!anonymousGuest) {
+            ensureInvitationAccepted(examId, studentId);
+        }
         ensureExamPasswordValid(exam, password);
 
         int maxAttempts = exam.getMaxAttempts() == null ? 1 : exam.getMaxAttempts();
@@ -494,6 +519,8 @@ public class ExamAttemptService {
         response.setDurationMinutes(attempt.getDurationMinutes());
         response.setTotalPoints(attempt.getTotalPoints());
         response.setStatus(attempt.getStatus());
+        response.setObjectiveScore(attempt.getObjectiveScore());
+        response.setFinalScore(attempt.getFinalScore());
         response.setStartedAt(attempt.getStartedAt());
         response.setOfficialDeadlineAt(attempt.getOfficialDeadlineAt());
         response.setDeadlineAt(attempt.getDeadlineAt() != null
@@ -552,14 +579,6 @@ public class ExamAttemptService {
 
     private int maxAttempts(Exam exam) {
         return exam.getMaxAttempts() == null ? 1 : exam.getMaxAttempts();
-    }
-
-    private Integer bestScore(ExamAttempt current, List<ExamAttempt> attempts) {
-        return attempts.stream()
-                .filter(candidate -> candidate.getFinalScore() != null)
-                .map(ExamAttempt::getFinalScore)
-                .max(Integer::compareTo)
-                .orElse(current.getFinalScore());
     }
 
     private void ensureExamPasswordValid(Exam exam, String password) {

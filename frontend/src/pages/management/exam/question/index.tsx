@@ -1,4 +1,4 @@
-import { questionApi } from "@/api";
+import { questionExportApi } from "@/api/features/question-export.api";
 import { QuestionCreatePage } from "./pages/QuestionCreatePage";
 import { QuestionDetailPage } from "./pages/QuestionDetailPage";
 import { QuestionEditPage } from "./pages/QuestionEditPage";
@@ -78,7 +78,7 @@ const questionSchema: EntitySchema = {
 export const entityConfig: EntityConfig = {
   name: "Questions",
   path: "/questions",
-  api: questionApi,
+  api: questionExportApi,
   schema: questionSchema,
   actionPages: {
     create: { path: "/questions/create", component: QuestionCreatePage },

@@ -30,6 +30,7 @@ public class ExamEssayGradingService {
     private final ExamRepository examRepository;
     private final ExamAttemptRepository attemptRepository;
     private final AiEssayGradingClient aiClient;
+    private final AnonymousExamService anonymousExamService;
 
     public List<EssayGradingDTO.Summary> listPending(Long examId) {
         requireExam(examId);
@@ -165,7 +166,27 @@ public class ExamEssayGradingService {
         attempt.setStatus(ExamAttemptStatus.SUBMITTED);
         attemptRepository.save(attempt);
 
+        // Học sinh thi qua link anonymous không xem được điểm trên hệ thống,
+        // nên gửi bổ sung kết quả chính thức về email của họ.
+        notifyGuestIfNeeded(attempt);
+
         return getDetail(examId, attemptId);
+    }
+
+    private void notifyGuestIfNeeded(ExamAttempt attempt) {
+        User student = attempt.getStudent();
+        if (student == null || !Boolean.TRUE.equals(student.getIsGuest())) {
+            return;
+        }
+
+        try {
+            anonymousExamService.sendFinalResultToGuest(attempt.getId());
+        } catch (Exception e) {
+            // Không để lỗi gửi email làm fail thao tác chấm điểm của giáo viên.
+            org.slf4j.LoggerFactory.getLogger(ExamEssayGradingService.class)
+                    .error("Failed to send guest result email for attemptId={}: {}",
+                            attempt.getId(), e.getMessage());
+        }
     }
 
     public EssayGradingDTO.AiGradingResponse requestAiGrading(Long examId, Long attemptId) {

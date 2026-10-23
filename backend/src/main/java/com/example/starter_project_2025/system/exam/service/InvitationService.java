@@ -28,6 +28,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -39,6 +40,7 @@ public class InvitationService {
     private final ExamRepository examRepository;
     private final UserRepository userRepository;
     private final EmailService emailService;
+    private final GuestUserService guestUserService;
 
     @Value("${app.frontend-domain}")
     private String frontendUrl;
@@ -287,7 +289,11 @@ public class InvitationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Exam not found with id: " + examId));
 
         String accessCode = generateAccessCode();
-        String oneTimeToken = UUID.randomUUID().toString();
+
+        // Tên/email học sinh là tuỳ chọn ở phía giáo viên. Nếu không nhập,
+        // học sinh sẽ tự khai báo khi mở link (AnonymousSessionRequest).
+        String guestName = blankToNull(request.getStudentName());
+        String guestEmail = blankToNull(request.getStudentEmail());
 
         Invitation invitation = Invitation.builder()
                 .exam(exam)
@@ -300,10 +306,9 @@ public class InvitationService {
                         exam.getEndTime() != null ? exam.getEndTime() : LocalDateTime.now().plusDays(30))
                 .note(request.getNote())
                 .anonymous(true)
-                .guestName(request.getStudentName())
-                .guestEmail(request.getStudentEmail())
+                .guestName(guestName)
+                .guestEmail(guestEmail)
                 .accessCode(accessCode)
-                .oneTimeToken(oneTimeToken)
                 .maxAccessTime(request.getMaxAccessTime() != null ?
                         parseDateTime(request.getMaxAccessTime()) : null)
                 .maxAccessAttempts(request.getMaxAccessAttempts() != null ?
@@ -312,13 +317,25 @@ public class InvitationService {
 
         invitation = invitationRepository.save(invitation);
 
-        // Send access link to guest email
-        emailService.sendAnonymousAccessLink(invitation, request.getStudentEmail());
+        // Chỉ gửi email khi giáo viên có nhập email học sinh. Nếu không có email
+        // thì giáo viên copy link / QR để chia sẻ trực tiếp.
+        if (guestEmail != null) {
+            emailService.sendAnonymousAccessLink(invitation, guestEmail);
+        }
 
         return toDTO(invitation);
     }
 
-    @Transactional(readOnly = true)
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    /**
+     * Xác minh mã truy cập. Không dùng {@code readOnly} vì khi phát hiện lời
+     * mời đã quá hạn, hàm này cập nhật status sang EXPIRED — đó là side-effect
+     * nên transaction phải cho phép ghi.
+     */
+    @Transactional
     public AnonymousAccessResponse verifyAccessCode(String accessCode) {
         Invitation invitation = invitationRepository.findByAccessCode(accessCode)
                 .orElseThrow(() -> new ResourceNotFoundException("Invalid access code"));
@@ -344,6 +361,16 @@ public class InvitationService {
                     .build();
         }
 
+        if (invitation.getMaxAccessTime() != null
+            && LocalDateTime.now().isAfter(invitation.getMaxAccessTime())) {
+            invitation.setStatus(InvitationStatus.EXPIRED);
+            invitationRepository.save(invitation);
+            return AnonymousAccessResponse.builder()
+                    .valid(false)
+                    .message("The access window for this link has closed")
+                    .build();
+        }
+
         int remaining = invitation.getMaxAccessAttempts() - invitation.getAccessAttemptCount();
 
         return AnonymousAccessResponse.builder()
@@ -357,8 +384,13 @@ public class InvitationService {
     }
 
     @Transactional
-    public AnonymousSessionResponse createAnonymousSession(String accessCode, String fingerprint) {
-        Invitation invitation = invitationRepository.findByAccessCode(accessCode)
+    public AnonymousSessionResponse createAnonymousSession(
+            String accessCode,
+            String fingerprint,
+            String studentName,
+            String studentEmail
+    ) {
+        Invitation invitation = invitationRepository.lockByAccessCode(accessCode)
                 .orElseThrow(() -> new ResourceNotFoundException("Invalid access code"));
 
         if (!Boolean.TRUE.equals(invitation.getAnonymous())) {
@@ -367,6 +399,36 @@ public class InvitationService {
 
         validateInvitationForAction(invitation);
 
+        // Tạo (hoặc tái sử dụng) user khách để gắn kết quả bài thi.
+        User guestUser = guestUserService.findOrCreateGuest(studentEmail, studentName);
+
+        // === QUAY LẠI LINK ĐÃ TỪNG NHẬP THÔNG TIN ===
+        // Học sinh có thể mở link, nhập tên/email, rồi quay lại trang truy cập
+        // (đóng tab, refresh, ...) mà chưa hề bắt đầu làm bài. Lúc đó KHÔNG
+        // được chặn, vì họ vẫn chưa dùng lượt thi nào.
+        // Ta tái sử dụng phiên gần nhất của chính học sinh đó (cùng email)
+        // nếu phiên đó còn dùng được.
+        Optional<AnonymousSession> reusable = reusableSessionFor(invitation, guestUser);
+        if (reusable.isPresent()) {
+            AnonymousSession session = reusable.get();
+            session.setGuestName(studentName);
+            session.setGuestEmail(studentEmail);
+            session.setIsValid(true);
+            if (fingerprint != null && !fingerprint.equals(session.getFingerprint())) {
+                session.setFingerprint(fingerprint);
+            }
+            anonymousSessionRepository.save(session);
+
+            // Ghi lại thông tin người thực sự làm bài (giống lần đầu).
+            invitation.setGuestName(studentName);
+            invitation.setGuestEmail(studentEmail);
+            invitation.setGuestUserId(guestUser.getId());
+            invitationRepository.save(invitation);
+
+            return buildSessionResponse(session, invitation, "Bạn đã xác nhận thông tin. Có thể vào phòng thi.");
+        }
+
+        // === HỌC SINH MỚI (chưa từng nhập thông tin trên link này) ===
         // Check access attempts
         if (invitation.getAccessAttemptCount() >= invitation.getMaxAccessAttempts()) {
             throw new BadRequestException("Maximum access attempts reached for this invitation");
@@ -382,6 +444,12 @@ public class InvitationService {
 
         // Increment access count
         invitation.setAccessAttemptCount(invitation.getAccessAttemptCount() + 1);
+
+        // Ghi lại thông tin người thực sự làm bài. Nếu giáo viên không nhập sẵn
+        // khi tạo link thì đây là nơi duy nhất lưu lại tên/email của học sinh.
+        invitation.setGuestName(studentName);
+        invitation.setGuestEmail(studentEmail);
+        invitation.setGuestUserId(guestUser.getId());
         invitationRepository.save(invitation);
 
         // Create session
@@ -390,18 +458,49 @@ public class InvitationService {
                 .invitation(invitation)
                 .sessionToken(sessionToken)
                 .fingerprint(fingerprint)
+                .guestName(studentName)
+                .guestEmail(studentEmail)
+                .guestUserId(guestUser.getId())
                 .accessedAt(LocalDateTime.now())
                 .isValid(true)
                 .build();
 
         anonymousSessionRepository.save(session);
 
+        return buildSessionResponse(session, invitation, "Session created successfully");
+    }
+
+    /**
+     * Tìm phiên có thể tái sử dụng cho học sinh đã quay lại link.
+     * <p>
+     * Chỉ dùng lại phiên của CHÍNH học sinh đó (khớp guest user) và phiên đó
+     * chưa bị hủy/hoàn tất. Nếu học sinh đã nộp bài xong thì không tái sử dụng
+     * (để lời mời vẫn giữ đúng số lượt thi).
+     */
+    private Optional<AnonymousSession> reusableSessionFor(Invitation invitation, User guestUser) {
+        List<AnonymousSession> sessions = anonymousSessionRepository
+                .findByInvitationIdAndGuestUserIdOrderByAccessedAtDesc(invitation.getId(), guestUser.getId());
+
+        return sessions.stream()
+                .filter(session -> Boolean.TRUE.equals(session.getIsValid()))
+                .filter(session -> session.getCompletedAt() == null)
+                .findFirst();
+    }
+
+    private AnonymousSessionResponse buildSessionResponse(
+            AnonymousSession session,
+            Invitation invitation,
+            String message
+    ) {
         return AnonymousSessionResponse.builder()
                 .valid(true)
-                .sessionToken(sessionToken)
+                .sessionToken(session.getSessionToken())
                 .examTitle(invitation.getExam().getTitle())
+                .examId(invitation.getExam().getId())
                 .durationMinutes(invitation.getExam().getDurationMinutes())
-                .message("Session created successfully")
+                .studentName(session.getGuestName())
+                .studentEmail(session.getGuestEmail())
+                .message(message)
                 .build();
     }
 
@@ -429,6 +528,14 @@ public class InvitationService {
         if (invitation.getStatus() == InvitationStatus.REJECTED) {
             throw new BadRequestException("Invitation has already been rejected");
         }
+        // maxAccessTime là mốc cuối để mở link (khác expiresAt là hạn của
+        // lời mời). Quá mốc này thì link không dùng được nữa.
+        if (invitation.getMaxAccessTime() != null
+            && LocalDateTime.now().isAfter(invitation.getMaxAccessTime())) {
+            invitation.setStatus(InvitationStatus.EXPIRED);
+            invitationRepository.save(invitation);
+            throw new BadRequestException("Access window for this invitation has closed");
+        }
     }
 
     private String generateToken() {
@@ -444,8 +551,8 @@ public class InvitationService {
     }
 
     private String buildAnonymousAccessUrl(Invitation invitation) {
-        return frontendUrl + "/anonymous-exam?code=" + invitation.getAccessCode()
-                + "&token=" + invitation.getOneTimeToken();
+        // Khớp với link frontend sinh ra: /anonymous-exam?code=...
+        return frontendUrl + "/anonymous-exam?code=" + invitation.getAccessCode();
     }
 
     private byte[] generateQRCodeImage(String content, int width, int height) {
@@ -492,7 +599,6 @@ public class InvitationService {
         dto.setGuestName(invitation.getGuestName());
         dto.setGuestEmail(invitation.getGuestEmail());
         dto.setAccessCode(invitation.getAccessCode());
-        dto.setOneTimeToken(invitation.getOneTimeToken());
         dto.setMaxAccessTime(invitation.getMaxAccessTime());
         dto.setMaxAccessAttempts(invitation.getMaxAccessAttempts());
         dto.setAccessAttemptCount(invitation.getAccessAttemptCount());

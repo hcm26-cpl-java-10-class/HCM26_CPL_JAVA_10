@@ -10,9 +10,12 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.security.access.prepost.PreAuthorize;
+
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -52,6 +55,16 @@ public class UserController
     public ResponseEntity<Void> unlockUser(@PathVariable Long id) {
         service.unlockUser(id);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Danh sách sinh viên đang hoạt động - dùng để chọn nhiều sinh viên khi
+     * tạo lời mời hàng loạt.
+     */
+    @GetMapping("/students")
+    @PreAuthorize("hasAuthority('INVITATION_READ') or hasAuthority('USER_READ')")
+    public ResponseEntity<List<StudentSummaryDTO>> students() {
+        return ResponseEntity.ok(service.findStudents());
     }
 
 }

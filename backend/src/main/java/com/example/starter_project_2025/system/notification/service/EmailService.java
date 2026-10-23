@@ -25,6 +25,7 @@ public class EmailService {
     private static final String EXAM_ACCESS_EMAIL = "email/exam_access";
     private static final String EXAM_REVOKED_EMAIL = "email/exam_revoked";
     private static final String EXAM_ACCEPTED_EMAIL = "email/exam_accepted";
+    private static final String EXAM_RESULT_EMAIL = "email/exam_result";
 
     private static final DateTimeFormatter DATE_TIME_FORMATTER =
             DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
@@ -135,8 +136,11 @@ public class EmailService {
 
     public void sendAnonymousAccessLink(Invitation invitation, String email) {
         String examTitle = invitation.getExam().getTitle();
-        String accessLink = String.format("%s/anonymous-exam?code=%s&token=%s",
-                frontendUrl, invitation.getAccessCode(), invitation.getOneTimeToken());
+        // Link phải khớp đúng format mà frontend đọc: /anonymous-exam?code=...
+        // Frontend chỉ đọc tham số "code", nên không thêm các tham số khác
+        // (ví dụ one-time token) vào link.
+        String accessLink = String.format("%s/anonymous-exam?code=%s",
+                frontendUrl, invitation.getAccessCode());
 
         List<Map.Entry<String, Object>> vars = new ArrayList<>();
         vars.add(Map.entry("username", invitation.getGuestName() == null ? "Học sinh" : invitation.getGuestName()));
@@ -165,6 +169,44 @@ public class EmailService {
         vars.add(Map.entry("revokedAt", formatDateTime(LocalDateTime.now())));
 
         send("[Hủy] " + examTitle, invitation.getUser().getEmail(), EXAM_REVOKED_EMAIL, vars);
+    }
+
+    // ==================== RESULT (KHÔNG CÓ TÀI KHOẢN RBAC) ====================
+
+    /**
+     * Gửi kết quả bài thi cho học sinh thi qua link anonymous.
+     * <p>
+     * Học sinh này không có tài khoản RBAC nên không thể xem điểm trên hệ
+     * thống - kết quả được gửi thẳng về email đã khai báo ở lời mời.
+     *
+     * @param pendingReview true khi còn câu tự luận chờ giáo viên chấm
+     */
+    public void sendAnonymousExamResult(
+            String recipientEmail,
+            String studentName,
+            String examTitle,
+            Integer score,
+            Integer totalPoints,
+            String submittedAt,
+            boolean pendingReview
+    ) {
+        if (recipientEmail == null || recipientEmail.isBlank()) {
+            return;
+        }
+
+        List<Map.Entry<String, Object>> vars = new ArrayList<>();
+        vars.add(Map.entry("username", studentName == null || studentName.isBlank() ? "Học sinh" : studentName));
+        vars.add(Map.entry("examTitle", examTitle));
+        vars.add(Map.entry("score", score == null ? "Chưa chấm" : String.valueOf(score)));
+        vars.add(Map.entry("totalPoints", totalPoints == null ? "0" : String.valueOf(totalPoints)));
+        vars.add(Map.entry("submittedAt", submittedAt == null ? "" : submittedAt));
+        vars.add(Map.entry("pendingReview", pendingReview ? "true" : "false"));
+        vars.add(Map.entry("resultMessage", pendingReview
+                ? "Bài thi của bạn đã được ghi nhận và đang chờ giáo viên chấm các câu tự luận. "
+                + "Chúng tôi sẽ gửi lại điểm chính thức qua email này sau khi chấm xong."
+                : "Bài thi của bạn đã được chấm xong. Điểm chi tiết sẽ được thông báo sau khi giáo viên công bố."));
+
+        send("[Kết quả] " + examTitle, recipientEmail, EXAM_RESULT_EMAIL, vars);
     }
 
     // ==================== HELPERS ====================

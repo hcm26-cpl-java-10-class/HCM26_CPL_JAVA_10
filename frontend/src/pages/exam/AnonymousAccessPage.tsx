@@ -1,28 +1,58 @@
 import { invitationApi } from "@/api";
-import type { AnonymousAccessResponse, AnonymousSessionResponse } from "@/types";
+import {
+    SESSION_EMAIL_KEY,
+    SESSION_NAME_KEY,
+    SESSION_TOKEN_KEY,
+} from "@/api/exam.api";
+import type { AnonymousSessionResponse } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useMutation } from "@tanstack/react-query";
-import { AlertCircle, CheckCircle2, Clock3, Lock, QrCode, Scan } from "lucide-react";
-import { useEffect, useState } from "react";
+import { AlertCircle, CheckCircle2, Clock3, Lock, Mail, QrCode, Scan, User } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const ACCESS_CODE_KEY = "anonymous_access_code";
 
 export default function AnonymousAccessPage() {
-    const [accessCode, setAccessCode] = useState("");
-    const [qrMode, setQrMode] = useState(false);
-    const [sessionToken, setSessionToken] = useState<string | null>(null);
-    const [sessionInfo, setSessionInfo] = useState<AnonymousSessionResponse | null>(null);
-
-    // Read code from URL on mount
-    useEffect(() => {
+    // Đọc mã truy cập từ URL ngay từ đầu (lazy initial state) để tránh
+    // setState trong effect.
+    const [accessCode, setAccessCode] = useState(() => {
         const params = new URLSearchParams(window.location.search);
-        const code = params.get("code");
-        if (code) setAccessCode(code.toUpperCase());
-    }, []);
+        return (params.get("code") ?? "").toUpperCase();
+    });
+    const [studentName, setStudentName] = useState("");
+    const [studentEmail, setStudentEmail] = useState("");
+    const [qrMode, setQrMode] = useState(false);
+    // Nếu đã có phiên thi trong sessionStorage (học sinh quay lại trang truy cập),
+    // khôi phục lại để không phải nhập thông tin lần nữa.
+    // Chỉ khôi phục khi access code trên URL khớp với code đã lưu, tránh
+    // nhầm phiên của link cũ khi học sinh mở một link khác.
+    const [sessionInfo, setSessionInfo] = useState<AnonymousSessionResponse | null>(() => {
+        const token = sessionStorage.getItem(SESSION_TOKEN_KEY);
+        if (!token) return null;
+        const name = sessionStorage.getItem(SESSION_NAME_KEY) ?? "";
+        const email = sessionStorage.getItem(SESSION_EMAIL_KEY) ?? "";
+        const title = sessionStorage.getItem("anonymous_exam_title") ?? "";
+        const savedCode = sessionStorage.getItem(ACCESS_CODE_KEY) ?? "";
+        const urlCode = (
+            new URLSearchParams(window.location.search).get("code") ?? ""
+        ).toUpperCase();
+        // Có mã trên URL thì chỉ khôi phục khi trùng mã đã lưu.
+        if (urlCode && savedCode && urlCode !== savedCode) return null;
+        if (!name && !email) return null;
+        return {
+            valid: true,
+            sessionToken: token,
+            studentName: name,
+            studentEmail: email,
+            examTitle: title,
+        };
+    });
 
     const verifyMutation = useMutation({
         mutationFn: (code: string) => invitationApi.verifyAccessCode(code),
@@ -30,35 +60,54 @@ export default function AnonymousAccessPage() {
             if (!data.valid) {
                 toast.error(data.message ?? "Mã truy cập không hợp lệ.");
             } else {
-                toast.success("Mã hợp lệ! Bạn có thể vào thi.");
+                // Gợi ý tên/email đã cấp trong lời mời để học sinh không phải
+                // gõ lại từ đầu (vẫn bắt buộc xác nhận).
+                if (data.studentName) setStudentName(data.studentName);
+                toast.success("Mã hợp lệ! Vui lòng xác nhận thông tin của bạn.");
             }
         },
         onError: () => toast.error("Không thể xác minh mã truy cập."),
     });
 
     const enterMutation = useMutation({
-        mutationFn: (code: string) =>
-            invitationApi.createAnonymousSession({ accessCode: code }),
-        onSuccess: (data) => {
+        mutationFn: ({ code, name, email }: { code: string; name: string; email: string }) =>
+            invitationApi.createAnonymousSession({
+                accessCode: code,
+                studentName: name,
+                studentEmail: email,
+            }),
+        onSuccess: (data, variables) => {
             if (!data.valid) {
                 toast.error(data.message ?? "Không thể bắt đầu phiên thi.");
                 return;
             }
-            setSessionToken(data.sessionToken ?? null);
+            // Phải có sessionToken thì mới vào được phòng thi. Không ghi
+            // token rỗng xuống sessionStorage, nếu không trang thi sẽ chỉ hiện
+            // "Chưa có phiên thi" mà không giải thích được nguyên nhân.
+            if (!data.sessionToken) {
+                toast.error("Không nhận được phiên thi. Vui lòng thử lại.");
+                return;
+            }
             setSessionInfo(data);
 
-            // Store session for exam-taking page
-            sessionStorage.setItem("anonymous_session_token", data.sessionToken ?? "");
+            sessionStorage.setItem(SESSION_TOKEN_KEY, data.sessionToken);
             sessionStorage.setItem("anonymous_exam_title", data.examTitle ?? "");
+            sessionStorage.setItem(SESSION_NAME_KEY, variables.name);
+            sessionStorage.setItem(SESSION_EMAIL_KEY, variables.email);
+            sessionStorage.setItem(ACCESS_CODE_KEY, variables.code);
 
-            toast.success("Đã tạo phiên thi. Chuyển sang trang thi...");
+            toast.success("Đã xác nhận. Bạn có thể vào phòng thi.");
         },
-        onError: (err: any) => {
-            toast.error(
-                err?.response?.data?.message || "Không thể bắt đầu phiên thi.",
-            );
+        onError: (err: unknown) => {
+            const message =
+                (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+            toast.error(message || "Không thể bắt đầu phiên thi.");
         },
     });
+
+    const nameValid = studentName.trim().length > 0;
+    const emailValid = EMAIL_PATTERN.test(studentEmail.trim());
+    const canEnter = Boolean(accessCode.trim()) && nameValid && emailValid;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -67,16 +116,25 @@ export default function AnonymousAccessPage() {
             toast.error("Vui lòng nhập mã truy cập.");
             return;
         }
-        verifyMutation.mutate(code);
-        // Auto-enter on submit
-        enterMutation.mutate(code);
+        if (!nameValid) {
+            toast.error("Vui lòng nhập họ tên của bạn.");
+            return;
+        }
+        if (!emailValid) {
+            toast.error("Vui lòng nhập email hợp lệ để nhận kết quả bài thi.");
+            return;
+        }
+        enterMutation.mutate({
+            code,
+            name: studentName.trim(),
+            email: studentEmail.trim(),
+        });
     };
 
     const handleScan = (code: string) => {
         setAccessCode(code.toUpperCase());
         setQrMode(false);
-        verifyMutation.mutate(code);
-        enterMutation.mutate(code);
+        verifyMutation.mutate(code.toUpperCase());
     };
 
     return (
@@ -89,7 +147,7 @@ export default function AnonymousAccessPage() {
                     </div>
                     <h1 className="text-2xl font-bold text-slate-900">Truy cập kỳ thi</h1>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        Nhập mã được cung cấp bởi giáo viên để vào thi
+                        Nhập thông tin của bạn để vào thi — không cần tài khoản
                     </p>
                 </div>
 
@@ -112,7 +170,17 @@ export default function AnonymousAccessPage() {
                                 <p className="text-sm text-muted-foreground">Kỳ thi</p>
                                 <p className="text-lg font-semibold text-slate-900">{sessionInfo.examTitle}</p>
                             </div>
-                            {sessionInfo.durationMinutes && (
+                            <div className="space-y-1 text-sm text-green-800">
+                                <p className="flex items-center gap-2">
+                                    <User className="size-4" />
+                                    {studentName.trim()}
+                                </p>
+                                <p className="flex items-center gap-2">
+                                    <Mail className="size-4" />
+                                    Kết quả sẽ gửi về {studentEmail.trim()}
+                                </p>
+                            </div>
+                            {sessionInfo.durationMinutes !== undefined && sessionInfo.durationMinutes > 0 && (
                                 <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                                     <Clock3 className="size-4" />
                                     Thời lượng: {sessionInfo.durationMinutes} phút
@@ -122,7 +190,7 @@ export default function AnonymousAccessPage() {
                                 <Button
                                     className="w-full"
                                     onClick={() => {
-                                        window.location.href = "/anonymous-exam";
+                                        window.location.href = "/anonymous-exam/take";
                                     }}
                                 >
                                     Vào phòng thi
@@ -131,10 +199,12 @@ export default function AnonymousAccessPage() {
                                     variant="outline"
                                     className="w-full"
                                     onClick={() => {
-                                        setSessionToken(null);
                                         setSessionInfo(null);
-                                        sessionStorage.removeItem("anonymous_session_token");
+                                        sessionStorage.removeItem(SESSION_TOKEN_KEY);
                                         sessionStorage.removeItem("anonymous_exam_title");
+                                        sessionStorage.removeItem(SESSION_NAME_KEY);
+                                        sessionStorage.removeItem(SESSION_EMAIL_KEY);
+                                        sessionStorage.removeItem(ACCESS_CODE_KEY);
                                     }}
                                 >
                                     Thi trên thiết bị khác
@@ -145,27 +215,63 @@ export default function AnonymousAccessPage() {
                 ) : (
                     <Card>
                         <CardHeader className="pb-4">
-                            <CardTitle className="text-base">Nhập mã truy cập</CardTitle>
+                            <CardTitle className="text-base">Thông tin của bạn</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={handleSubmit} className="space-y-4">
                                 <div className="flex gap-2">
+                                    <div className="flex-1 space-y-2">
+                                        <Label htmlFor="access-code">Mã truy cập</Label>
+                                        <div className="flex gap-2">
+                                            <Input
+                                                id="access-code"
+                                                className="text-center font-mono text-lg font-bold tracking-widest uppercase"
+                                                placeholder="ABCD1234"
+                                                maxLength={10}
+                                                value={accessCode}
+                                                onChange={(e) =>
+                                                    setAccessCode(e.target.value.toUpperCase())
+                                                }
+                                                autoFocus
+                                            />
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={() => setQrMode(true)}
+                                                title="Quét QR"
+                                            >
+                                                <QrCode className="size-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="student-name">Họ và tên</Label>
                                     <Input
-                                        className="text-center font-mono text-lg font-bold tracking-widest uppercase"
-                                        placeholder="ABCD1234"
-                                        maxLength={10}
-                                        value={accessCode}
-                                        onChange={(e) => setAccessCode(e.target.value.toUpperCase())}
-                                        autoFocus
+                                        id="student-name"
+                                        placeholder="Nguyễn Văn A"
+                                        value={studentName}
+                                        onChange={(e) => setStudentName(e.target.value)}
                                     />
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={() => setQrMode(true)}
-                                        title="Quét QR"
-                                    >
-                                        <QrCode className="size-4" />
-                                    </Button>
+                                    <p className="text-xs text-muted-foreground">
+                                        Tên sẽ hiển thị trong kết quả bài thi của bạn.
+                                    </p>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="student-email">Email nhận kết quả</Label>
+                                    <Input
+                                        id="student-email"
+                                        type="email"
+                                        placeholder="ban@example.com"
+                                        value={studentEmail}
+                                        onChange={(e) => setStudentEmail(e.target.value)}
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Kết quả bài thi sẽ được gửi thẳng về email này sau khi bạn
+                                        nộp bài.
+                                    </p>
                                 </div>
 
                                 {verifyMutation.data && !verifyMutation.data.valid && (
@@ -175,35 +281,20 @@ export default function AnonymousAccessPage() {
                                     </div>
                                 )}
 
-                                {verifyMutation.data?.valid && !sessionToken && (
-                                    <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">
-                                        <CheckCircle2 className="size-4 shrink-0" />
-                                        {verifyMutation.data.message}
-                                    </div>
-                                )}
-
-                                <Button
-                                    type="submit"
-                                    className="w-full"
-                                    disabled={
-                                        !accessCode.trim() ||
-                                        verifyMutation.isPending ||
-                                        enterMutation.isPending
-                                    }
-                                >
-                                    {enterMutation.isPending || verifyMutation.isPending ? (
+                                <Button type="submit" className="w-full" disabled={!canEnter || enterMutation.isPending}>
+                                    {enterMutation.isPending ? (
                                         <span className="flex items-center gap-2">
                                             <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                                            Đang xác minh...
+                                            Đang xác nhận...
                                         </span>
                                     ) : (
-                                        "Xác minh & Vào thi"
+                                        "Xác nhận & Vào thi"
                                     )}
                                 </Button>
                             </form>
 
                             <p className="mt-4 text-center text-xs text-muted-foreground">
-                                Bạn không cần tài khoản để thi. Mỗi mã chỉ dùng được số lần nhất định.
+                                Bạn không cần tài khoản để thi. Kết quả sẽ được gửi qua email.
                             </p>
                         </CardContent>
                     </Card>
@@ -225,8 +316,7 @@ export default function AnonymousAccessPage() {
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-3">
-                                <div className="aspect-square w-full overflow-hidden rounded-md border bg-muted flex items-center justify-center">
-                                    {/* Placeholder — wire to html5-qrcode if needed */}
+                                <div className="flex aspect-square w-full items-center justify-center overflow-hidden rounded-md border bg-muted">
                                     <div className="text-center text-muted-foreground">
                                         <Scan className="mx-auto size-10 opacity-30" />
                                         <p className="mt-2 text-sm">Camera sẽ hiển thị ở đây</p>

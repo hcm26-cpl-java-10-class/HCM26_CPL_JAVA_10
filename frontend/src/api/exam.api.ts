@@ -11,6 +11,7 @@ export interface Exam {
     maxAttempts?: number | null;
     latePolicy?: 'NOT_ALLOWED' | 'ALLOWED' | 'ALLOWED_WITH_PENALTY';
     hasPassword?: boolean;
+    showAnswersAfterExam?: boolean;
     createdAt?: string;
     updatedAt?: string;
 }
@@ -25,7 +26,8 @@ export type ExamAttemptStatus =
 export interface ExamAttemptQuestion {
     id: number;
     content: string;
-    type: 'SINGLE_CHOICE' | 'MULTI_CHOICE' | 'MULTIPLE_CHOICE' | 'ESSAY';
+    /** Khớp với enum QuestionType của backend (MULTIPLE_CHOICE | ESSAY). */
+    type: 'MULTIPLE_CHOICE' | 'ESSAY';
     points: number;
     /** true = nhiều đáp án đúng -> ô vuông (checkbox); false = ô tròn (radio). */
     multiSelect: boolean;
@@ -79,6 +81,41 @@ export interface ExamAttemptSummary {
     submittedAt: string | null;
 }
 
+export interface ExamReviewOption {
+    id: number;
+    content: string;
+    imageUrl?: string | null;
+    correct: boolean;
+    selected: boolean;
+}
+
+export interface ExamReviewQuestion {
+    questionId: number;
+    content: string;
+    imageUrl?: string | null;
+    type: ExamAttemptQuestion['type'];
+    points: number;
+    /** null for essay questions */
+    correct: boolean | null;
+    options: ExamReviewOption[];
+    textAnswer?: string | null;
+    score?: number | null;
+    feedback?: string | null;
+}
+
+export interface ExamAttemptReview {
+    attemptId: number;
+    examId: number;
+    title: string;
+    attemptNumber: number;
+    status: ExamAttemptStatus;
+    totalPoints: number;
+    objectiveScore: number | null;
+    finalScore: number | null;
+    submittedAt: string | null;
+    questions: ExamReviewQuestion[];
+}
+
 export interface SaveExamAnswerRequest {
     questionId: number;
     selectedOptionIds?: number[];
@@ -127,7 +164,53 @@ export const saveExamAnswers = async (attemptId: number, answers: SaveExamAnswer
     return response.data;
 };
 
+export const getAttemptReview = async (attemptId: number) => {
+    const response = await api.get<ExamAttemptReview>(`/exams/attempts/${attemptId}/review`);
+    return response.data;
+};
+
 export const submitExamAttempt = async (attemptId: number, answers: SaveExamAnswerRequest[]) => {
     const response = await api.post<ExamAttempt>(`/exams/attempts/${attemptId}/submit`, answers);
+    return response.data;
+};
+
+// ============ HỌC SINH THI QUA LINK (KHÔNG CÓ TÀI KHOẢN) ============
+
+export const SESSION_TOKEN_KEY = 'anonymous_session_token';
+export const SESSION_EMAIL_KEY = 'anonymous_student_email';
+export const SESSION_NAME_KEY = 'anonymous_student_name';
+
+/** Bắt đầu/tiếp tục làm bài bằng phiên anonymous. */
+export const startAnonymousExam = async (sessionToken: string, password?: string) => {
+    const response = await api.post<ExamAttempt>('/exams/anonymous/attempt', {
+        sessionToken,
+        password: password || undefined,
+    });
+    return response.data;
+};
+
+export const saveAnonymousAnswers = async (
+    attemptId: number,
+    sessionToken: string,
+    answers: SaveExamAnswerRequest[],
+) => {
+    const response = await api.put<ExamAttempt>(
+        `/exams/anonymous/attempts/${attemptId}/answers`,
+        answers,
+        { headers: { 'X-Anonymous-Session': sessionToken } },
+    );
+    return response.data;
+};
+
+export const submitAnonymousExam = async (
+    attemptId: number,
+    sessionToken: string,
+    answers: SaveExamAnswerRequest[],
+) => {
+    const response = await api.post<ExamAttempt>(
+        `/exams/anonymous/attempts/${attemptId}/submit`,
+        answers,
+        { headers: { 'X-Anonymous-Session': sessionToken } },
+    );
     return response.data;
 };

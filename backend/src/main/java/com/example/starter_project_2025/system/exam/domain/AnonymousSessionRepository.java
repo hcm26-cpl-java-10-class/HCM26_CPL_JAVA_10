@@ -12,16 +12,18 @@ public interface AnonymousSessionRepository extends BaseCrudRepository<Anonymous
 
     Optional<AnonymousSession> findBySessionToken(String sessionToken);
 
-    List<AnonymousSession> findByInvitationId(Long invitationId);
-
-    @Query("SELECT s FROM AnonymousSession s WHERE s.invitation.id = :invitationId AND s.isValid = true")
-    List<AnonymousSession> findValidByInvitationId(@Param("invitationId") Long invitationId);
-
-    @Query("SELECT COUNT(s) FROM AnonymousSession s WHERE s.invitation.id = :invitationId")
-    long countByInvitationId(@Param("invitationId") Long invitationId);
-
     @Query("SELECT s FROM AnonymousSession s WHERE s.accessedAt < :before AND s.isValid = true")
     List<AnonymousSession> findStaleSessions(@Param("before") LocalDateTime before);
 
     Optional<AnonymousSession> findByInvitationIdAndFingerprint(Long invitationId, String fingerprint);
+
+    /**
+     * Các phiên đã tạo cho một học sinh cụ thể (guest user) trên cùng link,
+     * mới nhất trước.
+     */
+    @Query("SELECT s FROM AnonymousSession s WHERE s.invitation.id = :invitationId AND s.guestUserId = :guestUserId ORDER BY s.accessedAt DESC")
+    List<AnonymousSession> findByInvitationIdAndGuestUserIdOrderByAccessedAtDesc(
+            @Param("invitationId") Long invitationId,
+            @Param("guestUserId") Long guestUserId
+    );
 }

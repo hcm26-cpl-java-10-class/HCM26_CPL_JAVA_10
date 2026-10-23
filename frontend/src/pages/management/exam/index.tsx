@@ -48,6 +48,7 @@ interface ExamConfigForm {
   maxAttempts: string;
   shuffleQuestions: boolean;
   shuffleOptions: boolean;
+  showAnswersAfterExam: boolean;
   passScore: string;
   latePolicy: LatePolicy;
   latePenaltyPercent: string;
@@ -63,6 +64,7 @@ const DEFAULT_CONFIG: ExamConfigForm = {
   maxAttempts: "1",
   shuffleQuestions: false,
   shuffleOptions: false,
+  showAnswersAfterExam: false,
   passScore: "",
   latePolicy: "NOT_ALLOWED",
   latePenaltyPercent: "",
@@ -98,6 +100,7 @@ const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   maxAttempts: String(exam.maxAttempts ?? 1),
   shuffleQuestions: exam.shuffleQuestions ?? false,
   shuffleOptions: exam.shuffleOptions ?? false,
+  showAnswersAfterExam: exam.showAnswersAfterExam ?? false,
   passScore: exam.passScore != null ? String(exam.passScore) : "",
   latePolicy: exam.latePolicy ?? "NOT_ALLOWED",
   latePenaltyPercent: exam.latePenaltyPercent != null ? String(exam.latePenaltyPercent) : "",
@@ -222,6 +225,7 @@ export default function ExamManagementPage() {
         maxAttempts: Number(cfg.maxAttempts),
         shuffleQuestions: cfg.shuffleQuestions,
         shuffleOptions: cfg.shuffleOptions,
+        showAnswersAfterExam: cfg.showAnswersAfterExam,
         passScore: cfg.passScore !== "" ? Number(cfg.passScore) : undefined,
         latePolicy: cfg.latePolicy,
         latePenaltyPercent:
@@ -445,16 +449,6 @@ export default function ExamManagementPage() {
                           </Button>
 
                           <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label="Edit exam"
-                              title="Edit exam"
-                              onClick={() => openEditExam(exam)}
-                          >
-                            <Pencil className="size-4" />
-                          </Button>
-
-                          <Button
                               variant="outline"
                               size="sm"
                               onClick={() =>
@@ -464,6 +458,16 @@ export default function ExamManagementPage() {
                           >
                             <ClipboardCheck className="size-4" />
                             Statistics
+                          </Button>
+
+                          <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label="Edit exam"
+                              title="Edit exam"
+                              onClick={() => openEditExam(exam)}
+                          >
+                            <Pencil className="size-4" />
                           </Button>
 
                           <DropdownMenu>
@@ -629,6 +633,15 @@ export default function ExamManagementPage() {
                     <input type="checkbox" className="size-4 accent-primary" checked={cfg.shuffleOptions} onChange={(event) => setCfg((c) => ({ ...c, shuffleOptions: event.target.checked }))} />
                     Shuffle Options
                   </label>
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <input type="checkbox" className="size-4 accent-primary" checked={cfg.showAnswersAfterExam} onChange={(event) => setCfg((c) => ({ ...c, showAnswersAfterExam: event.target.checked }))} />
+                    Show Answers After Exam
+                  </label>
+                  {cfg.showAnswersAfterExam && (
+                    <p className="text-xs text-muted-foreground">
+                      Students see correct answers only after their score is published and they have no attempts left (or the exam has closed).
+                    </p>
+                  )}
                 </div>
               </div>
               <DialogFooter>
