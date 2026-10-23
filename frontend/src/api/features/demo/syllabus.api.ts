@@ -84,9 +84,38 @@ export type SyllabusInformation = SyllabusInformationInput & {
 };
 
 
+export type SyllabusImportSummary = {
+    syllabuses: number;
+    clos: number;
+    sections: number;
+    topics: number;
+    materials: number;
+};
+
 const root = "/syllabuses";
 
 export const syllabusApi = {
+
+    importExcel: async (
+        file: File
+    ): Promise<SyllabusImportSummary> => {
+        const formData = new FormData();
+
+        formData.append("file", file);
+
+        const response = await api.post<SyllabusImportSummary>(
+            `${root}/import`,
+            formData,
+            {
+                headers: {
+                    "Content-Type": "multipart/form-data",
+                },
+            }
+        );
+
+        return response.data;
+    },
+
 
     // CLO Management
     listClos: async (syllabusId: number) =>

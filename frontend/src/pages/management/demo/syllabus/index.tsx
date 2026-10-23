@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -9,6 +9,7 @@ import {
     Eye,
     Pencil,
     Trash2,
+    Upload,
 } from "lucide-react";
 
 import {
@@ -82,6 +83,11 @@ export default function SyllabusesPage() {
         useState<SyllabusSummary | null>(null);
 
     const [busy, setBusy] = useState(false);
+
+    const [importing, setImporting] = useState(false);
+
+    const importInputRef = useRef<HTMLInputElement>(null);
+
 
     const canCreate = hasPermission(
         "SYLLABUS_CREATE"
@@ -210,7 +216,72 @@ export default function SyllabusesPage() {
         }
     }
 
-    async function remove() {
+        async function handleImportExcel(file: File) {
+            if (importing) return;
+
+            if (!file.name.toLowerCase().endsWith(".xlsx")) {
+                toast.error("Please select an Excel .xlsx file.");
+                return;
+            }
+
+            if (file.size > 5_000_000) {
+                toast.error("File must be smaller than 5 MB.");
+                return;
+            }
+
+            const confirmed = window.confirm(
+                "Import demo data into your local database?"
+            );
+
+            if (!confirmed) return;
+
+            setImporting(true);
+
+            try {
+                const result = await syllabusApi.importExcel(file);
+
+                setSearch("");
+
+                await qc.invalidateQueries({
+                    queryKey: ["syllabuses"],
+                });
+
+                toast.success(
+                    `Import successful! ` +
+                    `${result.syllabuses} Syllabuses, ` +
+                    `${result.clos} CLOs, ` +
+                    `${result.sections} Sections, ` +
+                    `${result.topics} Topics, ` +
+                    `${result.materials} Materials.`
+                );
+
+            } catch (error) {
+                if (axios.isAxiosError(error)) {
+                    const status = error.response?.status;
+
+                    const data = error.response?.data as
+                        | { message?: string; detail?: string }
+                        | undefined;
+
+                    if (status === 403) {
+                        toast.error(
+                            "Import denied. Check permissions and enable demo import in Backend."
+                        );
+                    } else {
+                        toast.error(
+                            data?.detail ||
+                            data?.message ||
+                            `Import failed (HTTP ${status ?? "unknown"}).`
+                        );
+                    }
+                } else {
+                    toast.error("Import failed. Please try again.");
+                }
+            } finally {
+                setImporting(false);
+            }
+        }
+        async function remove() {
         if (!deleting || busy) return;
 
         setBusy(true);
@@ -251,12 +322,50 @@ export default function SyllabusesPage() {
                         </p>
                     </div>
 
-                    {canCreate && (
-                        <Button onClick={openCreate}>
-                            <Plus className="size-4" />
-                            Create Syllabus
-                        </Button>
-                    )}
+
+                    <div className="flex flex-wrap items-center gap-2">
+
+                        {import.meta.env.DEV && canCreate && canEdit && (
+                            <>
+                                <input
+                                    ref={importInputRef}
+                                    type="file"
+                                    accept=".xlsx"
+                                    className="hidden"
+                                    aria-label="Import Syllabus Excel"
+                                    onChange={(event) => {
+                                        const file = event.currentTarget.files?.[0];
+
+                                        event.currentTarget.value = "";
+
+                                        if (file) {
+                                            void handleImportExcel(file);
+                                        }
+                                    }}
+                                />
+
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled={importing}
+                                    onClick={() => importInputRef.current?.click()}
+                                >
+                                    <Upload className="size-4" />
+
+                                    {importing ? "Importing..." : "Import Excel"}
+                                </Button>
+                            </>
+                        )}
+
+                        {canCreate && (
+                            <Button onClick={openCreate}>
+                                <Plus className="size-4" />
+                                Create Syllabus
+                            </Button>
+                        )}
+
+                    </div>
+
                 </div>
 
                 {/* Search */}
