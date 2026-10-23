@@ -48,6 +48,7 @@ interface FormState {
 
 const LESSON_CONTENT_TYPE_OPTIONS: { value: LessonContentType; label: string }[] = [
   { value: "VIDEO", label: "Video" },
+  { value: "AUDIO", label: "Audio" },
   { value: "TEXT", label: "Text" },
   { value: "DOCUMENT", label: "Document" },
   { value: "LINK", label: "Link" },
@@ -230,11 +231,12 @@ export function LessonFormModal({
               onChange={(e) => setField("title", e.target.value)}
               placeholder="e.g. Introduction to variables"
             />
+            <p className="text-xs text-muted-foreground">Required · max 200 characters ({form.title.length}/200)</p>
             <FieldMessage message={errors.title} />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="grid gap-1.5 sm:col-span-1">
+          <div className="grid items-start gap-4 sm:grid-cols-3">
+            <div className="grid grid-rows-[1.25rem_2.25rem_auto] gap-1.5">
               <Label>Content type</Label>
               <Select
                 value={form.contentType}
@@ -253,7 +255,7 @@ export function LessonFormModal({
               </Select>
             </div>
 
-            <div className="grid gap-1.5">
+            <div className="grid grid-rows-[1.25rem_2.25rem_auto] gap-1.5">
               <Label htmlFor="lesson-duration">Duration</Label>
               <Input
                 id="lesson-duration"
@@ -267,11 +269,11 @@ export function LessonFormModal({
               {errors.duration ? (
                 <FieldMessage message={errors.duration} />
               ) : (
-                <p className="text-xs text-muted-foreground">{durationHint}</p>
+                <p className="text-xs text-muted-foreground">Optional · whole seconds ≥ 0 {durationHint !== "In seconds" ? durationHint : ""}</p>
               )}
             </div>
 
-            <div className="grid gap-1.5">
+            <div className="grid grid-rows-[1.25rem_2.25rem_auto] gap-1.5">
               <Label htmlFor="lesson-order">Order index</Label>
               <Input
                 id="lesson-order"
@@ -282,14 +284,22 @@ export function LessonFormModal({
                 aria-invalid={!!errors.orderIndex}
                 onChange={(e) => setField("orderIndex", e.target.value)}
               />
-              <FieldMessage message={errors.orderIndex} />
+              {errors.orderIndex ? (
+                <FieldMessage message={errors.orderIndex} />
+              ) : (
+                <p className="text-xs text-muted-foreground">Whole number ≥ 0, unique in this section</p>
+              )}
             </div>
           </div>
 
           {needsUrl(form.contentType) ? (
             <div className="grid gap-1.5">
               <Label htmlFor="lesson-url">
-                {form.contentType === "VIDEO" ? "Video URL" : "Resource URL"}
+                {form.contentType === "VIDEO"
+                  ? "Video URL"
+                  : form.contentType === "AUDIO"
+                    ? "Audio URL"
+                    : "Resource URL"}
               </Label>
               <Input
                 id="lesson-url"
@@ -300,9 +310,14 @@ export function LessonFormModal({
                 placeholder={
                   form.contentType === "VIDEO"
                     ? "https://www.youtube.com/watch?v=..."
-                    : "https://example.com/material.pdf"
+                    : form.contentType === "AUDIO"
+                      ? "https://example.com/audio.mp3"
+                      : "https://example.com/material.pdf"
                 }
               />
+              <p className="text-xs text-muted-foreground">
+                Required · must start with http:// or https:// · max 500 characters
+              </p>
               <FieldMessage message={errors.contentUrl} />
             </div>
           ) : (
@@ -316,6 +331,7 @@ export function LessonFormModal({
                 onChange={(e) => setField("textContent", e.target.value)}
                 placeholder="Write the lesson content here..."
               />
+              <p className="text-xs text-muted-foreground">Required for Text lessons</p>
               <FieldMessage message={errors.textContent} />
             </div>
           )}

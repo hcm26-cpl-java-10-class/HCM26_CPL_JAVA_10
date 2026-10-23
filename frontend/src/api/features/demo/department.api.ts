@@ -7,6 +7,28 @@ import type {
     DepartmentStats,
 } from "@/types";
 
+export interface BulkMembershipResult {
+    succeeded: number[];
+    failed: number[];
+}
+
+const BULK_BATCH_SIZE = 5;
+
+async function runBulk(
+    userIds: number[],
+    request: (userId: number) => Promise<unknown>,
+): Promise<BulkMembershipResult> {
+    const result: BulkMembershipResult = { succeeded: [], failed: [] };
+    for (let i = 0; i < userIds.length; i += BULK_BATCH_SIZE) {
+        const batch = userIds.slice(i, i + BULK_BATCH_SIZE);
+        const settled = await Promise.allSettled(batch.map(request));
+        settled.forEach((outcome, index) => {
+            (outcome.status === "fulfilled" ? result.succeeded : result.failed).push(batch[index]);
+        });
+    }
+    return result;
+}
+
 const base = createBaseApiService<DepartmentDTO, DepartmentFilter>({
     path: "/departments",
 });
@@ -46,4 +68,14 @@ export const departmentApi = Object.assign({}, base, {
     removeStudent: async (departmentId: number, userId: number): Promise<void> => {
         await axiosInstance.delete(`/departments/${departmentId}/members/${userId}`);
     },
+    /** Thêm nhiều sinh viên cùng lúc (gọi lần lượt từng lô nhỏ, không dừng khi có lỗi). */
+    assignStudents: (departmentId: number, userIds: number[]): Promise<BulkMembershipResult> =>
+        runBulk(userIds, (userId) =>
+            axiosInstance.put(`/departments/${departmentId}/members/${userId}`),
+        ),
+    /** Xóa nhiều sinh viên khỏi department cùng lúc. */
+    removeStudents: (departmentId: number, userIds: number[]): Promise<BulkMembershipResult> =>
+        runBulk(userIds, (userId) =>
+            axiosInstance.delete(`/departments/${departmentId}/members/${userId}`),
+        ),
 });

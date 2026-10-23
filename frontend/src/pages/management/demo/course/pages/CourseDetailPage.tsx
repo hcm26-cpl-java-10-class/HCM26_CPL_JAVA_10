@@ -1,13 +1,20 @@
 import { PermissionGate } from "@/components/PermissionGate";
 
-import { courseApi } from "@/api";
+import { courseApi, departmentApi, enrollmentApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ConfirmDialog } from "@/components/ui/confirmdialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { CourseDetail, CourseDetailLesson, CourseDetailSection, LessonContentType } from "@/types";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   BookOpen,
@@ -20,12 +27,15 @@ import {
   Layers,
   Link2,
   Lock,
+  LoaderCircle,
+  Music2,
   PlayCircle,
   Video,
   type LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
+import { toast } from "sonner";
 import { useCourseEnrollment } from "../hooks/useCourseEnrollment.ts";
 import {
   LEVEL_BADGE_CLASS,
@@ -37,6 +47,7 @@ import {
 
 const CONTENT_ICON: Record<LessonContentType, LucideIcon> = {
   VIDEO: Video,
+  AUDIO: Music2,
   TEXT: FileText,
   DOCUMENT: FileText,
   LINK: Link2,
@@ -199,7 +210,7 @@ function CourseActionCard({ course }: { course: CourseDetail }) {
   // Staff (COURSE_UPDATE) xem được nội dung nhưng không ghi danh.
   const isStaffPreview = !course.enrolled && !course.isFree && course.contentUnlocked;
 
-  let action: React.ReactNode;
+  let action: ReactNode;
   if (course.enrolled) {
     if (enrollment) {
       action = (
@@ -267,6 +278,10 @@ function CourseActionCard({ course }: { course: CourseDetail }) {
 
       {action}
 
+      <PermissionGate permissions={["ENROLLMENT_CREATE", "DEPARTMENT_READ"]} requireAll>
+        <DepartmentEnrollmentControl courseId={course.id} />
+      </PermissionGate>
+
       <ul className="space-y-2 border-t pt-4 text-sm text-muted-foreground">
         <li className="flex items-center gap-2">
           <BookOpen className="size-4" /> {course.lessonCount} lessons
@@ -304,6 +319,140 @@ function CourseActionCard({ course }: { course: CourseDetail }) {
             }
           />
         </>
+      )}
+    </div>
+  );
+}
+
+function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
+  const [departmentId, setDepartmentId] = useState("");
+  const queryClient = useQueryClient();
+
+  const departmentsQuery = useQuery({
+    queryKey: ["course-enrollment-departments"],
+    queryFn: async () => {
+      const firstPage = await departmentApi.getPage(
+        { page: 0, size: 100, sort: "name,asc" },
+      );
+      const remainingPages = await Promise.all(
+        Array.from({ length: Math.max(0, firstPage.totalPages - 1) }, (_, index) =>
+          departmentApi.getPage({ page: index + 1, size: 100, sort: "name,asc" }),
+        ),
+      );
+      return [firstPage, ...remainingPages]
+        .flatMap((page) => page.content)
+        .filter((department) => department.isActive !== false && department.id !== undefined);
+    },
+  });
+
+  const previewQuery = useQuery({
+    queryKey: ["course-department-enrollment-preview", courseId, departmentId],
+    enabled: Boolean(departmentId),
+    queryFn: () =>
+      enrollmentApi.previewDepartment({
+        departmentId: Number(departmentId),
+        courseId,
+      }),
+  });
+
+  const enrollMutation = useMutation({
+    mutationFn: () =>
+      enrollmentApi.enrollDepartment({
+        departmentId: Number(departmentId),
+        courseId,
+      }),
+    onSuccess: async (result) => {
+      toast.success(
+        `${result.newEnrollments} student${result.newEnrollments === 1 ? "" : "s"} enrolled in ${result.courseName}.`,
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["department-overview"] }),
+        queryClient.invalidateQueries({ queryKey: ["my-enrollments"] }),
+        queryClient.invalidateQueries({ queryKey: ["course-catalog"] }),
+        queryClient.invalidateQueries({ queryKey: ["course-detail"] }),
+      ]);
+      setDepartmentId("");
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Department enrollment failed.");
+    },
+  });
+
+  const selectedDepartment = departmentsQuery.data?.find(
+    (department) => department.id === Number(departmentId),
+  );
+  const preview = previewQuery.data;
+
+  return (
+    <div className="space-y-2 border-t pt-4">
+      <label htmlFor="course-enrollment-department" className="text-sm font-medium">
+        Enroll a department
+      </label>
+      {departmentsQuery.isLoading ? (
+        <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+          <LoaderCircle className="size-4 animate-spin" /> Loading departments...
+        </p>
+      ) : departmentsQuery.isError ? (
+        <div role="alert" className="space-y-2">
+          <p className="text-sm text-destructive">
+            {departmentsQuery.error instanceof Error
+              ? departmentsQuery.error.message
+              : "Could not load departments."}
+          </p>
+          <Button variant="outline" size="sm" onClick={() => void departmentsQuery.refetch()}>
+            Try again
+          </Button>
+        </div>
+      ) : departmentsQuery.data?.length ? (
+        <>
+          <Select
+            value={departmentId}
+            onValueChange={setDepartmentId}
+            disabled={enrollMutation.isPending}
+          >
+            <SelectTrigger id="course-enrollment-department" className="w-full">
+              <SelectValue placeholder="Choose a department" />
+            </SelectTrigger>
+            <SelectContent>
+              {departmentsQuery.data.map((department) => (
+                <SelectItem key={department.id} value={String(department.id)}>
+                  {department.name || department.code || `Department ${department.id}`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {departmentId && previewQuery.isLoading && (
+            <p role="status" className="text-xs text-muted-foreground">
+              Checking department students...
+            </p>
+          )}
+          {departmentId && previewQuery.isError && (
+            <p role="alert" className="text-xs text-destructive">
+              {previewQuery.error instanceof Error
+                ? previewQuery.error.message
+                : "Could not check department enrollment."}
+            </p>
+          )}
+          {preview && (
+            <>
+              <p className="text-xs text-muted-foreground">
+                {preview.newEnrollments} new enrollment{preview.newEnrollments === 1 ? "" : "s"} for{" "}
+                {selectedDepartment?.name || "this department"} ({preview.studentCount} active students).
+              </p>
+              <Button
+                size="sm"
+                className="w-full"
+                disabled={preview.newEnrollments === 0 || enrollMutation.isPending}
+                onClick={() => enrollMutation.mutate()}
+              >
+                {enrollMutation.isPending && <LoaderCircle className="size-4 animate-spin" />}
+                Enroll department
+              </Button>
+            </>
+          )}
+        </>
+      ) : (
+        <p className="text-sm text-muted-foreground">No active departments available.</p>
       )}
     </div>
   );
@@ -423,7 +572,7 @@ function LessonRow({ lesson }: { lesson: CourseDetailLesson }) {
   );
 }
 
-function StateCard({ title, text, action }: { title: string; text: string; action?: React.ReactNode }) {
+function StateCard({ title, text, action }: { title: string; text: string; action?: ReactNode }) {
   return (
     <div className="rounded-2xl border border-dashed px-6 py-14 text-center">
       <GraduationCap className="mx-auto size-12 text-muted-foreground" />

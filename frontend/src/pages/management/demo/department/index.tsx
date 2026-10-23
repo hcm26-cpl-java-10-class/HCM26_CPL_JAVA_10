@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { auditableFieldsSchema, type DepartmentDTO, type EntityConfig, type EntitySchema, type FieldSchema } from "@/types";
+import axios from "axios";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, LoaderCircle, Pencil, Plus, Power, Search, Trash2, Users } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
@@ -24,9 +25,18 @@ const departmentSchema: EntitySchema = {
     entityName: "department",
     idField: "id",
     fields: [
-        { name: "name", label: "Department Name", type: "text", sortable: true, bold: true },
-        { name: "code", label: "Department Code", type: "text", sortable: true },
-        { name: "description", label: "Description", type: "textarea", sortable: false },
+        {
+            name: "name", label: "Department Name", type: "text", sortable: true, bold: true,
+            validation: { required: true, requiredMessage: "Department name is required", maxLength: 150 },
+        },
+        {
+            name: "code", label: "Department Code", type: "text", sortable: true,
+            validation: { required: true, requiredMessage: "Department code is required", maxLength: 50 },
+        },
+        {
+            name: "description", label: "Description", type: "textarea", sortable: false,
+            validation: { maxLength: 500 },
+        },
         ...(auditableFieldsSchema as FieldSchema[]),
     ],
 };
@@ -47,6 +57,7 @@ export default function DepartmentManagementPage() {
     const [name, setName] = useState("");
     const [code, setCode] = useState("");
     const [description, setDescription] = useState("");
+    const [errors, setErrors] = useState<Partial<Record<"name" | "code" | "description", string>>>({});
     const [departmentPage, setDepartmentPage] = useState(0);
     const [departmentSearch, setDepartmentSearch] = useState("");
 
@@ -83,6 +94,25 @@ export default function DepartmentManagementPage() {
             setEditorOpen(false);
         },
         onError: (error) => {
+            // Backend trả 400 { errors: { field: [msg] } } (vd: "Department code already exists")
+            if (axios.isAxiosError(error)) {
+                const body = error.response?.data as { message?: string; errors?: Record<string, string[] | string> } | undefined;
+                if (body?.errors) {
+                    const mapped: typeof errors = {};
+                    for (const key of ["name", "code", "description"] as const) {
+                        const v = body.errors[key];
+                        const msg = Array.isArray(v) ? v[0] : v;
+                        if (msg) mapped[key] = msg;
+                    }
+                    if (Object.keys(mapped).length > 0) {
+                        setErrors(mapped);
+                        toast.error(body.message || "Please fix the highlighted fields.");
+                        return;
+                    }
+                }
+                toast.error(body?.message || "Could not save department.");
+                return;
+            }
             toast.error(error instanceof Error ? error.message : "Could not save department.");
         },
     });
@@ -123,6 +153,7 @@ export default function DepartmentManagementPage() {
         setName(editingDepartment?.name ?? "");
         setCode(editingDepartment?.code ?? "");
         setDescription(editingDepartment?.description ?? "");
+        setErrors({});
     }, [editorOpen, editingDepartment]);
 
     const openCreateDialog = () => {
@@ -137,9 +168,19 @@ export default function DepartmentManagementPage() {
 
     const submitDepartment = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        const trimmedName = name.trim();
+        const trimmedCode = code.trim();
+        const found: typeof errors = {};
+        if (!trimmedName) found.name = "Department name is required";
+        else if (trimmedName.length > 150) found.name = "Name must not exceed 150 characters";
+        if (!trimmedCode) found.code = "Department code is required";
+        else if (trimmedCode.length > 50) found.code = "Code must not exceed 50 characters";
+        if (description.trim().length > 500) found.description = "Description must not exceed 500 characters";
+        setErrors(found);
+        if (Object.keys(found).length > 0) return;
         saveMutation.mutate({
-            name: name.trim(),
-            code: code.trim(),
+            name: trimmedName,
+            code: trimmedCode,
             description: description.trim(),
             isActive: editingDepartment?.isActive ?? true,
         });
@@ -204,7 +245,7 @@ export default function DepartmentManagementPage() {
                 ) : departmentsQuery.data?.departments.length ? (
                     <div className="grid gap-5 xl:grid-cols-2">
                         {departmentsQuery.data.departments.map((department) => (
-                            <article key={department.id} className="rounded-2xl border bg-card p-5 shadow-sm">
+                            <article key={department.id} className="flex h-full flex-col rounded-2xl border bg-card p-5 shadow-sm">
                                 <div className="flex items-start gap-4">
                                     <span className="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
                                         <Building2 className="size-8" />
@@ -218,7 +259,7 @@ export default function DepartmentManagementPage() {
                                                 {department.isActive === false ? "Inactive" : "Active"}
                                             </Badge>
                                         </div>
-                                        <p className="mt-1 text-sm text-muted-foreground">
+                                        <p className="mt-1 line-clamp-2 text-sm text-muted-foreground" title={department.description || department.code}>
                                             {department.description || department.code}
                                         </p>
                                         <p className="mt-1 text-xs text-muted-foreground">Code: {department.code}</p>
@@ -257,36 +298,39 @@ export default function DepartmentManagementPage() {
                                     </PermissionGate>
                                 </div>
 
-                                <div className="mt-5 grid grid-cols-2 gap-4 border-t pt-5">
-                                    <div>
-                                        <p className="text-sm text-muted-foreground">Members</p>
-                                        <p className="mt-2 text-2xl font-bold">{department.stats.members}</p>
+                                {/* mt-auto: đẩy Members + nút xuống đáy card để các card cùng hàng thẳng hàng */}
+                                <div className="mt-auto">
+                                    <div className="mt-5 grid grid-cols-2 gap-4 border-t pt-5">
+                                        <div>
+                                            <p className="text-sm text-muted-foreground">Members</p>
+                                            <p className="mt-2 text-2xl font-bold">{department.stats.members}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-muted-foreground">Enrolled courses</p>
+                                            <p className="mt-2 text-2xl font-bold">{department.stats.enrolledCourses}</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="text-sm text-muted-foreground">Enrolled courses</p>
-                                        <p className="mt-2 text-2xl font-bold">{department.stats.enrolledCourses}</p>
-                                    </div>
-                                </div>
 
-                                <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                                    <PermissionGate permission="USER_UPDATE">
-                                        <Button
-                                            variant="outline"
-                                            className="w-full"
-                                            onClick={() => setMembersDepartment(department)}
-                                        >
-                                            <Users className="size-4" /> Manage Members
-                                        </Button>
-                                    </PermissionGate>
-                                    <PermissionGate permission="ENROLLMENT_CREATE">
-                                        <Button
-                                            className="w-full"
-                                            disabled={department.stats.members === 0 || department.isActive === false}
-                                            onClick={() => setEnrollDepartment(department)}
-                                        >
-                                            Enroll Course
-                                        </Button>
-                                    </PermissionGate>
+                                    <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                                        <PermissionGate permission="USER_UPDATE">
+                                            <Button
+                                                variant="outline"
+                                                className="w-full"
+                                                onClick={() => setMembersDepartment(department)}
+                                            >
+                                                <Users className="size-4" /> Manage Members
+                                            </Button>
+                                        </PermissionGate>
+                                        <PermissionGate permission="ENROLLMENT_CREATE">
+                                            <Button
+                                                className="w-full"
+                                                disabled={department.stats.members === 0 || department.isActive === false}
+                                                onClick={() => setEnrollDepartment(department)}
+                                            >
+                                                Enroll Course
+                                            </Button>
+                                        </PermissionGate>
+                                    </div>
                                 </div>
                             </article>
                         ))}
@@ -338,35 +382,51 @@ export default function DepartmentManagementPage() {
                             Add the department name, unique code, and an optional description.
                         </DialogDescription>
                     </DialogHeader>
-                    <form className="space-y-4" onSubmit={submitDepartment}>
+                    <form className="space-y-4" onSubmit={submitDepartment} noValidate>
                         <div className="space-y-2">
                             <label htmlFor="department-name" className="text-sm font-medium">Name</label>
                             <Input
                                 id="department-name"
                                 value={name}
-                                onChange={(event) => setName(event.target.value)}
+                                onChange={(event) => {
+                                    setName(event.target.value);
+                                    setErrors((prev) => ({ ...prev, name: undefined }));
+                                }}
                                 maxLength={150}
-                                required
+                                aria-invalid={!!errors.name}
                             />
+                            <p className="text-xs text-muted-foreground">Required · unique · max 150 characters, e.g. Software Engineering</p>
+                            {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
                         </div>
                         <div className="space-y-2">
                             <label htmlFor="department-code" className="text-sm font-medium">Code</label>
                             <Input
                                 id="department-code"
                                 value={code}
-                                onChange={(event) => setCode(event.target.value)}
+                                onChange={(event) => {
+                                    setCode(event.target.value);
+                                    setErrors((prev) => ({ ...prev, code: undefined }));
+                                }}
                                 maxLength={50}
-                                required
+                                aria-invalid={!!errors.code}
                             />
+                            <p className="text-xs text-muted-foreground">Required · unique · max 50 characters, e.g. SE</p>
+                            {errors.code && <p className="text-xs text-destructive">{errors.code}</p>}
                         </div>
                         <div className="space-y-2">
                             <label htmlFor="department-description" className="text-sm font-medium">Description</label>
                             <Textarea
                                 id="department-description"
                                 value={description}
-                                onChange={(event) => setDescription(event.target.value)}
+                                onChange={(event) => {
+                                    setDescription(event.target.value);
+                                    setErrors((prev) => ({ ...prev, description: undefined }));
+                                }}
                                 maxLength={500}
+                                aria-invalid={!!errors.description}
                             />
+                            <p className="text-xs text-muted-foreground">Optional · {description.length}/500 characters</p>
+                            {errors.description && <p className="text-xs text-destructive">{errors.description}</p>}
                         </div>
                         <div className="flex justify-end gap-2">
                             <Button type="button" variant="outline" onClick={() => setEditorOpen(false)}>

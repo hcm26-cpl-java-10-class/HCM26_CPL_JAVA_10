@@ -1,3 +1,7 @@
+import {
+    CloPanel,
+    MaterialsPanel,
+} from "./SyllabusContentPanels";
 import GeneralInformationPanel from "./GeneralInformationPanel";
 import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -11,6 +15,7 @@ import {
     Pencil,
     Trash2,
     CheckCircle2,
+    Eye,
 } from "lucide-react";
 
 import {
@@ -100,6 +105,8 @@ export default function SyllabusDetailPage() {
     const [sectionOrder, setSectionOrder] =
         useState("1");
 
+    const [sectionMission, setSectionMission] = useState("");
+
     const [bulkOpen, setBulkOpen] =
         useState(false);
 
@@ -153,9 +160,8 @@ export default function SyllabusDetailPage() {
         setValidation(null);
     }
 
-    function openSection(
-        section?: SyllabusSection
-    ) {
+    function openSection(section?: SyllabusSection){
+        setSectionMission(section?.mission ?? "");
         setEditingSection(section ?? null);
 
         setSectionTitle(
@@ -188,6 +194,12 @@ export default function SyllabusDetailPage() {
 
         const title = norm(sectionTitle);
         const order = Number(sectionOrder);
+        const mission = sectionMission.trim();
+
+        if (mission.length > 2000) {
+            toast.error("Mission must not exceed 2000 characters");
+            return;
+        }
 
         if (
             title.length < 3 ||
@@ -244,13 +256,15 @@ export default function SyllabusDetailPage() {
                     syllabusId,
                     editingSection.id,
                     title,
-                    order
+                    order,
+                    mission
                 );
             } else {
                 await syllabusApi.addSection(
                     syllabusId,
                     title,
-                    order
+                    order,
+                    mission
                 );
             }
 
@@ -499,6 +513,15 @@ export default function SyllabusDetailPage() {
                     </div>
                 ) : (
                     <>
+                        {/* Student Preview Button */}
+                        <div className="flex justify-end">
+                            <Button asChild variant="outline">
+                                <Link to={`/syllabuses/${syllabusId}/preview`}>
+                                    <Eye className="size-4" />
+                                    Student Preview
+                                </Link>
+                            </Button>
+                        </div>
                         {/* Syllabus Header */}
                         <section className="w-full rounded-xl border bg-card p-6">
                             <h1 className="break-words text-2xl font-bold">
@@ -512,6 +535,11 @@ export default function SyllabusDetailPage() {
 
                         {/* General Information */}
                         <GeneralInformationPanel syllabusId={syllabusId} />
+
+                        {/* Course Learning Outcomes */}
+                        <CloPanel syllabusId={syllabusId} />
+
+
 
                         {/* Sections Toolbar */}
                         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -639,19 +667,28 @@ export default function SyllabusDetailPage() {
                                             )}
                                         </div>
                                     </div>
+                                    {/* Section Mission */}
+                                    <div className="rounded-lg border p-3">
+                                        <p className="mb-1 text-sm font-semibold">
+                                            Student Mission
+                                        </p>
 
+                                        <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                                            {section.mission?.trim() || "No mission provided yet."}
+                                        </p>
+                                    </div>
                                     {/* Topics */}
                                     <div className="space-y-2 border-t pt-3">
-                                        {section.topics.map(
-                                            (topic) => (
-                                                <div
-                                                    key={topic.id}
-                                                    className="flex items-center justify-between gap-2 rounded-md bg-muted/40 p-2 text-sm"
-                                                >
-                          <span>
-                            {topic.orderIndex}.{" "}
-                              {topic.title}
-                          </span>
+
+                                        {section.topics.map((topic) => (
+                                            <div
+                                                key={topic.id}
+                                                className="rounded-lg border bg-muted/20 p-3"
+                                            >
+                                                <div className="flex items-center justify-between gap-2">
+                                                 <span className="text-sm font-medium">
+                                                  {topic.orderIndex}. {topic.title}
+                                                     </span>
 
                                                     <div className="flex gap-2">
                                                         {canEdit && (
@@ -659,10 +696,7 @@ export default function SyllabusDetailPage() {
                                                                 size="sm"
                                                                 variant="ghost"
                                                                 onClick={() =>
-                                                                    openTopic(
-                                                                        section,
-                                                                        topic
-                                                                    )
+                                                                    openTopic(section, topic)
                                                                 }
                                                             >
                                                                 <Pencil className="size-4" />
@@ -676,10 +710,8 @@ export default function SyllabusDetailPage() {
                                                                 onClick={() =>
                                                                     setConfirm({
                                                                         type: "topic",
-                                                                        sectionId:
-                                                                        section.id,
-                                                                        topicId:
-                                                                        topic.id,
+                                                                        sectionId: section.id,
+                                                                        topicId: topic.id,
                                                                     })
                                                                 }
                                                             >
@@ -688,8 +720,15 @@ export default function SyllabusDetailPage() {
                                                         )}
                                                     </div>
                                                 </div>
-                                            )
-                                        )}
+
+                                                {/* Materials belonging to this Topic */}
+                                                <MaterialsPanel
+                                                    syllabusId={syllabusId}
+                                                    topicId={topic.id}
+                                                />
+                                            </div>
+                                        ))}
+
 
                                         {section.topics.length === 0 && (
                                             <p className="text-sm text-muted-foreground">
@@ -713,6 +752,8 @@ export default function SyllabusDetailPage() {
                                 </div>
                             )
                         )}
+                        {/* General Learning Materials */}
+                        <MaterialsPanel syllabusId={syllabusId} />
                     </>
                 )}
             </div>
@@ -759,11 +800,11 @@ export default function SyllabusDetailPage() {
                     <div>
                         <label
                             htmlFor="section-order"
-                            className="mb-1 block text-sm"
-                        >
+                            className="mb-1 block text-sm">
                             Order Index
-                        </label>
 
+
+                        </label>
                         <Input
                             id="section-order"
                             type="number"
@@ -778,6 +819,32 @@ export default function SyllabusDetailPage() {
                             required
                         />
                     </div>
+                    {/* Section Mission */}
+                        <div className="space-y-2">
+                            <label
+                                htmlFor="section-mission"
+                                className="text-sm font-medium"
+                            >
+                                Mission — Student Tasks (optional)
+                            </label>
+
+                            <textarea
+                                id="section-mission"
+                                value={sectionMission}
+                                onChange={(e) => setSectionMission(e.target.value)}
+                                maxLength={2000}
+                                rows={4}
+                                disabled={busy}
+                                placeholder={
+                                    "Tasks students should complete after this section..."
+                                }
+                                className="w-full rounded-md border bg-background p-3 text-sm"
+                            />
+
+                            <p className="text-xs text-muted-foreground">
+                                This mission will appear in the Student Learning Plan.
+                            </p>
+                        </div>
 
                     <div className="flex justify-end gap-2">
                         <Button
