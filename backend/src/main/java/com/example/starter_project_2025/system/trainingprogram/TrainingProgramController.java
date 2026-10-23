@@ -67,7 +67,20 @@ public class TrainingProgramController {
         return ResponseEntity.ok(service.changeStatus(id, status));
     }
 
-   
+    @GetMapping("/export")
+    public ResponseEntity<String> export(@RequestParam(required = false) String search) {
+        StringBuilder csv = new StringBuilder("id,code,name,version,region,status,totalDurationHours\n");
+        for (TrainingProgramResponse p : service.findAll(search, null, null)) {
+            csv.append(p.id()).append(",").append(csv(p.code())).append(",").append(csv(p.name())).append(",")
+                    .append(csv(p.version())).append(",").append(csv(p.region())).append(",")
+                    .append(p.status()).append(",").append(p.totalDurationHours()).append("\n");
+        }
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename=training-programs.csv")
+                .header("Content-Type", "text/csv; charset=UTF-8")
+                .body("\uFEFF" + csv);
+    }
+
     private String csv(String value) {
         if (value == null) return "";
         return "\"" + value.replace("\"", "\"\"") + "\"";
