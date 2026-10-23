@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen, CalendarDays, GraduationCap, UserRound } from "lucide-react";
 import type { EntityConfig } from "@/types";
-import { Link, Navigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { CourseLearningPage } from "../progress/CourseLearningPage";
 import { EnrollmentProgressBar } from "../progress/EnrollmentProgressBar";
 import { AdminDepartmentStudentCourses } from "@/pages/student/AdminDepartmentStudentCourses";
@@ -43,14 +43,6 @@ export const entityConfig: EntityConfig = {
 };
 
 export default function EnrollmentManagementPage() {
-    // UI hidden: the Enrollments list page is no longer shown, send users to the catalog.
-    // The "learn" route (/enrollments/:id/learn) is still used by "Continue learning".
-    return <Navigate to="/courses" replace />;
-}
-
-// Original Enrollments list page, kept (unused) so it can be restored easily.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function LegacyEnrollmentManagementPage() {
     const isAdminStudentPreview = useAdminStudentPreview();
     const { data: enrollments = [], isLoading, isError, error, refetch } = useQuery({
         queryKey: ["my-enrollments"],
