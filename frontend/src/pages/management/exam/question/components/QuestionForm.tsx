@@ -37,6 +37,7 @@ import React, {
 } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { ImageUrlField } from "./ImageUrlField";
 
 export interface QuestionFormValues {
     content: string;
@@ -542,9 +543,9 @@ export function QuestionForm({
                     />
                 )}
 
-                <Input
-                    value={form.imageUrl ?? ""}
-                    onChange={(event) => setForm((prev) => ({ ...prev, imageUrl: event.target.value }))}
+                <ImageUrlField
+                    value={form.imageUrl}
+                    onChange={(url) => setForm((prev) => ({ ...prev, imageUrl: url }))}
                     placeholder="Question image URL (optional, https://...)"
                 />
                 {form.imageUrl?.trim() && (
@@ -617,10 +618,10 @@ export function QuestionForm({
                                     <Trash2 className="h-4 w-4" />
                                 </Button>
                             </div>
-                            <Input
-                                className="ml-8 w-auto"
+                            <ImageUrlField
+                                className="ml-8"
                                 value={option.imageUrl ?? ""}
-                                onChange={(event) => updateOption(index, { imageUrl: event.target.value })}
+                                onChange={(url) => updateOption(index, { imageUrl: url })}
                                 placeholder="Image URL (optional, https://...)"
                             />
                             {option.imageUrl?.trim() && (
