@@ -1,5 +1,8 @@
 package com.example.starter_project_2025.system.location;
 
+import com.example.starter_project_2025.system.rbac.role.Role;
+import com.example.starter_project_2025.system.rbac.user.User;
+import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,6 +18,7 @@ import java.util.stream.Collectors;
 public class LocationService {
 
     private final LocationRepository locationRepository;
+    private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
     public List<Location> getAllLocations() {
@@ -51,6 +55,27 @@ public class LocationService {
         return rootNodes;
     }
 
+    @Transactional(readOnly = true)
+    public List<LocationUserDTO> getUsersByLocationId(Long locationId) {
+        List<User> allUsers = userRepository.findAll();
+
+        return allUsers.stream().map(user -> {
+            String jobTitle = user.getRoles().stream()
+                    .findFirst()
+                    .map(Role::getName)
+                    .orElse("Staff");
+
+            return LocationUserDTO.builder()
+                    .id(user.getId())
+                    .username(user.getUsername())
+                    .fullName(user.getFullName())
+                    .email(user.getEmail())
+                    .phone(user.getPhone())
+                    .jobTitle(jobTitle)
+                    .build();
+        }).collect(Collectors.toList());
+    }
+
     private LocationDTO toDTO(Location location) {
         LocationDTO dto = new LocationDTO();
         dto.setId(location.getId());
@@ -59,6 +84,11 @@ public class LocationService {
         dto.setParentId(location.getParentId());
         dto.setStatus(location.getStatus());
         dto.setIsActive("ACTIVE".equalsIgnoreCase(location.getStatus()));
+
+        List<LocationUserDTO> users = getUsersByLocationId(location.getId());
+        dto.setUsers(users);
+        dto.setTotalUsers(users.size());
+
         return dto;
     }
 

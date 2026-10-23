@@ -17,4 +17,6 @@ public class LocationDTO extends BaseDTO {
     private String status;
     private List<LocationDTO> children = new ArrayList<>();
     private Boolean isActive;
+    private Integer totalUsers = 0;
+    private List<LocationUserDTO> users = new ArrayList<>();
 }
