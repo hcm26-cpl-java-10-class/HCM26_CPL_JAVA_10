@@ -28,7 +28,7 @@ import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Entity
 @Getter
@@ -77,12 +77,12 @@ public class Sprint extends BaseEntity {
     @Column(name = "start_date")
     @ImportField(name = "Start Date")
     @ExportField(name = "Start Date")
-    LocalDate startDate;
+    LocalDateTime startDate;
 
     @Column(name = "end_date")
     @ImportField(name = "End Date")
     @ExportField(name = "End Date")
-    LocalDate endDate;
+    LocalDateTime endDate;
 
     @Builder.Default
     @Enumerated(EnumType.STRING)

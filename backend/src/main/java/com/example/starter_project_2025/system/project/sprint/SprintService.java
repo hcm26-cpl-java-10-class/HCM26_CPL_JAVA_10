@@ -12,4 +12,9 @@ public interface SprintService
      * Audit trail of a sprint, newest first.
      */
     List<SprintAuditLogDTO> getAuditLogs(Long sprintId);
+
+    /**
+     * Flattened rows for the Excel/CSV export (PROJECT-RELATION-SAFE).
+     */
+    List<SprintExportRow> getExportRows();
 }
