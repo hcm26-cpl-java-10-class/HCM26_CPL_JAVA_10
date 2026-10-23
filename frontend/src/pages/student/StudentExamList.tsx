@@ -70,15 +70,19 @@ function ExamCard({
                       attempt,
                       now,
                       onOpen,
+                      onReview,
                       disabled: externallyDisabled,
                   }: {
     exam: Exam;
     attempt?: ExamAttemptSummary;
     now: number;
     onOpen: (examId: number) => void;
+    onReview: (attemptId: number) => void;
     disabled: boolean;
 }) {
     const status = getAttemptStatus(attempt);
+    const canReview = exam.showAnswersAfterExam === true
+        && (attempt?.status === 'SUBMITTED' || attempt?.status === 'PENDING_REVIEW');
     const open = isExamOpen(exam, now);
     const beforeOpen = exam.startTime != null && now < new Date(exam.startTime).getTime();
     const afterClose = exam.endTime != null && now >= new Date(exam.endTime).getTime();
@@ -153,11 +157,16 @@ function ExamCard({
                 )}
             </CardContent>
 
-            <CardFooter className="border-t border-slate-100 pt-4">
+            <CardFooter className="flex-col gap-2 border-t border-slate-100 pt-4">
                 <Button className="w-full bg-cyan-600 text-white hover:bg-cyan-500" disabled={isDisabled} onClick={() => onOpen(exam.id)}>
                     {buttonLabel}
                     <ArrowRight className="size-4" />
                 </Button>
+                {canReview && attempt && (
+                    <Button variant="outline" className="w-full" onClick={() => onReview(attempt.id)}>
+                        View Answers
+                    </Button>
+                )}
             </CardFooter>
         </Card>
     );
@@ -280,6 +289,7 @@ export default function StudentExamList() {
                                     now={now}
                                     disabled={attemptsQuery.isError}
                                     onOpen={openExam}
+                                    onReview={(attemptId) => navigate(`/student/exams/attempts/${attemptId}/review`)}
                                 />
                             );
                         })}

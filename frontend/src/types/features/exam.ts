@@ -45,6 +45,7 @@ export interface ExamDTO {
   maxAttempts?: number;
   shuffleQuestions?: boolean;
   shuffleOptions?: boolean;
+  showAnswersAfterExam?: boolean;
   passScore?: number | null;
   latePolicy?: LatePolicy;
   latePenaltyPercent?: number | null;

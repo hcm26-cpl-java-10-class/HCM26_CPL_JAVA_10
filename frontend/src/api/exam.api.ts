@@ -11,6 +11,7 @@ export interface Exam {
     maxAttempts?: number | null;
     latePolicy?: 'NOT_ALLOWED' | 'ALLOWED' | 'ALLOWED_WITH_PENALTY';
     hasPassword?: boolean;
+    showAnswersAfterExam?: boolean;
     createdAt?: string;
     updatedAt?: string;
 }
@@ -80,6 +81,41 @@ export interface ExamAttemptSummary {
     submittedAt: string | null;
 }
 
+export interface ExamReviewOption {
+    id: number;
+    content: string;
+    imageUrl?: string | null;
+    correct: boolean;
+    selected: boolean;
+}
+
+export interface ExamReviewQuestion {
+    questionId: number;
+    content: string;
+    imageUrl?: string | null;
+    type: ExamAttemptQuestion['type'];
+    points: number;
+    /** null for essay questions */
+    correct: boolean | null;
+    options: ExamReviewOption[];
+    textAnswer?: string | null;
+    score?: number | null;
+    feedback?: string | null;
+}
+
+export interface ExamAttemptReview {
+    attemptId: number;
+    examId: number;
+    title: string;
+    attemptNumber: number;
+    status: ExamAttemptStatus;
+    totalPoints: number;
+    objectiveScore: number | null;
+    finalScore: number | null;
+    submittedAt: string | null;
+    questions: ExamReviewQuestion[];
+}
+
 export interface SaveExamAnswerRequest {
     questionId: number;
     selectedOptionIds?: number[];
@@ -125,6 +161,11 @@ export const verifyExamPassword = async (examId: number, password: string) => {
 
 export const saveExamAnswers = async (attemptId: number, answers: SaveExamAnswerRequest[]) => {
     const response = await api.put<ExamAttempt>(`/exams/attempts/${attemptId}/answers`, answers);
+    return response.data;
+};
+
+export const getAttemptReview = async (attemptId: number) => {
+    const response = await api.get<ExamAttemptReview>(`/exams/attempts/${attemptId}/review`);
     return response.data;
 };
 
