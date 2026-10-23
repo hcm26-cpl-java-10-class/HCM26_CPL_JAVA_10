@@ -12,6 +12,11 @@ export type SidebarModuleGroup = ModuleGroupDTO & {
     modules: SidebarModule[];
 };
 
+// Menu URLs hidden from the UI only (data in DB / backend is untouched).
+const HIDDEN_MENU_URLS = new Set(["/enrollments"]);
+
+const normalizeMenuUrl = (url?: string) => (url ?? "").replace(/\/+$/, "").toLowerCase();
+
 const menuPagination: Pagination = {
     page: 0,
     size: 9999,
@@ -37,8 +42,10 @@ export function useActiveModuleGroups(enabled = true) {
             ]);
 
             const groups = groupPage.content ?? groupPage.items ?? [];
-            const modules = (modulePage.content ?? modulePage.items ?? []).filter((module) =>
-                canAccessByPermission(module.requiredPermission, hasPermission),
+            const modules = (modulePage.content ?? modulePage.items ?? []).filter(
+                (module) =>
+                    !HIDDEN_MENU_URLS.has(normalizeMenuUrl(module.url)) &&
+                    canAccessByPermission(module.requiredPermission, hasPermission),
             );
 
             const groupedModules = modules.reduce<Record<string, SidebarModule[]>>((acc, module) => {

@@ -96,8 +96,8 @@ export function CourseLearningPage() {
     <MainLayout pathName={{ enrollments: "My courses", learn: "Learn" }}>
       <div className="mx-auto w-full max-w-7xl space-y-5">
         <Button asChild variant="ghost" className="-ml-3">
-          <Link to="/enrollments">
-            <ArrowLeft className="size-4" /> Back to my courses
+          <Link to="/courses">
+            <ArrowLeft className="size-4" /> Back to courses
           </Link>
         </Button>
 
