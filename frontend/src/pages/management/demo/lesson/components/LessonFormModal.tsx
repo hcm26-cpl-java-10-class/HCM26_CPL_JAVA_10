@@ -235,8 +235,8 @@ export function LessonFormModal({
             <FieldMessage message={errors.title} />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="grid gap-1.5 sm:col-span-1">
+          <div className="grid items-start gap-4 sm:grid-cols-3">
+            <div className="grid grid-rows-[1.25rem_2.25rem_auto] gap-1.5">
               <Label>Content type</Label>
               <Select
                 value={form.contentType}
@@ -255,7 +255,7 @@ export function LessonFormModal({
               </Select>
             </div>
 
-            <div className="grid gap-1.5">
+            <div className="grid grid-rows-[1.25rem_2.25rem_auto] gap-1.5">
               <Label htmlFor="lesson-duration">Duration</Label>
               <Input
                 id="lesson-duration"
@@ -273,7 +273,7 @@ export function LessonFormModal({
               )}
             </div>
 
-            <div className="grid gap-1.5">
+            <div className="grid grid-rows-[1.25rem_2.25rem_auto] gap-1.5">
               <Label htmlFor="lesson-order">Order index</Label>
               <Input
                 id="lesson-order"
