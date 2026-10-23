@@ -1,0 +1,194 @@
+package com.example.starter_project_2025.init;
+
+import com.example.starter_project_2025.system.project.trainingclass.ClassMember;
+import com.example.starter_project_2025.system.project.trainingclass.ClassMemberRepository;
+import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
+import com.example.starter_project_2025.system.project.trainingclass.TrainingClass;
+import com.example.starter_project_2025.system.project.trainingclass.TrainingClassRepository;
+import com.example.starter_project_2025.system.project.trainingclass.TrainingClassStatus;
+import com.example.starter_project_2025.system.rbac.role.Role;
+import com.example.starter_project_2025.system.rbac.role.RoleRepository;
+import com.example.starter_project_2025.system.rbac.user.User;
+import com.example.starter_project_2025.system.rbac.user.UserRepository;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.annotation.Order;
+import org.springframework.context.annotation.Profile;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+@Slf4j
+@Order(4)
+@Component
+@RequiredArgsConstructor
+@Profile("!prod")
+@ConditionalOnProperty(
+        prefix = "app.seed.team-allocation",
+        name = "enabled",
+        havingValue = "true",
+        matchIfMissing = true
+)
+public class TeamAllocationDemoDataInitializer implements CommandLineRunner {
+
+    private static final long DEMO_TENANT_ID = 91001L;
+    private static final int MEMBERS_PER_CLASS = 35;
+    private static final String EMAIL_DOMAIN = "team-allocation.example.test";
+
+    private static final List<String> FAMILY_NAMES = List.of(
+            "Nguyễn", "Trần", "Lê", "Phạm", "Hoàng", "Phan",
+            "Vũ", "Võ", "Đặng", "Bùi", "Đỗ", "Hồ",
+            "Ngô", "Dương", "Lý", "Đinh", "Mai", "Cao"
+    );
+
+    private static final List<String> MIDDLE_AND_GIVEN_NAMES = List.of(
+            "Minh Anh", "Quốc Bảo", "Thảo Vy", "Gia Huy", "Khánh Linh",
+            "Tuấn Kiệt", "Ngọc Hân", "Đức Anh", "Phương Thảo", "Hoàng Nam",
+            "Bảo Ngọc", "Thanh Tùng", "Minh Khang", "Hải Yến", "Quang Huy",
+            "Mai Phương", "Anh Duy", "Kim Ngân", "Đăng Khoa", "Thu Trang",
+            "Trọng Nghĩa", "Diệu Linh", "Nhật Minh", "Tú Anh", "Văn Khôi",
+            "Thùy Dương", "Đình Phúc", "Mỹ Linh", "Hữu Phước", "Thanh Hà",
+            "Công Thành", "Yến Nhi", "Hoài An", "Xuân Bách", "Bích Ngọc"
+    );
+
+    private static final List<ClassSeed> CLASSES = List.of(
+            new ClassSeed(
+                    "DEMO-JAVA-26-01", "Lập trình Java 2026 - Lớp 01",
+                    92601L, "Java Backend Development", 92601L, "Java 2026 - Đợt 1"),
+            new ClassSeed(
+                    "DEMO-JAVA-26-02", "Lập trình Java 2026 - Lớp 02",
+                    92601L, "Java Backend Development", 92602L, "Java 2026 - Đợt 2"),
+            new ClassSeed(
+                    "DEMO-FE-26-01", "Frontend React 2026 - Lớp 01",
+                    92602L, "Frontend Engineering with React", 92603L, "Frontend 2026 - Đợt 1"),
+            new ClassSeed(
+                    "DEMO-QA-26-01", "Kiểm thử tự động 2026 - Lớp 01",
+                    92603L, "Quality Assurance and Test Automation", 92604L, "QA 2026 - Đợt 1"),
+            new ClassSeed(
+                    "DEMO-DATA-26-01", "Phân tích dữ liệu 2026 - Lớp 01",
+                    92604L, "Applied Data Analytics", 92605L, "Data Analytics 2026 - Đợt 1")
+    );
+
+    private final TrainingClassRepository trainingClassRepository;
+    private final ClassMemberRepository classMemberRepository;
+    private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
+    private final PasswordEncoder passwordEncoder;
+
+    @Override
+    @Transactional
+    public void run(String... args) {
+        Role studentRole = roleRepository.findByName("STUDENT")
+                .orElseThrow(() -> new IllegalStateException(
+                        "Role STUDENT not found. Ensure role seed runs first."));
+
+        int createdClasses = 0;
+        int createdUsers = 0;
+        int createdMemberships = 0;
+
+        for (int classIndex = 0; classIndex < CLASSES.size(); classIndex++) {
+            ClassSeed classSeed = CLASSES.get(classIndex);
+            TrainingClass trainingClass = trainingClassRepository
+                    .findByCodeAndTenantId(classSeed.code(), DEMO_TENANT_ID)
+                    .orElseGet(() -> createClass(classSeed));
+
+            if (trainingClass.getId() == null) {
+                trainingClass = trainingClassRepository.saveAndFlush(trainingClass);
+                createdClasses++;
+            } else if (trainingClass.getProgramName() == null
+                    || trainingClass.getCohortName() == null) {
+                if (trainingClass.getProgramName() == null) {
+                    trainingClass.setProgramName(classSeed.programName());
+                }
+                if (trainingClass.getCohortName() == null) {
+                    trainingClass.setCohortName(classSeed.cohortName());
+                }
+                trainingClass = trainingClassRepository.saveAndFlush(trainingClass);
+            }
+
+            for (int rosterIndex = 0; rosterIndex < MEMBERS_PER_CLASS; rosterIndex++) {
+                int globalIndex = classIndex * MEMBERS_PER_CLASS + rosterIndex;
+                String email = String.format(
+                        "student.%03d@%s", globalIndex + 1, EMAIL_DOMAIN);
+                User user = userRepository.findByEmail(email).orElse(null);
+                if (user == null) {
+                    user = createStudent(globalIndex, studentRole, email);
+                    user = userRepository.saveAndFlush(user);
+                    createdUsers++;
+                }
+
+                if (!classMemberRepository.existsByTrainingClass_IdAndUser_Id(
+                        trainingClass.getId(), user.getId())) {
+                    classMemberRepository.save(ClassMember.builder()
+                            .trainingClass(trainingClass)
+                            .user(user)
+                            .status(ClassMemberStatus.ACTIVE)
+                            .joinedAt(LocalDateTime.now().minusDays(30L + rosterIndex))
+                            .build());
+                    createdMemberships++;
+                }
+            }
+
+            log.info(
+                    "Demo class ready: code={}, classId={}, members={}",
+                    trainingClass.getCode(),
+                    trainingClass.getId(),
+                    classMemberRepository.countByTrainingClass_Id(trainingClass.getId())
+            );
+        }
+
+        classMemberRepository.flush();
+        log.info(
+                "Team-allocation demo data ensured: {} classes, {} students, "
+                        + "{} memberships created; target is 5 classes with 35 members each.",
+                createdClasses,
+                createdUsers,
+                createdMemberships
+        );
+    }
+
+    private TrainingClass createClass(ClassSeed seed) {
+        return TrainingClass.builder()
+                .code(seed.code())
+                .name(seed.name())
+                .tenantId(DEMO_TENANT_ID)
+                .programId(seed.programId())
+                .programName(seed.programName())
+                .cohortId(seed.cohortId())
+                .cohortName(seed.cohortName())
+                .status(TrainingClassStatus.ONGOING)
+                .build();
+    }
+
+    private User createStudent(int globalIndex, Role studentRole, String email) {
+        String fullName = FAMILY_NAMES.get((globalIndex * 7) % FAMILY_NAMES.size())
+                + " "
+                + MIDDLE_AND_GIVEN_NAMES.get(globalIndex % MIDDLE_AND_GIVEN_NAMES.size());
+
+        User student = User.builder()
+                .email(email)
+                .passwordHash(passwordEncoder.encode(UUID.randomUUID().toString()))
+                .firstName(fullName)
+                .lastName(null)
+                .locked(true)
+                .build();
+        student.setIsActive(true);
+        student.getRoles().add(studentRole);
+        return student;
+    }
+
+    private record ClassSeed(
+            String code,
+            String name,
+            long programId,
+            String programName,
+            long cohortId,
+            String cohortName
+    ) {
+    }
+}

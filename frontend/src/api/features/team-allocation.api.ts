@@ -1,0 +1,142 @@
+import axiosInstance from "@/api/axios";
+import type {
+  AllocationSession,
+  ClassMember,
+  ClassRosterMember,
+  PublishTeamsResponse,
+  SaveDraftRequest,
+  TeamListResponse,
+  UpdateDraftTeamRequest,
+} from "@/types/features/team-allocation";
+
+const classPath = (classId: number) => `/v1/classes/${classId}`;
+
+export const teamAllocationApi = {
+  async getSessions(classId: number): Promise<AllocationSession[]> {
+    const response = await axiosInstance.get<AllocationSession[]>(
+      `${classPath(classId)}/allocation-sessions`,
+    );
+    return response.data;
+  },
+
+  async openSession(
+    classId: number,
+    payload: { maxMembers?: number },
+  ): Promise<AllocationSession> {
+    const response = await axiosInstance.post<AllocationSession>(
+      `${classPath(classId)}/allocation-sessions`,
+      payload,
+    );
+    return response.data;
+  },
+
+  async updateSessionCapacity(
+    classId: number,
+    sessionId: number,
+    maxMembers: number,
+  ): Promise<AllocationSession> {
+    const response = await axiosInstance.patch<AllocationSession>(
+      `${classPath(classId)}/allocation-sessions/${sessionId}`,
+      { maxMembers },
+    );
+    return response.data;
+  },
+
+  async cancelSession(classId: number, sessionId: number): Promise<AllocationSession> {
+    const response = await axiosInstance.post<AllocationSession>(
+      `${classPath(classId)}/allocation-sessions/${sessionId}/cancel`,
+    );
+    return response.data;
+  },
+
+  async getUnassignedMembers(classId: number, sessionId: number): Promise<ClassMember[]> {
+    const response = await axiosInstance.get<ClassMember[]>(
+      `${classPath(classId)}/members/unassigned`,
+      { params: { sessionId } },
+    );
+    return response.data;
+  },
+
+  async getClassRoster(
+    classId: number,
+    sessionId: number | null,
+  ): Promise<ClassRosterMember[]> {
+    const response = await axiosInstance.get<ClassRosterMember[]>(
+      `${classPath(classId)}/members`,
+      { params: sessionId === null ? undefined : { sessionId } },
+    );
+    return response.data;
+  },
+
+  async getTeams(classId: number, sessionId: number): Promise<TeamListResponse> {
+    const response = await axiosInstance.get<TeamListResponse>(
+      `${classPath(classId)}/allocation-sessions/${sessionId}/teams`,
+    );
+    return response.data;
+  },
+
+  async saveDraft(
+    classId: number,
+    sessionId: number,
+    payload: SaveDraftRequest,
+    idempotencyKey: string,
+  ): Promise<TeamListResponse> {
+    const response = await axiosInstance.post<TeamListResponse>(
+      `${classPath(classId)}/allocation-sessions/${sessionId}/teams/batch`,
+      payload,
+      { headers: { "X-Idempotency-Key": idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  async updateDraftTeam(
+    classId: number,
+    sessionId: number,
+    teamId: number,
+    payload: UpdateDraftTeamRequest,
+  ): Promise<void> {
+    await axiosInstance.put(
+      `${classPath(classId)}/allocation-sessions/${sessionId}/teams/${teamId}/draft`,
+      payload,
+    );
+  },
+
+  async addActiveTeamMember(
+    classId: number,
+    sessionId: number,
+    teamId: number,
+    memberId: number,
+  ): Promise<void> {
+    await axiosInstance.post(
+      `${classPath(classId)}/allocation-sessions/${sessionId}/teams/${teamId}/members`,
+      { memberId },
+    );
+  },
+
+  async removeActiveTeamMember(
+    classId: number,
+    sessionId: number,
+    teamId: number,
+    memberId: number,
+    reason: string,
+  ): Promise<void> {
+    await axiosInstance.delete(
+      `${classPath(classId)}/allocation-sessions/${sessionId}/teams/${teamId}/members/${memberId}`,
+      { data: { reason } },
+    );
+  },
+
+  async publishTeams(
+    classId: number,
+    sessionId: number,
+    teamIds: number[],
+    idempotencyKey: string,
+  ): Promise<PublishTeamsResponse> {
+    const response = await axiosInstance.post<PublishTeamsResponse>(
+      `${classPath(classId)}/allocation-sessions/${sessionId}/teams/publish`,
+      { teamIds },
+      { headers: { "X-Idempotency-Key": idempotencyKey } },
+    );
+    return response.data;
+  },
+};

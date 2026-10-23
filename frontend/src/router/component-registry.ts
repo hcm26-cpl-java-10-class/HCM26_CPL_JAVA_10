@@ -9,6 +9,8 @@ import { Dashboard } from "@/pages/management/dashboard";
 import ExamManagementPage from "@/pages/management/exam";
 import InvitationManagementPage from "@/pages/management/invitation";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
+import TeamAllocationPage from "@/pages/management/team-allocation";
+import TeamAllocationClassListPage from "@/pages/management/team-allocation/class-list";
 import StudentExamList from "@/pages/student/StudentExamList";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
@@ -38,6 +40,17 @@ export const routes: RouteConfig[] = [
     component: TopicMarkGradebookDemoPage,
     requiredPermission: "STUDENT_SCORE_READ",
     isModuleDriven: true,
+  },
+  {
+    path: "/team-allocation",
+    component: TeamAllocationClassListPage,
+    requiredPermission: "PEO_TEAM_ALLOCATE",
+    isModuleDriven: true,
+  },
+  {
+    path: "/team-allocation/classes/:classId",
+    component: TeamAllocationPage,
+    requiredPermission: "PEO_TEAM_ALLOCATE",
   },
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
   { path: "/student/exams", component: StudentExamList,requiredPermission: "EXAM_READ", isModuleDriven: true },
