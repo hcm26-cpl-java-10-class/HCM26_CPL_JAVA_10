@@ -28,13 +28,34 @@ public class ScopeAuthorizationService {
             Authentication authentication,
             TrainingClass trainingClass
     ) {
+        return canManageClass(authentication, trainingClass, "PEO_TEAM_ALLOCATE");
+    }
+
+    @Transactional(readOnly = true)
+    public void assertCanManageTeamMentor(
+            Authentication authentication,
+            TrainingClass trainingClass
+    ) {
+        if (!canManageClass(authentication, trainingClass,
+                "PEO_TEAM_ALLOCATE", "PRJ_WORKSPACE_MANAGE")) {
+            throw new AccessDeniedException("User is outside the class data scope");
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public boolean canManageClass(
+            Authentication authentication,
+            TrainingClass trainingClass,
+            String... acceptedPermissions
+    ) {
         if (authentication == null || !(authentication.getPrincipal() instanceof UserPrincipal principal)) {
             return false;
         }
 
         boolean hasPermission = authentication.getAuthorities().stream()
                 .anyMatch(authority ->
-                        "PEO_TEAM_ALLOCATE".equals(authority.getAuthority()));
+                        java.util.Arrays.asList(acceptedPermissions)
+                                .contains(authority.getAuthority()));
 
         if (!hasPermission) {
             return false;

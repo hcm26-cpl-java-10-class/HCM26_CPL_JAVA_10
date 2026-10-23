@@ -23,6 +23,7 @@ import type {
   ClassMember,
   ClassRosterMember,
   DraftWarning,
+  MentorOption,
   PublishTeamsResponse,
   SaveDraftRequest,
   TeamListResponse,
@@ -53,6 +54,7 @@ interface LocalDraftTeam {
   localId: string;
   savedTeamId?: number;
   teamName: string;
+  assignedMentorId: number | null;
   memberIds: number[];
 }
 
@@ -159,6 +161,14 @@ export default function TeamAllocationPage() {
     memberName: string;
   } | null>(null);
   const [removeMemberReason, setRemoveMemberReason] = useState("");
+  const [activeMentorTarget, setActiveMentorTarget] = useState<{
+    teamId: number;
+    teamName: string;
+    mentorId: number | null;
+    active: boolean;
+  } | null>(null);
+  const [activeMentorReason, setActiveMentorReason] = useState("");
+  const [activeMentorSelection, setActiveMentorSelection] = useState("");
   const [draftTeams, setDraftTeams] = useState<LocalDraftTeam[]>([]);
   const [memberSearch, setMemberSearch] = useState("");
   const [memberPickerTeamId, setMemberPickerTeamId] = useState<string | null>(null);
@@ -196,6 +206,11 @@ export default function TeamAllocationPage() {
     queryFn: () => teamAllocationApi.getTeams(classId!, sessionId!),
     enabled: classId !== null && sessionId !== null,
     retry: false,
+  });
+  const mentorsQuery = useQuery({
+    queryKey: ["team-allocation", "mentors", classId],
+    queryFn: () => teamAllocationApi.getClassMentors(classId),
+    enabled: Number.isSafeInteger(classId) && classId > 0,
   });
 
   useEffect(() => {
@@ -296,6 +311,7 @@ export default function TeamAllocationPage() {
           team.savedTeamId!,
           {
             teamName: team.teamName.trim(),
+            assignedMentorId: team.assignedMentorId,
             members: team.memberIds.map((memberId) => ({ memberId, role: null })),
           },
         );
@@ -305,6 +321,7 @@ export default function TeamAllocationPage() {
       const payload: SaveDraftRequest = {
         teams: newDrafts.map((team) => ({
           teamName: team.teamName.trim(),
+          assignedMentorId: team.assignedMentorId,
           members: team.memberIds.map((memberId) => ({ memberId, role: null })),
         })),
       };
@@ -499,6 +516,28 @@ export default function TeamAllocationPage() {
     onError: (error) => toast.error(getApiFailure(error).message),
   });
 
+  const updateActiveMentorMutation = useMutation({
+    mutationFn: ({
+      teamId,
+      mentorId,
+      reason,
+    }: { teamId: number; mentorId: number | null; reason?: string }) => {
+      if (sessionId === null) throw new Error("Không có phiên phân nhóm.");
+      return teamAllocationApi.updateTeamMentor(
+        classId, sessionId, teamId, mentorId, reason,
+      );
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["team-allocation", "teams", classId, sessionId],
+      });
+      setActiveMentorTarget(null);
+      setActiveMentorReason("");
+      toast.success("Đã cập nhật Mentor phụ trách nhóm.");
+    },
+    onError: (error) => toast.error(getApiFailure(error).message),
+  });
+
   const members = membersQuery.data ?? [];
   const savedTeams = teamsQuery.data?.teams ?? [];
   const memberPickerTeam = draftTeams.find(
@@ -536,6 +575,7 @@ export default function TeamAllocationPage() {
       {
         localId,
         teamName: `Nhóm ${current.length + 1}`,
+        assignedMentorId: null,
         memberIds: [],
       },
     ]);
@@ -584,6 +624,7 @@ export default function TeamAllocationPage() {
       localId,
       savedTeamId: team.teamId,
       teamName: team.teamName,
+      assignedMentorId: team.assignedMentorId,
       memberIds: [...team.memberIds],
     }]);
     setEditingSavedTeamId(team.teamId);
@@ -1039,15 +1080,46 @@ export default function TeamAllocationPage() {
                               <Users className="size-4" />
                               {team.memberIds.length}/{session.maxMembers}
                             </div>
+                            <label className="mt-3 block max-w-md space-y-1.5 text-sm font-medium">
+                              Mentor phụ trách
+                              <select
+                                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                value={team.assignedMentorId ?? ""}
+                                disabled={mentorsQuery.isLoading}
+                                onChange={(event) => setDraftTeams((current) =>
+                                  current.map((item) => item.localId === team.localId
+                                    ? {
+                                        ...item,
+                                        assignedMentorId: event.target.value
+                                          ? Number(event.target.value)
+                                          : null,
+                                      }
+                                    : item),
+                                )}
+                              >
+                                <option value="">Chưa chọn Mentor</option>
+                                {(mentorsQuery.data ?? []).map((mentor) => (
+                                  <option key={mentor.mentorId} value={mentor.mentorId}>
+                                    {mentor.fullName}
+                                    {mentor.defaultMentor ? " · Mentor mặc định của lớp" : ""}
+                                  </option>
+                                ))}
+                              </select>
+                              {mentorsQuery.isError && (
+                                <span className="block text-xs font-normal text-destructive">
+                                  Không tải được danh sách Mentor của lớp.
+                                </span>
+                              )}
+                            </label>
+                          </div>
+                          {team.savedTeamId === undefined && (
                             <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-label={`Xóa Nhóm ${teamIndex + 1}`}
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              className="mt-3"
+                              aria-label={`Xóa nhóm nháp ${team.teamName || teamIndex + 1}`}
                               onClick={() => {
-                                if (team.savedTeamId !== undefined) {
-                                  cancelDraftEditing();
-                                  return;
-                                }
                                 setDraftTeams((current) =>
                                   current.filter((item) => item.localId !== team.localId),
                                 );
@@ -1057,9 +1129,10 @@ export default function TeamAllocationPage() {
                                 setSaveFailure(null);
                               }}
                             >
-                              <Trash2 className="size-4 text-muted-foreground" />
+                              <Trash2 className="size-4" />
+                              Xóa nhóm nháp
                             </Button>
-                          </div>
+                          )}
                           <Button
                             className="mt-3"
                             size="sm"
@@ -1297,10 +1370,16 @@ export default function TeamAllocationPage() {
                           key={team.teamId}
                           team={team}
                           memberName={nameForMember}
+                          mentors={mentorsQuery.data ?? []}
                           memberOptions={rosterQuery.data ?? []}
                           maxMembers={session.maxMembers}
                           canManageMembers={
                             hasPermission("PEO_TEAM_ALLOCATE") &&
+                            (session.status === "OPEN" || session.status === "PUBLISHED")
+                          }
+                          canManageMentor={
+                            (hasPermission("PEO_TEAM_ALLOCATE") ||
+                              hasPermission("PRJ_WORKSPACE_MANAGE")) &&
                             (session.status === "OPEN" || session.status === "PUBLISHED")
                           }
                           membershipPending={
@@ -1328,6 +1407,18 @@ export default function TeamAllocationPage() {
                               memberName: nameForMember(memberId),
                             });
                             setRemoveMemberReason("");
+                          }}
+                          onUpdateMentor={(mentorId) => {
+                            setActiveMentorTarget({
+                              teamId: team.teamId,
+                              teamName: team.teamName,
+                              mentorId,
+                              active: team.status === "ACTIVE",
+                            });
+                            setActiveMentorSelection(
+                              mentorId === null ? "" : String(mentorId),
+                            );
+                            setActiveMentorReason("");
                           }}
                         />
                       ))}
@@ -1535,6 +1626,99 @@ export default function TeamAllocationPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <Dialog
+        open={activeMentorTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !updateActiveMentorMutation.isPending) {
+            setActiveMentorTarget(null);
+            setActiveMentorReason("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Thay đổi Mentor phụ trách</DialogTitle>
+            <DialogDescription>
+              Cập nhật Mentor cho nhóm {activeMentorTarget?.teamName}.
+              {activeMentorTarget?.active
+                ? " Lý do thay đổi là bắt buộc và được lưu vào lịch sử audit."
+                : " Lý do thay đổi có thể được ghi lại trong lịch sử audit."}
+            </DialogDescription>
+          </DialogHeader>
+          <label className="space-y-2 text-sm font-medium">
+            Mentor phụ trách
+            <select
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={activeMentorSelection}
+              onChange={(event) => setActiveMentorSelection(event.target.value)}
+              disabled={updateActiveMentorMutation.isPending}
+            >
+              <option value="">Chưa gán Mentor</option>
+              {(mentorsQuery.data ?? []).map((mentor) => (
+                <option key={mentor.mentorId} value={mentor.mentorId}>
+                  {mentor.fullName}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-2 text-sm font-medium">
+            Lý do thay đổi{activeMentorTarget?.active ? " (bắt buộc)" : " (không bắt buộc)"}
+            <Textarea
+              maxLength={500}
+              placeholder={
+                activeMentorTarget?.active
+                  ? "Nhập lý do thay đổi (bắt buộc)"
+                  : "Nhập lý do thay đổi (không bắt buộc)"
+              }
+              value={activeMentorReason}
+              onChange={(event) => setActiveMentorReason(event.target.value)}
+              disabled={updateActiveMentorMutation.isPending}
+            />
+            <span className="block text-xs font-normal text-muted-foreground">
+              {activeMentorReason.length}/500 ký tự
+            </span>
+          </label>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setActiveMentorTarget(null)}
+              disabled={updateActiveMentorMutation.isPending}
+            >
+              Hủy
+            </Button>
+            <Button
+              type="button"
+              disabled={
+                (activeMentorTarget?.active === true && !activeMentorReason.trim()) ||
+                (activeMentorTarget?.active === true && !activeMentorSelection) ||
+                updateActiveMentorMutation.isPending
+              }
+              onClick={() => {
+                if (
+                  !activeMentorTarget ||
+                  (activeMentorTarget.active && !activeMentorReason.trim()) ||
+                  (activeMentorTarget.active && !activeMentorSelection)
+                ) {
+                  return;
+                }
+                updateActiveMentorMutation.mutate({
+                  teamId: activeMentorTarget.teamId,
+                  mentorId: activeMentorSelection
+                    ? Number(activeMentorSelection)
+                    : null,
+                  reason: activeMentorReason.trim() || undefined,
+                });
+              }}
+            >
+              {updateActiveMentorMutation.isPending
+                ? <LoaderCircle className="size-4 animate-spin" />
+                : <Save className="size-4" />}
+              Lưu Mentor
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   );
 }
@@ -1615,29 +1799,38 @@ function MemberOption({
 function SavedTeamCard({
   team,
   memberName,
+  mentors,
   memberOptions,
   maxMembers,
   canManageMembers,
+  canManageMentor,
   membershipPending,
   pending,
   onEdit,
   onPublish,
   onAddMember,
   onRemoveMember,
+  onUpdateMentor,
 }: {
   team: AllocationTeam;
   memberName: (memberId: number) => string;
+  mentors: MentorOption[];
   memberOptions: ClassRosterMember[];
   maxMembers: number;
   canManageMembers: boolean;
+  canManageMentor: boolean;
   membershipPending: boolean;
   pending: boolean;
   onEdit: () => void;
   onPublish: () => void;
   onAddMember: (memberId: number) => void;
   onRemoveMember: (memberId: number) => void;
+  onUpdateMentor: (mentorId: number | null) => void;
 }) {
   const [selectedToAdd, setSelectedToAdd] = useState("");
+  const [selectedMentor, setSelectedMentor] = useState(
+    team.assignedMentorId === null ? "" : String(team.assignedMentorId),
+  );
   const [detailsOpen, setDetailsOpen] = useState(false);
   const isDraft = team.status === "DRAFT";
   const isActive = team.status === "ACTIVE";
@@ -1647,6 +1840,18 @@ function SavedTeamCard({
         memberId,
         fullName: memberName(memberId),
       }));
+  useEffect(() => {
+    setSelectedMentor(
+      team.assignedMentorId === null ? "" : String(team.assignedMentorId),
+    );
+  }, [team.assignedMentorId]);
+  const mentorName = team.assignedMentorName;
+  const mentorInitials = mentorName
+    ?.split(/\s+/)
+    .filter(Boolean)
+    .slice(-2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
   return (
     <>
       <button
@@ -1660,6 +1865,12 @@ function SavedTeamCard({
           <span className="mt-1 block text-xs text-muted-foreground">
             {team.memberIds.length} thành viên
           </span>
+          <span className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary">
+              {mentorInitials || "?"}
+            </span>
+            {mentorName ?? "Chưa gán Mentor"}
+          </span>
         </span>
       </button>
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
@@ -1671,6 +1882,51 @@ function SavedTeamCard({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="flex items-center gap-3 rounded-lg border bg-background p-3">
+              <span className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                {mentorInitials || "?"}
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground">Mentor phụ trách</p>
+                <p className="truncate text-sm font-medium">
+                  {mentorName ?? "Chưa gán Mentor"}
+                </p>
+              </div>
+            </div>
+            {(isActive || isDraft) && canManageMentor && (
+              <div className="flex flex-wrap gap-2">
+                <select
+                  aria-label={`Chọn Mentor cho ${team.teamName}`}
+                  className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
+                  value={selectedMentor}
+                  onChange={(event) => setSelectedMentor(event.target.value)}
+                >
+                  <option value="">
+                    {isDraft ? "Chưa gán Mentor" : "Chọn Mentor..."}
+                  </option>
+                  {mentors.map((mentor) => (
+                    <option key={mentor.mentorId} value={mentor.mentorId}>
+                      {mentor.fullName}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={
+                    (isActive && !selectedMentor) ||
+                    selectedMentor === (team.assignedMentorId === null
+                      ? ""
+                      : String(team.assignedMentorId))
+                  }
+                  onClick={() => onUpdateMentor(
+                    selectedMentor ? Number(selectedMentor) : null,
+                  )}
+                >
+                  {isDraft ? "Lưu Mentor" : "Cập nhật Mentor"}
+                </Button>
+              </div>
+            )}
             <div>
               <p className="mb-2 text-sm font-medium">Danh sách thành viên</p>
               {members.length === 0 ? (

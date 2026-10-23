@@ -29,6 +29,16 @@ public class TeamAllocationSessionController {
     private final ProjectTeamPublishCoordinator publishCoordinator;
     private final ProjectTeamDraftService draftService;
     private final ProjectTeamMembershipService membershipService;
+    private final ProjectTeamMentorService mentorService;
+
+    @GetMapping("/mentors")
+    @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
+    public java.util.List<MentorOptionResponse> getClassMentors(
+            @PathVariable Long classId,
+            Authentication authentication
+    ) {
+        return mentorService.getMentors(classId, authentication);
+    }
 
     @GetMapping
     @PreAuthorize("hasAuthority('PEO_TEAM_ALLOCATE')")
@@ -106,6 +116,20 @@ public class TeamAllocationSessionController {
             Authentication authentication
     ) {
         draftService.updateDraftTeam(
+                classId, sessionId, teamId, request, authentication);
+    }
+
+    @PutMapping("/{sessionId}/teams/{teamId}/mentor")
+    @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void updateTeamMentor(
+            @PathVariable Long classId,
+            @PathVariable Long sessionId,
+            @PathVariable Long teamId,
+            @Valid @RequestBody UpdateTeamMentorRequest request,
+            Authentication authentication
+    ) {
+        mentorService.updateTeamMentor(
                 classId, sessionId, teamId, request, authentication);
     }
 

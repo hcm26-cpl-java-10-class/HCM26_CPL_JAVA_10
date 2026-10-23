@@ -37,6 +37,7 @@ public class ProjectTeamDraftService {
     private final ProjectTeamAuditRepository auditRepository;
     private final ProjectTeamOutboxRepository outboxRepository;
     private final ObjectMapper objectMapper;
+    private final ProjectTeamMentorService teamMentorService;
 
     @Transactional
     public BatchSaveDraftResponse saveBatch(
@@ -85,12 +86,17 @@ public class ProjectTeamDraftService {
                     "One or more members are not ACTIVE members of this class");
         }
 
+        request.teams().forEach(team ->
+                teamMentorService.validateMentor(
+                        session.getTrainingClass(), team.assignedMentorId()));
+
         List<ProjectTeam> newTeams = new ArrayList<>();
         for (BatchSaveDraftRequest.TeamDraftRequest teamRequest : request.teams()) {
             newTeams.add(ProjectTeam.builder()
                     .trainingClass(session.getTrainingClass())
                     .allocationSession(session)
                     .teamName(teamRequest.teamName().trim())
+                    .assignedMentorId(teamRequest.assignedMentorId())
                     .maxMembers(session.getMaxMembers())
                     .status(ProjectTeamStatus.DRAFT)
                     .build());
@@ -145,6 +151,7 @@ public class ProjectTeamDraftService {
                                 team.getProjectId(),
                                 team.getMaxMembers(),
                                 team.getStatus(),
+                                team.getAssignedMentorId(),
                                 newMembers.stream()
                                         .filter(member -> member.getTeam().getId().equals(team.getId()))
                                         .map(member -> new MemberSnapshot(
@@ -230,6 +237,8 @@ public class ProjectTeamDraftService {
             throw new BadRequestException(
                     "One or more members are not ACTIVE members of this class");
         }
+        teamMentorService.validateMentor(
+                session.getTrainingClass(), request.assignedMentorId());
         List<ProjectMember> oldMembers =
                 projectMemberRepository.findAllByTeam_IdOrderByIdAsc(teamId);
         String beforeState = writeJson(new TeamSnapshot(
@@ -238,12 +247,14 @@ public class ProjectTeamDraftService {
                 team.getProjectId(),
                 team.getMaxMembers(),
                 team.getStatus(),
+                team.getAssignedMentorId(),
                 oldMembers.stream()
                         .map(member -> new MemberSnapshot(
                                 member.getClassMember().getId(), member.getRole()))
                         .toList()));
 
         team.setTeamName(request.teamName().trim());
+        team.setAssignedMentorId(request.assignedMentorId());
         teamRepository.saveAndFlush(team);
         projectMemberRepository.deleteAllByTeam_Id(teamId);
         projectMemberRepository.flush();
@@ -263,6 +274,7 @@ public class ProjectTeamDraftService {
                 team.getProjectId(),
                 team.getMaxMembers(),
                 team.getStatus(),
+                team.getAssignedMentorId(),
                 newMembers.stream()
                         .map(member -> new MemberSnapshot(
                                 member.getClassMember().getId(), member.getRole()))
@@ -305,6 +317,7 @@ public class ProjectTeamDraftService {
             Long projectId,
             Integer maxMembers,
             ProjectTeamStatus status,
+            Long assignedMentorId,
             List<MemberSnapshot> members
     ) {
     }
@@ -361,6 +374,8 @@ public class ProjectTeamDraftService {
                         team.getId(),
                         team.getTeamName(),
                         team.getStatus(),
+                        team.getAssignedMentorId(),
+                        teamMentorService.getMentorName(team.getAssignedMentorId()),
                         memberIdsByTeam.getOrDefault(team.getId(), List.of()),
                         membersByTeam.getOrDefault(team.getId(), List.of())
                 ))

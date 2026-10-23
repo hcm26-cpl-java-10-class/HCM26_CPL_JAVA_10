@@ -19,6 +19,7 @@ public class ProjectTeamQueryService {
     private final ProjectTeamRepository teamRepository;
     private final ProjectMemberRepository memberRepository;
     private final ScopeAuthorizationService scopeAuthorizationService;
+    private final ProjectTeamMentorService teamMentorService;
 
     @Transactional(readOnly = true)
     public BatchSaveDraftResponse getTeams(
@@ -61,6 +62,8 @@ public class ProjectTeamQueryService {
                         team.getId(),
                         team.getTeamName(),
                         team.getStatus(),
+                        team.getAssignedMentorId(),
+                        teamMentorService.getMentorName(team.getAssignedMentorId()),
                         memberIds,
                         members
                     );

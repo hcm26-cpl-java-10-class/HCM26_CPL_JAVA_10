@@ -8,6 +8,7 @@ import com.example.starter_project_2025.system.project.IdempotencyKeyConflictExc
 import com.example.starter_project_2025.system.project.IdempotencyRequestInProgressException;
 import com.example.starter_project_2025.system.project.TeamCapacityExceededException;
 import com.example.starter_project_2025.system.project.TeamErrorResponse;
+import com.example.starter_project_2025.system.project.InvalidMentorForClassException;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
@@ -124,6 +125,19 @@ public class GlobalExceptionHandler {
                 ex.getMessage(),
                 LocalDateTime.now());
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(InvalidMentorForClassException.class)
+    public ResponseEntity<TeamErrorResponse> handleInvalidMentorForClass(
+            InvalidMentorForClassException ex
+    ) {
+        return ResponseEntity.badRequest().body(new TeamErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "ERR_INVALID_MENTOR_FOR_CLASS",
+                InvalidMentorForClassException.MESSAGE,
+                null,
+                null,
+                LocalDateTime.now()));
     }
 
 

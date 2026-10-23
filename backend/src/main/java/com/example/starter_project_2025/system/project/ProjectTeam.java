@@ -33,6 +33,9 @@ public class ProjectTeam extends BaseEntity {
     @Column(name = "team_name", nullable = false, length = 255)
     String teamName;
 
+    @Column(name = "assigned_mentor_id")
+    Long assignedMentorId;
+
     @Column(name = "max_members", nullable = false)
     Integer maxMembers;
 

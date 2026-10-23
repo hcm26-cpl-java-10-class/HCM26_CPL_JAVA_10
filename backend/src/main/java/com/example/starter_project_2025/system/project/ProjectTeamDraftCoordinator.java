@@ -156,6 +156,15 @@ public class ProjectTeamDraftCoordinator {
     }
 
     private ResponseEntity<TeamErrorResponse> mapBusinessError(RuntimeException exception) {
+        if (exception instanceof InvalidMentorForClassException) {
+            return ResponseEntity.badRequest().body(new TeamErrorResponse(
+                    400,
+                    "ERR_INVALID_MENTOR_FOR_CLASS",
+                    InvalidMentorForClassException.MESSAGE,
+                    null,
+                    null,
+                    LocalDateTime.now()));
+        }
         if (exception instanceof TeamCapacityExceededException capacityError) {
             return ResponseEntity.unprocessableEntity().body(new TeamErrorResponse(
                     422, "ERR_TEAM_CAPACITY_EXCEEDED", capacityError.getMessage(),

@@ -3,6 +3,9 @@ package com.example.starter_project_2025.init;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMember;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberRepository;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
+import com.example.starter_project_2025.system.project.trainingclass.ClassStaffAssignment;
+import com.example.starter_project_2025.system.project.trainingclass.ClassStaffAssignmentRepository;
+import com.example.starter_project_2025.system.project.trainingclass.ClassStaffRoleType;
 import com.example.starter_project_2025.system.project.trainingclass.TrainingClass;
 import com.example.starter_project_2025.system.project.trainingclass.TrainingClassRepository;
 import com.example.starter_project_2025.system.project.trainingclass.TrainingClassStatus;
@@ -74,8 +77,27 @@ public class TeamAllocationDemoDataInitializer implements CommandLineRunner {
                     92604L, "Applied Data Analytics", 92605L, "Data Analytics 2026 - Đợt 1")
     );
 
+    private static final List<List<MentorSeed>> MENTORS_BY_CLASS = List.of(
+            List.of(
+                    new MentorSeed("Nguyễn Hoàng Minh", "mentor.java.minh"),
+                    new MentorSeed("Trần Thu Hà", "mentor.java.ha")),
+            List.of(
+                    new MentorSeed("Lê Quốc Bảo", "mentor.java.bao"),
+                    new MentorSeed("Phạm Ngọc Lan", "mentor.java.lan")),
+            List.of(
+                    new MentorSeed("Vũ Khánh Linh", "mentor.frontend.linh"),
+                    new MentorSeed("Đỗ Anh Tuấn", "mentor.frontend.tuan")),
+            List.of(
+                    new MentorSeed("Bùi Thanh Tâm", "mentor.qa.tam"),
+                    new MentorSeed("Hoàng Đức Long", "mentor.qa.long")),
+            List.of(
+                    new MentorSeed("Phan Mai Phương", "mentor.data.phuong"),
+                    new MentorSeed("Đặng Gia Huy", "mentor.data.huy"))
+    );
+
     private final TrainingClassRepository trainingClassRepository;
     private final ClassMemberRepository classMemberRepository;
+    private final ClassStaffAssignmentRepository classStaffAssignmentRepository;
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
@@ -86,6 +108,9 @@ public class TeamAllocationDemoDataInitializer implements CommandLineRunner {
         Role studentRole = roleRepository.findByName("STUDENT")
                 .orElseThrow(() -> new IllegalStateException(
                         "Role STUDENT not found. Ensure role seed runs first."));
+        Role mentorRole = roleRepository.findByName("MENTOR")
+                .orElseThrow(() -> new IllegalStateException(
+                        "Role MENTOR not found. Ensure role seed runs first."));
 
         int createdClasses = 0;
         int createdUsers = 0;
@@ -109,6 +134,17 @@ public class TeamAllocationDemoDataInitializer implements CommandLineRunner {
                     trainingClass.setCohortName(classSeed.cohortName());
                 }
                 trainingClass = trainingClassRepository.saveAndFlush(trainingClass);
+            }
+
+            List<MentorSeed> classMentors = MENTORS_BY_CLASS.get(classIndex);
+            User defaultMentor = ensureMentor(classMentors.get(0), mentorRole);
+            if (trainingClass.getMentorId() == null) {
+                trainingClass.setMentorId(defaultMentor.getId());
+                trainingClass = trainingClassRepository.saveAndFlush(trainingClass);
+            }
+            for (MentorSeed mentorSeed : classMentors) {
+                User mentor = ensureMentor(mentorSeed, mentorRole);
+                ensureClassMentorAssignment(trainingClass, mentor);
             }
 
             for (int rosterIndex = 0; rosterIndex < MEMBERS_PER_CLASS; rosterIndex++) {
@@ -145,11 +181,53 @@ public class TeamAllocationDemoDataInitializer implements CommandLineRunner {
         classMemberRepository.flush();
         log.info(
                 "Team-allocation demo data ensured: {} classes, {} students, "
-                        + "{} memberships created; target is 5 classes with 35 members each.",
+                        + "{} memberships created, and {} classes have sample Mentors; "
+                        + "target is 5 classes with 35 members each.",
                 createdClasses,
                 createdUsers,
-                createdMemberships
+                createdMemberships,
+                CLASSES.size()
         );
+    }
+
+    private User ensureMentor(MentorSeed seed, Role mentorRole) {
+        String email = seed.emailLocalPart() + "@" + EMAIL_DOMAIN;
+        User mentor = userRepository.findByEmail(email)
+                .orElseGet(() -> createMentor(seed, email, mentorRole));
+        if (mentor.getId() == null) {
+            mentor = userRepository.saveAndFlush(mentor);
+        } else {
+            mentor.setIsActive(true);
+            mentor.setLocked(true);
+            mentor.getRoles().add(mentorRole);
+            mentor = userRepository.saveAndFlush(mentor);
+        }
+        return mentor;
+    }
+
+    private User createMentor(MentorSeed seed, String email, Role mentorRole) {
+        User mentor = User.builder()
+                .email(email)
+                .passwordHash(passwordEncoder.encode(UUID.randomUUID().toString()))
+                .firstName(seed.fullName())
+                .locked(true)
+                .build();
+        mentor.setIsActive(true);
+        mentor.getRoles().add(mentorRole);
+        return mentor;
+    }
+
+    private void ensureClassMentorAssignment(TrainingClass trainingClass, User mentor) {
+        ClassStaffAssignment assignment = classStaffAssignmentRepository
+                .findByTrainingClass_IdAndUser_IdAndRoleType(
+                        trainingClass.getId(), mentor.getId(), ClassStaffRoleType.MENTOR)
+                .orElseGet(() -> ClassStaffAssignment.builder()
+                        .trainingClass(trainingClass)
+                        .user(mentor)
+                        .roleType(ClassStaffRoleType.MENTOR)
+                        .build());
+        assignment.setIsActive(true);
+        classStaffAssignmentRepository.save(assignment);
     }
 
     private TrainingClass createClass(ClassSeed seed) {
@@ -190,5 +268,8 @@ public class TeamAllocationDemoDataInitializer implements CommandLineRunner {
             long cohortId,
             String cohortName
     ) {
+    }
+
+    private record MentorSeed(String fullName, String emailLocalPart) {
     }
 }

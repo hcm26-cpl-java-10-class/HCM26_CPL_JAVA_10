@@ -24,6 +24,7 @@ public class TeamPublishItemService {
     private final ProjectTeamAuditRepository auditRepository;
     private final ProjectTeamOutboxRepository outboxRepository;
     private final ObjectMapper objectMapper;
+    private final ProjectTeamMentorService teamMentorService;
 
     @Transactional(noRollbackFor = {
             StudentAlreadyAssignedException.class,
@@ -81,7 +82,9 @@ public class TeamPublishItemService {
                     conflict.getClassMember().getUser().getFullName());
         }
 
+        Long assignedMentorId = teamMentorService.resolveMentorForPublish(team);
         String beforeState = serialize(snapshot(team, assignments, ProjectTeamStatus.DRAFT));
+        team.setAssignedMentorId(assignedMentorId);
         team.setStatus(ProjectTeamStatus.ACTIVE);
         teamRepository.saveAndFlush(team);
         String afterState = serialize(snapshot(team, assignments, ProjectTeamStatus.ACTIVE));
@@ -122,6 +125,7 @@ public class TeamPublishItemService {
                 team.getProjectId(),
                 team.getMaxMembers(),
                 status,
+                team.getAssignedMentorId(),
                 assignments.stream()
                         .map(assignment -> new TeamMemberSnapshot(
                                 assignment.getClassMember().getId(),
@@ -147,6 +151,7 @@ public class TeamPublishItemService {
             Long projectId,
             Integer maxMembers,
             ProjectTeamStatus status,
+            Long assignedMentorId,
             List<TeamMemberSnapshot> members
     ) {
     }

@@ -3,6 +3,7 @@ import type {
   AllocationSession,
   ClassMember,
   ClassRosterMember,
+  MentorOption,
   PublishTeamsResponse,
   SaveDraftRequest,
   TeamListResponse,
@@ -75,6 +76,13 @@ export const teamAllocationApi = {
     return response.data;
   },
 
+  async getClassMentors(classId: number): Promise<MentorOption[]> {
+    const response = await axiosInstance.get<MentorOption[]>(
+      `${classPath(classId)}/allocation-sessions/mentors`,
+    );
+    return response.data;
+  },
+
   async saveDraft(
     classId: number,
     sessionId: number,
@@ -98,6 +106,19 @@ export const teamAllocationApi = {
     await axiosInstance.put(
       `${classPath(classId)}/allocation-sessions/${sessionId}/teams/${teamId}/draft`,
       payload,
+    );
+  },
+
+  async updateTeamMentor(
+    classId: number,
+    sessionId: number,
+    teamId: number,
+    assignedMentorId: number | null,
+    reason?: string,
+  ): Promise<void> {
+    await axiosInstance.put(
+      `${classPath(classId)}/allocation-sessions/${sessionId}/teams/${teamId}/mentor`,
+      { assignedMentorId, reason },
     );
   },
 

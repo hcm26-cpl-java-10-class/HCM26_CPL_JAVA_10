@@ -10,8 +10,15 @@ export interface AllocationSession {
   version: number;
 }
 
+export interface MentorOption {
+  mentorId: number;
+  fullName: string;
+  defaultMentor: boolean;
+}
+
 export interface UpdateDraftTeamRequest {
   teamName: string;
+  assignedMentorId: number | null;
   members: Array<{
     memberId: number;
     role: string | null;
@@ -40,6 +47,8 @@ export interface AllocationTeam {
   teamId: number;
   teamName: string;
   status: ProjectTeamStatus;
+  assignedMentorId: number | null;
+  assignedMentorName: string | null;
   memberIds: number[];
   members?: Array<{
     memberId: number;
@@ -56,6 +65,7 @@ export interface TeamListResponse {
 
 export interface DraftTeamInput {
   teamName: string;
+  assignedMentorId: number | null;
   members: Array<{
     memberId: number;
     role: string | null;

@@ -12,6 +12,8 @@ public record BatchSaveDraftResponse(
             Long teamId,
             String teamName,
             ProjectTeamStatus status,
+            Long assignedMentorId,
+            String assignedMentorName,
             List<Long> memberIds,
             List<MemberResponse> members
     ) {

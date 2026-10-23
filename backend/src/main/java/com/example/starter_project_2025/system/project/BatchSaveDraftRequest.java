@@ -19,6 +19,9 @@ public record BatchSaveDraftRequest(
             @Size(max = 255, message = "Team name must not exceed 255 characters")
             String teamName,
 
+            @Positive(message = "assignedMentorId must be positive")
+            Long assignedMentorId,
+
             @NotEmpty(message = "Each team must have at least one member")
             @Valid
             List<MemberAssignmentRequest> members

@@ -12,6 +12,9 @@ public record UpdateDraftTeamRequest(
         @Size(max = 255)
         String teamName,
 
+        @Positive
+        Long assignedMentorId,
+
         @Valid
         List<MemberRequest> members
 ) {
