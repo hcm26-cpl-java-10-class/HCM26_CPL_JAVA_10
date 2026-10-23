@@ -507,9 +507,13 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
     const status = error.response?.status;
     const body = error.response?.data as ValidationErrorResponse | undefined;
 
-    // The sprint module answers with 422 (validation) and 409 (conflict) while
+    // The sprint / backlog modules answer with 422 (validation), 409 (conflict)
+    // and 404 (stale reference, e.g. a Milestone that no longer exists) while
     // the legacy modules still use 400; highlight fields for all of them.
-    if ((status === 400 || status === 409 || status === 422) && body?.errors) {
+    if (
+      (status === 400 || status === 404 || status === 409 || status === 422) &&
+      body?.errors
+    ) {
       setFieldErrors(body.errors);
     }
   };

@@ -90,6 +90,8 @@ const resolveDefaultValue = (field: FieldSchema) => {
   return "";
 };
 
+const EMPTY_FIELD_ERRORS: Record<string, string[]> = {};
+
 interface FormModalProps {
   open: boolean;
   onClose: (open: boolean) => void;
@@ -111,10 +113,25 @@ export function FormModal({
   title = "Form",
   isSubmitting = false,
   relationOptions = {},
-  fieldErrors = {},
+  fieldErrors,
 }: FormModalProps) {
+  const serverErrors = fieldErrors ?? EMPTY_FIELD_ERRORS;
+
   const [form, setForm] = useState<Record<string, any>>({});
   const [localErrors, setLocalErrors] = useState<Record<string, string[]>>({});
+  /**
+   * Server-side errors (422 / 404 / 409) that the user already reacted to: once
+   * a field is edited again the stale highlight is dropped, so a Milestone that
+   * was rejected as "no longer existing" stops being red as soon as another one
+   * is picked - while the rest of the form is preserved.
+   */
+  const [touchedServerErrorFields, setTouchedServerErrorFields] = useState<
+    Set<string>
+  >(new Set());
+
+  useEffect(() => {
+    setTouchedServerErrorFields(new Set());
+  }, [serverErrors]);
 
   const editableFields: FieldSchema[] = schema.fields.filter(
     (f: FieldSchema) =>
@@ -154,6 +171,12 @@ export function FormModal({
 
   const updateField = (name: string, value: any) => {
     setForm((prev) => ({ ...prev, [name]: value }));
+    setTouchedServerErrorFields((prev) => {
+      if (prev.has(name)) return prev;
+      const next = new Set(prev);
+      next.add(name);
+      return next;
+    });
     setLocalErrors((prev) => {
       if (!prev[name]) return prev;
       const next = { ...prev };
@@ -219,9 +242,15 @@ export function FormModal({
   };
 
   const mergedErrors: Record<string, string[]> = {
-    ...fieldErrors,
+    ...serverErrors,
     ...localErrors,
   };
+
+  touchedServerErrorFields.forEach((fieldName) => {
+    if (!localErrors[fieldName]) {
+      delete mergedErrors[fieldName];
+    }
+  });
 
   const hasError = (fieldName: string) =>
     mergedErrors[fieldName] && mergedErrors[fieldName].length > 0;

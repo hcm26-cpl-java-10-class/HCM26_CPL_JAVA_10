@@ -155,16 +155,44 @@ export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
         isStudentRole ||
         (isReadOnlyLikeRole && !(isUserManagement && isAdminRole));
 
+    /**
+     * Browse mode is read-only card view, but entities owned by the student
+     * persona (e.g. Sprints) can opt in to keep a "Create" action that opens
+     * the inline form modal.
+     */
+    const browseActions =
+        browseMode && entity.browseModeCreate && table.permission?.canCreate ? (
+            <PermissionGate permission={table.permission?.keys?.create}>
+                <ActionButton
+                    onClick={() => table.openCreate()}
+                    tooltip={`Create ${entity.name}`}
+                    title="Create"
+                    variant="default"
+                    icon={<Plus size={16} />}
+                />
+            </PermissionGate>
+        ) : undefined;
+
+    /**
+     * Entities owned by the student persona (e.g. Sprints) can also keep the
+     * edit / delete actions and the active toggle inside the browse view; the
+     * individual buttons stay gated by RowActions permissions.
+     */
+    const browseRowActions = browseMode && !!entity.browseModeActions;
+
     return (
         <MainLayout pathName={{ [breadcrumbKey]: entity.name }}>
             <ProTable
                 table={table}
                 mode={browseMode ? "browse" : "default"}
                 headerActions={browseMode ? undefined : headerActions}
-                hideActions={browseMode}
+                browseActions={browseActions}
+                browseRowActions={browseRowActions}
+                hideActions={browseMode && !browseRowActions}
                 onEdit={browseMode ? undefined : onEdit}
                 onView={onView}
                 renderCard={entity.cardRenderer}
+                cardLayout={entity.cardLayout}
             />
         </MainLayout>
     );
