@@ -20,13 +20,14 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class SprintDTO extends BaseDTO {
 
-    Long projectId;
-
     /**
-     * Display-only projection of the linked project name.
+     * Reserved for the (currently external) project module.
+     * <p>
+     * Temporarily unused: sprint does not validate, resolve or display the
+     * project. Kept so clients can still round-trip the value once the project
+     * module is reintroduced.
      */
-    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
-    String projectName;
+    Long projectId;
 
     String name;
 

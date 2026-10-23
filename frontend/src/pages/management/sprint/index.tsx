@@ -1,4 +1,4 @@
-import { projectApi, sprintApi } from "@/api";
+import { sprintApi } from "@/api";
 import {
   auditableFieldsSchema,
   type EntityConfig,
@@ -24,27 +24,6 @@ const sprintSchema: EntitySchema = {
   entityName: "sprint",
   idField: "id",
   fields: [
-    {
-      name: "projectId",
-      label: "Project",
-      type: "relation",
-      relation: {
-        api: projectApi,
-        valueField: "id",
-        labelField: "name",
-      },
-      // Used by the form; the table renders the human-readable projectName.
-      visible: false,
-      required: true,
-      requiredMessage: "Vui lòng chọn Project cho Sprint",
-    },
-    {
-      name: "projectName",
-      label: "Project",
-      type: "text",
-      sortable: true,
-      editable: false,
-    },
     {
       name: "name",
       label: "Sprint Name",

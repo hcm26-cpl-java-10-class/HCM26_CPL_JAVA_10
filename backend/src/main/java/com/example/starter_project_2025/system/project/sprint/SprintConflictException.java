@@ -8,8 +8,7 @@ import java.util.Map;
 
 /**
  * State conflict for the sprint use case (UFR-PRJ-003-01, AC03): duplicate
- * sprint name inside a project, or a stale write detected by optimistic
- * locking.
+ * sprint name, or a stale write detected by optimistic locking.
  * <p>
  * Handled by {@link SprintController} and translated into {@code 409 Conflict}.
  */

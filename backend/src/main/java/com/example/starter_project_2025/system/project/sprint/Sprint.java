@@ -7,15 +7,11 @@ import com.example.starter_project_2025.base.dataio.importer.annotation.ImportFi
 import com.example.starter_project_2025.base.dataio.template.annotation.ImportEntity;
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
-import com.example.starter_project_2025.system.project.Project;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
@@ -39,8 +35,8 @@ import java.time.LocalDateTime;
 @Table(
         name = "sprint",
         uniqueConstraints = @UniqueConstraint(
-                name = "uk_sprint_project_name",
-                columnNames = {"project_id", "name"}
+                name = "uk_sprint_name",
+                columnNames = {"name"}
         )
 )
 @FieldDefaults(level = AccessLevel.PRIVATE)
@@ -58,11 +54,17 @@ import java.time.LocalDateTime;
 )
 public class Sprint extends BaseEntity {
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "project_id", nullable = false)
-    @ImportField(name = "Project", required = true, lookupEntity = Project.class, lookupField = "name")
-    @ExportField(name = "Project", relation = true, path = "name")
-    Project project;
+    /**
+     * Reference to the owning project.
+     * <p>
+     * The project module is owned by a different team, so the sprint feature
+     * only keeps the raw identifier for now: no relation, no lookup, no
+     * business rule relies on it. It is stored as a plain column so the data
+     * is preserved and the relation can be re-introduced once the project
+     * module is available again.
+     */
+    @Column(name = "project_id")
+    Long projectId;
 
     @Column(length = 255)
     @ImportField(name = "Name")

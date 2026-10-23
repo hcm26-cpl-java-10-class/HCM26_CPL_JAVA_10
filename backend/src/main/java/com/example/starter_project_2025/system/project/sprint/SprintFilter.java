@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @Setter
 public class SprintFilter extends BaseFilter {
 
-    @FilterField(entityField = "project.id", operator = FilterOperator.EQUAL)
+    @FilterField(entityField = "projectId", operator = FilterOperator.EQUAL)
     Long projectId;
 
     @FilterField(entityField = "status", operator = FilterOperator.EQUAL)
