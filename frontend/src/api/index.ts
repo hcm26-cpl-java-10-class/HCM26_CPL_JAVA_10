@@ -8,6 +8,7 @@ export * from "./features/invitation.api";
 export * from "./features/menu/module.api";
 export * from "./features/menu/module_group.api";
 export * from "./features/milestone.api";
+export * from "./features/project-template-version.api";
 export * from "./features/sprint.api";
 export * from "./features/task.api";
 export * from "./features/rbac/permission.api";
