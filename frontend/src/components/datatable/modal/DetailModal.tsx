@@ -109,6 +109,13 @@ export function DetailModal({
         return matched ? matched[rel.labelField] : String(value);
       }
 
+      case "select": {
+        const option = field.options?.find(
+          (item) => String(item.value) === String(value)
+        );
+        return option?.label ?? String(value);
+      }
+
       case "date": {
         // LocalDate from Spring is a date-only value (yyyy-MM-dd), not a timestamp.
         // Parse its components locally to avoid timezone conversion adding a time.

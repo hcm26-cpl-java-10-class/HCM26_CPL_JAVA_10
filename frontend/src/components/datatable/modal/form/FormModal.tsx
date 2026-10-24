@@ -152,24 +152,61 @@ export function FormModal({
   }, [initial, open]);
 
   const updateField = (name: string, value: any) => {
+    if (schema.entityName === "student" && name === "address") {
+      const addressValue = String(value ?? "");
+      if (addressValue.length > 500) {
+        // Keep the input at 500 characters, show the validation message,
+        // and prevent additional characters from being entered.
+        setForm((prev) => ({ ...prev, address: addressValue.slice(0, 500) }));
+        setClientErrors((prev) => ({
+          ...prev,
+          address: ["Địa chỉ không được vượt quá 500 ký tự."],
+        }));
+        return;
+      }
+
+      setForm((prev) => ({ ...prev, address: addressValue }));
+      if (addressValue.length < 500) {
+        setClientErrors((prev) => ({ ...prev, address: [] }));
+      }
+      return;
+    }
+
     setForm((prev) => ({ ...prev, [name]: value }));
     if (name === "email") setClientErrors((prev) => ({ ...prev, email: [] }));
   };
 
   const handleSubmit = () => {
     if (schema.entityName === "student") {
+      const errors: Record<string, string[]> = {};
+      schema.fields.filter((field) => field.required).forEach((field) => {
+        const value = form[field.name];
+        if (value === undefined || value === null || String(value).trim() === "") {
+          errors[field.name] = [`${field.label} là bắt buộc.`];
+        }
+      });
+
       const email = String(form.email ?? "").trim();
-      if (!email) {
-        setClientErrors({ email: ["Email là bắt buộc."] });
+      if (email && !/^[A-Za-z0-9._%+-]+@gmail\.com$/i.test(email)) {
+        errors.email = ["Email phải có định dạng @gmail.com."];
+      }
+
+      const address = String(form.address ?? "");
+      if (address.length > 500) {
+        errors.address = ["Địa chỉ không được vượt quá 500 ký tự."];
+      }
+
+      if (Object.keys(errors).length > 0) {
+        setClientErrors(errors);
         return;
       }
-      if (!/^[A-Za-z0-9._%+-]+@gmail\.com$/i.test(email)) {
-        setClientErrors({ email: ["Email phải có định dạng @gmail.com."] });
-        return;
-      }
+      setClientErrors({});
+      onSubmit({ ...form, email });
+      return;
     }
+
     setClientErrors({});
-    onSubmit({ ...form, ...(schema.entityName === "student" ? { email: String(form.email).trim() } : {}) });
+    onSubmit(form);
   };
 
   const getFieldErrors = (fieldName: string) =>

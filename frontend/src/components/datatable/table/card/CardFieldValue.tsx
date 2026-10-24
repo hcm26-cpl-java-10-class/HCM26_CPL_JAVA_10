@@ -113,13 +113,16 @@ export function CardFieldValue({
 
   if (field.type === "date" && value) {
     try {
-      const formatted = new Date(value).toLocaleDateString("vi-VN", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+      // Date-only values (e.g. LocalDate yyyy-MM-dd) must not be timezone-converted.
+      const raw = String(value);
+      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+      const formatted = match
+        ? `${match[3]}/${match[2]}/${match[1]}`
+        : new Date(raw).toLocaleDateString("vi-VN", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          });
       return (
         <TruncatedText
           content={formatted}
