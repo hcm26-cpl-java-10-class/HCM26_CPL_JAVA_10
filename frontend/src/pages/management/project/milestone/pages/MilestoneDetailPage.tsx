@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { MilestoneDetailRouteState } from "@/types";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, CalendarClock, Check, Clock, Globe2, UserRound } from "lucide-react";
+import { ArrowLeft, CalendarClock, Check, Clock, Globe2 } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { MilestoneDetailError } from "../components/MilestoneDetailError";
 import { MilestoneRubricCard } from "../components/MilestoneRubricCard";
@@ -122,7 +122,6 @@ export function MilestoneDetailPage() {
                 <div><p className="text-muted-foreground">Project</p><p className="mt-1 font-medium">{milestone.project.name}</p></div>
                 <div><p className="text-muted-foreground">Deadline</p><p className="mt-1 flex items-start gap-2 font-medium"><CalendarClock className="mt-0.5 size-4 shrink-0" /> {formatTenantDateTime(milestone.deadline, milestone.tenantTimeZone)}</p></div>
                 <div><p className="text-muted-foreground">Tenant timezone</p><p className="mt-1 flex items-center gap-2 font-medium"><Globe2 className="size-4" /> {milestone.tenantTimeZone}</p></div>
-                <div><p className="text-muted-foreground">Reviewer</p><p className="mt-1 flex items-center gap-2 font-medium"><UserRound className="size-4" /> {milestone.reviewer.displayName}</p></div>
               </CardContent>
             </Card>
 

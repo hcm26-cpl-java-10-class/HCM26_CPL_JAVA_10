@@ -74,7 +74,6 @@ export function MilestoneCreatePage() {
     checklist: milestoneDefaultValues.checklist.map((item) => ({ ...item })),
     latePolicy: { ...milestoneDefaultValues.latePolicy },
     rubricSnapshotId: optionsQuery.data?.rubrics.length === 1 ? optionsQuery.data.rubrics[0].id : "",
-    reviewerId: optionsQuery.data?.reviewers.length === 1 ? optionsQuery.data.reviewers[0].id : "",
   }), [optionsQuery.data]);
 
   const createMutation = useMutation({
@@ -86,12 +85,10 @@ export function MilestoneCreatePage() {
       setApiError(null);
       await queryClient.invalidateQueries({ queryKey: ["projects", projectId, "milestones"] });
       const rubric = optionsQuery.data?.rubrics.find((item) => item.id === milestone.rubricSnapshotId);
-      const reviewer = optionsQuery.data?.reviewers.find((item) => item.id === milestone.reviewerId);
       const routeState: MilestoneDetailRouteState = {
         projectName: optionsQuery.data?.project.name,
         rubricName: rubric?.name,
         rubricVersion: rubric?.version,
-        reviewerName: reviewer?.displayName,
         returnTo: listUrl,
       };
       toast.success("Milestone created successfully.");
@@ -104,7 +101,7 @@ export function MilestoneCreatePage() {
       setApiError(normalized);
 
       if (!uncertain && normalized.status === 409) attemptRef.current = null;
-      if (normalized.status === 422 && normalized.errors && Object.keys(normalized.errors).some((key) => key.startsWith("rubric") || key.startsWith("reviewer"))) {
+      if (normalized.status === 422 && normalized.errors && Object.keys(normalized.errors).some((key) => key.startsWith("rubric"))) {
         await optionsQuery.refetch();
       }
 
@@ -185,7 +182,7 @@ export function MilestoneCreatePage() {
             </div>
             <div>
               <CardTitle className="text-2xl">Create a milestone for {optionsQuery.data.project.name}</CardTitle>
-              <CardDescription className="mt-2">Define the delivery deadline, acceptance conditions, and responsible reviewer.</CardDescription>
+              <CardDescription className="mt-2">Define the delivery deadline, acceptance conditions, and evaluation rubric. Reviewers are assigned when submissions are evaluated.</CardDescription>
             </div>
           </CardHeader>
         </Card>

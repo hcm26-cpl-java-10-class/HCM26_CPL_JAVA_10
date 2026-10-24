@@ -45,7 +45,7 @@ public class MilestoneDetailMapper {
                                                 rating.level(), rating.percentage(), rating.description(), rating.orderIndex())).toList()))
                                 .toList()
                 ),
-                new MilestoneReviewerResponse(reviewer.id(), reviewer.displayName()),
+                reviewer == null ? null : new MilestoneReviewerResponse(reviewer.id(), reviewer.displayName()),
                 new MilestoneLatePolicyResponse(
                         milestone.getLatePolicyType(), milestone.getLateUntil(), milestone.getLatePenaltyPercent()),
                 milestone.getVersion(),

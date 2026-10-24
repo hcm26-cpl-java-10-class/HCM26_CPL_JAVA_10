@@ -30,7 +30,7 @@ public record CreateMilestoneRequest(
         @NotNull(message = "Rubric snapshot is required")
         UUID rubricSnapshotId,
 
-        @NotNull(message = "Reviewer is required")
+        /** Legacy field; new milestone forms leave reviewer assignment to submissions. */
         UUID reviewerId,
 
         @NotNull(message = "Late policy is required")

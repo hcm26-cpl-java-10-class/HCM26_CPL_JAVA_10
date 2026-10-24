@@ -19,7 +19,6 @@ export function buildMilestonePayload(values: MilestoneFormValues): CreateMilest
       orderIndex: index,
     })),
     rubricSnapshotId: values.rubricSnapshotId,
-    reviewerId: values.reviewerId,
     latePolicy: { type: values.latePolicy.type },
   };
 

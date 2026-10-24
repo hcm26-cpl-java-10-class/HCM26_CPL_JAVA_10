@@ -49,7 +49,9 @@ public class Milestone {
     @Column(name = "rubric_snapshot_id", nullable = false, updatable = false)
     private UUID rubricSnapshotId;
 
-    @Column(name = "reviewer_id", nullable = false)
+    // Reviewer assignment belongs to a submission, not to the milestone itself.
+    // Keep the nullable legacy column so existing milestones can still be read.
+    @Column(name = "reviewer_id")
     private UUID reviewerId;
 
     @Enumerated(EnumType.STRING)

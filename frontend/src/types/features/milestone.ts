@@ -21,7 +21,6 @@ export interface CreateMilestoneRequest {
   mandatory: boolean;
   checklist: MilestoneChecklistItemRequest[];
   rubricSnapshotId: string;
-  reviewerId: string;
   latePolicy: MilestoneLatePolicyRequest;
 }
 
@@ -46,7 +45,6 @@ export interface MilestoneReviewerOption {
 export interface MilestoneCreateOptions {
   project: MilestoneProjectOption;
   rubrics: MilestoneRubricOption[];
-  reviewers: MilestoneReviewerOption[];
 }
 
 export interface MilestoneChecklistItemResponse {

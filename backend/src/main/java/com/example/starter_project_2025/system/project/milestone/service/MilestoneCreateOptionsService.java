@@ -17,7 +17,6 @@ public class MilestoneCreateOptionsService {
     private final CurrentTenantProvider tenantProvider;
     private final ProjectMilestonePort projectPort;
     private final RubricCatalogPort rubricPort;
-    private final ReviewerDirectoryPort reviewerPort;
     private final MilestoneAccessPolicy accessPolicy;
 
     @Transactional(readOnly = true)
@@ -40,10 +39,8 @@ public class MilestoneCreateOptionsService {
                                                 c.code(), c.name(), c.weight(), c.maxScore(),
                                                 c.ratings().stream().map(rating -> new RubricRatingOptionResponse(
                                                         rating.level(), rating.percentage(), rating.description(), rating.orderIndex())).toList()))
-                                        .toList()))
-                        .toList(),
-                reviewerPort.findEligibleReviewers(projectId, actorId, tenantId).stream()
-                        .map(r -> new ReviewerOptionResponse(r.id(), r.displayName())).toList()
+                        .toList()))
+                        .toList()
         );
     }
 }

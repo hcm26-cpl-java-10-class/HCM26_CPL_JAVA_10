@@ -17,7 +17,6 @@ export const milestoneFormSchema = z
       .min(1, "At least one checklist item is required")
       .max(100, "Checklist must not contain more than 100 items"),
     rubricSnapshotId: z.string().min(1, "Please select a rubric"),
-    reviewerId: z.string().min(1, "Please select a reviewer"),
     latePolicy: z.object({
       type: z.enum(["NO_LATE", "ALLOW_LATE"]),
       lateUntil: z.string().optional(),
@@ -58,7 +57,6 @@ export interface MilestoneFormValues {
   mandatory: boolean;
   checklist: Array<{ content: string; mandatory: boolean }>;
   rubricSnapshotId: string;
-  reviewerId: string;
   latePolicy: {
     type: LatePolicyType;
     lateUntil?: string;
@@ -73,6 +71,5 @@ export const milestoneDefaultValues: MilestoneFormValues = {
   mandatory: true,
   checklist: [{ content: "", mandatory: true }],
   rubricSnapshotId: "",
-  reviewerId: "",
   latePolicy: { type: "NO_LATE" },
 };

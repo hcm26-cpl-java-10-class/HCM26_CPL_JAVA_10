@@ -93,7 +93,9 @@ public class MilestoneQueryService {
         var milestone = repository.findByIdAndProjectIdAndTenantId(milestoneId, projectId, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
         var rubric = rubricPort.requireSnapshotForRead(milestone.getRubricSnapshotId(), projectId, tenantId);
-        var reviewer = reviewerPort.requireReviewerForRead(milestone.getReviewerId(), projectId, tenantId);
+        var reviewer = milestone.getReviewerId() == null
+                ? null
+                : reviewerPort.requireReviewerForRead(milestone.getReviewerId(), projectId, tenantId);
         var tenantTimeZone = tenantSettingsPort.requireTimeZone(tenantId);
         return detailMapper.toResponse(milestone, project, rubric, reviewer, tenantTimeZone);
     }

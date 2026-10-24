@@ -37,7 +37,6 @@ public class MilestoneCommandService {
     private final CurrentTenantProvider tenantProvider;
     private final ProjectMilestonePort projectPort;
     private final RubricCatalogPort rubricPort;
-    private final ReviewerDirectoryPort reviewerPort;
     private final MilestoneAccessPolicy accessPolicy;
     private final MilestoneValidator validator;
     private final MilestoneRepository milestoneRepository;
@@ -98,8 +97,6 @@ public class MilestoneCommandService {
         accessPolicy.requireCreatableState(project);
         RubricSnapshotData rubric = rubricPort.requireAllowedSnapshot(
                 request.rubricSnapshotId(), projectId, actorId, tenantId);
-        reviewerPort.requireEligibleReviewer(request.reviewerId(), projectId, actorId, tenantId);
-
         Instant now = milestoneClock.instant();
         validator.validate(request, rubric, now);
 
@@ -111,7 +108,7 @@ public class MilestoneCommandService {
                 request.deadline(),
                 request.mandatory(),
                 request.rubricSnapshotId(),
-                request.reviewerId(),
+                null,
                 request.latePolicy().type(),
                 request.latePolicy().lateUntil(),
                 request.latePolicy().penaltyPercent(),

@@ -73,12 +73,7 @@ export function MilestoneForm({
         shouldDirty: !!values.rubricSnapshotId,
       });
     }
-    if (!options.reviewers.some((item) => item.id === values.reviewerId)) {
-      setValue("reviewerId", options.reviewers.length === 1 ? options.reviewers[0].id : "", {
-        shouldDirty: !!values.reviewerId,
-      });
-    }
-  }, [options.reviewers, options.rubrics, setValue, values.reviewerId, values.rubricSnapshotId]);
+  }, [options.rubrics, setValue, values.rubricSnapshotId]);
 
   useEffect(() => {
     const serverErrors = apiError?.errors;
@@ -120,8 +115,7 @@ export function MilestoneForm({
   };
 
   const rubric = options.rubrics.find((item) => item.id === values.rubricSnapshotId);
-  const reviewer = options.reviewers.find((item) => item.id === values.reviewerId);
-  const hasMissingOptions = options.rubrics.length === 0 || options.reviewers.length === 0;
+  const hasMissingOptions = options.rubrics.length === 0;
   const now = new Date();
   const minimumDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
     .toISOString()
@@ -137,7 +131,6 @@ export function MilestoneForm({
           <AlertTitle>Milestone cannot be created yet</AlertTitle>
           <AlertDescription>
             {!options.rubrics.length ? <p>This project has no eligible rubric.</p> : null}
-            {!options.reviewers.length ? <p>This project has no eligible reviewer.</p> : null}
           </AlertDescription>
         </Alert>
       ) : null}
@@ -248,9 +241,9 @@ export function MilestoneForm({
           <Card>
             <CardHeader>
               <CardTitle>Acceptance settings</CardTitle>
-              <CardDescription>Select the rubric version and responsible reviewer.</CardDescription>
+              <CardDescription>Select the rubric version used to evaluate submissions for this milestone.</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-5 md:grid-cols-2">
+            <CardContent className="grid gap-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
               <div className="grid gap-2">
                 <div className="flex items-center justify-between gap-2"><Label>Rubric <span className="text-destructive">*</span></Label><a href="/rubrics" target="_blank" rel="noreferrer" className="text-xs font-medium text-primary hover:underline">Manage rubrics</a></div>
                 <Controller control={control} name="rubricSnapshotId" render={({ field }) => (
@@ -260,18 +253,8 @@ export function MilestoneForm({
                   </Select>
                 )} />
                 <FieldMessage message={errors.rubricSnapshotId?.message} />
-                <Button type="button" variant="outline" size="sm" className="w-fit" disabled={!rubric} onClick={() => setRubricPreviewOpen(true)}><Eye /> View selected rubric</Button>
               </div>
-              <div className="grid gap-2">
-                <Label>Reviewer <span className="text-destructive">*</span></Label>
-                <Controller control={control} name="reviewerId" render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange} disabled={!options.reviewers.length}>
-                    <SelectTrigger aria-invalid={!!errors.reviewerId}><SelectValue placeholder="Select a reviewer" /></SelectTrigger>
-                    <SelectContent>{options.reviewers.map((item) => <SelectItem key={item.id} value={item.id}>{item.displayName}</SelectItem>)}</SelectContent>
-                  </Select>
-                )} />
-                <FieldMessage message={errors.reviewerId?.message} />
-              </div>
+              <Button type="button" variant="outline" size="sm" className="w-full md:w-auto" disabled={!rubric} onClick={() => setRubricPreviewOpen(true)}><Eye /> View selected rubric</Button>
             </CardContent>
           </Card>
 
@@ -331,7 +314,6 @@ export function MilestoneForm({
             <div><p className="text-muted-foreground">Deadline</p><p className="mt-1 flex items-center gap-2 font-medium"><CalendarClock className="size-4" />{values.deadline ? new Date(values.deadline).toLocaleString("en-GB") : "Not selected"}</p></div>
             <div><p className="text-muted-foreground">Checklist</p><p className="mt-1 font-medium">{fields.length} item(s)</p></div>
             <div><p className="text-muted-foreground">Rubric</p><p className="mt-1 font-medium">{rubric ? `${rubric.name} · ${rubric.version}` : "Not selected"}</p></div>
-            <div><p className="text-muted-foreground">Reviewer</p><p className="mt-1 font-medium">{reviewer?.displayName || "Not selected"}</p></div>
             <div><p className="text-muted-foreground">Late submissions</p><Badge variant="secondary" className="mt-1">{latePolicyType === "ALLOW_LATE" ? "Allowed" : "Not allowed"}</Badge></div>
           </CardContent>
         </Card>
