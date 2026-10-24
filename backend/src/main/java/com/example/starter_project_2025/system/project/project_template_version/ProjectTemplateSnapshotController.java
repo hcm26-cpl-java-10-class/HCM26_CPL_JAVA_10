@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -84,6 +85,30 @@ public class ProjectTemplateSnapshotController
             @PathVariable Long id) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(snapshotService.createNewVersion(id));
+    }
+
+    /**
+     * US-08: duplicates the template behind the given version into a brand new,
+     * fully independent Project Template.
+     * <p>
+     * The client supplies the new {@code code} (must be unique) and {@code name};
+     * the server copies the configuration (rules, milestones, rubric), stores the
+     * row as {@code v1.0} / {@code DRAFT} and leaves {@code parentTemplateId}
+     * empty, so the copy keeps no version-tree link to the source template. The
+     * source template and its versions are never modified.
+     */
+    @PostMapping("/{id}/duplicate")
+    @PreAuthorize("hasAuthority('PROJECT_TEMPLATE_VERSION_CREATE')")
+    public ResponseEntity<ProjectTemplateSnapshotDTO> duplicate(
+            @PathVariable Long id,
+            @RequestBody(required = false) DuplicateProjectTemplateRequest request) {
+
+        DuplicateProjectTemplateRequest payload = request != null
+                ? request
+                : new DuplicateProjectTemplateRequest();
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(snapshotService.duplicateTemplate(id, payload.getCode(), payload.getName()));
     }
 
     /**

@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import type { ProjectTemplateVersionDTO } from "@/types";
 import {
   ChevronDown,
+  Copy,
   CopyPlus,
   GitBranch,
   Loader2,
@@ -39,6 +40,8 @@ interface ProjectTemplateVersionWorkspaceHeaderProps {
   submitting: boolean;
   /** US-07: create the next version from the selected one. */
   onNewVersion: () => void;
+  /** US-08: duplicate the template of the selected version as a new template. */
+  onDuplicate: () => void;
   onEditVersion: () => void;
   onDeleteVersion: () => void;
   tabs: ReactNode;
@@ -59,6 +62,7 @@ export function ProjectTemplateVersionWorkspaceHeader({
   canDelete,
   submitting,
   onNewVersion,
+  onDuplicate,
   onEditVersion,
   onDeleteVersion,
   tabs,
@@ -163,6 +167,15 @@ export function ProjectTemplateVersionWorkspaceHeader({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Template</DropdownMenuLabel>
+              <DropdownMenuItem
+                disabled={!canCreate || submitting}
+                onSelect={onDuplicate}
+              >
+                <Copy className="h-4 w-4" />
+                Duplicate as new template
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuLabel>Snapshot</DropdownMenuLabel>
               <DropdownMenuItem disabled={!canUpdate} onSelect={onEditVersion}>
                 <Pencil className="h-4 w-4" />

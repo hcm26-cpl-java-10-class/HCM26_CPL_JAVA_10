@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { projectTemplateVersionSchema } from "../project-template-version.schema";
 import { CreateVersionDialog } from "./CreateVersionDialog";
+import { DuplicateTemplateDialog } from "./DuplicateTemplateDialog";
 import { OverviewTab } from "./OverviewTab";
 import { ProjectTemplateVersionWorkspaceHeader } from "./ProjectTemplateVersionWorkspaceHeader";
 import { VersionListPanel } from "./VersionListPanel";
@@ -81,6 +82,7 @@ export default function ProjectTemplateVersionWorkspacePage() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [newVersionOpen, setNewVersionOpen] = useState(false);
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -166,6 +168,45 @@ export default function ProjectTemplateVersionWorkspacePage() {
     } catch (error) {
       toast.error(
         extractErrorMessage(error, "Không thể tạo phiên bản mới."),
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  /**
+   * US-08: duplicate the template of the selected version into a brand new one.
+   * The backend owns the new code uniqueness check, the copied configuration,
+   * `v1.0` / `DRAFT` and the absence of a `parentTemplateId` link; the source
+   * template is never modified.
+   */
+  const handleDuplicateTemplate = async (payload: {
+    code: string;
+    name: string;
+  }) => {
+    if (!selectedVersion?.id || submitting) return;
+
+    setSubmitting(true);
+
+    try {
+      const created = await projectTemplateVersionApi.duplicateTemplate(
+        selectedVersion.id,
+        payload,
+      );
+      setDuplicateOpen(false);
+      await refreshVersions();
+
+      if (created?.id != null) {
+        setSelectedVersionId(created.id);
+        setActiveTab("versions");
+      }
+
+      toast.success(
+        `Đã nhân bản thành "${payload.name}" ở trạng thái DRAFT (${created?.version ?? "v1.0"}).`,
+      );
+    } catch (error) {
+      toast.error(
+        extractErrorMessage(error, "Không thể nhân bản Project Template."),
       );
     } finally {
       setSubmitting(false);
@@ -269,6 +310,7 @@ export default function ProjectTemplateVersionWorkspacePage() {
           canDelete={canDelete}
           submitting={submitting}
           onNewVersion={() => setNewVersionOpen(true)}
+          onDuplicate={() => setDuplicateOpen(true)}
           onEditVersion={() => setEditOpen(true)}
           onDeleteVersion={() => setDeleteOpen(true)}
           tabs={
@@ -384,6 +426,14 @@ export default function ProjectTemplateVersionWorkspacePage() {
         versions={versions}
         loading={submitting}
         onConfirm={handleCreateNewVersion}
+      />
+
+      <DuplicateTemplateDialog
+        open={duplicateOpen}
+        onOpenChange={setDuplicateOpen}
+        source={selectedVersion}
+        loading={submitting}
+        onConfirm={handleDuplicateTemplate}
       />
 
       <FormModal

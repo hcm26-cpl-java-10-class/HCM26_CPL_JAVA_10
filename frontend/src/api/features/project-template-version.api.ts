@@ -31,6 +31,22 @@ export const projectTemplateVersionApi = Object.assign({}, base, {
   },
 
   /**
+   * US-08: duplicates the template behind this version into a brand new,
+   * independent template. The server stores the copy as `v1.0` / `DRAFT`,
+   * copies the configuration and keeps no `parentTemplateId` link.
+   */
+  duplicateTemplate: async (
+    sourceVersionId: number | string,
+    payload: { code: string; name: string },
+  ): Promise<ProjectTemplateVersionDTO> => {
+    const response = await axiosInstance.post<ProjectTemplateVersionDTO>(
+      `${path}/${sourceVersionId}/duplicate`,
+      payload,
+    );
+    return response.data;
+  },
+
+  /**
    * Every version of a project template, newest first.
    */
   getByTemplate: async (
