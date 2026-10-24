@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import type { SprintPlanningItem, TaskStatus } from "@/types";
+import type { BacklogStatus, SprintPlanningItem } from "@/types";
 import { ChevronDown } from "lucide-react";
 import type { DragEvent, ReactNode } from "react";
 import { backlogItemKey } from "../backlog.constants";
@@ -27,7 +27,7 @@ interface BacklogSectionProps {
   onToggleCollapse: () => void;
   onToggleSelectAll: () => void;
   onToggleSelect: (id: number) => void;
-  onStatusChange: (item: SprintPlanningItem, status: TaskStatus) => void;
+  onStatusChange: (item: SprintPlanningItem, status: BacklogStatus) => void;
   onOpenDetail: (item: SprintPlanningItem) => void;
   onDragStartItem: (id: number) => void;
   onDragEndItem: () => void;

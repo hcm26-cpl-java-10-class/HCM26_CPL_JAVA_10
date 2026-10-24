@@ -6,7 +6,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import type { SprintPlanningItem, TaskStatus } from "@/types";
+import type { BacklogStatus, SprintPlanningItem } from "@/types";
 import {
   ChevronDown,
   ClipboardList,
@@ -33,7 +33,7 @@ interface BacklogRowProps {
   dueDate?: string | null;
   draggable: boolean;
   onToggleSelect: (id: number) => void;
-  onStatusChange: (item: SprintPlanningItem, status: TaskStatus) => void;
+  onStatusChange: (item: SprintPlanningItem, status: BacklogStatus) => void;
   onOpenDetail: (item: SprintPlanningItem) => void;
   onDragStartItem: (id: number) => void;
   onDragEndItem: () => void;

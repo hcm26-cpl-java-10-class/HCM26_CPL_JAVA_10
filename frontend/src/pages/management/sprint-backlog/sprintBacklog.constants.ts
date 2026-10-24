@@ -1,4 +1,4 @@
-import type { SprintBacklogStatus, TaskPriority } from "@/types";
+import type { BacklogPriority, SprintBacklogStatus } from "@/types";
 
 /**
  * Lifecycle of a Sprint Backlog item: To do -> In progress -> Review -> Done.
@@ -21,7 +21,7 @@ export const SPRINT_BACKLOG_STATUS_OPTIONS: {
  */
 export const SPRINT_BACKLOG_PRIORITY_OPTIONS: {
   label: string;
-  value: TaskPriority;
+  value: BacklogPriority;
 }[] = [
   { label: "Low", value: "LOW" },
   { label: "Medium", value: "MEDIUM" },

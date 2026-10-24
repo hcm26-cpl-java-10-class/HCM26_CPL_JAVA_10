@@ -14,13 +14,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { usePermissions } from "@/hooks/usePermissions";
 import type {
+  BacklogPriority,
+  BacklogStatus,
   SprintBacklogDTO,
   SprintBacklogStatus,
   SprintDTO,
   SprintPlanningItem,
   SprintStatus,
   TaskPriority,
-  TaskStatus,
 } from "@/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -70,7 +71,7 @@ const toDateTimeLocal = (value?: string | null) => {
  * Board buckets map onto the backend lifecycle: "To Do" is `TODO`, ongoing
  * work is `IN_PROGRESS`, finished work is `DONE`.
  */
-const toSprintBacklogStatus = (status: TaskStatus): SprintBacklogStatus => {
+const toSprintBacklogStatus = (status: BacklogStatus): SprintBacklogStatus => {
   switch (status) {
     case "IN_PROGRESS":
       return "IN_PROGRESS";
@@ -104,8 +105,8 @@ export default function BacklogPage() {
   const [selectedSprintId, setSelectedSprintId] = useState<number | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [keyword, setKeyword] = useState("");
-  const [statusFilter, setStatusFilter] = useState<TaskStatus | "ALL">("ALL");
-  const [priorityFilter, setPriorityFilter] = useState<TaskPriority | "ALL">(
+  const [statusFilter, setStatusFilter] = useState<BacklogStatus | "ALL">("ALL");
+  const [priorityFilter, setPriorityFilter] = useState<BacklogPriority | "ALL">(
     "ALL",
   );
 
@@ -368,7 +369,7 @@ export default function BacklogPage() {
    */
   const handleItemStatusChange = async (
     item: SprintPlanningItem,
-    status: TaskStatus,
+    status: BacklogStatus,
   ) => {
     if (!canEditTask || item.status === status) return;
 

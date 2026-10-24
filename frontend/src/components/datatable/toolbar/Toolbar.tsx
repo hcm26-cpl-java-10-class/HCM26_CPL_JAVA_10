@@ -50,6 +50,7 @@ export function Toolbar({
       table={table}
       headerActions={headerActions}
       extraActions={extraHeaderActions}
+      hideCreate={hideCreate}
     />
   ) : browseActions ? (
     <div className="flex justify-end items-center gap-2 w-full">{browseActions}</div>

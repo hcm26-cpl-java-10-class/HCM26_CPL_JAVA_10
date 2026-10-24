@@ -13,12 +13,15 @@ interface ToolbarActionsProps {
   headerActions?: React.ReactNode;
   /** Extra buttons rendered before the header actions / default Create button. */
   extraActions?: React.ReactNode;
+  /** Hide the default Create button (e.g. browse-only pages). */
+  hideCreate?: boolean;
 }
 
 export function ToolbarActions({
   table,
   headerActions,
   extraActions,
+  hideCreate = false,
 }: ToolbarActionsProps) {
   const [importOpen, setImportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);

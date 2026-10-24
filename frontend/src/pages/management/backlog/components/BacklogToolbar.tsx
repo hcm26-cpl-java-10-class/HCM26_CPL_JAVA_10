@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { SprintDTO, TaskPriority, TaskStatus } from "@/types";
+import type { BacklogPriority, BacklogStatus, SprintDTO } from "@/types";
 import {
   ClipboardList,
   Filter,
@@ -39,10 +39,10 @@ interface BacklogToolbarProps {
   sprints: SprintDTO[];
   sprintId: number | null;
   onSprintChange: (id: number) => void;
-  statusFilter: TaskStatus | "ALL";
-  onStatusFilterChange: (value: TaskStatus | "ALL") => void;
-  priorityFilter: TaskPriority | "ALL";
-  onPriorityFilterChange: (value: TaskPriority | "ALL") => void;
+  statusFilter: BacklogStatus | "ALL";
+  onStatusFilterChange: (value: BacklogStatus | "ALL") => void;
+  priorityFilter: BacklogPriority | "ALL";
+  onPriorityFilterChange: (value: BacklogPriority | "ALL") => void;
   allCollapsed: boolean;
   onToggleCollapseAll: () => void;
   canCreateSprint: boolean;
@@ -103,7 +103,7 @@ export function BacklogToolbar({
           <DropdownMenuRadioGroup
             value={statusFilter}
             onValueChange={(value) =>
-              onStatusFilterChange(value as TaskStatus | "ALL")
+              onStatusFilterChange(value as BacklogStatus | "ALL")
             }
           >
             <DropdownMenuRadioItem value="ALL">
@@ -122,7 +122,7 @@ export function BacklogToolbar({
           <DropdownMenuRadioGroup
             value={priorityFilter}
             onValueChange={(value) =>
-              onPriorityFilterChange(value as TaskPriority | "ALL")
+              onPriorityFilterChange(value as BacklogPriority | "ALL")
             }
           >
             <DropdownMenuRadioItem value="ALL">

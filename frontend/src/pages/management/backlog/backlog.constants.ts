@@ -1,7 +1,7 @@
-import type { SprintPlanningItem, TaskPriority, TaskStatus } from "@/types";
+import type { BacklogPriority, BacklogStatus, SprintPlanningItem } from "@/types";
 
 /** Workflow order of a backlog item (UFR-PRJ-003-02). */
-export const TASK_STATUS_ORDER: TaskStatus[] = [
+export const TASK_STATUS_ORDER: BacklogStatus[] = [
   "BACKLOG",
   "SPRINT_BACKLOG",
   "IN_PROGRESS",
@@ -13,7 +13,7 @@ export const TASK_STATUS_ORDER: TaskStatus[] = [
  * `SPRINT_BACKLOG` is displayed as "To Do" to stay closer to the board wording.
  */
 export const BACKLOG_STATUS_META: Record<
-  TaskStatus,
+  BacklogStatus,
   { label: string; pill: string; dot: string }
 > = {
   BACKLOG: {
@@ -38,7 +38,7 @@ export const BACKLOG_STATUS_META: Record<
   },
 };
 
-export const PRIORITY_FILTER_OPTIONS: { value: TaskPriority; label: string }[] = [
+export const PRIORITY_FILTER_OPTIONS: { value: BacklogPriority; label: string }[] = [
   { value: "URGENT", label: "Critical" },
   { value: "HIGH", label: "High" },
   { value: "MEDIUM", label: "Medium" },
@@ -50,7 +50,7 @@ export const PRIORITY_FILTER_OPTIONS: { value: TaskPriority; label: string }[] =
  * "Critical" like the project mock-up).
  */
 export const BACKLOG_PRIORITY_META: Record<
-  TaskPriority,
+  BacklogPriority,
   { label: string; pill: string; dot: string }
 > = {
   URGENT: {
@@ -81,23 +81,23 @@ export const NO_PRIORITY_META = {
   dot: "bg-muted-foreground",
 };
 
-export const backlogPriorityMeta = (priority?: TaskPriority | null) =>
+export const backlogPriorityMeta = (priority?: BacklogPriority | null) =>
   (priority && BACKLOG_PRIORITY_META[priority]) || NO_PRIORITY_META;
 
 /** The backend only accepts a one-step forward transition (422 otherwise). */
-export const NEXT_TASK_STATUS: Record<TaskStatus, TaskStatus | null> = {
+export const NEXT_TASK_STATUS: Record<BacklogStatus, BacklogStatus | null> = {
   BACKLOG: "SPRINT_BACKLOG",
   SPRINT_BACKLOG: "IN_PROGRESS",
   IN_PROGRESS: "DONE",
   DONE: null,
 };
 
-export const backlogStatusMeta = (status?: TaskStatus | null) =>
+export const backlogStatusMeta = (status?: BacklogStatus | null) =>
   (status && BACKLOG_STATUS_META[status]) || BACKLOG_STATUS_META.BACKLOG;
 
 export const canMoveToStatus = (
-  current: TaskStatus | null | undefined,
-  target: TaskStatus,
+  current: BacklogStatus | null | undefined,
+  target: BacklogStatus,
 ) => {
   const from = current ?? "BACKLOG";
 
