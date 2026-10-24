@@ -6,7 +6,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
-@Repository
+@Repository("backlogItemRepository")
 public interface TaskRepository extends BaseCrudRepository<Task, Long> {
 
     Optional<Task> findByProjectIdAndTitleIgnoreCase(Long projectId, String title);

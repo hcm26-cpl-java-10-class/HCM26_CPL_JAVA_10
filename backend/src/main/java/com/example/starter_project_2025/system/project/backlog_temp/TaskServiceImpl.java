@@ -41,7 +41,7 @@ import java.util.Optional;
  * The project, sprint and assignee identifiers are owned by other modules and
  * are therefore only carried along, never resolved here.
  */
-@Service
+@Service("backlogItemService")
 @Transactional
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)

@@ -55,6 +55,8 @@ export interface FieldSchema {
 
   filterOptions?: { label: string; value: any }[];
 
+  filterMultiple?: boolean;
+
   editable?: boolean;
 
   visible?: boolean;

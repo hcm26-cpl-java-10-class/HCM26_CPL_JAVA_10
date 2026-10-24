@@ -26,12 +26,12 @@ import java.time.LocalDateTime;
  * Every row captures the actor, the timestamp, the before/after state and the
  * correlation id of the originating request.
  */
-@Entity
+@Entity(name = "BacklogItemAuditLog")
 @Table(
-        name = "task_audit_log",
+        name = "backlog_item_audit_log",
         indexes = {
-                @Index(name = "idx_task_audit_task", columnList = "task_id"),
-                @Index(name = "idx_task_audit_correlation", columnList = "correlation_id")
+                @Index(name = "idx_backlog_item_audit_task", columnList = "task_id"),
+                @Index(name = "idx_backlog_item_audit_correlation", columnList = "correlation_id")
         }
 )
 @Getter

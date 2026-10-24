@@ -29,14 +29,14 @@ import java.time.LocalDateTime;
  * at most once even if the originating use case is retried with the same
  * correlation id (idempotent publishing).
  */
-@Entity
+@Entity(name = "BacklogItemOutboxEvent")
 @Table(
-        name = "task_outbox_event",
+        name = "backlog_item_outbox_event",
         uniqueConstraints = @UniqueConstraint(
-                name = "uk_task_outbox_dedupe",
+                name = "uk_backlog_item_outbox_dedupe",
                 columnNames = "dedupe_key"
         ),
-        indexes = @Index(name = "idx_task_outbox_status", columnList = "status")
+        indexes = @Index(name = "idx_backlog_item_outbox_status", columnList = "status")
 )
 @Getter
 @Setter

@@ -5,7 +5,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
-@Repository
+@Repository("backlogItemOutboxRepository")
 public interface TaskOutboxRepository extends JpaRepository<TaskOutboxEvent, Long> {
 
     boolean existsByDedupeKey(String dedupeKey);

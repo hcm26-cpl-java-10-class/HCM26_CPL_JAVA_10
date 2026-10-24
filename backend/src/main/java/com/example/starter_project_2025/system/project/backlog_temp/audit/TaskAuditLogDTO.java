@@ -11,7 +11,7 @@ import lombok.experimental.FieldDefaults;
 import java.time.LocalDateTime;
 
 /**
- * Audit entry returned by {@code GET /api/tasks/{id}/audit-logs}.
+ * Audit entry returned by {@code GET /api/backlog-items/{id}/audit-logs}.
  */
 @Getter
 @Setter

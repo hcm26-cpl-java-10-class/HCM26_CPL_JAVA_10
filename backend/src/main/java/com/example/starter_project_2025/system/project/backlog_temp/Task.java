@@ -25,11 +25,9 @@ import lombok.experimental.SuperBuilder;
 /**
  * Backlog task (temporary implementation).
  * <p>
- * TEMPORARY: the real task/backlog module is owned by another team member and
- * is not implemented yet. This class lives in {@code backlog_temp} so the
- * project module has working task CRUD in the meantime. When the official
- * module lands, delete this package and point the frontend to the new
- * {@code /api/tasks} owner.
+ * This model supports Sprint Planning with Long identifiers. It remains
+ * separate from the UUID-based Task module and is served by
+ * {@code /api/backlog-items}.
  * <p>
  * Mapping notes (compared to the team's class diagram):
  * <ul>
@@ -50,20 +48,20 @@ import lombok.experimental.SuperBuilder;
  * {@link TaskServiceImpl} so every failure surfaces as a business error
  * (422/404) instead of a generic bean validation error.
  */
-@Entity
+@Entity(name = "BacklogItem")
 @Getter
 @Setter
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "task")
+@Table(name = "backlog_item")
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @AttributeOverride(name = "id", column = @Column(name = "task_id"))
 @ImportEntity("task")
 @ExportEntity(fileName = "tasks", sheetName = "Tasks")
 @ResourcePermission("TASK")
 @ResourceMenu(
-        title = "Tasks",
+        title = "Backlog Items",
         group = "Project Management",
         icon = "tasks",
         url = "/taskstemp",

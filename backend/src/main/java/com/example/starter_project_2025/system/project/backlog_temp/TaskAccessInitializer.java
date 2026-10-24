@@ -30,7 +30,7 @@ import java.util.Set;
  */
 @Slf4j
 @Order(5)
-@Component
+@Component("backlogItemAccessInitializer")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class TaskAccessInitializer implements CommandLineRunner {

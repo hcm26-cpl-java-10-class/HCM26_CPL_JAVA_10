@@ -1,183 +1,69 @@
-import { milestoneApi, taskApi } from "@/api";
-import {
-    auditableFieldsSchema,
-    type EntityConfig,
-    type EntitySchema,
-    type FieldSchema,
-} from "@/types";
+import { MainLayout } from "@/components/layout/MainLayout";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { usePermissions } from "@/hooks/usePermissions";
+import { ChevronDown, FolderOpen } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { TaskProjectPicker } from "./components/TaskProjectPicker";
+import { TaskTable } from "./components/TaskTable";
+import { isProjectId } from "./task-form.utils";
 
-const priorityOptions = [
-    { label: "Low", value: "LOW" },
-    { label: "Medium", value: "MEDIUM" },
-    { label: "High", value: "HIGH" },
-    { label: "Urgent", value: "URGENT" },
-];
+export default function TaskManagementPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { user, activeRole } = usePermissions();
+  const [projectOpen, setProjectOpen] = useState(false);
+  const projectStorageKey = `task-project:${user.email}`;
+  const projectId =
+    searchParams.get("projectId") ?? sessionStorage.getItem(projectStorageKey) ?? "";
+  const projectSelected = isProjectId(projectId);
 
-/**
- * Workflow of a backlog item (UFR-PRJ-003-02):
- * Backlog -> Sprint Backlog -> In Progress -> Done.
- */
-const statusOptions = [
-    { label: "Backlog", value: "BACKLOG" },
-    { label: "Sprint Backlog", value: "SPRINT_BACKLOG" },
-    { label: "In Progress", value: "IN_PROGRESS" },
-    { label: "Done", value: "DONE" },
-];
+  useEffect(() => {
+    if (projectSelected) sessionStorage.setItem(projectStorageKey, projectId);
+  }, [projectId, projectSelected, projectStorageKey]);
 
-/** New backlog items are active by default; boolean fields would otherwise start as false. */
-const auditFields = (auditableFieldsSchema as FieldSchema[]).map((field) =>
-    field.name === "isActive"
-        ? { ...field, defaultValue: true, label: "Active" }
-        : field,
-);
+  const selectProject = (id: string) => {
+    sessionStorage.setItem(projectStorageKey, id);
+    setSearchParams({ projectId: id });
+    setProjectOpen(false);
+  };
 
-const MAX_TITLE_LENGTH = 250;
-const MAX_DESCRIPTION_LENGTH = 2000;
-
-const taskSchema: EntitySchema = {
-    entityName: "task",
-    idField: "id",
-    fields: [
-        {
-            name: "title",
-            label: "Backlog Item Title",
-            type: "text",
-            sortable: true,
-            bold: true,
-            required: true,
-            maxLength: MAX_TITLE_LENGTH,
-            requiredMessage: "Vui lòng nhập tên Backlog item",
-            maxLengthMessage: "Tên Backlog item không vượt quá 250 ký tự",
-            filterable: true,
-            filterType: "text",
-        },
-        {
-            name: "description",
-            label: "Description",
-            type: "textarea",
-            sortable: true,
-            maxLength: MAX_DESCRIPTION_LENGTH,
-            rows: 5,
-            maxLengthMessage: "Mô tả không được vượt quá 2000 ký tự",
-            helpText: "Mô tả chi tiết 1 - 2000 ký tự",
-            width: 320,
-        },
-        {
-            name: "milestoneId",
-            label: "Milestone",
-            type: "relation",
-            relation: {
-                api: milestoneApi,
-                valueField: "id",
-                labelField: "label",
-            },
-            sortable: true,
-            filterable: true,
-            filterType: "select",
-            helpText:
-                "Chỉ hiển thị các Milestone còn hiệu lực của dự án được chọn",
-        },
-        {
-            name: "projectId",
-            label: "Project ID",
-            type: "number",
-            sortable: true,
-            required: true,
-            requiredMessage: "Vui lòng nhập Project ID",
-        },
-        {
-            name: "sprintId",
-            label: "Sprint ID",
-            type: "number",
-            sortable: true,
-        },
-        {
-            name: "priority",
-            label: "Priority",
-            type: "select",
-            sortable: true,
-            options: priorityOptions,
-            defaultValue: "MEDIUM",
-            required: true,
-            requiredMessage: "Vui lòng chọn độ ưu tiên",
-            filterable: true,
-            filterType: "select",
-            filterOptions: priorityOptions,
-        },
-        {
-            name: "status",
-            label: "Backlog Status",
-            type: "select",
-            sortable: true,
-            options: statusOptions,
-            defaultValue: "BACKLOG",
-            required: true,
-            requiredMessage: "Vui lòng chọn trạng thái Backlog item",
-            filterable: true,
-            filterType: "select",
-            filterOptions: statusOptions,
-            helpText: "Workflow: Backlog → Sprint Backlog → In Progress → Done",
-        },
-        {
-            name: "estimatedHours",
-            label: "Estimated Hours",
-            type: "number",
-            sortable: true,
-            width: 150,
-            helpText: "Số giờ ước tính, phải lớn hơn hoặc bằng 0",
-        },
-        {
-            name: "assigneeProjectMemberId",
-            label: "Assignee ID",
-            type: "number",
-            sortable: true,
-        },
-        ...auditFields,
-    ],
-    /** Cross-field validation kept in sync with the backend rules (AC02). */
-    validate: (values) => {
-        const errors: Record<string, string[]> = {};
-
-        const title = values.title;
-        if (
-            typeof title === "string" &&
-            title.trim().length > MAX_TITLE_LENGTH
-        ) {
-            errors.title = ["Tên Backlog item không vượt quá 250 ký tự"];
-        }
-
-        const description = values.description;
-        if (
-            typeof description === "string" &&
-            description.length > MAX_DESCRIPTION_LENGTH
-        ) {
-            errors.description = ["Mô tả không được vượt quá 2000 ký tự"];
-        }
-
-        if (values.status === "SPRINT_BACKLOG" && !values.sprintId) {
-            errors.sprintId = [
-                "Vui lòng chọn Sprint khi chuyển sang Sprint Backlog",
-            ];
-        }
-
-        const hours = values.estimatedHours;
-
-        if (
-            hours !== undefined &&
-            hours !== null &&
-            hours !== "" &&
-            Number(hours) < 0
-        ) {
-            errors.estimatedHours = ["Số giờ ước tính phải lớn hơn hoặc bằng 0"];
-        }
-
-        return errors;
-    },
-};
-
-export const entityConfig: EntityConfig = {
-    name: "Task",
-    path: "/taskstemp",
-    api: taskApi,
-    schema: taskSchema,
-};
+  return (
+    <MainLayout pathName={{ tasks: "Tasks" }}>
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
+        <header className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-xl font-semibold">Task Management</h1>
+          {projectSelected && (
+            <Popover open={projectOpen} onOpenChange={setProjectOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="gap-2" title={projectId}>
+                  <FolderOpen className="size-4 text-muted-foreground" />
+                  Project{" "}
+                  <span className="font-mono text-xs">{projectId.slice(0, 8).toUpperCase()}</span>
+                  <ChevronDown className="size-4 text-muted-foreground" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-[min(28rem,calc(100vw-2rem))] p-0">
+                <TaskProjectPicker key={projectId} projectId={projectId} onSelect={selectProject} />
+              </PopoverContent>
+            </Popover>
+          )}
+        </header>
+        {projectSelected ? (
+          <TaskTable key={`${user.email}:${activeRole}:${projectId}`} projectId={projectId} />
+        ) : (
+          <div className="mx-auto grid w-full max-w-xl gap-5 py-12">
+            <div className="text-center">
+              <FolderOpen className="mx-auto mb-3 size-10 text-muted-foreground" />
+              <h2 className="font-semibold">Select a project to get started</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Enter your shared project ID to manage tasks.
+              </p>
+            </div>
+            <TaskProjectPicker key={projectId} projectId={projectId} onSelect={selectProject} />
+          </div>
+        )}
+      </section>
+    </MainLayout>
+  );
+}

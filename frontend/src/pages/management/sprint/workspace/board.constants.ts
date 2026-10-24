@@ -1,8 +1,8 @@
 import type {
   SprintPlanningItem,
   SprintStatus,
-  TaskPriority,
-  TaskStatus,
+  BacklogPriority,
+  BacklogStatus,
 } from "@/types";
 
 const DAY_MS = 86_400_000;
@@ -51,7 +51,7 @@ export const FALLBACK_SPRINT_STATUS = {
 
 /** Backlog item priority pills ("Critical" == URGENT). */
 export const PRIORITY_META: Record<
-  TaskPriority,
+  BacklogPriority,
   { label: string; badge: string; dot: string; rank: number }
 > = {
   URGENT: {
@@ -93,7 +93,7 @@ export const FALLBACK_PRIORITY = {
 
 /** Workflow chips of a backlog item card. */
 export const TASK_STATUS_META: Record<
-  TaskStatus,
+  BacklogStatus,
   { label: string; chip: string; column: string }
 > = {
   BACKLOG: {
@@ -127,10 +127,10 @@ export const FALLBACK_TASK_STATUS = {
 export const sprintStatusMeta = (status?: SprintStatus | null) =>
   (status && SPRINT_STATUS_META[status]) || FALLBACK_SPRINT_STATUS;
 
-export const priorityMeta = (priority?: TaskPriority | null) =>
+export const priorityMeta = (priority?: BacklogPriority | null) =>
   (priority && PRIORITY_META[priority]) || FALLBACK_PRIORITY;
 
-export const taskStatusMeta = (status?: TaskStatus | null) =>
+export const taskStatusMeta = (status?: BacklogStatus | null) =>
   (status && TASK_STATUS_META[status]) || FALLBACK_TASK_STATUS;
 
 export const formatDate = (value?: string | null) => {

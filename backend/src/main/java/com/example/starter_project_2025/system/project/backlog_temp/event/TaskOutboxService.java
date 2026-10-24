@@ -23,7 +23,7 @@ import java.util.UUID;
  * ignored, making publishing idempotent.
  */
 @Slf4j
-@Service
+@Service("backlogItemOutboxService")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class TaskOutboxService {

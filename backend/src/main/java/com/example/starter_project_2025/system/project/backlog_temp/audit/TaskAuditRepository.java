@@ -5,7 +5,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
-@Repository
+@Repository("backlogItemAuditRepository")
 public interface TaskAuditRepository extends JpaRepository<TaskAuditLog, Long> {
 
     List<TaskAuditLog> findByTaskIdOrderByCreatedAtDesc(Long taskId);

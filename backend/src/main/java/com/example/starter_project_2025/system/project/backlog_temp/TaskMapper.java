@@ -9,7 +9,7 @@ import org.mapstruct.Mapping;
  * Task has no JPA relations (the referenced modules are external), so plain
  * field name mapping is enough.
  */
-@Mapper(componentModel = "spring", config = BaseMapperConfig.class)
+@Mapper(componentModel = "spring", config = BaseMapperConfig.class, implementationName = "BacklogItemMapperImpl")
 public interface TaskMapper extends BaseCrudMapper<Task, TaskDTO> {
 
     /**

@@ -21,9 +21,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-@RestController
+@RestController("backlogItemController")
 @RequiredArgsConstructor
-@RequestMapping("/api/tasks")
+@RequestMapping("/api/backlog-items")
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Tag(name = "Task", description = "APIs for managing backlog items (temporary module)")
 public class TaskController

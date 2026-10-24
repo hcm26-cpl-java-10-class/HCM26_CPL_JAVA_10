@@ -22,7 +22,7 @@ import java.util.List;
  * (UFR-PRJ-003-02, "thay đổi thông tin đều được ghi log").
  */
 @Slf4j
-@Service
+@Service("backlogItemAuditService")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class TaskAuditService {

@@ -60,7 +60,7 @@ export function SortableHeader({ field, sortState, onToggleSort, width, onResize
           </span>
         )}
         {isDate && onDateFormatCycle && (
-          <TooltipWrapper content={`Định dạng: ${currentFormatLabel} — Click để đổi`}>
+          <TooltipWrapper content={`Format: ${currentFormatLabel} — Click to change`}>
             <button
               type="button"
               className="inline-flex items-center shrink-0 rounded p-0.5 text-muted-foreground/50 opacity-0 group-hover/header:opacity-100 hover:text-foreground hover:bg-muted transition-all"
