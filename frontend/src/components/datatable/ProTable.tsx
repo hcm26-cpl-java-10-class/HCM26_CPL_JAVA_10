@@ -1,6 +1,6 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAutoPageSize } from "@/components/datatable/hook/useAutoPageSize";
-import type { EntityCardRendererProps } from "@/types";
+import type { EntityCardLayout, EntityCardRendererProps } from "@/types";
 import { ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Loading from "./common/Loading";
@@ -50,11 +50,20 @@ interface ProTableProps<TData = any> {
     /** Optional: Override default create button. If not provided, shows default "Create" button */
     headerActions?: React.ReactNode;
 
+    /**
+     * Optional: actions shown in browse mode, where the regular toolbar actions
+     * are hidden (read-only card view). Used to expose a single "Create" button.
+     */
+    browseActions?: React.ReactNode;
+
     /** Optional: Complete override of row actions. If provided, you have full control */
     renderRowActions?: (row: TData) => React.ReactNode;
 
     /** Optional: Custom card renderer for card view */
     renderCard?: (props: EntityCardRendererProps) => React.ReactNode;
+
+    /** Optional: Card view layout. "list" renders full-width stacked rows. */
+    cardLayout?: EntityCardLayout;
 
     /** Optional: Override default view action. If not provided, uses internal modal view */
     onView?: (row: TData) => void;
@@ -93,6 +102,12 @@ interface ProTableProps<TData = any> {
     mode?: "default" | "browse";
 
     /**
+     * Optional: keep row actions (view / edit / delete) and the boolean toggle
+     * enabled in browse mode. Only takes effect together with `mode="browse"`.
+     */
+    browseRowActions?: boolean;
+
+    /**
      * Optional: Expandable row configuration.
      * Expansion is auto-enabled when any field in the schema has `expandable: true`.
      * Use `renderExpandedRow` to customise the expanded content; if omitted,
@@ -107,8 +122,10 @@ interface ProTableProps<TData = any> {
 export function ProTable<TData = any>({
     table,
     headerActions,
+    browseActions,
     renderRowActions,
     renderCard,
+    cardLayout = "grid",
     onView,
     onEdit,
     onDelete,
@@ -119,10 +136,13 @@ export function ProTable<TData = any>({
     hideActions = false,
     hideCreate = false,
     mode = "default",
+    browseRowActions = false,
     expandable,
 }: ProTableProps<TData>) {
     const { schema } = table;
     const isBrowseMode = mode === "browse";
+    /** Browse mode normally hides row actions; entities can opt back in. */
+    const allowBrowseRowActions = isBrowseMode && browseRowActions;
 
     // Auto-detect expandable from schema — true when any field is marked expandable: true
     const isExpandable: boolean = schema.fields.some((f: any) => f.expandable === true);
@@ -258,6 +278,7 @@ export function ProTable<TData = any>({
             <Toolbar
                 table={table}
                 headerActions={headerActions}
+                browseActions={browseActions}
                 viewMode={effectiveViewMode}
                 onViewModeChange={setViewMode}
                 showViewModeToggle={!isBrowseMode}
@@ -498,21 +519,27 @@ export function ProTable<TData = any>({
                             <CardView
                                 table={table}
                                 onRowClick={cardRowClickHandler}
-                                showActions={!isBrowseMode && showActionsColumn}
+                                showActions={
+                                    (!isBrowseMode || allowBrowseRowActions) && showActionsColumn
+                                }
                                 renderRowActions={
-                                    !isBrowseMode && showActionsColumn ? finalRenderRowActions : undefined
+                                    (!isBrowseMode || allowBrowseRowActions) && showActionsColumn
+                                        ? finalRenderRowActions
+                                        : undefined
                                 }
                                 onView={onView || setDetailRow}
                                 onEdit={onEdit || table.openEdit}
                                 onDelete={onDelete || setDeleteItem}
                                 disableBooleanToggle={
-                                    isBrowseMode || !(table.permission?.canUpdate ?? true)
+                                    (isBrowseMode && !allowBrowseRowActions) ||
+                                    !(table.permission?.canUpdate ?? true)
                                 }
                                 selectable={!isBrowseMode}
                                 showIndex={!isBrowseMode}
                                 renderCard={renderCard}
+                                layout={cardLayout}
                                 onBooleanToggle={(id, fieldName, newValue) => {
-                                    if (isBrowseMode) return;
+                                    if (isBrowseMode && !allowBrowseRowActions) return;
                                     if (!(table.permission?.canUpdate ?? true)) return;
                                     table.patchField(id, fieldName, newValue);
                                 }}

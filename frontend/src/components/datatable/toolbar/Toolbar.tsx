@@ -10,6 +10,7 @@ export type ViewMode = "table" | "card";
 interface ToolbarProps {
   table: any;
   headerActions?: React.ReactNode;
+  browseActions?: React.ReactNode;
   viewMode?: ViewMode;
   onViewModeChange?: (mode: ViewMode) => void;
   showViewModeToggle?: boolean;
@@ -21,6 +22,7 @@ interface ToolbarProps {
 export function Toolbar({
   table,
   headerActions,
+  browseActions,
   viewMode = "table",
   onViewModeChange,
   showViewModeToggle = true,
@@ -37,9 +39,17 @@ export function Toolbar({
 
   const hasSorts = table.sortState?.length > 0;
 
+  // Browse mode hides the regular toolbar actions; a single browse action
+  // (e.g. "Create") can still be rendered on the right hand side.
+  const rightSlot = showActions ? (
+    <ToolbarActions table={table} headerActions={headerActions} />
+  ) : browseActions ? (
+    <div className="flex justify-end items-center gap-2 w-full">{browseActions}</div>
+  ) : null;
+
   return (
     <div
-      className={`grid ${showActions ? "lg:grid-cols-[1fr_auto]" : "grid-cols-1"} items-center gap-2 w-full`}
+      className={`grid ${rightSlot ? "lg:grid-cols-[1fr_auto]" : "grid-cols-1"} items-center gap-2 w-full`}
     >
       <div className="flex flex-col lg:flex-row justify-start items-center gap-2">
         {viewMode === "card" && showCardColumnToggle && (
@@ -85,6 +95,7 @@ export function Toolbar({
           hideCreate={hideCreate}
         />
       )}
+      {rightSlot}
     </div>
   );
 }
