@@ -36,7 +36,7 @@ export function TaskDependencyPanel({
           variant="ghost"
           size="icon"
           disabled={disabled}
-          aria-label={`Gỡ Task tiền đề ${task.title}`}
+          aria-label={`Remove prerequisite ${task.title}`}
           onClick={() => onRemove(task)}
         >
           <Unlink className="size-4" />
@@ -48,35 +48,35 @@ export function TaskDependencyPanel({
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <CardTitle>Liên kết phụ thuộc</CardTitle>
+          <CardTitle>Dependencies</CardTitle>
           {workflow.editable && (
             <Button variant="outline" size="sm" disabled={disabled} onClick={onAdd}>
-              <Plus className="size-4" /> Thêm Task tiền đề
+              <Plus className="size-4" /> Add prerequisite
             </Button>
           )}
         </div>
         <CardDescription>
-          Tất cả Task tiền đề phải Done trước khi công việc này được bắt đầu.
+          All prerequisite tasks must be Done before this task can start.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-5">
         <div className="grid gap-2">
-          <h2 className="text-sm font-medium">Task tiền đề ({workflow.predecessors.length})</h2>
+          <h2 className="text-sm font-medium">Prerequisites ({workflow.predecessors.length})</h2>
           {workflow.predecessors.length ? (
             workflow.predecessors.map((task) => renderTask(task, true))
           ) : (
-            <p className="text-sm text-muted-foreground">Chưa có Task tiền đề.</p>
+            <p className="text-sm text-muted-foreground">No prerequisites.</p>
           )}
         </div>
         <div className="grid gap-2 border-t pt-4">
           <h2 className="text-sm font-medium">
-            Task đang chờ công việc này ({workflow.successors.length})
+            Tasks blocked by this task ({workflow.successors.length})
           </h2>
           {workflow.successors.length ? (
             workflow.successors.map((task) => renderTask(task, false))
           ) : (
             <p className="text-sm text-muted-foreground">
-              Chưa có Task phụ thuộc vào công việc này.
+              No tasks depend on this task.
             </p>
           )}
         </div>

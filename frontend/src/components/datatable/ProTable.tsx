@@ -1,8 +1,8 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAutoPageSize } from "@/components/datatable/hook/useAutoPageSize";
-import type { EntityCardRendererProps } from "@/types";
+import type { EntityCardRendererProps, FieldSchema } from "@/types";
 import { ChevronRight } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import Loading from "./common/Loading";
 import NoResult from "./common/NoResult";
 import { ConfirmDeleteModal } from "./modal/ConfirmDeleteModal";
@@ -52,6 +52,12 @@ interface ProTableProps<TData = any> {
 
     /** Optional: Complete override of row actions. If provided, you have full control */
     renderRowActions?: (row: TData) => React.ReactNode;
+
+    renderCell?: (row: TData, field: FieldSchema) => React.ReactNode;
+
+    compactToolbar?: boolean;
+
+    responsiveCards?: boolean;
 
     /** Optional: Custom card renderer for card view */
     renderCard?: (props: EntityCardRendererProps) => React.ReactNode;
@@ -105,6 +111,9 @@ export function ProTable<TData = any>({
     table,
     headerActions,
     renderRowActions,
+    renderCell,
+    compactToolbar = false,
+    responsiveCards = false,
     renderCard,
     onView,
     onEdit,
@@ -149,7 +158,19 @@ export function ProTable<TData = any>({
     const [deleteItem, setDeleteItem] = useState<TData | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [detailRow, setDetailRow] = useState<TData | null>(null);
-    const [viewMode, setViewMode] = useState<ViewMode>(isBrowseMode ? "card" : "table");
+    const [viewMode, setViewMode] = useState<ViewMode>(() =>
+        isBrowseMode || (responsiveCards && window.matchMedia("(max-width: 640px)").matches)
+            ? "card"
+            : "table",
+    );
+
+    useEffect(() => {
+        if (!responsiveCards || isBrowseMode) return;
+        const media = window.matchMedia("(max-width: 640px)");
+        const changeView = (event: MediaQueryListEvent) => setViewMode(event.matches ? "card" : "table");
+        media.addEventListener("change", changeView);
+        return () => media.removeEventListener("change", changeView);
+    }, [responsiveCards, isBrowseMode]);
 
     useEffect(() => {
         if (isBrowseMode) {
@@ -259,6 +280,7 @@ export function ProTable<TData = any>({
                 showViewModeToggle={!isBrowseMode}
                 showActions={!isBrowseMode}
                 showCardColumnToggle={!isBrowseMode}
+                compact={compactToolbar}
             />
 
             <div
@@ -338,7 +360,7 @@ export function ProTable<TData = any>({
                                             (showActionsColumn ? 1 : 0);
 
                                         return (
-                                            <>
+                                            <Fragment key={id}>
                                                 <TableRow
                                                     key={id}
                                                     className="group w-full odd:bg-accent even:bg-background [&>td]:h-[inherit] [&>td]:overflow-hidden"
@@ -385,24 +407,29 @@ export function ProTable<TData = any>({
                                                         {(table.page || 0) * (table.size || 10) + index + 1}
                                                     </TableCell>
 
-                                                    {table.visibleFields.map((f: any) => (
-                                                        <CellRenderer
-                                                            key={f.name}
-                                                            field={f}
-                                                            value={row[f.name]}
-                                                            relationOptions={table.relationOptions}
-                                                            disableBooleanToggle={!(table.permission?.canUpdate ?? true)}
-                                                            onBooleanToggle={(fieldName, newValue) => {
-                                                                if (!(table.permission?.canUpdate ?? true)) return;
-                                                                table.patchField(id, fieldName, newValue);
-                                                            }}
-                                                            dateFormat={
-                                                                f.type === "date"
-                                                                    ? (dateFormats[f.name] ?? "datetime")
-                                                                    : undefined
-                                                            }
-                                                        />
-                                                    ))}
+                                                    {table.visibleFields.map((f: any) => {
+                                                        const content = renderCell?.(row, f);
+                                                        return content !== undefined ? (
+                                                            <TableCell key={f.name}>{content}</TableCell>
+                                                        ) : (
+                                                            <CellRenderer
+                                                                key={f.name}
+                                                                field={f}
+                                                                value={row[f.name]}
+                                                                relationOptions={table.relationOptions}
+                                                                disableBooleanToggle={!(table.permission?.canUpdate ?? true)}
+                                                                onBooleanToggle={(fieldName, newValue) => {
+                                                                    if (!(table.permission?.canUpdate ?? true)) return;
+                                                                    table.patchField(id, fieldName, newValue);
+                                                                }}
+                                                                dateFormat={
+                                                                    f.type === "date"
+                                                                        ? (dateFormats[f.name] ?? "datetime")
+                                                                        : undefined
+                                                                }
+                                                            />
+                                                        );
+                                                    })}
 
                                                     {showActionsColumn && (
                                                         <TableCell
@@ -474,7 +501,7 @@ export function ProTable<TData = any>({
                                                         </TableCell>
                                                     </TableRow>
                                                 )}
-                                            </>
+                                            </Fragment>
                                         );
                                     })}
                                 </TableBody>

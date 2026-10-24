@@ -107,10 +107,10 @@ public class TaskServiceImpl implements TaskService {
             throw new TaskConflictException(TaskConflictException.STALE_MESSAGE);
         }
         if (!task.getProjectId().equals(request.getProjectId())) {
-            throw new TaskValidationException("projectId", "Không thể chuyển Task sang Project khác");
+            throw new TaskValidationException("projectId", "A task cannot be moved to a different project");
         }
         if (request.getStatus() != null && request.getStatus() != task.getStatus()) {
-            throw new TaskConflictException("Không thể đổi trạng thái khi cập nhật thông tin Task");
+            throw new TaskConflictException("Task status cannot be changed when updating task details");
         }
         taskAccess.checkAssignee(task.getProjectId(), request.getAssigneeProjectMemberId());
 
@@ -142,12 +142,12 @@ public class TaskServiceImpl implements TaskService {
 
     private Task findTask(UUID id) {
         return taskRepository.findByIdAndIsActiveTrue(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Task không tồn tại hoặc đã bị xóa"));
+                .orElseThrow(() -> new ResourceNotFoundException("Task does not exist or has been deleted"));
     }
 
     private void requireProjectId(UUID projectId) {
         if (projectId == null) {
-            throw new TaskValidationException("projectId", "Vui lòng chọn Project");
+            throw new TaskValidationException("projectId", "Please select a project");
         }
     }
 
@@ -155,7 +155,7 @@ public class TaskServiceImpl implements TaskService {
         Set<String> fields = Set.of("id", "title", "createdAt", "updatedAt", "priority", "status", "estimatedHours");
         for (var order : pageable.getSort()) {
             if (!fields.contains(order.getProperty())) {
-                throw new TaskValidationException("sort", "Trường sắp xếp không hợp lệ");
+                throw new TaskValidationException("sort", "Invalid sort field");
             }
         }
     }

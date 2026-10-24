@@ -46,7 +46,7 @@ export function TaskTagsInput({
               <button
                 type="button"
                 disabled={disabled}
-                aria-label={`Xóa nhãn ${tag}`}
+                aria-label={`Remove tag ${tag}`}
                 onClick={() => onChange(value.filter((name) => name !== tag))}
                 className="rounded-sm p-0.5 hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
               >
@@ -63,7 +63,7 @@ export function TaskTagsInput({
           disabled={disabled}
           aria-invalid={invalid}
           aria-describedby={invalid ? "task-tags-error" : undefined}
-          placeholder="Nhập nhãn, ví dụ Backend"
+          placeholder="Enter a tag, for example Backend"
           onChange={(event) => onDraftChange(event.target.value)}
           onKeyDown={(event) => {
             if ((event.key === "Enter" || event.key === ",") && !event.nativeEvent.isComposing) {
@@ -78,12 +78,12 @@ export function TaskTagsInput({
           disabled={disabled || !draft.trim()}
           onClick={() => addTag(draft)}
         >
-          <Plus className="size-4" /> Thêm
+          <Plus className="size-4" /> Add
         </Button>
       </div>
       {availableTags.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted-foreground">Nhãn có sẵn:</span>
+          <span className="text-xs text-muted-foreground">Existing tags:</span>
           {availableTags.map((tag) => (
             <Button
               key={tag}

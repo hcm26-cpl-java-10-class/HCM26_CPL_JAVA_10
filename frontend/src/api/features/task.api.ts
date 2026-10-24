@@ -66,6 +66,14 @@ export const taskApi = {
     return response.data;
   },
 
+  async delete(id: string, version: number, requestId: string): Promise<TaskDTO> {
+    const response = await axiosInstance.delete<TaskDTO>(`${path}/${id}`, {
+      params: { version },
+      headers: { "Idempotency-Key": requestId },
+    });
+    return response.data;
+  },
+
   async create(data: TaskPayload, requestId: string): Promise<TaskDTO> {
     const response = await axiosInstance.post<TaskDTO>(path, data, {
       headers: { "Idempotency-Key": requestId },

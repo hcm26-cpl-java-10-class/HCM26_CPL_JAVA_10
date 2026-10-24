@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.project.task;
 
+import com.example.starter_project_2025.system.project.task.deletion.TaskDeletionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -16,6 +17,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class TaskController {
     private final TaskService taskService;
+    private final TaskDeletionService deletionService;
 
     @GetMapping
     public ResponseEntity<Page<TaskDTO>> getAll(
@@ -49,6 +51,14 @@ public class TaskController {
             @RequestHeader(value = "X-Correlation-ID", required = false) String correlationId) {
         TaskRequestContext context = TaskRequestContext.create(requestId, correlationId);
         return response(taskService.update(id, request, context), context);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<TaskDTO> delete(@PathVariable UUID id, @RequestParam(required = false) Long version,
+            @RequestHeader(value = "Idempotency-Key", required = false) UUID requestId,
+            @RequestHeader(value = "X-Correlation-ID", required = false) String correlationId) {
+        TaskRequestContext context = TaskRequestContext.create(requestId, correlationId);
+        return response(deletionService.delete(id, version, context), context);
     }
 
     private ResponseEntity<TaskDTO> response(TaskDTO task, TaskRequestContext context) {

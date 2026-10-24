@@ -31,9 +31,9 @@ export function TaskFormPage() {
   return (
     <MainLayout
       pathName={{
-        tasks: "Công việc",
-        create: "Tạo mới",
-        edit: "Chỉnh sửa",
+        tasks: "Tasks",
+        create: "Create",
+        edit: "Edit",
         ...(id ? { [id]: "Task" } : {}),
       }}
     >
@@ -42,11 +42,11 @@ export function TaskFormPage() {
           <div>
             <p className="text-sm text-muted-foreground">Project Management</p>
             <h1 className="mt-1 text-2xl font-semibold">
-              {id ? "Chỉnh sửa Task" : "Tạo Task mới"}
+              {id ? "Edit task" : "Create task"}
             </h1>
           </div>
           <Button variant="outline" onClick={goBack}>
-            <ArrowLeft className="size-4" /> {returnToDetail ? "Về chi tiết Task" : "Về danh sách"}
+            <ArrowLeft className="size-4" /> {returnToDetail ? "Back to task details" : "Back to tasks"}
           </Button>
         </header>
         {id && taskQuery.isLoading ? (
@@ -54,21 +54,21 @@ export function TaskFormPage() {
             role="status"
             className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground"
           >
-            <Loader2 className="size-5 animate-spin" /> Đang tải Task...
+            <Loader2 className="size-5 animate-spin" /> Loading task...
           </div>
         ) : taskQuery.isError || missingProject ? (
           <Alert variant="destructive">
             <AlertCircle />
-            <AlertTitle>{missingProject ? "Chưa chọn dự án" : "Không tải được Task"}</AlertTitle>
+            <AlertTitle>{missingProject ? "No project selected" : "Unable to load task"}</AlertTitle>
             <AlertDescription>
               <p>
                 {missingProject
-                  ? "Vui lòng chọn dự án từ danh sách công việc trước khi tạo Task."
+                  ? "Please select a project from the task list before creating a task."
                   : getTaskError(taskQuery.error).message}
               </p>
               {id && (
                 <Button variant="outline" size="sm" onClick={() => void taskQuery.refetch()}>
-                  Thử lại
+                  Try again
                 </Button>
               )}
             </AlertDescription>

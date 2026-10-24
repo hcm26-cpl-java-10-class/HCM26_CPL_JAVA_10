@@ -11,7 +11,7 @@ public record TaskRequestContext(UUID requestId, String correlationId) {
         String correlation = correlationId == null || correlationId.isBlank()
                 ? UUID.randomUUID().toString() : correlationId.strip();
         if (correlation.length() > 100) {
-            throw new TaskValidationException("correlationId", "Correlation ID không vượt quá 100 ký tự");
+            throw new TaskValidationException("correlationId", "Correlation ID must not exceed 100 characters");
         }
         TaskRequestContext context = new TaskRequestContext(
                 requestId == null ? UUID.randomUUID() : requestId, correlation);

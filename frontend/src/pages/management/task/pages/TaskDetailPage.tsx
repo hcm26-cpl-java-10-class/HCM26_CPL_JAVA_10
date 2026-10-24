@@ -15,12 +15,13 @@ import {
 import { usePermissions } from "@/hooks/usePermissions";
 import type { TaskDTO, TaskDependencyDTO } from "@/types/features/task";
 import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, ArrowLeft, Loader2, Pencil, RefreshCw } from "lucide-react";
+import { AlertCircle, ArrowLeft, Loader2, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { TaskActivityFeed } from "../components/TaskActivityFeed";
 import { TaskPriorityBadge } from "../components/TaskBadges";
 import { TaskDependencyDialog } from "../components/TaskDependencyDialog";
+import { TaskDeleteDialog } from "../components/TaskDeleteDialog";
 import { TaskDependencyPanel } from "../components/TaskDependencyPanel";
 import { TaskMutationError } from "../components/TaskMutationError";
 import { TaskStatusActions } from "../components/TaskStatusActions";
@@ -39,6 +40,7 @@ function TaskDetailContent({ taskId: id }: { taskId: string }) {
   const [removing, setRemoving] = useState<{ task: TaskDTO; dependency: TaskDependencyDTO } | null>(
     null,
   );
+  const [deleting, setDeleting] = useState<{ task: TaskDTO; dependencyCount: number } | null>(null);
   const workflowQuery = useQuery({
     queryKey: ["tasks", user.email, activeRole, "workflow", id],
     queryFn: () => taskApi.getWorkflow(id),
@@ -47,20 +49,31 @@ function TaskDetailContent({ taskId: id }: { taskId: string }) {
     refetchOnReconnect: false,
     retry: false,
   });
-  const mutation = useTaskWorkflowMutation(id, () => {
-    setDependencyTask(null);
-    setRemoving(null);
-  });
+  const mutation = useTaskWorkflowMutation(
+    id,
+    (action) => {
+      setDependencyTask(null);
+      setRemoving(null);
+      if (action.kind === "DELETE") {
+        navigate(taskListPath(deleting?.task.projectId ?? ""), { replace: true });
+      }
+    },
+    (action) => {
+      if (action.kind === "DELETE") setDeleting(null);
+    },
+  );
   const workflow =
     !workflowQuery.isError && workflowQuery.data
       ? {
           ...workflowQuery.data,
           editable: workflowQuery.data.editable && hasPermission("TASK_UPDATE"),
+          deletable: workflowQuery.data.deletable && hasPermission("TASK_DELETE"),
         }
       : undefined;
   const closeDialog = () => {
     setDependencyTask(null);
     setRemoving(null);
+    setDeleting(null);
     mutation.clearError();
   };
   const reload = () => {
@@ -69,13 +82,13 @@ function TaskDetailContent({ taskId: id }: { taskId: string }) {
   };
 
   return (
-    <MainLayout pathName={{ tasks: "Công việc", [id]: "Task", detail: "Chi tiết" }}>
+    <MainLayout pathName={{ tasks: "Tasks", [id]: "Task", detail: "Details" }}>
       <section className="grid gap-5">
         <header className="flex flex-wrap items-start justify-between gap-4 border-b pb-4">
           <div className="min-w-0">
             <p className="text-sm text-muted-foreground">Project Management</p>
             <h1 className="mt-1 break-words text-2xl font-semibold">
-              {workflow?.task.title ?? "Chi tiết Task"}
+              {workflow?.task.title ?? "Task details"}
             </h1>
             <p className="mt-2 font-mono text-xs text-muted-foreground">
               {id.slice(0, 8).toUpperCase()}
@@ -87,12 +100,12 @@ function TaskDetailContent({ taskId: id }: { taskId: string }) {
               disabled={mutation.isPending}
               onClick={() => navigate(taskListPath(workflow?.task.projectId ?? ""))}
             >
-              <ArrowLeft className="size-4" /> Về danh sách
+              <ArrowLeft className="size-4" /> Back to tasks
             </Button>
             <Button
               variant="outline"
               size="icon"
-              aria-label="Tải lại Task"
+              aria-label="Refresh task"
               disabled={mutation.isPending || workflowQuery.isFetching}
               onClick={reload}
             >
@@ -103,7 +116,27 @@ function TaskDetailContent({ taskId: id }: { taskId: string }) {
                 disabled={mutation.isPending}
                 onClick={() => navigate(`/tasks/${id}/edit?from=detail`)}
               >
-                <Pencil className="size-4" /> Sửa thông tin
+                <Pencil className="size-4" /> Edit details
+              </Button>
+            )}
+            {workflow?.deletable && (
+              <Button
+                variant="destructive"
+                disabled={
+                  mutation.isPending ||
+                  workflowQuery.isFetching ||
+                  (workflow.task.status !== "TODO" && workflow.task.status !== "IN_PROGRESS")
+                }
+                title="Only tasks in To Do or In Progress can be deleted"
+                onClick={() => {
+                  mutation.clearError();
+                  setDeleting({
+                    task: workflow.task,
+                    dependencyCount: workflow.predecessors.length + workflow.successors.length,
+                  });
+                }}
+              >
+                <Trash2 className="size-4" /> Delete task
               </Button>
             )}
           </div>
@@ -113,16 +146,16 @@ function TaskDetailContent({ taskId: id }: { taskId: string }) {
             role="status"
             className="flex items-center justify-center gap-2 py-16 text-muted-foreground"
           >
-            <Loader2 className="size-5 animate-spin" /> Đang tải Task...
+            <Loader2 className="size-5 animate-spin" /> Loading task...
           </div>
         ) : workflowQuery.isError || !workflow ? (
           <Alert variant="destructive">
             <AlertCircle />
-            <AlertTitle>Không tải được Task</AlertTitle>
+            <AlertTitle>Unable to load task</AlertTitle>
             <AlertDescription>
               <p>{getTaskError(workflowQuery.error).message}</p>
               <Button variant="outline" size="sm" onClick={reload}>
-                Thử lại
+                Try again
               </Button>
             </AlertDescription>
           </Alert>
@@ -135,11 +168,11 @@ function TaskDetailContent({ taskId: id }: { taskId: string }) {
               <div className="grid min-w-0 gap-5">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Mô tả công việc</CardTitle>
+                    <CardTitle>Task description</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">
-                      {workflow.task.description || "Chưa có mô tả."}
+                      {workflow.task.description || "No description provided."}
                     </p>
                   </CardContent>
                 </Card>
@@ -171,31 +204,31 @@ function TaskDetailContent({ taskId: id }: { taskId: string }) {
                 />
                 <Card>
                   <CardHeader>
-                    <CardTitle>Thông tin chi tiết</CardTitle>
+                    <CardTitle>Details</CardTitle>
                   </CardHeader>
                   <CardContent className="grid gap-4 text-sm">
                     <div className="flex justify-between gap-3">
-                      <span className="text-muted-foreground">Người thực hiện</span>
+                      <span className="text-muted-foreground">Assignee</span>
                       <span>
                         {workflow.task.assigneeProjectMemberId
-                          ? `Thành viên ${workflow.task.assigneeProjectMemberId.slice(0, 8)}`
-                          : "Chưa giao"}
+                          ? `Member ${workflow.task.assigneeProjectMemberId.slice(0, 8)}`
+                          : "Unassigned"}
                       </span>
                     </div>
                     <div className="flex justify-between gap-3">
-                      <span className="text-muted-foreground">Ước lượng</span>
+                      <span className="text-muted-foreground">Estimate</span>
                       <span>
                         {workflow.task.estimatedHours == null
-                          ? "Chưa ước lượng"
-                          : `${workflow.task.estimatedHours} giờ`}
+                          ? "Not estimated"
+                          : `${workflow.task.estimatedHours} hours`}
                       </span>
                     </div>
                     <div className="flex justify-between gap-3">
-                      <span className="text-muted-foreground">Ưu tiên</span>
+                      <span className="text-muted-foreground">Priority</span>
                       <TaskPriorityBadge priority={workflow.task.priority} />
                     </div>
                     <div className="grid gap-2 border-t pt-4">
-                      <span className="text-muted-foreground">Nhãn</span>
+                      <span className="text-muted-foreground">Tags</span>
                       <div className="flex flex-wrap gap-2">
                         {workflow.task.tags.length ? (
                           workflow.task.tags.map((tag) => (
@@ -204,7 +237,7 @@ function TaskDetailContent({ taskId: id }: { taskId: string }) {
                             </Badge>
                           ))
                         ) : (
-                          <span className="text-muted-foreground">Chưa có nhãn</span>
+                          <span className="text-muted-foreground">No tags</span>
                         )}
                       </div>
                     </div>
@@ -221,6 +254,17 @@ function TaskDetailContent({ taskId: id }: { taskId: string }) {
                 onReload={reload}
                 onClearError={mutation.clearError}
                 onSubmit={mutation.execute}
+              />
+            )}
+            {deleting && (
+              <TaskDeleteDialog
+                task={deleting.task}
+                dependencyCount={deleting.dependencyCount}
+                pending={mutation.isPending}
+                onClose={closeDialog}
+                onConfirm={() =>
+                  void mutation.execute({ kind: "DELETE", version: deleting.task.version })
+                }
               />
             )}
             {removing && (
@@ -240,16 +284,16 @@ function TaskDetailContent({ taskId: id }: { taskId: string }) {
                   }}
                 >
                   <DialogHeader>
-                    <DialogTitle>Gỡ Task tiền đề?</DialogTitle>
+                    <DialogTitle>Remove prerequisite?</DialogTitle>
                     <DialogDescription>
-                      Gỡ liên kết với “{removing.dependency.title}”. Công việc này vẫn được giữ
-                      trong dự án.
+                      Remove the dependency on "{removing.dependency.title}". This task will remain
+                      in the project.
                     </DialogDescription>
                   </DialogHeader>
                   <TaskMutationError error={mutation.error} onReload={reload} />
                   <DialogFooter>
                     <Button variant="outline" disabled={mutation.isPending} onClick={closeDialog}>
-                      Hủy
+                      Cancel
                     </Button>
                     <Button
                       variant="destructive"
@@ -263,7 +307,7 @@ function TaskDetailContent({ taskId: id }: { taskId: string }) {
                       }
                     >
                       {mutation.isPending && <Loader2 className="size-4 animate-spin" />}
-                      {mutation.isPending ? "Đang gỡ..." : "Gỡ liên kết"}
+                      {mutation.isPending ? "Removing..." : "Remove dependency"}
                     </Button>
                   </DialogFooter>
                 </DialogContent>

@@ -53,19 +53,19 @@ public class TaskOutboxService {
             byte[] json = objectMapper.writeValueAsString(values).getBytes(StandardCharsets.UTF_8);
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(json));
         } catch (JsonProcessingException | NoSuchAlgorithmException ex) {
-            throw new IllegalStateException("Không thể xác định yêu cầu Task", ex);
+            throw new IllegalStateException("Unable to identify task request", ex);
         }
     }
 
     public Optional<TaskDTO> findReplay(Long actorId, TaskRequestContext context, String requestHash) {
         return outboxRepository.findByActorIdAndRequestId(actorId, context.requestId()).map(event -> {
             if (!event.getRequestHash().equals(requestHash)) {
-                throw new TaskConflictException("Idempotency-Key đã được dùng cho yêu cầu khác");
+                throw new TaskConflictException("This Idempotency-Key has already been used for a different request");
             }
             try {
                 return objectMapper.readValue(event.getPayload(), TaskDTO.class);
             } catch (JsonProcessingException ex) {
-                throw new IllegalStateException("Không thể đọc kết quả Task đã lưu", ex);
+                throw new IllegalStateException("Unable to read saved task result", ex);
             }
         });
     }
@@ -78,7 +78,7 @@ public class TaskOutboxService {
                     .eventType(eventType).requestId(context.requestId()).requestHash(requestHash)
                     .correlationId(context.correlationId()).payload(objectMapper.writeValueAsString(task)).build());
         } catch (JsonProcessingException ex) {
-            throw new IllegalStateException("Không thể lưu sự kiện Task", ex);
+            throw new IllegalStateException("Unable to save task event", ex);
         }
     }
 }

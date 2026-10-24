@@ -8,5 +8,5 @@ import java.util.List;
 
 public record TaskWorkflowDTO(TaskDTO task, List<TaskStatus> allowedTransitions,
                               List<TaskDependencyDTO> predecessors, List<TaskDependencyDTO> successors,
-                              boolean editable) {
+                              boolean editable, boolean deletable) {
 }

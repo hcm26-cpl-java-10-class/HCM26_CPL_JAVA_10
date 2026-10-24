@@ -14,34 +14,36 @@ export const DATE_FORMAT_LABELS: Record<DateFormatKey, string> = {
   datetime: "D/M HH:mm",
   date: "DD/MM/YYYY",
   time: "HH:mm:ss",
-  relative: "Tương đối",
+  relative: "Relative",
   iso: "ISO 8601",
 };
+
+const relativeTime = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 
 function formatRelative(d: Date): string {
   const diff = Date.now() - d.getTime();
   const abs = Math.abs(diff);
   const future = diff < 0;
 
-  if (abs < 60_000) return future ? "vài giây nữa" : "vừa xong";
+  if (abs < 60_000) return future ? "in a few seconds" : "just now";
   if (abs < 3_600_000) {
     const m = Math.round(abs / 60_000);
-    return future ? `${m} phút nữa` : `${m} phút trước`;
+    return relativeTime.format(future ? m : -m, "minute");
   }
   if (abs < 86_400_000) {
     const h = Math.round(abs / 3_600_000);
-    return future ? `${h} giờ nữa` : `${h} giờ trước`;
+    return relativeTime.format(future ? h : -h, "hour");
   }
   if (abs < 86_400_000 * 30) {
     const d = Math.round(abs / 86_400_000);
-    return future ? `${d} ngày nữa` : `${d} ngày trước`;
+    return relativeTime.format(future ? d : -d, "day");
   }
   if (abs < 86_400_000 * 365) {
     const mo = Math.round(abs / (86_400_000 * 30));
-    return future ? `${mo} tháng nữa` : `${mo} tháng trước`;
+    return relativeTime.format(future ? mo : -mo, "month");
   }
   const yr = Math.round(abs / (86_400_000 * 365));
-  return future ? `${yr} năm nữa` : `${yr} năm trước`;
+  return relativeTime.format(future ? yr : -yr, "year");
 }
 
 export function formatDateValue(

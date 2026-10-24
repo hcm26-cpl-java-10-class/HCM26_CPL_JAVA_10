@@ -10,7 +10,7 @@ public class TaskValidationException extends RuntimeException {
     private final Map<String, List<String>> errors;
 
     public TaskValidationException(Map<String, List<String>> errors) {
-        super("Dữ liệu Task không hợp lệ");
+        super("Invalid task data");
         this.errors = errors;
     }
 

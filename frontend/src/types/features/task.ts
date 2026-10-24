@@ -48,6 +48,7 @@ export interface TaskWorkflowDTO {
   predecessors: TaskDependencyDTO[];
   successors: TaskDependencyDTO[];
   editable: boolean;
+  deletable: boolean;
 }
 
 export interface TaskActivityDTO {

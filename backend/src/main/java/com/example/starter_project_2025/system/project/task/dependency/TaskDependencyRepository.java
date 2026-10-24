@@ -11,4 +11,6 @@ public interface TaskDependencyRepository extends JpaRepository<TaskDependency, 
     List<TaskDependency> findByPredecessorTaskIdOrderByCreatedAtAsc(UUID taskId);
 
     List<TaskDependency> findBySuccessorTaskProjectId(UUID projectId);
+
+    List<TaskDependency> findByPredecessorTaskIdOrSuccessorTaskId(UUID predecessorId, UUID successorId);
 }

@@ -52,22 +52,22 @@ public class TaskExceptionHandler {
 
     @ExceptionHandler({PessimisticLockingFailureException.class, PessimisticLockException.class, LockTimeoutException.class})
     public ResponseEntity<ErrorResponse> busy(Exception ex) {
-        return error(409, "Task đang được cập nhật, vui lòng thử lại với cùng Idempotency-Key");
+        return error(409, "This task is being updated. Please retry with the same Idempotency-Key");
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> concurrentWrite(DataIntegrityViolationException ex) {
-        return error(409, "Dữ liệu vừa thay đổi, vui lòng thử lại với cùng Idempotency-Key");
+        return error(409, "The data has changed. Please retry with the same Idempotency-Key");
     }
 
     @ExceptionHandler(AuthenticationCredentialsNotFoundException.class)
     public ResponseEntity<ErrorResponse> unauthenticated(AuthenticationCredentialsNotFoundException ex) {
-        return error(401, "Vui lòng đăng nhập");
+        return error(401, "Please sign in");
     }
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> forbidden(AccessDeniedException ex) {
-        return error(403, "Bạn không có quyền thực hiện thao tác Task này");
+        return error(403, "You do not have permission to perform this task action");
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
@@ -78,13 +78,13 @@ public class TaskExceptionHandler {
     @ExceptionHandler(BindException.class)
     public ResponseEntity<ValidationErrorResponse> invalidFilter(BindException ex) {
         Map<String, List<String>> errors = new LinkedHashMap<>();
-        ex.getFieldErrors().forEach(field -> errors.put(field.getField(), List.of("Giá trị không hợp lệ")));
+        ex.getFieldErrors().forEach(field -> errors.put(field.getField(), List.of("Invalid value")));
         return validation(new TaskValidationException(errors));
     }
 
     @ExceptionHandler({MethodArgumentTypeMismatchException.class, MissingServletRequestParameterException.class})
     public ResponseEntity<ErrorResponse> invalidParameter(Exception ex) {
-        return error(400, "Tham số yêu cầu không hợp lệ");
+        return error(400, "Invalid request parameter");
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
@@ -97,7 +97,18 @@ public class TaskExceptionHandler {
                 field = name;
             }
         }
-        return validation(new TaskValidationException(field, "Giá trị không hợp lệ"));
+        String message = switch (field) {
+            case "estimatedHours" -> "Estimate must be a valid number greater than 0";
+            case "title" -> "Task title must contain 1 to 250 characters";
+            case "priority" -> "Priority must be High, Medium or Low";
+            case "status" -> "Please select a valid task status";
+            case "version" -> "Task version must be a non-negative whole number";
+            case "tags" -> "Tags must be a list of text values";
+            case "projectId", "sprintId", "milestoneId", "assigneeProjectMemberId", "predecessorTaskId" ->
+                    "Please provide a valid ID";
+            default -> "Invalid request data";
+        };
+        return validation(new TaskValidationException(field, message));
     }
 
     @ExceptionHandler(Exception.class)
@@ -105,7 +116,7 @@ public class TaskExceptionHandler {
         String correlationId = TaskRequestContext.currentCorrelationId();
         log.error("Task request failed, correlationId={}", correlationId, ex);
         return ResponseEntity.internalServerError().header("X-Correlation-ID", correlationId)
-                .body(new ErrorResponse(500, "Không thể xử lý yêu cầu Task", LocalDateTime.now()));
+                .body(new ErrorResponse(500, "Unable to process task request", LocalDateTime.now()));
     }
 
     private ResponseEntity<ErrorResponse> error(int status, String message) {

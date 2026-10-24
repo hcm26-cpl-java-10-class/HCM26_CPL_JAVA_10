@@ -18,7 +18,7 @@ export function TaskMutationError({
     <Alert variant="destructive">
       <AlertCircle />
       <AlertTitle>
-        {error.status === 409 ? "Dữ liệu đã thay đổi" : "Chưa thực hiện được thao tác"}
+        {error.status === 409 ? "Data has changed" : "Unable to complete this action"}
       </AlertTitle>
       <AlertDescription>
         <p>{error.message}</p>
@@ -27,7 +27,7 @@ export function TaskMutationError({
         ))}
         {error.status === 409 && onReload && (
           <Button type="button" size="sm" variant="outline" onClick={onReload}>
-            <RefreshCw className="size-4" /> Tải dữ liệu mới
+            <RefreshCw className="size-4" /> Reload data
           </Button>
         )}
       </AlertDescription>

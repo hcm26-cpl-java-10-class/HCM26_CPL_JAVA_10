@@ -22,7 +22,7 @@ public class TaskAccessInitializer implements CommandLineRunner {
     public void run(String... args) {
         for (String roleName : List.of("STUDENT", "TEACHER")) {
             roleRepository.findByName(roleName).ifPresent(role -> {
-                for (String name : List.of("TASK_CREATE", "TASK_READ", "TASK_UPDATE")) {
+                for (String name : List.of("TASK_CREATE", "TASK_READ", "TASK_UPDATE", "TASK_DELETE")) {
                     permissionRepository.findByName(name).ifPresent(role.getPermissions()::add);
                 }
                 roleRepository.save(role);

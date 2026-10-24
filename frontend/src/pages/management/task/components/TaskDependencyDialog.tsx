@@ -101,22 +101,22 @@ export function TaskDependencyDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle>Thêm Task tiền đề</DialogTitle>
+          <DialogTitle>Add prerequisite</DialogTitle>
           <DialogDescription>
-            Chọn công việc phải Done trước khi “{task.title}” được bắt đầu.
-            {task.status !== "TODO" && " Công việc đã bắt đầu chỉ được thêm tiền đề đã Done."}
+            Select a task that must be Done before "{task.title}" can start.
+            {task.status !== "TODO" && " Only completed prerequisites can be added after a task has started."}
           </DialogDescription>
         </DialogHeader>
         <TaskMutationError error={error} onReload={onReload} />
         <div className="relative">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            aria-label="Tìm Task tiền đề"
+            aria-label="Search prerequisite tasks"
             className="pl-9"
             autoFocus
             disabled={pending}
             value={search}
-            placeholder="Tìm theo tên hoặc mô tả..."
+            placeholder="Search by title or description..."
             onChange={(event) => setSearch(event.target.value)}
           />
         </div>
@@ -125,24 +125,24 @@ export function TaskDependencyDialog({
             role="status"
             className="flex items-center justify-center gap-2 py-8 text-muted-foreground"
           >
-            <Loader2 className="size-4 animate-spin" /> Đang tải Task...
+            <Loader2 className="size-4 animate-spin" /> Loading task...
           </div>
         ) : optionsQuery.isError ? (
           <div role="alert" className="grid gap-3 text-sm text-destructive">
             <p>{getTaskError(optionsQuery.error).message}</p>
             <Button variant="outline" onClick={() => void optionsQuery.refetch()}>
-              Thử lại
+              Try again
             </Button>
           </div>
         ) : options.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            Không có Task phù hợp để chọn.
+            No matching tasks found.
           </p>
         ) : (
           <RadioGroup
             value={selected?.id ?? ""}
             disabled={pending}
-            aria-label="Task tiền đề"
+            aria-label="Prerequisites"
             aria-invalid={!!error?.fieldErrors.predecessorTaskId?.length}
             onValueChange={(id) => {
               setSelected(options.find((option) => option.id === id) ?? null);
@@ -170,13 +170,13 @@ export function TaskDependencyDialog({
         )}
         <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
           <span>
-            Trang {page + 1}/{Math.max(1, optionsQuery.data?.totalPages ?? 0)}
+            Page {page + 1}/{Math.max(1, optionsQuery.data?.totalPages ?? 0)}
           </span>
           <div className="flex gap-2">
             <Button
               variant="outline"
               size="icon"
-              aria-label="Task tiền đề trang trước"
+              aria-label="Previous page of prerequisites"
               disabled={pending || optionsQuery.isFetching || page === 0}
               onClick={() => setPage(page - 1)}
             >
@@ -185,7 +185,7 @@ export function TaskDependencyDialog({
             <Button
               variant="outline"
               size="icon"
-              aria-label="Task tiền đề trang sau"
+              aria-label="Next page of prerequisites"
               disabled={
                 pending ||
                 optionsQuery.isFetching ||
@@ -199,16 +199,16 @@ export function TaskDependencyDialog({
         </div>
         {selected && (
           <p className="text-sm">
-            Đang chọn: <strong>{selected.title}</strong>
+            Selected: <strong>{selected.title}</strong>
           </p>
         )}
         <DialogFooter>
           <Button variant="outline" disabled={pending} onClick={onClose}>
-            Hủy
+            Cancel
           </Button>
           <Button disabled={pending || !selected} onClick={() => void submit()}>
             {pending && <Loader2 className="size-4 animate-spin" />}
-            {pending ? "Đang thêm..." : "Thêm liên kết"}
+            {pending ? "Adding..." : "Add dependency"}
           </Button>
         </DialogFooter>
       </DialogContent>

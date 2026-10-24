@@ -6,15 +6,15 @@ import { TaskStatusBadge } from "./TaskBadges";
 
 const actionLabels: Record<TaskStatus, string> = {
   TODO: "To Do",
-  IN_PROGRESS: "Bắt đầu thực hiện",
-  REVIEW: "Gửi review",
-  DONE: "Hoàn thành",
-  BLOCKED: "Đánh dấu bị chặn",
+  IN_PROGRESS: "Start task",
+  REVIEW: "Submit for review",
+  DONE: "Complete task",
+  BLOCKED: "Mark as blocked",
 };
 
 function actionLabel(from: TaskStatus, to: TaskStatus) {
-  if (to === "IN_PROGRESS" && from === "REVIEW") return "Trả về In Progress";
-  if (to === "IN_PROGRESS" && from === "BLOCKED") return "Tiếp tục thực hiện";
+  if (to === "IN_PROGRESS" && from === "REVIEW") return "Return to In Progress";
+  if (to === "IN_PROGRESS" && from === "BLOCKED") return "Resume task";
   return actionLabels[to];
 }
 
@@ -31,11 +31,11 @@ export function TaskStatusActions({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Trạng thái công việc</CardTitle>
+        <CardTitle>Task status</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
         <div className="flex items-center justify-between gap-3 text-sm">
-          <span className="text-muted-foreground">Hiện tại</span>
+          <span className="text-muted-foreground">Current status</span>
           <TaskStatusBadge status={workflow.task.status} />
         </div>
         <p className="text-xs leading-relaxed text-muted-foreground">
@@ -43,13 +43,13 @@ export function TaskStatusActions({
         </p>
         {workflow.task.status === "REVIEW" && (
           <p className="text-sm text-muted-foreground">
-            Review chưa đạt có thể trả về In Progress để tiếp tục chỉnh sửa.
+            Tasks that need changes can return from Review to In Progress.
           </p>
         )}
         {unfinished > 0 && (
           <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
-            Còn {unfinished} Task tiền đề chưa Done. Phải hoàn thành tất cả tiền đề trước khi bắt
-            đầu hoặc hoàn thành công việc này.
+            {unfinished} prerequisite task(s) are not Done. Complete all prerequisites before
+            starting or completing this task.
           </p>
         )}
         {workflow.editable &&
@@ -76,10 +76,10 @@ export function TaskStatusActions({
             </Button>
           ))}
         {workflow.task.status === "DONE" && (
-          <p className="text-sm text-muted-foreground">Công việc đã hoàn thành.</p>
+          <p className="text-sm text-muted-foreground">This task is complete.</p>
         )}
         {!workflow.editable && (
-          <p className="text-sm text-muted-foreground">Bạn có quyền xem công việc này.</p>
+          <p className="text-sm text-muted-foreground">You have view-only access to this task.</p>
         )}
       </CardContent>
     </Card>

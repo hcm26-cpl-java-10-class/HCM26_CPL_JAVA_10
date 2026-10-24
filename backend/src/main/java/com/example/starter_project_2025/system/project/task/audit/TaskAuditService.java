@@ -42,7 +42,7 @@ public class TaskAuditService {
     }
 
     private String actorName(User actor) {
-        if (actor == null) return "Thành viên";
+        if (actor == null) return "Member";
         return ((actor.getFirstName() == null ? "" : actor.getFirstName()) + " "
                 + (actor.getLastName() == null ? "" : actor.getLastName())).strip();
     }
@@ -52,7 +52,7 @@ public class TaskAuditService {
         try {
             return objectMapper.readValue(json, TaskDTO.class);
         } catch (JsonProcessingException ex) {
-            throw new IllegalStateException("Không thể đọc lịch sử Task", ex);
+            throw new IllegalStateException("Unable to read task history", ex);
         }
     }
 
@@ -60,7 +60,7 @@ public class TaskAuditService {
         try {
             return objectMapper.writeValueAsString(value);
         } catch (JsonProcessingException ex) {
-            throw new IllegalStateException("Không thể lưu audit của Task", ex);
+            throw new IllegalStateException("Unable to save task audit log", ex);
         }
     }
 }

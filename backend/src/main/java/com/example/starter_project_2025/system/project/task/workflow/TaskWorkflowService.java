@@ -35,7 +35,7 @@ public class TaskWorkflowService {
         var successors = dependencyRepository.findByPredecessorTaskIdOrderByCreatedAtAsc(taskId).stream()
                 .map(dependency -> relatedTask(dependency.getSuccessorTask(), dependency, actorId)).toList();
         return new TaskWorkflowDTO(taskMapper.toResponse(task), task.getStatus().nextStatuses(),
-                predecessors, successors, taskAccess.canUpdate(task, actorId));
+                predecessors, successors, taskAccess.canUpdate(task, actorId), taskAccess.canDelete(task, actorId));
     }
 
     @Transactional(readOnly = true)
@@ -50,7 +50,7 @@ public class TaskWorkflowService {
         Task task = findReadableTask(taskId, actorId);
         validateVersion(request.version());
         if (request.status() == null) {
-            throw new TaskValidationException("status", "Vui lòng chọn trạng thái");
+            throw new TaskValidationException("status", "Please select a status");
         }
         String hash = outboxService.requestHash("STATUS_CHANGED", taskId, request);
         var replay = outboxService.findReplay(actorId, context, hash);
@@ -58,7 +58,7 @@ public class TaskWorkflowService {
 
         lockForUpdate(task, actorId, request.version());
         if (!task.getStatus().nextStatuses().contains(request.status())) {
-            throw new TaskConflictException("Không thể chuyển trạng thái Task theo bước đã chọn");
+            throw new TaskConflictException("This task status transition is not allowed");
         }
         if (request.status() == TaskStatus.IN_PROGRESS || request.status() == TaskStatus.DONE) {
             checkPrerequisitesDone(task);
@@ -74,7 +74,7 @@ public class TaskWorkflowService {
         Task task = findReadableTask(taskId, actorId);
         validateVersion(request.version());
         if (request.predecessorTaskId() == null) {
-            throw new TaskValidationException("predecessorTaskId", "Vui lòng chọn Task tiền đề");
+            throw new TaskValidationException("predecessorTaskId", "Please select a prerequisite task");
         }
         String hash = outboxService.requestHash("DEPENDENCY_ADDED", taskId, request);
         var replay = outboxService.findReplay(actorId, context, hash);
@@ -83,15 +83,15 @@ public class TaskWorkflowService {
         lockForUpdate(task, actorId, request.version());
         Task predecessor = findLinkedTask(request.predecessorTaskId(), task, actorId);
         if (wouldCreateCycle(taskId, predecessor.getId(), task.getProjectId())) {
-            throw new TaskValidationException("predecessorTaskId", "Không thể tạo phụ thuộc vòng (Circular Dependency)");
+            throw new TaskValidationException("predecessorTaskId", "Cannot create a circular dependency");
         }
         TaskDependencyId id = new TaskDependencyId(predecessor.getId(), taskId);
         if (dependencyRepository.existsById(id)) {
-            throw new TaskConflictException("Liên kết phụ thuộc đã tồn tại");
+            throw new TaskConflictException("This dependency already exists");
         }
         if (task.getStatus() != TaskStatus.TODO && predecessor.getStatus() != TaskStatus.DONE) {
             throw new TaskValidationException("predecessorTaskId",
-                    "Task đã bắt đầu, chỉ được thêm Task tiền đề đã hoàn thành");
+                    "Only completed prerequisites can be added after a task has started");
         }
 
         TaskDTO before = taskMapper.toResponse(task);
@@ -140,7 +140,7 @@ public class TaskWorkflowService {
     private Task findLinkedTask(UUID id, Task task, Long actorId) {
         Task linked = findReadableTask(id, actorId);
         if (!task.getProjectId().equals(linked.getProjectId())) {
-            throw new TaskValidationException("predecessorTaskId", "Các Task phụ thuộc phải thuộc cùng Project");
+            throw new TaskValidationException("predecessorTaskId", "Dependent tasks must belong to the same project");
         }
         entityManager.refresh(linked);
         if (!Boolean.TRUE.equals(linked.getIsActive())) throw missingLinkedTask();
@@ -179,7 +179,7 @@ public class TaskWorkflowService {
             Task predecessor = dependency.getPredecessorTask();
             if (!Boolean.TRUE.equals(predecessor.getIsActive())) throw missingLinkedTask();
             if (predecessor.getStatus() != TaskStatus.DONE) {
-                throw new TaskValidationException("status", "Task tiền đề chưa hoàn thành, không thể chuyển trạng thái");
+                throw new TaskValidationException("status", "All prerequisite tasks must be Done before changing to this status");
             }
         }
     }
@@ -197,11 +197,11 @@ public class TaskWorkflowService {
 
     private void validateVersion(Long version) {
         if (version == null || version < 0) {
-            throw new TaskValidationException("version", "Vui lòng gửi version hiện tại của Task");
+            throw new TaskValidationException("version", "Please provide the current task version");
         }
     }
 
     private ResourceNotFoundException missingLinkedTask() {
-        return new ResourceNotFoundException("Task liên kết không tồn tại hoặc đã bị xóa");
+        return new ResourceNotFoundException("The linked task does not exist or has been deleted");
     }
 }

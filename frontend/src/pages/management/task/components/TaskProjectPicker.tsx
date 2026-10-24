@@ -20,7 +20,7 @@ export function TaskProjectPicker({
     event.preventDefault();
     const id = value.trim();
     if (!isProjectId(id)) {
-      setError("Vui lòng nhập mã dự án hợp lệ.");
+      setError("Please enter a valid project ID.");
       return;
     }
     setError(undefined);
@@ -34,11 +34,11 @@ export function TaskProjectPicker({
       className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
     >
       <div className="grid gap-2">
-        <Label htmlFor="task-project">Dự án</Label>
+        <Label htmlFor="task-project">Project</Label>
         <Input
           id="task-project"
           value={value}
-          placeholder="Nhập mã dự án được chia sẻ với bạn"
+          placeholder="Enter the project ID shared with you"
           aria-invalid={!!error}
           aria-describedby={error ? "task-project-error" : undefined}
           onChange={(event) => {
@@ -51,7 +51,7 @@ export function TaskProjectPicker({
         </div>
       </div>
       <Button type="submit" variant="outline" className="sm:mb-2">
-        <FolderOpen className="size-4" /> Mở dự án
+        <FolderOpen className="size-4" /> Open project
       </Button>
     </form>
   );

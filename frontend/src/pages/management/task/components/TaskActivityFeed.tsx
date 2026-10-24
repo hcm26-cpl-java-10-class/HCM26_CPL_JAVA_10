@@ -8,30 +8,30 @@ import { History, Loader2 } from "lucide-react";
 import { getTaskError, taskStatusOptions } from "../task-form.utils";
 
 function activityDescription(activity: TaskActivityDTO): string {
-  if (activity.action === "CREATE") return "Tạo Task";
-  if (activity.action === "UPDATE") return "Cập nhật thông tin Task";
+  if (activity.action === "CREATE") return "Create task";
+  if (activity.action === "UPDATE") return "Updated task details";
   if (activity.action === "STATUS_CHANGED") {
     const before =
       taskStatusOptions.find((option) => option.value === activity.before?.status)?.label ?? "";
     const after =
       taskStatusOptions.find((option) => option.value === activity.after.status)?.label ?? "";
-    return `Chuyển trạng thái: ${before} → ${after}`;
+    return `Changed status: ${before} → ${after}`;
   }
   const before = activity.before?.predecessorTaskIds ?? [];
   const after = activity.after.predecessorTaskIds ?? [];
   if (activity.action === "DEPENDENCY_ADDED") {
-    return `Thêm Task tiền đề: ${after
+    return `Added prerequisite: ${after
       .filter((id) => !before.includes(id))
       .map((id) => id.slice(0, 8).toUpperCase())
       .join(", ")}`;
   }
   if (activity.action === "DEPENDENCY_REMOVED") {
-    return `Gỡ Task tiền đề: ${before
+    return `Removed prerequisite: ${before
       .filter((id) => !after.includes(id))
       .map((id) => id.slice(0, 8).toUpperCase())
       .join(", ")}`;
   }
-  return "Cập nhật công việc";
+  return "Updated task";
 }
 
 export function TaskActivityFeed({ taskId }: { taskId: string }) {
@@ -45,31 +45,31 @@ export function TaskActivityFeed({ taskId }: { taskId: string }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <History className="size-4" /> Lịch sử thay đổi
+          <History className="size-4" /> Activity
         </CardTitle>
       </CardHeader>
       <CardContent>
         {activityQuery.isLoading ? (
           <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" /> Đang tải lịch sử...
+            <Loader2 className="size-4 animate-spin" /> Loading activity...
           </div>
         ) : activityQuery.isError ? (
           <div role="alert" className="grid gap-2 text-sm text-destructive">
             <p>{getTaskError(activityQuery.error).message}</p>
             <Button variant="outline" size="sm" onClick={() => void activityQuery.refetch()}>
-              Thử lại
+              Try again
             </Button>
           </div>
         ) : !activityQuery.data?.length ? (
-          <p className="text-sm text-muted-foreground">Chưa có lịch sử thay đổi.</p>
+          <p className="text-sm text-muted-foreground">No activity yet.</p>
         ) : (
           <ol className="grid gap-5">
             {[...activityQuery.data].reverse().map((activity) => (
               <li key={activity.id} className="border-l-2 border-muted pl-4">
                 <p className="text-sm font-medium">{activityDescription(activity)}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {activity.actorName || "Thành viên"} ·{" "}
-                  {new Date(activity.occurredAt).toLocaleString("vi-VN")}
+                  {activity.actorName || "Member"} ·{" "}
+                  {new Date(activity.occurredAt).toLocaleString("en-US")}
                 </p>
               </li>
             ))}

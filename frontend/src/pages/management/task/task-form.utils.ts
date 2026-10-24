@@ -21,13 +21,13 @@ export const taskStatusOptions = [
 ] as const;
 
 export const taskPriorityOptions = [
-  { value: "LOW", label: "Thấp" },
-  { value: "MEDIUM", label: "Trung bình" },
-  { value: "HIGH", label: "Cao" },
+  { value: "LOW", label: "Low" },
+  { value: "MEDIUM", label: "Medium" },
+  { value: "HIGH", label: "High" },
 ] as const;
 
 export const taskConflictMessage =
-  "Dữ liệu Task đã bị thay đổi bởi thành viên khác, vui lòng tải lại trang";
+  "This task was changed by another member. Please reload the page.";
 
 export function isProjectId(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
@@ -61,17 +61,26 @@ export function validateTaskForm(values: TaskFormValues): TaskFieldErrors {
   const errors: TaskFieldErrors = {};
   const title = values.title.trim();
   if (!title || title.length > 250) {
-    errors.title = ["Tên task bắt buộc từ 1 - 250 ký tự"];
+    errors.title = ["Task title must contain 1 to 250 characters"];
+  }
+  if (values.assigneeProjectMemberId && !isProjectId(values.assigneeProjectMemberId)) {
+    errors.assigneeProjectMemberId = ["Please select a valid project member"];
   }
   const hours = values.estimatedHours.trim();
   if (
     (values.assigneeProjectMemberId && !hours) ||
-    (hours && (!Number.isFinite(Number(hours)) || Number(hours) <= 0))
+    (hours &&
+      (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(hours) ||
+        !Number.isFinite(Number(hours)) ||
+        Number(hours) <= 0))
   ) {
-    errors.estimatedHours = ["Estimate phải lớn hơn 0"];
+    errors.estimatedHours = ["Estimate must be a valid number greater than 0"];
+  }
+  if (!taskPriorityOptions.some((option) => option.value === values.priority)) {
+    errors.priority = ["Please select a valid priority"];
   }
   if (values.tags.some((tag) => !tag.trim() || tag.trim().length > 100)) {
-    errors.tags = ["Tag bắt buộc từ 1 - 100 ký tự"];
+    errors.tags = ["Tags must contain 1 to 100 characters"];
   }
   return errors;
 }
@@ -105,17 +114,17 @@ export function getTaskError(error: unknown): TaskRequestError {
   if (!axios.isAxiosError<{ message?: string; errors?: Record<string, string[]> }>(error)) {
     return {
       status: undefined,
-      message: "Không thể xử lý yêu cầu. Vui lòng thử lại.",
+      message: "Unable to process your request. Please try again.",
       fieldErrors: {},
     };
   }
   const status = error.response?.status;
   const messages: Record<number, string> = {
-    401: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
-    403: "Bạn không có quyền thực hiện thao tác Task này.",
-    404: "Task không tồn tại hoặc đã bị xóa.",
+    401: "Your session has expired. Please sign in again.",
+    403: "You do not have permission to perform this task action.",
+    404: "Task does not exist or has been deleted.",
     409: taskConflictMessage,
-    422: "Vui lòng kiểm tra lại các trường bị lỗi.",
+    422: "Please check the highlighted fields.",
   };
   return {
     status,
@@ -123,7 +132,7 @@ export function getTaskError(error: unknown): TaskRequestError {
       ((status === 409 || status === 404) && error.response?.data?.message) ||
       (status && messages[status]) ||
       error.response?.data?.message ||
-      "Không kết nối được máy chủ. Vui lòng thử lại.",
+      "Unable to connect to the server. Please try again.",
     fieldErrors: error.response?.data?.errors ?? {},
   };
 }
