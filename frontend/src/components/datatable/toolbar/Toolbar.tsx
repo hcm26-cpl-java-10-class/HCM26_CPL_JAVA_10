@@ -17,6 +17,7 @@ interface ToolbarProps {
   showViewModeToggle?: boolean;
   showActions?: boolean;
   showCardColumnToggle?: boolean;
+  hideCreate?: boolean;
 }
 
 export function Toolbar({
@@ -29,6 +30,7 @@ export function Toolbar({
   showViewModeToggle = true,
   showActions = true,
   showCardColumnToggle = true,
+  hideCreate = false,
 }: ToolbarProps) {
   const { schema } = table;
 
@@ -92,6 +94,13 @@ export function Toolbar({
         )}
       </div>
 
+      {showActions && (
+        <ToolbarActions
+          table={table}
+          headerActions={headerActions}
+          hideCreate={hideCreate}
+        />
+      )}
       {rightSlot}
     </div>
   );

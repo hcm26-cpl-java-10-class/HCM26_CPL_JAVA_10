@@ -86,7 +86,7 @@ export function ToolbarActions({
 
       {/* Show custom header actions if provided, otherwise show default Create button */}
       {headerActions ||
-        (table.permission?.canCreate && (
+        (!hideCreate && table.permission?.canCreate && (
           <PermissionGate permission={table.permission?.keys?.create}>
             <ActionButton
               onClick={() => table.openCreate()}

@@ -99,6 +99,38 @@ export function useActiveModuleGroups(enabled = true) {
                 });
             }
 
+            if (canAccessByPermission("PEO_TEAM_ALLOCATE", hasPermission)) {
+                const moduleGroup = groups.find(
+                    (group) => (group.name ?? "").toLowerCase() === "project management",
+                );
+                const allocationModule: SidebarModule = {
+                    id: 100001,
+                    moduleGroupId: String(moduleGroup?.id ?? 100000),
+                    title: "Phân nhóm dự án",
+                    name: "Phân nhóm dự án",
+                    url: "/team-allocation",
+                    icon: "users",
+                    displayOrder: 1,
+                    requiredPermission: "PEO_TEAM_ALLOCATE",
+                    isActive: true,
+                };
+                if (moduleGroup) {
+                    const groupId = String(moduleGroup.id ?? "");
+                    if (!groupedModules[groupId]) groupedModules[groupId] = [];
+                    groupedModules[groupId].push(allocationModule);
+                } else {
+                    const fallbackGroup: ModuleGroupDTO = {
+                        id: 100000,
+                        name: "Project Management",
+                        description: "Project and team allocation",
+                        displayOrder: 1,
+                        isActive: true,
+                    };
+                    groups.push(fallbackGroup);
+                    groupedModules[String(fallbackGroup.id)] = [allocationModule];
+                }
+            }
+
             return groups
                 .map((group) => {
                     const groupId = String(group.id ?? "");

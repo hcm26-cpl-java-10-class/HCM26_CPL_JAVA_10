@@ -98,6 +98,9 @@ interface ProTableProps<TData = any> {
     /** Hide default actions completely (for display-only tables) */
     hideActions?: boolean;
 
+    /** Hide only the default Create action while retaining import/export actions */
+    hideCreate?: boolean;
+
     /** UI mode for datatable. browse mode is card-first with simplified controls. */
     mode?: "default" | "browse";
 
@@ -135,6 +138,7 @@ export function ProTable<TData = any>({
     autoPageSize = true,
     rowHeight = 49,
     hideActions = false,
+    hideCreate = false,
     mode = "default",
     browseRowActions = false,
     expandable,
@@ -285,6 +289,7 @@ export function ProTable<TData = any>({
                 showViewModeToggle={!isBrowseMode}
                 showActions={!isBrowseMode}
                 showCardColumnToggle={!isBrowseMode}
+                hideCreate={hideCreate}
             />
 
             <div
