@@ -12,8 +12,11 @@ import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.annotation.AfterReturning;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
+import org.slf4j.MDC;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.stereotype.Component;
+import org.aspectj.lang.JoinPoint;
+import org.aspectj.lang.annotation.AfterReturning;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
@@ -32,31 +35,61 @@ public class AuditLogAspect {
     private final ObjectMapper objectMapper;
     private static final Logger log = LoggerFactory.getLogger(AuditLogAspect.class);
 
-    @AfterReturning(
-            pointcut = "execution(public * com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl+.create(..))",
-            returning = "result"
+    @Around(
+            "execution(public * com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl+.create(..))"
     )
-    public void afterCreate(JoinPoint joinPoint, Object result) {
+    public Object aroundCreate(ProceedingJoinPoint joinPoint) throws Throwable {
+        Object result;
 
-        if (!(result instanceof BaseDTO dto)) return;
+        try {
+            result = joinPoint.proceed();
+        } catch (Throwable ex) {
+            String entityType = getEntityType(joinPoint.getTarget());
 
-        String entityType = getEntityType(joinPoint.getTarget());
-        if (entityType == null) return;
+            if (entityType != null) {
+                auditLogService.log(
+                        "CREATE",
+                        entityType,
+                        null,
+                        null,
+                        null,
+                        MDC.get(CorrelationIdFilter.MDC_KEY),
+                        "FAILED"
+                );
+            }
 
-        auditLogService.log(
-                "CREATE",
-                entityType,
-                toId(dto.getId()),
-                null,
-                toJson(dto),
-                null
-        );
+            throw ex;
+        }
+
+        if (result instanceof BaseDTO dto) {
+            String entityType = getEntityType(joinPoint.getTarget());
+
+            if (entityType != null) {
+                auditLogService.log(
+                        "CREATE",
+                        entityType,
+                        toId(dto.getId()),
+                        null,
+                        toJson(dto),
+                        MDC.get(CorrelationIdFilter.MDC_KEY),
+                        "SUCCESS"
+                );
+            }
+        }
+
+        return result;
     }
 
     @Around(
             "execution(public * com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl+.update(..))"
     )
+
+
+
     public Object aroundUpdate(ProceedingJoinPoint joinPoint) throws Throwable {
+
+        log.info(">>> AuditLogAspect aroundUpdate triggered: {}",
+                joinPoint.getSignature());
 
         Object target = joinPoint.getTarget();
         String entityType = getEntityType(target);
@@ -67,23 +100,39 @@ public class AuditLogAspect {
 
         Object[] args = joinPoint.getArgs();
         Object id = args[0];
-
         String oldValue = snapshot(target, id);
 
-        Object result = joinPoint.proceed();
+        try {
+            Object result = joinPoint.proceed();
 
-        if (result instanceof BaseDTO dto) {
+            if (result instanceof BaseDTO dto) {
+                auditLogService.log(
+                        "UPDATE",
+                        entityType,
+                        toId(dto.getId()),
+                        oldValue,
+                        toJson(dto),
+                        MDC.get(CorrelationIdFilter.MDC_KEY),
+                        "SUCCESS"
+                );
+            }
+
+            return result;
+        } catch (Throwable ex) {
+            log.error("Audit aspect caught UPDATE failure for id {}", id, ex);
+
             auditLogService.log(
                     "UPDATE",
                     entityType,
-                    toId(dto.getId()),
+                    toId(id),
                     oldValue,
-                    toJson(dto),
-                    null
+                    null,
+                    MDC.get(CorrelationIdFilter.MDC_KEY),
+                    "FAILED"
             );
-        }
 
-        return result;
+            throw ex;
+        }
     }
 
     @Around(
@@ -91,6 +140,9 @@ public class AuditLogAspect {
     )
     public Object aroundDelete(ProceedingJoinPoint joinPoint) throws Throwable {
 
+        log.info(">>> AuditLogAspect aroundDelete triggered: {}",
+                joinPoint.getSignature());
+
         Object target = joinPoint.getTarget();
         String entityType = getEntityType(target);
 
@@ -100,23 +152,36 @@ public class AuditLogAspect {
 
         Object[] args = joinPoint.getArgs();
         Object id = args[0];
-
         String oldValue = snapshot(target, id);
 
-        Object result = joinPoint.proceed();
+        try {
+            Object result = joinPoint.proceed();
 
-        auditLogService.log(
-                "DELETE",
-                entityType,
-                toId(id),
-                oldValue,
-                null,
-                null
-        );
+            auditLogService.log(
+                    "DELETE",
+                    entityType,
+                    toId(id),
+                    oldValue,
+                    null,
+                    MDC.get(CorrelationIdFilter.MDC_KEY),
+                    "SUCCESS"
+            );
 
-        return result;
+            return result;
+        } catch (Throwable ex) {
+            auditLogService.log(
+                    "DELETE",
+                    entityType,
+                    toId(id),
+                    oldValue,
+                    null,
+                    MDC.get(CorrelationIdFilter.MDC_KEY),
+                    "FAILED"
+            );
+
+            throw ex;
+        }
     }
-
     private String snapshot(Object target, Object id) {
         try {
             Object entity = findEntity(target, id);

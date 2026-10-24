@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -16,14 +17,15 @@ public class AuditLogServiceImpl implements AuditLogService {
     private final AuditDataSanitizer auditDataSanitizer;
 
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void log(
             String action,
             String entityType,
             String entityId,
             String oldValue,
             String newValue,
-            String correlationId
+            String correlationId,
+            String result
     ) {
         Long actorId = null;
         String actorEmail = "SYSTEM";
@@ -55,6 +57,7 @@ public class AuditLogServiceImpl implements AuditLogService {
                 .correlationId(correlationId)
                 .build();
 
+        auditLog.setResult(result);
         auditLogRepository.save(auditLog);
     }
 }

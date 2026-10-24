@@ -13,6 +13,7 @@ public record AuditLogDTO(
         String oldValue,
         String newValue,
         String correlationId,
+        String result,
         LocalDateTime createdAt
 ) {
     public static AuditLogDTO fromEntity(AuditLog log) {
@@ -26,6 +27,7 @@ public record AuditLogDTO(
                 log.getOldValue(),
                 log.getNewValue(),
                 log.getCorrelationId(),
+                log.getResult(),
                 log.getCreatedAt()
         );
     }

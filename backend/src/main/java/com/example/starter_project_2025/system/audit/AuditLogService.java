@@ -9,6 +9,7 @@ public interface AuditLogService {
             String entityId,
             String oldValue,
             String newValue,
-            String correlationId
+            String correlationId,
+            String result
     );
 }

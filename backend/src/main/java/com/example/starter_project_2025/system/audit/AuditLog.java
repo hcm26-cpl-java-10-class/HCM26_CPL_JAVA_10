@@ -48,6 +48,9 @@ public class AuditLog {
     @Column(name = "correlation_id", length = 100)
     private String correlationId;
 
+    @Column(name = "result", nullable = false, length = 20)
+    private String result;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
