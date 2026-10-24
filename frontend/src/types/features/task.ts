@@ -24,10 +24,48 @@ export interface TaskDTO extends TaskPayload {
   updatedBy: number;
   createdAt: string;
   updatedAt: string;
+  predecessorTaskIds: string[];
 }
 
 export interface TaskFilter {
   projectId: string;
   priority?: TaskPriority;
   status?: TaskStatus;
+  excludeIds?: string[];
+}
+
+export interface TaskDependencyDTO {
+  taskId: string;
+  title: string;
+  status: TaskStatus;
+  dependencyType: string;
+  createdAt: string;
+}
+
+export interface TaskWorkflowDTO {
+  task: TaskDTO;
+  allowedTransitions: TaskStatus[];
+  predecessors: TaskDependencyDTO[];
+  successors: TaskDependencyDTO[];
+  editable: boolean;
+}
+
+export interface TaskActivityDTO {
+  id: string;
+  action: string;
+  actorId: number;
+  actorName: string;
+  occurredAt: string;
+  before: TaskDTO | null;
+  after: TaskDTO;
+}
+
+export interface TaskStatusPayload {
+  status: TaskStatus;
+  version: number;
+}
+
+export interface TaskDependencyPayload {
+  predecessorTaskId: string;
+  version: number;
 }

@@ -79,6 +79,7 @@ export default function TaskManagementPage() {
   });
   const createTask = () => navigate(`/tasks/create?${new URLSearchParams({ projectId })}`);
   const editTask = (task: TaskDTO) => navigate(`/tasks/${task.id}/edit`);
+  const viewTask = (task: TaskDTO) => navigate(`/tasks/${task.id}/detail`);
   const hasFilters = !!search || status !== "ALL" || priority !== "ALL";
   const clearFilters = () => {
     setSearch("");
@@ -217,6 +218,7 @@ export default function TaskManagementPage() {
                   canCreate={canCreate}
                   filtered={hasFilters}
                   onEdit={editTask}
+                  onView={viewTask}
                   onCreate={createTask}
                 />
                 <TaskPagination

@@ -9,7 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { TaskDTO } from "@/types/features/task";
-import { ClipboardList, Loader2, Pencil, Plus } from "lucide-react";
+import { ClipboardList, Eye, Loader2, Pencil, Plus } from "lucide-react";
 import { TaskPriorityBadge, TaskStatusBadge } from "./TaskBadges";
 
 interface TaskTableProps {
@@ -19,6 +19,7 @@ interface TaskTableProps {
   canCreate: boolean;
   filtered: boolean;
   onEdit: (task: TaskDTO) => void;
+  onView: (task: TaskDTO) => void;
   onCreate: () => void;
 }
 
@@ -29,6 +30,7 @@ export function TaskTable({
   canCreate,
   filtered,
   onEdit,
+  onView,
   onCreate,
 }: TaskTableProps) {
   return (
@@ -43,13 +45,13 @@ export function TaskTable({
             <TableHead className="text-right">Ước lượng</TableHead>
             <TableHead>Ưu tiên</TableHead>
             <TableHead className="min-w-40">Nhãn</TableHead>
-            {canEdit && <TableHead className="w-24 text-right">Thao tác</TableHead>}
+            <TableHead className="w-24 text-right">Thao tác</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {loading ? (
             <TableRow>
-              <TableCell colSpan={canEdit ? 8 : 7}>
+              <TableCell colSpan={8}>
                 <div
                   role="status"
                   className="flex items-center justify-center gap-2 py-16 text-muted-foreground"
@@ -60,7 +62,7 @@ export function TaskTable({
             </TableRow>
           ) : tasks.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={canEdit ? 8 : 7}>
+              <TableCell colSpan={8}>
                 <div className="flex flex-col items-center gap-3 py-14 text-center">
                   <ClipboardList className="size-9 text-muted-foreground" />
                   <p className="font-medium">
@@ -88,17 +90,13 @@ export function TaskTable({
                   </span>
                 </TableCell>
                 <TableCell>
-                  {canEdit ? (
-                    <button
-                      type="button"
-                      className="text-left font-medium hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-                      onClick={() => onEdit(task)}
-                    >
-                      {task.title}
-                    </button>
-                  ) : (
-                    <span className="font-medium">{task.title}</span>
-                  )}
+                  <button
+                    type="button"
+                    className="text-left font-medium hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+                    onClick={() => onView(task)}
+                  >
+                    {task.title}
+                  </button>
                   {task.description && (
                     <p className="mt-1 line-clamp-1 max-w-lg text-xs text-muted-foreground">
                       {task.description}
@@ -138,18 +136,28 @@ export function TaskTable({
                     {task.tags.length === 0 && <span className="text-muted-foreground">—</span>}
                   </div>
                 </TableCell>
-                {canEdit && (
-                  <TableCell className="text-right">
+                <TableCell className="text-right">
+                  <div className="flex justify-end gap-1">
                     <Button
                       variant="ghost"
                       size="icon"
-                      aria-label={`Sửa Task ${task.title}`}
-                      onClick={() => onEdit(task)}
+                      aria-label={`Xem Task ${task.title}`}
+                      onClick={() => onView(task)}
                     >
-                      <Pencil className="size-4" />
+                      <Eye className="size-4" />
                     </Button>
-                  </TableCell>
-                )}
+                    {canEdit && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Sửa Task ${task.title}`}
+                        onClick={() => onEdit(task)}
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
+                    )}
+                  </div>
+                </TableCell>
               </TableRow>
             ))
           )}

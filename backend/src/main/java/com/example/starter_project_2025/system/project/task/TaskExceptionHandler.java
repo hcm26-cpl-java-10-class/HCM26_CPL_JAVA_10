@@ -3,13 +3,17 @@ package com.example.starter_project_2025.system.project.task;
 import com.example.starter_project_2025.exception.error.ErrorResponse;
 import com.example.starter_project_2025.exception.error.ValidationErrorResponse;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import com.example.starter_project_2025.system.project.task.workflow.TaskWorkflowController;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import jakarta.persistence.OptimisticLockException;
+import jakarta.persistence.PessimisticLockException;
+import jakarta.persistence.LockTimeoutException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
@@ -26,7 +30,7 @@ import java.util.Map;
 import java.util.LinkedHashMap;
 
 @Slf4j
-@RestControllerAdvice(assignableTypes = TaskController.class)
+@RestControllerAdvice(assignableTypes = {TaskController.class, TaskWorkflowController.class})
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class TaskExceptionHandler {
 
@@ -46,6 +50,11 @@ public class TaskExceptionHandler {
         return error(409, TaskConflictException.STALE_MESSAGE);
     }
 
+    @ExceptionHandler({PessimisticLockingFailureException.class, PessimisticLockException.class, LockTimeoutException.class})
+    public ResponseEntity<ErrorResponse> busy(Exception ex) {
+        return error(409, "Task đang được cập nhật, vui lòng thử lại với cùng Idempotency-Key");
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> concurrentWrite(DataIntegrityViolationException ex) {
         return error(409, "Dữ liệu vừa thay đổi, vui lòng thử lại với cùng Idempotency-Key");
@@ -63,7 +72,7 @@ public class TaskExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> notFound(ResourceNotFoundException ex) {
-        return error(404, "Task không tồn tại hoặc đã bị xóa");
+        return error(404, ex.getMessage());
     }
 
     @ExceptionHandler(BindException.class)

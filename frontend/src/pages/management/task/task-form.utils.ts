@@ -95,7 +95,13 @@ export function toTaskPayload(
   };
 }
 
-export function getTaskError(error: unknown) {
+export interface TaskRequestError {
+  status?: number;
+  message: string;
+  fieldErrors: Record<string, string[]>;
+}
+
+export function getTaskError(error: unknown): TaskRequestError {
   if (!axios.isAxiosError<{ message?: string; errors?: Record<string, string[]> }>(error)) {
     return {
       status: undefined,
@@ -114,7 +120,7 @@ export function getTaskError(error: unknown) {
   return {
     status,
     message:
-      (status === 409 && error.response?.data?.message) ||
+      ((status === 409 || status === 404) && error.response?.data?.message) ||
       (status && messages[status]) ||
       error.response?.data?.message ||
       "Không kết nối được máy chủ. Vui lòng thử lại.",

@@ -41,6 +41,9 @@ public class TaskServiceImpl implements TaskService {
 
         Specification<Task> spec = autoSpecBuilder.build(filter);
         spec = spec.and((root, query, cb) -> cb.isTrue(root.get("isActive")));
+        if (filter.getExcludeIds() != null && !filter.getExcludeIds().isEmpty()) {
+            spec = spec.and((root, query, cb) -> cb.not(root.get("id").in(filter.getExcludeIds())));
+        }
         if (creatorId != null) {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("createdBy"), creatorId));
         }

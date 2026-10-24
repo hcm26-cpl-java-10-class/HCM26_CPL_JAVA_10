@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.util.UUID;
+import java.util.Set;
 
 @Getter
 @Setter
@@ -27,4 +28,6 @@ public class TaskFilter {
 
     @FilterField
     private TaskStatus status;
+
+    private Set<UUID> excludeIds;
 }

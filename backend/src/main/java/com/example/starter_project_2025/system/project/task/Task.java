@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.project.task;
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import com.example.starter_project_2025.system.project.task.tag.Tag;
+import com.example.starter_project_2025.system.project.task.dependency.TaskDependency;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -68,6 +69,10 @@ public class Task {
     @JoinTable(name = "task_tag", joinColumns = @JoinColumn(name = "task_id"),
             inverseJoinColumns = @JoinColumn(name = "tag_id"))
     Set<Tag> tags = new LinkedHashSet<>();
+
+    @Builder.Default
+    @OneToMany(mappedBy = "successorTask")
+    Set<TaskDependency> incomingDependencies = new LinkedHashSet<>();
 
     @Version
     @Column(nullable = false)

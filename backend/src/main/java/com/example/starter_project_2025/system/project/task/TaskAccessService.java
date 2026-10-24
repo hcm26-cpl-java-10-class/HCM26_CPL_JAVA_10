@@ -57,16 +57,25 @@ public class TaskAccessService {
 
     public void checkUpdate(Task task, Long actorId) {
         checkRead(task, actorId);
-        if (task.getAssigneeProjectMemberId() == null && Objects.equals(task.getCreatedBy(), actorId)) {
-            return;
+        if (!canUpdate(task, actorId)) {
+            throw new AccessDeniedException("Chỉ người được giao Task hoặc Leader/Mentor được sửa Task");
+        }
+    }
+
+    public boolean canUpdate(Task task, Long actorId) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getAuthorities().stream()
+                .noneMatch(authority -> "TASK_UPDATE".equals(authority.getAuthority()))) {
+            return false;
         }
         TaskProjectAccess access = projectAccessProvider.getIfAvailable();
-        if (access != null && (access.isManager(task.getProjectId(), actorId)
+        if (access != null && !access.findProjectIds(actorId).contains(task.getProjectId())) {
+            return false;
+        }
+        return (task.getAssigneeProjectMemberId() == null && Objects.equals(task.getCreatedBy(), actorId))
+                || (access != null && (access.isManager(task.getProjectId(), actorId)
                 || (task.getAssigneeProjectMemberId() != null && access
                 .findMemberUserId(task.getProjectId(), task.getAssigneeProjectMemberId())
-                .filter(actorId::equals).isPresent()))) {
-            return;
-        }
-        throw new AccessDeniedException("Chỉ người được giao Task hoặc Leader/Mentor được sửa Task");
+                .filter(actorId::equals).isPresent())));
     }
 }

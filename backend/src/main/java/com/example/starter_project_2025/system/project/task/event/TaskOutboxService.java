@@ -37,6 +37,18 @@ public class TaskOutboxService {
         values.put("status", request.getStatus());
         values.put("tags", request.getTags());
         values.put("version", request.getVersion());
+        return hash(values);
+    }
+
+    public String requestHash(String action, UUID taskId, Object request) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("action", action);
+        values.put("taskId", taskId);
+        values.put("request", request);
+        return hash(values);
+    }
+
+    private String hash(Object values) {
         try {
             byte[] json = objectMapper.writeValueAsString(values).getBytes(StandardCharsets.UTF_8);
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(json));

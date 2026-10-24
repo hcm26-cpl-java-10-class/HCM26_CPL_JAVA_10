@@ -24,7 +24,8 @@ export function TaskFormPage() {
     retry: false,
   });
   const projectId = taskQuery.data?.projectId ?? searchParams.get("projectId") ?? "";
-  const goBack = () => navigate(taskListPath(projectId));
+  const returnToDetail = !!id && searchParams.get("from") === "detail";
+  const goBack = () => navigate(returnToDetail ? `/tasks/${id}/detail` : taskListPath(projectId));
   const missingProject = !id && !isProjectId(projectId);
 
   return (
@@ -45,7 +46,7 @@ export function TaskFormPage() {
             </h1>
           </div>
           <Button variant="outline" onClick={goBack}>
-            <ArrowLeft className="size-4" /> Về danh sách
+            <ArrowLeft className="size-4" /> {returnToDetail ? "Về chi tiết Task" : "Về danh sách"}
           </Button>
         </header>
         {id && taskQuery.isLoading ? (
@@ -78,7 +79,9 @@ export function TaskFormPage() {
             task={taskQuery.data}
             projectId={projectId}
             onCancel={goBack}
-            onSaved={(saved) => navigate(taskListPath(saved.projectId))}
+            onSaved={(saved) =>
+              navigate(returnToDetail ? `/tasks/${saved.id}/detail` : taskListPath(saved.projectId))
+            }
           />
         )}
       </section>

@@ -4,6 +4,9 @@ import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenSe
 import com.example.starter_project_2025.system.project.task.audit.TaskAuditRepository;
 import com.example.starter_project_2025.system.project.task.event.TaskOutboxRepository;
 import com.example.starter_project_2025.system.project.task.tag.TagRepository;
+import com.example.starter_project_2025.system.project.task.dependency.TaskDependencyRepository;
+import com.example.starter_project_2025.system.project.task.dependency.TaskDependencyRequest;
+import com.example.starter_project_2025.system.project.task.workflow.TaskStatusRequest;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import com.example.starter_project_2025.system.rbac.role.Role;
@@ -39,6 +42,7 @@ class TaskStandaloneIntegrationTest {
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
     @Autowired TaskRepository taskRepository;
+    @Autowired TaskDependencyRepository dependencyRepository;
     @Autowired TagRepository tagRepository;
     @Autowired TaskAuditRepository auditRepository;
     @Autowired TaskOutboxRepository outboxRepository;
@@ -54,6 +58,7 @@ class TaskStandaloneIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        dependencyRepository.deleteAll();
         taskRepository.deleteAll();
         tagRepository.deleteAll();
         auditRepository.deleteAll();
@@ -112,6 +117,53 @@ class TaskStandaloneIntegrationTest {
         mockMvc.perform(put("/api/tasks/" + created.getId()).header("Authorization", studentToken)
                         .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsBytes(created)))
                 .andExpect(status().isForbidden());
+        mockMvc.perform(patch("/api/tasks/{id}/status", created.getId()).header("Authorization", studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(new TaskStatusRequest(TaskStatus.IN_PROGRESS, created.getVersion()))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void creatorCanManageWorkflowAndDependenciesWithoutAProjectAdapter() throws Exception {
+        TaskDTO a = create(TaskDTO.builder().projectId(projectId).title("A").build(), studentToken);
+        TaskDTO b = create(TaskDTO.builder().projectId(projectId).title("B").build(), studentToken);
+        byte[] linkedBody = mockMvc.perform(post("/api/tasks/{id}/dependencies", b.getId()).header("Authorization", studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(new TaskDependencyRequest(a.getId(), b.getVersion()))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        TaskDTO linked = objectMapper.readValue(linkedBody, TaskDTO.class);
+        mockMvc.perform(patch("/api/tasks/{id}/status", b.getId()).header("Authorization", studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(new TaskStatusRequest(TaskStatus.IN_PROGRESS, linked.getVersion()))))
+                .andExpect(status().isUnprocessableEntity());
+        for (TaskStatus next : List.of(TaskStatus.IN_PROGRESS, TaskStatus.REVIEW, TaskStatus.DONE)) {
+            byte[] changed = mockMvc.perform(patch("/api/tasks/{id}/status", a.getId()).header("Authorization", studentToken)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsBytes(new TaskStatusRequest(next, a.getVersion()))))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+            a = objectMapper.readValue(changed, TaskDTO.class);
+        }
+        mockMvc.perform(patch("/api/tasks/{id}/status", b.getId()).header("Authorization", studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(new TaskStatusRequest(TaskStatus.IN_PROGRESS, linked.getVersion()))))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/tasks/{id}/workflow", b.getId()).header("Authorization", studentToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.editable").value(true))
+                .andExpect(jsonPath("$.predecessors[0].title").value("A"));
+        assertEquals(1, dependencyRepository.count());
+    }
+
+    @Test
+    void missingProjectAdapterDoesNotAllowLinkingAnotherCreatorsTask() throws Exception {
+        TaskDTO a = create(TaskDTO.builder().projectId(projectId).title("Private teacher task").build(), teacherToken);
+        TaskDTO b = create(TaskDTO.builder().projectId(projectId).title("Student task").build(), studentToken);
+        mockMvc.perform(post("/api/tasks/{id}/dependencies", b.getId()).header("Authorization", studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(new TaskDependencyRequest(a.getId(), b.getVersion()))))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.title").doesNotExist());
+        mockMvc.perform(get("/api/tasks/{id}/activity", a.getId()).header("Authorization", studentToken))
+                .andExpect(status().isForbidden());
+        assertEquals(0, dependencyRepository.count());
     }
 
     @Test
