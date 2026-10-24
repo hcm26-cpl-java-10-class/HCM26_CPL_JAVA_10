@@ -18,6 +18,7 @@ export * from "./features/invitation";
 export * from "./features/menu/module";
 export * from "./features/menu/module_group";
 export * from "./features/milestone";
+export * from "./features/project-template";
 export * from "./features/project-template-version";
 export * from "./features/sprint";
 export * from "./features/task";

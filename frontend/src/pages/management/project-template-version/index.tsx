@@ -1,11 +1,12 @@
 import { projectTemplateVersionApi } from "@/api";
 import { usePermissions } from "@/hooks/usePermissions";
 import { AutoCrudPage } from "@/pages/management/AutoCrudPage";
-import type { EntityConfig } from "@/types";
+import type { EntityConfig, ProjectTemplateVersionDTO } from "@/types";
 import { ADMIN_ROLE, normalizeRole } from "@/utils/rbac.utils";
 import { ProjectTemplateVersionCard } from "./components/ProjectTemplateVersionCard";
 import { projectTemplateVersionAdminEntityConfig } from "./project-template-version.admin.config";
 import { projectTemplateVersionSchema } from "./project-template-version.schema";
+import { CloneTemplateButton } from "./workspace/CloneTemplateButton";
 import ProjectTemplateVersionWorkspacePage from "./workspace/ProjectTemplateVersionWorkspacePage";
 
 /**
@@ -22,12 +23,24 @@ import ProjectTemplateVersionWorkspacePage from "./workspace/ProjectTemplateVers
  * and documents the schema, permissions and browse-mode behaviour of the
  * Project Template Version entity.
  */
+/**
+ * Admin table flavour: the generic CRUD table plus a per-row "Clone template"
+ * action (US-08), which duplicates the template behind a version into a brand
+ * new, independent template.
+ */
+const adminEntityConfig: EntityConfig = {
+  ...projectTemplateVersionAdminEntityConfig,
+  extraRowActions: (row) => (
+    <CloneTemplateButton version={row as ProjectTemplateVersionDTO} />
+  ),
+};
+
 export default function ProjectTemplateVersionPage() {
   const { activeRole } = usePermissions();
   const isAdmin = normalizeRole(activeRole) === ADMIN_ROLE;
 
   if (isAdmin) {
-    return <AutoCrudPage entity={projectTemplateVersionAdminEntityConfig} />;
+    return <AutoCrudPage entity={adminEntityConfig} />;
   }
 
   return <ProjectTemplateVersionWorkspacePage />;

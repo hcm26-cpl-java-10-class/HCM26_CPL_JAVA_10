@@ -159,6 +159,23 @@ export function ProjectTemplateVersionWorkspaceHeader({
             </Button>
           )}
 
+          {canCreate && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onDuplicate}
+              disabled={!version || submitting}
+              title="Clone the selected template as a new independent template"
+            >
+              {submitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+              Clone
+            </Button>
+          )}
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" disabled={!version}>

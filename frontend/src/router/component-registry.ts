@@ -14,6 +14,7 @@ import TeamAllocationPage from "@/pages/management/team-allocation";
 import TeamAllocationClassListPage from "@/pages/management/team-allocation/class-list";
 import StudentExamList from "@/pages/student/StudentExamList";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
+import ExploreProjectsPage from "@/pages/student/projects/explore";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
@@ -62,6 +63,19 @@ export const routes: RouteConfig[] = [
   },
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
   { path: "/student/exams", component: StudentExamList,requiredPermission: "EXAM_READ", isModuleDriven: true },
+  {
+    // US-09: mock Project Template catalogue (Project Management tab).
+    // Module-driven: `useSidebarMenus` injects the matching student module
+    // entry, and `App` resolves it through the module-driven component map.
+    // Without `isModuleDriven`, the injected module route would shadow this
+    // route with a "missing component" redirect (page not found).
+    // No permission string because the Project Template module is not seeded
+    // yet; access is limited to authenticated users, and the data scope is
+    // mocked in `mocks/project-templates.mock.ts`.
+    path: "/student/projects/explore",
+    component: ExploreProjectsPage,
+    isModuleDriven: true,
+  },
   { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
   ...buildEntityRoutes(),
 

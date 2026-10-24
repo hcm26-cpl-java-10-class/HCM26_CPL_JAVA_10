@@ -1,7 +1,7 @@
 import { moduleApi, moduleGroupApi } from "@/api";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { ModuleDTO, ModuleGroupDTO, Pagination } from "@/types";
-import { canAccessByPermission } from "@/utils/rbac.utils";
+import { canAccessByPermission, normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
 import { useQuery } from "@tanstack/react-query";
 
 export type SidebarModule = ModuleDTO & {
@@ -121,6 +121,47 @@ export function useActiveModuleGroups(enabled = true) {
                     };
                     groups.push(fallbackGroup);
                     groupedModules[String(fallbackGroup.id)] = [allocationModule];
+                }
+            }
+
+            // US-09: the Project Template module is not seeded in the backend
+            // yet, so expose the mock Explore Projects catalogue under the
+            // "Project Management" tab for students.
+            if (normalizeRole(activeRole) === STUDENT_ROLE) {
+                const exploreUrl = "/student/projects/explore";
+                const alreadyRegistered = modules.some((module) => module.url === exploreUrl);
+
+                if (!alreadyRegistered) {
+                    const projectGroup = groups.find(
+                        (group) => (group.name ?? "").toLowerCase() === "project management",
+                    );
+                    const exploreModule: SidebarModule = {
+                        id: 100002,
+                        moduleGroupId: String(projectGroup?.id ?? 100000),
+                        title: "Explore Projects",
+                        name: "Explore Projects",
+                        url: exploreUrl,
+                        icon: "folder",
+                        description: "Browse active project templates for your class",
+                        displayOrder: 2,
+                        isActive: true,
+                    };
+
+                    if (projectGroup) {
+                        const groupId = String(projectGroup.id ?? "");
+                        if (!groupedModules[groupId]) groupedModules[groupId] = [];
+                        groupedModules[groupId].push(exploreModule);
+                    } else {
+                        const fallbackGroup: ModuleGroupDTO = {
+                            id: 100000,
+                            name: "Project Management",
+                            description: "Project and team allocation",
+                            displayOrder: 1,
+                            isActive: true,
+                        };
+                        groups.push(fallbackGroup);
+                        groupedModules[String(fallbackGroup.id)] = [exploreModule];
+                    }
                 }
             }
 

@@ -58,6 +58,12 @@ export interface EntityConfig {
      * fully owned by the student persona (e.g. Sprints).
      */
     browseModeActions?: boolean;
+    /**
+     * Extra entity-specific row buttons rendered after the default
+     * view / edit / delete actions (e.g. "Clone template" on the
+     * project-template-version table).
+     */
+    extraRowActions?: (row: any) => ReactNode;
 }
 
 const registry: EntityConfig[] = [];
