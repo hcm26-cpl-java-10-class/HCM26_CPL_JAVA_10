@@ -18,6 +18,10 @@ import org.springframework.stereotype.Component;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 
 @Aspect
 @Component
@@ -26,6 +30,7 @@ public class AuditLogAspect {
 
     private final AuditLogService auditLogService;
     private final ObjectMapper objectMapper;
+    private static final Logger log = LoggerFactory.getLogger(AuditLogAspect.class);
 
     @AfterReturning(
             pointcut = "execution(public * com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl+.create(..))",
@@ -63,8 +68,7 @@ public class AuditLogAspect {
         Object[] args = joinPoint.getArgs();
         Object id = args[0];
 
-        Object oldEntity = findEntity(target, id);
-        String oldValue = toJson(oldEntity);
+        String oldValue = snapshot(target, id);
 
         Object result = joinPoint.proceed();
 
@@ -97,8 +101,7 @@ public class AuditLogAspect {
         Object[] args = joinPoint.getArgs();
         Object id = args[0];
 
-        Object oldEntity = findEntity(target, id);
-        String oldValue = toJson(oldEntity);
+        String oldValue = snapshot(target, id);
 
         Object result = joinPoint.proceed();
 
@@ -112,6 +115,28 @@ public class AuditLogAspect {
         );
 
         return result;
+    }
+
+    private String snapshot(Object target, Object id) {
+        try {
+            Object entity = findEntity(target, id);
+            if (entity == null) return null;
+            return toJson(toDto(target, entity));
+        } catch (Exception e) {
+            log.warn("Cannot build audit snapshot for id {}: {}", id, e.getMessage());
+            return null;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object toDto(Object target, Object entity) throws Exception {
+        Method method = BaseCrudServiceImpl.class.getDeclaredMethod("getMapper");
+        method.setAccessible(true);
+
+        BaseCrudMapper<BaseEntity, BaseDTO> mapper =
+                (BaseCrudMapper<BaseEntity, BaseDTO>) method.invoke(target);
+
+        return mapper.toResponse((BaseEntity) entity);
     }
 
     private Object findEntity(Object target, Object id) {
@@ -175,15 +200,13 @@ public class AuditLogAspect {
     }
 
     private String toJson(Object value) {
-
         if (value == null) return null;
 
         try {
             return objectMapper.writeValueAsString(value);
         } catch (JsonProcessingException e) {
-            throw new IllegalStateException(
-                    "Cannot serialize audit data", e
-            );
+            log.warn("Cannot serialize audit data: {}", e.getMessage());
+            return null;
         }
     }
 
