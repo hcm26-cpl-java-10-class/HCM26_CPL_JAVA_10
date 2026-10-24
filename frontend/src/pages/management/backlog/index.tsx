@@ -43,6 +43,10 @@ import {
 } from "../sprint/hooks/useSprintPlanningBoard";
 import { sprintSchema } from "../sprint/sprint.schema";
 import {
+  incompleteSprintMessage,
+  unfinishedSprintItems,
+} from "../sprint/workspace/board.constants";
+import {
   formatBacklogRange,
   projectKeyOf,
   statusCounts,
@@ -254,6 +258,15 @@ export default function BacklogPage() {
 
   const handleChangeSprintStatus = async (status: SprintStatus) => {
     if (!selectedSprint?.id || sprintStatusUpdating) return;
+
+    if (status === "COMPLETED") {
+      const unfinished = unfinishedSprintItems(board.sprintItems);
+
+      if (unfinished.length > 0) {
+        toast.error(incompleteSprintMessage(unfinished.length));
+        return;
+      }
+    }
 
     setSprintStatusUpdating(true);
 

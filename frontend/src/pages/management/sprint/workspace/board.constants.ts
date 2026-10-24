@@ -228,3 +228,14 @@ export const countByStatus = (items: SprintPlanningItem[]) => ({
   inProgress: items.filter((item) => item.status === "IN_PROGRESS").length,
   done: items.filter((item) => item.status === "DONE").length,
 });
+
+/**
+ * Sprint Backlog items that are still open. A sprint can only be completed once
+ * this list is empty - the backend rejects the transition with 422 otherwise.
+ */
+export const unfinishedSprintItems = (items: SprintPlanningItem[]) =>
+  items.filter((item) => item.status !== "DONE");
+
+/** Message shown when "Complete sprint" is blocked by open backlog items. */
+export const incompleteSprintMessage = (unfinishedCount: number) =>
+  `Không thể hoàn thành Sprint: còn ${unfinishedCount} Backlog item chưa ở trạng thái Done.`;

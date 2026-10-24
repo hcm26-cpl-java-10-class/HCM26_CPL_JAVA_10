@@ -22,6 +22,9 @@ public class SprintBacklogDTO extends BaseDTO {
 
     /**
      * Owning sprint. Write it to create / move the item to another sprint.
+     * <p>
+     * Optional: without it the item stays in the product backlog (no sprint
+     * assigned) until it is pulled into a sprint.
      */
     Long sprintId;
 

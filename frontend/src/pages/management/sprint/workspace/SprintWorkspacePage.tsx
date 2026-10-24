@@ -22,6 +22,10 @@ import { sprintSchema } from "../sprint.schema";
 import { SprintBacklogBoard } from "./SprintBacklogBoard";
 import { SprintWorkspaceHeader } from "./SprintWorkspaceHeader";
 import { OverviewTab } from "./OverviewTab";
+import {
+  incompleteSprintMessage,
+  unfinishedSprintItems,
+} from "./board.constants";
 
 const SPRINTS_QUERY_KEY = ["sprints", "workspace"] as const;
 
@@ -156,6 +160,15 @@ export default function SprintWorkspacePage() {
 
   const handleChangeStatus = async (status: SprintStatus) => {
     if (!selectedSprint?.id || statusUpdating) return;
+
+    if (status === "COMPLETED") {
+      const unfinished = unfinishedSprintItems(board.sprintItems);
+
+      if (unfinished.length > 0) {
+        toast.error(incompleteSprintMessage(unfinished.length));
+        return;
+      }
+    }
 
     setStatusUpdating(true);
 

@@ -9,9 +9,10 @@ import java.time.LocalDate;
  * Backlog item as rendered by the Sprint Planning / Backlog board
  * (UFR-PRJ-003-03).
  * <p>
- * The board is fed by the {@code sprint_backlog} module: a backlog item always
- * belongs to exactly one sprint ({@link SprintBacklog#getSprint()}), so the
- * sprint panel is the list of items of the planned sprint.
+ * The board is fed by the {@code sprint_backlog} module: the sprint panel is
+ * the list of items assigned to the planned sprint, while the product backlog
+ * panel only lists items that are not assigned to any sprint yet
+ * ({@link SprintBacklog#getSprint()} is {@code null}).
  * <p>
  * The payload keeps the fields the board renders. Milestone, priority and
  * estimated hours are not modelled by the Sprint Backlog module yet, so they

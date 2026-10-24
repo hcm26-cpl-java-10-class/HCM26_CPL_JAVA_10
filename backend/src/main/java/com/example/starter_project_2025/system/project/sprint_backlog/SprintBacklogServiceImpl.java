@@ -27,7 +27,8 @@ import java.util.Map;
  * <p>
  * Business rules covered:
  * <ul>
- *     <li>a backlog item always belongs to an existing sprint (422 otherwise)</li>
+ *     <li>the owning sprint is optional: without it the item is a product
+ *     backlog item; when provided it must exist (422 otherwise)</li>
  *     <li>title mandatory, 1..200 characters (422)</li>
  *     <li>description optional, at most 2000 characters (422)</li>
  *     <li>start date &lt; end date when both are provided (422)</li>
@@ -256,12 +257,12 @@ public class SprintBacklogServiceImpl
     // ---------------------------------------------------------------------
 
     /**
-     * The sprint relation is mandatory and must point at an existing sprint.
+     * The sprint relation is optional: {@code null} keeps the item in the
+     * product backlog. A provided id must point at an existing sprint.
      */
     private Sprint resolveSprint(Long sprintId, Map<String, List<String>> errors) {
 
         if (sprintId == null) {
-            addError(errors, SPRINT_ID_FIELD, "Vui lòng chọn Sprint cho Sprint Backlog");
             return null;
         }
 

@@ -26,7 +26,8 @@ import java.time.LocalDateTime;
  * Every seeded row respects the business rules enforced by
  * {@code SprintBacklogServiceImpl}:
  * <ul>
- *     <li>the owning sprint exists (Sprint 1 / 2 / 3)</li>
+ *     <li>the owning sprint exists when one is given (Sprint 1 / 2 / 3), while
+ *     the product backlog items have no sprint at all</li>
  *     <li>title mandatory, 1..200 characters</li>
  *     <li>description at most 2000 characters</li>
  *     <li>start date strictly before end date (both provided)</li>
@@ -102,6 +103,18 @@ public class SprintBacklogDataInitializer implements CommandLineRunner {
                 LocalDateTime.of(2026, 11, 27, 17, 0),
                 SprintBacklogStatus.TODO);
 
+        // Product backlog: items without a sprint, so the backlog page only
+        // offers these (and not the work already planned in another sprint).
+        upsertProductBacklog(MEMBER_2,
+                "Clarify release acceptance criteria",
+                "Collect the acceptance criteria of the next release from QA and the product owner",
+                SprintBacklogStatus.TODO);
+
+        upsertProductBacklog(MEMBER_1,
+                "Audit accessibility of the checkout flow",
+                "Check the checkout screens against WCAG AA before planning the next sprint",
+                SprintBacklogStatus.TODO);
+
         log.info("Ensured sample sprint backlog data.");
     }
 
@@ -138,5 +151,32 @@ public class SprintBacklogDataInitializer implements CommandLineRunner {
 
     private Sprint findSprint(String sprintName) {
         return sprintRepository.findByName(sprintName).orElse(null);
+    }
+
+    /**
+     * Upserts a product backlog item: a backlog item that is not assigned to
+     * any sprint yet.
+     */
+    private void upsertProductBacklog(
+            Long assigneeProjectMemberId,
+            String title,
+            String description,
+            SprintBacklogStatus status
+    ) {
+
+        SprintBacklog backlog = sprintBacklogRepository
+                .findBySprintIsNullAndTitleIgnoreCase(title)
+                .orElseGet(SprintBacklog::new);
+
+        backlog.setSprint(null);
+        backlog.setAssigneeProjectMemberId(assigneeProjectMemberId);
+        backlog.setTitle(title);
+        backlog.setDescription(description);
+        backlog.setStartDate(null);
+        backlog.setEndDate(null);
+        backlog.setStatus(status);
+        backlog.setIsActive(true);
+
+        sprintBacklogRepository.save(backlog);
     }
 }

@@ -30,8 +30,11 @@ import java.time.LocalDateTime;
  * Sprint Backlog item: one task of a sprint.
  * <p>
  * A sprint owns one or many backlog items ({@link Sprint#getSprintBacklogs()}),
- * the owning side of the relation is this class ({@code sprint_id} is
- * mandatory).
+ * the owning side of the relation is this class ({@code sprint_id}).
+ * <p>
+ * The relation is optional: an item without a sprint is a <em>product
+ * backlog</em> item that only becomes a sprint backlog item once it is pulled
+ * into a sprint.
  * <p>
  * Mapping notes (compared to the team's class diagram):
  * <ul>
@@ -77,11 +80,11 @@ import java.time.LocalDateTime;
 public class SprintBacklog extends BaseEntity {
 
     /**
-     * Owning sprint. Mandatory: a backlog item always belongs to exactly one
-     * sprint, and a sprint can own many backlog items.
+     * Owning sprint. Optional: when it is {@code null} the item is still in the
+     * product backlog and only waits to be assigned to a sprint.
      */
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "sprint_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sprint_id")
     Sprint sprint;
 
     /**
