@@ -1,27 +1,28 @@
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { MilestoneApiError } from "@/types";
-import { AlertCircle, ArrowLeft, Clipboard, Flag, Plus, RefreshCw } from "lucide-react";
+import { AlertCircle, ArrowLeft, Clipboard, Flag, Plus, RefreshCw, SearchX } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
 export function MilestoneListSkeleton() {
   return (
-    <div className="mx-auto grid w-full max-w-7xl gap-6" aria-label="Loading milestones">
-      <Card>
-        <CardHeader className="gap-3">
-          <Skeleton className="h-5 w-24" />
-          <Skeleton className="h-8 w-72 max-w-full" />
-          <Skeleton className="h-4 w-96 max-w-full" />
-        </CardHeader>
-      </Card>
-      <Card className="overflow-hidden">
-        <CardContent className="grid gap-3 p-4">
+    <div className="grid h-full w-full grid-rows-[auto_1fr_auto] gap-4" aria-label="Loading milestones">
+      <div className="flex items-center justify-between gap-4">
+        <div className="grid gap-2">
+          <Skeleton className="h-6 w-56 max-w-full" />
+          <Skeleton className="h-4 w-40" />
+        </div>
+        <Skeleton className="h-9 w-36" />
+      </div>
+      <Card className="h-full overflow-hidden">
+        <CardContent className="grid gap-3 p-3">
           {[1, 2, 3, 4, 5].map((item) => <Skeleton key={item} className="h-16 w-full" />)}
         </CardContent>
       </Card>
+      <div className="flex justify-end"><Skeleton className="h-9 w-80 max-w-full" /></div>
     </div>
   );
 }
@@ -30,19 +31,25 @@ interface MilestoneEmptyStateProps {
   canCreate: boolean;
   projectActive: boolean;
   createUrl: string;
+  filtered?: boolean;
+  onClear?: () => void;
 }
 
-export function MilestoneEmptyState({ canCreate, projectActive, createUrl }: MilestoneEmptyStateProps) {
+export function MilestoneEmptyState({ canCreate, projectActive, createUrl, filtered = false, onClear }: MilestoneEmptyStateProps) {
   return (
     <div className="flex min-h-80 flex-col items-center justify-center px-6 py-12 text-center">
-      <div className="rounded-full bg-primary/10 p-4 text-primary"><Flag className="size-8" /></div>
-      <h2 className="mt-5 text-xl font-semibold">No milestones yet</h2>
+      <div className="rounded-full bg-primary/10 p-4 text-primary">{filtered ? <SearchX className="size-8" /> : <Flag className="size-8" />}</div>
+      <h2 className="mt-5 text-xl font-semibold">{filtered ? "No matching milestones" : "No milestones yet"}</h2>
       <p className="mt-2 max-w-md text-sm text-muted-foreground">
-        {canCreate && projectActive
+        {filtered
+          ? "Try another search term or clear the active filters."
+          : canCreate && projectActive
           ? "Create the first milestone to define a delivery deadline and clear acceptance criteria."
           : "Milestones will appear here when a project mentor creates one."}
       </p>
-      {canCreate && projectActive ? (
+      {filtered && onClear ? (
+        <Button type="button" variant="outline" className="mt-6" onClick={onClear}><RefreshCw /> Clear search and filters</Button>
+      ) : canCreate && projectActive ? (
         <Button asChild className="mt-6"><Link to={createUrl}><Plus /> Create the first milestone</Link></Button>
       ) : null}
     </div>

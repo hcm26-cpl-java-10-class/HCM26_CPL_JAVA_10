@@ -5,6 +5,7 @@ import com.example.starter_project_2025.system.project.milestone.integration.mod
 import com.example.starter_project_2025.system.project.milestone.integration.port.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
@@ -19,6 +20,7 @@ public class MilestoneCreateOptionsService {
     private final ReviewerDirectoryPort reviewerPort;
     private final MilestoneAccessPolicy accessPolicy;
 
+    @Transactional(readOnly = true)
     public MilestoneCreateOptionsResponse getOptions(UUID projectId) {
         UUID actorId = actorProvider.requireCurrentActorId();
         UUID tenantId = tenantProvider.requireCurrentTenantId();
@@ -29,7 +31,17 @@ public class MilestoneCreateOptionsService {
         return new MilestoneCreateOptionsResponse(
                 new ProjectOptionResponse(project.projectId(), project.projectName(), project.status().name()),
                 rubricPort.findAllowedRubrics(projectId, actorId, tenantId).stream()
-                        .map(r -> new RubricOptionResponse(r.id(), r.name(), r.version())).toList(),
+                        .map(r -> new RubricOptionResponse(
+                                r.id(),
+                                r.name(),
+                                r.version(),
+                                        r.criteria().stream()
+                                        .map(c -> new RubricCriterionOptionResponse(
+                                                c.code(), c.name(), c.weight(), c.maxScore(),
+                                                c.ratings().stream().map(rating -> new RubricRatingOptionResponse(
+                                                        rating.level(), rating.percentage(), rating.description(), rating.orderIndex())).toList()))
+                                        .toList()))
+                        .toList(),
                 reviewerPort.findEligibleReviewers(projectId, actorId, tenantId).stream()
                         .map(r -> new ReviewerOptionResponse(r.id(), r.displayName())).toList()
         );

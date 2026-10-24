@@ -40,7 +40,9 @@ public class MilestoneDetailMapper {
                         rubric.version(),
                         rubric.criteria().stream()
                                 .map(criterion -> new MilestoneRubricCriterionResponse(
-                                        criterion.code(), criterion.name(), criterion.weight(), criterion.maxScore()))
+                                        criterion.code(), criterion.name(), criterion.weight(), criterion.maxScore(),
+                                        criterion.ratings().stream().map(rating -> new RubricRatingOptionResponse(
+                                                rating.level(), rating.percentage(), rating.description(), rating.orderIndex())).toList()))
                                 .toList()
                 ),
                 new MilestoneReviewerResponse(reviewer.id(), reviewer.displayName()),

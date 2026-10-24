@@ -15,6 +15,10 @@ import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import { MilestoneCreatePage } from "@/pages/management/project/milestone/pages/MilestoneCreatePage";
 import { MilestoneDetailPage } from "@/pages/management/project/milestone/pages/MilestoneDetailPage";
 import { MilestoneListPage } from "@/pages/management/project/milestone/pages/MilestoneListPage";
+import { RubricListPage } from "@/pages/management/project/rubric/pages/RubricListPage";
+import { RubricCreatePage } from "@/pages/management/project/rubric/pages/RubricCreatePage";
+import { RubricDetailPage } from "@/pages/management/project/rubric/pages/RubricDetailPage";
+import { RubricEditPage } from "@/pages/management/project/rubric/pages/RubricEditPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 
@@ -60,6 +64,10 @@ export const routes: RouteConfig[] = [
     component: MilestoneDetailPage,
     requiredPermission: "MILESTONE_READ",
   },
+  { path: "/rubrics", component: RubricListPage, requiredPermission: "RUBRIC_READ" },
+  { path: "/rubrics/new", component: RubricCreatePage, requiredPermission: "RUBRIC_CREATE" },
+  { path: "/rubrics/:rubricId", component: RubricDetailPage, requiredPermission: "RUBRIC_READ" },
+  { path: "/rubrics/:rubricId/versions/:versionId/edit", component: RubricEditPage, requiredPermission: "RUBRIC_UPDATE" },
   ...buildEntityRoutes(),
 
   { path: "/not-found-page", component: NotFoundPage, isPublic: true },

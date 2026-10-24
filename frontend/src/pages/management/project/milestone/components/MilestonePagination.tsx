@@ -47,13 +47,13 @@ export function MilestonePagination({
   });
 
   return (
-    <div className="flex flex-col gap-4 border-t px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
       <p className="text-sm text-muted-foreground" aria-live="polite">
         Showing <span className="font-medium text-foreground">{firstItem}–{lastItem}</span> of{" "}
         <span className="font-medium text-foreground">{totalElements}</span> milestones
       </p>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="flex flex-col items-end gap-5 sm:flex-row sm:items-center">
         <div className="flex items-center gap-2">
           <span className="whitespace-nowrap text-sm text-muted-foreground">Rows per page</span>
           <Select
@@ -72,7 +72,12 @@ export function MilestonePagination({
           </Select>
         </div>
 
-        <Pagination className="mx-0 w-auto justify-start sm:justify-end">
+        <div className="whitespace-nowrap text-sm text-muted-foreground" aria-live="polite">
+          Page <span className="font-medium text-foreground">{currentPage}</span> of{" "}
+          <span className="font-medium text-foreground">{safeTotalPages}</span>
+        </div>
+
+        <Pagination className="mx-0 w-auto justify-end">
           <PaginationContent>
             <PaginationItem>
               <Button

@@ -1,8 +1,10 @@
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { MilestoneDetailRouteState, MilestoneListItem } from "@/types";
-import { CalendarClock, ChevronRight, Clock } from "lucide-react";
+import { ArrowRight, CalendarClock, ChevronRight, Clock, Flag } from "lucide-react";
 import type { KeyboardEvent, MouseEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -19,6 +21,7 @@ interface MilestoneListViewProps {
   projectName: string;
   returnTo: string;
   loading?: boolean;
+  viewMode?: "table" | "card";
 }
 
 function LatePolicy({ milestone }: { milestone: MilestoneListItem }) {
@@ -52,6 +55,7 @@ export function MilestoneListView({
   projectName,
   returnTo,
   loading = false,
+  viewMode = "table",
 }: MilestoneListViewProps) {
   const navigate = useNavigate();
   const routeState: MilestoneDetailRouteState = { projectName, returnTo };
@@ -70,9 +74,16 @@ export function MilestoneListView({
 
   return (
     <>
-      <div className={`hidden transition-opacity md:block ${loading ? "pointer-events-none opacity-55" : ""}`} aria-busy={loading}>
+      <div
+        className={cn(
+          "h-full overflow-auto transition-opacity",
+          viewMode === "table" ? "hidden md:block" : "hidden",
+          loading && "pointer-events-none opacity-55",
+        )}
+        aria-busy={loading}
+      >
         <Table>
-          <TableHeader className="bg-muted/40">
+          <TableHeader className="sticky top-0 z-10 bg-background shadow-xs">
             <TableRow>
               <TableHead className="w-[38%] px-4">Milestone</TableHead>
               <TableHead>Status</TableHead>
@@ -83,12 +94,15 @@ export function MilestoneListView({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {milestones.map((milestone) => (
+            {milestones.map((milestone, index) => (
               <TableRow
                 key={milestone.id}
                 tabIndex={0}
                 aria-label={`Open ${milestone.title}`}
-                className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                className={cn(
+                  "group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                  index % 2 === 0 ? "bg-accent" : "bg-background",
+                )}
                 onClick={(event) => handleRowClick(event, milestone.id)}
                 onKeyDown={(event) => handleRowKeyDown(event, milestone.id)}
               >
@@ -107,33 +121,66 @@ export function MilestoneListView({
                 <TableCell className="whitespace-normal"><Deadline milestone={milestone} /></TableCell>
                 <TableCell className="whitespace-normal"><LatePolicy milestone={milestone} /></TableCell>
                 <TableCell className="text-muted-foreground">{formatDateTime(milestone.createdAt)}</TableCell>
-                <TableCell><ChevronRight className="size-4 text-muted-foreground" /></TableCell>
+                <TableCell>
+                  <Button asChild size="icon-sm" variant="ghost" aria-label={`View ${milestone.title}`}>
+                    <Link to={detailUrl(milestone.id)} state={routeState}><ChevronRight /></Link>
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
 
-      <div className={`grid gap-3 p-3 transition-opacity md:hidden ${loading ? "pointer-events-none opacity-55" : ""}`} aria-busy={loading}>
+      <div
+        className={cn(
+          "grid flex-1 gap-3 overflow-y-auto p-3 transition-opacity sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
+          viewMode === "table" && "md:hidden",
+          loading && "pointer-events-none opacity-55",
+        )}
+        aria-busy={loading}
+      >
         {milestones.map((milestone) => (
-          <Link key={milestone.id} to={detailUrl(milestone.id)} state={routeState} className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <Card className="transition-colors hover:bg-muted/30">
-              <CardContent className="grid gap-4 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2"><MilestoneStatusBadge status={milestone.status} />{milestone.mandatory ? <Badge variant="secondary">Mandatory</Badge> : null}</div>
-                    <h2 className="mt-3 font-semibold">{milestone.title}</h2>
-                    {milestone.description ? <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{milestone.description}</p> : null}
+          <Card
+            key={milestone.id}
+            className="group relative cursor-pointer overflow-hidden border-border/70 bg-gradient-to-b from-background to-muted/30 transition-all hover:-translate-y-0.5 hover:shadow-lg"
+            role="link"
+            tabIndex={0}
+            onClick={() => openMilestone(milestone.id)}
+            onKeyDown={(event) => {
+              if (event.target !== event.currentTarget) return;
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                openMilestone(milestone.id);
+              }
+            }}
+          >
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-r from-sky-100 via-cyan-100 to-emerald-100 dark:from-sky-900/30 dark:via-cyan-900/20 dark:to-emerald-900/30" />
+            <CardContent className="relative grid h-full gap-4 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900">
+                    <Flag className="size-5" />
                   </div>
-                  <ChevronRight className="mt-1 size-5 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5"><MilestoneStatusBadge status={milestone.status} />{milestone.mandatory ? <Badge variant="secondary">Mandatory</Badge> : null}</div>
+                    <h2 className="mt-2 line-clamp-1 font-semibold">{milestone.title}</h2>
+                    <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{milestone.description || "No description available."}</p>
+                  </div>
                 </div>
-                <div className="grid gap-3 border-t pt-3 text-sm sm:grid-cols-2">
-                  <div><p className="flex items-center gap-1 text-xs text-muted-foreground"><CalendarClock className="size-3" /> Deadline</p><div className="mt-1"><Deadline milestone={milestone} /></div></div>
-                  <div><p className="flex items-center gap-1 text-xs text-muted-foreground"><Clock className="size-3" /> Late policy</p><div className="mt-1"><LatePolicy milestone={milestone} /></div></div>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
+                <ChevronRight className="mt-1 size-5 shrink-0 text-muted-foreground" />
+              </div>
+              <div className="grid gap-3 border-t pt-3 text-sm sm:grid-cols-2">
+                <div><p className="flex items-center gap-1 text-xs text-muted-foreground"><CalendarClock className="size-3" /> Deadline</p><div className="mt-1"><Deadline milestone={milestone} /></div></div>
+                <div><p className="flex items-center gap-1 text-xs text-muted-foreground"><Clock className="size-3" /> Late policy</p><div className="mt-1"><LatePolicy milestone={milestone} /></div></div>
+              </div>
+              <Button asChild type="button" size="sm" variant="outline" className="mt-auto w-full justify-between">
+                <Link to={detailUrl(milestone.id)} state={routeState} onClick={(event) => event.stopPropagation()}>
+                  View detail <ArrowRight className="size-4" />
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
         ))}
       </div>
     </>

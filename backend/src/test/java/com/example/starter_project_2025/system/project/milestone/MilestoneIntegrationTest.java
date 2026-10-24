@@ -18,6 +18,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -215,6 +217,97 @@ class MilestoneIntegrationTest {
     }
 
     @Test
+    void searchesTitleAndDescriptionCaseInsensitivelyAndEscapesWildcards() throws Exception {
+        createMilestone("Alpha Release", Instant.now().plusSeconds(86400L), "search-alpha");
+        createMilestone("Release 100%", Instant.now().plusSeconds(2 * 86400L), "search-percent");
+
+        mockMvc.perform(get(endpoint())
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .param("search", "  aLpHa  "))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].title").value("Alpha Release"));
+
+        mockMvc.perform(get(endpoint())
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .param("search", "FIRST milestone"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(2));
+
+        mockMvc.perform(get(endpoint())
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .param("search", "%"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].title").value("Release 100%"));
+    }
+
+    @Test
+    void combinesStatusMandatoryAndLatePolicyFilters() throws Exception {
+        createMilestone("Required delivery", Instant.now().plusSeconds(86400L), "filter-required");
+        Map<String, Object> optional = validRequest("Optional review", Instant.now().plusSeconds(2 * 86400L));
+        optional.put("mandatory", false);
+        optional.put("latePolicy", Map.of("type", "NO_LATE"));
+        createMilestone(optional, "filter-optional");
+
+        mockMvc.perform(get(endpoint())
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .param("status", "PLANNED", "CLOSED")
+                        .param("mandatory", "false")
+                        .param("latePolicyType", "NO_LATE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].title").value("Optional review"));
+    }
+
+    @Test
+    void filtersDeadlineByInclusiveTenantLocalDates() throws Exception {
+        ZoneId tenantZone = ZoneId.of("Asia/Ho_Chi_Minh");
+        LocalDate includedDate = LocalDate.now(tenantZone).plusDays(3);
+        LocalDate excludedDate = includedDate.plusDays(1);
+        createMilestone(
+                "Included deadline",
+                includedDate.atTime(12, 0).atZone(tenantZone).toInstant(),
+                "filter-deadline-included"
+        );
+        createMilestone(
+                "Excluded deadline",
+                excludedDate.atTime(12, 0).atZone(tenantZone).toInstant(),
+                "filter-deadline-excluded"
+        );
+
+        mockMvc.perform(get(endpoint())
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .param("deadlineFrom", includedDate.toString())
+                        .param("deadlineTo", includedDate.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].title").value("Included deadline"));
+    }
+
+    @Test
+    void rejectsInvalidMilestoneFilters() throws Exception {
+        mockMvc.perform(get(endpoint())
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .param("deadlineFrom", "2026-11-02")
+                        .param("deadlineTo", "2026-11-01"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors.deadlineFrom").isArray());
+
+        mockMvc.perform(get(endpoint())
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .param("search", "x".repeat(121)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors.search").isArray());
+
+        mockMvc.perform(get(endpoint())
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .param("status", "UNKNOWN"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors.status").isArray());
+    }
+
+    @Test
     void rejectsInvalidPaginationWithFieldErrors() throws Exception {
         mockMvc.perform(get(endpoint())
                         .header("Authorization", "Bearer " + teacherToken)
@@ -385,12 +478,20 @@ class MilestoneIntegrationTest {
         createMilestoneAndGetId(title, deadline, key);
     }
 
+    private void createMilestone(Map<String, Object> body, String key) throws Exception {
+        createMilestoneAndGetId(body, key);
+    }
+
     private String createMilestoneAndGetId(String title, Instant deadline, String key) throws Exception {
+        return createMilestoneAndGetId(validRequest(title, deadline), key);
+    }
+
+    private String createMilestoneAndGetId(Map<String, Object> body, String key) throws Exception {
         String response = mockMvc.perform(post(endpoint())
                         .header("Authorization", "Bearer " + teacherToken)
                         .header("Idempotency-Key", key)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(validRequest(title, deadline))))
+                        .content(objectMapper.writeValueAsString(body)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return objectMapper.readTree(response).get("id").asText();

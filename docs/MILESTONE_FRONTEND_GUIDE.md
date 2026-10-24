@@ -4,7 +4,7 @@
 
 Frontend đã tích hợp các API Milestone hiện có:
 
-- Xem danh sách: `GET /api/projects/{projectId}/milestones?page=0&size=20`
+- Xem danh sách: `GET /api/projects/{projectId}/milestones?page=0&size=20` cùng search/filter server-side
 - Mở form: `GET /api/projects/{projectId}/milestones/create-options`
 - Tạo mới: `POST /api/projects/{projectId}/milestones`
 - Xem chi tiết: `GET /api/projects/{projectId}/milestones/{milestoneId}`
@@ -46,6 +46,8 @@ Trang tạo trực tiếp:
 /projects/11111111-1111-1111-1111-111111111111/milestones/new
 ```
 
+Backend mock mặc định seed 7 milestone cho project này, cùng 3 rubric và 3 reviewer. Vì có nhiều lựa chọn, form tạo milestone yêu cầu Mentor chủ động chọn rubric và reviewer. Để kiểm tra empty state, chạy backend với `MILESTONE_MOCK_SEED_ENABLED=false`.
+
 ## Luồng sử dụng
 
 1. Teacher landing mở trang danh sách milestone của project mock.
@@ -73,7 +75,11 @@ Trang tạo trực tiếp:
 - Page mặc định `0`, size mặc định `20`.
 - Các size hỗ trợ trên UI: `10`, `20`, `30`, `50`, `100`.
 - Đổi size tự quay về page `0`.
-- Frontend không cung cấp sort/search client-side vì backend hiện chỉ hỗ trợ thứ tự deadline cố định. Điều này tránh hiển thị kết quả gây hiểu nhầm trên một page riêng lẻ.
+- Search theo title/description được debounce 300 ms và thực hiện server-side trên toàn bộ dữ liệu của project.
+- Filter hỗ trợ status, mandatory/optional, late policy và khoảng deadline theo ngày.
+- Search/filter/page/size được giữ trong URL; reload, chia sẻ URL hoặc quay lại từ detail không làm mất trạng thái.
+- Thay đổi search/filter tự quay về page `0`; đổi page/size giữ nguyên search/filter.
+- Frontend không cung cấp sort client-side vì backend giữ thứ tự deadline cố định. Điều này tránh hiển thị kết quả gây hiểu nhầm trên một page riêng lẻ.
 - Khi chuyển page, dữ liệu hiện tại được giữ lại với trạng thái mờ và chỉ báo loading nhỏ để tránh layout nhấp nháy.
 - Nếu page trong URL vượt quá tổng số page, UI tự điều hướng về page cuối hợp lệ.
 - API list không tải checklist. Checklist được lấy khi mở detail.
@@ -82,6 +88,7 @@ Trang tạo trực tiếp:
 
 - Loading: skeleton theo đúng cấu trúc header và rows.
 - Empty: chỉ hiển thị sau response `200` có `totalElements = 0`.
+- Empty khi có query hiển thị **No matching milestones** và cho phép xóa toàn bộ search/filter.
 - Error: hiển thị riêng `403`, `404`, network/system error và correlation ID nếu có.
 - Network/system error có nút **Try again**.
 - `403/404` không bị hiển thị thành “No milestones yet”.

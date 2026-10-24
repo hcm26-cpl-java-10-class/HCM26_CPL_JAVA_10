@@ -55,11 +55,38 @@ milestone.mock.project-status=ACTIVE
 milestone.mock.tenant-active=true
 milestone.mock.mentor-assigned=true
 milestone.mock.tenant-time-zone=Asia/Ho_Chi_Minh
+milestone.mock.seed-enabled=true
 ```
 
 Đặt project thành `COMPLETED` hoặc `CANCELLED` để kiểm tra response `409`. Đặt tenant/assignment thành `false` để kiểm tra `403`.
 
 Project `COMPLETED` hoặc `CANCELLED` vẫn xem được danh sách và chi tiết; giới hạn trạng thái chỉ áp dụng cho thao tác tạo.
+
+## Dữ liệu mẫu local
+
+Khi mock integration đang được sử dụng và `milestone.mock.seed-enabled=true`, backend tự tạo dữ liệu sau:
+
+- 7 milestone cho project `11111111-1111-1111-1111-111111111111`.
+- 1 milestone cho secondary project `55555555-5555-5555-5555-555555555555` để kiểm tra project isolation.
+- 3 rubric: delivery, demo/presentation và technical documentation.
+- 3 reviewer: Mentor Reviewer, Academic Reviewer và Technical Lead.
+- Checklist từ 2–4 mục cho từng milestone.
+- Cả hai late policy `NO_LATE` và `ALLOW_LATE`, với nhiều mức phạt khác nhau.
+- Deadline quá hạn, sắp tới và dài hạn được tính tương đối từ thời điểm backend khởi động.
+
+Seeder kiểm tra `tenantId + projectId + title` trước khi insert nên chạy lại không tạo thêm bản trùng. Seed data không tạo audit, outbox hoặc idempotency record vì không đại diện cho thao tác nghiệp vụ của người dùng.
+
+Có thể tắt seed khi cần kiểm tra empty state:
+
+```bash
+MILESTONE_MOCK_SEED_ENABLED=false bash mvnw spring-boot:run
+```
+
+Hoặc cấu hình:
+
+```properties
+milestone.mock.seed-enabled=false
+```
 
 ## Lấy access token
 
@@ -232,6 +259,24 @@ Quy tắc phân trang:
 - Client không cần truyền sort. Backend luôn sắp xếp theo `deadline ASC`, sau đó `id ASC` để kết quả ổn định giữa các trang.
 - Query luôn lọc đồng thời bằng `projectId` và `tenantId`.
 - API danh sách không tải checklist để tránh payload lớn và N+1 query. Dùng API chi tiết khi cần checklist.
+
+Search và filter server-side:
+
+```text
+search=sprint
+status=PLANNED&status=OPEN
+mandatory=true
+latePolicyType=ALLOW_LATE
+deadlineFrom=2026-10-01
+deadlineTo=2026-10-31
+```
+
+- `search` tìm không phân biệt hoa thường trong title và description, tối đa 120 ký tự.
+- `status` và `latePolicyType` có thể lặp lại; giá trị trong cùng nhóm được kết hợp bằng OR.
+- Các nhóm filter khác nhau được kết hợp bằng AND.
+- Khoảng deadline bao gồm cả hai ngày và được quy đổi theo timezone tenant.
+- Khoảng ngày ngược, enum/date sai định dạng hoặc search quá dài trả `422 VALIDATION_FAILED`.
+- Search/filter không thay đổi access policy và không thể vượt khỏi scope tenant/project.
 
 Response mẫu:
 

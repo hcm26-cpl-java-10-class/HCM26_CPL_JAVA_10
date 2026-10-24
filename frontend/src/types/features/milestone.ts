@@ -35,6 +35,7 @@ export interface MilestoneRubricOption {
   id: string;
   name: string;
   version: string;
+  criteria: MilestoneRubricCriterion[];
 }
 
 export interface MilestoneReviewerOption {
@@ -80,6 +81,14 @@ export interface MilestoneRubricCriterion {
   name: string;
   weight: number;
   maxScore: number;
+  ratings: MilestoneRubricRating[];
+}
+
+export interface MilestoneRubricRating {
+  level: "EXCELLENT" | "GOOD" | "FAIR" | "NOT_MET";
+  percentage: number;
+  description: string;
+  orderIndex: number;
 }
 
 export interface MilestoneRubricDetail {
@@ -165,4 +174,10 @@ export interface MilestonePageResponse {
 export interface MilestoneListParams {
   page: number;
   size: number;
+  search?: string;
+  status?: MilestoneStatus[];
+  mandatory?: boolean;
+  latePolicyType?: LatePolicyType[];
+  deadlineFrom?: string;
+  deadlineTo?: string;
 }

@@ -27,12 +27,12 @@ export function MilestoneRubricCard({ rubric }: { rubric: MilestoneRubricDetail 
             <div className="hidden overflow-hidden rounded-lg border md:block">
               <Table>
                 <TableHeader className="bg-muted/40">
-                  <TableRow><TableHead>Criterion</TableHead><TableHead className="text-right">Weight</TableHead><TableHead className="text-right">Maximum score</TableHead></TableRow>
+                  <TableRow><TableHead>Criterion and rating guidance</TableHead><TableHead className="text-right">Weight</TableHead><TableHead className="text-right">Maximum score</TableHead></TableRow>
                 </TableHeader>
                 <TableBody>
                   {rubric.criteria.map((criterion) => (
                     <TableRow key={criterion.code}>
-                      <TableCell className="whitespace-normal"><p className="font-medium">{criterion.name}</p><p className="mt-1 text-xs text-muted-foreground">{criterion.code}</p></TableCell>
+                      <TableCell className="whitespace-normal"><p className="font-medium">{criterion.name}</p><p className="mt-1 text-xs text-muted-foreground">{criterion.code}</p><div className="mt-2 grid gap-1 text-xs">{criterion.ratings?.map((rating) => <div key={`${criterion.code}-${rating.level}`}><span className="font-medium">{rating.level.replace("_", " ")} ({rating.percentage}%):</span> <span className="text-muted-foreground">{rating.description}</span></div>)}</div></TableCell>
                       <TableCell className="text-right font-medium">{formatNumber(criterion.weight)}%</TableCell>
                       <TableCell className="text-right font-medium">{formatNumber(criterion.maxScore)}</TableCell>
                     </TableRow>
@@ -46,6 +46,7 @@ export function MilestoneRubricCard({ rubric }: { rubric: MilestoneRubricDetail 
                 <div key={criterion.code} className="rounded-xl border p-4">
                   <p className="font-medium">{criterion.name}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{criterion.code}</p>
+                  <div className="mt-3 grid gap-1 text-xs">{criterion.ratings?.map((rating) => <div key={`${criterion.code}-${rating.level}`}><span className="font-medium">{rating.level.replace("_", " ")} ({rating.percentage}%):</span> <span className="text-muted-foreground">{rating.description}</span></div>)}</div>
                   <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
                     <div><p className="text-xs text-muted-foreground">Weight</p><p className="mt-1 font-semibold">{formatNumber(criterion.weight)}%</p></div>
                     <div><p className="text-xs text-muted-foreground">Maximum score</p><p className="mt-1 font-semibold">{formatNumber(criterion.maxScore)}</p></div>

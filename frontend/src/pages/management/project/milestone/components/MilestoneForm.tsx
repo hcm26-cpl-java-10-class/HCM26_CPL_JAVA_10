@@ -1,19 +1,21 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Controller, type FieldPath, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import type { MilestoneApiError, MilestoneCreateOptions } from "@/types";
-import { AlertTriangle, ArrowDown, ArrowUp, CalendarClock, CheckCircle2, Plus, Save, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, CalendarClock, CheckCircle2, Eye, Plus, Save, Trash2 } from "lucide-react";
 import { MilestoneErrorSummary } from "./MilestoneErrorSummary";
 import { milestoneFormSchema, type MilestoneFormValues } from "../milestone-form.schema";
 import { toFormFieldPath } from "../milestone.utils";
@@ -43,6 +45,7 @@ export function MilestoneForm({
   onCancel,
   onDirtyChange,
 }: MilestoneFormProps) {
+  const [rubricPreviewOpen, setRubricPreviewOpen] = useState(false);
   const {
     control,
     register,
@@ -249,7 +252,7 @@ export function MilestoneForm({
             </CardHeader>
             <CardContent className="grid gap-5 md:grid-cols-2">
               <div className="grid gap-2">
-                <Label>Rubric <span className="text-destructive">*</span></Label>
+                <div className="flex items-center justify-between gap-2"><Label>Rubric <span className="text-destructive">*</span></Label><a href="/rubrics" target="_blank" rel="noreferrer" className="text-xs font-medium text-primary hover:underline">Manage rubrics</a></div>
                 <Controller control={control} name="rubricSnapshotId" render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange} disabled={!options.rubrics.length}>
                     <SelectTrigger aria-invalid={!!errors.rubricSnapshotId}><SelectValue placeholder="Select a rubric version" /></SelectTrigger>
@@ -257,6 +260,7 @@ export function MilestoneForm({
                   </Select>
                 )} />
                 <FieldMessage message={errors.rubricSnapshotId?.message} />
+                <Button type="button" variant="outline" size="sm" className="w-fit" disabled={!rubric} onClick={() => setRubricPreviewOpen(true)}><Eye /> View selected rubric</Button>
               </div>
               <div className="grid gap-2">
                 <Label>Reviewer <span className="text-destructive">*</span></Label>
@@ -339,6 +343,32 @@ export function MilestoneForm({
           <Save className="size-4" /> {submitting ? "Creating..." : networkUncertain ? "Retry safely" : "Create milestone"}
         </Button>
       </div>
+
+      <Dialog open={rubricPreviewOpen} onOpenChange={setRubricPreviewOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{rubric ? `${rubric.name} · ${rubric.version}` : "Rubric preview"}</DialogTitle>
+            <DialogDescription>Review the scoring criteria before assigning this rubric to the milestone.</DialogDescription>
+          </DialogHeader>
+          {rubric ? (
+            <div className="grid gap-4">
+              <div className="grid grid-cols-2 gap-3 rounded-lg bg-muted/40 p-3 text-sm">
+                <div><p className="text-muted-foreground">Criteria</p><p className="font-semibold">{rubric.criteria.length}</p></div>
+                <div><p className="text-muted-foreground">Maximum score</p><p className="font-semibold">{rubric.criteria.reduce((sum, item) => sum + Number(item.maxScore), 0)}</p></div>
+              </div>
+              <div className="overflow-x-auto rounded-md border">
+                <Table>
+                  <TableHeader><TableRow><TableHead>#</TableHead><TableHead>Code</TableHead><TableHead>Criterion</TableHead><TableHead className="text-right">Weight</TableHead><TableHead className="text-right">Max score</TableHead></TableRow></TableHeader>
+                  <TableBody>{rubric.criteria.map((criterion, index) => (
+                    <TableRow key={`${criterion.code}-${index}`}><TableCell>{index + 1}</TableCell><TableCell className="font-mono text-xs">{criterion.code}</TableCell><TableCell><p className="font-medium">{criterion.name}</p><div className="mt-2 grid gap-1 text-xs">{criterion.ratings?.map((rating) => <div key={`${criterion.code}-${rating.level}`}><span className="font-medium">{rating.level.replace("_", " ")} ({rating.percentage}%):</span> <span className="text-muted-foreground">{rating.description}</span></div>)}</div></TableCell><TableCell className="text-right">{criterion.weight}%</TableCell><TableCell className="text-right">{criterion.maxScore}</TableCell></TableRow>
+                  ))}</TableBody>
+                </Table>
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter showCloseButton />
+        </DialogContent>
+      </Dialog>
     </form>
   );
 }

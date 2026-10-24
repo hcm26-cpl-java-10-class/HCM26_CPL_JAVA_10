@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/hooks/usePermissions";
 import { formatRoleLabel } from "@/utils/rbac.utils";
 import { motion } from "motion/react";
-import { ArrowRight, BookOpen, ClipboardCheck, Flag, GraduationCap, PenSquare } from "lucide-react";
+import { ArrowRight, BookOpen, ClipboardCheck, FileCheck2, Flag, GraduationCap, PenSquare } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const teacherCapabilities = [
@@ -75,6 +75,11 @@ export default function TeacherLandingPage() {
               <Link to={`/projects/${mockProjectId}/milestones`}>
                 <Flag className="mr-2 size-4" /> Manage milestones
               </Link>
+            </Button>
+          ) : null}
+          {hasPermission("RUBRIC_READ") ? (
+            <Button asChild variant="outline" className="mt-3 border-slate-300 bg-white/80 sm:ml-3 sm:mt-0">
+              <Link to="/rubrics"><FileCheck2 className="mr-2 size-4" /> Manage rubrics</Link>
             </Button>
           ) : null}
         </div>

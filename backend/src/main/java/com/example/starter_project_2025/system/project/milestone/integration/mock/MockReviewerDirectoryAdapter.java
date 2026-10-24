@@ -15,35 +15,39 @@ import java.util.UUID;
 @Profile("!milestone-real-integrations")
 public class MockReviewerDirectoryAdapter implements ReviewerDirectoryPort {
 
-    private final ReviewerData reviewer = new ReviewerData(
-            MockMilestoneData.REVIEWER_ID,
-            "Mentor Reviewer",
-            true,
-            true
+    private final List<ReviewerData> reviewers = List.of(
+            new ReviewerData(MockMilestoneData.REVIEWER_ID, "Mentor Reviewer", true, true),
+            new ReviewerData(MockMilestoneData.SECONDARY_REVIEWER_ID, "Academic Reviewer", true, true),
+            new ReviewerData(MockMilestoneData.TECHNICAL_REVIEWER_ID, "Technical Lead", true, true)
     );
 
     @Override
     public List<ReviewerData> findEligibleReviewers(UUID projectId, UUID actorId, UUID tenantId) {
-        return List.of(reviewer);
+        return reviewers;
     }
 
     @Override
     public ReviewerData requireEligibleReviewer(
             UUID reviewerId, UUID projectId, UUID actorId, UUID tenantId) {
-        if (!reviewer.id().equals(reviewerId) || !reviewer.active() || !reviewer.assignedToProject()) {
-            throw new MilestoneValidationException(Map.of(
-                    "reviewerId", List.of("Reviewer is not available")
-            ));
-        }
-        return reviewer;
+        return reviewers.stream()
+                .filter(reviewer -> reviewer.id().equals(reviewerId)
+                        && reviewer.active()
+                        && reviewer.assignedToProject())
+                .findFirst()
+                .orElseThrow(() -> new MilestoneValidationException(Map.of(
+                        "reviewerId", List.of("Reviewer is not available")
+                )));
     }
 
     @Override
     public ReviewerData requireReviewerForRead(UUID reviewerId, UUID projectId, UUID tenantId) {
-        if (!reviewer.id().equals(reviewerId)
-                || !MockMilestoneData.TENANT_ID.equals(tenantId)) {
+        if (!MockMilestoneData.TENANT_ID.equals(tenantId)) {
             throw new MilestoneDependencyException("Milestone reviewer could not be loaded");
         }
-        return reviewer;
+        return reviewers.stream()
+                .filter(reviewer -> reviewer.id().equals(reviewerId))
+                .findFirst()
+                .orElseThrow(() -> new MilestoneDependencyException(
+                        "Milestone reviewer could not be loaded"));
     }
 }
