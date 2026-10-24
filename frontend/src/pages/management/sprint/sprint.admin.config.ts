@@ -136,4 +136,6 @@ export const sprintAdminEntityConfig: EntityConfig = {
     path: "/sprints",
     api: sprintApi,
     schema: sprintAdminSchema,
+    /** Admins can jump to the student backlog view from the Sprint table. */
+    backlogShortcutPath: "/backlogs",
 };

@@ -1,21 +1,21 @@
 import { sprintApi } from "@/api";
 import { usePermissions } from "@/hooks/usePermissions";
 import { AutoCrudPage } from "@/pages/management/AutoCrudPage";
+import BacklogPage from "@/pages/management/backlog";
 import type { EntityConfig } from "@/types";
 import { ADMIN_ROLE, normalizeRole } from "@/utils/rbac.utils";
 import { SprintCard } from "./components/SprintCard";
 import { sprintAdminEntityConfig } from "./sprint.admin.config";
 import { sprintSchema } from "./sprint.schema";
-import SprintWorkspacePage from "./workspace/SprintWorkspacePage";
 
 /**
  * Sprint route (`/sprints`), rendered per role:
  * <ul>
  *   <li><b>Admin</b>: the generic CRUD data table cloned from the temporary
  *       task page (`/taskstemp`) - see {@link sprintAdminEntityConfig}.</li>
- *   <li><b>Student</b> (and every other persona): the project style workspace
- *       built by {@link SprintWorkspacePage}, with the sprint ribbon, the board
- *       and the sprint / product backlog planning panels.</li>
+ *   <li><b>Student</b> (and every other persona): the Jira style backlog view
+ *       shared with the `/backlogs` page - see
+ *       `pages/management/backlog`.</li>
  * </ul>
  * The entity config below keeps the route registered in `buildEntityRoutes`
  * and documents the schema, permissions and browse-mode behaviour of the
@@ -29,7 +29,7 @@ export default function SprintPage() {
     return <AutoCrudPage entity={sprintAdminEntityConfig} />;
   }
 
-  return <SprintWorkspacePage />;
+  return <BacklogPage />;
 }
 
 export const entityConfig: EntityConfig = {

@@ -11,9 +11,15 @@ import { PermissionGate } from "@/components/PermissionGate";
 interface ToolbarActionsProps {
   table: any;
   headerActions?: React.ReactNode;
+  /** Extra buttons rendered before the header actions / default Create button. */
+  extraActions?: React.ReactNode;
 }
 
-export function ToolbarActions({ table, headerActions }: ToolbarActionsProps) {
+export function ToolbarActions({
+  table,
+  headerActions,
+  extraActions,
+}: ToolbarActionsProps) {
   const [importOpen, setImportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
@@ -75,6 +81,8 @@ export function ToolbarActions({ table, headerActions }: ToolbarActionsProps) {
           />
         </PermissionGate>
       )}
+
+      {extraActions}
 
       {/* Show custom header actions if provided, otherwise show default Create button */}
       {headerActions ||

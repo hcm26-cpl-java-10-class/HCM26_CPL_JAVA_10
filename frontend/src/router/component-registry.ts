@@ -5,6 +5,7 @@ import { Login } from "@/pages/auth/Login";
 import RegisterPage from "@/pages/auth/RegisterPage";
 import NotFoundPage from "@/pages/error/NotFoundPage";
 import { Unauthorized } from "@/pages/error/Unauthorized";
+import BacklogPage from "@/pages/management/backlog";
 import { Dashboard } from "@/pages/management/dashboard";
 import ExamManagementPage from "@/pages/management/exam";
 import InvitationManagementPage from "@/pages/management/invitation";
@@ -38,6 +39,13 @@ export const routes: RouteConfig[] = [
     // UFR-PRJ-003-03: Sprint Planning board reached from the Sprint card.
     path: "/sprints/:sprintId/planning",
     component: SprintPlanningPage,
+    requiredPermission: "SPRINT_READ",
+    isModuleDriven: false,
+  },
+  {
+    // Student backlog view (also served at /sprints for non-admin roles).
+    path: "/backlogs",
+    component: BacklogPage,
     requiredPermission: "SPRINT_READ",
     isModuleDriven: false,
   },

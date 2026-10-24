@@ -50,6 +50,9 @@ interface ProTableProps<TData = any> {
     /** Optional: Override default create button. If not provided, shows default "Create" button */
     headerActions?: React.ReactNode;
 
+    /** Optional: extra buttons rendered next to the header actions / Create button */
+    extraHeaderActions?: React.ReactNode;
+
     /**
      * Optional: actions shown in browse mode, where the regular toolbar actions
      * are hidden (read-only card view). Used to expose a single "Create" button.
@@ -119,6 +122,7 @@ interface ProTableProps<TData = any> {
 export function ProTable<TData = any>({
     table,
     headerActions,
+    extraHeaderActions,
     browseActions,
     renderRowActions,
     renderCard,
@@ -274,6 +278,7 @@ export function ProTable<TData = any>({
             <Toolbar
                 table={table}
                 headerActions={headerActions}
+                extraHeaderActions={extraHeaderActions}
                 browseActions={browseActions}
                 viewMode={effectiveViewMode}
                 onViewModeChange={setViewMode}

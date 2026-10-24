@@ -259,6 +259,65 @@ export function useSprintPlanningBoard({
     setSelectedSprint([]);
   };
 
+  /**
+   * Assigns items to the sprint right away (used by the inline "Create" row of
+   * the backlog page, which must not depend on the manual save banner). The
+   * whole ordered list is sent, so pending reorders are persisted as well.
+   */
+  const assignToSprint = async (ids: number[], options?: { silent?: boolean }) => {
+    if (!sprintId || saving || !canEdit) {
+      return null;
+    }
+
+    const existing = new Set(currentSprintIds);
+    const added = ids.filter((id) => !existing.has(id));
+
+    if (!added.length) {
+      return null;
+    }
+
+    setSaving(true);
+
+    try {
+      const result = await sprintApi.updateBacklog(sprintId, [
+        ...currentSprintIds,
+        ...added,
+      ]);
+
+      setPlan(result);
+      setSprintItems(result.sprintItems ?? []);
+      setProductItems(result.productBacklogItems ?? []);
+      clearSelection();
+
+      if (!options?.silent) {
+        toast.success(
+          added.length === 1
+            ? "Đã thêm công việc vào Sprint."
+            : `Đã thêm ${added.length} công việc vào Sprint.`,
+        );
+      }
+
+      return result;
+    } catch (error) {
+      if (plan) {
+        setSprintItems(plan.sprintItems ?? []);
+        setProductItems(plan.productBacklogItems ?? []);
+      }
+
+      clearSelection();
+
+      toast.error(
+        extractErrorMessage(error, "Không thể thêm công việc vào Sprint."),
+      );
+
+      return null;
+    } finally {
+      setSaving(false);
+      setDragged(null);
+      setDragTarget(null);
+    }
+  };
+
   /** AC01: one atomic call assigns, unassigns and saves the priority order. */
   const confirmPlan = async () => {
     if (!sprintId || saving || !canEdit) {
@@ -320,6 +379,7 @@ export function useSprintPlanningBoard({
     load,
     moveToSprint,
     moveToProduct,
+    assignToSprint,
     reorderBefore,
     moveWithinSprint,
     toggleProductSelection,

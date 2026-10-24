@@ -201,4 +201,6 @@ export const entityConfig: EntityConfig = {
     path: "/sprint-backlogs",
     api: sprintBacklogApi,
     schema: sprintBacklogSchema,
+    /** Admins can jump to the student backlog view from the Sprint Backlog table. */
+    backlogShortcutPath: "/backlogs",
 };
