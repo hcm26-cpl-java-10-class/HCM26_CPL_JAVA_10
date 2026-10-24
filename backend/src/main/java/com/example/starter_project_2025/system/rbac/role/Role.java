@@ -56,6 +56,16 @@ public class Role extends BaseEntity {
     Boolean isSystem = false;
 
     @Builder.Default
+    @Column(name = "is_system", nullable = false)
+    @ExportField(name = "Is System")
+    Boolean isSystem = false;
+
+    @Builder.Default
+    @Column(name = "is_active", nullable = false)
+    @ExportField(name = "Is Active")
+    Boolean isActive = true;
+
+    @Builder.Default
     @ManyToMany(fetch = FetchType.LAZY)
     @ExportField(name = "Permissions", relation = true, path = "name")
     @ImportField(name = "Permissions", lookupEntity = Permission.class, lookupField = "name", separator = ",")
