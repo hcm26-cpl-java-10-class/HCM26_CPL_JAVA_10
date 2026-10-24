@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.project.sprint_backlog;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
+import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import com.example.starter_project_2025.system.project.sprint.Sprint;
 import jakarta.persistence.AttributeOverride;
@@ -65,6 +66,14 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @AttributeOverride(name = "id", column = @Column(name = "sprint_backlog_id"))
 @ResourcePermission("SPRINT_BACKLOG")
+@ResourceMenu(
+        title = "Sprint Backlogs",
+        group = "Project Management",
+        icon = "clipboard-check",
+        url = "/sprint-backlogs",
+        order = 2,
+        permission = "SPRINT_BACKLOG_READ"
+)
 public class SprintBacklog extends BaseEntity {
 
     /**
