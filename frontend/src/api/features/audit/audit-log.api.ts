@@ -10,6 +10,7 @@ export interface AuditLogDTO {
     oldValue: string | null;
     newValue: string | null;
     correlationId: string | null;
+    result: string | null;
     createdAt: string;
 }
 

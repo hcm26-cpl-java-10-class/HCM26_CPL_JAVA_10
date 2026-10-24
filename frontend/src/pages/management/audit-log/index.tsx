@@ -98,13 +98,29 @@ function ActionBadge({ action }: { action: string }) {
   );
 }
 
-function ResultBadge() {
-  return (
-    <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
-      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-      Recorded
+function ResultBadge({ result }: { result: string | null }) {
+    const isSuccess = result === "SUCCESS";
+    const isFailed = result === "FAIL" || result === "FAILED";
+
+    const label = isSuccess
+        ? "Success"
+        : isFailed
+            ? "Failed"
+            : "Unknown";
+
+    const className = isSuccess
+        ? "bg-green-100 text-green-700"
+        : isFailed
+            ? "bg-red-100 text-red-700"
+            : "bg-gray-100 text-gray-700";
+
+    return (
+        <span
+            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${className}`}
+        >
+      {label}
     </span>
-  );
+    );
 }
 
 function AuditLogDetails({ log }: { log: AuditLogDTO }) {
@@ -140,6 +156,8 @@ function AuditLogDetails({ log }: { log: AuditLogDTO }) {
   );
 }
 
+
+
 function downloadCsv(logs: AuditLogDTO[]) {
   if (logs.length === 0) return;
 
@@ -150,21 +168,23 @@ function downloadCsv(logs: AuditLogDTO[]) {
     "Action",
     "Object",
     "Object ID",
+    "Result",
     "Old Value",
     "New Value",
     "Correlation ID",
   ];
 
-  const escapeCsv = (value: unknown) =>
+  const escapeCsv = (value: unknown): string =>
     `"${String(value ?? "").replace(/"/g, '""')}"`;
 
-const rows = logs.map((log) => [
+const rows = logs.map((log: AuditLogDTO) => [
     log.createdAt,
     log.actorEmail || "Unknown",
     log.actorId ?? "",
     log.action,
     log.entityType || "",
     log.entityId || "",
+    log.result || "Unknown",
     log.oldValue || "",
     log.newValue || "",
     log.correlationId || "",
@@ -174,7 +194,6 @@ const csv = [headers, ...rows]
     .map((row) => row.map(escapeCsv).join(","))
     .join("\r\n");
 
-// BOM giúp Excel đọc UTF-8 và tiếng Việt chính xác hơn.
 const blob = new Blob(["\uFEFF", csv], {
     type: "text/csv;charset=utf-8;",
 });
@@ -184,11 +203,14 @@ const link = document.createElement("a");
 
 link.href = url;
 link.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
+
 document.body.appendChild(link);
 link.click();
 link.remove();
+
 URL.revokeObjectURL(url);
 }
+
 
 export default function AuditLogPage() {
     const [action, setAction] = useState("");
@@ -675,7 +697,7 @@ function AuditLogRow({
                 </td>
 
                 <td className="px-5 py-3.5">
-                    <ResultBadge />
+                    <ResultBadge result={log.result} />
                 </td>
 
                 <td className="px-5 py-3.5 text-right">
