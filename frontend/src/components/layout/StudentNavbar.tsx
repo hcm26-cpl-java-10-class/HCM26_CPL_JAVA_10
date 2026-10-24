@@ -24,10 +24,22 @@ const normalizePath = (path?: string) => {
   return trimmed || "/";
 };
 
+/**
+ * The student persona works with a single backlog entry point: the `Sprints`
+ * and `Sprint Backlogs` menus collapse into `Backlogs` -> `/backlogs`.
+ */
+const STUDENT_HIDDEN_URLS = new Set(["/sprint-backlogs"]);
+
+const STUDENT_MENU_OVERRIDES: Record<string, { title: string; url: string }> = {
+  "/sprints": { title: "Backlogs", url: "/backlogs" },
+};
+
+const BACKLOGS_URL = "/backlogs";
+
 export function StudentNavbar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { activeRole } = usePermissions();
+  const { activeRole, hasPermission } = usePermissions();
   const { data: moduleGroups = [] } = useActiveModuleGroups();
   const pathname = normalizePath(location.pathname);
 
@@ -39,25 +51,67 @@ export function StudentNavbar() {
       return iconMap[key];
     };
 
-    return moduleGroups
-      .map((group) => ({
-        id: group.id ?? group.name ?? "group",
-        name: group.name ?? "Menu",
-        items: group.modules
-          .filter((module) => !!module.url)
-          .map((module) => ({
-            id: module.id ?? `${group.id ?? group.name}-module`,
-            title: module.title ?? "Untitled",
-            url: module.url ?? "#",
-            icon: resolveIcon(module.icon),
-            isActive:
-              !!module.url &&
-              (pathname === normalizePath(module.url) || pathname.startsWith(`${normalizePath(module.url)}/`)),
-          })),
-      }))
-      .filter((group) => group.items.length > 0);
+    const groups = moduleGroups
+      .map((group) => {
+        const seenUrls = new Set<string>();
 
-  }, [moduleGroups, pathname]);
+        const items = group.modules
+          .filter((module) => !!module.url)
+          .filter((module) => !STUDENT_HIDDEN_URLS.has(normalizePath(module.url)))
+          .map((module) => {
+            const override = STUDENT_MENU_OVERRIDES[normalizePath(module.url)];
+            const url = override?.url ?? module.url!;
+
+            return {
+              id: module.id ?? `${group.id ?? group.name}-module`,
+              title: override?.title ?? module.title ?? "Untitled",
+              url,
+              icon: resolveIcon(module.icon),
+              isActive:
+                pathname === normalizePath(url) ||
+                pathname.startsWith(`${normalizePath(url)}/`),
+            };
+          })
+          .filter((item) => {
+            if (seenUrls.has(item.url)) {
+              return false;
+            }
+
+            seenUrls.add(item.url);
+            return true;
+          });
+
+        return {
+          id: group.id ?? group.name ?? "group",
+          name: group.name ?? "Menu",
+          items,
+        };
+      });
+
+    // Safety net: when the sprint module is not configured in the database the
+    // student still needs the Backlogs entry point.
+    const hasBacklogs = groups.some((group) =>
+      group.items.some((item) => item.url === BACKLOGS_URL),
+    );
+
+    if (!hasBacklogs && hasPermission("SPRINT_READ")) {
+      const projectGroup =
+        groups.find((group) => /project/i.test(group.name)) ?? groups[0];
+
+      if (projectGroup) {
+        projectGroup.items.push({
+          id: "student-backlogs",
+          title: "Backlogs",
+          url: BACKLOGS_URL,
+          icon: resolveIcon("menu"),
+          isActive:
+            pathname === BACKLOGS_URL || pathname.startsWith(`${BACKLOGS_URL}/`),
+        });
+      }
+    }
+
+    return groups.filter((group) => group.items.length > 0);
+  }, [moduleGroups, pathname, hasPermission]);
 
   const hasMenuItems = navGroups.length > 0;
 

@@ -19,14 +19,14 @@ public interface SprintService
     List<SprintExportRow> getExportRows();
 
     /**
-     * Sprint Planning board: sprint header, ordered Sprint Backlog and the
-     * items still available in the product backlog (UFR-PRJ-003-03).
+     * Backlog board of a sprint: sprint header plus the ordered list of its
+     * Sprint Backlog items (UFR-PRJ-003-03).
      */
     SprintPlanningDTO getPlanning(Long sprintId);
 
     /**
-     * Assigns / unassigns backlog items and persists their priority order in a
-     * single transaction (UFR-PRJ-003-03, AC01 / AC02).
+     * Persists the scope confirmed on the backlog board in one transaction
+     * (UFR-PRJ-003-03, AC01 / AC02).
      */
     SprintPlanningDTO saveSprintBacklog(Long sprintId, SprintBacklogPlanDTO request);
 }

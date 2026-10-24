@@ -30,6 +30,13 @@ export function useActiveModuleGroups(enabled = true) {
     return useQuery<SidebarModuleGroup[]>({
         queryKey: ["sidebar-menu", "active-module-groups", activeRole],
         enabled,
+        /**
+         * Keep the previous role's menu while the new role's menu is loading.
+         * The App builds the module driven routes from this data: dropping it
+         * for a frame sends the current URL to the catch-all 404 route right
+         * after a role switch.
+         */
+        placeholderData: (previousData) => previousData,
         queryFn: async () => {
             const [groupPage, modulePage] = await Promise.all([
                 moduleGroupApi.getPage(menuPagination, undefined, { ids: [], isActive: true }),

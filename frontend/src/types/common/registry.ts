@@ -58,6 +58,11 @@ export interface EntityConfig {
      * fully owned by the student persona (e.g. Sprints).
      */
     browseModeActions?: boolean;
+    /**
+     * Admin-only shortcut rendered in the table toolbar that navigates to the
+     * student backlog view (e.g. `/backlogs`). Ignored for non-admin roles.
+     */
+    backlogShortcutPath?: string;
 }
 
 const registry: EntityConfig[] = [];

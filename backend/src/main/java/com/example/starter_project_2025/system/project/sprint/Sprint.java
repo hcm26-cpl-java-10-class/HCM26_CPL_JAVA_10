@@ -7,11 +7,14 @@ import com.example.starter_project_2025.base.dataio.importer.annotation.ImportFi
 import com.example.starter_project_2025.base.dataio.template.annotation.ImportEntity;
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
+import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklog;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
@@ -25,6 +28,8 @@ import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Getter
@@ -80,6 +85,16 @@ public class Sprint extends BaseEntity {
     @ImportField(name = "Start Date")
     @ExportField(name = "Start Date")
     LocalDateTime startDate;
+
+    /**
+     * Backlog items of this sprint: one sprint has one or many Sprint Backlog
+     * items. The owning side of the relation is {@link SprintBacklog#getSprint()}
+     * ({@code sprint_backlog.sprint_id}), so the collection is only mapped to
+     * allow reading the items from the sprint side.
+     */
+    @Builder.Default
+    @OneToMany(mappedBy = "sprint", fetch = FetchType.LAZY)
+    List<SprintBacklog> sprintBacklogs = new ArrayList<>();
 
     @Column(name = "end_date")
     @ImportField(name = "End Date")

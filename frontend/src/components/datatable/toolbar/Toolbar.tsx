@@ -10,6 +10,7 @@ export type ViewMode = "table" | "card";
 interface ToolbarProps {
   table: any;
   headerActions?: React.ReactNode;
+  extraHeaderActions?: React.ReactNode;
   browseActions?: React.ReactNode;
   viewMode?: ViewMode;
   onViewModeChange?: (mode: ViewMode) => void;
@@ -23,6 +24,7 @@ interface ToolbarProps {
 export function Toolbar({
   table,
   headerActions,
+  extraHeaderActions,
   browseActions,
   viewMode = "table",
   onViewModeChange,
@@ -44,7 +46,12 @@ export function Toolbar({
   // Browse mode hides the regular toolbar actions; a single browse action
   // (e.g. "Create") can still be rendered on the right hand side.
   const rightSlot = showActions ? (
-    <ToolbarActions table={table} headerActions={headerActions} hideCreate={hideCreate} />
+    <ToolbarActions
+      table={table}
+      headerActions={headerActions}
+      extraActions={extraHeaderActions}
+      hideCreate={hideCreate}
+    />
   ) : browseActions ? (
     <div className="flex justify-end items-center gap-2 w-full">{browseActions}</div>
   ) : null;

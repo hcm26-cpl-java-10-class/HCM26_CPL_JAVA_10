@@ -7,15 +7,12 @@ import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserPrincipal;
-import com.example.starter_project_2025.system.project.backlog_temp.Milestone;
-import com.example.starter_project_2025.system.project.backlog_temp.MilestoneRepository;
-import com.example.starter_project_2025.system.project.backlog_temp.Task;
-import com.example.starter_project_2025.system.project.backlog_temp.TaskPriority;
-import com.example.starter_project_2025.system.project.backlog_temp.TaskRepository;
-import com.example.starter_project_2025.system.project.backlog_temp.TaskStatus;
 import com.example.starter_project_2025.system.project.sprint.audit.SprintAuditLogDTO;
 import com.example.starter_project_2025.system.project.sprint.audit.SprintAuditService;
 import com.example.starter_project_2025.system.project.sprint.event.SprintOutboxService;
+import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklog;
+import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogRepository;
+import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogStatus;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -24,13 +21,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -45,7 +39,14 @@ import java.util.stream.Collectors;
  *     <li>start date &lt; end date (422)</li>
  *     <li>sprint name unique (409)</li>
  *     <li>sprint goal 1..500 characters (422)</li>
- *     <li>a new sprint can only be Planned or Active</li>
+ *     <li>a new sprint always starts as Planned (the client cannot pick another
+ *     status)</li>
+ *     <li>an existing Planned sprint can only move to Active or Cancelled; an
+ *     Active sprint can only move to Completed or Cancelled (422 otherwise)</li>
+ *     <li>a sprint can only be started (Active) when it holds at least one
+ *     Sprint Backlog item (422 otherwise)</li>
+ *     <li>a sprint can only move to Completed once every Sprint Backlog item of
+ *     that sprint is Done (422 otherwise)</li>
  *     <li>audit log (actor, timestamp, before/after, correlation id) + outbox event (idempotent)</li>
  * </ul>
  * <p>
@@ -73,20 +74,19 @@ public class SprintServiceImpl
     static final String EVENT_CREATED = "SPRINT_CREATED";
     static final String EVENT_UPDATED = "SPRINT_UPDATED";
     static final String EVENT_DELETED = "SPRINT_DELETED";
-    static final String EVENT_BACKLOG_UPDATED = "SPRINT_BACKLOG_UPDATED";
 
-    static final String ACTION_BACKLOG_UPDATED = "BACKLOG_UPDATED";
-
-    static final String TASK_IDS_FIELD = "taskIds";
+    static final String BACKLOG_IDS_FIELD = "taskIds";
     static final String SCOPE_LOCKED_MESSAGE =
             "Không thể thay đổi phạm vi công việc do Sprint đã hoàn thành/đã đóng";
+
+    /** How many unfinished backlog titles are quoted in the completion error. */
+    static final int MAX_UNFINISHED_TITLES_IN_MESSAGE = 5;
 
     SprintMapper sprintMapper;
     SprintRepository sprintRepository;
     SprintAuditService sprintAuditService;
     SprintOutboxService sprintOutboxService;
-    TaskRepository taskRepository;
-    MilestoneRepository milestoneRepository;
+    SprintBacklogRepository sprintBacklogRepository;
 
     @Override
     protected BaseCrudRepository<Sprint, Long> getRepository() {
@@ -117,15 +117,14 @@ public class SprintServiceImpl
         validateName(sprint.getName(), errors);
         validateGoal(sprint.getSprintGoal(), errors);
         validateDates(sprint.getStartDate(), sprint.getEndDate(), errors);
-        validateCreateStatus(sprint.getStatus(), errors);
 
         throwIfInvalid(errors);
 
         ensureUniqueName(sprint.getName(), null);
 
-        if (sprint.getStatus() == null) {
-            sprint.setStatus(SprintStatus.PLANNED);
-        }
+        // A sprint is always created as Planned: any status sent by the client
+        // is ignored so the lifecycle can only be advanced through an update.
+        sprint.setStatus(SprintStatus.PLANNED);
 
         if (sprint.getIsActive() == null) {
             sprint.setIsActive(true);
@@ -163,12 +162,17 @@ public class SprintServiceImpl
         String goal = request.getSprintGoal() != null ? request.getSprintGoal().trim() : sprint.getSprintGoal();
         LocalDateTime startDate = request.getStartDate() != null ? request.getStartDate() : sprint.getStartDate();
         LocalDateTime endDate = request.getEndDate() != null ? request.getEndDate() : sprint.getEndDate();
+        SprintStatus currentStatus = sprint.getStatus();
+        SprintStatus targetStatus = request.getStatus() != null ? request.getStatus() : currentStatus;
 
         Map<String, List<String>> errors = new LinkedHashMap<>();
 
         validateName(name, errors);
         validateGoal(goal, errors);
         validateDates(startDate, endDate, errors);
+        validateStatusTransition(currentStatus, targetStatus, errors);
+        validateActivation(sprint.getId(), currentStatus, targetStatus, errors);
+        validateCompletion(sprint.getId(), currentStatus, targetStatus, errors);
 
         throwIfInvalid(errors);
 
@@ -248,13 +252,12 @@ public class SprintServiceImpl
     }
 
     // ---------------------------------------------------------------------
-    // Sprint Planning (UFR-PRJ-003-03)
+    // Backlog board (UFR-PRJ-003-03)
     // ---------------------------------------------------------------------
 
     /**
-     * Builds the two panels of the planning board. The sprint backlog is
-     * returned in its persisted priority order, while the product backlog is
-     * sorted by priority so the most valuable items are picked first.
+     * Board snapshot of a sprint: its header plus every Sprint Backlog item
+     * that belongs to it.
      */
     @Override
     @Transactional(readOnly = true)
@@ -262,66 +265,42 @@ public class SprintServiceImpl
 
         check("SPRINT_READ");
 
-        Sprint sprint = findSprint(sprintId);
-
-        check("TASK_READ");
-
-        return buildPlanning(sprint);
+        return buildPlanning(findSprint(sprintId));
     }
 
     /**
-     * Applies the whole planning board in one transaction (AC01 / AC02 / AC03):
-     * <ul>
-     *     <li>items listed in {@code taskIds} are assigned to the sprint, in the
-     *     given order (priority order);</li>
-     *     <li>items currently in the sprint but missing from the list are moved
-     *     back to the product backlog;</li>
-     *     <li>a completed / cancelled sprint rejects the change with 422 so the
-     *     UI can revert the drag &amp; drop position.</li>
-     * </ul>
-     * One audit row and one outbox event are written for the whole operation.
+     * Confirms the scope of the board.
+     * <p>
+     * The board works with Sprint Backlog items: an item without a sprint is a
+     * product backlog item, so this operation validates the submitted list and
+     * moves the items that are not part of this sprint yet (product backlog or
+     * another editable sprint) into the planned sprint. A completed /
+     * cancelled sprint rejects the change with 422 (AC02).
      */
     @Override
     public SprintPlanningDTO saveSprintBacklog(Long sprintId, SprintBacklogPlanDTO request) {
 
         check("SPRINT_UPDATE");
-        check("TASK_UPDATE");
 
         Sprint sprint = findSprint(sprintId);
 
         Map<String, List<String>> errors = new LinkedHashMap<>();
 
-        // AC02: a sprint that is already closed keeps its backlog frozen.
         if (!isScopeEditable(sprint)) {
             addError(errors, STATUS_FIELD, scopeLockedMessage(sprint));
         }
 
-        List<Long> orderedIds = distinctTaskIds(request, errors);
+        List<Long> orderedIds = distinctBacklogIds(request, errors);
 
         throwIfInvalid(errors);
 
-        List<Task> currentSprintTasks =
-                taskRepository.findBySprintIdOrderBySprintOrderAscIdAsc(sprintId);
-        List<Task> requestedTasks = resolveRequestedTasks(orderedIds, errors);
+        List<SprintBacklog> orderedItems = resolveBacklogItems(orderedIds, errors);
 
-        validateAssignable(sprint, requestedTasks, errors);
-        validateUnassignable(currentSprintTasks, orderedIds, errors);
+        validateAssignable(sprint, orderedItems, errors);
 
         throwIfInvalid(errors);
 
-        Map<String, Object> before = planningSnapshot(sprintId, currentSprintTasks);
-
-        applyPlan(sprintId, orderedIds, requestedTasks, currentSprintTasks);
-
-        taskRepository.flush();
-
-        List<Task> savedTasks =
-                taskRepository.findBySprintIdOrderBySprintOrderAscIdAsc(sprintId);
-        Map<String, Object> after = planningSnapshot(sprintId, savedTasks);
-
-        if (!before.get("taskIds").equals(after.get("taskIds"))) {
-            recordPlanningChange(sprint, orderedIds, currentSprintTasks, before, after);
-        }
+        applyPlan(sprint, orderedItems);
 
         return buildPlanning(sprint);
     }
@@ -351,11 +330,11 @@ public class SprintServiceImpl
      * Validates the shape of the request and removes duplicated ids while
      * keeping the order chosen by the user.
      */
-    private List<Long> distinctTaskIds(SprintBacklogPlanDTO request,
-                                       Map<String, List<String>> errors) {
+    private List<Long> distinctBacklogIds(SprintBacklogPlanDTO request,
+                                          Map<String, List<String>> errors) {
 
         if (request == null || request.getTaskIds() == null) {
-            addError(errors, TASK_IDS_FIELD,
+            addError(errors, BACKLOG_IDS_FIELD,
                     "Danh sách Backlog item của Sprint Backlog không hợp lệ");
             return List.of();
         }
@@ -363,251 +342,152 @@ public class SprintServiceImpl
         List<Long> orderedIds = new ArrayList<>();
         Set<Long> seen = new HashSet<>();
 
-        for (Long taskId : request.getTaskIds()) {
+        for (Long backlogId : request.getTaskIds()) {
 
-            if (taskId == null) {
-                addError(errors, TASK_IDS_FIELD, "Backlog item không hợp lệ");
+            if (backlogId == null) {
+                addError(errors, BACKLOG_IDS_FIELD, "Backlog item không hợp lệ");
                 continue;
             }
 
-            if (!seen.add(taskId)) {
-                addError(errors, TASK_IDS_FIELD,
+            if (!seen.add(backlogId)) {
+                addError(errors, BACKLOG_IDS_FIELD,
                         "Danh sách Sprint Backlog chứa Backlog item bị trùng");
                 continue;
             }
 
-            orderedIds.add(taskId);
+            orderedIds.add(backlogId);
         }
 
         return orderedIds;
     }
 
-    private List<Task> resolveRequestedTasks(List<Long> orderedIds,
-                                             Map<String, List<String>> errors) {
+    /**
+     * Loads the submitted ids in the order chosen by the user, reporting the
+     * ids that no longer exist.
+     */
+    private List<SprintBacklog> resolveBacklogItems(List<Long> orderedIds,
+                                                    Map<String, List<String>> errors) {
 
         if (orderedIds.isEmpty()) {
             return List.of();
         }
 
-        Map<Long, Task> tasksById = taskRepository.findAllById(orderedIds)
+        Map<Long, SprintBacklog> backlogsById = sprintBacklogRepository.findAllById(orderedIds)
                 .stream()
-                .collect(Collectors.toMap(Task::getId, Function.identity()));
+                .collect(Collectors.toMap(SprintBacklog::getId, Function.identity()));
 
-        List<Task> ordered = new ArrayList<>();
+        List<SprintBacklog> ordered = new ArrayList<>(orderedIds.size());
 
-        for (Long taskId : orderedIds) {
+        for (Long backlogId : orderedIds) {
 
-            Task task = tasksById.get(taskId);
+            SprintBacklog backlog = backlogsById.get(backlogId);
 
-            if (task == null) {
-                addError(errors, TASK_IDS_FIELD,
-                        "Backlog item #" + taskId + " không tồn tại hoặc đã bị xoá");
+            if (backlog == null) {
+                addError(errors, BACKLOG_IDS_FIELD,
+                        "Backlog item #" + backlogId + " không tồn tại hoặc đã bị xoá");
                 continue;
             }
 
-            ordered.add(task);
+            ordered.add(backlog);
         }
 
         return ordered;
     }
 
     /**
-     * AC01 / business rule "Tương thích Milestone": every item that enters the
-     * sprint must belong to the same project, still be workable and stay inside
-     * the deadline of the milestone it is linked to.
+     * An item that is not assigned to a sprint (product backlog) or that belongs
+     * to an editable sprint (Planned / Active) can be pulled into this sprint; a
+     * closed sprint keeps its scope frozen.
      */
     private void validateAssignable(Sprint sprint,
-                                    List<Task> requestedTasks,
+                                    List<SprintBacklog> orderedItems,
                                     Map<String, List<String>> errors) {
 
         Long sprintId = sprint.getId();
-        Long sprintProjectId = sprint.getProjectId();
 
-        for (Task task : requestedTasks) {
+        for (SprintBacklog backlog : orderedItems) {
 
-            String label = displayName(task);
+            Sprint owner = backlog.getSprint();
 
-            if (task.getSprintId() != null && !task.getSprintId().equals(sprintId)) {
-                addError(errors, TASK_IDS_FIELD, label + " đã thuộc một Sprint khác");
+            if (owner == null || owner.getId().equals(sprintId) || isScopeEditable(owner)) {
                 continue;
             }
 
-            if (task.getStatus() == TaskStatus.IN_PROGRESS || task.getStatus() == TaskStatus.DONE) {
-                addError(errors, TASK_IDS_FIELD,
-                        label + " đang ở trạng thái " + task.getStatus().getLabel()
-                                + " nên không thể gán vào Sprint");
-                continue;
-            }
-
-            if (sprintProjectId != null
-                    && task.getProjectId() != null
-                    && !sprintProjectId.equals(task.getProjectId())) {
-                addError(errors, TASK_IDS_FIELD, label + " thuộc dự án khác với Sprint");
-                continue;
-            }
-
-            validateMilestoneCompatibility(sprint, task, label, errors);
-        }
-    }
-
-    private void validateMilestoneCompatibility(Sprint sprint,
-                                                Task task,
-                                                String label,
-                                                Map<String, List<String>> errors) {
-
-        if (task.getMilestoneId() == null) {
-            return;
-        }
-
-        Milestone milestone = milestoneRepository.findById(task.getMilestoneId()).orElse(null);
-
-        if (milestone == null
-                || !milestone.isLinkable()
-                || (task.getProjectId() != null
-                && !task.getProjectId().equals(milestone.getProjectId()))) {
-
-            addError(errors, TASK_IDS_FIELD,
-                    label + " đang liên kết tới Milestone không còn hiệu lực");
-            return;
-        }
-
-        LocalDate sprintEnd = sprint.getEndDate() != null
-                ? sprint.getEndDate().toLocalDate()
-                : null;
-
-        if (sprintEnd != null
-                && milestone.getDueDate() != null
-                && sprintEnd.isAfter(milestone.getDueDate())) {
-
-            addError(errors, TASK_IDS_FIELD,
-                    label + " không tương thích Milestone \"" + milestone.getName()
-                            + "\" (hạn chót " + milestone.getDueDate()
-                            + " trước ngày kết thúc Sprint " + sprintEnd + ")");
+            addError(errors, BACKLOG_IDS_FIELD,
+                    "Backlog item #" + backlog.getId()
+                            + " thuộc Sprint đã hoàn thành/đã đóng nên không thể chuyển sang Sprint này");
         }
     }
 
     /**
-     * Items that are already in progress or done cannot leave the sprint.
+     * Synchronises the sprint scope with the submitted board.
+     * <p>
+     * Items of the submitted list that are not part of this sprint yet (product
+     * backlog items or items of another editable sprint) are moved into this
+     * sprint, and items that currently belong to this sprint but are no longer
+     * listed return to the product backlog (their sprint is cleared).
      */
-    private void validateUnassignable(List<Task> currentSprintTasks,
-                                      List<Long> orderedIds,
-                                      Map<String, List<String>> errors) {
+    private void applyPlan(Sprint sprint, List<SprintBacklog> orderedItems) {
 
-        Set<Long> keep = new HashSet<>(orderedIds);
+        boolean changed = false;
 
-        for (Task task : currentSprintTasks) {
+        Set<Long> keptIds = new HashSet<>();
 
-            if (keep.contains(task.getId())) {
+        for (SprintBacklog backlog : orderedItems) {
+
+            keptIds.add(backlog.getId());
+
+            Sprint owner = backlog.getSprint();
+
+            if (owner != null && sprint.getId().equals(owner.getId())) {
                 continue;
             }
 
-            if (task.getStatus() == TaskStatus.IN_PROGRESS || task.getStatus() == TaskStatus.DONE) {
-                addError(errors, TASK_IDS_FIELD,
-                        displayName(task) + " đang ở trạng thái " + task.getStatus().getLabel()
-                                + " nên không thể hủy gán khỏi Sprint");
-            }
+            backlog.setSprint(sprint);
+            sprintBacklogRepository.save(backlog);
+            changed = true;
         }
-    }
 
-    private void applyPlan(Long sprintId,
-                           List<Long> orderedIds,
-                           List<Task> requestedTasks,
-                           List<Task> currentSprintTasks) {
+        // Anything still holding this sprint but absent from the submitted
+        // board was removed by the user: send it back to the product backlog.
+        for (SprintBacklog backlog : sprintBacklogRepository.findBySprintIdOrderByIdAsc(sprint.getId())) {
 
-        Map<Long, Task> requestedById = requestedTasks.stream()
-                .collect(Collectors.toMap(Task::getId, Function.identity()));
-
-        for (int index = 0; index < orderedIds.size(); index++) {
-
-            Task task = requestedById.get(orderedIds.get(index));
-
-            if (task == null) {
+            if (keptIds.contains(backlog.getId())) {
                 continue;
             }
 
-            task.setSprintId(sprintId);
-            task.setSprintOrder(index + 1);
-
-            if (task.getStatus() == null || task.getStatus() == TaskStatus.BACKLOG) {
-                task.setStatus(TaskStatus.SPRINT_BACKLOG);
-            }
+            backlog.setSprint(null);
+            sprintBacklogRepository.save(backlog);
+            changed = true;
         }
 
-        taskRepository.saveAll(requestedById.values());
-
-        Set<Long> keep = new HashSet<>(orderedIds);
-        List<Task> removed = new ArrayList<>();
-
-        for (Task task : currentSprintTasks) {
-
-            if (keep.contains(task.getId())) {
-                continue;
-            }
-
-            task.setSprintId(null);
-            task.setSprintOrder(null);
-
-            if (task.getStatus() == TaskStatus.SPRINT_BACKLOG) {
-                task.setStatus(TaskStatus.BACKLOG);
-            }
-
-            removed.add(task);
+        if (changed) {
+            sprintBacklogRepository.flush();
         }
-
-        taskRepository.saveAll(removed);
-    }
-
-    private void recordPlanningChange(Sprint sprint,
-                                      List<Long> orderedIds,
-                                      List<Task> currentSprintTasks,
-                                      Map<String, Object> before,
-                                      Map<String, Object> after) {
-
-        Set<Long> beforeIds = currentSprintTasks.stream()
-                .map(Task::getId)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-        Set<Long> afterIds = new LinkedHashSet<>(orderedIds);
-
-        List<Long> addedTaskIds = orderedIds.stream()
-                .filter(taskId -> !beforeIds.contains(taskId))
-                .toList();
-        List<Long> removedTaskIds = beforeIds.stream()
-                .filter(taskId -> !afterIds.contains(taskId))
-                .toList();
-
-        long currentSprintId = sprint.getId();
-
-        sprintAuditService.record(
-                ACTION_BACKLOG_UPDATED,
-                currentSprintId,
-                sprint.getProjectId(),
-                before,
-                after
-        );
-
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("sprintId", currentSprintId);
-        payload.put("sprintName", sprint.getName());
-        payload.put("taskIds", orderedIds);
-        payload.put("addedTaskIds", addedTaskIds);
-        payload.put("removedTaskIds", removedTaskIds);
-
-        sprintOutboxService.enqueue(
-                EVENT_BACKLOG_UPDATED,
-                currentSprintId,
-                sprint.getProjectId(),
-                currentActorEmail(),
-                payload
-        );
     }
 
     private SprintPlanningDTO buildPlanning(Sprint sprint) {
 
-        List<Task> sprintItems =
-                taskRepository.findBySprintIdOrderBySprintOrderAscIdAsc(sprint.getId());
-        List<Task> productItems = loadProductBacklog(sprint);
+        Long projectId = sprint.getProjectId();
 
-        Map<Long, Milestone> milestones = loadMilestones(sprintItems, productItems);
+        List<SprintBacklog> backlogs =
+                sprintBacklogRepository.findBySprintIdOrderByIdAsc(sprint.getId());
+
+        List<SprintPlanningItemDTO> sprintItems = new ArrayList<>(backlogs.size());
+
+        for (int index = 0; index < backlogs.size(); index++) {
+            sprintItems.add(SprintPlanningItemDTO.from(backlogs.get(index), projectId, index + 1));
+        }
+
+        // Only items that do not belong to any sprint yet: work that is already
+        // planned in another sprint is not offered as a candidate.
+        List<SprintBacklog> candidates = sprintBacklogRepository.findBySprintIsNullOrderByIdAsc();
+
+        List<SprintPlanningItemDTO> productItems = new ArrayList<>(candidates.size());
+
+        for (int index = 0; index < candidates.size(); index++) {
+            productItems.add(SprintPlanningItemDTO.from(candidates.get(index), projectId, index + 1));
+        }
 
         boolean canPlan = isScopeEditable(sprint);
 
@@ -618,101 +498,12 @@ public class SprintServiceImpl
                 sprint.getStatus(),
                 sprint.getStartDate(),
                 sprint.getEndDate(),
-                sprint.getProjectId(),
+                projectId,
                 canPlan,
                 canPlan ? null : scopeLockedMessage(sprint),
-                sprintItems.stream()
-                        .map(task -> toPlanningItem(task, milestones))
-                        .toList(),
-                productItems.stream()
-                        .map(task -> toPlanningItem(task, milestones))
-                        .toList()
+                sprintItems,
+                productItems
         );
-    }
-
-    /**
-     * {@code Map.of()} rejects a {@code null} key lookup, so the milestone is
-     * only resolved when the item is actually linked to one.
-     */
-    private SprintPlanningItemDTO toPlanningItem(Task task,
-                                                 Map<Long, Milestone> milestones) {
-
-        Milestone milestone = task.getMilestoneId() != null
-                ? milestones.get(task.getMilestoneId())
-                : null;
-
-        return SprintPlanningItemDTO.from(task, milestone);
-    }
-
-    /**
-     * Items that are still in the product backlog of the sprint's project.
-     * Nothing is filtered out by priority: the student decides.
-     */
-    private List<Task> loadProductBacklog(Sprint sprint) {
-
-        List<Task> candidates = sprint.getProjectId() != null
-                ? taskRepository.findByProjectIdAndSprintIdIsNull(sprint.getProjectId())
-                : taskRepository.findBySprintIdIsNull();
-
-        return candidates.stream()
-                .filter(task -> task.getStatus() == null
-                        || task.getStatus() == TaskStatus.BACKLOG
-                        || task.getStatus() == TaskStatus.SPRINT_BACKLOG)
-                .sorted(productBacklogComparator())
-                .toList();
-    }
-
-    private Comparator<Task> productBacklogComparator() {
-
-        return Comparator
-                .comparingInt((Task task) -> priorityRank(task.getPriority()))
-                .reversed()
-                .thenComparing(Task::getTitle, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
-                .thenComparing(Task::getId, Comparator.nullsLast(Long::compareTo));
-    }
-
-    private int priorityRank(TaskPriority priority) {
-
-        return priority == null ? -1 : priority.ordinal();
-    }
-
-    private Map<Long, Milestone> loadMilestones(List<Task>... groups) {
-
-        Set<Long> milestoneIds = new HashSet<>();
-
-        for (List<Task> group : groups) {
-            for (Task task : group) {
-                if (task.getMilestoneId() != null) {
-                    milestoneIds.add(task.getMilestoneId());
-                }
-            }
-        }
-
-        if (milestoneIds.isEmpty()) {
-            return Map.of();
-        }
-
-        return milestoneRepository.findAllById(milestoneIds)
-                .stream()
-                .collect(Collectors.toMap(Milestone::getId, Function.identity()));
-    }
-
-    private Map<String, Object> planningSnapshot(Long sprintId, List<Task> tasks) {
-
-        Map<String, Object> snapshot = new LinkedHashMap<>();
-        snapshot.put("sprintId", sprintId);
-        snapshot.put("taskIds", tasks.stream().map(Task::getId).toList());
-
-        return snapshot;
-    }
-
-    private String displayName(Task task) {
-
-        if (task.getTitle() != null && !task.getTitle().isBlank()) {
-            return "\"" + task.getTitle() + "\"";
-        }
-
-        return "Backlog item #" + task.getId();
     }
 
     private void addError(Map<String, List<String>> errors, String field, String message) {
@@ -765,15 +556,116 @@ public class SprintServiceImpl
         }
     }
 
-    private void validateCreateStatus(SprintStatus status, Map<String, List<String>> errors) {
+    /**
+     * Lifecycle guard: a Planned sprint can only be started (Active) or
+     * cancelled, an Active sprint can only be completed or cancelled and a
+     * closed sprint (Completed / Cancelled) keeps its final status.
+     */
+    private void validateStatusTransition(SprintStatus currentStatus,
+                                          SprintStatus targetStatus,
+                                          Map<String, List<String>> errors) {
 
-        if (status == null) {
+        SprintStatus current = currentStatus != null ? currentStatus : SprintStatus.PLANNED;
+
+        if (targetStatus == null || targetStatus == current) {
             return;
         }
 
-        if (status != SprintStatus.PLANNED && status != SprintStatus.ACTIVE) {
-            errors.put(STATUS_FIELD, List.of("Sprint mới chỉ có thể ở trạng thái Planned hoặc Active"));
+        boolean allowed = switch (current) {
+            case PLANNED -> targetStatus == SprintStatus.ACTIVE
+                    || targetStatus == SprintStatus.CANCELLED;
+            case ACTIVE -> targetStatus == SprintStatus.COMPLETED
+                    || targetStatus == SprintStatus.CANCELLED;
+            default -> false;
+        };
+
+        if (!allowed) {
+            addError(errors, STATUS_FIELD,
+                    "Không thể chuyển Sprint từ trạng thái " + statusLabel(current)
+                            + " sang " + statusLabel(targetStatus));
         }
+    }
+
+    /**
+     * A sprint can only be started once it holds at least one Sprint Backlog
+     * item; an empty sprint stays Planned so the team plans work before the
+     * sprint begins.
+     */
+    private void validateActivation(Long sprintId,
+                                    SprintStatus currentStatus,
+                                    SprintStatus targetStatus,
+                                    Map<String, List<String>> errors) {
+
+        if (sprintId == null || targetStatus != SprintStatus.ACTIVE
+                || targetStatus == currentStatus) {
+            return;
+        }
+
+        if (sprintBacklogRepository.countBySprintId(sprintId) > 0) {
+            return;
+        }
+
+        addError(errors, STATUS_FIELD,
+                "Không thể bắt đầu Sprint vì Sprint Backlog chưa có Backlog item nào");
+    }
+
+    private String statusLabel(SprintStatus status) {
+
+        return switch (status) {
+            case PLANNED -> "Planned";
+            case ACTIVE -> "Active";
+            case COMPLETED -> "Completed";
+            case CANCELLED -> "Cancelled";
+        };
+    }
+
+    /**
+     * A sprint may only be completed once every Sprint Backlog item that
+     * belongs to it is {@code Done}; otherwise the transition answers 422 and
+     * lists the items that still have to be finished.
+     */
+    private void validateCompletion(Long sprintId,
+                                    SprintStatus currentStatus,
+                                    SprintStatus targetStatus,
+                                    Map<String, List<String>> errors) {
+
+        if (sprintId == null || targetStatus != SprintStatus.COMPLETED
+                || targetStatus == currentStatus) {
+            return;
+        }
+
+        List<SprintBacklog> unfinished = sprintBacklogRepository.findUnfinishedBySprintId(
+                sprintId, List.of(SprintBacklogStatus.DONE));
+
+        if (unfinished.isEmpty()) {
+            return;
+        }
+
+        addError(errors, STATUS_FIELD, unfinishedBacklogMessage(unfinished));
+    }
+
+    private String unfinishedBacklogMessage(List<SprintBacklog> unfinished) {
+
+        String titles = unfinished.stream()
+                .limit(MAX_UNFINISHED_TITLES_IN_MESSAGE)
+                .map(SprintBacklog::getTitle)
+                .filter(title -> title != null && !title.isBlank())
+                .collect(Collectors.joining(", "));
+
+        StringBuilder message = new StringBuilder()
+                .append("Không thể hoàn thành Sprint vì còn ")
+                .append(unfinished.size())
+                .append(" Backlog item chưa ở trạng thái Done");
+
+        if (!titles.isEmpty()) {
+            message.append(": ").append(titles);
+
+            if (unfinished.size() > MAX_UNFINISHED_TITLES_IN_MESSAGE) {
+                message.append("...");
+            }
+        }
+
+        return message.toString();
     }
 
     private void ensureUniqueName(String name, Long excludedId) {
