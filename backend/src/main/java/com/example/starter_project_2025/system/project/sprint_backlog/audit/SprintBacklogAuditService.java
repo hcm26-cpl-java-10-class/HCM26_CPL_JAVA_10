@@ -21,7 +21,7 @@ import java.util.List;
  * business mutation so the two can never diverge.
  */
 @Slf4j
-@Service
+@Service("backlogItemAuditService")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class SprintBacklogAuditService {

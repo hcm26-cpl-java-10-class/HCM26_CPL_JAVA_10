@@ -1,7 +1,7 @@
 import axiosInstance from "@/api/axios";
 import type { MilestoneOption, PageResponse } from "@/types";
 
-const path = "/tasks/milestone-options";
+const path = "/backlog-items/milestone-options";
 
 /**
  * Read-only milestone catalog exposed by the temporary backlog module.

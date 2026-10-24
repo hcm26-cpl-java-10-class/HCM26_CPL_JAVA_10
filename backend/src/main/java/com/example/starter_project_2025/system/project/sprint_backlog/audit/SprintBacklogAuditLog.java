@@ -25,7 +25,7 @@ import java.time.LocalDateTime;
  * correlation id of the originating request (same contract as the sprint
  * module).
  */
-@Entity
+@Entity(name = "BacklogItemAuditLog")
 @Table(
         name = "sprint_backlog_audit_log",
         indexes = {
