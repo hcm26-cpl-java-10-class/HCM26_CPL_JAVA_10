@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.project;
 
 import lombok.Builder;
 import lombok.Data;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.time.LocalDateTime;
 import java.time.Instant;
@@ -28,11 +29,15 @@ public class WorkspaceDetailResponse {
     private String cohortName;
     private LocalDateTime createdAt;
     private String createdByName;
-    private List<Member> members;
+    @JsonProperty("member_count")
+    private long memberCount;
+    @JsonProperty("can_view_members")
+    private boolean canViewMembers;
+    @JsonProperty("topic_snapshot")
+    private WorkspaceTopicSnapshotResponse topicSnapshot;
     private List<String> sections;
     private List<ActivityItem> activities;
 
-    public record Member(Long id, String name, String email) { }
     public record ActivityItem(String eventId, String action, Long actorId, String actorName,
                                Instant occurredAt, String correlationId) { }
 }

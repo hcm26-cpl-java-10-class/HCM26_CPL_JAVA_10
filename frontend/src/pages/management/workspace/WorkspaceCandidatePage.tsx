@@ -11,7 +11,7 @@ import type { WorkspaceCandidateItem } from "@/types/features/workspace";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, ArrowRight, ChevronLeft, ChevronRight, FolderOpen, Loader2, Plus, RefreshCw, Search, Users, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { getWorkspaceError, workspaceIneligibleReason, WorkspaceEmptyState, WorkspaceStatusBadge } from "./workspace.shared";
 
 import { WorkspaceCreateDialog } from "./WorkspaceCreateDialog";
@@ -56,13 +56,12 @@ export default function WorkspaceCandidatePage() {
 
 
   return (
-    <MainLayout pathName={{ management: "Management", workspaces: "Workspace", candidates: "Create workspace" }}>
+    <MainLayout pathName={{ management: "Management", workspaces: "Workspace", candidates: "Workspace" }}>
       <Card className="w-full">
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="space-y-2"><CardTitle>Workspace</CardTitle><CardDescription>Select a project and team to create a workspace or continue working in an existing one.</CardDescription></div>
             <div className="flex flex-wrap gap-2">
-              {hasPermission("TEAM_READ") && <Button variant="outline" asChild><Link to="/management/project-teams"><Users />Teams & Mentors</Link></Button>}
               <Button disabled={!canCreate || query.isLoading || query.isError} onClick={() => setCreateFor(null)}><Plus />Create workspace</Button>
               <Button variant="outline" onClick={() => void query.refetch()} disabled={query.isFetching}><RefreshCw className={query.isFetching ? "animate-spin" : ""} />Refresh</Button>
             </div>

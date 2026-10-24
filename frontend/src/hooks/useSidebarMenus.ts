@@ -38,7 +38,7 @@ export function useActiveModuleGroups(enabled = true) {
 
             const groups = groupPage.content ?? groupPage.items ?? [];
             const modules = (modulePage.content ?? modulePage.items ?? []).filter((module) =>
-                !["/management/project-templates", "/project-templates"].some(path => (module.url ?? "").startsWith(path)) && canAccessByPermission(module.requiredPermission, hasPermission),
+                !["/management/project-templates", "/project-templates", "/management/project-teams"].some(path => (module.url ?? "").startsWith(path)) && canAccessByPermission(module.requiredPermission, hasPermission),
             );
 
             const groupedModules = modules.reduce<Record<string, SidebarModule[]>>((acc, module) => {

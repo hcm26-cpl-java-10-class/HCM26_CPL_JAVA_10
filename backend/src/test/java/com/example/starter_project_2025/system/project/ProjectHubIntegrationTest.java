@@ -138,7 +138,8 @@ class ProjectHubIntegrationTest {
         long id = createWorkspace(UUID.randomUUID().toString()).get("id").asLong();
         mvc.perform(get("/api/workspaces/{id}", id).header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.projectName").value("Campus portal"))
-                .andExpect(jsonPath("$.members[0].email").value("student@example.com"))
+                .andExpect(jsonPath("$.member_count").value(1))
+                .andExpect(jsonPath("$.members").doesNotExist())
                 .andExpect(jsonPath("$.createdByName").isNotEmpty());
         mvc.perform(get("/api/workspaces/{id}", id).header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(id));

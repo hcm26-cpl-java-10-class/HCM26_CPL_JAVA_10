@@ -1,7 +1,11 @@
 import axiosInstance from "@/api/axios";
-import type { WorkspaceCandidateItem, WorkspaceCreateRequest, WorkspaceDetail, WorkspaceResponse, WorkspaceProjectOption } from "@/types/features/workspace";
+import type { WorkspaceCandidateItem, WorkspaceCreateRequest, WorkspaceDetail, WorkspaceResponse, WorkspaceProjectOption, WorkspaceMember } from "@/types/features/workspace";
 
 export const workspaceApi = {
+  getMembers: async (id: number): Promise<WorkspaceMember[]> => {
+    const response = await axiosInstance.get<WorkspaceMember[]>("/workspaces/" + id + "/members");
+    return response.data;
+  },
   getProjectOptions: async (teamId: number): Promise<WorkspaceProjectOption[]> => {
     const response = await axiosInstance.get<WorkspaceProjectOption[]>("/workspaces/projects", { params: { teamId } });
     return response.data;

@@ -303,13 +303,13 @@ class WorkspaceAcceptanceIntegrationTest {
         for (int refresh = 0; refresh < 2; refresh++) {
             mvc.perform(get("/api/workspaces/{id}", id).header("Authorization", "Bearer " + token))
                     .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(id))
-                    .andExpect(jsonPath("$.sections.length()").value(8)).andExpect(jsonPath("$.members.length()").value(1))
+                    .andExpect(jsonPath("$.sections.length()").value(8)).andExpect(jsonPath("$.member_count").value(1))
                     .andExpect(jsonPath("$.activities.length()").value(1));
         }
         tx.executeWithoutResult(status -> members.findById(membershipId).orElseThrow().setIsActive(false));
         tx.executeWithoutResult(status -> teams.findById(teamId).orElseThrow().setMentor(users.findById(actorId).orElseThrow()));
         mvc.perform(get("/api/workspaces/{id}", id).header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.members.length()").value(0));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.member_count").value(0));
     }
 
     @Test

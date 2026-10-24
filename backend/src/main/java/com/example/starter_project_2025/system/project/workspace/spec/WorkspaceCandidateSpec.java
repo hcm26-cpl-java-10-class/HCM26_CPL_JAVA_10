@@ -50,7 +50,8 @@ public final class WorkspaceCandidateSpec {
             var membership = query.subquery(Long.class);
             var member = membership.from(TeamMember.class);
             membership.select(member.get("id")).where(cb.equal(member.get("team").get("id"), root.get("id")),
-                    cb.equal(member.get("user").get("id"), userId), cb.isTrue(member.get("isActive")));
+                    cb.equal(member.get("user").get("id"), userId), cb.isTrue(member.get("isActive")),
+                    cb.equal(member.get("participationStatus"), ParticipationStatus.ACTIVE));
             return cb.and(scoped, cb.or(cb.equal(root.get("mentor").get("id"), userId), cb.exists(membership)));
         };
     }

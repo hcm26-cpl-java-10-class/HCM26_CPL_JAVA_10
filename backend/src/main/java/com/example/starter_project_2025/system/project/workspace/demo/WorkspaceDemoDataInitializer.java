@@ -25,6 +25,6 @@ public class WorkspaceDemoDataInitializer implements CommandLineRunner {
             log.warn("Workspace demo setup was skipped: {}", exception.getMessage());
             return;
         }
-        log.info("Workspace demo fixtures are ready for AC04–AC06.");
+        log.info("Workspace demo fixtures are ready for workspace creation, overview and member access checks.");
     }
 }

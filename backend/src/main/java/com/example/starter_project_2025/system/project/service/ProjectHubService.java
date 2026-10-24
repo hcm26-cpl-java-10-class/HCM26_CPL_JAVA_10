@@ -100,8 +100,8 @@ public class ProjectHubService {
         Project project = team.getProject();
         Cohort cohort = project != null ? project.getCohort() : null;
         var members = team.getMembers().stream().map(TeamMember::getUser)
-                .map(user -> new WorkspaceDetailResponse.Member(user.getId(), user.getFullName(), user.getEmail()))
-                .sorted(Comparator.comparing(WorkspaceDetailResponse.Member::name)).toList();
+                .map(user -> new ProjectHubDtos.Member(user.getId(), user.getFullName(), user.getEmail()))
+                .sorted(Comparator.comparing(ProjectHubDtos.Member::name)).toList();
         return new ProjectHubDtos.TeamView(team.getId(), team.getCode(), team.getName(), project != null ? project.getId() : null, project != null ? project.getName() : null,
                 cohort != null ? cohort.getId() : null, cohort != null ? cohort.getName() : null,
                 team.getMentor() != null ? team.getMentor().getId() : null,

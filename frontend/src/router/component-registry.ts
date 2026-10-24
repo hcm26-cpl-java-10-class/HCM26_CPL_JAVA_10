@@ -14,8 +14,8 @@ import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import WorkspaceCandidatePage from "@/pages/management/workspace/WorkspaceCandidatePage";
 import WorkspaceDetailPage from "@/pages/management/workspace/WorkspaceDetailPage";
-import TeamsMentorsPage from "@/pages/management/workspace/TeamsMentorsPage";
-import type { ComponentType } from "react";
+import { createElement, type ComponentType } from "react";
+import { Navigate } from "react-router-dom";
 import { buildEntityRoutes } from "./build-router";
 
 
@@ -48,7 +48,7 @@ export const routes: RouteConfig[] = [
   { path: "/workspaces/candidates", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
   { path: "/management/workspaces/candidates", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
   { path: "/management/workspaces/:id", component: WorkspaceDetailPage, requiredPermission: "WORKSPACE_READ" },
-  { path: "/management/project-teams", component: TeamsMentorsPage, requiredPermission: "TEAM_READ" },
+  { path: "/management/project-teams", component: () => createElement(Navigate, { to: "/management/workspaces/candidates", replace: true }), requiredPermission: "WORKSPACE_READ" },
   ...buildEntityRoutes(),
 
   { path: "/not-found-page", component: NotFoundPage, isPublic: true },

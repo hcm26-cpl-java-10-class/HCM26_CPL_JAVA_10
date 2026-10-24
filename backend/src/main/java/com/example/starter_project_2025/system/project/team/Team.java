@@ -2,7 +2,6 @@ package com.example.starter_project_2025.system.project;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
-import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.system.rbac.user.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -38,7 +37,6 @@ import java.util.Set;
 )
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ResourcePermission("TEAM")
-@ResourceMenu(title = "Teams & Mentors", group = "Project Management", icon = "users", url = "/management/project-teams", order = 2, permission = "TEAM_READ")
 public class Team extends BaseEntity {
 
     @Column(nullable = false, length = 100)

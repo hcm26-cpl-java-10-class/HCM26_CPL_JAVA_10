@@ -160,7 +160,7 @@ export const formatRoleLabel = (role: string): string =>
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 
-export const getHomePathByRole = (role?: string | null): string => {
+export const getHomePathByRole = (role?: string | null, permissions?: string[]): string => {
   const normalizedRole = normalizeRole(role);
 
   if (normalizedRole === STUDENT_ROLE) {
@@ -169,6 +169,12 @@ export const getHomePathByRole = (role?: string | null): string => {
 
   if (normalizedRole === TEACHER_ROLE) {
     return "/teacher";
+  }
+
+  // The Dashboard menu requires USER_READ. Workspace-only roles cannot open it.
+  const grantedPermissions = new Set(uniquePermissions(permissions));
+  if (!grantedPermissions.has("USER_READ") && grantedPermissions.has("WORKSPACE_READ")) {
+    return "/management/workspaces/candidates";
   }
 
   return "/dashboard";

@@ -17,5 +17,6 @@ public class WorkspaceModuleCleanup implements CommandLineRunner {
         jdbc.update("UPDATE modules SET is_active = FALSE WHERE url IN (?, ?) OR required_permission LIKE ?",
                 "/management/project-templates", "/project-templates", "PROJECT_TEMPLATE_%");
         jdbc.update("UPDATE permissions SET is_active = FALSE WHERE resource = ?", "PROJECT_TEMPLATE");
+        jdbc.update("UPDATE modules SET is_active = FALSE WHERE url = ?", "/management/project-teams");
     }
 }

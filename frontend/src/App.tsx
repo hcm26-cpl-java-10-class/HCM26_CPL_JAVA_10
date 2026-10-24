@@ -13,10 +13,10 @@ import { getHomePathByRole } from "./utils/rbac.utils";
 
 function AppRoutes() {
     const { isAuthenticated } = useSelector((state: RootState) => state.auth);
-    const { activeRole } = usePermissions();
+    const { activeRole, effectivePermissions } = usePermissions();
     const { data: moduleGroups = [] } = useActiveModuleGroups(isAuthenticated);
 
-    const homePath = isAuthenticated ? getHomePathByRole(activeRole) : "/login";
+    const homePath = isAuthenticated ? getHomePathByRole(activeRole, effectivePermissions) : "/login";
 
     // Create component lookup map from module-driven routes
     const componentRegistry = Object.fromEntries(

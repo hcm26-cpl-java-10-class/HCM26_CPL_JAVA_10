@@ -15,6 +15,11 @@ public class WorkspacePermissionInitializer implements CommandLineRunner {
     @Override public void run(String... args) {
         ensure("VIEW_PROJECT_WORKSPACE", "READ");
         ensure("CREATE_PROJECT_WORKSPACE", "CREATE");
+        if (!permissions.existsByName("WORKSPACE_MEMBER_READ")) {
+            permissions.save(Permission.builder().name("WORKSPACE_MEMBER_READ")
+                    .resource("WORKSPACE_MEMBER").action("READ")
+                    .description("US-PRJ-001-02: view workspace members").build());
+        }
     }
     private void ensure(String name, String action) {
         if (!permissions.existsByName(name)) permissions.save(Permission.builder().name(name)

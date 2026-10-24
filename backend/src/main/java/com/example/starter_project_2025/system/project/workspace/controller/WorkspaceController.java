@@ -65,6 +65,12 @@ public class WorkspaceController {
     @PreAuthorize(READ)
     public WorkspaceDetailResponse getWorkspace(@PathVariable Long id) { return workspaceService.getWorkspace(id); }
 
+    @GetMapping("/{id}/members")
+    @PreAuthorize("hasAnyAuthority('WORKSPACE_READ', 'VIEW_PROJECT_WORKSPACE') and hasAuthority('WORKSPACE_MEMBER_READ')")
+    public List<WorkspaceMemberResponse> getMembers(@PathVariable Long id) {
+        return workspaceService.getMembers(id);
+    }
+
     @PostMapping
     @PreAuthorize(CREATE)
     public ResponseEntity<WorkspaceResponse> createWorkspace(

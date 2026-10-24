@@ -15,6 +15,7 @@ public interface WorkspaceService {
     List<WorkspaceProjectSelection.Option> getProjectOptions(Long teamId);
 
     WorkspaceDetailResponse getWorkspace(Long id);
+    List<WorkspaceMemberResponse> getMembers(Long id);
 
     WorkspaceResponse createWorkspace(String idempotencyKey, WorkspaceCreateRequest request);
 }

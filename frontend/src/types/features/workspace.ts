@@ -55,10 +55,24 @@ export interface WorkspaceActivity {
   correlationId: string;
 }
 
+export type ProjectRole = "UNASSIGNED" | "TEAM_LEADER" | "DEV" | "FE_DEV" | "BE_DEV" | "BA" | "QA" | "TESTER";
+export type ParticipationStatus = "ACTIVE" | "INACTIVE" | "LEFT";
+
 export interface WorkspaceMember {
-  id: number;
-  name: string;
-  email: string;
+  user_code: string | null;
+  display_name: string;
+  project_role: ProjectRole;
+  status: ParticipationStatus;
+}
+
+export interface WorkspaceTopicSnapshot {
+  topic_code: string;
+  topic_title: string;
+  version: string;
+  description: string | null;
+  objectives: string | null;
+  requirements: string[];
+  attachments: { name: string; url: string }[];
 }
 
 export interface WorkspaceDetail extends WorkspaceResponse {
@@ -75,7 +89,9 @@ export interface WorkspaceDetail extends WorkspaceResponse {
   cohortName?: string;
   createdAt?: string;
   createdByName?: string;
-  members: WorkspaceMember[];
+  member_count: number;
+  can_view_members: boolean;
+  topic_snapshot: WorkspaceTopicSnapshot | null;
   activities: WorkspaceActivity[];
 }
 

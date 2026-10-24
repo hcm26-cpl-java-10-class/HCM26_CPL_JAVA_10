@@ -1,4 +1,4 @@
-import type { WorkspaceMember } from "./workspace";
+export interface ProjectTeamMember { id: number; name: string; email: string }
 
 export interface TeamCharter {
   mission: string;
@@ -18,8 +18,18 @@ export interface ProjectTeam {
   cohortName?: string;
   mentorId?: number;
   mentorName?: string;
-  members: WorkspaceMember[];
+  members: ProjectTeamMember[];
   charter: TeamCharter;
 }
 
 export interface ProjectMentor { id: number; name: string; email: string }
+
+export interface ManagedTeamMember {
+  userId: number;
+  userCode: string | null;
+  displayName: string;
+  projectRole: import("./workspace").ProjectRole;
+  status: import("./workspace").ParticipationStatus;
+}
+export interface TeamMemberOption { userId: number; userCode: string | null; displayName: string }
+export type TeamMembershipUpdate = Pick<ManagedTeamMember, "projectRole" | "status">;

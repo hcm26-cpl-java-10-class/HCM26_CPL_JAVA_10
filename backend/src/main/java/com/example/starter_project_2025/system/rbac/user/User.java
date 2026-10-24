@@ -44,6 +44,9 @@ public class User extends BaseEntity {
     @ExportField(name = "Email")
     String email;
 
+    @Column(name = "user_code", unique = true, length = 64)
+    String userCode;
+
     @Column(nullable = false)
     @ImportHash
     @ImportField(name = "Password", required = true)

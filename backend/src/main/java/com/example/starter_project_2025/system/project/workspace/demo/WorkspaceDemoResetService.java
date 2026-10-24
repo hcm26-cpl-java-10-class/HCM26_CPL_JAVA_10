@@ -39,6 +39,11 @@ public class WorkspaceDemoResetService {
             jdbc.update("DELETE FROM teams WHERE id IN (:ids)", teamParameters);
         }
         if (!projectIds.isEmpty()) {
+            jdbc.update("DELETE FROM project_topic_snapshots s WHERE s.project_id IN (:ids) "
+                    + "AND EXISTS (SELECT 1 FROM projects p WHERE p.id = s.project_id AND p.tenant_id = :tenant) "
+                    + "AND NOT EXISTS (SELECT 1 FROM teams t WHERE t.project_id = s.project_id) "
+                    + "AND NOT EXISTS (SELECT 1 FROM workspaces w WHERE w.project_id = s.project_id)",
+                    Map.of("ids", projectIds, "tenant", tenantId));
             jdbc.update("DELETE FROM projects p WHERE p.id IN (:ids) AND p.tenant_id = :tenant "
                     + "AND NOT EXISTS (SELECT 1 FROM teams t WHERE t.project_id = p.id) "
                     + "AND NOT EXISTS (SELECT 1 FROM workspaces w WHERE w.project_id = p.id)",

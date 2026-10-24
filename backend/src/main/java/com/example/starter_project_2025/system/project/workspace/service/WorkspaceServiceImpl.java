@@ -1,7 +1,6 @@
 package com.example.starter_project_2025.system.project;
 
 import com.example.starter_project_2025.system.rbac.user.User;
-import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -19,8 +18,7 @@ import java.util.List;
 public class WorkspaceServiceImpl implements WorkspaceService {
     private final WorkspaceRepository workspaceRepository;
     private final TeamRepository teamRepository;
-    private final UserRepository userRepository;
-    private final WorkspaceActivityRepository activities;
+    private final WorkspaceReadService reads;
     private final WorkspaceAccessService access;
     private final WorkspaceCreationTransaction creation;
     private final WorkspaceProjectSelection selection;
@@ -65,7 +63,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
         return WorkspaceCandidateItem.builder().projectId(project != null ? project.getId() : null)
                 .projectName(project != null ? project.getName() : null).projectCode(project != null ? project.getCode() : null)
                 .projectStatus(project != null ? project.getStatus() : null).teamId(team.getId()).teamName(team.getName()).teamCode(team.getCode())
-                .memberCount(team.getMembers().stream().filter(member -> Boolean.TRUE.equals(member.getIsActive())).count())
+                .memberCount(team.getMembers().stream().filter(TeamMember::isCurrentParticipant).count())
                 .cohortId(cohort != null ? cohort.getId() : null).cohortName(cohort != null ? cohort.getName() : null)
                 .workspaceId(existing != null ? existing.getId() : null).workspaceStatus(existing != null ? existing.getStatus() : null)
                 .eligibleForWorkspace(eligible).ineligibleReason(reason).build();
@@ -93,30 +91,13 @@ public class WorkspaceServiceImpl implements WorkspaceService {
     @Override
     @Transactional(readOnly = true)
     public WorkspaceDetailResponse getWorkspace(Long id) {
-        User user = access.requireUser(false);
-        access.requireTenant(user, false);
-        Workspace workspace = workspaceRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy workspace"));
-        if (!Boolean.TRUE.equals(workspace.getIsActive())) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy workspace");
-        if (!workspace.getTenant().getId().equals(user.getTenant().getId())) throw new org.springframework.security.access.AccessDeniedException("Workspace is outside the current tenant");
-        Team team = access.requirePair(user, workspace.getProject().getId(), workspace.getTeam().getId(), false);
-        Project project = team.getProject();
-        Cohort cohort = project.getCohort();
-        List<WorkspaceDetailResponse.Member> members = team.getMembers().stream()
-                .filter(member -> Boolean.TRUE.equals(member.getIsActive())).map(TeamMember::getUser)
-                .map(member -> new WorkspaceDetailResponse.Member(member.getId(), member.getFullName(), member.getEmail()))
-                .sorted(Comparator.comparing(WorkspaceDetailResponse.Member::name)).toList();
-        List<WorkspaceDetailResponse.ActivityItem> activity = activities.findByWorkspaceIdOrderByOccurredAtDesc(id).stream()
-                .map(item -> new WorkspaceDetailResponse.ActivityItem(item.getEventId(), item.getAction(), item.getActorId(),
-                        userRepository.findById(item.getActorId()).map(User::getFullName).orElse("Tài khoản đã ẩn danh"),
-                        item.getOccurredAt(), item.getCorrelationId())).toList();
-        return WorkspaceDetailResponse.builder().id(id).code(workspace.getCode()).name(workspace.getName()).status(workspace.getStatus())
-                .projectId(project.getId()).projectCode(project.getCode()).projectName(project.getName()).projectDescription(project.getDescription())
-                .projectStatus(project.getStatus()).teamId(team.getId()).teamCode(team.getCode()).teamName(team.getName())
-                .mentorName(team.getMentor() != null ? team.getMentor().getFullName() : null).charter(ProjectHubDtos.Charter.from(team))
-                .cohortId(cohort != null ? cohort.getId() : null).cohortName(cohort != null ? cohort.getName() : null)
-                .createdAt(workspace.getCreatedAt()).createdByName(workspace.getCreatedBy() == null ? null : userRepository.findById(workspace.getCreatedBy()).map(User::getFullName).orElse(null))
-                .members(members).sections(workspace.getSections().stream().map(WorkspaceSection::getKey).toList()).activities(activity).build();
+        return reads.overview(id);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<WorkspaceMemberResponse> getMembers(Long id) {
+        return reads.members(id);
     }
 
     @Override

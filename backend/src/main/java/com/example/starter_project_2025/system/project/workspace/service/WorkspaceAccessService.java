@@ -39,6 +39,18 @@ public class WorkspaceAccessService {
 
     public boolean canRead(User user) { return hasPermission(user, READ); }
 
+    public boolean canViewMembers(User user) {
+        return hasPermission(user, Set.of("WORKSPACE_MEMBER_READ"));
+    }
+
+    public void requireMemberRead(User user) {
+        if (!canViewMembers(user)) throw new AccessDeniedException("Member access is not allowed");
+    }
+
+    public void requireTeamUpdate(User user) {
+        if (!hasPermission(user, Set.of("TEAM_UPDATE"))) throw new AccessDeniedException("Team management is not allowed");
+    }
+
     private boolean hasPermission(User user, Set<String> required) {
         return user.getRoles().stream().filter(role -> Boolean.TRUE.equals(role.getIsActive()))
                 .flatMap(role -> role.getPermissions().stream())
@@ -89,7 +101,7 @@ public class WorkspaceAccessService {
         boolean admin = user.getRoles().stream().anyMatch(role -> Boolean.TRUE.equals(role.getIsActive())
                 && ("ADMIN".equals(role.getName()) || "PO".equals(role.getName())));
         return admin || (team.getMentor() != null && team.getMentor().getId().equals(user.getId()))
-                || team.getMembers().stream().anyMatch(member -> Boolean.TRUE.equals(member.getIsActive())
+                || team.getMembers().stream().anyMatch(member -> member.isCurrentParticipant()
                 && member.getUser().getId().equals(user.getId()));
     }
 
@@ -100,7 +112,7 @@ public class WorkspaceAccessService {
     }
 
     public boolean hasMembers(Team team) {
-        return team.getMembers().stream().anyMatch(member -> Boolean.TRUE.equals(member.getIsActive()));
+        return team.getMembers().stream().anyMatch(TeamMember::isCurrentParticipant);
     }
 
     public boolean projectCanStart(Project project) {
