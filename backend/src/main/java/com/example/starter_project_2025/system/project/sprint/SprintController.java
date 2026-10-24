@@ -23,6 +23,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -65,6 +67,30 @@ public class SprintController
     @GetMapping("/{id}/audit-logs")
     public ResponseEntity<List<SprintAuditLogDTO>> getAuditLogs(@PathVariable Long id) {
         return ResponseEntity.ok(sprintService.getAuditLogs(id));
+    }
+
+    /**
+     * Sprint Planning board (UFR-PRJ-003-03): sprint header, ordered Sprint
+     * Backlog and the items still available in the product backlog.
+     */
+    @GetMapping("/{id}/backlog-items")
+    public ResponseEntity<SprintPlanningDTO> getBacklogItems(@PathVariable Long id) {
+        return ResponseEntity.ok(sprintService.getPlanning(id));
+    }
+
+    /**
+     * Assigns / unassigns backlog items and saves their priority order in one
+     * transaction (UFR-PRJ-003-03).
+     * <p>
+     * A completed / cancelled sprint answers {@code 422 Unprocessable Entity}
+     * (AC02) so the UI can revert the moved items to the product backlog.
+     */
+    @PutMapping("/{id}/backlog-items")
+    public ResponseEntity<SprintPlanningDTO> updateBacklogItems(
+            @PathVariable Long id,
+            @RequestBody SprintBacklogPlanDTO request
+    ) {
+        return ResponseEntity.ok(sprintService.saveSprintBacklog(id, request));
     }
 
     /**

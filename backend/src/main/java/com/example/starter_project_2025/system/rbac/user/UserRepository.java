@@ -13,6 +13,8 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
 
     Optional<User> findByEmail(String email);
 
+    Optional<User> findByIdAndIsActiveTrue(Long id);
+
     boolean existsByEmail(String email);
 
     Long countByIsActive(Boolean isActive);

@@ -10,23 +10,27 @@ export type ViewMode = "table" | "card";
 interface ToolbarProps {
   table: any;
   headerActions?: React.ReactNode;
+  browseActions?: React.ReactNode;
   viewMode?: ViewMode;
   onViewModeChange?: (mode: ViewMode) => void;
   showViewModeToggle?: boolean;
   showActions?: boolean;
   showCardColumnToggle?: boolean;
   compact?: boolean;
+  hideCreate?: boolean;
 }
 
 export function Toolbar({
   table,
   headerActions,
+  browseActions,
   viewMode = "table",
   onViewModeChange,
   showViewModeToggle = true,
   showActions = true,
   showCardColumnToggle = true,
   compact = false,
+  hideCreate = false,
 }: ToolbarProps) {
   const { schema } = table;
 
@@ -37,9 +41,17 @@ export function Toolbar({
 
   const hasSorts = table.sortState?.length > 0;
 
+  // Browse mode hides the regular toolbar actions; a single browse action
+  // (e.g. "Create") can still be rendered on the right hand side.
+  const rightSlot = showActions ? (
+    <ToolbarActions table={table} headerActions={headerActions} hideCreate={hideCreate} />
+  ) : browseActions ? (
+    <div className="flex justify-end items-center gap-2 w-full">{browseActions}</div>
+  ) : null;
+
   return (
     <div
-      className={`grid ${showActions ? (compact ? "sm:grid-cols-[1fr_auto]" : "lg:grid-cols-[1fr_auto]") : "grid-cols-1"} items-center gap-2 w-full`}
+      className={`grid ${rightSlot ? (compact ? "sm:grid-cols-[1fr_auto]" : "lg:grid-cols-[1fr_auto]") : "grid-cols-1"} items-center gap-2 w-full`}
     >
       <div
         className={
@@ -85,7 +97,7 @@ export function Toolbar({
         )}
       </div>
 
-      {showActions && <ToolbarActions table={table} headerActions={headerActions} />}
+      {rightSlot}
     </div>
   );
 }
