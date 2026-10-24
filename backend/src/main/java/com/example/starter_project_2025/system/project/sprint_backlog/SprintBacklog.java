@@ -118,6 +118,21 @@ public class SprintBacklog extends BaseEntity {
     SprintBacklogStatus status = SprintBacklogStatus.TODO;
 
     /**
+     * Priority of the item, used by the backlog / planning board ordering and
+     * by the priority filter of the backlog page.
+     */
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    SprintBacklogPriority priority = SprintBacklogPriority.MEDIUM;
+
+    /**
+     * Optional effort estimate in hours, used by the board capacity summary.
+     */
+    @Column(name = "estimated_hours")
+    Double estimatedHours;
+
+    /**
      * Optimistic locking guard: a concurrent update of the same item makes the
      * second write fail with a conflict (409) instead of silently overwriting
      * the first one.

@@ -51,6 +51,17 @@ public class SprintBacklogDTO extends BaseDTO {
     SprintBacklogStatus status;
 
     /**
+     * Priority of the item: {@code LOW} / {@code MEDIUM} / {@code HIGH} /
+     * {@code URGENT}. Defaults to {@code MEDIUM}.
+     */
+    SprintBacklogPriority priority;
+
+    /**
+     * Optional effort estimate in hours (must be greater than or equal to 0).
+     */
+    Double estimatedHours;
+
+    /**
      * Optimistic locking token, read-only for clients.
      */
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)

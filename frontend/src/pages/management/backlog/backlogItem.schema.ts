@@ -1,11 +1,8 @@
 import type { EntitySchema } from "@/types";
+import { SPRINT_BACKLOG_PRIORITY_OPTIONS } from "../sprint-backlog/sprintBacklog.constants";
 
-const priorityOptions = [
-  { label: "Low", value: "LOW" },
-  { label: "Medium", value: "MEDIUM" },
-  { label: "High", value: "HIGH" },
-  { label: "Urgent", value: "URGENT" },
-];
+/** Shared with `/sprint-backlogs` so both create forms accept the same values. */
+const priorityOptions = SPRINT_BACKLOG_PRIORITY_OPTIONS;
 
 /**
  * Form used by the inline "Create" row of the `/backlogs` page.

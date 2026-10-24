@@ -5,7 +5,11 @@ import {
     type EntitySchema,
     type FieldSchema,
 } from "@/types";
-import { sprintStatusOptions } from "./sprint.schema";
+import {
+    sprintCreateStatusOptions,
+    sprintEditStatusOptions,
+    sprintStatusOptions,
+} from "./sprint.schema";
 
 /**
  * Admin flavour of the `/sprints` route.
@@ -78,13 +82,16 @@ export const sprintAdminSchema: EntitySchema = {
             type: "select",
             sortable: true,
             options: sprintStatusOptions,
+            createOptions: sprintCreateStatusOptions,
+            editOptions: sprintEditStatusOptions,
             defaultValue: "PLANNED",
             required: true,
             requiredMessage: "Vui lòng chọn trạng thái Sprint",
             filterable: true,
             filterType: "select",
             filterOptions: sprintStatusOptions,
-            helpText: "Workflow: Planned → Active → Completed / Cancelled",
+            helpText:
+                "Sprint mới luôn ở trạng thái Planned; khi cập nhật chỉ có thể chuyển sang Active hoặc Cancelled.",
         },
         {
             name: "projectId",

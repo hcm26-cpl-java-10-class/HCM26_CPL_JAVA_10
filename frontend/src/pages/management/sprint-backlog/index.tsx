@@ -5,6 +5,10 @@ import {
     type EntitySchema,
     type FieldSchema,
 } from "@/types";
+import {
+    SPRINT_BACKLOG_PRIORITY_OPTIONS,
+    SPRINT_BACKLOG_STATUS_OPTIONS,
+} from "./sprintBacklog.constants";
 
 /**
  * Sprint Backlog route (`/sprint-backlogs`).
@@ -26,12 +30,10 @@ const MAX_TITLE_LENGTH = 200;
 const MAX_DESCRIPTION_LENGTH = 2000;
 
 /** Lifecycle of a Sprint Backlog item: To do -> In progress -> Review -> Done. */
-const statusOptions = [
-    { label: "To do", value: "TODO" },
-    { label: "In progress", value: "IN_PROGRESS" },
-    { label: "Review", value: "REVIEW" },
-    { label: "Done", value: "DONE" },
-];
+const statusOptions = SPRINT_BACKLOG_STATUS_OPTIONS;
+
+/** Priority of a Sprint Backlog item, shared with the `/backlogs` create form. */
+const priorityOptions = SPRINT_BACKLOG_PRIORITY_OPTIONS;
 
 /** New backlog items are active by default; boolean fields would otherwise start as false. */
 const auditFields = (auditableFieldsSchema as FieldSchema[]).map((field) =>
@@ -123,6 +125,27 @@ const sprintBacklogSchema: EntitySchema = {
             filterOptions: statusOptions,
             helpText: "Workflow: To do → In progress → Review → Done",
         },
+        {
+            name: "priority",
+            label: "Priority",
+            type: "select",
+            sortable: true,
+            options: priorityOptions,
+            defaultValue: "MEDIUM",
+            required: true,
+            requiredMessage: "Vui lòng chọn độ ưu tiên",
+            filterable: true,
+            filterType: "select",
+            filterOptions: priorityOptions,
+            helpText: "Low / Medium / High / Urgent (mặc định: Medium)",
+        },
+        {
+            name: "estimatedHours",
+            label: "Estimate (hours)",
+            type: "number",
+            sortable: true,
+            helpText: "Số giờ ước tính, phải lớn hơn hoặc bằng 0",
+        },
         ...auditFields,
     ],
     /** Cross-field validation kept in sync with the backend rules. */
@@ -164,6 +187,18 @@ const sprintBacklogSchema: EntitySchema = {
             Number(assignee) <= 0
         ) {
             errors.assigneeProjectMemberId = ["Người phụ trách không hợp lệ"];
+        }
+
+        const estimatedHours = values.estimatedHours;
+        if (
+            estimatedHours !== undefined &&
+            estimatedHours !== null &&
+            estimatedHours !== "" &&
+            Number(estimatedHours) < 0
+        ) {
+            errors.estimatedHours = [
+                "Số giờ ước tính phải lớn hơn hoặc bằng 0",
+            ];
         }
 
         /**

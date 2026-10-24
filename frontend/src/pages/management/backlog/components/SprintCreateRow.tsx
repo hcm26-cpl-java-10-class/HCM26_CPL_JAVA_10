@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import type { SprintPlanningItem } from "@/types";
 import { ChevronUp, Loader2, Plus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
-import { backlogItemKey, backlogStatusMeta } from "../backlog.constants";
+import { backlogItemKey, backlogStatusMeta, backlogPriorityMeta } from "../backlog.constants";
 
 interface SprintCreateRowProps {
   /** Work items that are still waiting in the product backlog. */
@@ -109,6 +109,7 @@ export function SprintCreateRow({
               <div className="flex flex-col divide-y divide-border/70">
                 {visibleItems.map((item) => {
                   const status = backlogStatusMeta(item.status);
+                  const priority = backlogPriorityMeta(item.priority);
                   const estimate =
                     typeof item.estimatedHours === "number"
                       ? `${item.estimatedHours}h`
@@ -130,6 +131,16 @@ export function SprintCreateRow({
 
                       <span className="min-w-0 flex-1 truncate text-xs text-foreground">
                         {item.title ?? "Untitled work item"}
+                      </span>
+
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                          priority.pill,
+                        )}
+                        title={`Priority: ${priority.label}`}
+                      >
+                        {priority.label}
                       </span>
 
                       <span

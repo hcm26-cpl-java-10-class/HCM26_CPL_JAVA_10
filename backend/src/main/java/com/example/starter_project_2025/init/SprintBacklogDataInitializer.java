@@ -3,6 +3,7 @@ package com.example.starter_project_2025.init;
 import com.example.starter_project_2025.system.project.sprint.Sprint;
 import com.example.starter_project_2025.system.project.sprint.SprintRepository;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklog;
+import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogPriority;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogRepository;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogStatus;
 import lombok.AccessLevel;
@@ -64,14 +65,18 @@ public class SprintBacklogDataInitializer implements CommandLineRunner {
                 "Interview 5 stakeholders and document the as-is flows of the current release",
                 LocalDateTime.of(2026, 10, 19, 9, 0),
                 LocalDateTime.of(2026, 10, 22, 17, 0),
-                SprintBacklogStatus.DONE);
+                SprintBacklogStatus.DONE,
+                SprintBacklogPriority.HIGH,
+                12.0);
 
         upsertBacklog(discovery, MEMBER_2,
                 "Gather stakeholder requirements",
                 "Consolidate the requirement backlog with the product owner before the review",
                 LocalDateTime.of(2026, 10, 20, 9, 0),
                 LocalDateTime.of(2026, 10, 28, 17, 0),
-                SprintBacklogStatus.IN_PROGRESS);
+                SprintBacklogStatus.IN_PROGRESS,
+                SprintBacklogPriority.URGENT,
+                16.0);
 
         // Sprint 2 - Design System (planned): tokens under review, library pending.
         upsertBacklog(design, MEMBER_2,
@@ -79,14 +84,18 @@ public class SprintBacklogDataInitializer implements CommandLineRunner {
                 "Colours, typography and spacing tokens shared by every product surface",
                 LocalDateTime.of(2026, 11, 2, 9, 0),
                 LocalDateTime.of(2026, 11, 6, 17, 0),
-                SprintBacklogStatus.REVIEW);
+                SprintBacklogStatus.REVIEW,
+                SprintBacklogPriority.MEDIUM,
+                8.0);
 
         upsertBacklog(design, MEMBER_3,
                 "Deliver shared component library",
                 "Buttons, inputs, table and modal primitives with theming support",
                 LocalDateTime.of(2026, 11, 4, 9, 0),
                 LocalDateTime.of(2026, 11, 12, 17, 0),
-                SprintBacklogStatus.TODO);
+                SprintBacklogStatus.TODO,
+                SprintBacklogPriority.HIGH,
+                24.0);
 
         // Sprint 3 - Build (planned): implementation tasks not started yet.
         upsertBacklog(build, MEMBER_3,
@@ -94,26 +103,34 @@ public class SprintBacklogDataInitializer implements CommandLineRunner {
                 "Hero, feature grid and call to action sections built on the new design system",
                 LocalDateTime.of(2026, 11, 16, 9, 0),
                 LocalDateTime.of(2026, 11, 20, 17, 0),
-                SprintBacklogStatus.TODO);
+                SprintBacklogStatus.TODO,
+                SprintBacklogPriority.MEDIUM,
+                20.0);
 
         upsertBacklog(build, MEMBER_1,
                 "Update brand guidelines",
                 "Refresh the brand book with the final palette and typography decisions",
                 LocalDateTime.of(2026, 11, 23, 9, 0),
                 LocalDateTime.of(2026, 11, 27, 17, 0),
-                SprintBacklogStatus.TODO);
+                SprintBacklogStatus.TODO,
+                SprintBacklogPriority.LOW,
+                6.0);
 
         // Product backlog: items without a sprint, so the backlog page only
         // offers these (and not the work already planned in another sprint).
         upsertProductBacklog(MEMBER_2,
                 "Clarify release acceptance criteria",
                 "Collect the acceptance criteria of the next release from QA and the product owner",
-                SprintBacklogStatus.TODO);
+                SprintBacklogStatus.TODO,
+                SprintBacklogPriority.HIGH,
+                4.0);
 
         upsertProductBacklog(MEMBER_1,
                 "Audit accessibility of the checkout flow",
                 "Check the checkout screens against WCAG AA before planning the next sprint",
-                SprintBacklogStatus.TODO);
+                SprintBacklogStatus.TODO,
+                SprintBacklogPriority.URGENT,
+                8.0);
 
         log.info("Ensured sample sprint backlog data.");
     }
@@ -125,7 +142,9 @@ public class SprintBacklogDataInitializer implements CommandLineRunner {
             String description,
             LocalDateTime startDate,
             LocalDateTime endDate,
-            SprintBacklogStatus status
+            SprintBacklogStatus status,
+            SprintBacklogPriority priority,
+            Double estimatedHours
     ) {
 
         if (sprint == null) {
@@ -144,6 +163,8 @@ public class SprintBacklogDataInitializer implements CommandLineRunner {
         backlog.setStartDate(startDate);
         backlog.setEndDate(endDate);
         backlog.setStatus(status);
+        backlog.setPriority(priority);
+        backlog.setEstimatedHours(estimatedHours);
         backlog.setIsActive(true);
 
         sprintBacklogRepository.save(backlog);
@@ -161,7 +182,9 @@ public class SprintBacklogDataInitializer implements CommandLineRunner {
             Long assigneeProjectMemberId,
             String title,
             String description,
-            SprintBacklogStatus status
+            SprintBacklogStatus status,
+            SprintBacklogPriority priority,
+            Double estimatedHours
     ) {
 
         SprintBacklog backlog = sprintBacklogRepository
@@ -175,6 +198,8 @@ public class SprintBacklogDataInitializer implements CommandLineRunner {
         backlog.setStartDate(null);
         backlog.setEndDate(null);
         backlog.setStatus(status);
+        backlog.setPriority(priority);
+        backlog.setEstimatedHours(estimatedHours);
         backlog.setIsActive(true);
 
         sprintBacklogRepository.save(backlog);

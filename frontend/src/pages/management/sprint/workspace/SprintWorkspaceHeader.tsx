@@ -18,7 +18,6 @@ import {
 import type { SprintDTO, SprintStatus } from "@/types";
 import {
   ChevronDown,
-  ClipboardList,
   ListPlus,
   Loader2,
   Pencil,
@@ -38,6 +37,8 @@ import {
 interface SprintWorkspaceHeaderProps {
   sprint: SprintDTO | null;
   sprints: SprintDTO[];
+  /** Sprint Backlog items of the selected sprint: a sprint cannot start empty. */
+  sprintItemCount: number;
   onSelectSprint: (id: number) => void;
   projectLabel: string;
   canCreate: boolean;
@@ -46,7 +47,6 @@ interface SprintWorkspaceHeaderProps {
   statusUpdating: boolean;
   onOpenCreateSprint: () => void;
   onAddBacklogItem: () => void;
-  onOpenPlanning: () => void;
   onEditScope: () => void;
   onChangeStatus: (status: SprintStatus) => void;
   onDeleteSprint: () => void;
@@ -60,6 +60,7 @@ interface SprintWorkspaceHeaderProps {
 export function SprintWorkspaceHeader({
   sprint,
   sprints,
+  sprintItemCount,
   onSelectSprint,
   projectLabel,
   canCreate,
@@ -68,7 +69,6 @@ export function SprintWorkspaceHeader({
   statusUpdating,
   onOpenCreateSprint,
   onAddBacklogItem,
-  onOpenPlanning,
   onEditScope,
   onChangeStatus,
   onDeleteSprint,
@@ -80,7 +80,7 @@ export function SprintWorkspaceHeader({
     ? sprints.findIndex((item) => item.id === sprint.id) + 1
     : 0;
 
-  const canStart = sprint?.status === "PLANNED";
+  const canStart = sprint?.status === "PLANNED" && sprintItemCount > 0;
   const canComplete = sprint?.status === "ACTIVE";
 
   return (
@@ -173,10 +173,6 @@ export function SprintWorkspaceHeader({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>Sprint scope</DropdownMenuLabel>
-              <DropdownMenuItem onSelect={onOpenPlanning}>
-                <ClipboardList className="h-4 w-4" />
-                Open planning board
-              </DropdownMenuItem>
               <DropdownMenuItem disabled={!canUpdate} onSelect={onEditScope}>
                 <Pencil className="h-4 w-4" />
                 Edit sprint scope
@@ -185,6 +181,11 @@ export function SprintWorkspaceHeader({
               <DropdownMenuLabel>Status</DropdownMenuLabel>
               <DropdownMenuItem
                 disabled={!canUpdate || !canStart || statusUpdating}
+                title={
+                  sprint?.status === "PLANNED" && sprintItemCount === 0
+                    ? "Thêm ít nhất một Backlog item trước khi bắt đầu Sprint"
+                    : undefined
+                }
                 onSelect={() => onChangeStatus("ACTIVE")}
               >
                 {statusUpdating ? (

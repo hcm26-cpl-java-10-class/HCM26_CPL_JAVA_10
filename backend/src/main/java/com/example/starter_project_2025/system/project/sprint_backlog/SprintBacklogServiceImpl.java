@@ -33,6 +33,8 @@ import java.util.Map;
  *     <li>description optional, at most 2000 characters (422)</li>
  *     <li>start date &lt; end date when both are provided (422)</li>
  *     <li>status one of {@link SprintBacklogStatus} (To do / In progress / Review / Done)</li>
+ *     <li>priority one of {@link SprintBacklogPriority}, medium by default</li>
+ *     <li>estimated hours, when provided, must be greater than or equal to 0 (422)</li>
  *     <li>optimistic locking (409) + audit trail (actor, timestamp, before/after, correlation id)</li>
  * </ul>
  * The assignee is a temporary raw identifier: the project member module is not
@@ -56,6 +58,7 @@ public class SprintBacklogServiceImpl
     static final String START_DATE_FIELD = "startDate";
     static final String END_DATE_FIELD = "endDate";
     static final String STATUS_FIELD = "status";
+    static final String ESTIMATED_HOURS_FIELD = "estimatedHours";
 
     static final String ACTION_CREATE = "CREATE";
     static final String ACTION_UPDATE = "UPDATE";
@@ -100,6 +103,7 @@ public class SprintBacklogServiceImpl
         validateDescription(backlog.getDescription(), errors);
         validateDates(backlog.getStartDate(), backlog.getEndDate(), errors);
         validateAssignee(backlog.getAssigneeProjectMemberId(), errors);
+        validateEstimatedHours(backlog.getEstimatedHours(), errors);
 
         throwIfInvalid(errors);
 
@@ -107,6 +111,10 @@ public class SprintBacklogServiceImpl
 
         if (backlog.getStatus() == null) {
             backlog.setStatus(SprintBacklogStatus.TODO);
+        }
+
+        if (backlog.getPriority() == null) {
+            backlog.setPriority(SprintBacklogPriority.MEDIUM);
         }
 
         if (backlog.getIsActive() == null) {
@@ -158,6 +166,9 @@ public class SprintBacklogServiceImpl
         Long assigneeId = request.getAssigneeProjectMemberId() != null
                 ? request.getAssigneeProjectMemberId()
                 : backlog.getAssigneeProjectMemberId();
+        Double estimatedHours = request.getEstimatedHours() != null
+                ? request.getEstimatedHours()
+                : backlog.getEstimatedHours();
 
         Map<String, List<String>> errors = new LinkedHashMap<>();
 
@@ -165,6 +176,7 @@ public class SprintBacklogServiceImpl
         validateDescription(description, errors);
         validateDates(startDate, endDate, errors);
         validateAssignee(assigneeId, errors);
+        validateEstimatedHours(estimatedHours, errors);
 
         Sprint sprint = backlog.getSprint();
 
@@ -335,6 +347,18 @@ public class SprintBacklogServiceImpl
         }
     }
 
+    /**
+     * The effort estimate is optional; when provided it cannot be negative.
+     */
+    private void validateEstimatedHours(Double estimatedHours,
+                                        Map<String, List<String>> errors) {
+
+        if (estimatedHours != null && estimatedHours < 0) {
+            addError(errors, ESTIMATED_HOURS_FIELD,
+                    "Số giờ ước tính phải lớn hơn hoặc bằng 0");
+        }
+    }
+
     private void throwIfInvalid(Map<String, List<String>> errors) {
 
         if (!errors.isEmpty()) {
@@ -384,6 +408,8 @@ public class SprintBacklogServiceImpl
         snapshot.put("startDate", backlog.getStartDate());
         snapshot.put("endDate", backlog.getEndDate());
         snapshot.put("status", backlog.getStatus());
+        snapshot.put("priority", backlog.getPriority());
+        snapshot.put("estimatedHours", backlog.getEstimatedHours());
         snapshot.put("isActive", backlog.getIsActive());
         snapshot.put("version", backlog.getVersion());
 

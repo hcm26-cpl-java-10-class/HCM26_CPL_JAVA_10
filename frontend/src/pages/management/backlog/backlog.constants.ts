@@ -45,6 +45,45 @@ export const PRIORITY_FILTER_OPTIONS: { value: TaskPriority; label: string }[] =
   { value: "LOW", label: "Low" },
 ];
 
+/**
+ * Priority pills shown on every backlog row (`URGENT` is displayed as
+ * "Critical" like the project mock-up).
+ */
+export const BACKLOG_PRIORITY_META: Record<
+  TaskPriority,
+  { label: string; pill: string; dot: string }
+> = {
+  URGENT: {
+    label: "Critical",
+    pill: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-900/40 dark:text-rose-300",
+    dot: "bg-rose-500",
+  },
+  HIGH: {
+    label: "High",
+    pill: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+    dot: "bg-amber-500",
+  },
+  MEDIUM: {
+    label: "Medium",
+    pill: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/40 dark:text-sky-300",
+    dot: "bg-sky-500",
+  },
+  LOW: {
+    label: "Low",
+    pill: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
+    dot: "bg-emerald-500",
+  },
+};
+
+export const NO_PRIORITY_META = {
+  label: "No priority",
+  pill: "border-border bg-muted text-muted-foreground",
+  dot: "bg-muted-foreground",
+};
+
+export const backlogPriorityMeta = (priority?: TaskPriority | null) =>
+  (priority && BACKLOG_PRIORITY_META[priority]) || NO_PRIORITY_META;
+
 /** The backend only accepts a one-step forward transition (422 otherwise). */
 export const NEXT_TASK_STATUS: Record<TaskStatus, TaskStatus | null> = {
   BACKLOG: "SPRINT_BACKLOG",

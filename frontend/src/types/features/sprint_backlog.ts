@@ -1,4 +1,5 @@
 import type { BaseDTO, BaseFilter } from "@/types/common/base";
+import type { TaskPriority } from "./task";
 
 /**
  * Lifecycle of a Sprint Backlog item (kept in sync with the backend
@@ -22,6 +23,10 @@ export interface SprintBacklogDTO extends BaseDTO {
   startDate?: string | null;
   endDate?: string | null;
   status?: SprintBacklogStatus;
+  /** Priority of the item (defaults to `MEDIUM` on the backend). */
+  priority?: TaskPriority | null;
+  /** Optional effort estimate in hours. */
+  estimatedHours?: number | null;
   /** Optimistic locking token (read-only). */
   version?: number;
 }
@@ -29,6 +34,7 @@ export interface SprintBacklogDTO extends BaseDTO {
 export interface SprintBacklogFilter extends BaseFilter {
   sprintId?: number;
   status?: SprintBacklogStatus;
+  priority?: TaskPriority;
   assigneeProjectMemberId?: number;
   startFrom?: string;
   endTo?: string;

@@ -23,6 +23,7 @@ import { SprintBacklogBoard } from "./SprintBacklogBoard";
 import { SprintWorkspaceHeader } from "./SprintWorkspaceHeader";
 import { OverviewTab } from "./OverviewTab";
 import {
+  emptySprintBacklogMessage,
   incompleteSprintMessage,
   unfinishedSprintItems,
 } from "./board.constants";
@@ -69,7 +70,7 @@ export default function SprintWorkspacePage() {
   const sprintsQuery = useQuery({
     queryKey: SPRINTS_QUERY_KEY,
     queryFn: () =>
-      sprintApi.getPage({ page: 0, size: 100, sort: ["startDate,asc"] }),
+      sprintApi.getPage({ page: 0, size: 100, sort: ["id,asc"] }),
   });
 
   const sprints = useMemo<SprintDTO[]>(
@@ -161,6 +162,12 @@ export default function SprintWorkspacePage() {
   const handleChangeStatus = async (status: SprintStatus) => {
     if (!selectedSprint?.id || statusUpdating) return;
 
+    /** A sprint can only start once it holds at least one backlog item. */
+    if (status === "ACTIVE" && board.sprintItems.length === 0) {
+      toast.error(emptySprintBacklogMessage());
+      return;
+    }
+
     if (status === "COMPLETED") {
       const unfinished = unfinishedSprintItems(board.sprintItems);
 
@@ -231,6 +238,7 @@ export default function SprintWorkspacePage() {
         <SprintWorkspaceHeader
           sprint={selectedSprint}
           sprints={sprints}
+          sprintItemCount={board.sprintItems.length}
           projectLabel={projectLabel}
           onSelectSprint={setSelectedSprintId}
           canCreate={canCreate}
@@ -239,10 +247,6 @@ export default function SprintWorkspacePage() {
           statusUpdating={statusUpdating}
           onOpenCreateSprint={() => setCreateOpen(true)}
           onAddBacklogItem={() => navigate("/backlogs")}
-          onOpenPlanning={() =>
-            selectedSprint?.id != null &&
-            navigate(`/sprints/${selectedSprint.id}/planning`)
-          }
           onEditScope={() => setEditOpen(true)}
           onChangeStatus={(status) => void handleChangeStatus(status)}
           onDeleteSprint={() => setDeleteOpen(true)}

@@ -21,6 +21,9 @@ public class SprintBacklogFilter extends BaseFilter {
     @FilterField(entityField = "status", operator = FilterOperator.EQUAL)
     SprintBacklogStatus status;
 
+    @FilterField(entityField = "priority", operator = FilterOperator.EQUAL)
+    SprintBacklogPriority priority;
+
     @FilterField(entityField = "assigneeProjectMemberId", operator = FilterOperator.EQUAL)
     Long assigneeProjectMemberId;
 

@@ -14,9 +14,9 @@ import java.time.LocalDate;
  * panel only lists items that are not assigned to any sprint yet
  * ({@link SprintBacklog#getSprint()} is {@code null}).
  * <p>
- * The payload keeps the fields the board renders. Milestone, priority and
- * estimated hours are not modelled by the Sprint Backlog module yet, so they
- * are always {@code null} and the UI simply hides them.
+ * The payload keeps the fields the board renders. Milestone data is not
+ * modelled by the Sprint Backlog module yet, so it is always {@code null} and
+ * the UI simply hides it.
  *
  * @param sprintOrder 1-based position of the item inside the sprint panel.
  */
@@ -61,13 +61,13 @@ public record SprintPlanningItemDTO(
                 backlog.getId(),
                 backlog.getTitle(),
                 backlog.getDescription(),
-                null,
+                backlog.getPriority() == null ? null : backlog.getPriority().name(),
                 toBoardStatus(backlog.getStatus()),
                 projectId,
                 null,
                 null,
                 null,
-                null,
+                backlog.getEstimatedHours(),
                 position
         );
     }

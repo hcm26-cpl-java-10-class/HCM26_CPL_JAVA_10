@@ -35,7 +35,6 @@ import {
 } from "lucide-react";
 import type { DragEvent } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   extractErrorMessage,
@@ -44,14 +43,17 @@ import {
 import { sprintSchema } from "../sprint/sprint.schema";
 import {
   incompleteSprintMessage,
+  emptySprintBacklogMessage,
   unfinishedSprintItems,
 } from "../sprint/workspace/board.constants";
 import {
+  backlogItemKey,
   formatBacklogRange,
   projectKeyOf,
   statusCounts,
 } from "./backlog.constants";
 import { backlogItemSchema } from "./backlogItem.schema";
+import { BacklogItemDetailSheet } from "./components/BacklogItemDetailSheet";
 import { BacklogSection } from "./components/BacklogSection";
 import { BacklogToolbar } from "./components/BacklogToolbar";
 import { SprintCreateRow } from "./components/SprintCreateRow";
@@ -90,7 +92,6 @@ const toSprintBacklogStatus = (status: TaskStatus): SprintBacklogStatus => {
  * status can move one step along the UFR-PRJ-003-02 workflow.
  */
 export default function BacklogPage() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { hasAllPermissions, user } = usePermissions();
 
@@ -112,6 +113,7 @@ export default function BacklogPage() {
   const [createItemOpen, setCreateItemOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [detailItem, setDetailItem] = useState<SprintPlanningItem | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [sprintStatusUpdating, setSprintStatusUpdating] = useState(false);
   const [busyItemId, setBusyItemId] = useState<number | null>(null);
@@ -119,7 +121,7 @@ export default function BacklogPage() {
   const sprintsQuery = useQuery({
     queryKey: SPRINTS_QUERY_KEY,
     queryFn: () =>
-      sprintApi.getPage({ page: 0, size: 100, sort: ["startDate,asc"] }),
+      sprintApi.getPage({ page: 0, size: 100, sort: ["id,asc"] }),
   });
 
   const sprints = useMemo<SprintDTO[]>(
@@ -248,7 +250,7 @@ export default function BacklogPage() {
       await refreshSprints();
       await board.load();
 
-      toast.success("Đã cập nhật phạm vi Sprint.");
+      toast.success("Đã cập nhật Sprint.");
     } catch (error) {
       toast.error(extractErrorMessage(error, "Không thể cập nhật Sprint."));
     } finally {
@@ -258,6 +260,12 @@ export default function BacklogPage() {
 
   const handleChangeSprintStatus = async (status: SprintStatus) => {
     if (!selectedSprint?.id || sprintStatusUpdating) return;
+
+    /** A sprint can only start once it holds at least one backlog item. */
+    if (status === "ACTIVE" && board.sprintItems.length === 0) {
+      toast.error(emptySprintBacklogMessage());
+      return;
+    }
 
     if (status === "COMPLETED") {
       const unfinished = unfinishedSprintItems(board.sprintItems);
@@ -331,6 +339,13 @@ export default function BacklogPage() {
           ? String(values.description)
           : null,
         status: "TODO",
+        priority: (values.priority as TaskPriority) ?? "MEDIUM",
+        estimatedHours:
+          values.estimatedHours === "" ||
+          values.estimatedHours === null ||
+          values.estimatedHours === undefined
+            ? null
+            : Number(values.estimatedHours),
         // `BaseDTO.isActive` is mandatory on create.
         isActive: true,
       } as SprintBacklogDTO);
@@ -421,7 +436,12 @@ export default function BacklogPage() {
           type="button"
           size="sm"
           className="h-7 gap-1 text-[11px]"
-          disabled={sprintStatusUpdating}
+          disabled={sprintStatusUpdating || board.sprintItems.length === 0}
+          title={
+            board.sprintItems.length === 0
+              ? "Thêm ít nhất một Backlog item trước khi bắt đầu Sprint"
+              : undefined
+          }
           onClick={() => void handleChangeSprintStatus("ACTIVE")}
         >
           {sprintStatusUpdating ? (
@@ -463,19 +483,9 @@ export default function BacklogPage() {
         </DropdownMenuTrigger>
 
         <DropdownMenuContent align="end" className="w-52">
-          <DropdownMenuItem
-            disabled={selectedSprint?.id == null}
-            onClick={() =>
-              selectedSprint?.id != null &&
-              navigate(`/sprints/${selectedSprint.id}/planning`)
-            }
-          >
-            <Layers className="h-4 w-4" />
-            Sprint planning
-          </DropdownMenuItem>
           {canUpdate && (
             <DropdownMenuItem onClick={() => setEditOpen(true)}>
-              Edit sprint scope
+              Edit sprint
             </DropdownMenuItem>
           )}
           {canDelete && (
@@ -655,6 +665,7 @@ export default function BacklogPage() {
               onToggleSelectAll={toggleSelectAllSprint}
               onToggleSelect={board.toggleSprintSelection}
               onStatusChange={handleItemStatusChange}
+              onOpenDetail={setDetailItem}
               onDragStartItem={(id) => board.setDragged({ id, from: "sprint" })}
               onDragEndItem={() => board.setDragged(null)}
               onDragOverSection={() => board.setDragTarget("sprint")}
@@ -687,7 +698,7 @@ export default function BacklogPage() {
         open={editOpen}
         onClose={setEditOpen}
         schema={sprintSchema}
-        title="Edit Sprint Scope"
+        title="Edit Sprint"
         initial={editInitial}
         onSubmit={handleUpdateSprint}
         isSubmitting={submitting}
@@ -704,6 +715,18 @@ export default function BacklogPage() {
             ? `"${selectedSprint.name ?? selectedSprint.id}" will be removed. Backlog items that belong to it return to the product backlog.`
             : undefined
         }
+      />
+
+      <BacklogItemDetailSheet
+        open={detailItem !== null}
+        onClose={(open) => {
+          if (!open) setDetailItem(null);
+        }}
+        item={detailItem}
+        itemKey={
+          detailItem ? backlogItemKey(itemKeyPrefix, detailItem) : undefined
+        }
+        sprintName={selectedSprint?.name ?? null}
       />
     </MainLayout>
   );

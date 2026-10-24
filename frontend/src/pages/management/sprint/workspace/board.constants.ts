@@ -239,3 +239,10 @@ export const unfinishedSprintItems = (items: SprintPlanningItem[]) =>
 /** Message shown when "Complete sprint" is blocked by open backlog items. */
 export const incompleteSprintMessage = (unfinishedCount: number) =>
   `Không thể hoàn thành Sprint: còn ${unfinishedCount} Backlog item chưa ở trạng thái Done.`;
+
+/**
+ * A sprint can only be started once it holds at least one Sprint Backlog item -
+ * the backend rejects the transition with 422 otherwise.
+ */
+export const emptySprintBacklogMessage = () =>
+  "Không thể bắt đầu Sprint: Sprint Backlog chưa có Backlog item nào.";

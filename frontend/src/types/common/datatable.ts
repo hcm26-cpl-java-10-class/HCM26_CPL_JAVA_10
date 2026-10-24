@@ -67,6 +67,18 @@ export interface FieldSchema {
 
   options?: { label: string; value: any }[];
 
+  /** Options offered while creating a record (falls back to `options`). */
+  createOptions?: { label: string; value: any }[];
+
+  /** Options offered while editing a record (falls back to `options`). */
+  editOptions?: { label: string; value: any }[];
+
+  /** Client-side: hide the field from the create form. */
+  hideOnCreate?: boolean;
+
+  /** Client-side: hide the field from the edit form. */
+  hideOnEdit?: boolean;
+
   booleanLabels?: {
     true: string;
     false: string;

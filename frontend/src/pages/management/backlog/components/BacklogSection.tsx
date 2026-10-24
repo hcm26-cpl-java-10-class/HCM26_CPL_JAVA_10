@@ -28,6 +28,7 @@ interface BacklogSectionProps {
   onToggleSelectAll: () => void;
   onToggleSelect: (id: number) => void;
   onStatusChange: (item: SprintPlanningItem, status: TaskStatus) => void;
+  onOpenDetail: (item: SprintPlanningItem) => void;
   onDragStartItem: (id: number) => void;
   onDragEndItem: () => void;
   onDragOverSection: () => void;
@@ -65,6 +66,7 @@ export function BacklogSection({
   onToggleSelectAll,
   onToggleSelect,
   onStatusChange,
+  onOpenDetail,
   onDragStartItem,
   onDragEndItem,
   onDragOverSection,
@@ -180,6 +182,7 @@ export function BacklogSection({
                 draggable={draggable}
                 onToggleSelect={onToggleSelect}
                 onStatusChange={onStatusChange}
+                onOpenDetail={onOpenDetail}
                 onDragStartItem={onDragStartItem}
                 onDragEndItem={onDragEndItem}
               />

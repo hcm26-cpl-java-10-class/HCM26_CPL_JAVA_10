@@ -17,6 +17,7 @@ import {
 import type { DragEvent } from "react";
 import {
   TASK_STATUS_ORDER,
+  backlogPriorityMeta,
   backlogStatusMeta,
   canMoveToStatus,
   formatBacklogDate,
@@ -33,6 +34,7 @@ interface BacklogRowProps {
   draggable: boolean;
   onToggleSelect: (id: number) => void;
   onStatusChange: (item: SprintPlanningItem, status: TaskStatus) => void;
+  onOpenDetail: (item: SprintPlanningItem) => void;
   onDragStartItem: (id: number) => void;
   onDragEndItem: () => void;
 }
@@ -51,10 +53,12 @@ export function BacklogRow({
   draggable,
   onToggleSelect,
   onStatusChange,
+  onOpenDetail,
   onDragStartItem,
   onDragEndItem,
 }: BacklogRowProps) {
   const status = backlogStatusMeta(item.status);
+  const priority = backlogPriorityMeta(item.priority);
   const overdue = item.status !== "DONE" && isOverdue(dueDate);
   const date = formatBacklogDate(dueDate);
   const estimate =
@@ -76,16 +80,28 @@ export function BacklogRow({
       draggable={draggable}
       onDragStart={handleDragStart}
       onDragEnd={onDragEndItem}
+      onClick={() => onOpenDetail(item)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpenDetail(item);
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`View details of ${item.title ?? "work item"}`}
       className={cn(
-        "group flex items-center gap-2 bg-card px-3 py-1.5 transition-colors hover:bg-muted/40",
-        draggable && "cursor-grab active:cursor-grabbing",
+        "group flex items-center gap-2 bg-card px-3 py-1.5 transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none",
+        draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
       )}
     >
-      <Checkbox
-        checked={selected}
-        onCheckedChange={() => onToggleSelect(item.id)}
-        aria-label="Select work item"
-      />
+      <span onClick={(event) => event.stopPropagation()}>
+        <Checkbox
+          checked={selected}
+          onCheckedChange={() => onToggleSelect(item.id)}
+          aria-label="Select work item"
+        />
+      </span>
 
       <ClipboardList className="h-4 w-4 shrink-0 text-emerald-600" />
 
@@ -97,10 +113,22 @@ export function BacklogRow({
         {item.title ?? "Untitled work item"}
       </span>
 
+      <span
+        className={cn(
+          "hidden shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium sm:inline-flex",
+          priority.pill,
+        )}
+        title={`Priority: ${priority.label}`}
+      >
+        <span className={cn("h-1.5 w-1.5 rounded-full", priority.dot)} />
+        {priority.label}
+      </span>
+
       <DropdownMenu>
         <DropdownMenuTrigger asChild disabled={!canEditTask || busy}>
           <button
             type="button"
+            onClick={(event) => event.stopPropagation()}
             className={cn(
               "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium",
               status.pill,
