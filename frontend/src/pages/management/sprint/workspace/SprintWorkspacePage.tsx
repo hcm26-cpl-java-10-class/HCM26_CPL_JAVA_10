@@ -51,7 +51,7 @@ export default function SprintWorkspacePage() {
   const canCreate = hasAllPermissions(["SPRINT_CREATE"]);
   const canUpdate = hasAllPermissions(["SPRINT_UPDATE"]);
   const canDelete = hasAllPermissions(["SPRINT_DELETE"]);
-  const canEditBoard = canUpdate && hasAllPermissions(["TASK_UPDATE"]);
+  const canEditBoard = canUpdate && hasAllPermissions(["SPRINT_BACKLOG_UPDATE"]);
 
   const [activeTab, setActiveTab] = useState<string>("backlog");
   const [selectedSprintId, setSelectedSprintId] = useState<number | null>(null);
@@ -225,7 +225,7 @@ export default function SprintWorkspacePage() {
           canDelete={canDelete}
           statusUpdating={statusUpdating}
           onOpenCreateSprint={() => setCreateOpen(true)}
-          onAddBacklogItem={() => navigate("/taskstemp")}
+          onAddBacklogItem={() => navigate("/backlogs")}
           onOpenPlanning={() =>
             selectedSprint?.id != null &&
             navigate(`/sprints/${selectedSprint.id}/planning`)

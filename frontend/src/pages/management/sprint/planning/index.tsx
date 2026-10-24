@@ -185,7 +185,7 @@ export default function SprintPlanningPage() {
   const navigate = useNavigate();
   const { hasAllPermissions } = usePermissions();
 
-  const canEdit = hasAllPermissions(["SPRINT_UPDATE", "TASK_UPDATE"]);
+  const canEdit = hasAllPermissions(["SPRINT_UPDATE", "SPRINT_BACKLOG_UPDATE"]);
 
   const {
     plan,

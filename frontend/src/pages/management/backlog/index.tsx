@@ -1,4 +1,4 @@
-import { sprintApi, taskApi } from "@/api";
+import { sprintApi, sprintBacklogApi } from "@/api";
 import Loading from "@/components/datatable/common/Loading";
 import { ConfirmDeleteModal } from "@/components/datatable/modal/ConfirmDeleteModal";
 import { FormModal } from "@/components/datatable/modal/form/FormModal";
@@ -14,10 +14,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { usePermissions } from "@/hooks/usePermissions";
 import type {
+  SprintBacklogDTO,
+  SprintBacklogStatus,
   SprintDTO,
   SprintPlanningItem,
   SprintStatus,
-  TaskDTO,
   TaskPriority,
   TaskStatus,
 } from "@/types";
@@ -60,6 +61,21 @@ const toDateTimeLocal = (value?: string | null) => {
 };
 
 /**
+ * Board buckets map onto the backend lifecycle: "To Do" is `TODO`, ongoing
+ * work is `IN_PROGRESS`, finished work is `DONE`.
+ */
+const toSprintBacklogStatus = (status: TaskStatus): SprintBacklogStatus => {
+  switch (status) {
+    case "IN_PROGRESS":
+      return "IN_PROGRESS";
+    case "DONE":
+      return "DONE";
+    default:
+      return "TODO";
+  }
+};
+
+/**
  * Student backlog page (`/backlogs`, also served by `/sprints`).
  * <p>
  * A Jira style backlog: the selected sprint is shown as one collapsible
@@ -77,7 +93,7 @@ export default function BacklogPage() {
   const canCreate = hasAllPermissions(["SPRINT_CREATE"]);
   const canUpdate = hasAllPermissions(["SPRINT_UPDATE"]);
   const canDelete = hasAllPermissions(["SPRINT_DELETE"]);
-  const canEditTask = hasAllPermissions(["TASK_UPDATE"]);
+  const canEditTask = hasAllPermissions(["SPRINT_BACKLOG_UPDATE"]);
   const canEditBoard = canUpdate && canEditTask;
 
   const [selectedSprintId, setSelectedSprintId] = useState<number | null>(null);
@@ -285,48 +301,31 @@ export default function BacklogPage() {
   };
 
   /**
-   * Inline "+ Create" of the sprint section: the item is created in the project
-   * backlog and immediately assigned to the sprint that is being planned.
+   * Inline "+ Create" of the sprint section: the item is created directly in the
+   * sprint that is being planned, because a Sprint Backlog item always belongs
+   * to exactly one sprint.
    */
   const handleCreateWorkItem = async (values: Record<string, unknown>) => {
     if (submitting || selectedSprintId === null) return;
 
-    const projectId =
-      board.plan?.projectId ?? board.productItems[0]?.projectId ?? null;
-
-    if (projectId == null) {
-      toast.error(
-        "Sprint chưa được gắn với dự án nào nên không thể tạo Backlog item.",
-      );
-      return;
-    }
-
     setSubmitting(true);
 
     try {
-      const created = await taskApi.create({
-        ...values,
-        projectId,
-        sprintId: null,
-        status: "BACKLOG",
+      await sprintBacklogApi.create({
+        sprintId: selectedSprintId,
+        title: String(values.title ?? "").trim(),
+        description: values.description
+          ? String(values.description)
+          : null,
+        status: "TODO",
         // `BaseDTO.isActive` is mandatory on create.
         isActive: true,
-      } as TaskDTO);
+      } as SprintBacklogDTO);
 
       setCreateItemOpen(false);
+      await board.load();
 
-      if (created?.id != null) {
-        const result = await board.assignToSprint([created.id], {
-          silent: true,
-        });
-
-        if (result) {
-          toast.success("Đã tạo và thêm công việc vào Sprint.");
-        }
-      } else {
-        await board.load();
-        toast.success("Đã tạo Backlog item.");
-      }
+      toast.success("Đã tạo và thêm công việc vào Sprint.");
     } catch (error) {
       toast.error(extractErrorMessage(error, "Không thể tạo Backlog item."));
     } finally {
@@ -334,6 +333,11 @@ export default function BacklogPage() {
     }
   };
 
+  /**
+   * The board works with three buckets (`SPRINT_BACKLOG` / `IN_PROGRESS` /
+   * `DONE`); they map onto the four {@link SprintBacklogStatus} values of the
+   * backend.
+   */
   const handleItemStatusChange = async (
     item: SprintPlanningItem,
     status: TaskStatus,
@@ -343,7 +347,9 @@ export default function BacklogPage() {
     setBusyItemId(item.id);
 
     try {
-      await taskApi.update(String(item.id), { status } as TaskDTO);
+      await sprintBacklogApi.update(String(item.id), {
+        status: toSprintBacklogStatus(status),
+      } as SprintBacklogDTO);
       await board.load();
 
       toast.success("Đã cập nhật trạng thái công việc.");

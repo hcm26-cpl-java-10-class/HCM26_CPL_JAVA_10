@@ -18,7 +18,7 @@ import java.time.LocalDateTime;
 
 /**
  * Seeds sample {@link SprintBacklog} rows, following the same idempotent upsert
- * pattern used by {@link SprintDataInitializer} and {@link TaskDataInitializer}.
+ * pattern used by {@link SprintDataInitializer}.
  * <p>
  * Runs after {@link SprintDataInitializer} (@Order(12)) so the sample items can
  * point at real sprint ids resolved by name instead of hard coded ones.

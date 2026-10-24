@@ -10,10 +10,9 @@ import { sprintStatusOptions } from "./sprint.schema";
 /**
  * Admin flavour of the `/sprints` route.
  * <p>
- * Cloned from the temporary task page (`/taskstemp`): instead of the student
- * workspace, the admin persona gets the generic CRUD data table driven by
- * {@link sprintAdminEntityConfig}. The student workspace stays untouched in
- * `sprint/workspace/SprintWorkspacePage`.
+ * Instead of the student workspace, the admin persona gets the generic CRUD
+ * data table driven by {@link sprintAdminEntityConfig}. The student workspace
+ * stays untouched in `sprint/workspace/SprintWorkspacePage`.
  */
 
 const MAX_NAME_LENGTH = 255;

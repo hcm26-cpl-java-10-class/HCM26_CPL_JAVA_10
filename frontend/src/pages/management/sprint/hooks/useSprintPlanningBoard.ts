@@ -74,7 +74,7 @@ export interface BoardDragState {
 export interface UseSprintPlanningBoardOptions {
   /** Sprint whose backlog is being planned. Nothing is fetched while empty. */
   sprintId?: string;
-  /** False when the user lacks SPRINT_UPDATE / TASK_UPDATE. */
+  /** False when the user lacks SPRINT_UPDATE / SPRINT_BACKLOG_UPDATE. */
   canEdit: boolean;
 }
 

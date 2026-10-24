@@ -9,10 +9,8 @@ import {
 /**
  * Sprint Backlog route (`/sprint-backlogs`).
  * <p>
- * Cloned from the temporary task page (`/taskstemp`) and adapted to the
- * `sprint_backlog` backend module: the generic CRUD data table is enough, the
- * schema only keeps the fields and the rules enforced by
- * `SprintBacklogServiceImpl`.
+ * The generic CRUD data table is enough: the schema only keeps the fields and
+ * the rules enforced by `SprintBacklogServiceImpl`.
  *
  * Business rules mirrored on the client (the backend stays authoritative and
  * answers 422 with the same field keys):

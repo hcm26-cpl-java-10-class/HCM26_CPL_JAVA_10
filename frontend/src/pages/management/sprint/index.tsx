@@ -11,8 +11,8 @@ import { sprintSchema } from "./sprint.schema";
 /**
  * Sprint route (`/sprints`), rendered per role:
  * <ul>
- *   <li><b>Admin</b>: the generic CRUD data table cloned from the temporary
- *       task page (`/taskstemp`) - see {@link sprintAdminEntityConfig}.</li>
+ *   <li><b>Admin</b>: the generic CRUD data table driven by
+ *       {@link sprintAdminEntityConfig}.</li>
  *   <li><b>Student</b> (and every other persona): the Jira style backlog view
  *       shared with the `/backlogs` page - see
  *       `pages/management/backlog`.</li>
