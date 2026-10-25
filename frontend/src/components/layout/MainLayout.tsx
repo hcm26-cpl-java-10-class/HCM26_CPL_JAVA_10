@@ -1,4 +1,4 @@
-import {SidebarInset, SidebarProvider} from "@/components/ui/sidebar";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import HeaderRight from "@/components/layout/HeaderRight";
 import {SidebarMenu} from "@/components/layout/Sidebar.tsx";
 import DynamicBreadcrumbs from "@/components/layout/DynamicBreadcrumbs.tsx";
@@ -21,7 +21,7 @@ export function MainLayout({
             <div className="flex h-screen max-h-[calc(100vh-18px)] flex-col overflow-hidden">
                 <StudentNavbar />
 
-                <header className="flex h-14 shrink-0 items-center border-b px-6">
+                <header className="flex min-h-14 shrink-0 items-center border-b px-6 py-2">
                     <DynamicBreadcrumbs pathTitles={pathName} variant="student" />
                 </header>
 
@@ -36,12 +36,13 @@ export function MainLayout({
         <SidebarProvider>
             <SidebarMenu />
             <SidebarInset  className="h-screen flex flex-col overflow-hidden max-h-[calc(100vh-18px)]">
-                <header className="flex h-16 shrink-0 items-center gap-2">
+                <header className="flex min-h-16 shrink-0 items-center gap-2 py-3">
                     <div className="flex items-center gap-2 px-4 w-full justify-between">
-                        <div className="flex items-center gap-2">
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                            <SidebarTrigger aria-label="Toggle navigation sidebar" />
                             <DynamicBreadcrumbs pathTitles={pathName} />
                         </div>
-                        <HeaderRight />
+                        <div className="shrink-0"><HeaderRight /></div>
                     </div>
                 </header>
 

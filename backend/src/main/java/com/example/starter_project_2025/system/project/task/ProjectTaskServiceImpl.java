@@ -22,7 +22,7 @@ import com.example.starter_project_2025.system.project.task.event.TaskOutboxServ
 import com.example.starter_project_2025.system.project.sprint.Sprint;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
-import com.example.starter_project_2025.system.tenant.TenantRepository;
+import com.example.starter_project_2025.system.project.TenantRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AccessLevel;

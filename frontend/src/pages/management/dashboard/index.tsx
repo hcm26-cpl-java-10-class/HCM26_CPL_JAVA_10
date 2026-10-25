@@ -1,17 +1,16 @@
-import { ArrowRight, FileCheck2, Flag, KeyRound, ListChevronsUpDown, Menu, Users } from "lucide-react";
+import { FolderPlus, KeyRound, ListChevronsUpDown, Menu, Users } from "lucide-react";
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { dashboardApi, type DashboardStats } from "../../../api/features/dashboard.api";
 import { MainLayout } from "../../../components/layout/MainLayout";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
 
 export const Dashboard: React.FC = () => {
+    const navigate = useNavigate();
     const [stats, setStats] = useState<DashboardStats | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const { effectivePermissions } = usePermissions();
-    const milestoneProjectId = import.meta.env.VITE_MILESTONE_MOCK_PROJECT_ID
-        || "11111111-1111-1111-1111-111111111111";
 
     useEffect(() => {
         loadStats();
@@ -30,6 +29,19 @@ export const Dashboard: React.FC = () => {
 
     return (
         <MainLayout>
+            <div className="mb-6 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-5 shadow-sm">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div>
+                        <p className="text-sm font-medium text-blue-800">Quick Actions</p>
+                        <h2 className="mt-1 text-xl font-semibold text-slate-900">Workspace</h2>
+                    </div>
+                    <Button onClick={() => navigate("/management/workspaces/candidates")} className="gap-2">
+                        <FolderPlus className="h-4 w-4" />
+                        Open Workspace
+                    </Button>
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-4">
                 <div className="bg-white rounded-lg shadow p-6">
                     <div className="flex items-center justify-between">
@@ -91,46 +103,6 @@ export const Dashboard: React.FC = () => {
                     </div>
                 </div>
             </div>
-
-            <section className="mt-8">
-                <div className="mb-4">
-                    <h2 className="text-lg font-semibold text-gray-900">Project workspace</h2>
-                    <p className="mt-1 text-sm text-gray-500">
-                        Milestones and rubrics are available to every signed-in team member.
-                    </p>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                    <article className="rounded-xl border bg-white p-5 shadow-sm">
-                        <div className="flex size-10 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
-                            <Flag className="size-5" />
-                        </div>
-                        <h3 className="mt-4 font-semibold text-gray-900">Milestones</h3>
-                        <p className="mt-1 text-sm text-gray-500">
-                            Plan delivery deadlines, acceptance checklists, and evaluation settings.
-                        </p>
-                        <Button asChild className="mt-4">
-                            <Link to={`/projects/${milestoneProjectId}/milestones`}>
-                                Open milestones <ArrowRight className="size-4" />
-                            </Link>
-                        </Button>
-                    </article>
-
-                    <article className="rounded-xl border bg-white p-5 shadow-sm">
-                        <div className="flex size-10 items-center justify-center rounded-lg bg-violet-100 text-violet-700">
-                            <FileCheck2 className="size-5" />
-                        </div>
-                        <h3 className="mt-4 font-semibold text-gray-900">Rubrics</h3>
-                        <p className="mt-1 text-sm text-gray-500">
-                            Create, publish, and manage reusable milestone evaluation criteria.
-                        </p>
-                        <Button asChild className="mt-4">
-                            <Link to="/rubrics">
-                                Open rubrics <ArrowRight className="size-4" />
-                            </Link>
-                        </Button>
-                    </article>
-                </div>
-            </section>
 
             <div className="mt-8 bg-white rounded-lg shadow p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Your Permissions</h3>

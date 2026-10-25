@@ -1,0 +1,13 @@
+{
+  "passed": 8,
+  "results": [
+    "AC01/02: direct URL loads matching context and active tab",
+    "AC03: empty response shows empty state",
+    "AC07: section500 stays local; Sprint still opens",
+    "AC07: Try again recovers section",
+    "AC04/08:403 clears rows/actions; refreshed capabilities disable tab",
+    "AC05: Teacher sees create but no submit; explicit action posts correct endpoint",
+    "AC06: delayed A response cannot overwrite B after SPA navigation",
+    "AC09: all navigation produces no writes"
+  ]
+}

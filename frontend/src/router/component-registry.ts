@@ -13,21 +13,26 @@ import InvitationManagementPage from "@/pages/management/invitation";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
 import TeamAllocationPage from "@/pages/management/team-allocation";
 import TeamAllocationClassListPage from "@/pages/management/team-allocation/class-list";
-import { MilestoneCreatePage } from "@/pages/management/project/milestone/pages/MilestoneCreatePage";
-import { MilestoneDetailPage } from "@/pages/management/project/milestone/pages/MilestoneDetailPage";
-import { MilestoneListPage } from "@/pages/management/project/milestone/pages/MilestoneListPage";
-import { RubricCreatePage } from "@/pages/management/project/rubric/pages/RubricCreatePage";
-import { RubricDetailPage } from "@/pages/management/project/rubric/pages/RubricDetailPage";
-import { RubricEditPage } from "@/pages/management/project/rubric/pages/RubricEditPage";
-import { RubricListPage } from "@/pages/management/project/rubric/pages/RubricListPage";
-import TaskManagementPage from "@/pages/management/task";
-import { TaskDetailPage } from "@/pages/management/task/pages/TaskDetailPage";
-import { TaskFormPage } from "@/pages/management/task/pages/TaskFormPage";
 import StudentExamList from "@/pages/student/StudentExamList";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
+import { MilestoneCreatePage } from "@/pages/management/project/milestone/pages/MilestoneCreatePage";
+import { MilestoneDetailPage } from "@/pages/management/project/milestone/pages/MilestoneDetailPage";
+import { MilestoneListPage } from "@/pages/management/project/milestone/pages/MilestoneListPage";
+import { RubricListPage } from "@/pages/management/project/rubric/pages/RubricListPage";
+import { RubricCreatePage } from "@/pages/management/project/rubric/pages/RubricCreatePage";
+import { RubricDetailPage } from "@/pages/management/project/rubric/pages/RubricDetailPage";
+import { RubricEditPage } from "@/pages/management/project/rubric/pages/RubricEditPage";
+import WorkspaceCandidatePage from "@/pages/management/workspace/WorkspaceCandidatePage";
+import WorkspaceDetailPage from "@/pages/management/workspace/WorkspaceDetailPage";
+import { createElement} from "react";
+import { Navigate } from "react-router-dom";
+import TaskManagementPage from "@/pages/management/task";
+import { TaskFormPage } from "@/pages/management/task/pages/TaskFormPage";
+import { TaskDetailPage } from "@/pages/management/task/pages/TaskDetailPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
+
 
 export interface RouteConfig {
   path: string;
@@ -38,31 +43,15 @@ export interface RouteConfig {
 }
 
 export const routes: RouteConfig[] = [
-  { path: "/dashboard", component: Dashboard, isModuleDriven: true },
+  // Dashboard is the default landing page for administrators. Keep this route
+  // available while the backend-driven sidebar is still loading; otherwise a
+  // successful login can temporarily fall through to the blank 404 redirect.
+  { path: "/dashboard", component: Dashboard, requiredPermission: "USER_READ" },
   { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
-
-  {
-    path: "/tasks",
-    component: TaskManagementPage,
-    requiredPermission: "TASK_READ",
-    isModuleDriven: true,
-  },
-  {
-    path: "/tasks/create",
-    component: TaskFormPage,
-    requiredPermission: "TASK_CREATE",
-  },
-  {
-    path: "/tasks/:id/edit",
-    component: TaskFormPage,
-    requiredPermission: "TASK_UPDATE",
-  },
-  {
-    path: "/tasks/:id/detail",
-    component: TaskDetailPage,
-    requiredPermission: "TASK_READ",
-  },
-
+  { path: "/tasks", component: TaskManagementPage, requiredPermission: "TASK_READ", isModuleDriven: true },
+  { path: "/tasks/create", component: TaskFormPage, requiredPermission: "TASK_CREATE" },
+  { path: "/tasks/:id/edit", component: TaskFormPage, requiredPermission: "TASK_UPDATE" },
+  { path: "/tasks/:id/detail", component: TaskDetailPage, requiredPermission: "TASK_READ" },
   {
     path: "/invitations",
     component: InvitationManagementPage,
@@ -70,6 +59,7 @@ export const routes: RouteConfig[] = [
     isModuleDriven: true,
   },
   {
+    // Student backlog view (also served at /sprints for non-admin roles).
     path: "/backlogs",
     component: BacklogPage,
     requiredPermission: "SPRINT_READ",
@@ -92,18 +82,14 @@ export const routes: RouteConfig[] = [
     component: TeamAllocationPage,
     requiredPermission: "PEO_TEAM_ALLOCATE",
   },
-
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
-  {
-    path: "/student/exams",
-    component: StudentExamList,
-    requiredPermission: "EXAM_READ",
-    isModuleDriven: true,
-  },
+  { path: "/student/exams", component: StudentExamList,requiredPermission: "EXAM_READ", isModuleDriven: true },
   { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
-
   { path: "/project-board", component: ProjectBoardPage },
-
+  { path: "/workspaces/candidates", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
+  { path: "/management/workspaces/candidates", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
+  { path: "/management/workspaces/:id", component: WorkspaceDetailPage, requiredPermission: "WORKSPACE_READ" },
+  { path: "/management/project-teams", component: () => createElement(Navigate, { to: "/management/workspaces/candidates", replace: true }), requiredPermission: "WORKSPACE_READ" },
   {
     path: "/projects/:projectId/milestones",
     component: MilestoneListPage,
@@ -116,15 +102,10 @@ export const routes: RouteConfig[] = [
     path: "/projects/:projectId/milestones/:milestoneId",
     component: MilestoneDetailPage,
   },
-
   { path: "/rubrics", component: RubricListPage },
   { path: "/rubrics/new", component: RubricCreatePage },
   { path: "/rubrics/:rubricId", component: RubricDetailPage },
-  {
-    path: "/rubrics/:rubricId/versions/:versionId/edit",
-    component: RubricEditPage,
-  },
-
+  { path: "/rubrics/:rubricId/versions/:versionId/edit", component: RubricEditPage },
   ...buildEntityRoutes(),
 
   { path: "/not-found-page", component: NotFoundPage, isPublic: true },
@@ -133,5 +114,7 @@ export const routes: RouteConfig[] = [
   { path: "/register", component: RegisterPage, isPublic: true },
   { path: "/forgot-password", component: ForgotPasswordPage, isPublic: true },
   { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true },
+  { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true,},
   { path: "/unauthorized", component: Unauthorized, isPublic: true },
 ];
+

@@ -28,6 +28,7 @@ const AUTH_STORAGE_KEYS = [
     "roles",
     "permissions",
     "rolePermissions",
+    "viewRole",
 ];
 
 const mapAuthResponse = (data: BackendAuthenticationResponse): LoginResponse => {

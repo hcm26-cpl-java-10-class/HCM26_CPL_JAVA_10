@@ -9,7 +9,6 @@ import com.example.starter_project_2025.system.project.rubric.dto.*;
 import com.example.starter_project_2025.system.project.rubric.exception.*;
 import com.example.starter_project_2025.system.project.rubric.repository.*;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,12 +16,22 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.*;
+import java.util.function.Function;
 
 @Service
 @RequiredArgsConstructor
 public class RubricService {
     private static final BigDecimal ONE_HUNDRED = new BigDecimal("100.00");
     private static final BigDecimal SCORE_ALLOCATION_TOLERANCE = new BigDecimal("0.01");
+    private static final Set<String> LIST_SORT_FIELDS = Set.of(
+            "name",
+            "description",
+            "latestStatus",
+            "criteriaCount",
+            "totalMaxScore",
+            "milestoneUsageCount",
+            "updatedAt"
+    );
 
     private final RubricRepository rubricRepository;
     private final RubricVersionRepository versionRepository;
@@ -32,13 +41,90 @@ public class RubricService {
     private final Clock milestoneClock;
 
     @Transactional(readOnly = true)
-    public RubricPageResponse getList(int page, int size, String search, RubricVersionStatus status) {
+    public RubricPageResponse getList(int page, int size, List<String> sort,
+                                      String search, RubricVersionStatus status) {
+        int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), 100);
         UUID tenantId = tenantProvider.requireCurrentTenantId();
-        Page<Rubric> result = rubricRepository.search(tenantId, normalizeSearch(search), status,
-                PageRequest.of(Math.max(page, 0), safeSize, Sort.by(Sort.Direction.DESC, "updatedAt")));
-        return new RubricPageResponse(result.getContent().stream().map(this::toListItem).toList(),
-                result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
+        List<SortTerm> sortTerms = parseSort(sort);
+        List<RubricListItemResponse> items = new ArrayList<>(rubricRepository
+                .searchAll(tenantId, normalizeSearch(search), status)
+                .stream()
+                .map(this::toListItem)
+                .toList());
+        items.sort(buildListComparator(sortTerms));
+
+        int totalElements = items.size();
+        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / safeSize);
+        long requestedOffset = (long) safePage * safeSize;
+        int fromIndex = (int) Math.min(requestedOffset, totalElements);
+        int toIndex = Math.min(fromIndex + safeSize, totalElements);
+
+        return new RubricPageResponse(
+                List.copyOf(items.subList(fromIndex, toIndex)),
+                safePage,
+                safeSize,
+                totalElements,
+                totalPages
+        );
+    }
+
+    private List<SortTerm> parseSort(List<String> requestedSort) {
+        List<String> values = requestedSort == null || requestedSort.isEmpty()
+                ? List.of("updatedAt:desc")
+                : requestedSort;
+        List<SortTerm> terms = new ArrayList<>();
+
+        for (String value : values) {
+            String[] parts = value == null ? new String[0] : value.trim().split("[:,]", -1);
+            if (parts.length != 2 || !LIST_SORT_FIELDS.contains(parts[0])
+                    || !(parts[1].equalsIgnoreCase("asc") || parts[1].equalsIgnoreCase("desc"))) {
+                throw new RubricValidationException(Map.of(
+                        "sort", List.of("Sort must use a supported field and asc or desc direction")
+                ));
+            }
+            terms.add(new SortTerm(parts[0], parts[1].equalsIgnoreCase("desc")));
+        }
+        return terms;
+    }
+
+    private Comparator<RubricListItemResponse> buildListComparator(List<SortTerm> terms) {
+        Comparator<RubricListItemResponse> result = null;
+        for (SortTerm term : terms) {
+            Comparator<RubricListItemResponse> next = switch (term.field()) {
+                case "name" -> comparingText(RubricListItemResponse::name, term.descending());
+                case "description" -> comparingText(RubricListItemResponse::description, term.descending());
+                case "latestStatus" -> comparingValue(RubricListItemResponse::latestStatus, term.descending());
+                case "criteriaCount" -> comparingValue(RubricListItemResponse::criteriaCount, term.descending());
+                case "totalMaxScore" -> comparingValue(RubricListItemResponse::totalMaxScore, term.descending());
+                case "milestoneUsageCount" -> comparingValue(RubricListItemResponse::milestoneUsageCount, term.descending());
+                case "updatedAt" -> comparingValue(RubricListItemResponse::updatedAt, term.descending());
+                default -> throw new IllegalStateException("Unsupported rubric sort field: " + term.field());
+            };
+            result = result == null ? next : result.thenComparing(next);
+        }
+        return result.thenComparing(item -> item.id().toString());
+    }
+
+    private static Comparator<RubricListItemResponse> comparingText(
+            Function<RubricListItemResponse, String> extractor,
+            boolean descending
+    ) {
+        Comparator<String> values = descending
+                ? String.CASE_INSENSITIVE_ORDER.reversed()
+                : String.CASE_INSENSITIVE_ORDER;
+        return Comparator.comparing(extractor, Comparator.nullsLast(values));
+    }
+
+    private static <T extends Comparable<? super T>> Comparator<RubricListItemResponse> comparingValue(
+            Function<RubricListItemResponse, T> extractor,
+            boolean descending
+    ) {
+        Comparator<T> values = descending ? Comparator.reverseOrder() : Comparator.naturalOrder();
+        return Comparator.comparing(extractor, Comparator.nullsLast(values));
+    }
+
+    private record SortTerm(String field, boolean descending) {
     }
 
     @Transactional(readOnly = true)

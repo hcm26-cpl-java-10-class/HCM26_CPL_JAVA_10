@@ -7,6 +7,16 @@ import org.springframework.stereotype.Repository;
 public interface ProjectRepository extends BaseCrudRepository<Project, Long> {
 
     java.util.Optional<Project> findByCode(String code);
+    java.util.Optional<Project> findByCodeAndTenantId(String code, Long tenantId);
+    java.util.List<Project> findByTenantIdAndIsActiveTrue(Long tenantId);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("select p from Project p where p.id = :id")
+    java.util.Optional<Project> findForWorkspaceCreation(@org.springframework.data.repository.query.Param("id") Long id);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("update Project p set p.status = com.example.starter_project_2025.system.project.ProjectStatus.ACTIVE where p.status = com.example.starter_project_2025.system.project.ProjectStatus.PLANNING and exists (select w.id from Workspace w where w.project.id = p.id and w.status = com.example.starter_project_2025.system.project.WorkspaceStatus.ACTIVE)")
+    int activateProjectsWithWorkspace();
 
     java.util.List<Project> findAllByTenantIdAndIdInAndIsActiveTrueOrderByNameAsc(
             Long tenantId,

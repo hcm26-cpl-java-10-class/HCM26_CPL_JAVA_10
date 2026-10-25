@@ -18,6 +18,7 @@ import java.util.UUID;
 )
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+
 public class IdempotencyRecord {
 
     @Id

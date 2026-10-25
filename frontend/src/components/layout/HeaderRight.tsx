@@ -9,12 +9,13 @@ import {
   formatRoleLabel,
   getHomePathByRole,
   normalizeRole,
+  resolveEffectivePermissions,
   uniqueRoles,
 } from "@/utils/rbac.utils";
 import { useNavigate } from "react-router-dom";
 
 export default function HeaderRight() {
-  const { role, roles } = useSelector((state: RootState) => state.auth);
+  const { role, roles, rolePermissions, permissions } = useSelector((state: RootState) => state.auth);
   const { activeRole, availableRoles, isPreviewMode, setViewRole } = useRoleSwitch();
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -76,7 +77,16 @@ export default function HeaderRight() {
      */
     startTransition(() => {
       setViewRole(targetRole);
-      navigate(getHomePathByRole(normalizedRole));
+      navigate(
+          getHomePathByRole(
+              normalizedRole,
+              resolveEffectivePermissions(
+                  normalizedRole,
+                  rolePermissions,
+                  permissions
+              ),
+          ),
+      );
     });
   };
 
