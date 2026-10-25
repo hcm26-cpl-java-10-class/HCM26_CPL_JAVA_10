@@ -9,6 +9,7 @@ import java.util.List;
 public record MilestoneListQuery(
         int page,
         int size,
+        List<String> sort,
         String search,
         List<MilestoneStatus> status,
         Boolean mandatory,

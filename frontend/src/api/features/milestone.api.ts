@@ -21,6 +21,8 @@ export const milestoneApi = {
       page: String(params.page),
       size: String(params.size),
     });
+    const sort = Array.isArray(params.sort) ? params.sort : params.sort ? [params.sort] : [];
+    sort.forEach((item) => query.append("sort", item.replace(",", ":")));
     if (params.search) query.set("search", params.search);
     params.status?.forEach((status) => query.append("status", status));
     if (params.mandatory !== undefined) query.set("mandatory", String(params.mandatory));

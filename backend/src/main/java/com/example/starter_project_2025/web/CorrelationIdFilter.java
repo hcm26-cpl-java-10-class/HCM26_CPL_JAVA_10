@@ -27,7 +27,7 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
         String supplied = request.getHeader(HEADER);
-        String correlationId = supplied == null || supplied.isBlank()
+        String correlationId = supplied == null || supplied.isBlank() || supplied.length() > 100
                 ? UUID.randomUUID().toString()
                 : supplied.trim();
         MDC.put(MDC_KEY, correlationId);

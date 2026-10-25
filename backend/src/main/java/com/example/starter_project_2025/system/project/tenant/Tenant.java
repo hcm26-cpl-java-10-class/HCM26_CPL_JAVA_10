@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.project;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
+import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
@@ -21,23 +22,22 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
+@AttributeOverride(name = "id", column = @Column(name = "tenant_id"))
 @Table(
         name = "tenants",
-        uniqueConstraints = {
-                @UniqueConstraint(name = "uk_tenant_code", columnNames = {"code"})
-        }
+        uniqueConstraints = @UniqueConstraint(name = "uk_tenant_code", columnNames = {"code"})
 )
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ResourcePermission("TENANT")
 public class Tenant extends BaseEntity {
 
     @Column(nullable = false, length = 100)
-    private String code;
+    String code;
 
     @Column(nullable = false, length = 255)
-    private String name;
+    String name;
 
-    @Column(nullable = false)
     @Builder.Default
-    private Boolean active = true;
+    @Column(nullable = false)
+    Boolean active = true;
 }

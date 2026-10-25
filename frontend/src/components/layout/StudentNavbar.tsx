@@ -17,7 +17,10 @@ import { getHomePathByRole } from "@/utils/rbac.utils";
 import { usePermissions } from "@/hooks/usePermissions";
 import { ChevronDown, LogOutIcon, Menu } from "lucide-react";
 import { useMemo } from "react";
+import { useDispatch } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
+import { setLogout } from "@/store/slices/auth/authSlice";
+import { useQueryClient } from "@tanstack/react-query";
 
 const normalizePath = (path?: string) => {
   const trimmed = (path || "/").replace(/\/+$/, "");
@@ -39,6 +42,8 @@ const BACKLOGS_URL = "/backlogs";
 export function StudentNavbar() {
   const location = useLocation();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const queryClient = useQueryClient();
   const { activeRole,  effectivePermissions ,hasPermission} = usePermissions();
   const { data: moduleGroups = [] } = useActiveModuleGroups();
   const pathname = normalizePath(location.pathname);
@@ -116,8 +121,13 @@ export function StudentNavbar() {
   const hasMenuItems = navGroups.length > 0;
 
   const handleLogout = async () => {
-    await authApi.logout();
-    navigate("/login");
+    try {
+      await authApi.logout();
+    } finally {
+      queryClient.removeQueries({ queryKey: ["sidebar-menu"] });
+      dispatch(setLogout());
+      navigate("/login", { replace: true });
+    }
   };
 
   return (

@@ -4,6 +4,8 @@ import type { RubricDetail, RubricListParams, RubricPage, SaveRubricDraftRequest
 export const rubricApi = {
   async getList(params: RubricListParams): Promise<RubricPage> {
     const query = new URLSearchParams({ page: String(params.page), size: String(params.size) });
+    const sort = Array.isArray(params.sort) ? params.sort : params.sort ? [params.sort] : [];
+    sort.forEach((item) => query.append("sort", item.replace(",", ":")));
     if (params.search) query.set("search", params.search);
     if (params.status) query.set("status", params.status);
     const response = await axiosInstance.get<RubricPage>("/rubrics", { params: query });
