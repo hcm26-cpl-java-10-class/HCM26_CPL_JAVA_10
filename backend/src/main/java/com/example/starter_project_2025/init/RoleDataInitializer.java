@@ -128,7 +128,6 @@ public class RoleDataInitializer implements CommandLineRunner {
                 .name(name).resource(resource).action(action)
                 .description("Manually defined permission").build());
     }
-
     private void ensureAllocationPermissionForRole(String roleName, String description) {
         Permission allocationPermission = permissionRepository.findByName("PEO_TEAM_ALLOCATE")
                 .orElseThrow(() -> new IllegalStateException(

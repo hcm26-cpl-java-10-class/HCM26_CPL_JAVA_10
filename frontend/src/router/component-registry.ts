@@ -15,6 +15,13 @@ import TeamAllocationClassListPage from "@/pages/management/team-allocation/clas
 import StudentExamList from "@/pages/student/StudentExamList";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
+import { MilestoneCreatePage } from "@/pages/management/project/milestone/pages/MilestoneCreatePage";
+import { MilestoneDetailPage } from "@/pages/management/project/milestone/pages/MilestoneDetailPage";
+import { MilestoneListPage } from "@/pages/management/project/milestone/pages/MilestoneListPage";
+import { RubricListPage } from "@/pages/management/project/rubric/pages/RubricListPage";
+import { RubricCreatePage } from "@/pages/management/project/rubric/pages/RubricCreatePage";
+import { RubricDetailPage } from "@/pages/management/project/rubric/pages/RubricDetailPage";
+import { RubricEditPage } from "@/pages/management/project/rubric/pages/RubricEditPage";
 import WorkspaceCandidatePage from "@/pages/management/workspace/WorkspaceCandidatePage";
 import WorkspaceDetailPage from "@/pages/management/workspace/WorkspaceDetailPage";
 import { createElement} from "react";
@@ -78,6 +85,22 @@ export const routes: RouteConfig[] = [
   { path: "/management/workspaces/candidates", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
   { path: "/management/workspaces/:id", component: WorkspaceDetailPage, requiredPermission: "WORKSPACE_READ" },
   { path: "/management/project-teams", component: () => createElement(Navigate, { to: "/management/workspaces/candidates", replace: true }), requiredPermission: "WORKSPACE_READ" },
+  {
+    path: "/projects/:projectId/milestones",
+    component: MilestoneListPage,
+  },
+  {
+    path: "/projects/:projectId/milestones/new",
+    component: MilestoneCreatePage,
+  },
+  {
+    path: "/projects/:projectId/milestones/:milestoneId",
+    component: MilestoneDetailPage,
+  },
+  { path: "/rubrics", component: RubricListPage },
+  { path: "/rubrics/new", component: RubricCreatePage },
+  { path: "/rubrics/:rubricId", component: RubricDetailPage },
+  { path: "/rubrics/:rubricId/versions/:versionId/edit", component: RubricEditPage },
   ...buildEntityRoutes(),
 
   { path: "/not-found-page", component: NotFoundPage, isPublic: true },

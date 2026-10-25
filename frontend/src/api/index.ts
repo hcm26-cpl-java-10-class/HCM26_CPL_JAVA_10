@@ -20,5 +20,6 @@ export * from "./features/demo/lesson.api";
 export * from "./features/workspace.api";
 export * from "./features/demo/lesson.api";
 export * from "./features/rbac/department.api";
+export * from "./features/rubric.api";
 export * from "./features/team-allocation.api";
 export * from "./features/training-class.api";

@@ -5,9 +5,11 @@ import { Modal } from "./modal";
 export const ConfirmDialog: React.FC<{
   open: boolean;
   title?: string;
-  description?: string;
+  description?: React.ReactNode;
   confirmLabel?: string;
+  loadingLabel?: string;
   cancelLabel?: string;
+  destructive?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
   loading?: boolean;
@@ -16,7 +18,9 @@ export const ConfirmDialog: React.FC<{
   title = "Are you sure?",
   description,
   confirmLabel = "Yes, delete",
+  loadingLabel,
   cancelLabel = "Cancel",
+  destructive = true,
   onConfirm,
   onCancel,
   loading = false,
@@ -25,10 +29,11 @@ export const ConfirmDialog: React.FC<{
     <Modal open={open} onClose={onCancel} title={title} size="sm">
       <div className="space-y-4">
         {description && (
-          <p className="text-sm text-muted-foreground">{description}</p>
+          <div className="text-sm text-muted-foreground">{description}</div>
         )}
         <div className="flex justify-end gap-2">
           <button
+            type="button"
             onClick={onCancel}
             className="px-4 py-2 border border-border rounded hover:bg-muted transition"
             disabled={loading}
@@ -36,11 +41,12 @@ export const ConfirmDialog: React.FC<{
             {cancelLabel}
           </button>
           <button
+            type="button"
             onClick={onConfirm}
-            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition"
+            className={`rounded px-4 py-2 text-white transition ${destructive ? "bg-red-600 hover:bg-red-700" : "bg-primary hover:bg-primary/90"}`}
             disabled={loading}
           >
-            {loading ? "Deleting..." : confirmLabel}
+            {loading ? (loadingLabel ?? (destructive ? "Deleting..." : "Working...")) : confirmLabel}
           </button>
         </div>
       </div>
