@@ -8,9 +8,9 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 import java.util.UUID;
 
-@Entity
+@Entity(name = "MilestoneIdempotencyRecord")
 @Table(
-        name = "idempotency_records",
+        name = "milestone_idempotency_records",
         uniqueConstraints = @UniqueConstraint(
                 name = "uk_idempotency_scope_key",
                 columnNames = {"tenant_id", "actor_id", "operation", "idempotency_key"}
@@ -18,6 +18,7 @@ import java.util.UUID;
 )
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+
 public class IdempotencyRecord {
 
     @Id
