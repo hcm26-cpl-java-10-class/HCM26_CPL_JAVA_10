@@ -4,7 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { usePermissions } from "@/hooks/usePermissions";
 import { ChevronDown, FolderOpen } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { TaskProjectPicker } from "./components/TaskProjectPicker";
 import { TaskTable } from "./components/TaskTable";
 import { OverdueTaskPanel } from "./components/OverdueTaskPanel";
@@ -12,6 +12,7 @@ import { isProjectId } from "./task-form.utils";
 import { useTaskProjects } from "./hooks/useTaskProjects";
 
 export default function TaskManagementPage() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, activeRole } = usePermissions();
   const projects = useTaskProjects();
@@ -57,6 +58,7 @@ export default function TaskManagementPage() {
             <div className="flex gap-2" aria-label="Task views">
               <Button variant={overdue ? "outline" : "default"} onClick={() => setSearchParams({ projectId })}>All tasks</Button>
               <Button variant={overdue ? "default" : "outline"} onClick={() => setSearchParams({ projectId, overdue: "true" })}>Overdue tasks</Button>
+              <Button variant="outline" onClick={() => navigate(`/projects/${projectId}/milestones?view=risk`)}>Milestone risks</Button>
             </div>
             {overdue
               ? <OverdueTaskPanel key={`${user.email}:${activeRole}:${projectId}`} projectId={projectId} />

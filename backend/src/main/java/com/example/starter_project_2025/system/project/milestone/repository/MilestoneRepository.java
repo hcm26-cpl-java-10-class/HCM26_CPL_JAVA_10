@@ -11,6 +11,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface MilestoneRepository extends JpaRepository<Milestone, UUID>, JpaSpecificationExecutor<Milestone> {
+    java.util.List<Milestone> findByProjectIdAndTenantIdAndActiveTrueOrderByDeadlineAscIdAsc(UUID projectId, UUID tenantId);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("select m from Milestone m where m.id = :id and m.projectId = :projectId and m.tenantId = :tenantId and m.active = true")
+    Optional<Milestone> lockForRisk(UUID id, UUID projectId, UUID tenantId);
 
     boolean existsByTenantIdAndProjectIdAndTitle(UUID tenantId, UUID projectId, String title);
 

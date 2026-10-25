@@ -13,6 +13,8 @@ import java.util.UUID;
 
 @Repository
 public interface TaskRepository extends BaseCrudRepository<Task, UUID> {
+    long countByProjectIdAndMilestoneIdAndIsActiveTrue(UUID projectId, UUID milestoneId);
+    long countByProjectIdAndMilestoneIdAndIsActiveTrueAndStatus(UUID projectId, UUID milestoneId, TaskStatus status);
     Optional<Task> findByIdAndIsActiveTrue(UUID id);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

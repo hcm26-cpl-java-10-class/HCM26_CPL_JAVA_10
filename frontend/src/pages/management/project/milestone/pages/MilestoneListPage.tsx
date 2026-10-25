@@ -24,6 +24,8 @@ import {
   serializeMilestoneListParams,
 } from "../milestone-list-query.utils";
 import { getMilestoneApiError } from "../milestone.utils";
+import { MilestoneRiskPage } from "./MilestoneRiskPage";
+import { Button } from "@/components/ui/button";
 
 interface MilestoneTableFilters {
   status?: MilestoneStatus[];
@@ -33,6 +35,11 @@ interface MilestoneTableFilters {
 }
 
 export function MilestoneListPage() {
+  const [params] = useSearchParams();
+  return params.get("view") === "risk" ? <MilestoneRiskPage /> : <MilestoneStandardListPage />;
+}
+
+function MilestoneStandardListPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -187,6 +194,7 @@ export function MilestoneListPage() {
 
   return (
     <MainLayout pathName={breadcrumbs}>
+      <div className="mb-3 flex justify-end"><Button variant="outline" onClick={() => navigate(`/projects/${projectId}/milestones?view=risk`)}>Risk monitoring</Button></div>
       <ProTable<MilestoneListItem>
         table={table}
         headerActions={createAction}

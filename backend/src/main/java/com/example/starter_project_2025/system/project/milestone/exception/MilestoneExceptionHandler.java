@@ -19,7 +19,8 @@ import java.time.Instant;
 import java.util.*;
 
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@RestControllerAdvice(assignableTypes = MilestoneController.class)
+@RestControllerAdvice(assignableTypes = {MilestoneController.class,
+        com.example.starter_project_2025.system.project.milestone.risk.MilestoneRiskController.class})
 public class MilestoneExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -88,4 +89,21 @@ public class MilestoneExceptionHandler {
                 CorrelationIdFilter.currentId(), Instant.now()
         ));
     }
+
+    @ExceptionHandler(org.springframework.security.authentication.AuthenticationCredentialsNotFoundException.class)
+    public ResponseEntity<MilestoneErrorResponse> unauthenticated(Exception ex) {
+        return error(HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "Please sign in", Map.of());
+    }
+    @ExceptionHandler({org.springframework.dao.DataIntegrityViolationException.class,
+            org.springframework.dao.ConcurrencyFailureException.class})
+    public ResponseEntity<MilestoneErrorResponse> concurrent(Exception ex) {
+        return error(HttpStatus.CONFLICT, "CONFLICT", "Milestone data changed. Reload and try again.", Map.of());
+    }
+
+    @ExceptionHandler({IllegalStateException.class, org.springframework.dao.DataAccessException.class})
+    public ResponseEntity<MilestoneErrorResponse> internal(Exception ex) {
+        return error(HttpStatus.INTERNAL_SERVER_ERROR, "MILESTONE_SYSTEM_ERROR",
+                "Milestone request could not be completed. Please try again.", Map.of());
+    }
+
 }

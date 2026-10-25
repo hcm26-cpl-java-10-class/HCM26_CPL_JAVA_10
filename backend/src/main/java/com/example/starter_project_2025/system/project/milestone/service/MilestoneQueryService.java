@@ -91,6 +91,7 @@ public class MilestoneQueryService {
         ProjectReadContext project = projectPort.requireProjectForRead(projectId, actorId, tenantId);
         accessPolicy.requireReadAccess(project);
         var milestone = repository.findByIdAndProjectIdAndTenantId(milestoneId, projectId, tenantId)
+                .filter(com.example.starter_project_2025.system.project.milestone.domain.Milestone::isActive)
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
         var rubric = rubricPort.requireSnapshotForRead(milestone.getRubricSnapshotId(), projectId, tenantId);
         var reviewer = milestone.getReviewerId() == null

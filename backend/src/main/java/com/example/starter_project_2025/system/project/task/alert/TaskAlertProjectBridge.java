@@ -166,4 +166,28 @@ public class TaskAlertProjectBridge implements TaskProjectAccess {
                 .orElse(task.getAssigneeProjectMemberId() == null && leader(project, actor.getId())));
     }
     private AccessDeniedException denied() { return new AccessDeniedException("Task project access is not available"); }
+    /** Whole current student roster, including students with no task/member UUID alias. */
+    public List<User> studentRecipients(UUID projectId, Long actorId) {
+        Project project = project(projectId);
+        User actor = users.findById(actorId).orElseThrow(this::denied);
+        if (!isManager(projectId, actorId)) throw denied();
+        Map<Long, User> recipients = new TreeMap<>();
+        boolean projectManager = admin(actor) || mentor(project, actorId);
+        for (var row : teamMembers.findAll())
+            if (current(row) && matches(row.getTeam(), project) && sameTenant(row.getUser(), project)
+                    && student(row.getUser()) && (projectManager || inTeam(actor,
+                    new Member(null, row.getUser(), TaskAlertData.MemberSource.TEAM_MEMBER, row.getTeam().getId()), true)))
+                recipients.put(row.getUser().getId(), row.getUser());
+        for (var row : projectMembers.findAll()) {
+            User user = row.getClassMember().getUser();
+            if (current(row) && matches(row.getTeam(), project) && sameTenant(user, project) && student(user)
+                    && (projectManager || inTeam(actor, new Member(null, user, TaskAlertData.MemberSource.PROJECT_MEMBER, row.getTeam().getId()), true)))
+                recipients.put(user.getId(), user);
+        }
+        return List.copyOf(recipients.values());
+    }
+    private boolean student(User user) {
+        return user.getRoles().stream().anyMatch(role -> Boolean.TRUE.equals(role.getIsActive())
+                && Set.of("STUDENT", "TRAINEE").contains(role.getName()));
+    }
 }
