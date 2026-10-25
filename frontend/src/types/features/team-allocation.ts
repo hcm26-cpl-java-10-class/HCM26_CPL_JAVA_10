@@ -47,13 +47,60 @@ export interface AllocationTeam {
   teamId: number;
   teamName: string;
   status: ProjectTeamStatus;
+  version: number;
   assignedMentorId: number | null;
   assignedMentorName: string | null;
   memberIds: number[];
   members?: Array<{
     memberId: number;
     fullName: string;
+    role: string | null;
   }>;
+}
+
+export type TeamMemberRole = "PM" | "BA" | "DEV" | "QA";
+
+export interface UpdateTeamRolesRequest {
+  expectedVersion: number;
+  members: Array<{
+    memberId: number;
+    role: TeamMemberRole;
+  }>;
+}
+
+export interface TransferTeamMemberRequest {
+  destinationTeamId: number;
+  sourceTeamVersion: number;
+  destinationTeamVersion: number;
+  reason: string;
+}
+
+export interface TeamMemberHistoryItem {
+  id: number;
+  classId: number;
+  cohortId: number | null;
+  allocationSessionId: number;
+  memberId: number;
+  memberName: string;
+  fromTeamId: number | null;
+  fromTeamName: string | null;
+  toTeamId: number | null;
+  toTeamName: string | null;
+  fromRole: string | null;
+  toRole: string | null;
+  action: "ROLE_CHANGED" | "MEMBER_TRANSFERRED" | "MEMBER_SWAPPED" | "MEMBER_ADDED" | "MEMBER_REMOVED" | string;
+  reason: string | null;
+  actorId: number;
+  actorName: string;
+  occurredAt: string;
+}
+
+export interface TeamMemberHistoryPage {
+  items: TeamMemberHistoryItem[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
 }
 
 export interface TeamListResponse {
@@ -97,4 +144,5 @@ export interface AllocationApiError {
   conflictingTeamId?: number | null;
   unassignedCount?: number;
   unassignedMemberIds?: number[];
+  invalidMemberIds?: number[];
 }

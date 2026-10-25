@@ -38,6 +38,7 @@ export function useActiveModuleGroups(enabled = true) {
 
             const groups = groupPage.content ?? groupPage.items ?? [];
             const modules = (modulePage.content ?? modulePage.items ?? []).filter((module) =>
+                module.url !== "/team-allocation" &&
                 canAccessByPermission(module.requiredPermission, hasPermission),
             );
 
@@ -92,7 +93,10 @@ export function useActiveModuleGroups(enabled = true) {
                 });
             }
 
-            if (canAccessByPermission("PEO_TEAM_ALLOCATE", hasPermission)) {
+            if (
+                canAccessByPermission("PEO_TEAM_ALLOCATE", hasPermission) ||
+                canAccessByPermission("PRJ_WORKSPACE_MANAGE", hasPermission)
+            ) {
                 const moduleGroup = groups.find(
                     (group) => (group.name ?? "").toLowerCase() === "project management",
                 );
@@ -104,7 +108,12 @@ export function useActiveModuleGroups(enabled = true) {
                     url: "/team-allocation",
                     icon: "users",
                     displayOrder: 1,
-                    requiredPermission: "PEO_TEAM_ALLOCATE",
+                    requiredPermission: canAccessByPermission(
+                        "PEO_TEAM_ALLOCATE",
+                        hasPermission,
+                    )
+                        ? "PEO_TEAM_ALLOCATE"
+                        : "PRJ_WORKSPACE_MANAGE",
                     isActive: true,
                 };
                 if (moduleGroup) {

@@ -23,6 +23,7 @@ export interface RouteConfig {
   path: string;
   component: ComponentType<any>;
   requiredPermission?: string;
+  requiredPermissions?: string[];
   isPublic?: boolean;
   isModuleDriven?: boolean;
 }
@@ -58,7 +59,7 @@ export const routes: RouteConfig[] = [
   {
     path: "/team-allocation/classes/:classId",
     component: TeamAllocationPage,
-    requiredPermission: "PEO_TEAM_ALLOCATE",
+    requiredPermissions: ["PEO_TEAM_ALLOCATE", "PRJ_WORKSPACE_MANAGE"],
   },
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
   { path: "/student/exams", component: StudentExamList,requiredPermission: "EXAM_READ", isModuleDriven: true },

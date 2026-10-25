@@ -42,7 +42,11 @@ export function Toolbar({
   // Browse mode hides the regular toolbar actions; a single browse action
   // (e.g. "Create") can still be rendered on the right hand side.
   const rightSlot = showActions ? (
-    <ToolbarActions table={table} headerActions={headerActions} />
+    <ToolbarActions
+      table={table}
+      headerActions={headerActions}
+      hideCreate={hideCreate}
+    />
   ) : browseActions ? (
     <div className="flex justify-end items-center gap-2 w-full">{browseActions}</div>
   ) : null;
@@ -88,13 +92,6 @@ export function Toolbar({
         )}
       </div>
 
-      {showActions && (
-        <ToolbarActions
-          table={table}
-          headerActions={headerActions}
-          hideCreate={hideCreate}
-        />
-      )}
       {rightSlot}
     </div>
   );

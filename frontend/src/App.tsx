@@ -68,7 +68,10 @@ function AppRoutes() {
                         key={index}
                         path={route.path}
                         element={
-                            <ProtectedRoute requiredPermission={route.requiredPermission}>
+                            <ProtectedRoute
+                                requiredPermission={route.requiredPermission}
+                                requiredPermissions={route.requiredPermissions}
+                            >
                                 <Component />
                             </ProtectedRoute>
                         }
