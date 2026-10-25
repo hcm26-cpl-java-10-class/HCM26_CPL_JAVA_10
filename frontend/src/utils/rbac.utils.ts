@@ -117,19 +117,6 @@ export const resolveEffectivePermissions = (
 ): string[] => {
   const role = normalizeRole(activeRole);
 
-  if (role && rolePermissions[role]?.length) {
-    return uniquePermissions(rolePermissions[role]);
-  }
-
-  if (role === STUDENT_ROLE) {
-    return uniquePermissions(
-      allPermissions.filter(
-        (permission) =>
-          permission.endsWith("_READ") || permission === "ENROLL_COURSE",
-      ),
-    );
-  }
-
   if (role === TEACHER_ROLE) {
     const teacherDefaults = new Set([
       "MENU_READ",
@@ -143,8 +130,22 @@ export const resolveEffectivePermissions = (
       "EXAM_DELETE",
     ]);
 
+    return uniquePermissions([
+      ...(rolePermissions[role] ?? []),
+      ...allPermissions.filter((permission) => teacherDefaults.has(permission)),
+    ]);
+  }
+
+  if (role && rolePermissions[role]?.length) {
+    return uniquePermissions(rolePermissions[role]);
+  }
+
+  if (role === STUDENT_ROLE) {
     return uniquePermissions(
-      allPermissions.filter((permission) => teacherDefaults.has(permission)),
+      allPermissions.filter(
+        (permission) =>
+          permission.endsWith("_READ") || permission === "ENROLL_COURSE",
+      ),
     );
   }
 

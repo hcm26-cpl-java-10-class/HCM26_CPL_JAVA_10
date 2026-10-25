@@ -9,7 +9,7 @@ export type FieldType =
   | "boolean"
   | "relation"
   | "dynamic"
-    |"datetime";
+  | "datetime";
 
 export type DynamicValueFieldType = Exclude<
   FieldType,
@@ -99,6 +99,8 @@ export interface FieldSchema {
   expandable?: boolean;
 
   renderExpanded?: (value: any, row: any) => React.ReactNode;
+
+  renderCell?: (value: any, row: any) => React.ReactNode;
 
   /** Value used when creating a new record (defaults to "" / false). */
   defaultValue?: any;
