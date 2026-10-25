@@ -70,7 +70,7 @@ public class UnassignedClassMemberService {
                 .orElseThrow(() ->
                         new ResourceNotFoundException("TrainingClass", "id", classId));
 
-        scopeAuthorizationService.assertCanManageClass(authentication, trainingClass);
+        scopeAuthorizationService.assertCanManageTeamMentor(authentication, trainingClass);
 
         Set<Long> assignedMemberIds = sessionId == null
                 ? Set.of()

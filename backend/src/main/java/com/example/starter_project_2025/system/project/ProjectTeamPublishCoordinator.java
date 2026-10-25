@@ -120,7 +120,8 @@ public class ProjectTeamPublishCoordinator {
             List<PublishTeamsResponse.FailedItem> failed = new ArrayList<>();
             for (Long teamId : request.teamIds()) {
                 try {
-                    publishItemService.publish(sessionId, teamId, actorId);
+                    publishItemService.publish(
+                            sessionId, teamId, actorId, authentication);
                     succeeded.add(teamId);
                 } catch (StudentAlreadyAssignedException conflict) {
                     failed.add(new PublishTeamsResponse.FailedItem(

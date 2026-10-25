@@ -14,12 +14,13 @@ public record BatchSaveDraftResponse(
             ProjectTeamStatus status,
             Long assignedMentorId,
             String assignedMentorName,
+            Long version,
             List<Long> memberIds,
             List<MemberResponse> members
     ) {
     }
 
-    public record MemberResponse(Long memberId, String fullName) {
+    public record MemberResponse(Long memberId, String fullName, String role) {
     }
 
     public record DraftWarning(

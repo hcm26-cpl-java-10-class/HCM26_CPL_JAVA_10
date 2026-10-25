@@ -31,7 +31,7 @@ public class TrainingClassQueryController {
     private final ExportService exportService;
 
     @GetMapping
-    @PreAuthorize("hasAuthority('PEO_TEAM_ALLOCATE')")
+    @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
     public Page<TrainingClassListItem> getManageableClasses(
             @PageableDefault(size = 10) Pageable pageable,
             @RequestParam(required = false) String search,

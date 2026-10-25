@@ -95,7 +95,7 @@ public class TeamAllocationSessionService {
         TrainingClass trainingClass = trainingClassRepository.findById(classId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "TrainingClass", "id", classId));
-        scopeAuthorizationService.assertCanManageClass(authentication, trainingClass);
+        scopeAuthorizationService.assertCanManageTeamMentor(authentication, trainingClass);
         return sessionRepository.findAllByTrainingClass_IdOrderByCreatedAtDesc(classId)
                 .stream()
                 .map(AllocationSessionResponse::from)

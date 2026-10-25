@@ -9,6 +9,8 @@ import com.example.starter_project_2025.system.project.trainingclass.ClassMember
 import com.example.starter_project_2025.system.project.trainingclass.ScopeAuthorizationService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -38,6 +40,7 @@ public class ProjectTeamDraftService {
     private final ProjectTeamOutboxRepository outboxRepository;
     private final ObjectMapper objectMapper;
     private final ProjectTeamMentorService teamMentorService;
+    private final EntityManager entityManager;
 
     @Transactional
     public BatchSaveDraftResponse saveBatch(
@@ -253,6 +256,8 @@ public class ProjectTeamDraftService {
                                 member.getClassMember().getId(), member.getRole()))
                         .toList()));
 
+        entityManager.lock(team, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
+        entityManager.flush();
         team.setTeamName(request.teamName().trim());
         team.setAssignedMentorId(request.assignedMentorId());
         teamRepository.saveAndFlush(team);
@@ -365,7 +370,8 @@ public class ProjectTeamDraftService {
                     ignored -> new ArrayList<>()
             ).add(new BatchSaveDraftResponse.MemberResponse(
                     member.getClassMember().getId(),
-                    member.getClassMember().getUser().getFullName()
+                    member.getClassMember().getUser().getFullName(),
+                    member.getRole()
             ));
         }
 
@@ -376,6 +382,7 @@ public class ProjectTeamDraftService {
                         team.getStatus(),
                         team.getAssignedMentorId(),
                         teamMentorService.getMentorName(team.getAssignedMentorId()),
+                        team.getVersion(),
                         memberIdsByTeam.getOrDefault(team.getId(), List.of()),
                         membersByTeam.getOrDefault(team.getId(), List.of())
                 ))

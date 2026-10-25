@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.MDC;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,13 +26,19 @@ public class TeamPublishItemService {
     private final ProjectTeamOutboxRepository outboxRepository;
     private final ObjectMapper objectMapper;
     private final ProjectTeamMentorService teamMentorService;
+    private final ProjectTeamMemberHistoryService historyService;
 
     @Transactional(noRollbackFor = {
             StudentAlreadyAssignedException.class,
             ResourceNotFoundException.class,
             TeamPublishValidationException.class
     })
-    public void publish(Long sessionId, Long teamId, Long actorId) {
+    public void publish(
+            Long sessionId,
+            Long teamId,
+            Long actorId,
+            Authentication authentication
+    ) {
         TeamAllocationSession session = sessionRepository.findByIdForUpdate(sessionId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "TeamAllocationSession", "id", sessionId));
@@ -53,6 +60,11 @@ public class TeamPublishItemService {
         if (assignments.isEmpty()) {
             throw new TeamPublishValidationException(
                     "A team without members cannot be published");
+        }
+        if (assignments.stream().anyMatch(assignment ->
+                !ProjectMemberRole.isValid(assignment.getRole()))) {
+            throw new TeamPublishValidationException(
+                    "Mỗi thành viên cần được gán một vai trò hợp lệ trước khi publish");
         }
 
         List<Long> memberIds = assignments.stream()
@@ -87,6 +99,18 @@ public class TeamPublishItemService {
         team.setAssignedMentorId(assignedMentorId);
         team.setStatus(ProjectTeamStatus.ACTIVE);
         teamRepository.saveAndFlush(team);
+        for (ProjectMember assignment : assignments) {
+            historyService.record(
+                    session,
+                    assignment.getClassMember(),
+                    null,
+                    team,
+                    null,
+                    assignment.getRole(),
+                    "MEMBER_ADDED",
+                    null,
+                    authentication);
+        }
         String afterState = serialize(snapshot(team, assignments, ProjectTeamStatus.ACTIVE));
 
         String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
