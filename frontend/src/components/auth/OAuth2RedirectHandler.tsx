@@ -4,7 +4,7 @@ import { useDispatch } from "react-redux";
 import { jwtDecode } from "jwt-decode";
 import { setLogin } from "@/store/slices/auth/authSlice";
 import type { LoginResponse } from "@/types";
-import { getHomePathByRole, normalizeAuthRolePayload } from "@/utils/rbac.utils";
+import { getHomePathByRole, normalizeAuthRolePayload, resolveEffectivePermissions } from "@/utils/rbac.utils";
 
 export const OAuth2RedirectHandler = () => {
     const [searchParams] = useSearchParams();
@@ -53,7 +53,7 @@ export const OAuth2RedirectHandler = () => {
             };
 
             dispatch(setLogin(userData));
-            navigate(getHomePathByRole(userData.role), { replace: true });
+            navigate(getHomePathByRole(userData.role, resolveEffectivePermissions(userData.role, userData.rolePermissions, userData.permissions)), { replace: true });
         } catch {
             navigate("/login?error=google_token_invalid", { replace: true });
         }

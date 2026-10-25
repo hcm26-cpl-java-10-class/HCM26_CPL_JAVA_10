@@ -39,7 +39,7 @@ const BACKLOGS_URL = "/backlogs";
 export function StudentNavbar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { activeRole, hasPermission } = usePermissions();
+  const { activeRole,  effectivePermissions ,hasPermission} = usePermissions();
   const { data: moduleGroups = [] } = useActiveModuleGroups();
   const pathname = normalizePath(location.pathname);
 
@@ -126,7 +126,7 @@ export function StudentNavbar() {
         <Button
           type="button"
           variant="ghost"
-          onClick={() => navigate(getHomePathByRole(activeRole))}
+          onClick={() => navigate(getHomePathByRole(activeRole, effectivePermissions))}
           className="flex h-auto min-w-0 items-center justify-start gap-3 px-0 hover:bg-transparent"
         >
           <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-blue-800 text-sm font-semibold text-white">

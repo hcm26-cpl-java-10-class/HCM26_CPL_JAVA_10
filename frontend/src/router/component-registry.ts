@@ -22,6 +22,10 @@ import { RubricListPage } from "@/pages/management/project/rubric/pages/RubricLi
 import { RubricCreatePage } from "@/pages/management/project/rubric/pages/RubricCreatePage";
 import { RubricDetailPage } from "@/pages/management/project/rubric/pages/RubricDetailPage";
 import { RubricEditPage } from "@/pages/management/project/rubric/pages/RubricEditPage";
+import WorkspaceCandidatePage from "@/pages/management/workspace/WorkspaceCandidatePage";
+import WorkspaceDetailPage from "@/pages/management/workspace/WorkspaceDetailPage";
+import { createElement} from "react";
+import { Navigate } from "react-router-dom";
 import TaskManagementPage from "@/pages/management/task";
 import { TaskFormPage } from "@/pages/management/task/pages/TaskFormPage";
 import { TaskDetailPage } from "@/pages/management/task/pages/TaskDetailPage";
@@ -77,6 +81,10 @@ export const routes: RouteConfig[] = [
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
   { path: "/student/exams", component: StudentExamList,requiredPermission: "EXAM_READ", isModuleDriven: true },
   { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
+  { path: "/workspaces/candidates", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
+  { path: "/management/workspaces/candidates", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
+  { path: "/management/workspaces/:id", component: WorkspaceDetailPage, requiredPermission: "WORKSPACE_READ" },
+  { path: "/management/project-teams", component: () => createElement(Navigate, { to: "/management/workspaces/candidates", replace: true }), requiredPermission: "WORKSPACE_READ" },
   {
     path: "/projects/:projectId/milestones",
     component: MilestoneListPage,

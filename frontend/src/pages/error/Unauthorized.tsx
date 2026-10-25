@@ -11,9 +11,9 @@ interface UnauthorizedProps {
 export const Unauthorized = ({ isAuthenticated }: UnauthorizedProps) => {
   const navigate = useNavigate();
   const { isAuthenticated: authState, role } = useSelector((state: RootState) => state.auth);
-  const { activeRole } = usePermissions();
+  const { activeRole, effectivePermissions } = usePermissions();
   const resolvedAuth = isAuthenticated ?? authState;
-  const homePath = getHomePathByRole(activeRole ?? role);
+  const homePath = getHomePathByRole(activeRole ?? role, effectivePermissions);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 text-center">

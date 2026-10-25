@@ -45,7 +45,7 @@ export function useActiveModuleGroups(enabled = true) {
 
             const groups = groupPage.content ?? groupPage.items ?? [];
             const modules = (modulePage.content ?? modulePage.items ?? []).filter((module) =>
-                canAccessByPermission(module.requiredPermission, hasPermission),
+                !["/management/project-templates", "/project-templates", "/management/project-teams"].some(path => (module.url ?? "").startsWith(path)) && canAccessByPermission(module.requiredPermission, hasPermission),
             );
 
             const groupedModules = modules.reduce<Record<string, SidebarModule[]>>((acc, module) => {
@@ -57,7 +57,8 @@ export function useActiveModuleGroups(enabled = true) {
 
                 acc[module.moduleGroupId].push({
                     ...module,
-                    name: module.title,
+                    title: ["/management/workspaces/candidates", "/workspaces/candidates"].includes(module.url ?? "") ? "Workspace" : module.title,
+                    name: ["/management/workspaces/candidates", "/workspaces/candidates"].includes(module.url ?? "") ? "Workspace" : module.title,
                 });
                 return acc;
             }, {});
@@ -183,6 +184,24 @@ export function useActiveModuleGroups(enabled = true) {
                 if (!alreadyExists) {
                     groupedModules[projectGroupId].push(projectModule);
                 }
+            }
+
+            // Ensure Workspace Candidate menu is available for testing even when backend menu table is not yet updated
+            const hasWorkspaceMenu = modules.some(
+                (m) => m.url === "/management/workspaces/candidates" || m.url === "/workspaces/candidates",
+            );
+            if (!hasWorkspaceMenu && canAccessByPermission("WORKSPACE_READ", hasPermission)) {
+                groupedModules[projectGroupId].push({
+                    id: 99998,
+                    moduleGroupId: projectGroupId,
+                    title: "Workspace",
+                    name: "Workspace",
+                    url: "/management/workspaces/candidates",
+                    icon: "folder",
+                    displayOrder: 999,
+                    requiredPermission: "WORKSPACE_READ",
+                    isActive: true,
+                });
             }
 
             return groups
