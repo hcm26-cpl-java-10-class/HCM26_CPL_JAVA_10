@@ -6,10 +6,21 @@ import lombok.Getter;
 @Getter
 public class TaskConflictException extends RuntimeException {
 
+    public static final String STALE_MESSAGE =
+            "This task was changed by another member. Please reload the page.";
+
     private final Long currentVersion;
     private final TaskStatus currentStatus;
 
-    public TaskConflictException(String message, Long currentVersion, TaskStatus currentStatus) {
+    public TaskConflictException(String message) {
+        this(message, null, null);
+    }
+
+    public TaskConflictException(
+            String message,
+            Long currentVersion,
+            TaskStatus currentStatus
+    ) {
         super(message);
         this.currentVersion = currentVersion;
         this.currentStatus = currentStatus;

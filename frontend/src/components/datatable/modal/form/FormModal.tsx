@@ -90,6 +90,8 @@ const resolveDefaultValue = (field: FieldSchema) => {
   return "";
 };
 
+const EMPTY_FIELD_ERRORS: Record<string, string[]> = {};
+
 interface FormModalProps {
   open: boolean;
   onClose: (open: boolean) => void;
@@ -111,16 +113,35 @@ export function FormModal({
   title = "Form",
   isSubmitting = false,
   relationOptions = {},
-  fieldErrors = {},
+  fieldErrors,
 }: FormModalProps) {
+  const serverErrors = fieldErrors ?? EMPTY_FIELD_ERRORS;
+
   const [form, setForm] = useState<Record<string, any>>({});
   const [localErrors, setLocalErrors] = useState<Record<string, string[]>>({});
+  /**
+   * Server-side errors (422 / 404 / 409) that the user already reacted to: once
+   * a field is edited again the stale highlight is dropped, so a Milestone that
+   * was rejected as "no longer existing" stops being red as soon as another one
+   * is picked - while the rest of the form is preserved.
+   */
+  const [touchedServerErrorFields, setTouchedServerErrorFields] = useState<
+    Set<string>
+  >(new Set());
+
+  useEffect(() => {
+    setTouchedServerErrorFields(new Set());
+  }, [serverErrors]);
+
+  /** `initial` is only given when an existing record is edited. */
+  const isEditMode = Boolean(initial);
 
   const editableFields: FieldSchema[] = schema.fields.filter(
     (f: FieldSchema) =>
       f.editable !== false &&
       f.type !== "dynamic" &&
-      !f.dynamicChild
+      !f.dynamicChild &&
+      !(isEditMode ? f.hideOnEdit : f.hideOnCreate)
   );
   const activeLayout = sideMenuFormLayouts[schema.entityName as string];
   const editableFieldMap = new Map(
@@ -154,6 +175,12 @@ export function FormModal({
 
   const updateField = (name: string, value: any) => {
     setForm((prev) => ({ ...prev, [name]: value }));
+    setTouchedServerErrorFields((prev) => {
+      if (prev.has(name)) return prev;
+      const next = new Set(prev);
+      next.add(name);
+      return next;
+    });
     setLocalErrors((prev) => {
       if (!prev[name]) return prev;
       const next = { ...prev };
@@ -219,28 +246,67 @@ export function FormModal({
   };
 
   const mergedErrors: Record<string, string[]> = {
-    ...fieldErrors,
+    ...serverErrors,
     ...localErrors,
   };
+
+  touchedServerErrorFields.forEach((fieldName) => {
+    if (!localErrors[fieldName]) {
+      delete mergedErrors[fieldName];
+    }
+  });
 
   const hasError = (fieldName: string) =>
     mergedErrors[fieldName] && mergedErrors[fieldName].length > 0;
 
-  const renderField = (field: FieldSchema) => (
-    <FormFieldRenderer
-      key={field.name}
-      field={field}
-      value={form[field.name]}
-      errorClass={
-        hasError(field.name)
-          ? "border-destructive focus-visible:ring-destructive"
-          : ""
-      }
-      fieldErrors={mergedErrors[field.name]}
-      relationOptions={relationOptions}
-      onChange={updateField}
-    />
-  );
+  /**
+   * A field can offer different option lists while creating / editing (e.g. a
+   * status that is fixed on create). The current value is kept in the list so a
+   * record whose stored value is no longer selectable still displays it.
+   */
+  const resolveFieldOptions = (field: FieldSchema) => {
+    const modeOptions = isEditMode ? field.editOptions : field.createOptions;
+
+    if (!modeOptions) {
+      return null;
+    }
+
+    const currentOption = (field.options ?? []).find(
+      (option) => String(option.value) === String(form[field.name]),
+    );
+
+    if (
+      currentOption &&
+      !modeOptions.some(
+        (option) => String(option.value) === String(currentOption.value),
+      )
+    ) {
+      return [currentOption, ...modeOptions];
+    }
+
+    return modeOptions;
+  };
+
+  const renderField = (field: FieldSchema) => {
+    const modeOptions = resolveFieldOptions(field);
+    const resolvedField = modeOptions ? { ...field, options: modeOptions } : field;
+
+    return (
+      <FormFieldRenderer
+        key={field.name}
+        field={resolvedField}
+        value={form[field.name]}
+        errorClass={
+          hasError(field.name)
+            ? "border-destructive focus-visible:ring-destructive"
+            : ""
+        }
+        fieldErrors={mergedErrors[field.name]}
+        relationOptions={relationOptions}
+        onChange={updateField}
+      />
+    );
+  };
 
   const configuredFieldNames = new Set(
     activeLayout?.sections.flatMap((section) =>

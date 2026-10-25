@@ -1,0 +1,61 @@
+import type { EntitySchema } from "@/types";
+import { taskPriorityOptions, taskStatusOptions } from "./task-form.utils";
+
+export const taskTableSchema: EntitySchema = {
+  entityName: "task",
+  idField: "id",
+  fields: [
+    { name: "id", label: "Task ID", type: "text", sortable: true, width: 130 },
+    {
+      name: "title",
+      label: "Task title",
+      type: "text",
+      sortable: true,
+      hideable: false,
+      bold: true,
+      width: 320,
+      minWidth: 180,
+    },
+    {
+      name: "status",
+      label: "Status",
+      type: "select",
+      sortable: true,
+      filterable: true,
+      filterType: "select",
+      filterMultiple: false,
+      options: [...taskStatusOptions],
+      filterOptions: [...taskStatusOptions],
+      width: 150,
+    },
+    { name: "assigneeProjectMemberId", label: "Assignee", type: "text", width: 180 },
+    {
+      name: "estimatedHours",
+      label: "Estimate (hours)",
+      type: "number",
+      sortable: true,
+      width: 150,
+    },
+    {
+      name: "priority",
+      label: "Priority",
+      type: "select",
+      sortable: true,
+      filterable: true,
+      filterType: "select",
+      filterMultiple: false,
+      options: [...taskPriorityOptions],
+      filterOptions: [...taskPriorityOptions],
+      width: 130,
+    },
+    { name: "tags", label: "Tags", type: "text", width: 200 },
+    {
+      name: "updatedAt",
+      label: "Updated at",
+      type: "date",
+      sortable: true,
+      visible: false,
+      width: 180,
+    },
+  ],
+};

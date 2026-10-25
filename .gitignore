@@ -27,3 +27,5 @@ docker/.env
 /backend/compile.log
 /backend/compile_error.txt
 /test.txt
+/docs/UFR-PRJ-004-*.md
+/.playwright-mcp/

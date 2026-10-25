@@ -37,6 +37,7 @@ public class RoleDataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
+        ensurePermission("PEO", "TEAM_ALLOCATE");
         ensurePermission("EXAM", "TAKE");
         List<Permission> allPermissions = permissionRepository.findAll();
 
@@ -74,6 +75,13 @@ public class RoleDataInitializer implements CommandLineRunner {
                 )
         );
 
+        ensureAllocationPermissionForRole(
+                "PROGRAM_MANAGER", "Program manager with team allocation access");
+        ensureAllocationPermissionForRole(
+                "MENTOR", "Mentor with team allocation access");
+        ensureAllocationPermissionForRole(
+                "CLASS_ADMIN", "Class administrator with team allocation access");
+
         log.info("Ensured roles and permission mappings: ADMIN, STUDENT, TEACHER.");
     }
 
@@ -104,5 +112,23 @@ public class RoleDataInitializer implements CommandLineRunner {
         permissionRepository.save(Permission.builder()
                 .name(name).resource(resource).action(action)
                 .description("Manually defined permission").build());
+    }
+    private void ensureAllocationPermissionForRole(String roleName, String description) {
+        Permission allocationPermission = permissionRepository.findByName("PEO_TEAM_ALLOCATE")
+                .orElseThrow(() -> new IllegalStateException(
+                        "PEO_TEAM_ALLOCATE permission was not initialized"));
+        Permission classReadPermission = permissionRepository.findByName("TRAINING_CLASS_READ")
+                .orElseThrow(() -> new IllegalStateException(
+                        "TRAINING_CLASS_READ permission was not initialized"));
+        Role role = roleRepository.findByName(roleName).orElseGet(() -> {
+            Role newRole = new Role();
+            newRole.setName(roleName);
+            newRole.setDescription(description);
+            newRole.setIsActive(true);
+            return newRole;
+        });
+        role.getPermissions().add(allocationPermission);
+        role.getPermissions().add(classReadPermission);
+        roleRepository.save(role);
     }
 }

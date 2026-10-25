@@ -13,7 +13,7 @@ import lombok.experimental.SuperBuilder;
 @NoArgsConstructor
 @AllArgsConstructor
 @Table(
-        name = "task",
+        name = "sprint_task",
         uniqueConstraints = @UniqueConstraint(
                 name = "uk_task_project_code",
                 columnNames = {"project_id", "task_code"}

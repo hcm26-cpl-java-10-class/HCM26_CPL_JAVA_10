@@ -8,8 +8,7 @@ public class TaskValidationException extends RuntimeException {
     private final Map<String, List<String>> errors;
 
     public TaskValidationException(String field, String message) {
-        super(message);
-        this.errors = Map.of(field, List.of(message));
+        this(Map.of(field, List.of(message)));
     }
 
     public TaskValidationException(Map<String, List<String>> errors) {

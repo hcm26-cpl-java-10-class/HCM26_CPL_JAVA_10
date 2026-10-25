@@ -1,15 +1,9 @@
 package com.example.starter_project_2025.system.project;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
-import jakarta.persistence.AttributeOverride;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
+import com.example.starter_project_2025.system.project.trainingclass.ClassMember;
+import jakarta.persistence.*;
 import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -20,26 +14,25 @@ import lombok.experimental.SuperBuilder;
 @Table(
         name = "project_members",
         uniqueConstraints = @UniqueConstraint(
-                name = "uk_project_member_project_user_role",
-                columnNames = {"project_id", "user_id", "project_role"}
+                name = "uk_project_member_team_member",
+                columnNames = {"team_id", "member_id"}
         )
 )
 @Getter
 @Setter
 @SuperBuilder
 @NoArgsConstructor
-@AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-@AttributeOverride(name = "id", column = @Column(name = "project_member_id"))
 public class ProjectMember extends BaseEntity {
 
-    @Column(name = "project_id", nullable = false)
-    Long projectId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "team_id", nullable = false)
+    ProjectTeam team;
 
-    @Column(name = "user_id", nullable = false)
-    Long userId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "member_id", nullable = false)
+    ClassMember classMember;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "project_role", nullable = false, length = 30)
-    ProjectRole projectRole;
+    @Column(name = "member_role", length = 30)
+    String role;
 }

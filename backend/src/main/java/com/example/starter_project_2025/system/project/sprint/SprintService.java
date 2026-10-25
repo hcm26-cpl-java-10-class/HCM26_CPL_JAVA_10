@@ -17,4 +17,16 @@ public interface SprintService
      * Flattened rows for the Excel/CSV export.
      */
     List<SprintExportRow> getExportRows();
+
+    /**
+     * Backlog board of a sprint: sprint header plus the ordered list of its
+     * Sprint Backlog items (UFR-PRJ-003-03).
+     */
+    SprintPlanningDTO getPlanning(Long sprintId);
+
+    /**
+     * Persists the scope confirmed on the backlog board in one transaction
+     * (UFR-PRJ-003-03, AC01 / AC02).
+     */
+    SprintPlanningDTO saveSprintBacklog(Long sprintId, SprintBacklogPlanDTO request);
 }

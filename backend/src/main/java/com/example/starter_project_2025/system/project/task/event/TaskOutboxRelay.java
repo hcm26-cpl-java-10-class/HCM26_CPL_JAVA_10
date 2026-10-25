@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class TaskOutboxRelay {
 
-    TaskOutboxRepository outboxRepository;
+    BoardTaskOutboxRepository outboxRepository;
 
     @Scheduled(
             fixedDelayString = "${app.task.outbox.relay-ms:10000}",
@@ -24,7 +24,7 @@ public class TaskOutboxRelay {
     )
     @Transactional
     public void publishPending() {
-        for (TaskOutboxEvent event : outboxRepository.findTop50ByStatusOrderByIdAsc(TaskOutboxStatus.PENDING)) {
+        for (BoardTaskOutboxEvent event : outboxRepository.findTop50ByStatusOrderByIdAsc(TaskOutboxStatus.PENDING)) {
             log.info("Task event published eventId={} eventType={} taskId={} correlationId={}",
                     event.getEventId(),
                     event.getEventType(),

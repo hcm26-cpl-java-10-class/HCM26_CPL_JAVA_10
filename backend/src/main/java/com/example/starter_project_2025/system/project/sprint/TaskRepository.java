@@ -7,10 +7,12 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
 
+@Repository("sprintTaskRepository")
 public interface TaskRepository extends BaseCrudRepository<Task, Long> {
 
     Optional<Task> findByProjectIdAndCode(Long projectId, String code);

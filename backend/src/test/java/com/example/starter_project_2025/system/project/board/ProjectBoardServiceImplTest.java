@@ -3,8 +3,8 @@ package com.example.starter_project_2025.system.project.board;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.project.Project;
-import com.example.starter_project_2025.system.project.ProjectMember;
-import com.example.starter_project_2025.system.project.ProjectMemberRepository;
+import com.example.starter_project_2025.system.project.BoardProjectMember;
+import com.example.starter_project_2025.system.project.BoardProjectMemberRepository;
 import com.example.starter_project_2025.system.project.ProjectRepository;
 import com.example.starter_project_2025.system.project.ProjectRole;
 import com.example.starter_project_2025.system.project.activity.ProjectActivityRepository;
@@ -49,7 +49,7 @@ class ProjectBoardServiceImplTest {
     ProjectRepository projectRepository;
 
     @Mock
-    ProjectMemberRepository projectMemberRepository;
+    BoardProjectMemberRepository projectMemberRepository;
 
     @Mock
     SprintRepository sprintRepository;
@@ -167,8 +167,8 @@ class ProjectBoardServiceImplTest {
                 eq(7L),
                 eq(List.of(ProjectRole.MEMBER, ProjectRole.TEAM_LEAD, ProjectRole.MENTOR))
         )).thenReturn(List.of(
-                ProjectMember.builder().projectId(11L).build(),
-                ProjectMember.builder().projectId(11L).build()
+                BoardProjectMember.builder().projectId(11L).build(),
+                BoardProjectMember.builder().projectId(11L).build()
         ));
         when(projectRepository.findAllByTenantIdAndIdInAndIsActiveTrueOrderByNameAsc(3L, List.of(11L)))
                 .thenReturn(List.of(project));

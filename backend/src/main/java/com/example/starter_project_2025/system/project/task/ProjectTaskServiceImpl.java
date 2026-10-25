@@ -3,8 +3,8 @@ package com.example.starter_project_2025.system.project.task;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.project.Project;
-import com.example.starter_project_2025.system.project.ProjectMember;
-import com.example.starter_project_2025.system.project.ProjectMemberRepository;
+import com.example.starter_project_2025.system.project.BoardProjectMember;
+import com.example.starter_project_2025.system.project.BoardProjectMemberRepository;
 import com.example.starter_project_2025.system.project.ProjectRepository;
 import com.example.starter_project_2025.system.project.ProjectRole;
 import com.example.starter_project_2025.system.project.activity.ProjectActivityLog;
@@ -59,7 +59,7 @@ public class ProjectTaskServiceImpl implements ProjectTaskService {
     );
 
     ProjectRepository projectRepository;
-    ProjectMemberRepository projectMemberRepository;
+    BoardProjectMemberRepository projectMemberRepository;
     SprintRepository sprintRepository;
     TaskRepository taskRepository;
     TenantRepository tenantRepository;
@@ -75,10 +75,10 @@ public class ProjectTaskServiceImpl implements ProjectTaskService {
         User actor = requireAuthenticatedActor();
         Project project = requireProjectScope(projectId, actor);
 
-        List<ProjectMember> members = projectMemberRepository
+        List<BoardProjectMember> members = projectMemberRepository
                 .findAllByProjectIdAndIsActiveTrueOrderByIdAsc(project.getId());
         Map<Long, User> usersById = userRepository.findAllById(
-                        members.stream().map(ProjectMember::getUserId).toList()
+                        members.stream().map(BoardProjectMember::getUserId).toList()
                 ).stream()
                 .filter(user -> Boolean.TRUE.equals(user.getIsActive()))
                 .collect(java.util.stream.Collectors.toMap(User::getId, user -> user));
@@ -103,7 +103,7 @@ public class ProjectTaskServiceImpl implements ProjectTaskService {
                 .filter(candidate -> projectId.equals(candidate.getProjectId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Sprint", "id", sprintId));
 
-        ProjectMember assigneeMember = resolveAssignee(projectId, request.assigneeProjectMemberId());
+        BoardProjectMember assigneeMember = resolveAssignee(projectId, request.assigneeProjectMemberId());
         User assignee = assigneeMember == null
                 ? null
                 : userRepository.findById(assigneeMember.getUserId())
@@ -412,7 +412,7 @@ try {
             task.setPriority(request.priority());
         }
         if (request.assigneeProjectMemberId() != null) {
-            ProjectMember assigneeMember = resolveAssignee(projectId, request.assigneeProjectMemberId());
+            BoardProjectMember assigneeMember = resolveAssignee(projectId, request.assigneeProjectMemberId());
             task.setAssigneeProjectMemberId(assigneeMember == null ? null : assigneeMember.getId());
         } else if (request.assigneeProjectMemberId() == null && request.title() != null) {
             // Explicit null to unassign
@@ -571,7 +571,7 @@ try {
 
         Long previousAssigneeId = task.getAssigneeProjectMemberId();
         if (request.assigneeProjectMemberId() != null) {
-            ProjectMember assigneeMember = resolveAssignee(projectId, request.assigneeProjectMemberId());
+            BoardProjectMember assigneeMember = resolveAssignee(projectId, request.assigneeProjectMemberId());
             task.setAssigneeProjectMemberId(assigneeMember == null ? null : assigneeMember.getId());
         } else {
             task.setAssigneeProjectMemberId(null);
@@ -674,16 +674,16 @@ try {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         if (memberIds.isEmpty()) return Map.of();
 
-        List<ProjectMember> members = projectMemberRepository
+        List<BoardProjectMember> members = projectMemberRepository
                 .findAllByIdInAndProjectIdAndIsActiveTrue(memberIds, projectId);
         Map<Long, User> usersById = new HashMap<>();
-        userRepository.findAllById(members.stream().map(ProjectMember::getUserId).toList())
+        userRepository.findAllById(members.stream().map(BoardProjectMember::getUserId).toList())
                 .stream()
                 .filter(user -> Boolean.TRUE.equals(user.getIsActive()))
                 .forEach(user -> usersById.put(user.getId(), user));
 
         Map<Long, TaskCardResponse.AssigneeResponse> result = new HashMap<>();
-        for (ProjectMember member : members) {
+        for (BoardProjectMember member : members) {
             User user = usersById.get(member.getUserId());
             if (user != null) {
                 result.put(member.getId(), new TaskCardResponse.AssigneeResponse(member.getId(), user.getFullName()));
@@ -764,7 +764,7 @@ try {
         return project;
     }
 
-    private ProjectMember resolveAssignee(Long projectId, Long memberId) {
+    private BoardProjectMember resolveAssignee(Long projectId, Long memberId) {
         if (memberId == null) return null;
         return projectMemberRepository.findByIdAndProjectIdAndIsActiveTrue(memberId, projectId)
                 .orElseThrow(() -> new TaskValidationException(

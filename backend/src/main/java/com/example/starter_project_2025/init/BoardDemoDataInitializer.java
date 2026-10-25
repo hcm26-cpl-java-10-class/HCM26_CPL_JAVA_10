@@ -1,8 +1,8 @@
 package com.example.starter_project_2025.init;
 
 import com.example.starter_project_2025.system.project.Project;
-import com.example.starter_project_2025.system.project.ProjectMember;
-import com.example.starter_project_2025.system.project.ProjectMemberRepository;
+import com.example.starter_project_2025.system.project.BoardProjectMember;
+import com.example.starter_project_2025.system.project.BoardProjectMemberRepository;
 import com.example.starter_project_2025.system.project.ProjectRepository;
 import com.example.starter_project_2025.system.project.ProjectRole;
 import com.example.starter_project_2025.system.project.ProjectStatus;
@@ -46,7 +46,7 @@ public class BoardDemoDataInitializer implements CommandLineRunner {
 
     TenantRepository tenantRepository;
     ProjectRepository projectRepository;
-    ProjectMemberRepository projectMemberRepository;
+    BoardProjectMemberRepository projectMemberRepository;
     SprintRepository sprintRepository;
     TaskRepository taskRepository;
     ProjectActivityRepository projectActivityRepository;
@@ -89,7 +89,7 @@ public class BoardDemoDataInitializer implements CommandLineRunner {
                 ProjectStatus.ACTIVE
         );
 
-        ProjectMember studentMembership = upsertMembership(
+        BoardProjectMember studentMembership = upsertMembership(
                 project.getId(), student.getId(), ProjectRole.MEMBER
         );
         upsertMembership(project.getId(), teacher.getId(), ProjectRole.MENTOR);
@@ -189,11 +189,11 @@ public class BoardDemoDataInitializer implements CommandLineRunner {
                 ));
     }
 
-    private ProjectMember upsertMembership(Long projectId, Long userId, ProjectRole role) {
-        ProjectMember member = projectMemberRepository.findByProjectIdAndUserIdAndProjectRole(
+    private BoardProjectMember upsertMembership(Long projectId, Long userId, ProjectRole role) {
+        BoardProjectMember member = projectMemberRepository.findByProjectIdAndUserIdAndProjectRole(
                         projectId, userId, role
                 )
-                .orElseGet(ProjectMember::new);
+                .orElseGet(BoardProjectMember::new);
         member.setProjectId(projectId);
         member.setUserId(userId);
         member.setProjectRole(role);

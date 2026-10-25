@@ -1,35 +1,17 @@
 package com.example.starter_project_2025.system.project.task.event;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Index;
-import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
-import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import jakarta.persistence.*;
+import lombok.*;
 import lombok.experimental.FieldDefaults;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
-@Table(
-        name = "task_outbox_event",
-        uniqueConstraints = @UniqueConstraint(
-                name = "uk_task_outbox_dedupe",
-                columnNames = "dedupe_key"
-        ),
-        indexes = @Index(name = "idx_task_outbox_status", columnList = "status")
-)
+@Table(name = "task_outbox_event", uniqueConstraints = @UniqueConstraint(name = "uk_task_outbox_request",
+        columnNames = {"actor_id", "request_id"}),
+        indexes = @Index(name = "idx_task_outbox_status", columnList = "status"))
 @Getter
 @Setter
 @Builder
@@ -37,31 +19,33 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class TaskOutboxEvent {
-
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    UUID id;
 
-    @Column(name = "event_id", nullable = false, unique = true, length = 64)
-    String eventId;
-
-    @Column(name = "dedupe_key", nullable = false, length = 255)
-    String dedupeKey;
-
-    @Column(name = "aggregate_id", nullable = false)
-    Long aggregateId;
+    @Column(name = "task_id", nullable = false)
+    UUID taskId;
 
     @Column(name = "project_id", nullable = false)
-    Long projectId;
+    UUID projectId;
 
-    @Column(name = "event_type", nullable = false, length = 60)
+    @Column(name = "actor_id", nullable = false)
+    Long actorId;
+
+    @Column(name = "event_type", nullable = false, length = 40)
     String eventType;
 
-    @Column(nullable = false, columnDefinition = "TEXT")
-    String payload;
+    @Column(name = "request_id", nullable = false)
+    UUID requestId;
+
+    @Column(name = "request_hash", nullable = false, length = 64)
+    String requestHash;
 
     @Column(name = "correlation_id", nullable = false, length = 100)
     String correlationId;
+
+    @Column(nullable = false, columnDefinition = "TEXT")
+    String payload;
 
     @Builder.Default
     @Enumerated(EnumType.STRING)
