@@ -4,6 +4,7 @@ import {
     type Exam,
     type ExamAttemptSummary,
 } from '@/api/exam.api';
+import { formatScore } from '@/utils/examScore'; // NEW
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -118,9 +119,9 @@ function ExamCard({
                 </div>
                 <CardTitle className="pt-2 text-lg text-slate-900">{exam.title}</CardTitle>
                 <CardDescription>
-                    Total Points:{' '}
+                    Max Score:{' '}
                     <span className="font-medium text-slate-700">
-                        {attempt?.totalPoints ?? exam.totalPoints ?? 'Not updated'}
+                        {formatScore(attempt?.maxScore ?? exam.maxScore ?? 10)} {/* CHANGED: score scale instead of summed points */}
                     </span>
                 </CardDescription>
             </CardHeader>
@@ -128,16 +129,16 @@ function ExamCard({
             <CardContent className="flex-1">
                 {attempt?.status === 'PENDING_REVIEW' && (
                     <p className="text-sm text-amber-700">
-                        Provisional Objective Score: {attempt.objectiveScore ?? 0}/{attempt.totalPoints}.
+                        Provisional Score: {formatScore(attempt.objectiveScore ?? 0)}/{formatScore(attempt.maxScore ?? 10)} (ungraded essays count as 0).
                     </p>
                 )}
                 {attempt?.status === 'SUBMITTED' && (
                     <p className="text-sm text-emerald-700">
-                        Highest Score: {attempt.bestScore ?? attempt.finalScore ?? 0}/{attempt.totalPoints}.
+                        Highest Score: {formatScore(attempt.bestScore ?? attempt.finalScore ?? 0)}/{formatScore(attempt.maxScore ?? 10)}.
                     </p>
                 )}
                 {hasAttempts && attempt?.status !== 'SUBMITTED' && attempt?.bestScore != null && (
-                    <p className="text-sm text-emerald-700">Highest Score: {attempt.bestScore}/{attempt.totalPoints}.</p>
+                    <p className="text-sm text-emerald-700">Highest Score: {formatScore(attempt.bestScore)}/{formatScore(attempt.maxScore ?? 10)}.</p>
                 )}
                 {attempt && (
                     <p className="mt-2 text-sm text-slate-600">

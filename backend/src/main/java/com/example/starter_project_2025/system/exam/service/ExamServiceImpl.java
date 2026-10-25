@@ -173,13 +173,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		Exam exam = findExam(examId);
 		Set<Question> before = new LinkedHashSet<>(exam.getQuestions());
 		exam.getQuestions().removeIf(question -> question.getId().equals(questionId));
-		int remaining = totalPoints(exam.getQuestions());
-		if (exam.getPassScore() != null && remaining > 0 && exam.getPassScore() > remaining) {
-			ValidationContext context = new ValidationContext();
-			context.add("passScore", "Sau khi bỏ câu hỏi, tổng điểm (" + remaining
-					+ ") nhỏ hơn điểm đạt (" + exam.getPassScore() + "). Hãy hạ điểm đạt trước");
-			context.throwIfErrors();
-		}
+		// REMOVED: kiểm tra "tổng điểm các câu < điểm đạt" — điểm đạt giờ so với thang điểm của đề (maxScore), không phụ thuộc số câu
 		Exam saved = examRepository.save(exam);
 		deleteExamCopies(before, exam.getQuestions());
 		return examMapper.toResponse(saved);
@@ -210,12 +204,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		questionMapper.update(copy, request);
 		questionRepository.save(copy);
 
-		int total = totalPoints(exam.getQuestions());
-		if (exam.getPassScore() != null && total > 0 && exam.getPassScore() > total) {
-			context.add("points", "Sau khi đổi điểm, tổng điểm (" + total
-					+ ") nhỏ hơn điểm đạt (" + exam.getPassScore() + "). Hãy hạ điểm đạt trước");
-			context.throwIfErrors();
-		}
+		// REMOVED: kiểm tra "tổng điểm các câu < điểm đạt" (xem removeQuestion)
 		return examMapper.toResponse(examRepository.save(exam));
 	}
 

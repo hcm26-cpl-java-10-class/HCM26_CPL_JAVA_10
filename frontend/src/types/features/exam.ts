@@ -19,7 +19,7 @@ export interface QuestionDTO {
   points: number;
   sourceQuestionId?: number | null;
   options: QuestionOptionDTO[];
-  imageUrl?: string | null; 
+  imageUrl?: string | null;
 }
 
 export interface QuestionFilter {
@@ -47,6 +47,7 @@ export interface ExamDTO {
   shuffleOptions?: boolean;
   showAnswersAfterExam?: boolean;
   passScore?: number | null;
+  maxScore?: number | null; // NEW: max exam score (blank = 10)
   latePolicy?: LatePolicy;
   latePenaltyPercent?: number | null;
   lateGraceMinutes?: number;
@@ -83,7 +84,8 @@ export interface EssayGradingItem {
   questionId: number;
   displayOrder: number;
   content: string;
-  points: number;
+  points: number; // weight
+  maxScore?: number; // NEW: converted max score; grading cannot exceed it
   answerText: string;
   score?: number | null;
   feedback?: string | null;
@@ -101,6 +103,7 @@ export interface EssayGradingDetail {
   startedAt: string;
   submittedAt: string | null;
   totalPoints: number;
+  maxScore?: number; // NEW
   objectiveScore: number | null;
   finalScore?: number | null;
   alreadyGraded?: boolean;

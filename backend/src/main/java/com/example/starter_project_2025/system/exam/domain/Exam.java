@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.exam.domain;
 
+import java.math.BigDecimal; // NEW
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
@@ -51,7 +52,13 @@ public class Exam extends BaseEntity {
     @Column(nullable = false)
     private Boolean showAnswersAfterExam = false;
 
-    private Integer passScore;
+    // CHANGED: điểm đạt giờ tính theo thang điểm của đề (có thể lẻ), trước đây là Integer
+    @Column(precision = 8, scale = 2)
+    private BigDecimal passScore;
+
+    // NEW: thang điểm tối đa của đề (mặc định 10). Tỉ lệ điểm của từng câu được quy ra theo thang này
+    @Column(nullable = false, precision = 8, scale = 2)
+    private BigDecimal maxScore = BigDecimal.TEN;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)

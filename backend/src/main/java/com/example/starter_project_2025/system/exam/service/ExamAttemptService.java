@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.exam.service;
 
+import java.math.BigDecimal; // NEW
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.exam.domain.*;
@@ -109,7 +110,8 @@ public class ExamAttemptService {
                 .max()
                 .orElse(0) + 1);
         attempt.setDurationMinutes(exam.getDurationMinutes());
-        attempt.setTotalPoints(questions.stream().mapToInt(Question::getPoints).sum());
+        attempt.setTotalPoints(questions.stream().mapToInt(Question::getPoints).sum()); // tổng tỉ lệ điểm (trọng số)
+        attempt.setMaxScore(ExamScoring.effectiveMax(exam.getMaxScore())); // NEW: thang điểm của đề
         attempt.setStartedAt(startedAt);
         Instant durationDeadline = startedAt.plus(Duration.ofMinutes(exam.getDurationMinutes()));
         Instant examDeadline = exam.getEndTime() == null
@@ -238,17 +240,18 @@ public class ExamAttemptService {
         response.setAttemptNumber(attempt.getAttemptNumber());
         response.setStatus(attempt.getStatus());
         response.setTotalPoints(attempt.getTotalPoints());
+        response.setMaxScore(ExamScoring.effectiveMax(attempt.getMaxScore())); // NEW
         response.setObjectiveScore(attempt.getObjectiveScore());
         response.setFinalScore(attempt.getFinalScore());
         response.setSubmittedAt(attempt.getSubmittedAt());
         response.setQuestions(attempt.getQuestions().stream()
                 .sorted(Comparator.comparingInt(ExamAttemptQuestion::getDisplayOrder))
-                .map(question -> toQuestionReview(question, answerByQuestion.get(question.getId())))
+                .map(question -> toQuestionReview(question, answerByQuestion.get(question.getId()), response.getMaxScore(), attempt.getTotalPoints()))
                 .toList());
         return response;
     }
 
-    private ExamAttemptReviewDTO.QuestionReviewDTO toQuestionReview(ExamAttemptQuestion question, ExamAttemptAnswer answer) {
+    private ExamAttemptReviewDTO.QuestionReviewDTO toQuestionReview(ExamAttemptQuestion question, ExamAttemptAnswer answer, BigDecimal maxScore, int totalWeight) {
         Set<Long> selectedIds = answer == null
                 ? Set.of()
                 : answer.getSelectedOptions().stream()
@@ -261,6 +264,7 @@ public class ExamAttemptService {
         dto.setImageUrl(question.getImageUrl());
         dto.setType(question.getType());
         dto.setPoints(question.getPoints());
+        dto.setMaxScore(ExamScoring.gradingCap(maxScore, question.getPoints(), totalWeight)); // NEW: điểm tối đa quy đổi
 
         if (question.getType() == QuestionType.ESSAY) {
             dto.setOptions(List.of());
@@ -457,7 +461,8 @@ public class ExamAttemptService {
     }
 
     private void gradeAndSubmit(ExamAttempt attempt, Instant submittedAt, boolean expired) {
-        int objectiveScore = 0;
+        // CHANGED: chấm theo tỉ lệ điểm. Điểm 1 câu = maxScore * trọngSốCâu / tổngTrọngSố
+        long correctWeight = 0;
         boolean hasEssay = false;
 
         Map<Long, Set<Long>> selectedByQuestion = new HashMap<>();
@@ -471,7 +476,7 @@ public class ExamAttemptService {
 
         for (ExamAttemptQuestion question : attempt.getQuestions()) {
             if (question.getType() == QuestionType.ESSAY) {
-                hasEssay = true;
+                hasEssay = true; // tự luận chưa chấm = 0 điểm cho tới khi giáo viên chấm
                 continue;
             }
             Set<Long> correctIds = question.getOptions().stream()
@@ -479,10 +484,12 @@ public class ExamAttemptService {
                     .map(ExamAttemptOption::getSourceOptionId)
                     .collect(Collectors.toSet());
             if (correctIds.equals(selectedByQuestion.getOrDefault(question.getSourceQuestionId(), Set.of()))) {
-                objectiveScore += question.getPoints();
+                correctWeight += question.getPoints();
             }
         }
 
+        BigDecimal maxScore = ExamScoring.effectiveMax(attempt.getMaxScore());
+        BigDecimal objectiveScore = ExamScoring.share(maxScore, correctWeight, attempt.getTotalPoints());
         attempt.setObjectiveScore(objectiveScore);
         Integer penalty = attempt.isLateGraceEligible()
                 && attempt.getOfficialDeadlineAt() != null
@@ -491,16 +498,9 @@ public class ExamAttemptService {
                 ? attempt.getLatePenaltyPercent()
                 : null;
         attempt.setLatePenaltyPercentApplied(penalty);
-        attempt.setFinalScore(hasEssay ? null : applyPenalty(objectiveScore, penalty));
+        attempt.setFinalScore(hasEssay ? null : ExamScoring.applyPenalty(objectiveScore, penalty));
         attempt.setStatus(ExamAttemptLifecycle.finalStatus(hasEssay, expired));
         attempt.setSubmittedAt(submittedAt);
-    }
-
-    private Integer applyPenalty(int score, Integer penaltyPercent) {
-        if (penaltyPercent == null) {
-            return score;
-        }
-        return score * (100 - penaltyPercent) / 100;
     }
 
     private List<Question> activeQuestions(Exam exam) {
@@ -518,9 +518,16 @@ public class ExamAttemptService {
         response.setTitle(attempt.getExam().getTitle());
         response.setDurationMinutes(attempt.getDurationMinutes());
         response.setTotalPoints(attempt.getTotalPoints());
-        response.setStatus(attempt.getStatus());
+        // NEW: thang điểm, điểm trắc nghiệm / điểm cuối / điểm tạm (tự luận chưa chấm = 0)
+        response.setMaxScore(ExamScoring.effectiveMax(attempt.getMaxScore()));
         response.setObjectiveScore(attempt.getObjectiveScore());
         response.setFinalScore(attempt.getFinalScore());
+        if (attempt.getStatus() != ExamAttemptStatus.IN_PROGRESS && attempt.getStatus() != ExamAttemptStatus.NOT_STARTED) {
+            response.setProvisionalScore(attempt.getFinalScore() != null
+                    ? attempt.getFinalScore()
+                    : ExamScoring.applyPenalty(attempt.getObjectiveScore(), attempt.getLatePenaltyPercentApplied()));
+        }
+        response.setStatus(attempt.getStatus());
         response.setStartedAt(attempt.getStartedAt());
         response.setOfficialDeadlineAt(attempt.getOfficialDeadlineAt());
         response.setDeadlineAt(attempt.getDeadlineAt() != null
@@ -564,6 +571,9 @@ public class ExamAttemptService {
         response.setAttemptNumber(attempt.getAttemptNumber());
         response.setStatus(attempt.getStatus());
         response.setTotalPoints(attempt.getTotalPoints());
+        response.setMaxScore(ExamScoring.effectiveMax(attempt.getMaxScore())); // NEW
+        response.setObjectiveScore(attempt.getObjectiveScore()); // NEW
+        response.setFinalScore(attempt.getFinalScore()); // NEW
         response.setStartedAt(attempt.getStartedAt());
         response.setDeadlineAt(deadlineOf(attempt));
         response.setSubmittedAt(attempt.getSubmittedAt());

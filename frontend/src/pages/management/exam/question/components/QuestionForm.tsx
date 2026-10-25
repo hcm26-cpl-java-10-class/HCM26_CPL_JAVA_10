@@ -285,7 +285,7 @@ export function QuestionForm({
             return;
         }
         if (!Number.isInteger(form.points) || form.points < 1) {
-            toast.error("Points must be a whole number of at least 1.");
+            toast.error("Weight must be a whole number of at least 1.");
             return;
         }
         if (content.length > 2000) {
@@ -544,7 +544,7 @@ export function QuestionForm({
                 )}
 
                 <ImageUrlField
-                    value={form.imageUrl}
+                    value={form.imageUrl ?? ""} // FIXED: imageUrl có thể undefined -> luôn truyền string
                     onChange={(url) => setForm((prev) => ({ ...prev, imageUrl: url }))}
                     placeholder="Question image URL (optional, https://...)"
                 />
@@ -641,7 +641,8 @@ export function QuestionForm({
 
             {/* 5. POINTS ROW */}
             <div className="grid max-w-xs gap-2 border-t pt-3">
-                <Label htmlFor="question-points">Points</Label>
+                {/* CHANGED: "Points" is now a weight; real score = exam max score × weight ÷ total weight */}
+                <Label htmlFor="question-points">Score weight</Label>
                 <Input
                     id="question-points"
                     type="number"
@@ -651,8 +652,11 @@ export function QuestionForm({
                     onChange={(event) =>
                         setForm((prev) => ({ ...prev, points: Number(event.target.value) }))
                     }
-                    placeholder="Points (e.g. 1)"
+                    placeholder="Weight (e.g. 1)"
                 />
+                <p className="text-xs text-muted-foreground">
+                    Question score = exam max score × weight ÷ total weight of all questions in the exam.
+                </p>
             </div>
 
             {/* 6. BOTTOM ROW: Active switch + action buttons */}

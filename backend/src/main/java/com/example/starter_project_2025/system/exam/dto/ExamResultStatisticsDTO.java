@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.exam.dto;
 
+import java.math.BigDecimal; // NEW
 import java.util.List;
 
 public record ExamResultStatisticsDTO(
@@ -10,8 +11,8 @@ public record ExamResultStatisticsDTO(
         long pendingGradingAttempts,
         long uniqueStudents,
         Double averageFinalScore,
-        Integer highestFinalScore,
-        Integer lowestFinalScore,
+        BigDecimal highestFinalScore, // CHANGED: Integer -> BigDecimal
+        BigDecimal lowestFinalScore,
         List<ScoreBandDTO> scoreDistribution
 ) {
     public record ScoreBandDTO(

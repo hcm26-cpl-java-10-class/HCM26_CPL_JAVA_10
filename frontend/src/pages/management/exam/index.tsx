@@ -50,6 +50,7 @@ interface ExamConfigForm {
   shuffleOptions: boolean;
   showAnswersAfterExam: boolean;
   passScore: string;
+  maxScore: string; // NEW: score scale (blank = 10)
   latePolicy: LatePolicy;
   latePenaltyPercent: string;
   lateGraceMinutes: string;
@@ -66,6 +67,7 @@ const DEFAULT_CONFIG: ExamConfigForm = {
   shuffleOptions: false,
   showAnswersAfterExam: false,
   passScore: "",
+  maxScore: "", // NEW
   latePolicy: "NOT_ALLOWED",
   latePenaltyPercent: "",
   lateGraceMinutes: "0",
@@ -102,6 +104,7 @@ const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   shuffleOptions: exam.shuffleOptions ?? false,
   showAnswersAfterExam: exam.showAnswersAfterExam ?? false,
   passScore: exam.passScore != null ? String(exam.passScore) : "",
+  maxScore: exam.maxScore != null ? String(exam.maxScore) : "", // NEW
   latePolicy: exam.latePolicy ?? "NOT_ALLOWED",
   latePenaltyPercent: exam.latePenaltyPercent != null ? String(exam.latePenaltyPercent) : "",
   lateGraceMinutes: String(exam.lateGraceMinutes ?? 0),
@@ -142,7 +145,9 @@ function validateConfig(
     if (duration > windowMinutes) return `Exam duration (${duration} mins) exceeds the available time window (${windowMinutes} mins).`;
   }
   if (!(Number(cfg.maxAttempts) >= 1)) return "Maximum attempts must be at least 1.";
+  if (cfg.maxScore !== "" && !(Number(cfg.maxScore) > 0 && Number(cfg.maxScore) <= 1000)) return "Max score must be greater than 0 and at most 1000."; // NEW
   if (cfg.passScore !== "" && Number(cfg.passScore) < 0) return "Passing score must be >= 0.";
+  if (cfg.passScore !== "" && Number(cfg.passScore) > (cfg.maxScore !== "" ? Number(cfg.maxScore) : 10)) return "Passing score cannot exceed the max score."; // NEW
   if (cfg.latePolicy !== "NOT_ALLOWED" && !cfg.endTime) return "End time is required when setting a late submission policy.";
   if (cfg.latePolicy === "ALLOWED_WITH_PENALTY") {
     const pct = Number(cfg.latePenaltyPercent);
@@ -227,6 +232,7 @@ export default function ExamManagementPage() {
         shuffleOptions: cfg.shuffleOptions,
         showAnswersAfterExam: cfg.showAnswersAfterExam,
         passScore: cfg.passScore !== "" ? Number(cfg.passScore) : undefined,
+        maxScore: cfg.maxScore !== "" ? Number(cfg.maxScore) : undefined, // NEW: blank = backend default 10
         latePolicy: cfg.latePolicy,
         latePenaltyPercent:
             cfg.latePolicy === "ALLOWED_WITH_PENALTY" && cfg.latePenaltyPercent !== ""
@@ -388,7 +394,7 @@ export default function ExamManagementPage() {
                   <TableHead>Exam Title</TableHead>
                   <TableHead className="w-32">Duration</TableHead>
                   <TableHead className="w-32">Questions</TableHead>
-                  <TableHead className="w-32">Total Points</TableHead>
+                  <TableHead className="w-32">Max Score</TableHead> {/* CHANGED: was "Total Points" */}
                   <TableHead className="w-64 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -422,7 +428,7 @@ export default function ExamManagementPage() {
                       </TableCell>
                       <TableCell>{exam.durationMinutes} mins</TableCell>
                       <TableCell>{exam.questionIds?.length ?? exam.questions?.length ?? 0}</TableCell>
-                      <TableCell>{exam.totalPoints ?? 0}</TableCell>
+                      <TableCell>{exam.maxScore ?? 10}</TableCell> {/* CHANGED */}
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button variant="outline" size="sm" onClick={() => openQuestionPicker(exam)}>
@@ -584,8 +590,15 @@ export default function ExamManagementPage() {
                     <Input type="number" min={1} value={cfg.maxAttempts} onChange={(event) => setCfg((c) => ({ ...c, maxAttempts: event.target.value }))} />
                   </label>
                   <label className="grid gap-2 text-sm font-medium">
+                    Max Score (leave blank = 10)
+                    <Input type="number" min={0.01} step="0.01" placeholder="10" value={cfg.maxScore} onChange={(event) => setCfg((c) => ({ ...c, maxScore: event.target.value }))} />
+                    <span className="text-xs font-normal text-muted-foreground">
+                      Question score = max score × question weight ÷ total weight. {/* NEW */}
+                    </span>
+                  </label>
+                  <label className="grid gap-2 text-sm font-medium">
                     Passing Score (leave blank = no requirement)
-                    <Input type="number" min={0} value={cfg.passScore} onChange={(event) => setCfg((c) => ({ ...c, passScore: event.target.value }))} />
+                    <Input type="number" min={0} step="0.01" value={cfg.passScore} onChange={(event) => setCfg((c) => ({ ...c, passScore: event.target.value }))} />
                   </label>
                   <div className="grid gap-2 text-sm font-medium">
                     Late Submission Policy
@@ -638,9 +651,9 @@ export default function ExamManagementPage() {
                     Show Answers After Exam
                   </label>
                   {cfg.showAnswersAfterExam && (
-                    <p className="text-xs text-muted-foreground">
-                      Students see correct answers only after their score is published and they have no attempts left (or the exam has closed).
-                    </p>
+                      <p className="text-xs text-muted-foreground">
+                        Students see correct answers only after their score is published and they have no attempts left (or the exam has closed).
+                      </p>
                   )}
                 </div>
               </div>
@@ -716,7 +729,7 @@ export default function ExamManagementPage() {
                         <TableHead>Content</TableHead>
                         <TableHead className="w-24">Type</TableHead>
                         <TableHead className="w-24">Difficulty</TableHead>
-                        <TableHead className="w-20 text-right">Points</TableHead>
+                        <TableHead className="w-20 text-right">Weight</TableHead> {/* CHANGED: was "Points" */}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -785,7 +798,7 @@ export default function ExamManagementPage() {
               <section className="flex min-h-0 flex-col gap-3 rounded-md border bg-muted/20 p-4">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold">Questions in Exam ({activeExam?.questions?.length ?? 0})</h3>
-                  <span className="text-xs font-medium text-muted-foreground">Total: {activeExam?.totalPoints ?? 0} pts</span>
+                  <span className="text-xs font-medium text-muted-foreground">Total weight: {activeExam?.totalPoints ?? 0} · Max score: {activeExam?.maxScore ?? 10}</span> {/* CHANGED */}
                 </div>
 
                 {activeExamStarted && (
@@ -801,7 +814,7 @@ export default function ExamManagementPage() {
                   {(activeExam?.questions ?? []).map((q, idx) => (
                       <div key={q.id} className="rounded-md border bg-background p-3 shadow-sm">
                         <div className="flex items-start justify-between gap-2">
-                          <span className="text-xs font-semibold text-primary">Question {idx + 1} ({q.points} pts)</span>
+                          <span className="text-xs font-semibold text-primary">Question {idx + 1} (weight {q.points})</span>
                           <div className="flex items-center gap-1">
                             <Button
                                 variant="ghost"

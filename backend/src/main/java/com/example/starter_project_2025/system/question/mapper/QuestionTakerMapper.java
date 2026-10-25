@@ -15,6 +15,8 @@ public class QuestionTakerMapper {
         d.setImageUrl(q.getImageUrl());
         d.setType(q.getType());
         d.setPoints(q.getPoints());
+        // NEW: nhiều đáp án đúng -> giao diện hiện ô vuông (checkbox), 1 đáp án đúng -> ô tròn (radio)
+        d.setMultiSelect(q.getOptions().stream().filter(o -> o.isCorrect()).count() > 1);
         d.setOptions(q.getOptions().stream().map(o -> {
             QuestionTakerDTO.OptionTakerDTO od = new QuestionTakerDTO.OptionTakerDTO();
             od.setId(o.getId());
@@ -33,6 +35,8 @@ public class QuestionTakerMapper {
         d.setImageUrl(q.getImageUrl());
         d.setType(q.getType());
         d.setPoints(q.getPoints());
+        // NEW: xem ghi chú ở trên
+        d.setMultiSelect(q.getOptions().stream().filter(o -> o.isCorrect()).count() > 1);
         d.setOptions(q.getOptions().stream().map(o -> {
             QuestionTakerDTO.OptionTakerDTO od = new QuestionTakerDTO.OptionTakerDTO();
             od.setId(o.getSourceOptionId());

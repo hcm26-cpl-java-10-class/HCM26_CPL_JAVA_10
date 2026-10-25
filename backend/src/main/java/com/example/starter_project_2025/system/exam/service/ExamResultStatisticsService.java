@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.exam.service;
 
+import java.math.BigDecimal; // NEW
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.exam.domain.Exam;
 import com.example.starter_project_2025.system.exam.domain.ExamAttempt;
@@ -39,7 +40,7 @@ public class ExamResultStatisticsService {
                 .filter(readinessService::isFullyGraded)
                 .toList();
 
-        List<Integer> scores = completedAttempts.stream()
+        List<BigDecimal> scores = completedAttempts.stream()
                 .map(ExamAttempt::getFinalScore)
                 .filter(Objects::nonNull)
                 .toList();
@@ -54,16 +55,16 @@ public class ExamResultStatisticsService {
         Double averageScore = scores.isEmpty()
                 ? null
                 : scores.stream()
-                  .mapToInt(Integer::intValue)
-                  .average()
-                  .orElse(0.0);
+                .mapToDouble(BigDecimal::doubleValue) // CHANGED: điểm là BigDecimal
+                .average()
+                .orElse(0.0);
 
-        Integer highestScore = scores.stream()
-                .max(Integer::compareTo)
+        BigDecimal highestScore = scores.stream()
+                .max(BigDecimal::compareTo)
                 .orElse(null);
 
-        Integer lowestScore = scores.stream()
-                .min(Integer::compareTo)
+        BigDecimal lowestScore = scores.stream()
+                .min(BigDecimal::compareTo)
                 .orElse(null);
 
         Map<String, Long> distribution = new LinkedHashMap<>();
@@ -76,15 +77,16 @@ public class ExamResultStatisticsService {
         distribution.put("N/A", 0L);
 
         for (ExamAttempt attempt : completedAttempts) {
-            int totalPoints = attempt.getTotalPoints();
+            // CHANGED: phần trăm tính theo thang điểm của đề (maxScore), không còn theo tổng điểm cứng
+            BigDecimal maxScore = ExamScoring.effectiveMax(attempt.getMaxScore());
 
-            if (totalPoints <= 0) {
+            if (maxScore.signum() <= 0) {
                 distribution.merge("N/A", 1L, Long::sum);
                 continue;
             }
 
             double percentage =
-                    attempt.getFinalScore() * 100.0 / totalPoints;
+                    attempt.getFinalScore().doubleValue() * 100.0 / maxScore.doubleValue();
 
             String range;
 

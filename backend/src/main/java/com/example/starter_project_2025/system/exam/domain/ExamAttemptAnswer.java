@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.exam.domain;
 
+import java.math.BigDecimal; // NEW
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -45,8 +46,9 @@ public class ExamAttemptAnswer extends BaseEntity {
     @Column(name = "saved", nullable = false)
     private boolean saved = false;
 
-    @Column(name = "score")
-    private Integer score;
+    // CHANGED: Integer -> BigDecimal
+    @Column(name = "score", precision = 12, scale = 4)
+    private BigDecimal score;
 
     @Column(name = "feedback", columnDefinition = "TEXT")
     private String feedback;

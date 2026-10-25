@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.exam.service;
 
+import java.math.BigDecimal; // NEW
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.exam.domain.Exam;
@@ -61,6 +62,7 @@ public class ExamEssayGradingService {
         detail.setStartedAt(attempt.getStartedAt());
         detail.setSubmittedAt(attempt.getSubmittedAt());
         detail.setTotalPoints(attempt.getTotalPoints());
+        detail.setMaxScore(ExamScoring.effectiveMax(attempt.getMaxScore())); // NEW
         detail.setObjectiveScore(attempt.getObjectiveScore());
         detail.setFinalScore(attempt.getFinalScore());
         detail.setAlreadyGraded(attempt.getFinalScore() != null || attempt.getStatus() == ExamAttemptStatus.SUBMITTED);
@@ -111,7 +113,8 @@ public class ExamEssayGradingService {
             if (grade.getQuestionId() == null) {
                 throw new BadRequestException("Question ID is required for each grade");
             }
-            if (grade.getScore() == null || grade.getScore() < 0) {
+            // CHANGED: điểm để trống coi như chưa chấm = 0 (không báo lỗi)
+            if (grade.getScore() != null && grade.getScore().signum() < 0) {
                 throw new BadRequestException("Score cannot be negative");
             }
             gradeMap.put(grade.getQuestionId(), grade);
@@ -121,24 +124,28 @@ public class ExamEssayGradingService {
                 .filter(q -> q.getType() == QuestionType.ESSAY)
                 .toList();
 
-        int totalEssayPointsAwarded = 0;
+        BigDecimal maxScore = ExamScoring.effectiveMax(attempt.getMaxScore());
+        BigDecimal totalEssayScoreAwarded = BigDecimal.ZERO;
 
         for (ExamAttemptQuestion question : essayQuestions) {
             Long sourceQId = question.getSourceQuestionId();
             EssayGradingDTO.QuestionGrade grade = gradeMap.get(sourceQId);
 
-            if (grade == null) {
-                throw new BadRequestException("Missing grade for essay question: " + question.getDisplayOrder());
-            }
+            // CHANGED: câu tự luận không có điểm gửi lên (chưa chấm) = 0 điểm, thay vì báo lỗi "Missing grade"
+            BigDecimal score = grade == null || grade.getScore() == null
+                    ? BigDecimal.ZERO
+                    : grade.getScore();
 
-            if (grade.getScore() > question.getPoints()) {
+            // CHANGED: điểm tối đa của câu = quy từ tỉ lệ điểm theo thang điểm của đề
+            BigDecimal cap = ExamScoring.gradingCap(maxScore, question.getPoints(), attempt.getTotalPoints());
+            if (score.compareTo(cap) > 0) {
                 throw new BadRequestException(
-                        "Score (" + grade.getScore() + ") for question " + question.getDisplayOrder() +
-                        " exceeds maximum points (" + question.getPoints() + ")"
+                        "Score (" + score.stripTrailingZeros().toPlainString() + ") for question " + question.getDisplayOrder() +
+                                " exceeds maximum points (" + cap.stripTrailingZeros().toPlainString() + ")"
                 );
             }
-
-            totalEssayPointsAwarded += grade.getScore();
+            BigDecimal stored = score.setScale(ExamScoring.STORE_SCALE, java.math.RoundingMode.HALF_UP);
+            totalEssayScoreAwarded = totalEssayScoreAwarded.add(stored);
 
             ExamAttemptAnswer answer = findAnswer(attempt, question);
             if (answer == null) {
@@ -148,45 +155,20 @@ public class ExamEssayGradingService {
                 answer.setTextAnswer("");
                 attempt.getAnswers().add(answer);
             }
-            answer.setScore(grade.getScore());
-            answer.setFeedback(grade.getFeedback() != null ? grade.getFeedback().trim() : "");
+            answer.setScore(stored);
+            answer.setFeedback(grade != null && grade.getFeedback() != null ? grade.getFeedback().trim() : "");
         }
 
-        int objectiveScore = attempt.getObjectiveScore() != null ? attempt.getObjectiveScore() : 0;
-        int unpenalizedTotal = objectiveScore + totalEssayPointsAwarded;
+        BigDecimal objectiveScore = attempt.getObjectiveScore() != null ? attempt.getObjectiveScore() : BigDecimal.ZERO;
+        BigDecimal unpenalizedTotal = objectiveScore.add(totalEssayScoreAwarded);
 
-        Integer penaltyPercent = attempt.getLatePenaltyPercentApplied();
-        int finalScore = applyPenalty(unpenalizedTotal, penaltyPercent);
-        int clampedFinalScore = Math.max(0, finalScore);
-        if (attempt.getTotalPoints() > 0) {
-            clampedFinalScore = Math.min(clampedFinalScore, attempt.getTotalPoints());
-        }
-
-        attempt.setFinalScore(clampedFinalScore);
+        // CHANGED: trừ điểm muộn rồi giới hạn trong [0, thang điểm của đề]
+        BigDecimal penalized = ExamScoring.applyPenalty(unpenalizedTotal, attempt.getLatePenaltyPercentApplied());
+        attempt.setFinalScore(ExamScoring.clamp(penalized, maxScore));
         attempt.setStatus(ExamAttemptStatus.SUBMITTED);
         attemptRepository.save(attempt);
 
-        // Học sinh thi qua link anonymous không xem được điểm trên hệ thống,
-        // nên gửi bổ sung kết quả chính thức về email của họ.
-        notifyGuestIfNeeded(attempt);
-
         return getDetail(examId, attemptId);
-    }
-
-    private void notifyGuestIfNeeded(ExamAttempt attempt) {
-        User student = attempt.getStudent();
-        if (student == null || !Boolean.TRUE.equals(student.getIsGuest())) {
-            return;
-        }
-
-        try {
-            anonymousExamService.sendFinalResultToGuest(attempt.getId());
-        } catch (Exception e) {
-            // Không để lỗi gửi email làm fail thao tác chấm điểm của giáo viên.
-            org.slf4j.LoggerFactory.getLogger(ExamEssayGradingService.class)
-                    .error("Failed to send guest result email for attemptId={}: {}",
-                            attempt.getId(), e.getMessage());
-        }
     }
 
     public EssayGradingDTO.AiGradingResponse requestAiGrading(Long examId, Long attemptId) {
@@ -207,7 +189,8 @@ public class ExamEssayGradingService {
                         q.getSourceQuestionId(),
                         q.getDisplayOrder(),
                         q.getContent(),
-                        q.getPoints(),
+                        // CHANGED: gửi điểm tối đa đã quy đổi (không phải tỉ lệ điểm) cho AI
+                        ExamScoring.gradingCap(ExamScoring.effectiveMax(attempt.getMaxScore()), q.getPoints(), attempt.getTotalPoints()),
                         answerText(attempt, q)
                 ))
                 .toList();
@@ -215,12 +198,7 @@ public class ExamEssayGradingService {
         return aiClient.requestProposal(payloads);
     }
 
-    private int applyPenalty(int score, Integer penaltyPercent) {
-        if (penaltyPercent == null || penaltyPercent <= 0) {
-            return score;
-        }
-        return score * (100 - penaltyPercent) / 100;
-    }
+    // REMOVED: applyPenalty(int, Integer) -> dùng ExamScoring.applyPenalty (BigDecimal)
 
     private Exam requireExam(Long examId) {
         return examRepository.findById(examId)
@@ -250,6 +228,8 @@ public class ExamEssayGradingService {
         item.setDisplayOrder(question.getDisplayOrder());
         item.setContent(question.getContent());
         item.setPoints(question.getPoints());
+        // NEW: điểm tối đa quy đổi cho câu này (giáo viên không thể nhập cao hơn)
+        item.setMaxScore(ExamScoring.gradingCap(ExamScoring.effectiveMax(attempt.getMaxScore()), question.getPoints(), attempt.getTotalPoints()));
         item.setAnswerText(answerText(attempt, question));
 
         ExamAttemptAnswer answer = findAnswer(attempt, question);

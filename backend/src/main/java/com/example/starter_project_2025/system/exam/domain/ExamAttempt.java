@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.exam.domain;
 
+import java.math.BigDecimal; // NEW
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.system.rbac.user.User;
 import jakarta.persistence.*;
@@ -63,9 +64,16 @@ public class ExamAttempt extends BaseEntity {
 
     private Integer latePenaltyPercentApplied;
 
-    private Integer objectiveScore;
+    // NEW: thang điểm của đề tại thời điểm bắt đầu làm bài
+    @Column(precision = 8, scale = 2)
+    private BigDecimal maxScore;
 
-    private Integer finalScore;
+    // CHANGED: Integer -> BigDecimal (điểm có thể lẻ)
+    @Column(precision = 12, scale = 4)
+    private BigDecimal objectiveScore;
+
+    @Column(precision = 12, scale = 4)
+    private BigDecimal finalScore;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.exam.service;
 
+import java.math.BigDecimal; // NEW
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.system.exam.domain.Exam;
 import com.example.starter_project_2025.system.exam.domain.LatePolicy;
@@ -20,13 +21,19 @@ public class ExamConfigValidator {
                 : (existing == null ? null : Integer.valueOf(existing.getDurationMinutes()));
         Integer maxAttempts = r.getMaxAttempts() != null ? r.getMaxAttempts()
                 : (existing == null ? Integer.valueOf(1) : existing.getMaxAttempts());
-        Integer passScore = r.getPassScore() != null ? r.getPassScore() : (existing == null ? null : existing.getPassScore());
+        BigDecimal passScore = r.getPassScore() != null ? r.getPassScore() : (existing == null ? null : existing.getPassScore());
+        // NEW: thang điểm của đề (bỏ trống = 10)
+        BigDecimal maxScore = ExamScoring.effectiveMax(r.getMaxScore() != null ? r.getMaxScore()
+                : (existing == null ? null : existing.getMaxScore()));
+        if (r.getMaxScore() != null && (r.getMaxScore().signum() <= 0 || r.getMaxScore().compareTo(BigDecimal.valueOf(1000)) > 0)) {
+            ctx.add("maxScore", "Thang điểm phải lớn hơn 0 và không quá 1000");
+        }
         LatePolicy latePolicy = r.getLatePolicy() != null ? r.getLatePolicy()
                 : (existing == null ? LatePolicy.NOT_ALLOWED : existing.getLatePolicy());
         Integer penalty = r.getLatePenaltyPercent() != null ? r.getLatePenaltyPercent()
                 : (existing == null ? null : existing.getLatePenaltyPercent());
         Integer lateGraceMinutes = r.getLateGraceMinutes() != null ? r.getLateGraceMinutes()
-            : (existing == null ? 0 : existing.getLateGraceMinutes());
+                : (existing == null ? 0 : existing.getLateGraceMinutes());
 
         LocalDateTime now = LocalDateTime.now();
 
@@ -58,10 +65,12 @@ public class ExamConfigValidator {
         }
 
         if (passScore != null) {
-            if (passScore < 0) {
+            if (passScore.signum() < 0) {
                 ctx.add("passScore", "Điểm đạt phải >= 0");
-            } else if (totalPoints != null && totalPoints > 0 && passScore > totalPoints) {
-                ctx.add("passScore", "Điểm đạt (" + passScore + ") không được lớn hơn tổng điểm của đề (" + totalPoints + ")");
+            } else if (passScore.compareTo(maxScore) > 0) {
+                // CHANGED: so với thang điểm của đề thay vì tổng điểm cứng của các câu
+                ctx.add("passScore", "Điểm đạt (" + passScore.stripTrailingZeros().toPlainString()
+                        + ") không được lớn hơn thang điểm của đề (" + maxScore.stripTrailingZeros().toPlainString() + ")");
             }
         }
 

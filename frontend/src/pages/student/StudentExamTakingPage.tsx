@@ -5,6 +5,7 @@ import {
     type ExamAttemptAnswer,
     type SaveExamAnswerRequest,
 } from '@/api/exam.api';
+import { formatScore, questionScore } from '@/utils/examScore'; // NEW
 import { Button } from '@/components/ui/button';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -584,7 +585,7 @@ export default function StudentExamTakingPage() {
                             <p className="text-sm text-muted-foreground">Exam</p>
                             <h1 className="mt-1 text-2xl font-semibold">{attempt.title}</h1>
                             <p className="mt-2 text-sm text-muted-foreground">
-                                Attempt #{attempt.attemptNumber} · Duration: {attempt.durationMinutes} mins · Total Points: {attempt.totalPoints}
+                                Attempt #{attempt.attemptNumber} · Duration: {attempt.durationMinutes} mins · Max Score: {formatScore(attempt.maxScore ?? 10)}
                             </p>
                             <p className="mt-1 text-xs text-muted-foreground">
                                 Official Deadline: {attempt.officialDeadlineAt
@@ -605,9 +606,10 @@ export default function StudentExamTakingPage() {
                                 {attempt.status === 'SUBMITTED' && 'Exam Completed'}
                             </h2>
                             <p className="mt-3 text-lg">
-                                {attempt.finalScore === null
-                                    ? `Provisional Objective Score: ${attempt.objectiveScore ?? 0}/${attempt.totalPoints}`
-                                    : `Score: ${attempt.finalScore}/${attempt.totalPoints}`}
+                                {/* CHANGED: score on the exam scale; ungraded essays count as 0 until the teacher grades */}
+                                {attempt.finalScore == null
+                                    ? `Provisional Score: ${formatScore(attempt.provisionalScore ?? attempt.objectiveScore ?? 0)}/${formatScore(attempt.maxScore ?? 10)} (ungraded essays count as 0)`
+                                    : `Score: ${formatScore(attempt.finalScore)}/${formatScore(attempt.maxScore ?? 10)}`}
                             </p>
                             {attempt.status === 'EXPIRED' && (
                                 <p className="mt-2 text-sm text-muted-foreground">
@@ -616,7 +618,7 @@ export default function StudentExamTakingPage() {
                             )}
                             {attempt.bestScore != null && (
                                 <p className="mt-2 text-sm font-medium text-emerald-700">
-                                    Highest Score: {attempt.bestScore}/{attempt.totalPoints}
+                                    Highest Score: {formatScore(attempt.bestScore)}/{formatScore(attempt.maxScore ?? 10)}
                                 </p>
                             )}
                             {attempt.late && (
@@ -649,7 +651,7 @@ export default function StudentExamTakingPage() {
                                                     <div className="min-w-0">
                                                         <p className="text-sm font-medium">
                                                             Question {attempt.questions.indexOf(question) + 1}
-                                                            <span className="ml-2 font-normal text-muted-foreground">{question.points} pts</span>
+                                                            <span className="ml-2 font-normal text-muted-foreground">{formatScore(questionScore(attempt.maxScore, question.points, attempt.totalPoints))} pts</span>
                                                         </p>
                                                         <p className="truncate text-sm text-muted-foreground">{question.content}</p>
                                                     </div>
@@ -710,7 +712,7 @@ export default function StudentExamTakingPage() {
                                             <h2 className="font-semibold">
                                                 Question {index + 1}
                                                 <span className="ml-2 text-sm font-normal text-muted-foreground">
-                                                    {question.points} pts
+                                                    {formatScore(questionScore(attempt.maxScore, question.points, attempt.totalPoints))} pts
                                                 </span>
                                             </h2>
                                             {starButton(question.id, index + 1)}

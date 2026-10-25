@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.exam.dto;
 
+import java.math.BigDecimal; // NEW
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus;
 import lombok.Getter;
 import lombok.Setter;
@@ -13,10 +14,11 @@ public class ExamAttemptSummaryDTO {
     private Long examId;
     private int attemptNumber;
     private ExamAttemptStatus status;
-    private Integer objectiveScore;
-    private Integer finalScore;
+    private BigDecimal objectiveScore; // CHANGED: Integer -> BigDecimal
+    private BigDecimal finalScore;
     private int totalPoints;
-    private Integer bestScore;
+    private BigDecimal maxScore; // NEW
+    private BigDecimal bestScore;
     private Integer attemptsUsed;
     private Integer attemptsRemaining;
     private Instant startedAt;

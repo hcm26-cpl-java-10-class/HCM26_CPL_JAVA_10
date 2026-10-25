@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.notification.service;
 
+import java.math.BigDecimal; // NEW
 import com.example.starter_project_2025.system.auth.util.MailUtil;
 import com.example.starter_project_2025.system.exam.domain.Invitation;
 import com.example.starter_project_2025.system.rbac.user.User;
@@ -185,8 +186,8 @@ public class EmailService {
             String recipientEmail,
             String studentName,
             String examTitle,
-            Integer score,
-            Integer totalPoints,
+            BigDecimal score, // CHANGED: Integer -> BigDecimal
+            BigDecimal totalPoints, // CHANGED: giờ là thang điểm của đề
             String submittedAt,
             boolean pendingReview
     ) {
@@ -197,8 +198,8 @@ public class EmailService {
         List<Map.Entry<String, Object>> vars = new ArrayList<>();
         vars.add(Map.entry("username", studentName == null || studentName.isBlank() ? "Học sinh" : studentName));
         vars.add(Map.entry("examTitle", examTitle));
-        vars.add(Map.entry("score", score == null ? "Chưa chấm" : String.valueOf(score)));
-        vars.add(Map.entry("totalPoints", totalPoints == null ? "0" : String.valueOf(totalPoints)));
+        vars.add(Map.entry("score", score == null ? "Chưa chấm" : score.setScale(2, java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()));
+        vars.add(Map.entry("totalPoints", totalPoints == null ? "10" : totalPoints.stripTrailingZeros().toPlainString()));
         vars.add(Map.entry("submittedAt", submittedAt == null ? "" : submittedAt));
         vars.add(Map.entry("pendingReview", pendingReview ? "true" : "false"));
         vars.add(Map.entry("resultMessage", pendingReview

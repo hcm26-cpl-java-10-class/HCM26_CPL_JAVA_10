@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.exam.dto;
 
+import java.math.BigDecimal; // NEW
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus;
 import lombok.Getter;
 import lombok.Setter;
@@ -38,8 +39,9 @@ public class EssayGradingDTO {
         private Instant startedAt;
         private Instant submittedAt;
         private int totalPoints;
-        private Integer objectiveScore;
-        private Integer finalScore;
+        private BigDecimal maxScore; // NEW: thang điểm của đề
+        private BigDecimal objectiveScore; // CHANGED: Integer -> BigDecimal
+        private BigDecimal finalScore;
         private boolean alreadyGraded;
         private List<EssayItem> essays;
     }
@@ -50,9 +52,10 @@ public class EssayGradingDTO {
         private Long questionId;
         private int displayOrder;
         private String content;
-        private int points;
+        private int points; // tỉ lệ điểm (trọng số) của câu
+        private BigDecimal maxScore; // NEW: điểm tối đa quy ra, giáo viên không được chấm vượt quá
         private String answerText;
-        private Integer score;
+        private BigDecimal score; // CHANGED: Integer -> BigDecimal
         private String feedback;
     }
 
@@ -67,7 +70,7 @@ public class EssayGradingDTO {
     @Setter
     public static class QuestionGrade {
         private Long questionId;
-        private Integer score;
+        private BigDecimal score; // CHANGED: Integer -> BigDecimal
         private String feedback;
     }
 
@@ -81,7 +84,7 @@ public class EssayGradingDTO {
     @Setter
     public static class AiQuestionProposal {
         private Long questionId;
-        private Integer proposedScore;
+        private BigDecimal proposedScore; // CHANGED: Integer -> BigDecimal
         private String feedback;
         private String reasoning;
     }

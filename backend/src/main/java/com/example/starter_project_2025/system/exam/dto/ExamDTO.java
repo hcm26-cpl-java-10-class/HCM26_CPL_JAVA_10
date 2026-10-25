@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.exam.dto;
 
+import java.math.BigDecimal; // NEW
 import com.example.starter_project_2025.base.crud.dto.BaseDTO;
 import com.example.starter_project_2025.base.crud.dto.OnCreate;
 import com.example.starter_project_2025.base.crud.dto.OnUpdate;
@@ -8,6 +9,8 @@ import com.example.starter_project_2025.system.exam.domain.LatePolicy;
 import com.example.starter_project_2025.system.exam.domain.ResultVisibility;
 import com.example.starter_project_2025.system.question.dto.QuestionDTO;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.validation.constraints.DecimalMax; // NEW
+import jakarta.validation.constraints.DecimalMin; // NEW
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -45,8 +48,14 @@ public class ExamDTO extends BaseDTO {
 
     private Boolean showAnswersAfterExam;
 
-    @Min(value = 0, groups = {OnCreate.class, OnUpdate.class}, message = "passScore phải >= 0")
-    private Integer passScore;
+    // CHANGED: Integer -> BigDecimal, tính theo thang điểm của đề
+    @DecimalMin(value = "0", groups = {OnCreate.class, OnUpdate.class}, message = "passScore phải >= 0")
+    private BigDecimal passScore;
+
+    // NEW: thang điểm tối đa của đề; bỏ trống = 10
+    @DecimalMin(value = "0.01", groups = {OnCreate.class, OnUpdate.class}, message = "maxScore phải > 0")
+    @DecimalMax(value = "1000", groups = {OnCreate.class, OnUpdate.class}, message = "maxScore tối đa 1000")
+    private BigDecimal maxScore;
 
     private LatePolicy latePolicy;
 

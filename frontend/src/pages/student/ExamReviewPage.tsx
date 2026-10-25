@@ -1,4 +1,5 @@
 import { getAttemptReview, type ExamReviewQuestion } from '@/api/exam.api';
+import { formatScore } from '@/utils/examScore'; // NEW
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -40,7 +41,7 @@ function QuestionReview({ question, index }: { question: ExamReviewQuestion; ind
                             {question.textAnswer || 'No answer'}
                         </p>
                         <p className="text-slate-600">
-                            Score: {question.score ?? 'Not graded yet'}/{question.points}
+                            Score: {question.score != null ? formatScore(question.score) : 'Not graded yet (counts as 0)'}/{formatScore(question.maxScore ?? question.points)}
                         </p>
                         {question.feedback && <p className="text-slate-600">Feedback: {question.feedback}</p>}
                     </div>
@@ -59,7 +60,7 @@ function QuestionReview({ question, index }: { question: ExamReviewQuestion; ind
                                 </span>
                             </div>
                         ))}
-                        <p className="text-xs text-slate-500">{question.points} point(s)</p>
+                        <p className="text-xs text-slate-500">{formatScore(question.maxScore ?? question.points)} point(s)</p>
                     </>
                 )}
             </CardContent>
@@ -117,8 +118,8 @@ export default function ExamReviewPage() {
                         <header className="space-y-1">
                             <h1 className="text-2xl font-bold text-slate-900">{data.title}</h1>
                             <p className="text-sm text-slate-600">
-                                Attempt #{data.attemptNumber} · Score: {data.finalScore ?? data.objectiveScore ?? '-'}/
-                                {data.totalPoints}
+                                Attempt #{data.attemptNumber} · Score: {formatScore(data.finalScore ?? data.objectiveScore)}/
+                                {formatScore(data.maxScore ?? 10)}
                             </p>
                         </header>
                         {data.questions.map((question, index) => (

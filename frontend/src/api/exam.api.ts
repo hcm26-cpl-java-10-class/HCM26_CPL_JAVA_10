@@ -5,6 +5,7 @@ export interface Exam {
     title: string;
     durationMinutes: number;
     totalPoints?: number;
+    maxScore?: number; // NEW: exam score scale
     isActive?: boolean;
     startTime?: string | null;
     endTime?: string | null;
@@ -48,9 +49,11 @@ export interface ExamAttempt {
     attemptNumber: number;
     title: string;
     durationMinutes: number;
-    totalPoints: number;
+    totalPoints: number; // sum of question weights
+    maxScore?: number; // NEW: exam score scale
     objectiveScore: number | null;
     finalScore: number | null;
+    provisionalScore?: number | null; // NEW: ungraded essays count as 0
     status: ExamAttemptStatus;
     startedAt: string;
     officialDeadlineAt?: string | null;
@@ -76,6 +79,7 @@ export interface ExamAttemptSummary {
     objectiveScore: number | null;
     finalScore: number | null;
     totalPoints: number;
+    maxScore?: number; // NEW
     startedAt: string;
     deadlineAt: string;
     submittedAt: string | null;
@@ -94,7 +98,8 @@ export interface ExamReviewQuestion {
     content: string;
     imageUrl?: string | null;
     type: ExamAttemptQuestion['type'];
-    points: number;
+    points: number; // weight
+    maxScore?: number; // NEW: converted max score of this question
     /** null for essay questions */
     correct: boolean | null;
     options: ExamReviewOption[];
@@ -110,6 +115,7 @@ export interface ExamAttemptReview {
     attemptNumber: number;
     status: ExamAttemptStatus;
     totalPoints: number;
+    maxScore?: number; // NEW
     objectiveScore: number | null;
     finalScore: number | null;
     submittedAt: string | null;

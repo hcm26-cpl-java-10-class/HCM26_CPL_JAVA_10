@@ -1,4 +1,5 @@
 import { examApi } from "@/api";
+import { formatScore } from '@/utils/examScore'; // NEW
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -134,13 +135,14 @@ export default function EssayAttemptDetailPage() {
                 toast.error(`Score for Essay Question ${essay.displayOrder} must be a non-negative number.`);
                 return null;
             }
-            if (scoreNum > essay.points) {
-                toast.error(`Score for Essay Question ${essay.displayOrder} cannot exceed maximum points (${essay.points}).`);
+            // CHANGED: cap is the converted score (essay.maxScore), not the weight
+            if (scoreNum > (essay.maxScore ?? essay.points)) {
+                toast.error(`Score for Essay Question ${essay.displayOrder} cannot exceed maximum points (${formatScore(essay.maxScore ?? essay.points)}).`);
                 return null;
             }
             gradesList.push({
                 questionId: essay.questionId,
-                score: Math.round(scoreNum),
+                score: Math.round(scoreNum * 100) / 100, // CHANGED: decimals allowed (was integer rounding)
                 feedback: draft.feedback.trim(),
             });
         }
@@ -233,12 +235,12 @@ export default function EssayAttemptDetailPage() {
                                 </div>
                                 <div>
                                     <span className="block text-xs text-muted-foreground">Objective Score</span>
-                                    <span className="font-medium">{detail.objectiveScore ?? 0} / {detail.totalPoints} pts</span>
+                                    <span className="font-medium">{formatScore(detail.objectiveScore ?? 0)} / {formatScore(detail.maxScore ?? 10)} pts</span>
                                 </div>
                                 <div>
                                     <span className="block text-xs text-muted-foreground">Final Score</span>
                                     <span className="font-medium">
-                                        {detail.finalScore != null ? `${detail.finalScore} / ${detail.totalPoints} pts` : "Pending Grading"}
+                                        {detail.finalScore != null ? `${formatScore(detail.finalScore)} / ${formatScore(detail.maxScore ?? 10)} pts` : "Pending Grading"}
                                     </span>
                                 </div>
                                 <div>
@@ -267,7 +269,7 @@ export default function EssayAttemptDetailPage() {
                                         <h2 className="font-semibold text-lg">
                                             Question {index + 1}
                                             <span className="ml-2 text-sm font-normal text-muted-foreground">
-                                                (Max: {essay.points} points)
+                                                (Max: {formatScore(essay.maxScore ?? essay.points)} points · weight {essay.points})
                                             </span>
                                         </h2>
                                     </div>
@@ -320,7 +322,7 @@ export default function EssayAttemptDetailPage() {
                                                     Suggested Score:
                                                 </span>
                                                 <span className="font-semibold text-base text-purple-950 dark:text-purple-100">
-                                                    {proposal.proposedScore} / {essay.points} pts
+                                                    {formatScore(proposal.proposedScore)} / {formatScore(essay.maxScore ?? essay.points)} pts
                                                 </span>
                                             </div>
 
@@ -343,14 +345,15 @@ export default function EssayAttemptDetailPage() {
                                     <div className="grid gap-4 rounded-lg border bg-background p-4 sm:grid-cols-4">
                                         <div className="sm:col-span-1">
                                             <label className="text-xs font-medium uppercase text-muted-foreground">
-                                                Official Score (0 - {essay.points})
+                                                Official Score (0 - {formatScore(essay.maxScore ?? essay.points)})
                                             </label>
                                             <Input
                                                 type="number"
                                                 min={0}
-                                                max={essay.points}
+                                                max={essay.maxScore ?? essay.points}
+                                                step="0.01"
                                                 className="mt-1 font-semibold"
-                                                placeholder={`0 - ${essay.points}`}
+                                                placeholder={`0 - ${formatScore(essay.maxScore ?? essay.points)}`}
                                                 value={draft.score}
                                                 onChange={(e) => {
                                                     const val = e.target.value;
@@ -397,7 +400,7 @@ export default function EssayAttemptDetailPage() {
                             <DialogDescription>
                                 This exam attempt has already been graded with an official final score of{" "}
                                 <span className="font-semibold text-foreground">
-                                    {detail?.finalScore != null ? `${detail.finalScore} pts` : "Graded"}
+                                    {detail?.finalScore != null ? `${formatScore(detail.finalScore)} pts` : "Graded"}
                                 </span>
                                 . Are you sure you want to overwrite the confirmed official grade?
                             </DialogDescription>

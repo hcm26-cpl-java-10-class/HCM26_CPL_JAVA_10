@@ -7,6 +7,7 @@ import {
     type ExamAttemptAnswer,
     type SaveExamAnswerRequest,
 } from "@/api/exam.api";
+import { formatScore, questionScore } from '@/utils/examScore'; // NEW
 import { Button } from "@/components/ui/button";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
@@ -103,7 +104,7 @@ export default function AnonymousExamTakingPage() {
             toast.error(
                 axios.isAxiosError(error)
                     ? ((error.response?.data as { message?: string } | undefined)?.message ??
-                      'Không thể nộp bài.')
+                        'Không thể nộp bài.')
                     : 'Không thể nộp bài.',
             ),
     });
@@ -425,9 +426,9 @@ export default function AnonymousExamTakingPage() {
                     const color = isFlagged
                         ? 'bg-yellow-400 text-black'
                         : (answers[question.id]?.selectedOptionIds.length ?? 0) > 0 ||
-                            hasText(question.id)
-                          ? 'bg-green-600 text-white'
-                          : 'bg-black text-white';
+                        hasText(question.id)
+                            ? 'bg-green-600 text-white'
+                            : 'bg-black text-white';
                     return (
                         <button
                             key={question.id}
@@ -460,7 +461,7 @@ export default function AnonymousExamTakingPage() {
                             <p className="font-semibold leading-tight">{attempt.title}</p>
                             <p className="text-xs text-muted-foreground">
                                 {studentName || 'Học sinh'} · {attempt.durationMinutes} phút ·{' '}
-                                {attempt.totalPoints} điểm
+                                {formatScore(attempt.maxScore ?? 10)} điểm
                             </p>
                         </div>
                     </div>
@@ -493,9 +494,10 @@ export default function AnonymousExamTakingPage() {
                             {attempt.status === 'SUBMITTED' && 'Hoàn thành bài thi'}
                         </h2>
                         <p className="mt-3 text-lg">
+                            {/* CHANGED: điểm theo thang điểm của đề; tự luận chưa chấm tính 0 */}
                             {attempt.finalScore === null
-                                ? `Điểm phần trắc nghiệm: ${attempt.objectiveScore ?? 0}/${attempt.totalPoints}`
-                                : `Điểm: ${attempt.finalScore}/${attempt.totalPoints}`}
+                                ? `Điểm tạm thời: ${formatScore(attempt.provisionalScore ?? attempt.objectiveScore ?? 0)}/${formatScore(attempt.maxScore ?? 10)} (câu tự luận chưa chấm tính 0 điểm)`
+                                : `Điểm: ${formatScore(attempt.finalScore)}/${formatScore(attempt.maxScore ?? 10)}`}
                         </p>
                         {attempt.finalScore === null && (
                             <p className="mt-2 text-sm text-muted-foreground">
@@ -531,7 +533,7 @@ export default function AnonymousExamTakingPage() {
                                         <h2 className="font-semibold">
                                             Câu {index + 1}
                                             <span className="ml-2 text-sm font-normal text-muted-foreground">
-                                                {question.points} điểm
+                                                {formatScore(questionScore(attempt.maxScore, question.points, attempt.totalPoints))} điểm
                                             </span>
                                         </h2>
                                         {starButton(question.id, index + 1)}
@@ -595,11 +597,11 @@ export default function AnonymousExamTakingPage() {
                                                                 const selectedOptionIds = !isMulti
                                                                     ? [option.id]
                                                                     : checked
-                                                                      ? answer.selectedOptionIds.filter(
+                                                                        ? answer.selectedOptionIds.filter(
                                                                             (id) =>
                                                                                 id !== option.id,
                                                                         )
-                                                                      : [
+                                                                        : [
                                                                             ...answer.selectedOptionIds,
                                                                             option.id,
                                                                         ];

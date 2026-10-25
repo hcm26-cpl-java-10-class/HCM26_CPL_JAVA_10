@@ -56,9 +56,10 @@ public class ExamResultEmailDispatcher {
                                         + "\nObjective score: "
                                         + (attempt.getObjectiveScore() == null
                                         ? "Not available"
-                                        : attempt.getObjectiveScore())
+                                        : attempt.getObjectiveScore().setScale(2, java.math.RoundingMode.HALF_UP)) // CHANGED: hiển thị 2 số lẻ
                                         + "\nFinal score: "
-                                        + attempt.getFinalScore()
+                                        + attempt.getFinalScore().setScale(2, java.math.RoundingMode.HALF_UP)
+                                        + "/" + ExamScoring.effectiveMax(attempt.getMaxScore()).stripTrailingZeros().toPlainString()
                         ))
                         .toList();
 

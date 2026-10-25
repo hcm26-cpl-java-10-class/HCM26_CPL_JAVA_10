@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.exam.service.ai;
 
+import java.math.BigDecimal; // NEW
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.system.exam.dto.EssayGradingDTO;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -28,7 +29,7 @@ public class AiEssayGradingClient {
             Long questionId,
             int displayOrder,
             String questionContent,
-            int maxPoints,
+            BigDecimal maxPoints, // CHANGED: int -> BigDecimal (điểm tối đa quy đổi)
             String studentAnswer
     ) {}
 
@@ -36,7 +37,7 @@ public class AiEssayGradingClient {
         if (!properties.isEnabled() || properties.getApiKey() == null || properties.getApiKey().isBlank()) {
             throw new BadRequestException(
                     "AI grading provider is not configured. Missing required configuration: app.ai.api-key. " +
-                    "Please configure app.ai.api-key in application.properties or set the AI_API_KEY environment variable."
+                            "Please configure app.ai.api-key in application.properties or set the AI_API_KEY environment variable."
             );
         }
 
@@ -164,11 +165,11 @@ public class AiEssayGradingClient {
             for (JsonNode item : proposalsNode) {
                 Long qId = item.path("questionId").asLong();
                 EssayQuestionPayload payload = payloadMap.get(qId);
-                int maxPoints = payload != null ? payload.maxPoints() : 100;
+                BigDecimal maxPoints = payload != null ? payload.maxPoints() : BigDecimal.valueOf(100);
 
-                int rawScore = item.path("proposedScore").asInt(0);
+                BigDecimal rawScore = BigDecimal.valueOf(item.path("proposedScore").asDouble(0));
                 // Validate score bounds: 0 <= score <= maxPoints
-                int validScore = Math.max(0, Math.min(rawScore, maxPoints));
+                BigDecimal validScore = rawScore.max(BigDecimal.ZERO).min(maxPoints).setScale(2, java.math.RoundingMode.HALF_UP);
 
                 EssayGradingDTO.AiQuestionProposal proposal = new EssayGradingDTO.AiQuestionProposal();
                 proposal.setQuestionId(qId);

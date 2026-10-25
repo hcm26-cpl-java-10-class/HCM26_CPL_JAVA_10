@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.exam.dto;
 
+import java.math.BigDecimal; // NEW
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus;
 import com.example.starter_project_2025.system.question.dto.QuestionTakerDTO;
 import lombok.Getter;
@@ -16,9 +17,12 @@ public class ExamAttemptDTO {
     private int attemptNumber;
     private String title;
     private int durationMinutes;
-    private int totalPoints;
-    private Integer objectiveScore;
-    private Integer finalScore;
+    private int totalPoints; // tổng tỉ lệ điểm (trọng số) của các câu
+    private BigDecimal maxScore; // NEW: thang điểm của đề
+    private BigDecimal objectiveScore; // CHANGED: Integer -> BigDecimal
+    private BigDecimal finalScore;
+    // NEW: điểm tạm = trắc nghiệm (đã trừ muộn) + 0 cho tự luận chưa chấm; bằng finalScore khi đã chấm xong
+    private BigDecimal provisionalScore;
     private ExamAttemptStatus status;
     private Instant startedAt;
     private Instant officialDeadlineAt;
@@ -28,7 +32,7 @@ public class ExamAttemptDTO {
     private Integer latePenaltyPercentApplied;
     private Integer attemptsUsed;
     private Integer attemptsRemaining;
-    private Integer bestScore;
+    private BigDecimal bestScore; // CHANGED: Integer -> BigDecimal
     private List<QuestionTakerDTO> questions;
     private List<AnswerDTO> answers;
 

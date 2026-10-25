@@ -61,7 +61,7 @@ public class PublishedExamScoreService {
                         attempt.getAttemptNumber(),
                         attempt.getObjectiveScore(),
                         attempt.getFinalScore(),
-                        attempt.getTotalPoints(),
+                        ExamScoring.effectiveMax(attempt.getMaxScore()), // CHANGED
                         attempt.getSubmittedAt()
                 ))
                 .toList();

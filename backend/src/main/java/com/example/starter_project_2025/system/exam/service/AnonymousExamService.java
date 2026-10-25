@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.exam.service;
 
+import java.math.BigDecimal; // NEW
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.exam.domain.AnonymousSession;
@@ -123,14 +124,14 @@ public class AnonymousExamService {
         // Có câu tự luận thì chưa có điểm cuối cùng, chờ giáo viên chấm.
         boolean pendingReview = attempt.getFinalScore() == null;
 
-        Integer score = attempt.getFinalScore() != null
+        BigDecimal score = attempt.getFinalScore() != null // CHANGED: Integer -> BigDecimal
                 ? attempt.getFinalScore()
                 : attempt.getObjectiveScore();
 
         String submittedAt = attempt.getSubmittedAt() == null
                 ? ""
                 : SUBMITTED_AT_FORMAT.format(
-                        LocalDateTime.ofInstant(attempt.getSubmittedAt(), ZoneId.systemDefault()));
+                LocalDateTime.ofInstant(attempt.getSubmittedAt(), ZoneId.systemDefault()));
 
         try {
             emailService.sendAnonymousExamResult(
@@ -138,7 +139,7 @@ public class AnonymousExamService {
                     session.getGuestName(),
                     attempt.getExam().getTitle(),
                     score,
-                    attempt.getTotalPoints(),
+                    ExamScoring.effectiveMax(attempt.getMaxScore()), // CHANGED: thang điểm của đề thay cho tổng điểm cứng
                     submittedAt,
                     pendingReview
             );
@@ -176,14 +177,14 @@ public class AnonymousExamService {
         String submittedAt = attempt.getSubmittedAt() == null
                 ? ""
                 : SUBMITTED_AT_FORMAT.format(
-                        LocalDateTime.ofInstant(attempt.getSubmittedAt(), ZoneId.systemDefault()));
+                LocalDateTime.ofInstant(attempt.getSubmittedAt(), ZoneId.systemDefault()));
 
         emailService.sendAnonymousExamResult(
                 attempt.getStudent().getEmail(),
                 attempt.getStudent().getFullName(),
                 attempt.getExam().getTitle(),
                 attempt.getFinalScore(),
-                attempt.getTotalPoints(),
+                ExamScoring.effectiveMax(attempt.getMaxScore()), // CHANGED
                 submittedAt,
                 false
         );

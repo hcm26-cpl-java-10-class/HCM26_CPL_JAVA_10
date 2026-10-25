@@ -45,6 +45,7 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setShuffleOptions(e.getShuffleOptions());
         d.setShowAnswersAfterExam(e.getShowAnswersAfterExam());
         d.setPassScore(e.getPassScore());
+        d.setMaxScore(ExamScoring.effectiveMax(e.getMaxScore())); // NEW
         d.setLatePolicy(e.getLatePolicy());
         d.setLatePenaltyPercent(e.getLatePenaltyPercent());
         d.setLateGraceMinutes(e.getLateGraceMinutes());
@@ -78,6 +79,9 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         if (d.getShuffleOptions() != null) e.setShuffleOptions(d.getShuffleOptions());
         if (d.getShowAnswersAfterExam() != null) e.setShowAnswersAfterExam(d.getShowAnswersAfterExam());
         if (d.getPassScore() != null) e.setPassScore(d.getPassScore());
+        // NEW: bỏ trống thang điểm = 10
+        if (d.getMaxScore() != null) e.setMaxScore(d.getMaxScore());
+        else if (e.getMaxScore() == null) e.setMaxScore(ExamScoring.DEFAULT_MAX_SCORE);
         if (d.getLatePolicy() != null) e.setLatePolicy(d.getLatePolicy());
         if (d.getLatePenaltyPercent() != null) e.setLatePenaltyPercent(d.getLatePenaltyPercent());
         if (d.getLateGraceMinutes() != null) e.setLateGraceMinutes(d.getLateGraceMinutes());
