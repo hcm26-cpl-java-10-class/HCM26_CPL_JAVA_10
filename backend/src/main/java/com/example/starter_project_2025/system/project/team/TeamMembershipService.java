@@ -55,6 +55,9 @@ public class TeamMembershipService {
         TeamMember membership = memberships.findByTeamIdAndUserId(teamId, userId).orElseGet(() -> {
             TeamMember created = new TeamMember(); created.setTeam(team); created.setUser(user); return created;
         });
+        users.lockForContribution(java.util.List.of(userId));
+        if (request.status() == ParticipationStatus.ACTIVE && !membership.isCurrentParticipant())
+            membership.setJoinedAt(java.time.Instant.now());
         membership.setIsActive(true);
         membership.setProjectRole(request.projectRole());
         membership.setParticipationStatus(request.status());

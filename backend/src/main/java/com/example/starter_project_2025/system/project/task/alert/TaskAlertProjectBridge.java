@@ -190,4 +190,32 @@ public class TaskAlertProjectBridge implements TaskProjectAccess {
         return user.getRoles().stream().anyMatch(role -> Boolean.TRUE.equals(role.getIsActive())
                 && Set.of("STUDENT", "TRAINEE").contains(role.getName()));
     }
+
+    public record StudentMembership(Long userId, String userCode, String displayName, java.time.Instant joinedAt) { }
+
+    public List<StudentMembership> studentRoster(UUID projectId, Long actorId, java.time.ZoneId legacyZone) {
+        Project project = project(projectId);
+        User actor = users.findById(actorId).orElseThrow(this::denied);
+        if (!isManager(projectId, actorId)) throw denied();
+        boolean manager = admin(actor) || mentor(project, actorId);
+        Map<Long, StudentMembership> result = new TreeMap<>();
+        for (var row : teamMembers.findAll())
+            if (current(row) && matches(row.getTeam(), project) && sameTenant(row.getUser(), project) && student(row.getUser())
+                    && (manager || inTeam(actor, new Member(null,row.getUser(),TaskAlertData.MemberSource.TEAM_MEMBER,row.getTeam().getId()),true))) {
+                var joined = row.getJoinedAt() != null ? row.getJoinedAt()
+                        : row.getCreatedAt() == null ? null : row.getCreatedAt().atZone(legacyZone).toInstant();
+                mergeMembership(result, row.getUser(), joined);
+            }
+        for (var row : projectMembers.findAll()) {
+            User user = row.getClassMember().getUser();
+            if (current(row) && matches(row.getTeam(),project) && sameTenant(user,project) && student(user)
+                    && (manager || inTeam(actor,new Member(null,user,TaskAlertData.MemberSource.PROJECT_MEMBER,row.getTeam().getId()),true)))
+                mergeMembership(result,user,row.getCreatedAt()==null?null:row.getCreatedAt().atZone(legacyZone).toInstant());
+        }
+        return List.copyOf(result.values());
+    }
+    private void mergeMembership(Map<Long,StudentMembership> result,User user,java.time.Instant joined) {
+        var value = new StudentMembership(user.getId(),user.getUserCode(),user.getFullName(),joined);
+        result.merge(user.getId(),value,(old,current)-> old.joinedAt()==null || current.joinedAt()!=null && current.joinedAt().isAfter(old.joinedAt()) ? current : old);
+    }
 }

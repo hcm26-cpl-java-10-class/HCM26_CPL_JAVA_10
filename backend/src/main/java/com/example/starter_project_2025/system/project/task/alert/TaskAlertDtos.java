@@ -23,7 +23,7 @@ public final class TaskAlertDtos {
                                 @NotNull Long sourceMemberId) { }
     public record MemberOption(Long id, TaskAlertData.MemberSource source, Long userId, String displayName, String teamName) { }
     public record AssigneeOption(UUID id, String displayName) { }
-    public record ProjectOption(UUID id, String name, String code) { }
+    public record ProjectOption(UUID id, String name, String code, boolean canManage) { }
     public record BridgeOption(Long projectId, String projectName, UUID taskProjectId, List<MemberOption> members) { }
 
     // The payload is immutable. Assignee IDs are UUID member aliases; recipients are deduplicated User IDs.

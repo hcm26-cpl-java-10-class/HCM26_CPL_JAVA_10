@@ -25,6 +25,8 @@ public class TaskAuditService {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void record(String action, TaskDTO before, TaskDTO after, Long actorId, String correlationId) {
+        // Serialize committed contributions with inactivity evaluation for this actor.
+        userRepository.lockForContribution(java.util.List.of(actorId));
         auditRepository.save(TaskAuditLog.builder()
                 .taskId(after.getId()).projectId(after.getProjectId()).actorId(actorId)
                 .action(action).beforeState(before == null ? null : toJson(before))

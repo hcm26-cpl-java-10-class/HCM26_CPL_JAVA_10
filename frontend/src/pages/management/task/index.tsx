@@ -8,13 +8,14 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { TaskProjectPicker } from "./components/TaskProjectPicker";
 import { TaskTable } from "./components/TaskTable";
 import { OverdueTaskPanel } from "./components/OverdueTaskPanel";
+import { InactiveMemberPanel } from "./components/InactiveMemberPanel";
 import { isProjectId } from "./task-form.utils";
 import { useTaskProjects } from "./hooks/useTaskProjects";
 
 export default function TaskManagementPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user, activeRole } = usePermissions();
+  const { user, activeRole, hasPermission } = usePermissions();
   const projects = useTaskProjects();
   const [projectOpen, setProjectOpen] = useState(false);
   const projectStorageKey = `task-project:${user.email}`;
@@ -22,6 +23,7 @@ export default function TaskManagementPage() {
     searchParams.get("projectId") ?? sessionStorage.getItem(projectStorageKey) ?? "";
   const projectSelected = isProjectId(projectId);
   const overdue = searchParams.get("overdue") === "true";
+  const inactive = searchParams.get("view") === "inactive";
 
   useEffect(() => {
     if (projectSelected) sessionStorage.setItem(projectStorageKey, projectId);
@@ -29,7 +31,7 @@ export default function TaskManagementPage() {
 
   const selectProject = (id: string) => {
     sessionStorage.setItem(projectStorageKey, id);
-    setSearchParams({ projectId: id, ...(overdue ? { overdue: "true" } : {}) });
+    setSearchParams({ projectId: id, ...(inactive ? { view: "inactive" } : overdue ? { overdue: "true" } : {}) });
     setProjectOpen(false);
   };
 
@@ -55,12 +57,14 @@ export default function TaskManagementPage() {
         </header>
         {projectSelected ? (
           <div className="grid min-h-0 gap-4">
-            <div className="flex gap-2" aria-label="Task views">
-              <Button variant={overdue ? "outline" : "default"} onClick={() => setSearchParams({ projectId })}>All tasks</Button>
+            <div className="flex flex-wrap gap-2" aria-label="Task views">
+              <Button variant={overdue || inactive ? "outline" : "default"} onClick={() => setSearchParams({ projectId })}>All tasks</Button>
               <Button variant={overdue ? "default" : "outline"} onClick={() => setSearchParams({ projectId, overdue: "true" })}>Overdue tasks</Button>
               <Button variant="outline" onClick={() => navigate(`/projects/${projectId}/milestones?view=risk`)}>Milestone risks</Button>
+              {hasPermission("INACTIVE_MEMBER_READ") && projects.data?.find(project => project.id===projectId)?.canManage &&
+                <Button variant={inactive ? "default" : "outline"} onClick={() => setSearchParams({ projectId, view: "inactive" })}>Inactive members</Button>}
             </div>
-            {overdue
+            {inactive ? <InactiveMemberPanel key={`${user.email}:${activeRole}:${projectId}`} projectId={projectId} /> : overdue
               ? <OverdueTaskPanel key={`${user.email}:${activeRole}:${projectId}`} projectId={projectId} />
               : <TaskTable key={`${user.email}:${activeRole}:${projectId}`} projectId={projectId} />}
           </div>

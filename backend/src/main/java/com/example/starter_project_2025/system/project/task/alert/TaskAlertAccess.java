@@ -106,7 +106,7 @@ public class TaskAlertAccess {
         User actor = actor("TASK_READ");
         return bridge.findProjectIds(actor.getId()).stream().map(id -> {
             var project = bridge.project(id);
-            return new ProjectOption(id, project.getName(), project.getCode());
+            return new ProjectOption(id, project.getName(), project.getCode(), bridge.isManager(id,actor.getId()));
         }).sorted(Comparator.comparing(ProjectOption::name).thenComparing(ProjectOption::id)).toList();
     }
     public List<AssigneeOption> assignees(UUID projectId) {
