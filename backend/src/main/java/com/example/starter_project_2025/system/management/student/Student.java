@@ -62,7 +62,7 @@ public class Student extends BaseEntity {
     String phone;
 
     @ImportField(name = "Date of Birth")
-    @ExportField(name = "Date of Birth")
+    @ExportField(name = "Date of Birth", dateFormat = "dd-MM-yyyy")
     LocalDate dateOfBirth;
 
     @Column(length = 20)
@@ -75,7 +75,7 @@ public class Student extends BaseEntity {
     @ExportField(name = "Class Name")
     String className;
 
-    @Column(length = 500)
+    @Column(length = 1000)
     @ImportField(name = "Address")
     @ExportField(name = "Address")
     String address;

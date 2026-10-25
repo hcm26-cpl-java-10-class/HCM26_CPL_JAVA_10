@@ -1,8 +1,6 @@
 package com.example.starter_project_2025.service;
 
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
-import com.example.starter_project_2025.exception.BadRequestException;
-import com.example.starter_project_2025.system.menu.module.ModuleRepository;
 import com.example.starter_project_2025.system.menu.module_groups.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -23,9 +21,6 @@ class ModuleGroupServiceTest {
 
     @Mock
     private ModuleGroupMapper moduleMapper;
-
-    @Mock
-    private ModuleRepository moduleRepository;
 
     @InjectMocks
     private ModuleGroupServiceImpl moduleGroupService;
@@ -156,28 +151,5 @@ class ModuleGroupServiceTest {
 
         assertFalse(ctx.hasErrors());
         verify(moduleRepo, never()).existsByNameIgnoreCase(anyString());
-    }
-
-    // --- 4. TEST LOGIC TRƯỚC KHI XÓA (beforeDelete) ---
-
-    @Test
-    @DisplayName("beforeDelete - Should throw BadRequestException when group contains modules")
-    void beforeDelete_HasModules_ThrowsBadRequestException() {
-        when(moduleRepository.existsByModuleGroupId(1L)).thenReturn(true);
-
-        BadRequestException ex = assertThrows(BadRequestException.class, () ->
-                moduleGroupService.beforeDelete(mockEntity));
-
-        assertTrue(ex.getMessage().contains("Cannot delete module group"));
-        verify(moduleRepository, times(1)).existsByModuleGroupId(1L);
-    }
-
-    @Test
-    @DisplayName("beforeDelete - Should pass when group does not contain modules")
-    void beforeDelete_NoModules_Success() {
-        when(moduleRepository.existsByModuleGroupId(1L)).thenReturn(false);
-
-        assertDoesNotThrow(() -> moduleGroupService.beforeDelete(mockEntity));
-        verify(moduleRepository, times(1)).existsByModuleGroupId(1L);
     }
 }

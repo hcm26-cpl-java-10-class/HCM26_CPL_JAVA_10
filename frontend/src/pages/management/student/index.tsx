@@ -13,7 +13,7 @@ const studentSchema: EntitySchema = {
     { name: "dateOfBirth", label: "Ngày sinh", type: "date", sortable: true, required: true },
     { name: "gender", label: "Giới tính", type: "select", sortable: true, filterable: true, filterType: "select", options: [{ label: "Nam", value: "MALE" }, { label: "Nữ", value: "FEMALE" }], filterOptions: [{ label: "Nam", value: "MALE" }, { label: "Nữ", value: "FEMALE" }], required: true },
     { name: "className", label: "Lớp", type: "text", sortable: true, filterable: true, filterType: "text", required: true },
-    { name: "address", label: "Địa chỉ", type: "textarea", maxLength: 500 },
+    { name: "address", label: "Địa chỉ", type: "textarea", maxLength: 1000 },
     ...(auditableFieldsSchema as FieldSchema[]),
   ],
 };

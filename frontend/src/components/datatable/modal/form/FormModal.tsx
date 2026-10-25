@@ -152,26 +152,6 @@ export function FormModal({
   }, [initial, open]);
 
   const updateField = (name: string, value: any) => {
-    if (schema.entityName === "student" && name === "address") {
-      const addressValue = String(value ?? "");
-      if (addressValue.length > 500) {
-        // Keep the input at 500 characters, show the validation message,
-        // and prevent additional characters from being entered.
-        setForm((prev) => ({ ...prev, address: addressValue.slice(0, 500) }));
-        setClientErrors((prev) => ({
-          ...prev,
-          address: ["Địa chỉ không được vượt quá 500 ký tự."],
-        }));
-        return;
-      }
-
-      setForm((prev) => ({ ...prev, address: addressValue }));
-      if (addressValue.length < 500) {
-        setClientErrors((prev) => ({ ...prev, address: [] }));
-      }
-      return;
-    }
-
     setForm((prev) => ({ ...prev, [name]: value }));
     if (name === "email") setClientErrors((prev) => ({ ...prev, email: [] }));
   };
@@ -192,8 +172,8 @@ export function FormModal({
       }
 
       const address = String(form.address ?? "");
-      if (address.length > 500) {
-        errors.address = ["Địa chỉ không được vượt quá 500 ký tự."];
+      if (address.length > 1000) {
+        errors.address = ["Địa chỉ không được vượt quá 1000 ký tự."];
       }
 
       if (Object.keys(errors).length > 0) {

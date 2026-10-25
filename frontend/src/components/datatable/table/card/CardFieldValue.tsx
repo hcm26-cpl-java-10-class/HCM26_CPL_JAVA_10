@@ -40,6 +40,16 @@ export function CardFieldValue({
     );
   }
 
+  // Show Vietnamese labels for student gender values stored by the backend.
+  if (field.name === "gender" && value != null) {
+    const genderText = String(value).toUpperCase() === "MALE"
+      ? "Nam"
+      : String(value).toUpperCase() === "FEMALE"
+        ? "Nữ"
+        : String(value);
+    return <TruncatedText content={genderText} bold={field.bold} className="text-sm" />;
+  }
+
   if (field.type === "icon" || field.name === "icon") {
     const iconKey = value?.toString();
     const Icon =

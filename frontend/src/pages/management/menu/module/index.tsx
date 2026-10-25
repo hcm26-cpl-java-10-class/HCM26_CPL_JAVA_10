@@ -1,7 +1,6 @@
 import { moduleApi, moduleGroupApi, permissionApi } from "@/api";
 import { iconKeyOptions } from "@/components/datatable/iconMap";
 import { auditableFieldsSchema, type EntityConfig, type EntitySchema, type FieldSchema } from "@/types";
-import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
 
 const moduleSchema: EntitySchema = {
     entityName: "module",
@@ -70,6 +69,3 @@ export const entityConfig: EntityConfig = {
     api: moduleApi,
     schema: moduleSchema,
 };
-
-// Temporarily route /menus to the combined Module Group & Module UI
-export default ModuleGroupModulePage;
