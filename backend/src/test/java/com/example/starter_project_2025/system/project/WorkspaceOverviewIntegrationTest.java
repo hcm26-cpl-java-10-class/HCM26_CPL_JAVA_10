@@ -58,7 +58,8 @@ class WorkspaceOverviewIntegrationTest {
             role.setPermissions(new HashSet<>(List.of(
                     permissions.findByName("WORKSPACE_READ").orElseThrow(),
                     permissions.findByName("WORKSPACE_CREATE").orElseThrow(),
-                    permissions.findByName("WORKSPACE_MEMBER_READ").orElseThrow())));
+                    permissions.findByName("WORKSPACE_MEMBER_READ").orElseThrow(),
+                    permissions.findByName("WORKSPACE_ACTIVITY_READ").orElseThrow())));
             roleId = roles.saveAndFlush(role).getId();
             var user = new User();
             user.setEmail(UUID.randomUUID() + "@us02.test");
@@ -94,6 +95,11 @@ class WorkspaceOverviewIntegrationTest {
 
     JsonNode overview() throws Exception {
         return json.readTree(mvc.perform(get("/api/workspaces/{id}", workspaceId)
+                .header("Authorization", "Bearer " + token)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+    }
+    JsonNode activity() throws Exception {
+        return json.readTree(mvc.perform(get("/api/workspaces/{id}/activity", workspaceId)
                 .header("Authorization", "Bearer " + token)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
     }
@@ -169,14 +175,14 @@ class WorkspaceOverviewIntegrationTest {
     }
 
     @Test void ac05RosterRefreshExcludesLeftMemberAndRetainsHistory() throws Exception {
-        var oldEvent = overview().at("/activities/0/eventId").asText();
+        var oldEvent = activity().at("/items/0/id").asText();
         tx.executeWithoutResult(status -> memberships.findById(membershipId).orElseThrow()
                 .setParticipationStatus(ParticipationStatus.LEFT));
         assertThat(members()).isEmpty();
         var result = overview();
         assertThat(result.get("member_count").asInt()).isZero();
-        assertThat(result.at("/activities/0/eventId").asText()).isEqualTo(oldEvent);
-        assertThat(result.at("/activities/0/actorName").asText()).isEqualTo("Workspace Reader");
+        assertThat(activity().at("/items/0/id").asText()).isEqualTo(oldEvent);
+        assertThat(activity().at("/items/0/description").asText()).isEqualTo("Workspace Reader");
     }
 
     @Test void ac06OverviewOnlyRoleSeesCountButMembersApiIs403() throws Exception {

@@ -92,6 +92,23 @@ export interface WorkspaceDetail extends WorkspaceResponse {
   member_count: number;
   can_view_members: boolean;
   topic_snapshot: WorkspaceTopicSnapshot | null;
-  activities: WorkspaceActivity[];
+  activities: WorkspaceActivity[] | null;
+}
+
+export type WorkspaceSectionKey = "overview" | "members" | "milestones" | "sprints" | "backlog" | "artifacts" | "feedback" | "activity";
+export interface WorkspaceSectionAccess { key: WorkspaceSectionKey; canRead: boolean; actions: Record<string, boolean> }
+export interface WorkspaceNavigation {
+  workspaceId: number; projectId: number; teamId: number; projectCode: string; projectName: string;
+  teamName: string; projectStatus: string; sections: WorkspaceSectionAccess[];
+}
+export interface WorkspaceSectionItem {
+  id: string; title: string; description: string | null; status: string; published: boolean; score?: number; occurredAt?: string;
+}
+export interface WorkspaceSectionContent {
+  workspaceId: number; projectId: number; teamId: number; section: WorkspaceSectionKey; items: WorkspaceSectionItem[];
+}
+export interface SectionCreate { title: string; description: string; published: boolean }
+export interface SectionReview {
+  kind: "ARTIFACT" | "MILESTONE" | "SPRINT"; targetId: string; comment: string; score?: number; published: boolean;
 }
 

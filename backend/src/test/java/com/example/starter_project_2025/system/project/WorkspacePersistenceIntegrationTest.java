@@ -67,7 +67,8 @@ class WorkspacePersistenceIntegrationTest {
             var service = context.getBean(WorkspaceService.class);
             var detail = service.getWorkspace(first.getId());
             assertThat(detail.getSections()).hasSize(8);
-            assertThat(detail.getActivities()).hasSize(1);
+            assertThat(detail.getActivities()).isNull();
+            assertThat(context.getBean(WorkspaceSectionService.class).read(first.getId(), "activity").items()).hasSize(1);
             assertThat(detail.getStatus()).isEqualTo(WorkspaceStatus.ACTIVE);
             assertThat(detail.getProjectStatus()).isEqualTo(ProjectStatus.ACTIVE);
             assertThat(service.createWorkspace(key, payload)).isEqualTo(first);

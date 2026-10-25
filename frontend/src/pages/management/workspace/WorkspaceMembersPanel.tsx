@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { workspaceApi } from "@/api/features/workspace.api";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { WorkspaceMember } from "@/types/features/workspace";
@@ -11,18 +11,21 @@ import { Loader2, Users } from "lucide-react";
 import { getWorkspaceError } from "./workspace.shared";
 import { PROJECT_ROLE_LABELS, PARTICIPATION_LABELS } from "./workspace.roles";
 import { WorkspaceMemberManagementDialog } from "./WorkspaceMemberManagementDialog";
+import { WorkspaceSectionState } from "./WorkspaceSectionState";
 
-export function WorkspaceMembersPanel({ workspaceId, teamId, canViewMembers }: {
+export function WorkspaceMembersPanel({ workspaceId, teamId, canViewMembers, canManageMembers = false, onAccessChanged }: {
   workspaceId: number;
   teamId: number;
   canViewMembers: boolean;
+  canManageMembers?: boolean;
+  onAccessChanged?: () => void;
 }) {
-  const { user, hasPermission } = usePermissions();
+  const { user, activeRole, hasPermission } = usePermissions();
   const queryClient = useQueryClient();
   const [managementOpen, setManagementOpen] = useState(false);
   const query = useQuery<WorkspaceMember[]>({
-    queryKey: ["workspace-members", workspaceId, user.email],
-    queryFn: () => workspaceApi.getMembers(workspaceId),
+    queryKey: ["workspace-members", workspaceId, user.email, activeRole],
+    queryFn: ({ signal }) => workspaceApi.getMembers(workspaceId, signal),
     enabled: canViewMembers,
     retry: false,
     staleTime: 0,
@@ -30,13 +33,16 @@ export function WorkspaceMembersPanel({ workspaceId, teamId, canViewMembers }: {
     refetchOnMount: "always"
   });
 
+  const denied = isAxiosError(query.error) && query.error.response?.status === 403;
+  useEffect(() => { if (denied) onAccessChanged?.(); }, [denied, onAccessChanged]);
+  if (denied) return <WorkspaceSectionState denied retry={() => onAccessChanged?.()} />;
+
   if (!canViewMembers) {
     return <Card><CardHeader><CardTitle>Members</CardTitle></CardHeader>
       <CardContent>You do not have permission to view member details.</CardContent></Card>;
   }
   const members = query.data ?? [];
   const loading = query.isFetching || query.isLoading;
-  const denied = isAxiosError(query.error) && query.error.response?.status === 403;
   function changeManagementOpen(open: boolean) {
     setManagementOpen(open);
     if (!open) void queryClient.invalidateQueries({ queryKey: ["workspace-detail", workspaceId] });
@@ -45,7 +51,7 @@ export function WorkspaceMembersPanel({ workspaceId, teamId, canViewMembers }: {
     <Card>
       <CardHeader><div className="flex flex-wrap items-center justify-between gap-3">
         <CardTitle>{query.isError ? "Unable to load members" : loading ? "Members" : "Members (" + members.length + ")"}</CardTitle>
-        {hasPermission("TEAM_UPDATE") && <Button variant="outline" onClick={() => setManagementOpen(true)}><Users />Manage members</Button>}
+        {canManageMembers && hasPermission("TEAM_UPDATE") && <Button variant="outline" onClick={() => setManagementOpen(true)}><Users />Manage members</Button>}
       </div></CardHeader>
       <CardContent>{loading ? <p className="flex items-center justify-center gap-2 py-10"><Loader2 className="size-4 animate-spin" />Loading members...</p>
         : query.isError ? <div className="space-y-3"><p className="text-sm">{denied ? "You do not have permission to view member details." : getWorkspaceError(query.error)}</p><Button variant="outline" onClick={() => void query.refetch()}>Try again</Button></div>
@@ -59,6 +65,6 @@ export function WorkspaceMembersPanel({ workspaceId, teamId, canViewMembers }: {
           </TableRow>)}</TableBody></Table>}
       </CardContent>
     </Card>
-    {hasPermission("TEAM_UPDATE") && <WorkspaceMemberManagementDialog teamId={teamId} workspaceId={workspaceId} open={managementOpen} onOpenChange={changeManagementOpen} />}
+    {canManageMembers && hasPermission("TEAM_UPDATE") && <WorkspaceMemberManagementDialog teamId={teamId} workspaceId={workspaceId} open={managementOpen} onOpenChange={changeManagementOpen} onAccessChanged={onAccessChanged} />}
   </>;
 }

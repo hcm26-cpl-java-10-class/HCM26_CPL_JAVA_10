@@ -18,41 +18,22 @@ import java.util.Objects;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class WorkspaceReadService {
-    private final WorkspaceRepository workspaces;
+    private final WorkspaceContextService contexts;
     private final WorkspaceAccessService access;
     private final WorkspaceRosterService roster;
     private final ProjectTopicSnapshotRepository snapshots;
-    private final WorkspaceActivityRepository activities;
     private final UserRepository users;
     private final ObjectMapper json;
 
-    private Workspace authorizedWorkspace(User user, Long id) {
-        access.requireTenant(user, false);
-        Workspace workspace = workspaces.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Workspace was not found"));
-        if (!Boolean.TRUE.equals(workspace.getIsActive()))
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Workspace was not found");
-        if (!workspace.getTenant().getId().equals(user.getTenant().getId()))
-            throw new AccessDeniedException("Workspace is outside the current tenant");
-        access.requirePair(user, workspace.getProject().getId(), workspace.getTeam().getId(), false);
-        return workspace;
-    }
-
     public WorkspaceDetailResponse overview(Long id) {
         User user = access.requireUser(false);
-        Workspace workspace = authorizedWorkspace(user, id);
+        Workspace workspace = contexts.require(user, id);
         Project project = workspace.getProject();
         Team team = workspace.getTeam();
         Cohort cohort = project.getCohort();
         var snapshot = snapshots.findByProjectId(project.getId()).map(this::snapshotResponse).orElse(null);
         // A blank snapshot description stays blank; do not substitute newer project content.
         String description = snapshot != null ? snapshot.description() : project.getDescription();
-        var history = activities.findByWorkspaceIdOrderByOccurredAtDesc(id).stream()
-                .map(item -> new WorkspaceDetailResponse.ActivityItem(
-                        item.getEventId(), item.getAction(), item.getActorId(),
-                        users.findById(item.getActorId()).map(User::getFullName).orElse("Former member"),
-                        item.getOccurredAt(), item.getCorrelationId())).toList();
-
         return WorkspaceDetailResponse.builder()
                 .id(workspace.getId()).code(workspace.getCode()).name(workspace.getName())
                 .status(workspace.getStatus())
@@ -70,13 +51,13 @@ public class WorkspaceReadService {
                 .canViewMembers(access.canViewMembers(user))
                 .topicSnapshot(snapshot)
                 .sections(workspace.getSections().stream().map(WorkspaceSection::getKey).toList())
-                .activities(history).build();
+                .activities(null).build();
     }
 
     public List<WorkspaceMemberResponse> members(Long id) {
         User user = access.requireUser(false);
         access.requireMemberRead(user);
-        Workspace workspace = authorizedWorkspace(user, id);
+        Workspace workspace = contexts.require(user, id);
         return roster.response(roster.current(workspace.getTeam()));
     }
 

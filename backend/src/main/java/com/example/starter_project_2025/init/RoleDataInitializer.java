@@ -57,7 +57,9 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "ENROLLMENT_CREATE",
                         "LESSON_READ",
                         "EXAM_TAKE",
-                        "WORKSPACE_READ", "WORKSPACE_MEMBER_READ"
+                        "WORKSPACE_READ", "WORKSPACE_MEMBER_READ",
+                        "MILESTONE_READ", "SPRINT_READ", "TASK_WRITE", "ARTIFACT_READ", "ARTIFACT_SUBMIT",
+                        "FEEDBACK_READ", "WORKSPACE_ACTIVITY_READ"
                 )
         );
 
@@ -72,10 +74,21 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "EXAM_CREATE", "EXAM_READ", "EXAM_UPDATE", "EXAM_DELETE",
                         "QUESTION_CREATE", "QUESTION_READ", "QUESTION_UPDATE", "QUESTION_DELETE",
                         "INVITATION_CREATE", "INVITATION_READ", "INVITATION_UPDATE", "INVITATION_DELETE",
-                        "WORKSPACE_READ", "WORKSPACE_CREATE", "WORKSPACE_MEMBER_READ", "TEAM_READ", "TEAM_UPDATE"
+                        "WORKSPACE_READ", "WORKSPACE_CREATE", "WORKSPACE_MEMBER_READ", "TEAM_READ", "TEAM_UPDATE",
+                        "MILESTONE_READ", "MILESTONE_WRITE", "SPRINT_READ", "SPRINT_WRITE",
+                        "ARTIFACT_READ", "ARTIFACT_WRITE", "ARTIFACT_REVIEW", "FEEDBACK_READ", "FEEDBACK_WRITE",
+                        "WORKSPACE_ACTIVITY_READ"
                 )
         );
 
+        // Grant an existing PM role; do not create extra roles/accounts or expand data scope.
+        roleRepository.findByName("PM").ifPresent(pm -> {
+            pm.getPermissions().addAll(findPermissions("WORKSPACE_READ", "WORKSPACE_MEMBER_READ",
+                    "MILESTONE_READ", "MILESTONE_WRITE", "SPRINT_READ", "SPRINT_WRITE",
+                    "ARTIFACT_READ", "ARTIFACT_WRITE", "ARTIFACT_SUBMIT", "ARTIFACT_REVIEW",
+                    "FEEDBACK_READ", "FEEDBACK_WRITE", "WORKSPACE_ACTIVITY_READ"));
+            roleRepository.save(pm);
+        });
         log.info("Ensured roles and permission mappings: ADMIN, STUDENT, TEACHER.");
     }
 

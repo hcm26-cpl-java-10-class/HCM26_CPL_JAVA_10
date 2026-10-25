@@ -76,7 +76,8 @@ class WorkspaceAcceptanceIntegrationTest {
             Role role = new Role();
             role.setName("WORKSPACE_MEMBER_" + UUID.randomUUID());
             role.setPermissions(new HashSet<>(List.of(permissions.findByName("VIEW_PROJECT_WORKSPACE").orElseThrow(),
-                    permissions.findByName("CREATE_PROJECT_WORKSPACE").orElseThrow())));
+                    permissions.findByName("CREATE_PROJECT_WORKSPACE").orElseThrow(),
+                    permissions.findByName("WORKSPACE_ACTIVITY_READ").orElseThrow())));
             roleId = roles.saveAndFlush(role).getId();
             email = UUID.randomUUID() + "@workspace.test";
             User actor = new User();
@@ -304,7 +305,7 @@ class WorkspaceAcceptanceIntegrationTest {
             mvc.perform(get("/api/workspaces/{id}", id).header("Authorization", "Bearer " + token))
                     .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(id))
                     .andExpect(jsonPath("$.sections.length()").value(8)).andExpect(jsonPath("$.member_count").value(1))
-                    .andExpect(jsonPath("$.activities.length()").value(1));
+                    .andExpect(jsonPath("$.activities").isEmpty());
         }
         tx.executeWithoutResult(status -> members.findById(membershipId).orElseThrow().setIsActive(false));
         tx.executeWithoutResult(status -> teams.findById(teamId).orElseThrow().setMentor(users.findById(actorId).orElseThrow()));
@@ -497,9 +498,9 @@ class WorkspaceAcceptanceIntegrationTest {
         delivery.deliver(event.getId());
         assertThat(activities.findByWorkspaceIdOrderByOccurredAtDesc(id)).hasSize(1);
         assertThat(outbox.findById(event.getId()).orElseThrow().getDeliveredAt()).isNotNull();
-        mvc.perform(get("/api/workspaces/{id}", id).header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.activities[0].eventId").value(event.getEventId()))
-                .andExpect(jsonPath("$.activities[0].actorName").value("Workspace Creator"));
+        mvc.perform(get("/api/workspaces/{id}/activity", id).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].id").value(event.getEventId()))
+                .andExpect(jsonPath("$.items[0].description").value("Workspace Creator"));
     }
 
     @Test

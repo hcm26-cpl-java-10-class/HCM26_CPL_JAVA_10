@@ -51,6 +51,10 @@ public class WorkspaceAccessService {
         if (!hasPermission(user, Set.of("TEAM_UPDATE"))) throw new AccessDeniedException("Team management is not allowed");
     }
 
+    public boolean permitted(User user, String permission) {
+        return hasPermission(user, Set.of(permission));
+    }
+
     private boolean hasPermission(User user, Set<String> required) {
         return user.getRoles().stream().filter(role -> Boolean.TRUE.equals(role.getIsActive()))
                 .flatMap(role -> role.getPermissions().stream())

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { projectHubApi } from "@/api/features/project-hub.api";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -10,23 +10,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
+import { sectionForbidden } from "./WorkspaceSectionState";
 import { getWorkspaceError } from "./workspace.shared";
 import { PROJECT_ROLE_LABELS, PARTICIPATION_LABELS } from "./workspace.roles";
 
-export function WorkspaceMemberManagementDialog({ teamId, workspaceId, open, onOpenChange }: {
-  teamId: number; workspaceId: number; open: boolean; onOpenChange: (open: boolean) => void;
+export function WorkspaceMemberManagementDialog({ teamId, workspaceId, open, onOpenChange, onAccessChanged }: {
+  teamId: number; workspaceId: number; open: boolean; onOpenChange: (open: boolean) => void; onAccessChanged?: () => void;
 }) {
-  const { user, hasPermission } = usePermissions();
+  const { user, activeRole, hasPermission } = usePermissions();
   const queryClient = useQueryClient();
   const allowed = hasPermission("TEAM_UPDATE") && hasPermission("WORKSPACE_MEMBER_READ");
-  const roster = useQuery({ queryKey: ["team-managed-members", teamId, user.email],
-    queryFn: () => projectHubApi.getMembers(teamId), enabled: open && allowed, retry: false, staleTime: 0 });
-  const options = useQuery({ queryKey: ["team-member-options", teamId, user.email],
-    queryFn: () => projectHubApi.getMemberOptions(teamId), enabled: open && allowed, retry: false, staleTime: 0 });
+  const roster = useQuery({ queryKey: ["team-managed-members", teamId, user.email, activeRole],
+    queryFn: () => projectHubApi.getMembers(teamId), enabled: open && allowed, retry: false, staleTime: 0, gcTime: 0 });
+  const options = useQuery({ queryKey: ["team-member-options", teamId, user.email, activeRole],
+    queryFn: () => projectHubApi.getMemberOptions(teamId), enabled: open && allowed, retry: false, staleTime: 0, gcTime: 0 });
   const [selectedUser, setSelectedUser] = useState("");
   const [newRole, setNewRole] = useState<ProjectRole>("UNASSIGNED");
   const save = useMutation({
     mutationFn: ({ userId, ...update }: TeamMembershipUpdate & { userId: number }) => projectHubApi.saveMember(teamId, userId, update),
+    onError: error => { if (sectionForbidden(error)) onAccessChanged?.(); },
     onSuccess: async () => {
       setSelectedUser(""); setNewRole("UNASSIGNED");
       await Promise.all([
@@ -39,6 +41,9 @@ export function WorkspaceMemberManagementDialog({ teamId, workspaceId, open, onO
       toast.success("Team membership saved");
     }
   });
+  const denied = sectionForbidden(roster.error) || sectionForbidden(options.error) || sectionForbidden(save.error);
+  useEffect(() => { if (denied) onAccessChanged?.(); }, [denied, onAccessChanged]);
+  if (denied) return null;
   const available = options.data?.filter(option => !roster.data?.some(member => member.userId === option.userId)) ?? [];
   const loading = roster.isLoading || options.isLoading;
   const failed = roster.isError || options.isError;
