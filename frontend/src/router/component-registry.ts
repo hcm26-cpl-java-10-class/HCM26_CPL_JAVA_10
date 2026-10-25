@@ -52,22 +52,19 @@ export const routes: RouteConfig[] = [
   {
     path: "/projects/:projectId/milestones",
     component: MilestoneListPage,
-    requiredPermission: "MILESTONE_READ",
   },
   {
     path: "/projects/:projectId/milestones/new",
     component: MilestoneCreatePage,
-    requiredPermission: "MILESTONE_CREATE",
   },
   {
     path: "/projects/:projectId/milestones/:milestoneId",
     component: MilestoneDetailPage,
-    requiredPermission: "MILESTONE_READ",
   },
-  { path: "/rubrics", component: RubricListPage, requiredPermission: "RUBRIC_READ" },
-  { path: "/rubrics/new", component: RubricCreatePage, requiredPermission: "RUBRIC_CREATE" },
-  { path: "/rubrics/:rubricId", component: RubricDetailPage, requiredPermission: "RUBRIC_READ" },
-  { path: "/rubrics/:rubricId/versions/:versionId/edit", component: RubricEditPage, requiredPermission: "RUBRIC_UPDATE" },
+  { path: "/rubrics", component: RubricListPage },
+  { path: "/rubrics/new", component: RubricCreatePage },
+  { path: "/rubrics/:rubricId", component: RubricDetailPage },
+  { path: "/rubrics/:rubricId/versions/:versionId/edit", component: RubricEditPage },
   ...buildEntityRoutes(),
 
   { path: "/not-found-page", component: NotFoundPage, isPublic: true },

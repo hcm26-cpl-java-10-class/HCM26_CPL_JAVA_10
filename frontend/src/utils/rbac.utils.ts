@@ -117,9 +117,6 @@ export const resolveEffectivePermissions = (
 ): string[] => {
   const role = normalizeRole(activeRole);
 
-  // Milestone creation is a core Teacher capability in the current project flow.
-  // Keep it available in the UI even when localStorage still contains an older
-  // rolePermissions snapshot; the backend remains the final authorization layer.
   if (role === TEACHER_ROLE) {
     const teacherDefaults = new Set([
       "MENU_READ",
@@ -136,8 +133,6 @@ export const resolveEffectivePermissions = (
     return uniquePermissions([
       ...(rolePermissions[role] ?? []),
       ...allPermissions.filter((permission) => teacherDefaults.has(permission)),
-      "MILESTONE_CREATE",
-      "MILESTONE_READ",
     ]);
   }
 

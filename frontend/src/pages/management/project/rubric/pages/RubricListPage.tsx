@@ -4,7 +4,6 @@ import ActionButton from "@/components/datatable/common/ActionButton";
 import { useProTable } from "@/components/datatable/hook/useProTable";
 import { MainLayout } from "@/components/layout/MainLayout";
 import ConfirmDialog from "@/components/ui/confirmdialog";
-import { usePermissions } from "@/hooks/usePermissions";
 import type {
   Pagination,
   RubricListItem,
@@ -33,7 +32,6 @@ interface RubricTableFilters {
 export function RubricListPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { hasPermission } = usePermissions();
   const [searchParams, setSearchParams] = useSearchParams();
   const [deleteTarget, setDeleteTarget] = useState<RubricListItem | null>(null);
   const [publishTarget, setPublishTarget] = useState<RubricListItem | null>(null);
@@ -72,6 +70,8 @@ export function RubricListPage() {
     retry: false,
     staleTime: 30_000,
     permissionOverrides: {
+      canRead: true,
+      canCreate: true,
       canUpdate: false,
       canDelete: false,
       canImport: false,
@@ -97,9 +97,9 @@ export function RubricListPage() {
   });
 
   const response = table.pageData as RubricPage | undefined;
-  const canUpdate = hasPermission("RUBRIC_UPDATE");
-  const canDelete = hasPermission("RUBRIC_DELETE");
-  const canCreate = hasPermission("RUBRIC_CREATE");
+  const canUpdate = true;
+  const canDelete = true;
+  const canCreate = true;
   const filtered = hasRubricQuery(params);
 
   useEffect(() => {

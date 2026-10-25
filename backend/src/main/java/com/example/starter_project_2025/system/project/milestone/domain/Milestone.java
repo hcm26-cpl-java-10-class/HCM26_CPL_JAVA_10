@@ -1,6 +1,5 @@
 package com.example.starter_project_2025.system.project.milestone.domain;
 
-import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -14,7 +13,6 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "milestones")
-@ResourcePermission("MILESTONE")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Milestone {

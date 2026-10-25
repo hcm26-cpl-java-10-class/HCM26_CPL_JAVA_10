@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import ConfirmDialog from "@/components/ui/confirmdialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { usePermissions } from "@/hooks/usePermissions";
 import type { RubricDetail, RubricVersion } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, ArrowLeft, CopyPlus, Edit3, LockKeyhole, Send, Trash2 } from "lucide-react";
@@ -27,7 +26,6 @@ export function RubricDetailPage() {
   const { rubricId } = useParams<{ rubricId: string }>();
   const navigate = useNavigate();
   const client = useQueryClient();
-  const { hasPermission } = usePermissions();
   const [action, setAction] = useState<Action | null>(null);
   const query = useQuery({ queryKey: ["rubrics", rubricId], queryFn: () => rubricApi.getDetail(rubricId!), enabled: Boolean(rubricId), retry: false });
   const actionMutation = useMutation({
@@ -84,10 +82,10 @@ export function RubricDetailPage() {
                 </p>
               </div>
               <div className="flex flex-wrap justify-end gap-2">
-                {canEditRubricVersion(version.status) && hasPermission("RUBRIC_UPDATE") ? <Button variant="outline" size="sm" asChild><Link to={`/rubrics/${rubric.id}/versions/${version.id}/edit`}><Edit3 /> Edit draft</Link></Button> : null}
-                {canPublishRubricVersion(version.status) && hasPermission("RUBRIC_UPDATE") ? <Button size="sm" onClick={() => setAction({ type: "publish", version })}><Send /> Publish version</Button> : null}
-                {canDeleteRubricVersion(version.status) && hasPermission("RUBRIC_DELETE") ? <Button variant="destructive" size="sm" onClick={() => setAction({ type: "delete", version })}><Trash2 /> Delete draft</Button> : null}
-                {canCreateDraftFromVersion(version.status) && !hasDraft && hasPermission("RUBRIC_CREATE") ? <Button variant="outline" size="sm" disabled={newVersion.isPending} onClick={() => newVersion.mutate(version.id)}><CopyPlus /> Create new draft</Button> : null}
+                {canEditRubricVersion(version.status) ? <Button variant="outline" size="sm" asChild><Link to={`/rubrics/${rubric.id}/versions/${version.id}/edit`}><Edit3 /> Edit draft</Link></Button> : null}
+                {canPublishRubricVersion(version.status) ? <Button size="sm" onClick={() => setAction({ type: "publish", version })}><Send /> Publish version</Button> : null}
+                {canDeleteRubricVersion(version.status) ? <Button variant="destructive" size="sm" onClick={() => setAction({ type: "delete", version })}><Trash2 /> Delete draft</Button> : null}
+                {canCreateDraftFromVersion(version.status) && !hasDraft ? <Button variant="outline" size="sm" disabled={newVersion.isPending} onClick={() => newVersion.mutate(version.id)}><CopyPlus /> Create new draft</Button> : null}
               </div>
             </CardHeader>
             <CardContent><div className="overflow-x-auto rounded-md border"><Table><TableHeader><TableRow><TableHead>#</TableHead><TableHead>Code</TableHead><TableHead>Criterion and rating guidance</TableHead><TableHead className="text-right">Weight</TableHead><TableHead className="text-right">Max score</TableHead></TableRow></TableHeader><TableBody>{version.criteria.map((criterion, index) => <TableRow key={criterion.id}><TableCell>{index + 1}</TableCell><TableCell className="font-mono text-xs">{criterion.code}</TableCell><TableCell><p className="font-medium">{criterion.name}</p>{criterion.description ? <p className="mt-1 text-xs text-muted-foreground">{criterion.description}</p> : null}<div className="mt-3 grid gap-1 text-xs">{criterion.ratings?.map((rating) => <div key={rating.id || rating.level} className="rounded bg-muted/40 px-2 py-1"><span className="font-medium">{rating.level.replace("_", " ")} ({rating.percentage}%):</span> <span className="text-muted-foreground">{rating.description}</span></div>)}</div></TableCell><TableCell className="text-right">{criterion.weight}%</TableCell><TableCell className="text-right">{criterion.maxScore}</TableCell></TableRow>)}</TableBody></Table></div></CardContent>

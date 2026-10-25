@@ -98,6 +98,8 @@ export function MilestoneListPage() {
     retry: false,
     staleTime: 30_000,
     permissionOverrides: {
+      canRead: true,
+      canCreate: true,
       canUpdate: false,
       canDelete: false,
       canImport: false,

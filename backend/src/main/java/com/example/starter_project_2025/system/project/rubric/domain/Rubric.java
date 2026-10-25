@@ -1,6 +1,5 @@
 package com.example.starter_project_2025.system.project.rubric.domain;
 
-import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -17,7 +16,6 @@ import java.util.UUID;
 }, indexes = {
         @Index(name = "idx_rubric_tenant_name", columnList = "tenant_id,name")
 })
-@ResourcePermission("RUBRIC")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Rubric {
