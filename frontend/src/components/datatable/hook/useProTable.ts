@@ -565,19 +565,47 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
     qc.invalidateQueries({ queryKey: [queryKeyRoot] });
 
   const handleMutationError = (error: unknown) => {
-    if (axios.isAxiosError(error) && error.response?.status === 400) {
-      const body = error.response.data as ValidationErrorResponse;
-      if (body?.errors) {
-        setFieldErrors(body.errors);
-      }
+    if (!axios.isAxiosError(error)) return;
+
+    const status = error.response?.status;
+    const body = error.response?.data as ValidationErrorResponse | undefined;
+
+    // The sprint / backlog modules answer with 422 (validation), 409 (conflict)
+    // and 404 (stale reference, e.g. a Milestone that no longer exists) while
+    // the legacy modules still use 400; highlight fields for all of them.
+    if (
+      (status === 400 || status === 404 || status === 409 || status === 422) &&
+      body?.errors
+    ) {
+      setFieldErrors(body.errors);
     }
   };
 
   const getMutationErrorMessage = (error: unknown, fallback: string) => {
     if (axios.isAxiosError(error)) {
-      const message = error.response?.data?.message;
-      if (typeof message === "string" && message.trim()) {
-        return message;
+      const status = error.response?.status;
+      const data = error.response?.data as
+        | (ValidationErrorResponse & { message?: string })
+        | undefined;
+
+      const firstFieldError = data?.errors
+        ? Object.values(data.errors).find((messages) => messages?.length)
+        : undefined;
+
+      if (firstFieldError?.length) {
+        return String(firstFieldError[0]);
+      }
+
+      if (typeof data?.message === "string" && data.message.trim()) {
+        return data.message;
+      }
+
+      if (status === 403) {
+        return "Bạn không có quyền thực hiện thao tác này.";
+      }
+
+      if (status === 401) {
+        return "Phiên làm việc đã hết hạn, vui lòng đăng nhập lại.";
       }
     }
 

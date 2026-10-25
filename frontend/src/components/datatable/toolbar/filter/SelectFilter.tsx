@@ -53,6 +53,10 @@ export function SelectFilter({ field, value, onChange }: SelectFilterProps) {
 
   const toggleValue = (optValue: any) => {
     const strVal = optValue?.toString();
+    if (field.filterMultiple === false) {
+      onChange(selectedValues.includes(strVal) ? undefined : strVal);
+      return;
+    }
     if (selectedValues.includes(strVal)) {
       if (!isMultiple) {
         onChange(undefined);

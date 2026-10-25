@@ -4,9 +4,13 @@ import type {
   MilestoneCreateOptions,
   MilestoneDetailResponse,
   MilestoneListParams,
+  MilestoneOption,
   MilestonePageResponse,
   MilestoneResponse,
+  PageResponse,
 } from "@/types";
+
+const backlogMilestoneOptionsPath = "/backlog-items/milestone-options";
 
 export const milestoneApi = {
   async getList(
@@ -60,5 +64,22 @@ export const milestoneApi = {
       `/projects/${projectId}/milestones/${milestoneId}`,
     );
     return response.data;
+  },
+
+  /** Compatibility adapter for the temporary backlog relation selector. */
+  getPage: async (): Promise<PageResponse<MilestoneOption>> => {
+    const response = await axiosInstance.get<MilestoneOption[]>(backlogMilestoneOptionsPath);
+    const content = response.data ?? [];
+
+    return {
+      content,
+      items: content,
+      page: 0,
+      size: content.length,
+      totalPages: 1,
+      totalElements: content.length,
+      hasNext: false,
+      hasPrevious: false,
+    };
   },
 };

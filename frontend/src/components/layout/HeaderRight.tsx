@@ -1,5 +1,5 @@
 import ToggleTheme from "@/components/ToggleTheme";
-import { useEffect, useRef, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge.tsx";
 import type { RootState } from "@/store/store";
 import { useSelector } from "react-redux";
@@ -64,9 +64,20 @@ export default function HeaderRight() {
 
   const switchRole = (nextRole: string) => {
     const normalizedRole = normalizeRole(nextRole);
-    setViewRole(normalizedRole === primaryRole ? null : normalizedRole);
+    const targetRole = normalizedRole === primaryRole ? null : normalizedRole;
+
     setOpen(false);
-    navigate(getHomePathByRole(normalizedRole));
+
+    /**
+     * The role and the URL must change in the same commit: React Router
+     * applies navigation updates inside `startTransition`, so an urgent
+     * `setViewRole` would otherwise commit first and re-render the *current*
+     * protected route with the *new* role (-> 403 on the old page).
+     */
+    startTransition(() => {
+      setViewRole(targetRole);
+      navigate(getHomePathByRole(normalizedRole));
+    });
   };
 
   return (

@@ -32,6 +32,9 @@ export interface EntityCardRendererProps {
     disableBooleanToggle?: boolean;
 }
 
+/** Card view layout: responsive grid (default) or full-width stacked rows. */
+export type EntityCardLayout = "grid" | "list";
+
 export interface EntityConfig {
     name: string;
     path: string;
@@ -39,6 +42,27 @@ export interface EntityConfig {
     schema: EntitySchema;
     actionPages?: EntityActionPagesConfig;
     cardRenderer?: (props: EntityCardRendererProps) => ReactNode;
+    /** Layout used by the card view. Defaults to "grid". */
+    cardLayout?: EntityCardLayout;
+    /**
+     * Keep the read-only browse view for the student role, but still expose the
+     * "Create" action (opened in the inline form modal) when the user holds the
+     * `<RESOURCE>_CREATE` permission. Used by entities whose use case is owned by
+     * the student persona (e.g. Sprints).
+     */
+    browseModeCreate?: boolean;
+    /**
+     * Also keep row actions (edit / delete / active toggle) available in the
+     * student browse view, when the user holds the matching
+     * `<RESOURCE>_UPDATE` / `<RESOURCE>_DELETE` permissions. Used by entities
+     * fully owned by the student persona (e.g. Sprints).
+     */
+    browseModeActions?: boolean;
+    /**
+     * Admin-only shortcut rendered in the table toolbar that navigates to the
+     * student backlog view (e.g. `/backlogs`). Ignored for non-admin roles.
+     */
+    backlogShortcutPath?: string;
 }
 
 const registry: EntityConfig[] = [];

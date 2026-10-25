@@ -179,3 +179,24 @@ export interface MilestoneListParams {
   deadlineFrom?: string;
   deadlineTo?: string;
 }
+
+/**
+ * Milestone reference used by the temporary `backlog_temp` backend module.
+ * Kept as a compatibility shape while backlog is migrated to the UUID-based
+ * milestone module above.
+ */
+export type BacklogMilestoneStatus =
+  | "PLANNED"
+  | "ACTIVE"
+  | "COMPLETED"
+  | "CANCELLED";
+
+export interface MilestoneOption {
+  id: number;
+  projectId: number;
+  name: string;
+  /** Name prefixed with the project, used as the selector label. */
+  label: string;
+  status: BacklogMilestoneStatus;
+  dueDate?: string | null;
+}
