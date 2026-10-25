@@ -1,4 +1,8 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.dto;
+
+import com.example.starter_project_2025.system.project.team.ParticipationStatus;
+import com.example.starter_project_2025.system.project.team.ProjectRole;
+import com.example.starter_project_2025.system.project.team.Team;
 
 import jakarta.validation.constraints.*;
 import java.util.List;

@@ -1,4 +1,10 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.spec;
+
+import com.example.starter_project_2025.system.project.team.ParticipationStatus;
+import com.example.starter_project_2025.system.project.team.Team;
+import com.example.starter_project_2025.system.project.team.TeamMember;
+import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceCandidateFilter;
 
 import com.example.starter_project_2025.security.UserPrincipal;
 import jakarta.persistence.criteria.Predicate;

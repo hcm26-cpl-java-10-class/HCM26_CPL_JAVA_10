@@ -9,7 +9,7 @@ import com.example.starter_project_2025.base.dataio.template.annotation.ImportEn
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import com.example.starter_project_2025.system.rbac.role.Role;
-import com.example.starter_project_2025.system.project.Tenant;
+import com.example.starter_project_2025.system.project.tenant.Tenant;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -79,6 +79,17 @@ public class User extends BaseEntity {
                 joinColumns = @JoinColumn(name = "user_id"),
                 inverseJoinColumns = @JoinColumn(name = "role_id"))
     Set<Role> roles = new HashSet<>();
+
+    public void setTenant(Tenant tenant) {
+        this.tenant = tenant;
+        this.tenantId = tenant == null ? null : tenant.getId();
+    }
+
+    @PrePersist
+    @PreUpdate
+    private void initializeTenantId() {
+        if (tenantId == null && tenant != null) tenantId = tenant.getId();
+    }
 
     public String getFullName() {
         return firstName + (lastName != null ? " " + lastName : "");

@@ -1,5 +1,20 @@
 package com.example.starter_project_2025.system.project;
 
+import com.example.starter_project_2025.system.project.domain.Project;
+import com.example.starter_project_2025.system.project.domain.ProjectStatus;
+import com.example.starter_project_2025.system.project.team.Team;
+import com.example.starter_project_2025.system.project.team.TeamMember;
+import com.example.starter_project_2025.system.project.team.TeamMemberRepository;
+import com.example.starter_project_2025.system.project.team.TeamRepository;
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceStatus;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceCreateRequest;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceResponse;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceAuditRepository;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceOutboxRepository;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceRepository;
+import com.example.starter_project_2025.system.project.workspace.service.WorkspaceSectionService;
+import com.example.starter_project_2025.system.project.workspace.service.WorkspaceService;
+
 import com.example.starter_project_2025.StarterProject2025Application;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import org.junit.jupiter.api.Test;

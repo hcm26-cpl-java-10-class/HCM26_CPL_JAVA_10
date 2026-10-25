@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project;
 
+import com.example.starter_project_2025.system.project.team.ProjectRole;
+
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;

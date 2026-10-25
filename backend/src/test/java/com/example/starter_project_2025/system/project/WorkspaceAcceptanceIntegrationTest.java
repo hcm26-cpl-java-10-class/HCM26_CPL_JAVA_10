@@ -1,5 +1,31 @@
 package com.example.starter_project_2025.system.project;
 
+import com.example.starter_project_2025.system.project.cohort.Cohort;
+import com.example.starter_project_2025.system.project.cohort.CohortRepository;
+import com.example.starter_project_2025.system.project.cohort.CohortStatus;
+import com.example.starter_project_2025.system.project.domain.Project;
+import com.example.starter_project_2025.system.project.domain.ProjectStatus;
+import com.example.starter_project_2025.system.project.team.Team;
+import com.example.starter_project_2025.system.project.team.TeamMember;
+import com.example.starter_project_2025.system.project.team.TeamMemberRepository;
+import com.example.starter_project_2025.system.project.team.TeamRepository;
+import com.example.starter_project_2025.system.project.tenant.Tenant;
+import com.example.starter_project_2025.system.project.tenant.TenantRepository;
+import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceActivity;
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceAudit;
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceCreationRequest;
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceOutboxEvent;
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceSection;
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceStatus;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceActivityRepository;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceAuditRepository;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceCreationRequestRepository;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceOutboxRepository;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceRepository;
+import com.example.starter_project_2025.system.project.workspace.service.WorkspaceIdempotencyService;
+import com.example.starter_project_2025.system.project.workspace.service.WorkspaceOutboxDelivery;
+
 import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenService;
 import com.example.starter_project_2025.system.rbac.permission.PermissionRepository;
 import com.example.starter_project_2025.system.rbac.role.Role;

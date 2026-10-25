@@ -1,4 +1,7 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.service;
+
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceSection;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceSectionDtos;
 
 import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.RequiredArgsConstructor;

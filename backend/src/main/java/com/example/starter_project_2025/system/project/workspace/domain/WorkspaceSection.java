@@ -1,4 +1,4 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.domain;
 
 public enum WorkspaceSection {
     OVERVIEW("overview"), MEMBERS("members"), MILESTONE("milestones"), SPRINT("sprints"),

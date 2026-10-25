@@ -1,4 +1,4 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.team;
 
 import com.example.starter_project_2025.system.rbac.user.User;
 import org.springframework.data.jpa.repository.JpaRepository;

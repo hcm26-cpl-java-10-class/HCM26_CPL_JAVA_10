@@ -1,4 +1,6 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.cohort;
+
+import com.example.starter_project_2025.system.project.tenant.Tenant;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;

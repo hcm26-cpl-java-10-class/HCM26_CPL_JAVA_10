@@ -1,5 +1,8 @@
 package com.example.starter_project_2025.system.project.task.alert;
 
+import com.example.starter_project_2025.system.project.team.TeamMemberRepository;
+import com.example.starter_project_2025.system.project.team.TeamRepository;
+
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.project.*;
 import com.example.starter_project_2025.system.project.task.*;

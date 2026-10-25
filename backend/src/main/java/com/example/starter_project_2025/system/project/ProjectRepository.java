@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project;
 
+import com.example.starter_project_2025.system.project.domain.Project;
+
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import org.springframework.stereotype.Repository;
 
@@ -15,7 +17,7 @@ public interface ProjectRepository extends BaseCrudRepository<Project, Long> {
     java.util.Optional<Project> findForWorkspaceCreation(@org.springframework.data.repository.query.Param("id") Long id);
 
     @org.springframework.data.jpa.repository.Modifying
-    @org.springframework.data.jpa.repository.Query("update Project p set p.status = com.example.starter_project_2025.system.project.ProjectStatus.ACTIVE where p.status = com.example.starter_project_2025.system.project.ProjectStatus.PLANNING and exists (select w.id from Workspace w where w.project.id = p.id and w.status = com.example.starter_project_2025.system.project.WorkspaceStatus.ACTIVE)")
+    @org.springframework.data.jpa.repository.Query("update Project p set p.status = com.example.starter_project_2025.system.project.domain.ProjectStatus.ACTIVE where p.status = com.example.starter_project_2025.system.project.domain.ProjectStatus.PLANNING and exists (select w.id from Workspace w where w.project.id = p.id and w.status = com.example.starter_project_2025.system.project.workspace.domain.WorkspaceStatus.ACTIVE)")
     int activateProjectsWithWorkspace();
 
     java.util.List<Project> findAllByTenantIdAndIdInAndIsActiveTrueOrderByNameAsc(

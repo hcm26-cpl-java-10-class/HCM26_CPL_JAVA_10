@@ -1,11 +1,11 @@
 package com.example.starter_project_2025.init;
 
-import com.example.starter_project_2025.system.project.Project;
+import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.BoardProjectMember;
 import com.example.starter_project_2025.system.project.BoardProjectMemberRepository;
 import com.example.starter_project_2025.system.project.ProjectRepository;
-import com.example.starter_project_2025.system.project.ProjectRole;
-import com.example.starter_project_2025.system.project.ProjectStatus;
+import com.example.starter_project_2025.system.project.team.ProjectRole;
+import com.example.starter_project_2025.system.project.domain.ProjectStatus;
 import com.example.starter_project_2025.system.project.activity.ProjectActivityLog;
 import com.example.starter_project_2025.system.project.activity.ProjectActivityRepository;
 import com.example.starter_project_2025.system.project.sprint.Sprint;
@@ -17,8 +17,8 @@ import com.example.starter_project_2025.system.project.sprint.TaskRepository;
 import com.example.starter_project_2025.system.project.sprint.TaskStatus;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
-import com.example.starter_project_2025.system.project.Tenant;
-import com.example.starter_project_2025.system.project.TenantRepository;
+import com.example.starter_project_2025.system.project.tenant.Tenant;
+import com.example.starter_project_2025.system.project.tenant.TenantRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -55,14 +55,16 @@ public class BoardDemoDataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        Tenant tenant = upsertTenant("DEMO-TENANT", "Board Demo Tenant");
-        Tenant otherTenant = upsertTenant("DEMO-OTHER-TENANT", "Other Demo Tenant");
-
         User student = requireUser(STUDENT_EMAIL);
         User teacher = requireUser(TEACHER_EMAIL);
-        student.setTenantId(tenant.getId());
-        teacher.setTenantId(tenant.getId());
-        userRepository.saveAll(List.of(student, teacher));
+        Tenant tenant = student.getTenant();
+        if (tenant == null || teacher.getTenant() == null
+                || !tenant.getId().equals(teacher.getTenant().getId())
+                || !Boolean.TRUE.equals(tenant.getActive()) || !Boolean.TRUE.equals(tenant.getIsActive())) {
+            log.warn("Board demo skipped: the existing student and teacher must share an active tenant");
+            return;
+        }
+        Tenant otherTenant = upsertTenant("DEMO-OTHER-TENANT", "Other Demo Tenant");
 
         Project project = upsertProject(
                 tenant.getId(),
@@ -172,7 +174,7 @@ public class BoardDemoDataInitializer implements CommandLineRunner {
     }
 
     private Project upsertProject(Long tenantId, String code, String name, ProjectStatus status) {
-        Project project = projectRepository.findByCode(code).orElseGet(Project::new);
+        Project project = projectRepository.findByCodeAndTenantId(code, tenantId).orElseGet(Project::new);
         project.setTenantId(tenantId);
         project.setCode(code);
         project.setName(name);

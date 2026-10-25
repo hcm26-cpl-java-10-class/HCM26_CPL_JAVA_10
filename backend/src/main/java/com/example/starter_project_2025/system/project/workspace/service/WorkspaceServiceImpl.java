@@ -1,4 +1,20 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.service;
+
+import com.example.starter_project_2025.system.project.cohort.Cohort;
+import com.example.starter_project_2025.system.project.domain.Project;
+import com.example.starter_project_2025.system.project.team.Team;
+import com.example.starter_project_2025.system.project.team.TeamMember;
+import com.example.starter_project_2025.system.project.team.TeamRepository;
+import com.example.starter_project_2025.system.project.workspace.controller.WorkspaceCorrelation;
+import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceCandidateFilter;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceCandidateItem;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceCreateRequest;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceDetailResponse;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceMemberResponse;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceResponse;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceRepository;
+import com.example.starter_project_2025.system.project.workspace.spec.WorkspaceCandidateSpec;
 
 import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.RequiredArgsConstructor;

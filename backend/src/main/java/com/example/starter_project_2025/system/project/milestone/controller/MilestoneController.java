@@ -15,6 +15,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
@@ -32,6 +33,7 @@ public class MilestoneController {
     private final MilestoneQueryService queryService;
 
     @GetMapping
+    @PreAuthorize("hasAuthority('MILESTONE_READ')")
     public ResponseEntity<MilestonePageResponse> getList(
             @PathVariable UUID projectId,
             @RequestParam(defaultValue = "0") int page,
@@ -50,11 +52,13 @@ public class MilestoneController {
     }
 
     @GetMapping("/create-options")
+    @PreAuthorize("hasAuthority('MILESTONE_WRITE')")
     public ResponseEntity<MilestoneCreateOptionsResponse> getCreateOptions(@PathVariable UUID projectId) {
         return ResponseEntity.ok(optionsService.getOptions(projectId));
     }
 
     @PostMapping
+    @PreAuthorize("hasAuthority('MILESTONE_WRITE')")
     public ResponseEntity<MilestoneResponse> create(
             @PathVariable UUID projectId,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
@@ -67,6 +71,7 @@ public class MilestoneController {
     }
 
     @GetMapping("/{milestoneId}")
+    @PreAuthorize("hasAuthority('MILESTONE_READ')")
     public ResponseEntity<MilestoneDetailResponse> getDetail(
             @PathVariable UUID projectId,
             @PathVariable UUID milestoneId

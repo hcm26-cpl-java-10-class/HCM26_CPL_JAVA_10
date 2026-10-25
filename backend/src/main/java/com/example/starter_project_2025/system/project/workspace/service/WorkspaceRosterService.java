@@ -1,4 +1,11 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.service;
+
+import com.example.starter_project_2025.system.project.team.ParticipationStatus;
+import com.example.starter_project_2025.system.project.team.ProjectRole;
+import com.example.starter_project_2025.system.project.team.Team;
+import com.example.starter_project_2025.system.project.team.TeamMember;
+import com.example.starter_project_2025.system.project.team.TeamMemberRepository;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceMemberResponse;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

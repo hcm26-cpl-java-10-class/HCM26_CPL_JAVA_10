@@ -6,7 +6,7 @@ import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
-import com.example.starter_project_2025.system.project.TenantRepository;
+import com.example.starter_project_2025.system.project.tenant.TenantRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;

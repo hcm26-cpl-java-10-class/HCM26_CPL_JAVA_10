@@ -1,4 +1,13 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.service;
+
+import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceActivity;
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceAudit;
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceOutboxEvent;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceResponse;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceActivityRepository;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceAuditRepository;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceOutboxRepository;
 
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.fasterxml.jackson.core.JsonProcessingException;

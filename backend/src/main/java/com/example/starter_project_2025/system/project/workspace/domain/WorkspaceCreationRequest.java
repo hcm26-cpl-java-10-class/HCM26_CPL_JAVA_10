@@ -1,4 +1,4 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.domain;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import jakarta.persistence.*;

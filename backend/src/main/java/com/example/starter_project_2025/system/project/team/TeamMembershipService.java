@@ -1,4 +1,7 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.team;
+
+import com.example.starter_project_2025.system.project.dto.ProjectHubDtos;
+import com.example.starter_project_2025.system.project.workspace.service.WorkspaceAccessService;
 
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;

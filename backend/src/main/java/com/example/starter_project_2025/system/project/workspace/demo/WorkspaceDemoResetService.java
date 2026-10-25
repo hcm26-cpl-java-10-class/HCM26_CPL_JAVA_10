@@ -1,4 +1,4 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.demo;
 
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;

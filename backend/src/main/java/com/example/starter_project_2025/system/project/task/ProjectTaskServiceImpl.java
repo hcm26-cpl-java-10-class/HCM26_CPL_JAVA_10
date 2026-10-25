@@ -2,11 +2,11 @@ package com.example.starter_project_2025.system.project.task;
 
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserPrincipal;
-import com.example.starter_project_2025.system.project.Project;
+import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.BoardProjectMember;
 import com.example.starter_project_2025.system.project.BoardProjectMemberRepository;
 import com.example.starter_project_2025.system.project.ProjectRepository;
-import com.example.starter_project_2025.system.project.ProjectRole;
+import com.example.starter_project_2025.system.project.team.ProjectRole;
 import com.example.starter_project_2025.system.project.activity.ProjectActivityLog;
 import com.example.starter_project_2025.system.project.activity.ProjectActivityRepository;
 import com.example.starter_project_2025.system.project.board.SprintSummaryResponse;
@@ -22,7 +22,7 @@ import com.example.starter_project_2025.system.project.task.event.TaskOutboxServ
 import com.example.starter_project_2025.system.project.sprint.Sprint;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
-import com.example.starter_project_2025.system.project.TenantRepository;
+import com.example.starter_project_2025.system.project.tenant.TenantRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AccessLevel;
