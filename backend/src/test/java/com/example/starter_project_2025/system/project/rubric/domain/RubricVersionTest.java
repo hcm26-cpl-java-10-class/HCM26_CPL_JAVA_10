@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class RubricVersionTest {
 
     @Test
-    void publishedVersionIsImmutableAndCanBeArchived() {
+    void publishedVersionIsImmutable() {
         UUID actorId = UUID.randomUUID();
         Instant createdAt = Instant.parse("2026-01-01T00:00:00Z");
         Rubric rubric = Rubric.create(UUID.randomUUID(), UUID.randomUUID(), "Delivery", null, actorId, createdAt);
@@ -33,21 +33,23 @@ class RubricVersionTest {
         assertEquals(publishedAt, version.getPublishedAt());
         assertThrows(IllegalStateException.class, () -> version.replaceDraft(
                 "Changed", null, List.of(), actorId, publishedAt.plusSeconds(1)));
-
-        Instant archivedAt = publishedAt.plusSeconds(60);
-        version.archive(actorId, archivedAt);
-
-        assertEquals(RubricVersionStatus.ARCHIVED, version.getStatus());
-        assertEquals(archivedAt, version.getArchivedAt());
+        assertThrows(IllegalStateException.class, () -> version.publish(actorId, publishedAt.plusSeconds(1)));
     }
 
     @Test
-    void draftCannotBeArchived() {
+    void draftCanBeUpdatedBeforePublishing() {
         UUID actorId = UUID.randomUUID();
         Instant now = Instant.parse("2026-01-01T00:00:00Z");
         Rubric rubric = Rubric.create(UUID.randomUUID(), UUID.randomUUID(), "Draft", null, actorId, now);
         RubricVersion version = RubricVersion.draft(UUID.randomUUID(), rubric, 1, actorId, now);
 
-        assertThrows(IllegalStateException.class, () -> version.archive(actorId, now));
+        version.replaceDraft("Updated draft", "Still editable", List.of(
+                new RubricVersion.CriterionValue("QUALITY", "Quality", null,
+                        new BigDecimal("100.00"), new BigDecimal("10.00"), 0)
+        ), actorId, now.plusSeconds(1));
+
+        assertEquals(RubricVersionStatus.DRAFT, version.getStatus());
+        assertEquals("Updated draft", version.getNameSnapshot());
+        assertEquals(new BigDecimal("10.00"), version.getTotalMaxScore());
     }
 }

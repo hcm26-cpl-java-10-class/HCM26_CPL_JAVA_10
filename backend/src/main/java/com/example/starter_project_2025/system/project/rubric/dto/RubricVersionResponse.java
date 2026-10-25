@@ -9,5 +9,5 @@ import java.util.UUID;
 public record RubricVersionResponse(
         UUID id, int versionNumber, String name, String description, RubricVersionStatus status,
         BigDecimal totalMaxScore, List<RubricCriterionResponse> criteria, long milestoneUsageCount,
-        Instant publishedAt, Instant archivedAt, Instant createdAt, Instant updatedAt, long lockVersion
+        Instant publishedAt, Instant createdAt, Instant updatedAt, long lockVersion
 ) {}

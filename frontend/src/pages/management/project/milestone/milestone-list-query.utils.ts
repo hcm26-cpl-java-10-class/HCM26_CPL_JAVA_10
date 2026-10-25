@@ -2,9 +2,6 @@ import type { LatePolicyType, MilestoneListParams, MilestoneStatus } from "@/typ
 
 export const DEFAULT_MILESTONE_PAGE = 0;
 export const DEFAULT_MILESTONE_PAGE_SIZE = 20;
-export const MILESTONE_PAGE_SIZES = [10, 20, 30, 50, 100] as const;
-
-const PAGE_SIZES = new Set<number>(MILESTONE_PAGE_SIZES);
 const STATUSES = new Set<MilestoneStatus>(["PLANNED", "OPEN", "CLOSED", "CANCELLED"]);
 const LATE_POLICY_TYPES = new Set<LatePolicyType>(["NO_LATE", "ALLOW_LATE"]);
 
@@ -15,7 +12,9 @@ function parsePage(value: string | null): number {
 
 function parseSize(value: string | null): number {
   const parsed = Number(value);
-  return PAGE_SIZES.has(parsed) ? parsed : DEFAULT_MILESTONE_PAGE_SIZE;
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 100
+    ? parsed
+    : DEFAULT_MILESTONE_PAGE_SIZE;
 }
 
 function parseDate(value: string | null): string | undefined {
@@ -35,7 +34,7 @@ function uniqueAllowed<T extends string>(values: string[], allowed: Set<T>): T[]
 }
 
 export function parseMilestoneListParams(searchParams: URLSearchParams): MilestoneListParams {
-  const search = searchParams.get("search")?.trim().replace(/\s+/g, " ").slice(0, 120);
+  const search = searchParams.get("search")?.slice(0, 120);
   const mandatoryValue = searchParams.get("mandatory");
 
   return {

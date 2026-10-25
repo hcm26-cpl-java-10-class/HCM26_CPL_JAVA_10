@@ -55,6 +55,8 @@ export interface FieldSchema {
 
   filterOptions?: { label: string; value: any }[];
 
+  filterMultiple?: boolean;
+
   editable?: boolean;
 
   visible?: boolean;
@@ -85,6 +87,8 @@ export interface FieldSchema {
   expandable?: boolean;
 
   renderExpanded?: (value: any, row: any) => React.ReactNode;
+
+  renderCell?: (value: any, row: any) => React.ReactNode;
 }
 
 export interface EntitySchema {

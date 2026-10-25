@@ -22,6 +22,7 @@ import java.util.*;
 @RequiredArgsConstructor
 public class RubricService {
     private static final BigDecimal ONE_HUNDRED = new BigDecimal("100.00");
+    private static final BigDecimal SCORE_ALLOCATION_TOLERANCE = new BigDecimal("0.01");
 
     private final RubricRepository rubricRepository;
     private final RubricVersionRepository versionRepository;
@@ -100,8 +101,8 @@ public class RubricService {
             throw new RubricConflictException("Finish or delete the existing draft before creating another version");
         }
         RubricVersion source = requireVersion(rubricId, request.sourceVersionId());
-        if (source.getStatus() == RubricVersionStatus.DRAFT) {
-            throw new RubricConflictException("A new version can only be created from a published or archived version");
+        if (source.getStatus() != RubricVersionStatus.PUBLISHED) {
+            throw new RubricConflictException("A new version can only be created from a published version");
         }
         int nextVersion = rubric.getVersions().stream().mapToInt(RubricVersion::getVersionNumber).max().orElse(0) + 1;
         UUID actorId = actorProvider.requireCurrentActorId();
@@ -113,19 +114,8 @@ public class RubricService {
                                 .map(r -> new RubricVersion.RatingValue(r.getLevel(), r.getDescription())).toList())).toList();
         draft.replaceDraft(source.getNameSnapshot(), source.getDescriptionSnapshot(), copied, actorId, now);
         rubric.addVersion(draft);
+        rubric.updateMetadata(source.getNameSnapshot(), source.getDescriptionSnapshot(), actorId, now);
         rubricRepository.saveAndFlush(rubric);
-        return toDetail(rubric);
-    }
-
-    @Transactional
-    public RubricDetailResponse archive(UUID rubricId, UUID versionId) {
-        Rubric rubric = requireRubric(rubricId);
-        RubricVersion version = requireVersion(rubricId, versionId);
-        if (version.getStatus() != RubricVersionStatus.PUBLISHED) {
-            throw new RubricConflictException("Only a published rubric version can be archived");
-        }
-        version.archive(actorProvider.requireCurrentActorId(), milestoneClock.instant());
-        versionRepository.saveAndFlush(version);
         return toDetail(rubric);
     }
 
@@ -141,7 +131,13 @@ public class RubricService {
             rubricRepository.delete(rubric);
         } else {
             rubric.removeVersion(version);
-            rubricRepository.save(rubric);
+            RubricVersion latestPublished = rubric.getVersions().stream()
+                    .filter(item -> item.getStatus() == RubricVersionStatus.PUBLISHED)
+                    .max(Comparator.comparingInt(RubricVersion::getVersionNumber))
+                    .orElseThrow(() -> new RubricConflictException("Rubric has no published version to restore"));
+            rubric.updateMetadata(latestPublished.getNameSnapshot(), latestPublished.getDescriptionSnapshot(),
+                    actorProvider.requireCurrentActorId(), milestoneClock.instant());
+            rubricRepository.saveAndFlush(rubric);
         }
     }
 
@@ -181,12 +177,14 @@ public class RubricService {
         Set<String> codes = new HashSet<>();
         Set<Integer> orders = new HashSet<>();
         BigDecimal totalWeight = BigDecimal.ZERO;
+        BigDecimal totalMaxScore = BigDecimal.ZERO;
         for (int i = 0; i < criteria.size(); i++) {
             RubricCriterionRequest item = criteria.get(i);
             String code = item.code().trim().toUpperCase();
             if (!codes.add(code)) add(errors, "criteria[" + i + "].code", "Criterion code must be unique");
             if (!orders.add(item.orderIndex())) add(errors, "criteria[" + i + "].orderIndex", "Criterion order must be unique");
             totalWeight = totalWeight.add(item.weight());
+            totalMaxScore = totalMaxScore.add(item.maxScore());
             Set<RubricRatingLevel> levels = new HashSet<>();
             for (int ratingIndex = 0; ratingIndex < item.ratings().size(); ratingIndex++) {
                 RubricRatingRequest rating = item.ratings().get(ratingIndex);
@@ -203,6 +201,15 @@ public class RubricService {
         }
         if (totalWeight.compareTo(ONE_HUNDRED) != 0) {
             add(errors, "criteria", "Total criterion weight must equal exactly 100.00 percent");
+        } else {
+            for (int i = 0; i < criteria.size(); i++) {
+                RubricCriterionRequest item = criteria.get(i);
+                BigDecimal expectedMaxScore = totalMaxScore.multiply(item.weight()).movePointLeft(2);
+                if (item.maxScore().subtract(expectedMaxScore).abs().compareTo(SCORE_ALLOCATION_TOLERANCE) > 0) {
+                    add(errors, "criteria[" + i + "].maxScore",
+                            "Maximum score must match the criterion weight and total rubric score");
+                }
+            }
         }
         for (int expected = 0; expected < criteria.size(); expected++) {
             if (!orders.contains(expected)) {
@@ -245,7 +252,7 @@ public class RubricService {
         return new RubricVersionResponse(version.getId(), version.getVersionNumber(), version.getNameSnapshot(),
                 version.getDescriptionSnapshot(), version.getStatus(), version.getTotalMaxScore(), criteria,
                 milestoneRepository.countByRubricSnapshotId(version.getId()), version.getPublishedAt(),
-                version.getArchivedAt(), version.getCreatedAt(), version.getUpdatedAt(), version.getLockVersion());
+                version.getCreatedAt(), version.getUpdatedAt(), version.getLockVersion());
     }
 
     private static String normalizeSearch(String value) {

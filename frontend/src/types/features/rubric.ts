@@ -1,4 +1,4 @@
-export type RubricVersionStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
+export type RubricVersionStatus = "DRAFT" | "PUBLISHED";
 export type RubricRatingLevel = "EXCELLENT" | "GOOD" | "FAIR" | "NOT_MET";
 
 export interface RubricRatingInput {
@@ -43,7 +43,6 @@ export interface RubricVersion {
   criteria: RubricCriterion[];
   milestoneUsageCount: number;
   publishedAt?: string | null;
-  archivedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   lockVersion: number;

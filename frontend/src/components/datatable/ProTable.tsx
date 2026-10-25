@@ -89,6 +89,20 @@ interface ProTableProps<TData = any> {
     /** UI mode for datatable. browse mode is card-first with simplified controls. */
     mode?: "default" | "browse";
 
+    /** Enable row/card selection. */
+    selectable?: boolean;
+
+    /** Show the row number column/card index. */
+    showIndex?: boolean;
+
+    /** Optional domain-specific list states. */
+    renderLoading?: React.ReactNode;
+    renderEmpty?: React.ReactNode;
+    renderError?: React.ReactNode;
+
+    /** Hide pagination for empty or error states when needed. */
+    showPagination?: boolean;
+
     /**
      * Optional: Expandable row configuration.
      * Expansion is auto-enabled when any field in the schema has `expandable: true`.
@@ -115,6 +129,12 @@ export function ProTable<TData = any>({
     rowHeight = 49,
     hideActions = false,
     mode = "default",
+    selectable = true,
+    showIndex = true,
+    renderLoading,
+    renderEmpty,
+    renderError,
+    showPagination = true,
     expandable,
 }: ProTableProps<TData>) {
     const { schema } = table;
@@ -248,6 +268,11 @@ export function ProTable<TData = any>({
     const effectiveViewMode: ViewMode = isBrowseMode ? "card" : viewMode;
     const cardRowClickHandler =
         onRowClick || (isBrowseMode ? ((onView || setDetailRow) as (row: TData) => void) : undefined);
+    const listState = table.error
+        ? (renderError ?? <NoResult message="Unable to load data" />)
+        : table.loading
+          ? (renderLoading ?? <Loading />)
+          : (renderEmpty ?? <NoResult />);
 
     return (
         <div className="grid gap-4 h-full font-inter grid-rows-[auto_1fr_auto]">
@@ -272,8 +297,8 @@ export function ProTable<TData = any>({
                         <Table className="table-fixed">
                             <colgroup>
                                 {isExpandable && <col style={{ width: 40 }} />}
-                                <col style={{ width: 20 }} />
-                                <col style={{ width: 50 }} />
+                                {selectable && <col style={{ width: 20 }} />}
+                                {showIndex && <col style={{ width: 50 }} />}
                                 {table.visibleFields.map((f: any) => (
                                     <col key={f.name} style={{ width: columnWidths[f.name] || 150 }} />
                                 ))}
@@ -282,12 +307,16 @@ export function ProTable<TData = any>({
                             <TableHeader className="bg-background z-10 sticky top-0 shadow-xs">
                                 <TableRow>
                                     {isExpandable && <TableHead style={{ width: 40 }} />}
-                                    <TableHead style={{ width: 20 }}>
-                                        <SelectAllCheckbox table={table} idField={schema.idField} />
-                                    </TableHead>
-                                    <TableHead style={{ width: 50 }} className="text-center">
-                                        #
-                                    </TableHead>
+                                    {selectable && (
+                                        <TableHead style={{ width: 20 }}>
+                                            <SelectAllCheckbox table={table} idField={schema.idField} />
+                                        </TableHead>
+                                    )}
+                                    {showIndex && (
+                                        <TableHead style={{ width: 50 }} className="text-center">
+                                            #
+                                        </TableHead>
+                                    )}
                                     {table.visibleFields.map((f: any) => (
                                         <SortableHeader
                                             key={f.name}
@@ -332,8 +361,8 @@ export function ProTable<TData = any>({
                                         const isExpanded = isExpandable && expandedRows.has(id);
                                         const expandColSpan =
                                             (isExpandable ? 1 : 0) +
-                                            1 +
-                                            1 +
+                                            (selectable ? 1 : 0) +
+                                            (showIndex ? 1 : 0) +
                                             table.visibleFields.length +
                                             (showActionsColumn ? 1 : 0);
 
@@ -377,19 +406,24 @@ export function ProTable<TData = any>({
                                                         </TableCell>
                                                     )}
 
-                                                    <TableCell>
-                                                        <RowSelection id={id} table={table} />
-                                                    </TableCell>
+                                                    {selectable && (
+                                                        <TableCell>
+                                                            <RowSelection id={id} table={table} />
+                                                        </TableCell>
+                                                    )}
 
-                                                    <TableCell className="text-center text-muted-foreground">
-                                                        {(table.page || 0) * (table.size || 10) + index + 1}
-                                                    </TableCell>
+                                                    {showIndex && (
+                                                        <TableCell className="text-center text-muted-foreground">
+                                                            {(table.page || 0) * (table.size || 10) + index + 1}
+                                                        </TableCell>
+                                                    )}
 
                                                     {table.visibleFields.map((f: any) => (
                                                         <CellRenderer
                                                             key={f.name}
                                                             field={f}
                                                             value={row[f.name]}
+                                                            row={row}
                                                             relationOptions={table.relationOptions}
                                                             disableBooleanToggle={!(table.permission?.canUpdate ?? true)}
                                                             onBooleanToggle={(fieldName, newValue) => {
@@ -436,6 +470,7 @@ export function ProTable<TData = any>({
                                                                                   <CellRenderer
                                                                                       field={f}
                                                                                       value={row[f.name]}
+                                                                                      row={row}
                                                                                       relationOptions={
                                                                                           table.relationOptions
                                                                                       }
@@ -483,7 +518,7 @@ export function ProTable<TData = any>({
 
                         {!table.data?.length && (
                             <div className="flex-1 flex items-center justify-center">
-                                {table.loading ? <Loading /> : <NoResult />}
+                                {listState}
                             </div>
                         )}
                     </>
@@ -503,8 +538,8 @@ export function ProTable<TData = any>({
                                 disableBooleanToggle={
                                     isBrowseMode || !(table.permission?.canUpdate ?? true)
                                 }
-                                selectable={!isBrowseMode}
-                                showIndex={!isBrowseMode}
+                                selectable={!isBrowseMode && selectable}
+                                showIndex={!isBrowseMode && showIndex}
                                 renderCard={renderCard}
                                 onBooleanToggle={(id, fieldName, newValue) => {
                                     if (isBrowseMode) return;
@@ -514,29 +549,30 @@ export function ProTable<TData = any>({
                             />
                         ) : (
                             <div className="flex-1 flex items-center justify-center">
-                                {table.loading ? <Loading /> : <NoResult />}
+                                {listState}
                             </div>
                         )}
                     </>
                 )}
             </div>
 
-            <Pagination
-                table={table}
-                isAutoSize={isAutoSize}
-                autoSize={calculatedSize}
-                showSelectionSummary={!isBrowseMode}
-                onPageSizeChange={(value) => {
-                    if (value === "auto") {
-                        setIsAutoSize(true);
-                        table.setSize(calculatedSize);
-                    } else {
-                        setIsAutoSize(false);
-                        table.setSize(Number(value));
-                    }
-                    table.setPage(0);
-                }}
-            />
+            {showPagination && (
+                <Pagination
+                    table={table}
+                    isAutoSize={isAutoSize}
+                    autoSize={calculatedSize}
+                    showSelectionSummary={!isBrowseMode && selectable}
+                    onPageSizeChange={(value) => {
+                        if (value === "auto") {
+                            setIsAutoSize(true);
+                            table.setSize(calculatedSize);
+                        } else {
+                            setIsAutoSize(false);
+                            table.setSize(Number(value));
+                        }
+                    }}
+                />
+            )}
 
             {/* Form Modal: Use custom renderer if provided, otherwise use default */}
             {renderFormModal ? (

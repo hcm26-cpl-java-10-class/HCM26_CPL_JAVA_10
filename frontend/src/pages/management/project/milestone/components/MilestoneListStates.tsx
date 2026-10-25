@@ -1,31 +1,9 @@
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import type { MilestoneApiError } from "@/types";
 import { AlertCircle, ArrowLeft, Clipboard, Flag, Plus, RefreshCw, SearchX } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-
-export function MilestoneListSkeleton() {
-  return (
-    <div className="grid h-full w-full grid-rows-[auto_1fr_auto] gap-4" aria-label="Loading milestones">
-      <div className="flex items-center justify-between gap-4">
-        <div className="grid gap-2">
-          <Skeleton className="h-6 w-56 max-w-full" />
-          <Skeleton className="h-4 w-40" />
-        </div>
-        <Skeleton className="h-9 w-36" />
-      </div>
-      <Card className="h-full overflow-hidden">
-        <CardContent className="grid gap-3 p-3">
-          {[1, 2, 3, 4, 5].map((item) => <Skeleton key={item} className="h-16 w-full" />)}
-        </CardContent>
-      </Card>
-      <div className="flex justify-end"><Skeleton className="h-9 w-80 max-w-full" /></div>
-    </div>
-  );
-}
 
 interface MilestoneEmptyStateProps {
   canCreate: boolean;

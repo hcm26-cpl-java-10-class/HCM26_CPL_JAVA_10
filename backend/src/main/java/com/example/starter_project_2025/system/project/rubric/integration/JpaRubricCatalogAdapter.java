@@ -35,7 +35,7 @@ public class JpaRubricCatalogAdapter implements RubricCatalogPort {
     @Override
     public RubricSnapshotData requireSnapshotForRead(UUID id, UUID projectId, UUID tenantId) {
         return repository.findByIdAndRubricTenantId(id, tenantId)
-                .filter(item -> item.getStatus() != RubricVersionStatus.DRAFT)
+                .filter(item -> item.getStatus() == RubricVersionStatus.PUBLISHED)
                 .map(this::map)
                 .orElseThrow(() -> new MilestoneDependencyException("Milestone rubric version could not be loaded"));
     }

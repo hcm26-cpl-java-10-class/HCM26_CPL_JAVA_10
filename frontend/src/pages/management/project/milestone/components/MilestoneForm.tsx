@@ -1,23 +1,21 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useState } from "react";
-import { Controller, type FieldPath, useFieldArray, useForm, useWatch } from "react-hook-form";
+import { useEffect } from "react";
+import { Controller, type FieldPath, useForm, useWatch } from "react-hook-form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import type { MilestoneApiError, MilestoneCreateOptions } from "@/types";
-import { AlertTriangle, ArrowDown, ArrowUp, CalendarClock, CheckCircle2, Eye, Plus, Save, Trash2 } from "lucide-react";
+import { AlertTriangle, CalendarClock, CheckCircle2, Save } from "lucide-react";
+import { MilestoneChecklistEditor } from "./MilestoneChecklistEditor";
 import { MilestoneErrorSummary } from "./MilestoneErrorSummary";
-import { milestoneFormSchema, type MilestoneFormValues } from "../milestone-form.schema";
+import { getMilestoneRubricMetrics, MilestoneRubricSelector } from "./MilestoneRubricSelector";
+import { MILESTONE_FORM_LIMITS, milestoneFormSchema, type MilestoneFormValues } from "../milestone-form.schema";
 import { toFormFieldPath } from "../milestone.utils";
 
 interface MilestoneFormProps {
@@ -45,7 +43,6 @@ export function MilestoneForm({
   onCancel,
   onDirtyChange,
 }: MilestoneFormProps) {
-  const [rubricPreviewOpen, setRubricPreviewOpen] = useState(false);
   const {
     control,
     register,
@@ -61,7 +58,6 @@ export function MilestoneForm({
     mode: "onBlur",
   });
 
-  const { fields, append, remove, move } = useFieldArray({ control, name: "checklist" });
   const values = useWatch({ control });
   const latePolicyType = useWatch({ control, name: "latePolicy.type" });
 
@@ -99,12 +95,6 @@ export function MilestoneForm({
     }
   }, [apiError, setError, setFocus]);
 
-  const addChecklistItem = () => {
-    if (fields.length >= 100) return;
-    append({ content: "", mandatory: true });
-    requestAnimationFrame(() => setFocus(`checklist.${fields.length}.content`));
-  };
-
   const selectLatePolicy = (type: "NO_LATE" | "ALLOW_LATE") => {
     setValue("latePolicy.type", type, { shouldDirty: true, shouldValidate: true });
     if (type === "NO_LATE") {
@@ -115,6 +105,7 @@ export function MilestoneForm({
   };
 
   const rubric = options.rubrics.find((item) => item.id === values.rubricSnapshotId);
+  const rubricMetrics = getMilestoneRubricMetrics(rubric);
   const hasMissingOptions = options.rubrics.length === 0;
   const now = new Date();
   const minimumDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
@@ -146,21 +137,21 @@ export function MilestoneForm({
               <div className="grid gap-2">
                 <div className="flex items-center justify-between gap-3">
                   <Label htmlFor="milestone-title">Milestone name <span className="text-destructive">*</span></Label>
-                  <span className="text-xs text-muted-foreground">{values.title?.length ?? 0}/120</span>
+                  <span className="text-xs text-muted-foreground">{values.title?.length ?? 0}/{MILESTONE_FORM_LIMITS.title}</span>
                 </div>
-                <Input id="milestone-title" autoFocus required maxLength={120} placeholder="For example: Sprint 1 Delivery" aria-invalid={!!errors.title} {...register("title")} />
+                <Input id="milestone-title" autoFocus required maxLength={MILESTONE_FORM_LIMITS.title} placeholder="For example: Sprint 1 Delivery" aria-invalid={!!errors.title} {...register("title")} />
                 <FieldMessage message={errors.title?.message} />
               </div>
 
               <div className="grid gap-2">
                 <div className="flex items-center justify-between gap-3">
                   <Label htmlFor="milestone-description">Description</Label>
-                  <span className="text-xs text-muted-foreground">{values.description?.length ?? 0}/1,000</span>
+                  <span className="text-xs text-muted-foreground">{values.description?.length ?? 0}/{MILESTONE_FORM_LIMITS.description.toLocaleString("en-US")}</span>
                 </div>
                 <Textarea
                   id="milestone-description"
                   rows={4}
-                  maxLength={1000}
+                  maxLength={MILESTONE_FORM_LIMITS.description}
                   className="h-32 min-h-32 max-h-32 resize-none overflow-y-auto !field-sizing-fixed"
                   placeholder="Describe the expected deliverables and outcome"
                   aria-invalid={!!errors.description}
@@ -189,74 +180,27 @@ export function MilestoneForm({
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="flex-row items-start justify-between gap-4">
-              <div>
-                <CardTitle>Acceptance checklist</CardTitle>
-                <CardDescription className="mt-1">Conditions the team must satisfy for delivery acceptance.</CardDescription>
-              </div>
-              <Button type="button" variant="outline" size="sm" onClick={addChecklistItem} disabled={fields.length >= 100 || submitting}>
-                <Plus className="size-4" /> Add item
-              </Button>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              {fields.map((field, index) => (
-                <div key={field.id} className="grid gap-2 rounded-xl border p-3 sm:grid-cols-[2rem_minmax(0,1fr)_auto] sm:items-start">
-                  <div className="flex size-8 items-center justify-center rounded-full bg-muted text-sm font-semibold">{index + 1}</div>
-                  <div className="grid min-w-0 gap-2">
-                    <Input
-                      required
-                      maxLength={500}
-                      placeholder={`Acceptance condition ${index + 1}`}
-                      aria-label={`Checklist item ${index + 1}`}
-                      aria-invalid={!!errors.checklist?.[index]?.content}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" && index === fields.length - 1 && fields.length < 100) {
-                          event.preventDefault();
-                          addChecklistItem();
-                        }
-                      }}
-                      {...register(`checklist.${index}.content`)}
-                    />
-                    <Controller control={control} name={`checklist.${index}.mandatory`} render={({ field: itemField }) => (
-                      <label className="flex w-fit items-center gap-2 text-sm text-muted-foreground">
-                        <Checkbox checked={itemField.value} onCheckedChange={(checked) => itemField.onChange(checked === true)} />
-                        Mandatory
-                      </label>
-                    )} />
-                    <FieldMessage message={errors.checklist?.[index]?.content?.message} />
-                  </div>
-                  <div className="flex justify-end gap-1">
-                    <Button type="button" variant="ghost" size="icon-sm" aria-label="Move up" disabled={index === 0 || submitting} onClick={() => move(index, index - 1)}><ArrowUp /></Button>
-                    <Button type="button" variant="ghost" size="icon-sm" aria-label="Move down" disabled={index === fields.length - 1 || submitting} onClick={() => move(index, index + 1)}><ArrowDown /></Button>
-                    <Button type="button" variant="ghost" size="icon-sm" className="text-destructive" aria-label="Delete item" disabled={fields.length === 1 || submitting} onClick={() => remove(index)}><Trash2 /></Button>
-                  </div>
-                </div>
-              ))}
-              <FieldMessage message={typeof errors.checklist?.message === "string" ? errors.checklist.message : undefined} />
-              <p className="text-xs text-muted-foreground">Press Enter in the last item to add another. Maximum 100 items.</p>
-            </CardContent>
-          </Card>
+          <MilestoneChecklistEditor
+            control={control}
+            errors={errors}
+            register={register}
+            setFocus={setFocus}
+            submitting={submitting}
+          />
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Acceptance settings</CardTitle>
-              <CardDescription>Select the rubric version used to evaluate submissions for this milestone.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-              <div className="grid gap-2">
-                <div className="flex items-center justify-between gap-2"><Label>Rubric <span className="text-destructive">*</span></Label><a href="/rubrics" target="_blank" rel="noreferrer" className="text-xs font-medium text-primary hover:underline">Manage rubrics</a></div>
-                <Controller control={control} name="rubricSnapshotId" render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange} disabled={!options.rubrics.length}>
-                    <SelectTrigger aria-invalid={!!errors.rubricSnapshotId}><SelectValue placeholder="Select a rubric version" /></SelectTrigger>
-                    <SelectContent>{options.rubrics.map((item) => <SelectItem key={item.id} value={item.id}>{item.name} · {item.version}</SelectItem>)}</SelectContent>
-                  </Select>
-                )} />
-                <FieldMessage message={errors.rubricSnapshotId?.message} />
-              </div>
-              <Button type="button" variant="outline" size="sm" className="w-full md:w-auto" disabled={!rubric} onClick={() => setRubricPreviewOpen(true)}><Eye /> View selected rubric</Button>
-            </CardContent>
-          </Card>
+          <Controller
+            control={control}
+            name="rubricSnapshotId"
+            render={({ field }) => (
+              <MilestoneRubricSelector
+                rubrics={options.rubrics}
+                value={field.value}
+                error={errors.rubricSnapshotId?.message}
+                disabled={submitting}
+                onChange={field.onChange}
+              />
+            )}
+          />
 
           <Card>
             <CardHeader>
@@ -312,8 +256,16 @@ export function MilestoneForm({
             <div><p className="text-muted-foreground">Project</p><p className="mt-1 font-medium">{options.project.name}</p></div>
             <div><p className="text-muted-foreground">Milestone</p><p className="mt-1 font-medium">{values.title?.trim() || "Not entered"}</p></div>
             <div><p className="text-muted-foreground">Deadline</p><p className="mt-1 flex items-center gap-2 font-medium"><CalendarClock className="size-4" />{values.deadline ? new Date(values.deadline).toLocaleString("en-GB") : "Not selected"}</p></div>
-            <div><p className="text-muted-foreground">Checklist</p><p className="mt-1 font-medium">{fields.length} item(s)</p></div>
-            <div><p className="text-muted-foreground">Rubric</p><p className="mt-1 font-medium">{rubric ? `${rubric.name} · ${rubric.version}` : "Not selected"}</p></div>
+            <div><p className="text-muted-foreground">Checklist</p><p className="mt-1 font-medium">{values.checklist?.length ?? 0} item(s)</p></div>
+            <div>
+              <p className="text-muted-foreground">Rubric</p>
+              <p className="mt-1 font-medium">{rubric ? `${rubric.name} · ${rubric.version}` : "Not selected"}</p>
+              {rubric ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {rubricMetrics.criteriaCount} criteria · {rubricMetrics.totalMaxScore} maximum score
+                </p>
+              ) : null}
+            </div>
             <div><p className="text-muted-foreground">Late submissions</p><Badge variant="secondary" className="mt-1">{latePolicyType === "ALLOW_LATE" ? "Allowed" : "Not allowed"}</Badge></div>
           </CardContent>
         </Card>
@@ -326,31 +278,6 @@ export function MilestoneForm({
         </Button>
       </div>
 
-      <Dialog open={rubricPreviewOpen} onOpenChange={setRubricPreviewOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>{rubric ? `${rubric.name} · ${rubric.version}` : "Rubric preview"}</DialogTitle>
-            <DialogDescription>Review the scoring criteria before assigning this rubric to the milestone.</DialogDescription>
-          </DialogHeader>
-          {rubric ? (
-            <div className="grid gap-4">
-              <div className="grid grid-cols-2 gap-3 rounded-lg bg-muted/40 p-3 text-sm">
-                <div><p className="text-muted-foreground">Criteria</p><p className="font-semibold">{rubric.criteria.length}</p></div>
-                <div><p className="text-muted-foreground">Maximum score</p><p className="font-semibold">{rubric.criteria.reduce((sum, item) => sum + Number(item.maxScore), 0)}</p></div>
-              </div>
-              <div className="overflow-x-auto rounded-md border">
-                <Table>
-                  <TableHeader><TableRow><TableHead>#</TableHead><TableHead>Code</TableHead><TableHead>Criterion</TableHead><TableHead className="text-right">Weight</TableHead><TableHead className="text-right">Max score</TableHead></TableRow></TableHeader>
-                  <TableBody>{rubric.criteria.map((criterion, index) => (
-                    <TableRow key={`${criterion.code}-${index}`}><TableCell>{index + 1}</TableCell><TableCell className="font-mono text-xs">{criterion.code}</TableCell><TableCell><p className="font-medium">{criterion.name}</p><div className="mt-2 grid gap-1 text-xs">{criterion.ratings?.map((rating) => <div key={`${criterion.code}-${rating.level}`}><span className="font-medium">{rating.level.replace("_", " ")} ({rating.percentage}%):</span> <span className="text-muted-foreground">{rating.description}</span></div>)}</div></TableCell><TableCell className="text-right">{criterion.weight}%</TableCell><TableCell className="text-right">{criterion.maxScore}</TableCell></TableRow>
-                  ))}</TableBody>
-                </Table>
-              </div>
-            </div>
-          ) : null}
-          <DialogFooter showCloseButton />
-        </DialogContent>
-      </Dialog>
     </form>
   );
 }

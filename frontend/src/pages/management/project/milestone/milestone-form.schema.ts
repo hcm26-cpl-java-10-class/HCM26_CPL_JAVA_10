@@ -1,21 +1,32 @@
 import { z } from "zod";
 import type { LatePolicyType } from "@/types";
 
+export const MILESTONE_FORM_LIMITS = {
+  title: 120,
+  description: 1000,
+  checklistItemContent: 500,
+  checklistItems: 100,
+} as const;
+
 export const milestoneFormSchema = z
   .object({
-    title: z.string().trim().min(1, "Milestone name is required").max(120, "Milestone name must not exceed 120 characters"),
-    description: z.string().max(1000, "Description must not exceed 1,000 characters"),
+    title: z.string().trim().min(1, "Milestone name is required").max(MILESTONE_FORM_LIMITS.title, "Milestone name must not exceed 120 characters"),
+    description: z.string().max(MILESTONE_FORM_LIMITS.description, "Description must not exceed 1,000 characters"),
     deadline: z.string().min(1, "Deadline is required"),
     mandatory: z.boolean(),
     checklist: z
       .array(
         z.object({
-          content: z.string().trim().min(1, "Checklist content is required").max(500, "Checklist content must not exceed 500 characters"),
+          content: z
+            .string()
+            .trim()
+            .min(1, "Checklist content is required")
+            .max(MILESTONE_FORM_LIMITS.checklistItemContent, "Checklist content must not exceed 500 characters"),
           mandatory: z.boolean(),
         }),
       )
       .min(1, "At least one checklist item is required")
-      .max(100, "Checklist must not contain more than 100 items"),
+      .max(MILESTONE_FORM_LIMITS.checklistItems, "Checklist must not contain more than 100 items"),
     rubricSnapshotId: z.string().min(1, "Please select a rubric"),
     latePolicy: z.object({
       type: z.enum(["NO_LATE", "ALLOW_LATE"]),

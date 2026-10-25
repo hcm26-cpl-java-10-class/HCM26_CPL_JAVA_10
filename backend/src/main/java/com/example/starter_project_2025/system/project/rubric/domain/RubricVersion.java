@@ -47,9 +47,6 @@ public class RubricVersion {
     @Column(name = "published_at")
     private Instant publishedAt;
 
-    @Column(name = "archived_at")
-    private Instant archivedAt;
-
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -106,16 +103,6 @@ public class RubricVersion {
         requireDraft();
         status = RubricVersionStatus.PUBLISHED;
         publishedAt = now;
-        updatedAt = now;
-        updatedBy = actorId;
-    }
-
-    public void archive(UUID actorId, Instant now) {
-        if (status != RubricVersionStatus.PUBLISHED) {
-            throw new IllegalStateException("Only a published rubric version can be archived");
-        }
-        status = RubricVersionStatus.ARCHIVED;
-        archivedAt = now;
         updatedAt = now;
         updatedBy = actorId;
     }

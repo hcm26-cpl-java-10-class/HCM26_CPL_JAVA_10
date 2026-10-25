@@ -21,9 +21,6 @@ export const rubricApi = {
   async publish(rubricId: string, versionId: string): Promise<RubricDetail> {
     return (await axiosInstance.post<RubricDetail>(`/rubrics/${rubricId}/versions/${versionId}/publish`)).data;
   },
-  async archive(rubricId: string, versionId: string): Promise<RubricDetail> {
-    return (await axiosInstance.post<RubricDetail>(`/rubrics/${rubricId}/versions/${versionId}/archive`)).data;
-  },
   async createVersion(rubricId: string, sourceVersionId: string): Promise<RubricDetail> {
     return (await axiosInstance.post<RubricDetail>(`/rubrics/${rubricId}/versions`, { sourceVersionId })).data;
   },

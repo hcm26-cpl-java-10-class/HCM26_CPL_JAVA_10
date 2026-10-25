@@ -58,12 +58,6 @@ public class RubricController {
         return service.createVersion(rubricId, request);
     }
 
-    @PostMapping("/{rubricId}/versions/{versionId}/archive")
-    @PreAuthorize("hasAuthority('RUBRIC_UPDATE')")
-    public RubricDetailResponse archive(@PathVariable UUID rubricId, @PathVariable UUID versionId) {
-        return service.archive(rubricId, versionId);
-    }
-
     @DeleteMapping("/{rubricId}/versions/{versionId}")
     @PreAuthorize("hasAuthority('RUBRIC_DELETE')")
     @ResponseStatus(HttpStatus.NO_CONTENT)

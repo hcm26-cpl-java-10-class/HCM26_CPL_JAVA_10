@@ -51,15 +51,16 @@ Backend mock mặc định seed 7 milestone cho project này, cùng 3 rubric và
 ## Luồng sử dụng
 
 1. Teacher landing mở trang danh sách milestone của project mock.
-2. Danh sách hiển thị table trên desktop và card trên mobile. Click toàn bộ row/card để mở chi tiết.
+2. Danh sách dùng cùng `ProTable` với trang Books, mặc định hiển thị table và cho phép chuyển đổi table/card. Dùng action **View** hoặc card để mở chi tiết.
 3. `page` và `size` được giữ trong URL, vì vậy quay lại từ trang chi tiết vẫn đúng vị trí trước đó.
 4. Chọn **Create milestone** để mở form. Nút chỉ xuất hiện khi có `MILESTONE_CREATE` và bị vô hiệu hóa khi project không còn active.
 5. Form tự lấy project, rubric và reviewer hợp lệ từ `create-options`.
 6. Nếu chỉ có một rubric hoặc reviewer, UI tự chọn để giảm thao tác.
-7. Nhập tên, deadline và checklist. Nhấn `Enter` tại checklist cuối để thêm nhanh một mục.
-8. `NO_LATE` là lựa chọn mặc định. Khi chọn `ALLOW_LATE`, nhập thời hạn nhận bài trễ và mức phạt.
-9. Chọn **Create milestone**. Thành công sẽ mở trang chi tiết milestone vừa tạo.
-10. Nếu kết nối bị gián đoạn, nút **Retry safely** sử dụng cùng `Idempotency-Key` và cùng payload.
+7. Rubric đã chọn hiển thị ngay số criteria, tổng weight và maximum score; có thể mở preview đầy đủ mà không rời form.
+8. Nhập tên, deadline và checklist. Nhấn `Enter` tại checklist cuối để thêm nhanh một mục.
+9. `NO_LATE` là lựa chọn mặc định. Khi chọn `ALLOW_LATE`, nhập thời hạn nhận bài trễ và mức phạt.
+10. Chọn **Create milestone**. Thành công sẽ mở trang chi tiết milestone vừa tạo.
+11. Nếu kết nối bị gián đoạn, nút **Retry safely** sử dụng cùng `Idempotency-Key` và cùng payload.
 
 ## Màn hình chi tiết
 
@@ -73,13 +74,15 @@ Backend mock mặc định seed 7 milestone cho project này, cùng 3 rubric và
 ## Danh sách và phân trang
 
 - Page mặc định `0`, size mặc định `20`.
-- Các size hỗ trợ trên UI: `10`, `20`, `30`, `50`, `100`.
+- Hỗ trợ page size tự động theo chiều cao màn hình giống trang Books hoặc chọn thủ công `10`, `20`, `30`, `50`, `100`; backend chấp nhận giá trị từ `1` đến `100`.
 - Đổi size tự quay về page `0`.
 - Search theo title/description được debounce 300 ms và thực hiện server-side trên toàn bộ dữ liệu của project.
 - Filter hỗ trợ status, mandatory/optional, late policy và khoảng deadline theo ngày.
 - Search/filter/page/size được giữ trong URL; reload, chia sẻ URL hoặc quay lại từ detail không làm mất trạng thái.
 - Thay đổi search/filter tự quay về page `0`; đổi page/size giữ nguyên search/filter.
 - Frontend không cung cấp sort client-side vì backend giữ thứ tự deadline cố định. Điều này tránh hiển thị kết quả gây hiểu nhầm trên một page riêng lẻ.
+- Có thể chuyển table/card, thay đổi độ rộng cột và bật/tắt cột giống các màn hình dùng `ProTable` khác.
+- Milestone không hiển thị checkbox chọn dòng, Edit, Delete, Import hoặc Export vì backend chưa cung cấp các capability tương ứng.
 - Khi chuyển page, dữ liệu hiện tại được giữ lại với trạng thái mờ và chỉ báo loading nhỏ để tránh layout nhấp nháy.
 - Nếu page trong URL vượt quá tổng số page, UI tự điều hướng về page cuối hợp lệ.
 - API list không tải checklist. Checklist được lấy khi mở detail.

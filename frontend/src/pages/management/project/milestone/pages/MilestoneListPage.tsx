@@ -1,18 +1,23 @@
 import { milestoneApi } from "@/api";
+import { ProTable } from "@/components/datatable/ProTable";
+import ActionButton from "@/components/datatable/common/ActionButton";
+import { useProTable } from "@/components/datatable/hook/useProTable";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { SearchInput } from "@/components/datatable/toolbar/SearchInput";
-import { usePermissions } from "@/hooks/usePermissions";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { AlertCircle, ArrowUpDown, LayoutGrid, LoaderCircle, Plus, Table2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
-import { MilestoneFilterPopover } from "../components/MilestoneFilterPopover";
-import { MilestoneEmptyState, MilestoneListError, MilestoneListSkeleton } from "../components/MilestoneListStates";
-import { MilestoneListView } from "../components/MilestoneListView";
-import { MilestonePagination } from "../components/MilestonePagination";
+import type {
+  LatePolicyType,
+  MilestoneDetailRouteState,
+  MilestoneListItem,
+  MilestonePageResponse,
+  MilestoneStatus,
+  Pagination,
+} from "@/types";
+import { AlertCircle, Plus } from "lucide-react";
+import { useCallback, useEffect, useMemo } from "react";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { MilestoneEmptyState, MilestoneListError } from "../components/MilestoneListStates";
+import { MilestoneTableCard } from "../components/MilestoneTableCard";
+import { milestoneListSchema } from "../milestone-list.schema";
 import {
   hasMilestoneQuery,
   parseMilestoneListParams,
@@ -20,186 +25,193 @@ import {
 } from "../milestone-list-query.utils";
 import { getMilestoneApiError } from "../milestone.utils";
 
+interface MilestoneTableFilters {
+  status?: MilestoneStatus[];
+  mandatory?: boolean;
+  latePolicyType?: LatePolicyType[];
+  deadline?: { from?: string; to?: string };
+}
+
 export function MilestoneListPage() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { hasPermission } = usePermissions();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const location = useLocation();
-  const [viewMode, setViewMode] = useState<"table" | "card">("table");
   const serializedSearchParams = searchParams.toString();
   const listParams = useMemo(
     () => parseMilestoneListParams(new URLSearchParams(serializedSearchParams)),
     [serializedSearchParams],
   );
-  const [searchValue, setSearchValue] = useState(listParams.search ?? "");
-  const canCreate = hasPermission("MILESTONE_CREATE");
+
+  const filters = useMemo<MilestoneTableFilters>(() => ({
+    status: listParams.status,
+    mandatory: listParams.mandatory,
+    latePolicyType: listParams.latePolicyType,
+    deadline: listParams.deadlineFrom || listParams.deadlineTo
+      ? { from: listParams.deadlineFrom, to: listParams.deadlineTo }
+      : undefined,
+  }), [
+    listParams.deadlineFrom,
+    listParams.deadlineTo,
+    listParams.latePolicyType,
+    listParams.mandatory,
+    listParams.status,
+  ]);
 
   const updateListParams = useCallback((patch: Partial<typeof listParams>) => {
-    setSearchParams(serializeMilestoneListParams({ ...listParams, ...patch }));
-  }, [listParams, setSearchParams]);
+    setSearchParams((current) => serializeMilestoneListParams({
+      ...parseMilestoneListParams(current),
+      ...patch,
+    }));
+  }, [setSearchParams]);
 
-  useEffect(() => {
-    setSearchValue(listParams.search ?? "");
-  }, [listParams.search]);
+  const tableApi = useMemo(() => ({
+    getPage: (
+      pagination: Pagination,
+      search?: string,
+      nextFilters?: MilestoneTableFilters,
+    ) => {
+      const normalizedSearch = search?.trim().replace(/\s+/g, " ").slice(0, 120) || undefined;
+      let deadlineFrom = nextFilters?.deadline?.from;
+      let deadlineTo = nextFilters?.deadline?.to;
+      if (deadlineFrom && deadlineTo && deadlineFrom > deadlineTo) {
+        [deadlineFrom, deadlineTo] = [deadlineTo, deadlineFrom];
+      }
 
-  useEffect(() => {
-    const normalizedSearch = searchValue.trim().replace(/\s+/g, " ").slice(0, 120) || undefined;
-    if (normalizedSearch === listParams.search) return;
-    const timeout = window.setTimeout(() => updateListParams({ search: normalizedSearch, page: 0 }), 300);
-    return () => window.clearTimeout(timeout);
-  }, [listParams.search, searchValue, updateListParams]);
+      return milestoneApi.getList(projectId as string, {
+        page: pagination.page ?? 0,
+        size: pagination.size ?? 20,
+        search: normalizedSearch,
+        status: nextFilters?.status,
+        mandatory: nextFilters?.mandatory,
+        latePolicyType: nextFilters?.latePolicyType,
+        deadlineFrom,
+        deadlineTo,
+      });
+    },
+  }), [projectId]);
 
-  const listQuery = useQuery({
-    queryKey: ["projects", projectId, "milestones", "list", listParams],
-    queryFn: () => milestoneApi.getList(projectId as string, listParams),
+  const table = useProTable(tableApi, milestoneListSchema, {
     enabled: Boolean(projectId),
-    placeholderData: keepPreviousData,
+    queryKeyParts: [projectId],
+    searchDebounceMs: 300,
     retry: false,
     staleTime: 30_000,
+    permissionOverrides: {
+      canUpdate: false,
+      canDelete: false,
+      canImport: false,
+      canExport: false,
+    },
+    state: {
+      pagination: { page: listParams.page, size: listParams.size },
+      search: listParams.search ?? "",
+      filters,
+    },
+    onPaginationChange: (pagination) => updateListParams({
+      page: pagination.page ?? 0,
+      size: pagination.size ?? listParams.size,
+    }),
+    onSearchChange: (search) => updateListParams({
+      search: search.slice(0, 120) || undefined,
+      page: 0,
+    }),
+    onFiltersChange: (nextFilters: MilestoneTableFilters) => updateListParams({
+      status: nextFilters.status,
+      mandatory: nextFilters.mandatory,
+      latePolicyType: nextFilters.latePolicyType,
+      deadlineFrom: nextFilters.deadline?.from,
+      deadlineTo: nextFilters.deadline?.to,
+      page: 0,
+    }),
   });
 
-  const setPagination = (nextPage: number, nextSize = listParams.size) => {
-    updateListParams({ page: nextPage, size: nextSize });
-  };
+  const response = table.pageData as MilestonePageResponse | undefined;
+  const projectActive = response?.project.status === "ACTIVE";
+  const createUrl = `/projects/${projectId}/milestones/new`;
+  const returnTo = `${location.pathname}${location.search}`;
+  const filtered = hasMilestoneQuery(listParams);
+  const breadcrumbs = response
+    ? { projects: "Projects", [projectId ?? "project"]: response.project.name, milestones: "Milestones" }
+    : { projects: "Projects", milestones: "Milestones" };
 
   useEffect(() => {
-    const response = listQuery.data;
-    if (!response || listQuery.isPlaceholderData) return;
+    if (!response || table.isFetching) return;
     if (response.totalElements === 0 && listParams.page > 0) {
-      setPagination(0);
+      updateListParams({ page: 0 });
       return;
     }
     if (response.totalPages > 0 && listParams.page >= response.totalPages) {
-      setPagination(response.totalPages - 1);
+      updateListParams({ page: response.totalPages - 1 });
     }
-  }, [listQuery.data, listQuery.isPlaceholderData, listParams.page]);
-
-  const breadcrumbs = listQuery.data
-    ? { projects: "Projects", [projectId ?? "project"]: listQuery.data.project.name, milestones: "Milestones" }
-    : { projects: "Projects", milestones: "Milestones" };
+  }, [listParams.page, response, table.isFetching, updateListParams]);
 
   if (!projectId) {
     return (
       <MainLayout pathName={breadcrumbs}>
-        <Alert variant="destructive"><AlertCircle /><AlertTitle>Missing project ID</AlertTitle><AlertDescription>The project for this milestone list could not be determined.</AlertDescription></Alert>
+        <Alert variant="destructive">
+          <AlertCircle />
+          <AlertTitle>Missing project ID</AlertTitle>
+          <AlertDescription>The project for this milestone list could not be determined.</AlertDescription>
+        </Alert>
       </MainLayout>
     );
   }
 
-  if (listQuery.isLoading) {
-    return <MainLayout pathName={breadcrumbs}><MilestoneListSkeleton /></MainLayout>;
-  }
+  const openDetail = (row: MilestoneListItem) => {
+    const routeState: MilestoneDetailRouteState = {
+      projectName: response?.project.name,
+      returnTo,
+    };
+    navigate(`/projects/${projectId}/milestones/${row.id}`, { state: routeState });
+  };
 
-  if (listQuery.isError || !listQuery.data) {
-    return (
-      <MainLayout pathName={breadcrumbs}>
-        <MilestoneListError error={getMilestoneApiError(listQuery.error)} homeUrl="/teacher" onRetry={() => void listQuery.refetch()} />
-      </MainLayout>
-    );
-  }
-
-  const response = listQuery.data;
-  const projectActive = response.project.status === "ACTIVE";
-  const createUrl = `/projects/${projectId}/milestones/new`;
-  const returnTo = `${location.pathname}${location.search}`;
-  const changingPage = listQuery.isFetching && !listQuery.isLoading;
-  const filtering = hasMilestoneQuery(listParams) || Boolean(searchValue.trim());
   const clearSearchAndFilters = () => {
-    setSearchValue("");
     setSearchParams(serializeMilestoneListParams({ page: 0, size: listParams.size }));
   };
 
+  const createAction = table.permission?.canCreate ? (
+    <ActionButton
+      onClick={() => navigate(createUrl)}
+      tooltip={projectActive
+        ? "Create milestone"
+        : `Milestones cannot be created while the project is ${response?.project.status.toLowerCase() ?? "unavailable"}.`}
+      title="Create"
+      variant="default"
+      icon={<Plus size={16} />}
+      disabled={!projectActive}
+    />
+  ) : undefined;
+
   return (
     <MainLayout pathName={breadcrumbs}>
-      <div className="grid h-full w-full grid-rows-[auto_1fr_auto] gap-4 font-inter">
-        <div className="grid gap-3">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="truncate text-lg font-semibold">{response.project.name}</h1>
-                <Badge variant="secondary">{response.project.status}</Badge>
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {response.totalElements} {filtering ? "matching " : ""}milestone{response.totalElements === 1 ? "" : "s"} · ordered by earliest deadline
-              </p>
-            </div>
-            <div className="hidden items-center gap-2 text-xs text-muted-foreground sm:flex" aria-live="polite">
-              {changingPage ? <LoaderCircle className="size-4 animate-spin" /> : <ArrowUpDown className="size-4" />}
-              {changingPage ? "Updating results…" : "Deadline · earliest first"}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
-              <MilestoneFilterPopover
-                value={listParams}
-                onChange={(patch) => updateListParams({ ...patch, page: 0 })}
-                onClear={() => updateListParams({
-                  status: undefined,
-                  mandatory: undefined,
-                  latePolicyType: undefined,
-                  deadlineFrom: undefined,
-                  deadlineTo: undefined,
-                  page: 0,
-                })}
-              />
-              <SearchInput search={searchValue} onSearchChange={(value) => setSearchValue(value.slice(0, 120))} />
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                size="icon"
-                variant="outline"
-                aria-label={viewMode === "table" ? "Switch to card view" : "Switch to table view"}
-                title={viewMode === "table" ? "Switch to card view" : "Switch to table view"}
-                onClick={() => setViewMode((current) => current === "table" ? "card" : "table")}
-              >
-                {viewMode === "table" ? <LayoutGrid /> : <Table2 />}
-              </Button>
-              {canCreate ? (
-                projectActive ? (
-                  <Button asChild><Link to={createUrl}><Plus /> Create milestone</Link></Button>
-                ) : (
-                  <Button disabled title={`Milestones cannot be created while the project is ${response.project.status.toLowerCase()}.`}><Plus /> Create milestone</Button>
-                )
-              ) : null}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-md border bg-card text-card-foreground">
-          {response.totalElements === 0 ? (
-            <MilestoneEmptyState
-              canCreate={canCreate}
-              projectActive={projectActive}
-              createUrl={createUrl}
-              filtered={filtering}
-              onClear={clearSearchAndFilters}
-            />
-          ) : (
-            <MilestoneListView
-              milestones={response.content}
-              projectId={projectId}
-              projectName={response.project.name}
-              returnTo={returnTo}
-              loading={changingPage}
-              viewMode={viewMode}
-            />
-          )}
-        </div>
-
-        {response.totalElements > 0 ? (
-          <MilestonePagination
-            page={response.page}
-            size={response.size}
-            totalElements={response.totalElements}
-            totalPages={response.totalPages}
-            loading={changingPage}
-            onPageChange={(nextPage) => setPagination(nextPage)}
-            onSizeChange={(nextSize) => setPagination(0, nextSize)}
+      <ProTable<MilestoneListItem>
+        table={table}
+        headerActions={createAction}
+        renderCard={(props) => <MilestoneTableCard {...props} />}
+        onView={openDetail}
+        selectable={false}
+        autoPageSize
+        renderEmpty={(
+          <MilestoneEmptyState
+            canCreate={Boolean(table.permission?.canCreate)}
+            projectActive={projectActive}
+            createUrl={createUrl}
+            filtered={filtered}
+            onClear={clearSearchAndFilters}
           />
-        ) : <div />}
-      </div>
+        )}
+        renderError={(
+          <div className="w-full p-5">
+            <MilestoneListError
+              error={getMilestoneApiError(table.error)}
+              homeUrl="/teacher"
+              onRetry={() => void table.refetch()}
+            />
+          </div>
+        )}
+        showPagination={!table.error && !table.loading && table.total > 0}
+      />
     </MainLayout>
   );
 }
