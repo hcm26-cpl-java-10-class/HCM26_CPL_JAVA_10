@@ -54,6 +54,9 @@ public class Task {
     @Column(name = "estimated_hours")
     Double estimatedHours;
 
+    @Column(name = "deadline")
+    java.time.Instant deadline;
+
     @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

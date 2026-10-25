@@ -20,6 +20,7 @@ public interface TaskMapper {
     @Mapping(target = "title", source = "title")
     @Mapping(target = "description", source = "description")
     @Mapping(target = "estimatedHours", source = "estimatedHours")
+    @Mapping(target = "deadline", source = "deadline")
     @Mapping(target = "priority", source = "priority")
     Task toEntity(TaskDTO request);
 
@@ -30,6 +31,7 @@ public interface TaskMapper {
     @Mapping(target = "title", source = "title")
     @Mapping(target = "description", source = "description")
     @Mapping(target = "estimatedHours", source = "estimatedHours")
+    @Mapping(target = "deadline", source = "deadline")
     @Mapping(target = "priority", source = "priority")
     void update(@MappingTarget Task task, TaskDTO request);
 

@@ -10,6 +10,7 @@ import { getTaskError, taskStatusOptions } from "../task-form.utils";
 function activityDescription(activity: TaskActivityDTO): string {
   if (activity.action === "CREATE") return "Create task";
   if (activity.action === "UPDATE") return "Updated task details";
+  if (activity.action === "OVERDUE_ALERT_QUEUED") return "Queued an overdue task alert";
   if (activity.action === "STATUS_CHANGED") {
     const before =
       taskStatusOptions.find((option) => option.value === activity.before?.status)?.label ?? "";

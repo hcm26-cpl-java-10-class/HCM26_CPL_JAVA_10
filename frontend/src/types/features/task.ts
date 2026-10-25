@@ -10,6 +10,7 @@ export interface TaskPayload {
   title: string;
   description: string | null;
   estimatedHours: number | null;
+  deadline?: string | null;
   priority: TaskPriority;
   tags: string[];
   version?: number;

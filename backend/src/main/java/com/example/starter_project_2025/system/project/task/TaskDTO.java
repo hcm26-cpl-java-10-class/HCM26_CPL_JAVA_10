@@ -24,6 +24,7 @@ public class TaskDTO {
     String title;
     String description;
     Double estimatedHours;
+    java.time.Instant deadline;
     TaskPriority priority;
     TaskStatus status;
     List<String> tags;

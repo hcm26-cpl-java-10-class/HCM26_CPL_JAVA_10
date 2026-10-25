@@ -30,7 +30,8 @@ import java.util.Map;
 import java.util.LinkedHashMap;
 
 @Slf4j
-@RestControllerAdvice(assignableTypes = {TaskController.class, TaskWorkflowController.class})
+@RestControllerAdvice(assignableTypes = {TaskController.class, TaskWorkflowController.class,
+        com.example.starter_project_2025.system.project.task.alert.TaskAlertController.class})
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class TaskExceptionHandler {
 

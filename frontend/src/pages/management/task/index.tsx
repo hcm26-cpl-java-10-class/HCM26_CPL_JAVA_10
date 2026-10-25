@@ -7,16 +7,20 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { TaskProjectPicker } from "./components/TaskProjectPicker";
 import { TaskTable } from "./components/TaskTable";
+import { OverdueTaskPanel } from "./components/OverdueTaskPanel";
 import { isProjectId } from "./task-form.utils";
+import { useTaskProjects } from "./hooks/useTaskProjects";
 
 export default function TaskManagementPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, activeRole } = usePermissions();
+  const projects = useTaskProjects();
   const [projectOpen, setProjectOpen] = useState(false);
   const projectStorageKey = `task-project:${user.email}`;
   const projectId =
     searchParams.get("projectId") ?? sessionStorage.getItem(projectStorageKey) ?? "";
   const projectSelected = isProjectId(projectId);
+  const overdue = searchParams.get("overdue") === "true";
 
   useEffect(() => {
     if (projectSelected) sessionStorage.setItem(projectStorageKey, projectId);
@@ -24,7 +28,7 @@ export default function TaskManagementPage() {
 
   const selectProject = (id: string) => {
     sessionStorage.setItem(projectStorageKey, id);
-    setSearchParams({ projectId: id });
+    setSearchParams({ projectId: id, ...(overdue ? { overdue: "true" } : {}) });
     setProjectOpen(false);
   };
 
@@ -38,8 +42,7 @@ export default function TaskManagementPage() {
               <PopoverTrigger asChild>
                 <Button variant="outline" className="gap-2" title={projectId}>
                   <FolderOpen className="size-4 text-muted-foreground" />
-                  Project{" "}
-                  <span className="font-mono text-xs">{projectId.slice(0, 8).toUpperCase()}</span>
+                  <span className="max-w-64 truncate">{projects.isError ? "Change project" : projects.data?.find(project => project.id === projectId)?.name ?? "Change project"}</span>
                   <ChevronDown className="size-4 text-muted-foreground" />
                 </Button>
               </PopoverTrigger>
@@ -50,14 +53,22 @@ export default function TaskManagementPage() {
           )}
         </header>
         {projectSelected ? (
-          <TaskTable key={`${user.email}:${activeRole}:${projectId}`} projectId={projectId} />
+          <div className="grid min-h-0 gap-4">
+            <div className="flex gap-2" aria-label="Task views">
+              <Button variant={overdue ? "outline" : "default"} onClick={() => setSearchParams({ projectId })}>All tasks</Button>
+              <Button variant={overdue ? "default" : "outline"} onClick={() => setSearchParams({ projectId, overdue: "true" })}>Overdue tasks</Button>
+            </div>
+            {overdue
+              ? <OverdueTaskPanel key={`${user.email}:${activeRole}:${projectId}`} projectId={projectId} />
+              : <TaskTable key={`${user.email}:${activeRole}:${projectId}`} projectId={projectId} />}
+          </div>
         ) : (
           <div className="mx-auto grid w-full max-w-xl gap-5 py-12">
             <div className="text-center">
               <FolderOpen className="mx-auto mb-3 size-10 text-muted-foreground" />
               <h2 className="font-semibold">Select a project to get started</h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                Enter your shared project ID to manage tasks.
+                Choose a project you can access to manage tasks.
               </p>
             </div>
             <TaskProjectPicker key={projectId} projectId={projectId} onSelect={selectProject} />

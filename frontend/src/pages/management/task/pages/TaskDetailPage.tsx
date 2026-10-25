@@ -19,6 +19,7 @@ import { AlertCircle, ArrowLeft, Loader2, Pencil, RefreshCw, Trash2 } from "luci
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { TaskActivityFeed } from "../components/TaskActivityFeed";
+import { TaskAlertHistory } from "../components/TaskAlertHistory";
 import { TaskPriorityBadge } from "../components/TaskBadges";
 import { TaskDependencyDialog } from "../components/TaskDependencyDialog";
 import { TaskDeleteDialog } from "../components/TaskDeleteDialog";
@@ -141,6 +142,7 @@ function TaskDetailContent({ taskId: id }: { taskId: string }) {
             )}
           </div>
         </header>
+        {workflow && <TaskAlertHistory taskId={id} />}
         {workflowQuery.isLoading ? (
           <div
             role="status"

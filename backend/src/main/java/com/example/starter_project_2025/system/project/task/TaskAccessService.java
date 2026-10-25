@@ -15,6 +15,10 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class TaskAccessService {
     private final ObjectProvider<TaskProjectAccess> projectAccessProvider;
+    private TaskProjectAccess projectAccess(UUID projectId) {
+        TaskProjectAccess value = projectAccessProvider.getIfAvailable();
+        return value != null && value.supports(projectId) ? value : null;
+    }
 
     public Long requirePermission(String permission) {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -30,14 +34,14 @@ public class TaskAccessService {
     }
 
     public void checkProject(UUID projectId, Long actorId) {
-        TaskProjectAccess access = projectAccessProvider.getIfAvailable();
+        TaskProjectAccess access = projectAccess(projectId);
         if (access != null && !access.findProjectIds(actorId).contains(projectId)) {
             throw new AccessDeniedException("You are not a member of this project");
         }
     }
 
     public void checkAssignee(UUID projectId, UUID memberId) {
-        TaskProjectAccess access = projectAccessProvider.getIfAvailable();
+        TaskProjectAccess access = projectAccess(projectId);
         if (memberId != null && access != null && access.findMemberUserId(projectId, memberId).isEmpty()) {
             throw new TaskValidationException("assigneeProjectMemberId", "The assignee must be a member of this project");
         }
@@ -45,12 +49,12 @@ public class TaskAccessService {
 
     public Long creatorFilter(UUID projectId, Long actorId) {
         checkProject(projectId, actorId);
-        return projectAccessProvider.getIfAvailable() == null ? actorId : null;
+        return projectAccess(projectId) == null ? actorId : null;
     }
 
     public void checkRead(Task task, Long actorId) {
         checkProject(task.getProjectId(), actorId);
-        if (projectAccessProvider.getIfAvailable() == null && !Objects.equals(task.getCreatedBy(), actorId)) {
+        if (projectAccess(task.getProjectId()) == null && !Objects.equals(task.getCreatedBy(), actorId)) {
             throw new AccessDeniedException("You do not have permission to view this task");
         }
     }
@@ -68,7 +72,7 @@ public class TaskAccessService {
                 .noneMatch(authority -> "TASK_UPDATE".equals(authority.getAuthority()))) {
             return false;
         }
-        TaskProjectAccess access = projectAccessProvider.getIfAvailable();
+        TaskProjectAccess access = projectAccess(task.getProjectId());
         if (access != null && !access.findProjectIds(actorId).contains(task.getProjectId())) {
             return false;
         }
@@ -92,7 +96,7 @@ public class TaskAccessService {
                 .noneMatch(authority -> "TASK_DELETE".equals(authority.getAuthority()))) {
             return false;
         }
-        TaskProjectAccess access = projectAccessProvider.getIfAvailable();
+        TaskProjectAccess access = projectAccess(task.getProjectId());
         return access != null && access.findProjectIds(actorId).contains(task.getProjectId())
                 && access.isManager(task.getProjectId(), actorId);
     }

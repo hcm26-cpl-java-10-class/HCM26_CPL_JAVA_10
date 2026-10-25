@@ -33,6 +33,7 @@ public class TaskOutboxService {
         values.put("title", request.getTitle());
         values.put("description", request.getDescription());
         values.put("estimatedHours", request.getEstimatedHours());
+        values.put("deadline", request.getDeadline());
         values.put("priority", request.getPriority());
         values.put("status", request.getStatus());
         values.put("tags", request.getTags());
