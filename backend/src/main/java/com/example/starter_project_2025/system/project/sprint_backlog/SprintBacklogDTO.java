@@ -51,6 +51,12 @@ public class SprintBacklogDTO extends BaseDTO {
     SprintBacklogStatus status;
 
     /**
+     * Work type of the item: {@code STORY} / {@code BUG} / {@code TASK}.
+     * Fixed set, defaults to {@code TASK}.
+     */
+    SprintBacklogWorkType workType;
+
+    /**
      * Priority of the item: {@code LOW} / {@code MEDIUM} / {@code HIGH} /
      * {@code URGENT}. Defaults to {@code MEDIUM}.
      */

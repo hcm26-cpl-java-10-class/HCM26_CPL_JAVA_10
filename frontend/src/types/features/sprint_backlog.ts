@@ -8,6 +8,14 @@ import type { TaskPriority } from "./task";
 export type SprintBacklogStatus = "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE";
 
 /**
+ * Work type of a Sprint Backlog item (kept in sync with the backend
+ * `SprintBacklogWorkType` enum): Story / Bug / Task.
+ * The set is FIXED - users choose one of these values, they never create new
+ * work types.
+ */
+export type SprintBacklogWorkType = "STORY" | "BUG" | "TASK";
+
+/**
  * One task of a sprint, served by the `sprint_backlog` backend module.
  * The assignee is a plain identifier because the project member module is not
  * implemented yet.
@@ -23,6 +31,8 @@ export interface SprintBacklogDTO extends BaseDTO {
   startDate?: string | null;
   endDate?: string | null;
   status?: SprintBacklogStatus;
+  /** Story / Bug / Task (fixed set, `TASK` by default). */
+  workType?: SprintBacklogWorkType | null;
   /** Priority of the item (defaults to `MEDIUM` on the backend). */
   priority?: TaskPriority | null;
   /** Optional effort estimate in hours. */
@@ -34,6 +44,7 @@ export interface SprintBacklogDTO extends BaseDTO {
 export interface SprintBacklogFilter extends BaseFilter {
   sprintId?: number;
   status?: SprintBacklogStatus;
+  workType?: SprintBacklogWorkType;
   priority?: TaskPriority;
   assigneeProjectMemberId?: number;
   startFrom?: string;
