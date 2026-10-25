@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.exam.mapper;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.system.exam.domain.Exam;
 import com.example.starter_project_2025.system.exam.dto.ExamDTO;
+import com.example.starter_project_2025.system.exam.service.ExamScoring;
 import com.example.starter_project_2025.system.exam.service.ExamTypePolicy; // NEW
 import com.example.starter_project_2025.system.question.domain.Question;
 import com.example.starter_project_2025.system.question.mapper.QuestionMapper;
