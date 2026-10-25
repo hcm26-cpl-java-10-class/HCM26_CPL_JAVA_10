@@ -36,6 +36,7 @@ public class MilestoneController {
             @PathVariable UUID projectId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) List<String> sort,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) List<MilestoneStatus> status,
             @RequestParam(required = false) Boolean mandatory,
@@ -44,7 +45,7 @@ public class MilestoneController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate deadlineTo
     ) {
         return ResponseEntity.ok(queryService.getList(projectId, new MilestoneListQuery(
-                page, size, search, status, mandatory, latePolicyType, deadlineFrom, deadlineTo
+                page, size, sort, search, status, mandatory, latePolicyType, deadlineFrom, deadlineTo
         )));
     }
 

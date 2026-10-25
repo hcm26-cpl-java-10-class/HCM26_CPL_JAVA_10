@@ -131,6 +131,60 @@ export function useActiveModuleGroups(enabled = true) {
                 }
             }
 
+            let projectGroup = groups.find(
+                (group) => (group.name ?? "").toLowerCase() === "project management",
+            );
+
+            if (!projectGroup) {
+                projectGroup = {
+                    id: 100000,
+                    name: "Project Management",
+                    description: "Project management workspace",
+                    displayOrder: 1,
+                    isActive: true,
+                };
+                groups.push(projectGroup);
+            }
+
+            const projectGroupId = String(projectGroup.id ?? 100000);
+            if (!groupedModules[projectGroupId]) {
+                groupedModules[projectGroupId] = [];
+            }
+
+            const milestoneProjectId = import.meta.env.VITE_MILESTONE_MOCK_PROJECT_ID
+                || "11111111-1111-1111-1111-111111111111";
+            const projectWorkspaceModules: SidebarModule[] = [
+                {
+                    id: 100002,
+                    moduleGroupId: projectGroupId,
+                    title: "Milestones",
+                    name: "Milestones",
+                    url: `/projects/${milestoneProjectId}/milestones`,
+                    icon: "bookmark",
+                    displayOrder: 3,
+                    isActive: true,
+                },
+                {
+                    id: 100003,
+                    moduleGroupId: projectGroupId,
+                    title: "Rubrics",
+                    name: "Rubrics",
+                    url: "/rubrics",
+                    icon: "file-text",
+                    displayOrder: 4,
+                    isActive: true,
+                },
+            ];
+
+            for (const projectModule of projectWorkspaceModules) {
+                const alreadyExists = modules.some((module) => module.url === projectModule.url)
+                    || groupedModules[projectGroupId].some((module) => module.url === projectModule.url);
+
+                if (!alreadyExists) {
+                    groupedModules[projectGroupId].push(projectModule);
+                }
+            }
+
             return groups
                 .map((group) => {
                     const groupId = String(group.id ?? "");

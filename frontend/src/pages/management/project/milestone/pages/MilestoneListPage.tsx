@@ -12,7 +12,7 @@ import type {
   MilestoneStatus,
   Pagination,
 } from "@/types";
-import { AlertCircle, Plus } from "lucide-react";
+import { AlertCircle, Eye, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { MilestoneEmptyState, MilestoneListError } from "../components/MilestoneListStates";
@@ -81,6 +81,7 @@ export function MilestoneListPage() {
       return milestoneApi.getList(projectId as string, {
         page: pagination.page ?? 0,
         size: pagination.size ?? 20,
+        sort: pagination.sort,
         search: normalizedSearch,
         status: nextFilters?.status,
         mandatory: nextFilters?.mandatory,
@@ -192,6 +193,13 @@ export function MilestoneListPage() {
         headerActions={createAction}
         renderCard={(props) => <MilestoneTableCard {...props} />}
         onView={openDetail}
+        renderRowActions={(milestone) => (
+          <ActionButton
+            onClick={() => openDetail(milestone)}
+            tooltip="View detail"
+            icon={<Eye size={10} className="text-gray-500" />}
+          />
+        )}
         selectable={false}
         autoPageSize
         renderEmpty={(
