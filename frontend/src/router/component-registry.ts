@@ -42,7 +42,10 @@ export interface RouteConfig {
 }
 
 export const routes: RouteConfig[] = [
-  { path: "/dashboard", component: Dashboard, isModuleDriven: true },
+  // Dashboard is the default landing page for administrators. Keep this route
+  // available while the backend-driven sidebar is still loading; otherwise a
+  // successful login can temporarily fall through to the blank 404 redirect.
+  { path: "/dashboard", component: Dashboard, requiredPermission: "USER_READ" },
   { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
   { path: "/tasks", component: TaskManagementPage, requiredPermission: "TASK_READ", isModuleDriven: true },
   { path: "/tasks/create", component: TaskFormPage, requiredPermission: "TASK_CREATE" },

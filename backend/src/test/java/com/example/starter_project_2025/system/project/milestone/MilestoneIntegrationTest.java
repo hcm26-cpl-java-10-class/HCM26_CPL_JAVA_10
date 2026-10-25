@@ -217,6 +217,30 @@ class MilestoneIntegrationTest {
     }
 
     @Test
+    void sortsMilestonesByRequestedColumnAndDirection() throws Exception {
+        createMilestone("Alpha milestone", Instant.now().plusSeconds(3 * 86400L), "sort-alpha");
+        createMilestone("Zulu milestone", Instant.now().plusSeconds(86400L), "sort-zulu");
+
+        mockMvc.perform(get(endpoint())
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .param("sort", "title:desc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].title").value("Zulu milestone"))
+                .andExpect(jsonPath("$.content[1].title").value("Alpha milestone"));
+    }
+
+    @Test
+    void sortsRubricsByRequestedColumnAndDirection() throws Exception {
+        mockMvc.perform(get("/api/rubrics")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .param("sort", "name:desc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].name").value("Technical Documentation Rubric"))
+                .andExpect(jsonPath("$.content[1].name").value("Milestone Delivery Rubric"))
+                .andExpect(jsonPath("$.content[2].name").value("Demo and Presentation Rubric"));
+    }
+
+    @Test
     void searchesTitleAndDescriptionCaseInsensitivelyAndEscapesWildcards() throws Exception {
         createMilestone("Alpha Release", Instant.now().plusSeconds(86400L), "search-alpha");
         createMilestone("Release 100%", Instant.now().plusSeconds(2 * 86400L), "search-percent");

@@ -59,6 +59,7 @@ export function RubricListPage() {
     ) => rubricApi.getList({
       page: pagination.page ?? 0,
       size: pagination.size ?? 20,
+      sort: pagination.sort,
       search: search?.trim().replace(/\s+/g, " ").slice(0, 150) || undefined,
       status: nextFilters?.latestStatus,
     }),
