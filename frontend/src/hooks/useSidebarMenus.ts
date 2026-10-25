@@ -3,6 +3,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import type { ModuleDTO, ModuleGroupDTO, Pagination } from "@/types";
 import { canAccessByPermission } from "@/utils/rbac.utils";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 
 export type SidebarModule = ModuleDTO & {
     name?: string;
@@ -25,11 +26,15 @@ const modulePagination: Pagination = {
 };
 
 export function useActiveModuleGroups(enabled = true) {
-    const { activeRole, hasPermission } = usePermissions();
+    const { activeRole, effectivePermissions, hasPermission } = usePermissions();
+    const permissionCacheKey = useMemo(
+        () => [...effectivePermissions].sort().join("|"),
+        [effectivePermissions],
+    );
 
     return useQuery<SidebarModuleGroup[]>({
-        queryKey: ["sidebar-menu", "active-module-groups", activeRole],
-        enabled,
+        queryKey: ["sidebar-menu", "active-module-groups", activeRole, permissionCacheKey],
+        enabled: enabled && !!activeRole,
         /**
          * Keep the previous role's menu while the new role's menu is loading.
          * The App builds the module driven routes from this data: dropping it
