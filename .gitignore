@@ -24,3 +24,6 @@ docker/.env
 
 
 /backend.zip
+
+/docs/UFR-PRJ-004-*.md
+/.playwright-mcp/

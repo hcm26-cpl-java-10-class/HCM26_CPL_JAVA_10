@@ -13,10 +13,10 @@ import { getHomePathByRole } from "./utils/rbac.utils";
 
 function AppRoutes() {
     const { isAuthenticated } = useSelector((state: RootState) => state.auth);
-    const { activeRole } = usePermissions();
+    const { activeRole, effectivePermissions } = usePermissions();
     const { data: moduleGroups = [] } = useActiveModuleGroups(isAuthenticated);
 
-    const homePath = isAuthenticated ? getHomePathByRole(activeRole) : "/login";
+    const homePath = isAuthenticated ? getHomePathByRole(activeRole, effectivePermissions) : "/login";
 
     // Create component lookup map from module-driven routes
     const componentRegistry = Object.fromEntries(
@@ -25,6 +25,7 @@ function AppRoutes() {
 
     // Get non-module routes (frontend-controlled)
     const staticRoutes = routes.filter((r) => !r.isModuleDriven);
+    const staticRoutePaths = new Set(staticRoutes.map((route) => route.path));
 
     return (
         <Routes>
@@ -34,7 +35,8 @@ function AppRoutes() {
             {/* Dynamic routes from backend Module table */}
             {moduleGroups.flatMap((group) =>
                 group.modules.map((m) => {
-                    if (!m.url) return null;
+                    // Frontend-controlled routes already include their permission checks.
+                    if (!m.url || staticRoutePaths.has(m.url)) return null;
                     const Component = componentRegistry[m.url];
 
                     if (!Component) {

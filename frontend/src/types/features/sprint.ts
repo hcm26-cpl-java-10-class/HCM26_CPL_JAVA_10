@@ -1,5 +1,5 @@
 import type { BaseDTO, BaseFilter } from "@/types/common/base";
-import type { TaskPriority, TaskStatus } from "./task";
+import type { BacklogPriority, BacklogStatus } from "./backlog-item";
 
 export type SprintStatus = "PLANNED" | "ACTIVE" | "COMPLETED" | "CANCELLED";
 
@@ -27,8 +27,8 @@ export interface SprintPlanningItem {
   id: number;
   title?: string | null;
   description?: string | null;
-  priority?: TaskPriority | null;
-  status?: TaskStatus | null;
+  priority?: BacklogPriority | null;
+  status?: BacklogStatus | null;
   projectId?: number | null;
   milestoneId?: number | null;
   milestoneName?: string | null;

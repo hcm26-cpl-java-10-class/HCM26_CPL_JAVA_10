@@ -30,6 +30,13 @@ export function useActiveModuleGroups(enabled = true) {
     return useQuery<SidebarModuleGroup[]>({
         queryKey: ["sidebar-menu", "active-module-groups", activeRole],
         enabled,
+        /**
+         * Keep the previous role's menu while the new role's menu is loading.
+         * The App builds the module driven routes from this data: dropping it
+         * for a frame sends the current URL to the catch-all 404 route right
+         * after a role switch.
+         */
+        placeholderData: (previousData) => previousData,
         queryFn: async () => {
             const [groupPage, modulePage] = await Promise.all([
                 moduleGroupApi.getPage(menuPagination, undefined, { ids: [], isActive: true }),
@@ -38,6 +45,7 @@ export function useActiveModuleGroups(enabled = true) {
 
             const groups = groupPage.content ?? groupPage.items ?? [];
             const modules = (modulePage.content ?? modulePage.items ?? []).filter((module) =>
+                !["/management/project-templates", "/project-templates", "/management/project-teams"].some(path => (module.url ?? "").startsWith(path)) && canAccessByPermission(module.requiredPermission, hasPermission),
                 module.url !== "/team-allocation" &&
                 canAccessByPermission(module.requiredPermission, hasPermission),
             );
@@ -51,7 +59,8 @@ export function useActiveModuleGroups(enabled = true) {
 
                 acc[module.moduleGroupId].push({
                     ...module,
-                    name: module.title,
+                    title: ["/management/workspaces/candidates", "/workspaces/candidates"].includes(module.url ?? "") ? "Workspace" : module.title,
+                    name: ["/management/workspaces/candidates", "/workspaces/candidates"].includes(module.url ?? "") ? "Workspace" : module.title,
                 });
                 return acc;
             }, {});
@@ -131,6 +140,45 @@ export function useActiveModuleGroups(enabled = true) {
                     groups.push(fallbackGroup);
                     groupedModules[String(fallbackGroup.id)] = [allocationModule];
                 }
+            }
+
+            // Ensure Workspace Candidate menu is available for testing even when backend menu table is not yet updated
+            const hasWorkspaceMenu = modules.some(
+                (m) => m.url === "/management/workspaces/candidates" || m.url === "/workspaces/candidates",
+            );
+            if (!hasWorkspaceMenu && canAccessByPermission("WORKSPACE_READ", hasPermission)) {
+                const fallbackGroup = groups.find((g) => (g.name || "").toLowerCase() === "project management")
+                    ?? groups.find((g) => (g.name || "").toLowerCase() === "exam management")
+                    ?? groups[0];
+
+                const targetGroup = fallbackGroup ?? {
+                    id: 99998,
+                    name: "Project Management",
+                    description: "Project Management Group",
+                    displayOrder: 100,
+                    isActive: true,
+                };
+
+                if (!groups.some((g) => (g.id ?? "") === (targetGroup.id ?? ""))) {
+                    groups.push(targetGroup);
+                }
+
+                const groupId = String(targetGroup.id ?? 99998);
+                if (!groupedModules[groupId]) {
+                    groupedModules[groupId] = [];
+                }
+
+                groupedModules[groupId].push({
+                    id: 99998,
+                    moduleGroupId: groupId,
+                    title: "Workspace",
+                    name: "Workspace",
+                    url: "/management/workspaces/candidates",
+                    icon: "folder",
+                    displayOrder: 999,
+                    requiredPermission: "WORKSPACE_READ",
+                    isActive: true,
+                });
             }
 
             return groups

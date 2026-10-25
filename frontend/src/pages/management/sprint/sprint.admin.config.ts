@@ -5,15 +5,18 @@ import {
     type EntitySchema,
     type FieldSchema,
 } from "@/types";
-import { sprintStatusOptions } from "./sprint.schema";
+import {
+    sprintCreateStatusOptions,
+    sprintEditStatusOptions,
+    sprintStatusOptions,
+} from "./sprint.schema";
 
 /**
  * Admin flavour of the `/sprints` route.
  * <p>
- * Cloned from the temporary task page (`/taskstemp`): instead of the student
- * workspace, the admin persona gets the generic CRUD data table driven by
- * {@link sprintAdminEntityConfig}. The student workspace stays untouched in
- * `sprint/workspace/SprintWorkspacePage`.
+ * Instead of the student workspace, the admin persona gets the generic CRUD
+ * data table driven by {@link sprintAdminEntityConfig}. The student workspace
+ * stays untouched in `sprint/workspace/SprintWorkspacePage`.
  */
 
 const MAX_NAME_LENGTH = 255;
@@ -79,13 +82,16 @@ export const sprintAdminSchema: EntitySchema = {
             type: "select",
             sortable: true,
             options: sprintStatusOptions,
+            createOptions: sprintCreateStatusOptions,
+            editOptions: sprintEditStatusOptions,
             defaultValue: "PLANNED",
             required: true,
             requiredMessage: "Vui lòng chọn trạng thái Sprint",
             filterable: true,
             filterType: "select",
             filterOptions: sprintStatusOptions,
-            helpText: "Workflow: Planned → Active → Completed / Cancelled",
+            helpText:
+                "Sprint mới luôn ở trạng thái Planned; khi cập nhật chỉ có thể chuyển sang Active hoặc Cancelled.",
         },
         {
             name: "projectId",
@@ -136,4 +142,6 @@ export const sprintAdminEntityConfig: EntityConfig = {
     path: "/sprints",
     api: sprintApi,
     schema: sprintAdminSchema,
+    /** Admins can jump to the student backlog view from the Sprint table. */
+    backlogShortcutPath: "/backlogs",
 };

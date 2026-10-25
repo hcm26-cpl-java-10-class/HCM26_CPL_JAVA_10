@@ -70,8 +70,8 @@ public class SprintController
     }
 
     /**
-     * Sprint Planning board (UFR-PRJ-003-03): sprint header, ordered Sprint
-     * Backlog and the items still available in the product backlog.
+     * Backlog board (UFR-PRJ-003-03): sprint header plus the ordered Sprint
+     * Backlog items of the sprint.
      */
     @GetMapping("/{id}/backlog-items")
     public ResponseEntity<SprintPlanningDTO> getBacklogItems(@PathVariable Long id) {
@@ -79,11 +79,11 @@ public class SprintController
     }
 
     /**
-     * Assigns / unassigns backlog items and saves their priority order in one
-     * transaction (UFR-PRJ-003-03).
+     * Confirms the scope of the backlog board in one transaction
+     * (UFR-PRJ-003-03).
      * <p>
      * A completed / cancelled sprint answers {@code 422 Unprocessable Entity}
-     * (AC02) so the UI can revert the moved items to the product backlog.
+     * (AC02) so the UI can revert the board to the server snapshot.
      */
     @PutMapping("/{id}/backlog-items")
     public ResponseEntity<SprintPlanningDTO> updateBacklogItems(

@@ -9,7 +9,7 @@ export type FieldType =
   | "boolean"
   | "relation"
   | "dynamic"
-    |"datetime";
+  | "datetime";
 
 export type DynamicValueFieldType = Exclude<
   FieldType,
@@ -55,6 +55,8 @@ export interface FieldSchema {
 
   filterOptions?: { label: string; value: any }[];
 
+  filterMultiple?: boolean;
+
   editable?: boolean;
 
   visible?: boolean;
@@ -66,6 +68,18 @@ export interface FieldSchema {
   minWidth?: number;
 
   options?: { label: string; value: any }[];
+
+  /** Options offered while creating a record (falls back to `options`). */
+  createOptions?: { label: string; value: any }[];
+
+  /** Options offered while editing a record (falls back to `options`). */
+  editOptions?: { label: string; value: any }[];
+
+  /** Client-side: hide the field from the create form. */
+  hideOnCreate?: boolean;
+
+  /** Client-side: hide the field from the edit form. */
+  hideOnEdit?: boolean;
 
   booleanLabels?: {
     true: string;
@@ -85,6 +99,8 @@ export interface FieldSchema {
   expandable?: boolean;
 
   renderExpanded?: (value: any, row: any) => React.ReactNode;
+
+  renderCell?: (value: any, row: any) => React.ReactNode;
 
   /** Value used when creating a new record (defaults to "" / false). */
   defaultValue?: any;
