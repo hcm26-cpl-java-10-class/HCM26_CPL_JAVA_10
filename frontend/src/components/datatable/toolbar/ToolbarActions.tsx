@@ -11,9 +11,18 @@ import { PermissionGate } from "@/components/PermissionGate";
 interface ToolbarActionsProps {
   table: any;
   headerActions?: React.ReactNode;
+  /** Extra buttons rendered before the header actions / default Create button. */
+  extraActions?: React.ReactNode;
+  /** Hide the default Create button (e.g. browse-only pages). */
+  hideCreate?: boolean;
 }
 
-export function ToolbarActions({ table, headerActions }: ToolbarActionsProps) {
+export function ToolbarActions({
+  table,
+  headerActions,
+  extraActions,
+  hideCreate = false,
+}: ToolbarActionsProps) {
   const [importOpen, setImportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
@@ -76,9 +85,11 @@ export function ToolbarActions({ table, headerActions }: ToolbarActionsProps) {
         </PermissionGate>
       )}
 
+      {extraActions}
+
       {/* Show custom header actions if provided, otherwise show default Create button */}
       {headerActions ||
-        (table.permission?.canCreate && (
+        (!hideCreate && table.permission?.canCreate && (
           <PermissionGate permission={table.permission?.keys?.create}>
             <ActionButton
               onClick={() => table.openCreate()}

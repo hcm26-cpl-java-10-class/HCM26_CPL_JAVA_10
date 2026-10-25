@@ -2,6 +2,13 @@ package com.example.starter_project_2025.exception;
 
 import com.example.starter_project_2025.exception.error.ErrorResponse;
 import com.example.starter_project_2025.exception.error.ValidationErrorResponse;
+import com.example.starter_project_2025.system.project.StudentAlreadyAssignedException;
+import com.example.starter_project_2025.system.project.AllocationSessionConflictException;
+import com.example.starter_project_2025.system.project.IdempotencyKeyConflictException;
+import com.example.starter_project_2025.system.project.IdempotencyRequestInProgressException;
+import com.example.starter_project_2025.system.project.TeamCapacityExceededException;
+import com.example.starter_project_2025.system.project.TeamErrorResponse;
+import com.example.starter_project_2025.system.project.InvalidMentorForClassException;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +31,81 @@ import java.util.Map;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(AllocationSessionConflictException.class)
+    public ResponseEntity<TeamErrorResponse> handleAllocationSessionConflict(
+            AllocationSessionConflictException ex
+    ) {
+        TeamErrorResponse response = new TeamErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                "ERR_ALLOCATION_SESSION_CONFLICT",
+                ex.getMessage(),
+                null,
+                null,
+                LocalDateTime.now()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    @ExceptionHandler(IdempotencyKeyConflictException.class)
+    public ResponseEntity<TeamErrorResponse> handleIdempotencyKeyConflict(
+            IdempotencyKeyConflictException ex
+    ) {
+        TeamErrorResponse response = new TeamErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                "ERR_IDEMPOTENCY_KEY_REUSED",
+                ex.getMessage(),
+                null,
+                null,
+                LocalDateTime.now()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    @ExceptionHandler(IdempotencyRequestInProgressException.class)
+    public ResponseEntity<TeamErrorResponse> handleIdempotencyRequestInProgress(
+            IdempotencyRequestInProgressException ex
+    ) {
+        TeamErrorResponse response = new TeamErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                "ERR_REQUEST_IN_PROGRESS",
+                ex.getMessage(),
+                null,
+                null,
+                LocalDateTime.now()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    @ExceptionHandler(TeamCapacityExceededException.class)
+    public ResponseEntity<TeamErrorResponse> handleTeamCapacityExceeded(
+            TeamCapacityExceededException ex
+    ) {
+        TeamErrorResponse response = new TeamErrorResponse(
+                HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                "ERR_TEAM_CAPACITY_EXCEEDED",
+                ex.getMessage(),
+                null,
+                null,
+                LocalDateTime.now()
+        );
+        return ResponseEntity.unprocessableEntity().body(response);
+    }
+
+    @ExceptionHandler(StudentAlreadyAssignedException.class)
+    public ResponseEntity<TeamErrorResponse> handleStudentAlreadyAssigned(
+            StudentAlreadyAssignedException ex
+    ) {
+        TeamErrorResponse response = new TeamErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                "ERR_STUDENT_ALREADY_ASSIGNED",
+                ex.getMessage(),
+                ex.getMemberId(),
+                ex.getConflictingTeamId(),
+                LocalDateTime.now()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
 
     @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
     public ResponseEntity<ErrorResponse> handleNoResourceFound(
@@ -50,6 +132,19 @@ public class GlobalExceptionHandler {
                 ex.getMessage(),
                 LocalDateTime.now());
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(InvalidMentorForClassException.class)
+    public ResponseEntity<TeamErrorResponse> handleInvalidMentorForClass(
+            InvalidMentorForClassException ex
+    ) {
+        return ResponseEntity.badRequest().body(new TeamErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "ERR_INVALID_MENTOR_FOR_CLASS",
+                InvalidMentorForClassException.MESSAGE,
+                null,
+                null,
+                LocalDateTime.now()));
     }
 
 

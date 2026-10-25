@@ -52,6 +52,10 @@ export function SelectFilter({ field, value, onChange }: SelectFilterProps) {
 
   const toggleValue = (optValue: any) => {
     const strVal = optValue?.toString();
+    if (field.filterMultiple === false) {
+      onChange(selectedValues.includes(strVal) ? undefined : strVal);
+      return;
+    }
     if (selectedValues.includes(strVal)) {
       const next = selectedValues.filter((v) => v !== strVal);
       onChange(next.length > 0 ? next : undefined);
@@ -138,7 +142,7 @@ export function SelectFilter({ field, value, onChange }: SelectFilterProps) {
               {selectedValues.length}/{options.length}
             </span>
             <div className="flex gap-0.5">
-              {!allFilteredSelected && (
+              {!allFilteredSelected && field.filterMultiple !== false && (
                 <Button
                   variant="ghost"
                   size="sm"

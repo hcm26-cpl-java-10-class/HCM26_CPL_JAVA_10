@@ -55,6 +55,8 @@ export interface FieldSchema {
 
   filterOptions?: { label: string; value: any }[];
 
+  filterMultiple?: boolean;
+
   editable?: boolean;
 
   visible?: boolean;
@@ -66,6 +68,18 @@ export interface FieldSchema {
   minWidth?: number;
 
   options?: { label: string; value: any }[];
+
+  /** Options offered while creating a record (falls back to `options`). */
+  createOptions?: { label: string; value: any }[];
+
+  /** Options offered while editing a record (falls back to `options`). */
+  editOptions?: { label: string; value: any }[];
+
+  /** Client-side: hide the field from the create form. */
+  hideOnCreate?: boolean;
+
+  /** Client-side: hide the field from the edit form. */
+  hideOnEdit?: boolean;
 
   booleanLabels?: {
     true: string;
@@ -85,12 +99,42 @@ export interface FieldSchema {
   expandable?: boolean;
 
   renderExpanded?: (value: any, row: any) => React.ReactNode;
+
+  /** Value used when creating a new record (defaults to "" / false). */
+  defaultValue?: any;
+
+  /** Client-side: the field must be filled before submitting. */
+  required?: boolean;
+
+  /** Client-side: minimum length for text values. */
+  minLength?: number;
+
+  /** Client-side: maximum length for text values. */
+  maxLength?: number;
+
+  /** Optional custom message shown when `required` is violated. */
+  requiredMessage?: string;
+
+  /** Optional custom message shown when `maxLength` is violated. */
+  maxLengthMessage?: string;
+
+  /** Optional helper text rendered under the input. */
+  helpText?: string;
+
+  /** Visible line count for textarea fields (fixed height, longer content scrolls). */
+  rows?: number;
 }
 
 export interface EntitySchema {
   entityName: string;
   idField: string;
   fields: FieldSchema[];
+
+  /**
+   * Optional cross-field validation executed by the generic form modal before
+   * submitting. Return a map of `fieldName -> messages`.
+   */
+  validate?: (values: Record<string, any>) => Record<string, string[]>;
 }
 
 export interface RelationConfig {

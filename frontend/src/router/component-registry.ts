@@ -5,17 +5,24 @@ import { Login } from "@/pages/auth/Login";
 import RegisterPage from "@/pages/auth/RegisterPage";
 import NotFoundPage from "@/pages/error/NotFoundPage";
 import { Unauthorized } from "@/pages/error/Unauthorized";
+import BacklogPage from "@/pages/management/backlog";
 import { Dashboard } from "@/pages/management/dashboard";
 import ExamManagementPage from "@/pages/management/exam";
 import InvitationManagementPage from "@/pages/management/invitation";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
+import TeamAllocationPage from "@/pages/management/team-allocation";
+import TeamAllocationClassListPage from "@/pages/management/team-allocation/class-list";
 import StudentExamList from "@/pages/student/StudentExamList";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import WorkspaceCandidatePage from "@/pages/management/workspace/WorkspaceCandidatePage";
 import WorkspaceDetailPage from "@/pages/management/workspace/WorkspaceDetailPage";
-import { createElement, type ComponentType } from "react";
+import { createElement} from "react";
 import { Navigate } from "react-router-dom";
+import TaskManagementPage from "@/pages/management/task";
+import { TaskFormPage } from "@/pages/management/task/pages/TaskFormPage";
+import { TaskDetailPage } from "@/pages/management/task/pages/TaskDetailPage";
+import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 
 
@@ -30,6 +37,10 @@ export interface RouteConfig {
 export const routes: RouteConfig[] = [
   { path: "/dashboard", component: Dashboard, isModuleDriven: true },
   { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
+  { path: "/tasks", component: TaskManagementPage, requiredPermission: "TASK_READ", isModuleDriven: true },
+  { path: "/tasks/create", component: TaskFormPage, requiredPermission: "TASK_CREATE" },
+  { path: "/tasks/:id/edit", component: TaskFormPage, requiredPermission: "TASK_UPDATE" },
+  { path: "/tasks/:id/detail", component: TaskDetailPage, requiredPermission: "TASK_READ" },
   {
     path: "/invitations",
     component: InvitationManagementPage,
@@ -37,10 +48,28 @@ export const routes: RouteConfig[] = [
     isModuleDriven: true,
   },
   {
+    // Student backlog view (also served at /sprints for non-admin roles).
+    path: "/backlogs",
+    component: BacklogPage,
+    requiredPermission: "SPRINT_READ",
+    isModuleDriven: false,
+  },
+  {
     path: "/topic-marks/gradebook-demo",
     component: TopicMarkGradebookDemoPage,
     requiredPermission: "STUDENT_SCORE_READ",
     isModuleDriven: true,
+  },
+  {
+    path: "/team-allocation",
+    component: TeamAllocationClassListPage,
+    requiredPermission: "PEO_TEAM_ALLOCATE",
+    isModuleDriven: true,
+  },
+  {
+    path: "/team-allocation/classes/:classId",
+    component: TeamAllocationPage,
+    requiredPermission: "PEO_TEAM_ALLOCATE",
   },
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
   { path: "/student/exams", component: StudentExamList,requiredPermission: "EXAM_READ", isModuleDriven: true },

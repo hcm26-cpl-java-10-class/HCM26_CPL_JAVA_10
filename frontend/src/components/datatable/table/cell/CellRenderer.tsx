@@ -167,7 +167,7 @@ export function CellRenderer({
 
   const displayValue = value ?? "—";
   const displayStr =
-    field.type === "date" && value
+    (field.type === "date" || field.type === "datetime") && value
       ? formatDateValue(value, dateFormat)
       : String(displayValue);
 

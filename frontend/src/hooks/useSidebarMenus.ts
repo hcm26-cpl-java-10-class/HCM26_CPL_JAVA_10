@@ -30,6 +30,13 @@ export function useActiveModuleGroups(enabled = true) {
     return useQuery<SidebarModuleGroup[]>({
         queryKey: ["sidebar-menu", "active-module-groups", activeRole],
         enabled,
+        /**
+         * Keep the previous role's menu while the new role's menu is loading.
+         * The App builds the module driven routes from this data: dropping it
+         * for a frame sends the current URL to the catch-all 404 route right
+         * after a role switch.
+         */
+        placeholderData: (previousData) => previousData,
         queryFn: async () => {
             const [groupPage, modulePage] = await Promise.all([
                 moduleGroupApi.getPage(menuPagination, undefined, { ids: [], isActive: true }),
@@ -91,6 +98,38 @@ export function useActiveModuleGroups(enabled = true) {
                     requiredPermission: "INVITATION_READ",
                     isActive: true,
                 });
+            }
+
+            if (canAccessByPermission("PEO_TEAM_ALLOCATE", hasPermission)) {
+                const moduleGroup = groups.find(
+                    (group) => (group.name ?? "").toLowerCase() === "project management",
+                );
+                const allocationModule: SidebarModule = {
+                    id: 100001,
+                    moduleGroupId: String(moduleGroup?.id ?? 100000),
+                    title: "Phân nhóm dự án",
+                    name: "Phân nhóm dự án",
+                    url: "/team-allocation",
+                    icon: "users",
+                    displayOrder: 1,
+                    requiredPermission: "PEO_TEAM_ALLOCATE",
+                    isActive: true,
+                };
+                if (moduleGroup) {
+                    const groupId = String(moduleGroup.id ?? "");
+                    if (!groupedModules[groupId]) groupedModules[groupId] = [];
+                    groupedModules[groupId].push(allocationModule);
+                } else {
+                    const fallbackGroup: ModuleGroupDTO = {
+                        id: 100000,
+                        name: "Project Management",
+                        description: "Project and team allocation",
+                        displayOrder: 1,
+                        isActive: true,
+                    };
+                    groups.push(fallbackGroup);
+                    groupedModules[String(fallbackGroup.id)] = [allocationModule];
+                }
             }
 
             // Ensure Workspace Candidate menu is available for testing even when backend menu table is not yet updated
