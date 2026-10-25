@@ -64,18 +64,18 @@ export default function StudentLandingPage() {
 
               {/* Nút Xem Books */}
               {canReadBooks ? (
-                  <Button asChild className="bg-slate-900 text-white hover:bg-slate-800">
-                    <Link to="/books">
-                      Mo danh sach books
-                      <ArrowRight className="ml-2 size-4" />
-                    </Link>
-                  </Button>
+                <Button asChild className="bg-slate-900 text-white hover:bg-slate-800">
+                  <Link to="/books">
+                    Mo danh sach books
+                    <ArrowRight className="ml-2 size-4" />
+                  </Link>
+                </Button>
               ) : (
-                  <Button disabled variant="outline" className="border-slate-300 bg-white/80">
-                    Khong co quyen BOOK_READ
-                  </Button>
+                <Button disabled variant="outline" className="border-slate-300 dark:border-slate-600 bg-white/80 dark:bg-slate-800/80 text-slate-900 dark:text-slate-100">
+                  Khong co quyen BOOK_READ
+                </Button>
               )}
-              <Button asChild variant="outline" className="border-slate-300 bg-white/80">
+              <Button asChild variant="outline" className="border-slate-300 dark:border-slate-600 bg-white/80 dark:bg-slate-800/80 text-slate-900 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700">
                 <Link to="/project-board">
                   <Kanban className="mr-2 size-4" />
                   Mở bảng công việc
