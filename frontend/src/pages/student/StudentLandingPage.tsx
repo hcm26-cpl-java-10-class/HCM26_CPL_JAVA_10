@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/hooks/usePermissions";
 import { formatRoleLabel } from "@/utils/rbac.utils";
 import { motion } from "motion/react";
-import { ArrowRight, BookOpen, Calendar, CheckCircle2 } from "lucide-react";
+import { ArrowRight, BookOpen, Calendar, CheckCircle2, Kanban } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const checklistItems = [
@@ -75,6 +75,12 @@ export default function StudentLandingPage() {
                     Khong co quyen BOOK_READ
                   </Button>
               )}
+              <Button asChild variant="outline" className="border-slate-300 bg-white/80">
+                <Link to="/project-board">
+                  <Kanban className="mr-2 size-4" />
+                  Mở bảng công việc
+                </Link>
+              </Button>
             </div>
           </motion.div>
         </section>

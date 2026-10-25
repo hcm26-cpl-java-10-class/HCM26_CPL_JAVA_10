@@ -56,6 +56,9 @@ public class User extends BaseEntity {
     @Column(length = 100)
     String lastName;
 
+    @Column(name = "tenant_id")
+    Long tenantId;
+
     @Builder.Default
     @Column(nullable = false)
     Boolean locked = false;
