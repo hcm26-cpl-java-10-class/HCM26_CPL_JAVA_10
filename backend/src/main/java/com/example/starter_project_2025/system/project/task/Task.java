@@ -15,7 +15,7 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
 
-@Entity
+@Entity(name = "ProjectTask")
 @Table(name = "task", indexes = @Index(name = "idx_task_project", columnList = "project_id"))
 @Getter
 @Setter

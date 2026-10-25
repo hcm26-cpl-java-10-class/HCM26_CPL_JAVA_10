@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 public interface UserMapper extends BaseCrudMapper<User, UserDTO> {
 
     @Override
+    @Mapping(target = "tenantId", source = "tenantId")
     @IgnoreAuditFields
     @Mapping(target = "passwordHash", ignore = true)
     User toEntity(UserDTO request);

@@ -11,7 +11,7 @@ import java.util.UUID;
 public interface TagRepository extends BaseCrudRepository<Tag, UUID> {
     Optional<Tag> findByProjectIdAndNormalizedName(UUID projectId, String normalizedName);
 
-    @Query("select distinct tag.name from Task task join task.tags tag "
+    @Query("select distinct tag.name from ProjectTask task join task.tags tag "
             + "where task.projectId = :projectId and task.isActive = true "
             + "and (:creatorId is null or task.createdBy = :creatorId) order by tag.name")
     List<String> findNames(@Param("projectId") UUID projectId, @Param("creatorId") Long creatorId);

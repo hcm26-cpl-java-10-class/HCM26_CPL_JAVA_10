@@ -60,8 +60,11 @@ public class User extends BaseEntity {
     @Column(length = 100)
     String lastName;
 
+    @Column(name = "tenant_id")
+    Long tenantId;
+
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "tenant_id")
+    @JoinColumn(name = "tenant_id", insertable = false, updatable = false)
     Tenant tenant;
 
     @Builder.Default
@@ -81,3 +84,4 @@ public class User extends BaseEntity {
         return firstName + (lastName != null ? " " + lastName : "");
     }
 }
+

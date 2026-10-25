@@ -96,6 +96,7 @@ public class UserDataInitializer implements CommandLineRunner {
       Tenant tenant = tenantRepository.findByCode("LOCAL_TRAINING").orElseGet(() ->
               tenantRepository.save(Tenant.builder().code("LOCAL_TRAINING").name("Local training").build()));
       user.setTenant(tenant);
+      user.setTenantId(tenant.getId());
     }
 
     if (replaceExistingRoles) {
