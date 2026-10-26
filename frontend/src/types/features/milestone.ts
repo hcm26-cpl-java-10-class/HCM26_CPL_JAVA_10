@@ -14,6 +14,11 @@ export interface MilestoneLatePolicyRequest {
   penaltyPercent?: number;
 }
 
+export interface MilestoneResubmissionPolicyRequest {
+  allowed: boolean;
+  maxAttempts?: number;
+}
+
 export interface CreateMilestoneRequest {
   title: string;
   description?: string;
@@ -22,6 +27,7 @@ export interface CreateMilestoneRequest {
   checklist: MilestoneChecklistItemRequest[];
   rubricSnapshotId: string;
   latePolicy: MilestoneLatePolicyRequest;
+  resubmissionPolicy: MilestoneResubmissionPolicyRequest;
 }
 
 export interface MilestoneProjectOption {
@@ -107,6 +113,11 @@ export interface MilestoneLatePolicyDetail {
   penaltyPercent?: number | null;
 }
 
+export interface MilestoneResubmissionPolicyDetail {
+  allowed: boolean;
+  maxAttempts?: number | null;
+}
+
 export interface MilestoneDetailResponse {
   id: string;
   project: MilestoneProjectOption;
@@ -120,6 +131,7 @@ export interface MilestoneDetailResponse {
   rubric: MilestoneRubricDetail;
   reviewer: MilestoneReviewerDetail;
   latePolicy: MilestoneLatePolicyDetail;
+  resubmissionPolicy: MilestoneResubmissionPolicyDetail;
   version: number;
   createdAt: string;
   createdBy: string;

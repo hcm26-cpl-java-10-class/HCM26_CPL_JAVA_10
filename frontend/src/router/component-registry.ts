@@ -22,6 +22,9 @@ import { RubricListPage } from "@/pages/management/project/rubric/pages/RubricLi
 import { RubricCreatePage } from "@/pages/management/project/rubric/pages/RubricCreatePage";
 import { RubricDetailPage } from "@/pages/management/project/rubric/pages/RubricDetailPage";
 import { RubricEditPage } from "@/pages/management/project/rubric/pages/RubricEditPage";
+import { SubmissionListPage } from "@/pages/management/project/milestone-submission/pages/SubmissionListPage";
+import { SubmissionReviewPage } from "@/pages/management/project/milestone-submission/pages/SubmissionReviewPage";
+import { StudentSubmissionPage } from "@/pages/student/milestone-submission/StudentSubmissionPage";
 import WorkspaceCandidatePage from "@/pages/management/workspace/WorkspaceCandidatePage";
 import WorkspaceDetailPage from "@/pages/management/workspace/WorkspaceDetailPage";
 import { createElement} from "react";
@@ -104,6 +107,10 @@ export const routes: RouteConfig[] = [
   { path: "/rubrics/new", component: RubricCreatePage },
   { path: "/rubrics/:rubricId", component: RubricDetailPage },
   { path: "/rubrics/:rubricId/versions/:versionId/edit", component: RubricEditPage },
+  { path: "/milestone-submissions", component: SubmissionListPage },
+  { path: "/milestone-submissions/:submissionId/review", component: SubmissionReviewPage },
+  { path: "/milestone-submissions/:submissionId", component: SubmissionReviewPage },
+  { path: "/student/milestone-submissions/:submissionId/edit", component: StudentSubmissionPage },
   ...buildEntityRoutes(),
 
   { path: "/not-found-page", component: NotFoundPage, isPublic: true },

@@ -48,6 +48,8 @@ public class MilestoneDetailMapper {
                 reviewer == null ? null : new MilestoneReviewerResponse(reviewer.id(), reviewer.displayName()),
                 new MilestoneLatePolicyResponse(
                         milestone.getLatePolicyType(), milestone.getLateUntil(), milestone.getLatePenaltyPercent()),
+                new MilestoneResubmissionPolicyResponse(
+                        milestone.isAllowResubmission(), milestone.getMaxSubmissionAttempts()),
                 milestone.getVersion(),
                 milestone.getCreatedAt(),
                 milestone.getCreatedBy()

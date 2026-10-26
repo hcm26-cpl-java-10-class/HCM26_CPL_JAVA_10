@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -62,6 +63,14 @@ public class Milestone {
     @Column(name = "late_penalty_percent", precision = 5, scale = 2)
     private BigDecimal latePenaltyPercent;
 
+    @Column(name = "allow_resubmission", nullable = false)
+    @ColumnDefault("true")
+    private boolean allowResubmission;
+
+    @Column(name = "max_submission_attempts")
+    @ColumnDefault("3")
+    private Integer maxSubmissionAttempts;
+
     @Version
     @Column(nullable = false)
     private long version;
@@ -110,11 +119,18 @@ public class Milestone {
         milestone.latePolicyType = latePolicyType;
         milestone.lateUntil = lateUntil;
         milestone.latePenaltyPercent = latePenaltyPercent;
+        milestone.allowResubmission = true;
+        milestone.maxSubmissionAttempts = 3;
         milestone.createdAt = now;
         milestone.createdBy = actorId;
         milestone.updatedAt = now;
         milestone.updatedBy = actorId;
         return milestone;
+    }
+
+    public void configureResubmission(boolean allowed, Integer maxAttempts) {
+        this.allowResubmission = allowed;
+        this.maxSubmissionAttempts = allowed ? maxAttempts : null;
     }
 
     public void addChecklistItem(String content, boolean mandatory, int orderIndex) {

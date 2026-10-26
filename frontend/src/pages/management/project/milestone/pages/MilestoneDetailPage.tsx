@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { MilestoneDetailRouteState } from "@/types";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, CalendarClock, Check, Clock, Globe2 } from "lucide-react";
+import { ArrowLeft, CalendarClock, Check, Clock, Globe2, RotateCcw } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { MilestoneDetailError } from "../components/MilestoneDetailError";
 import { MilestoneRubricCard } from "../components/MilestoneRubricCard";
@@ -137,6 +137,16 @@ export function MilestoneDetailPage() {
                     <div><p className="text-muted-foreground">Penalty</p><p className="mt-1 font-semibold">{formatPenalty(milestone.latePolicy.penaltyPercent)}</p></div>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle className="flex items-center gap-2"><RotateCcw className="size-5" /> Resubmission policy</CardTitle></CardHeader>
+              <CardContent className="grid gap-2 text-sm">
+                <Badge variant={milestone.resubmissionPolicy.allowed ? "secondary" : "outline"} className="w-fit">
+                  {milestone.resubmissionPolicy.allowed ? "Resubmissions allowed" : "No resubmissions"}
+                </Badge>
+                {milestone.resubmissionPolicy.allowed ? <p>Students may submit up to <strong>{milestone.resubmissionPolicy.maxAttempts ?? "unlimited"}</strong> version(s), subject to the deadline and late policy.</p> : null}
               </CardContent>
             </Card>
 

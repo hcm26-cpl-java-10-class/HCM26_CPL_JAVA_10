@@ -14,6 +14,8 @@ public interface MilestoneRepository extends JpaRepository<Milestone, UUID>, Jpa
 
     boolean existsByTenantIdAndProjectIdAndTitle(UUID tenantId, UUID projectId, String title);
 
+    Optional<Milestone> findByTenantIdAndProjectIdAndTitle(UUID tenantId, UUID projectId, String title);
+
     boolean existsByRubricSnapshotId(UUID rubricSnapshotId);
 
     long countByRubricSnapshotId(UUID rubricSnapshotId);

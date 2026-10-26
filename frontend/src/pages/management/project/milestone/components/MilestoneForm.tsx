@@ -60,6 +60,7 @@ export function MilestoneForm({
 
   const values = useWatch({ control });
   const latePolicyType = useWatch({ control, name: "latePolicy.type" });
+  const allowResubmission = useWatch({ control, name: "resubmissionPolicy.allowed" });
 
   useEffect(() => onDirtyChange(isDirty), [isDirty, onDirtyChange]);
 
@@ -180,6 +181,52 @@ export function MilestoneForm({
             </CardContent>
           </Card>
 
+          <Card>
+            <CardHeader>
+              <CardTitle>Resubmission policy</CardTitle>
+              <CardDescription>Control whether a reviewer can request a corrected version.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-5">
+              <div className="flex items-start justify-between gap-4 rounded-xl border bg-muted/30 p-4">
+                <div>
+                  <Label htmlFor="allow-resubmission">Allow resubmission</Label>
+                  <p className="mt-1 text-xs text-muted-foreground">Request Changes will unlock exactly one new immutable version at a time.</p>
+                </div>
+                <Controller control={control} name="resubmissionPolicy.allowed" render={({ field }) => (
+                  <Switch
+                    id="allow-resubmission"
+                    checked={field.value}
+                    onCheckedChange={(checked) => {
+                      field.onChange(checked);
+                      if (!checked) {
+                        setValue("resubmissionPolicy.maxAttempts", undefined, { shouldDirty: true });
+                        clearErrors("resubmissionPolicy.maxAttempts");
+                      } else if (!values.resubmissionPolicy?.maxAttempts) {
+                        setValue("resubmissionPolicy.maxAttempts", 3, { shouldDirty: true });
+                      }
+                    }}
+                  />
+                )} />
+              </div>
+              {allowResubmission ? (
+                <div className="grid max-w-sm gap-2">
+                  <Label htmlFor="max-submission-attempts">Maximum submission attempts</Label>
+                  <Input
+                    id="max-submission-attempts"
+                    type="number"
+                    min="2"
+                    max="99"
+                    placeholder="Unlimited"
+                    aria-invalid={!!errors.resubmissionPolicy?.maxAttempts}
+                    {...register("resubmissionPolicy.maxAttempts", { setValueAs: (value) => value === "" ? undefined : Number(value) })}
+                  />
+                  <p className="text-xs text-muted-foreground">Includes the first submission. For example, 3 means versions 1–3; leave blank for unlimited.</p>
+                  <FieldMessage message={errors.resubmissionPolicy?.maxAttempts?.message} />
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+
           <MilestoneChecklistEditor
             control={control}
             errors={errors}
@@ -267,6 +314,7 @@ export function MilestoneForm({
               ) : null}
             </div>
             <div><p className="text-muted-foreground">Late submissions</p><Badge variant="secondary" className="mt-1">{latePolicyType === "ALLOW_LATE" ? "Allowed" : "Not allowed"}</Badge></div>
+            <div><p className="text-muted-foreground">Resubmissions</p><Badge variant="secondary" className="mt-1">{allowResubmission ? (values.resubmissionPolicy?.maxAttempts ? `Up to ${values.resubmissionPolicy.maxAttempts} attempts` : "Unlimited attempts") : "Not allowed"}</Badge></div>
           </CardContent>
         </Card>
       </div>

@@ -73,6 +73,7 @@ export function MilestoneCreatePage() {
     ...milestoneDefaultValues,
     checklist: milestoneDefaultValues.checklist.map((item) => ({ ...item })),
     latePolicy: { ...milestoneDefaultValues.latePolicy },
+    resubmissionPolicy: { ...milestoneDefaultValues.resubmissionPolicy },
     rubricSnapshotId: optionsQuery.data?.rubrics.length === 1 ? optionsQuery.data.rubrics[0].id : "",
   }), [optionsQuery.data]);
 

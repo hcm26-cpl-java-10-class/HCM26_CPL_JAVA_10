@@ -34,6 +34,14 @@ public record CreateMilestoneRequest(
         UUID reviewerId,
 
         @NotNull(message = "Late policy is required")
-        @Valid LatePolicyRequest latePolicy
+        @Valid LatePolicyRequest latePolicy,
+
+        @Valid ResubmissionPolicyRequest resubmissionPolicy
 ) {
+    public CreateMilestoneRequest(String title, String description, Instant deadline, boolean mandatory,
+                                  List<ChecklistItemRequest> checklist, UUID rubricSnapshotId,
+                                  UUID reviewerId, LatePolicyRequest latePolicy) {
+        this(title, description, deadline, mandatory, checklist, rubricSnapshotId, reviewerId,
+                latePolicy, null);
+    }
 }

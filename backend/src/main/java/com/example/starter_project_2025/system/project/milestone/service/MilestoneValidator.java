@@ -24,6 +24,13 @@ public class MilestoneValidator {
         validateChecklist(request.checklist(), errors);
         validateRubric(rubric, errors);
         validateLatePolicy(request.latePolicy(), request.deadline(), errors);
+        if (request.resubmissionPolicy() != null
+                && request.resubmissionPolicy().allowed()
+                && request.resubmissionPolicy().maxAttempts() != null
+                && request.resubmissionPolicy().maxAttempts() < 2) {
+            add(errors, "resubmissionPolicy.maxAttempts",
+                    "Maximum submission attempts must be at least 2 when resubmission is allowed");
+        }
         if (!errors.isEmpty()) {
             throw new MilestoneValidationException(errors);
         }

@@ -12,7 +12,7 @@ import type {
   MilestoneStatus,
   Pagination,
 } from "@/types";
-import { AlertCircle, Eye, Plus } from "lucide-react";
+import { AlertCircle, ClipboardCheck, Eye, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { MilestoneEmptyState, MilestoneListError } from "../components/MilestoneListStates";
@@ -173,8 +173,16 @@ export function MilestoneListPage() {
     setSearchParams(serializeMilestoneListParams({ page: 0, size: listParams.size }));
   };
 
-  const createAction = table.permission?.canCreate ? (
-    <ActionButton
+  const createAction = (
+    <div className="flex items-center gap-2">
+      <ActionButton
+        onClick={() => navigate(`/milestone-submissions?projectId=${projectId}`)}
+        tooltip="Open milestone review queue"
+        title="Review submissions"
+        variant="outline"
+        icon={<ClipboardCheck size={16} />}
+      />
+      {table.permission?.canCreate ? <ActionButton
       onClick={() => navigate(createUrl)}
       tooltip={projectActive
         ? "Create milestone"
@@ -183,8 +191,9 @@ export function MilestoneListPage() {
       variant="default"
       icon={<Plus size={16} />}
       disabled={!projectActive}
-    />
-  ) : undefined;
+      /> : null}
+    </div>
+  );
 
   return (
     <MainLayout pathName={breadcrumbs}>

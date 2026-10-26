@@ -115,6 +115,11 @@ public class MilestoneCommandService {
                 actorId,
                 now
         );
+        if (request.resubmissionPolicy() != null) {
+            milestone.configureResubmission(
+                    request.resubmissionPolicy().allowed(),
+                    request.resubmissionPolicy().maxAttempts());
+        }
         request.checklist().forEach(item -> milestone.addChecklistItem(
                 item.content().trim(), item.mandatory(), item.orderIndex()));
 
