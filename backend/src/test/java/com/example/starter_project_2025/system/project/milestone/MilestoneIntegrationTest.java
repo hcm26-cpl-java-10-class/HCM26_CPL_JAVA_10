@@ -684,29 +684,75 @@ class MilestoneIntegrationTest {
         jdbcTemplate.update("update milestones set deadline = ? where milestone_id = ?",
                 java.sql.Timestamp.from(Instant.now().minusSeconds(600)), java.util.UUID.fromString(milestoneId));
         String submitUrl = endpoint() + "/" + milestoneId + "/artifact-draft/submissions";
-        Map<String, Object> body = Map.of(
+        Map<String, Object> firstBody = Map.of(
                 "deploymentUrl", "https://demo.example.com",
-                "releaseNotes", "Late delivery",
+                "releaseNotes", "Late delivery v1",
                 "checklist", Map.of()
         );
-        mockMvc.perform(post(submitUrl)
+        String first = mockMvc.perform(post(submitUrl)
                         .header("Authorization", "Bearer " + studentToken)
                         .header("Idempotency-Key", "artifact-submit-new-version-1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(body)))
+                        .content(objectMapper.writeValueAsString(firstBody)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("SUBMITTED"))
                 .andExpect(jsonPath("$.submittedLate").value(true))
                 .andExpect(jsonPath("$.latePenaltyPercent").value(10.0))
-                .andExpect(jsonPath("$.version").value(1));
-        mockMvc.perform(post(submitUrl)
+                .andExpect(jsonPath("$.version").value(1))
+                .andReturn().getResponse().getContentAsString();
+
+        Map<String, Object> secondBody = Map.of(
+                "deploymentUrl", "https://demo-v2.example.com",
+                "releaseNotes", "Late delivery v2",
+                "checklist", Map.of()
+        );
+        String second = mockMvc.perform(post(submitUrl)
                         .header("Authorization", "Bearer " + studentToken)
                         .header("Idempotency-Key", "artifact-submit-new-version-2")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(body)))
+                        .content(objectMapper.writeValueAsString(secondBody)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.version").value(2));
+                .andExpect(jsonPath("$.status").value("SUBMITTED"))
+                .andExpect(jsonPath("$.version").value(2))
+                .andExpect(jsonPath("$.deploymentUrl").value("https://demo-v2.example.com"))
+                .andReturn().getResponse().getContentAsString();
+
+        String replay = mockMvc.perform(post(submitUrl)
+                        .header("Authorization", "Bearer " + studentToken)
+                        .header("Idempotency-Key", "artifact-submit-new-version-2")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(secondBody)))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+
+        var firstResponse = objectMapper.readTree(first);
+        var secondResponse = objectMapper.readTree(second);
+        org.junit.jupiter.api.Assertions.assertEquals(secondResponse.get("id").asText(),
+                objectMapper.readTree(replay).get("id").asText());
+        var firstStored = artifactSubmissionRepository.findById(
+                java.util.UUID.fromString(firstResponse.get("id").asText())).orElseThrow();
+        var secondStored = artifactSubmissionRepository.findById(
+                java.util.UUID.fromString(secondResponse.get("id").asText())).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals(1, firstStored.getVersion());
+        org.junit.jupiter.api.Assertions.assertEquals("https://demo.example.com", firstStored.getDeploymentUrl());
+        org.junit.jupiter.api.Assertions.assertEquals("Late delivery v1", firstStored.getReleaseNotes());
+        org.junit.jupiter.api.Assertions.assertEquals(2, secondStored.getVersion());
+        org.junit.jupiter.api.Assertions.assertEquals(firstStored.getMilestoneId(), secondStored.getMilestoneId());
+        org.junit.jupiter.api.Assertions.assertEquals(firstStored.getProjectId(), secondStored.getProjectId());
         org.junit.jupiter.api.Assertions.assertEquals(2, artifactSubmissionRepository.count());
+        org.junit.jupiter.api.Assertions.assertEquals(2, idempotencyRepository.countByOperation("ARTIFACT_SUBMISSION"));
+        org.junit.jupiter.api.Assertions.assertEquals(2, auditRepository.countByMilestoneIdAndAction(
+                java.util.UUID.fromString(milestoneId), "ARTIFACT_SUBMITTED"));
+        org.junit.jupiter.api.Assertions.assertEquals(2, outboxRepository.countByEventType("ARTIFACT_SUBMITTED"));
+
+        var submissionAudits = auditRepository.findAllByMilestoneIdAndActionOrderByCreatedAtAsc(
+                java.util.UUID.fromString(milestoneId), "ARTIFACT_SUBMITTED");
+        var resubmissionAudit = objectMapper.readTree(submissionAudits.get(1).getDetailsJson());
+        org.junit.jupiter.api.Assertions.assertEquals(1, resubmissionAudit.at("/before/version").asInt());
+        org.junit.jupiter.api.Assertions.assertEquals("https://demo.example.com",
+                resubmissionAudit.at("/before/deploymentUrl").asText());
+        org.junit.jupiter.api.Assertions.assertEquals(2, resubmissionAudit.at("/after/version").asInt());
+        org.junit.jupiter.api.Assertions.assertTrue(
+                resubmissionAudit.path("changedFields").toString().contains("\"deploymentUrl\""));
     }
 
     @Test

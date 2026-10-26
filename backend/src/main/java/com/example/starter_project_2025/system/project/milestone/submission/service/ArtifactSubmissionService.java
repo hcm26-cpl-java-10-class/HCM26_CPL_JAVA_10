@@ -97,8 +97,10 @@ public class ArtifactSubmissionService {
             throw validation("deadline", "The milestone deadline has passed and its late policy does not accept submissions now");
         }
 
-        long version = submissionRepository.findTopByTenantIdAndProjectIdAndMilestoneIdAndSubmitterIdOrderByVersionDesc(
-                scope.tenantId(), projectId, milestoneId, scope.actorId()).map(row -> row.getVersion() + 1).orElse(1L);
+        var previousSubmission = submissionRepository
+                .findTopByTenantIdAndProjectIdAndMilestoneIdAndSubmitterIdOrderByVersionDesc(
+                        scope.tenantId(), projectId, milestoneId, scope.actorId());
+        long version = previousSubmission.map(row -> row.getVersion() + 1).orElse(1L);
         String checklistJson = writeJson(checklist);
         List<ArtifactSubmissionAttachmentResponse> attachmentSnapshots = attachments.stream()
                 .map(this::attachmentResponse).toList();
@@ -111,21 +113,15 @@ public class ArtifactSubmissionService {
         ArtifactSubmissionResponse response = toResponse(submission);
 
         try {
-            Map<String, Object> before = draftRepository
-                    .findByMilestoneIdAndProjectIdAndTenantId(milestoneId, projectId, scope.tenantId())
-                    .map(draft -> {
-                        Map<String, Object> snapshot = new LinkedHashMap<>();
-                        snapshot.put("status", "DRAFT");
-                        snapshot.put("version", draft.getVersion());
-                        snapshot.put("repositoryUrl", draft.getRepositoryUrl());
-                        snapshot.put("deploymentUrl", draft.getDeploymentUrl());
-                        snapshot.put("releaseNotes", draft.getReleaseNotes());
-                        snapshot.put("checklist", draft.getChecklistJson());
-                        return snapshot;
-                    }).orElseGet(() -> Map.of("status", "NO_DRAFT"));
+            Map<String, Object> before = previousSubmission
+                    .map(this::toResponse)
+                    .map(this::submissionSnapshot)
+                    .orElseGet(() -> draftSnapshot(milestoneId, projectId, scope.tenantId()));
             Map<String, Object> auditDetails = new LinkedHashMap<>();
             auditDetails.put("before", before);
             auditDetails.put("after", response);
+            auditDetails.put("previousSubmissionId", previousSubmission.map(MilestoneArtifactSubmission::getId).orElse(null));
+            auditDetails.put("changedFields", changedFields(before, response));
             auditRepository.save(MilestoneAuditLog.artifactEvent(milestoneId, projectId, scope.tenantId(),
                     scope.actorId(), "ARTIFACT_SUBMITTED", CorrelationIdFilter.currentId(),
                     objectMapper.writeValueAsString(auditDetails), now));
@@ -206,6 +202,57 @@ public class ArtifactSubmissionService {
     private ArtifactSubmissionAttachmentResponse attachmentResponse(ArtifactAttachment row) {
         return new ArtifactSubmissionAttachmentResponse(row.getId(), row.getOriginalName(),
                 row.getContentType(), row.getSizeBytes());
+    }
+
+    private Map<String, Object> draftSnapshot(UUID milestoneId, UUID projectId, UUID tenantId) {
+        return draftRepository.findByMilestoneIdAndProjectIdAndTenantId(milestoneId, projectId, tenantId)
+                .map(draft -> {
+                    Map<String, Object> snapshot = new LinkedHashMap<>();
+                    snapshot.put("status", "DRAFT");
+                    snapshot.put("version", draft.getVersion());
+                    snapshot.put("repositoryUrl", draft.getRepositoryUrl());
+                    snapshot.put("deploymentUrl", draft.getDeploymentUrl());
+                    snapshot.put("releaseNotes", draft.getReleaseNotes());
+                    try {
+                        snapshot.put("checklist", objectMapper.readValue(
+                                draft.getChecklistJson(), new TypeReference<Map<UUID, Boolean>>() { }));
+                    } catch (JsonProcessingException ex) {
+                        throw new IllegalStateException("Stored draft checklist is invalid", ex);
+                    }
+                    snapshot.put("attachments", attachmentRepository
+                            .findByMilestoneIdAndProjectIdAndTenantIdOrderByUploadedAtAsc(
+                                    milestoneId, projectId, tenantId).stream().map(ArtifactAttachment::getId).toList());
+                    return snapshot;
+                }).orElseGet(() -> Map.of("status", "NO_DRAFT", "version", 0));
+    }
+
+    private Map<String, Object> submissionSnapshot(ArtifactSubmissionResponse submission) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("submissionId", submission.id());
+        snapshot.put("status", submission.status());
+        snapshot.put("version", submission.version());
+        snapshot.put("repositoryUrl", submission.repositoryUrl());
+        snapshot.put("deploymentUrl", submission.deploymentUrl());
+        snapshot.put("releaseNotes", submission.releaseNotes());
+        snapshot.put("checklist", submission.checklist());
+        snapshot.put("attachments", submission.attachments().stream()
+                .map(ArtifactSubmissionAttachmentResponse::id).toList());
+        snapshot.put("submittedLate", submission.submittedLate());
+        snapshot.put("latePenaltyPercent", submission.latePenaltyPercent());
+        snapshot.put("submittedAt", submission.submittedAt());
+        return snapshot;
+    }
+
+    private List<String> changedFields(Map<String, Object> before, ArtifactSubmissionResponse after) {
+        Map<String, Object> afterSnapshot = submissionSnapshot(after);
+        List<String> fields = List.of("repositoryUrl", "deploymentUrl", "releaseNotes", "checklist",
+                "attachments", "status", "submittedLate", "latePenaltyPercent");
+        List<String> changed = new ArrayList<>();
+        for (String field : fields) {
+            if (!Objects.equals(before.get(field), afterSnapshot.get(field))) changed.add(field);
+        }
+        if (!Objects.equals(before.get("version"), afterSnapshot.get("version"))) changed.add("version");
+        return changed;
     }
 
     private String hash(UUID projectId, UUID milestoneId, UUID actorId, ArtifactSubmissionRequest request) {
