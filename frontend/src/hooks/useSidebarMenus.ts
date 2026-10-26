@@ -44,11 +44,20 @@ export function useActiveModuleGroups(enabled = true) {
             ]);
 
             const groups = groupPage.content ?? groupPage.items ?? [];
-            const modules = (modulePage.content ?? modulePage.items ?? []).filter((module) =>
-                !["/management/project-templates", "/project-templates", "/management/project-teams"].some(path => (module.url ?? "").startsWith(path)) && canAccessByPermission(module.requiredPermission, hasPermission),
-                module.url !== "/team-allocation" &&
-                canAccessByPermission(module.requiredPermission, hasPermission),
-            );
+            const modules = (modulePage.content ?? modulePage.items ?? []).filter((module) => {
+                const url = module.url ?? "";
+                const isExcludedPath = [
+                    "/management/project-templates",
+                    "/project-templates",
+                    "/management/project-teams",
+                ].some((path) => url.startsWith(path));
+
+                return (
+                    !isExcludedPath &&
+                    url !== "/team-allocation" &&
+                    canAccessByPermission(module.requiredPermission, hasPermission)
+                );
+            });
 
             const groupedModules = modules.reduce<Record<string, SidebarModule[]>>((acc, module) => {
                 if (!module.moduleGroupId) return acc;

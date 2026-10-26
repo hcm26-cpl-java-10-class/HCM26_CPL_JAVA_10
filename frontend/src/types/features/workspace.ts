@@ -14,6 +14,10 @@ export interface WorkspaceCandidateItem {
   cohortId?: number;
   cohortName?: string;
 
+  classId?: number;
+  classCode?: string;
+  className?: string;
+
   workspaceId?: number;
   workspaceStatus?: string;
   eligibleForWorkspace: boolean;
@@ -21,7 +25,7 @@ export interface WorkspaceCandidateItem {
 }
 
 export interface WorkspaceCreateRequest {
-  projectId: number;
+  projectId?: number | null;
   teamId: number;
 }
 
@@ -111,4 +115,3 @@ export interface SectionCreate { title: string; description: string; published: 
 export interface SectionReview {
   kind: "ARTIFACT" | "MILESTONE" | "SPRINT"; targetId: string; comment: string; score?: number; published: boolean;
 }
-

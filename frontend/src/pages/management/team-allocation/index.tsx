@@ -137,7 +137,7 @@ function isTeamMemberRole(role: string | null | undefined): role is TeamMemberRo
 
 function hasCompleteTeamRoles(team: AllocationTeam) {
   return team.members?.length === team.memberIds.length &&
-    team.members.every((member) => isTeamMemberRole(member.role));
+    team.members.every((member) => member.role == null || isTeamMemberRole(member.role));
 }
 
 function getStoredKey(
@@ -345,7 +345,7 @@ export default function TeamAllocationPage() {
             assignedMentorId: team.assignedMentorId,
             members: team.memberIds.map((memberId) => ({
               memberId,
-              role: team.memberRoles[memberId] ?? null,
+              role: team.memberRoles[memberId] ?? "DEV",
             })),
           },
         );
@@ -358,7 +358,7 @@ export default function TeamAllocationPage() {
           assignedMentorId: team.assignedMentorId,
           members: team.memberIds.map((memberId) => ({
             memberId,
-            role: team.memberRoles[memberId] ?? null,
+            role: team.memberRoles[memberId] ?? "DEV",
           })),
         })),
       };
@@ -464,7 +464,7 @@ export default function TeamAllocationPage() {
       if (succeededItems.length > 0) {
         const successMessage = `Đã publish thành công ${succeededItems.length} nhóm.`;
         setPublishSuccess(successMessage);
-        toast.success(successMessage);
+        if (failedItems.length === 0) toast.success(successMessage);
       } else {
         setPublishSuccess(null);
       }
@@ -480,10 +480,15 @@ export default function TeamAllocationPage() {
       void queryClient.invalidateQueries({
         queryKey: ["team-allocation", "class-roster", classId, sessionId],
       });
+      void queryClient.invalidateQueries({
+        queryKey: ["workspace-candidates"],
+      });
       if (failedItems.length) {
         setPublishSuccess(null);
         toast.warning(
-          `Đã publish ${succeededItems.length} nhóm; ${failedItems.length} nhóm cần xử lý.`,
+          succeededItems.length > 0
+            ? `Đã publish ${succeededItems.length} nhóm; ${failedItems.length} nhóm chưa thể publish. Xem toàn bộ lý do bên dưới.`
+            : `Chưa thể publish ${failedItems.length} nhóm. Xem toàn bộ lý do bên dưới.`,
         );
       }
       if (
@@ -734,7 +739,7 @@ export default function TeamAllocationPage() {
           ? [...team.memberIds, memberId]
           : team.memberIds.filter((id) => id !== memberId),
         memberRoles: checked
-          ? { ...team.memberRoles, [memberId]: null }
+          ? { ...team.memberRoles, [memberId]: "DEV" }
           : Object.fromEntries(
               Object.entries(team.memberRoles)
                 .filter(([id]) => Number(id) !== memberId),
@@ -774,7 +779,7 @@ export default function TeamAllocationPage() {
       assignedMentorId: team.assignedMentorId,
       memberIds: [...team.memberIds],
       memberRoles: Object.fromEntries(
-        (team.members ?? []).map((member) => [member.memberId, member.role]),
+        (team.members ?? []).map((member) => [member.memberId, member.role ?? "DEV"]),
       ),
     }]);
     setEditingSavedTeamId(team.teamId);
@@ -2419,7 +2424,7 @@ function SavedTeamCard({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [memberRoles, setMemberRoles] = useState<Record<number, string | null>>(
     () => Object.fromEntries(
-      (team.members ?? []).map((member) => [member.memberId, member.role]),
+      (team.members ?? []).map((member) => [member.memberId, member.role ?? "DEV"]),
     ),
   );
   const [localRoleErrors, setLocalRoleErrors] = useState<number[]>([]);
@@ -2430,10 +2435,10 @@ function SavedTeamCard({
     : team.memberIds.map((memberId) => ({
         memberId,
         fullName: memberName(memberId),
-        role: null,
+        role: "DEV",
       }));
   const savedRolesComplete = members.every((member) =>
-    isTeamMemberRole(member.role),
+    member.role == null || isTeamMemberRole(member.role),
   );
   const transferTargets = allTeams.filter((candidate) =>
     candidate.teamId !== team.teamId &&
@@ -2643,18 +2648,8 @@ function SavedTeamCard({
                   size="sm"
                   disabled={rolesPending}
                   onClick={() => {
-                    const missingRoleIds = members
-                      .filter((member) =>
-                        !isTeamMemberRole(memberRoles[member.memberId]),
-                      )
-                      .map((member) => member.memberId);
-                    if (missingRoleIds.length > 0) {
-                      setLocalRoleErrors(missingRoleIds);
-                      toast.error("Vui lòng chọn vai trò hợp lệ cho từng thành viên.");
-                      return;
-                    }
                     const requestedRoles = members.flatMap((member) => {
-                      const role = memberRoles[member.memberId];
+                      const role = memberRoles[member.memberId] ?? "DEV";
                       return isTeamMemberRole(role)
                         ? [{ memberId: member.memberId, role }]
                         : [];
