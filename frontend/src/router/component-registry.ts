@@ -30,6 +30,7 @@ import { Navigate } from "react-router-dom";
 import TaskManagementPage from "@/pages/management/task";
 import { TaskFormPage } from "@/pages/management/task/pages/TaskFormPage";
 import { TaskDetailPage } from "@/pages/management/task/pages/TaskDetailPage";
+import ArtifactDraftPage from "@/pages/student/ArtifactDraftPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 
@@ -101,6 +102,11 @@ export const routes: RouteConfig[] = [
   {
     path: "/projects/:projectId/milestones/:milestoneId",
     component: MilestoneDetailPage,
+  },
+  {
+    path: "/projects/:projectId/milestones/:milestoneId/submit",
+    component: ArtifactDraftPage,
+    requiredPermission: "ARTIFACT_READ",
   },
   { path: "/rubrics", component: RubricListPage },
   { path: "/rubrics/new", component: RubricCreatePage },

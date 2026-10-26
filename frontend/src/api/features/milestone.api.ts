@@ -1,6 +1,10 @@
 import axiosInstance from "@/api/axios";
 import type {
   CreateMilestoneRequest,
+  ArtifactDraft,
+  ArtifactDraftRequest,
+  ArtifactAttachment,
+  ArtifactSubmissionWorkspace,
   MilestoneCreateOptions,
   MilestoneDetailResponse,
   MilestoneListParams,
@@ -64,6 +68,29 @@ export const milestoneApi = {
   async getDetail(projectId: string, milestoneId: string): Promise<MilestoneDetailResponse> {
     const response = await axiosInstance.get<MilestoneDetailResponse>(
       `/projects/${projectId}/milestones/${milestoneId}`,
+    );
+    return response.data;
+  },
+
+  async getArtifactWorkspace(projectId: string, milestoneId: string): Promise<ArtifactSubmissionWorkspace> {
+    const response = await axiosInstance.get<ArtifactSubmissionWorkspace>(
+      `/projects/${projectId}/milestones/${milestoneId}/artifact-draft`,
+    );
+    return response.data;
+  },
+
+  async saveArtifactDraft(projectId: string, milestoneId: string, payload: ArtifactDraftRequest): Promise<ArtifactDraft> {
+    const response = await axiosInstance.put<ArtifactDraft>(
+      `/projects/${projectId}/milestones/${milestoneId}/artifact-draft`, payload,
+    );
+    return response.data;
+  },
+
+  async uploadArtifact(projectId: string, milestoneId: string, file: File): Promise<ArtifactAttachment> {
+    const payload = new FormData();
+    payload.append("file", file);
+    const response = await axiosInstance.post<ArtifactAttachment>(
+      `/projects/${projectId}/milestones/${milestoneId}/artifact-draft/attachments`, payload,
     );
     return response.data;
   },

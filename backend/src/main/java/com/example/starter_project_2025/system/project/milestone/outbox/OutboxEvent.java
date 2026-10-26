@@ -71,4 +71,18 @@ public class OutboxEvent {
         event.eventType = "INACTIVE_MEMBER_ALERT_BATCH_SENT";
         return event;
     }
+
+    public static OutboxEvent artifactDraftSaved(UUID milestoneId, String payloadJson, Instant now) {
+        OutboxEvent event = milestoneCreated(milestoneId, payloadJson, now);
+        event.aggregateType = "MILESTONE_ARTIFACT_DRAFT";
+        event.eventType = "ARTIFACT_DRAFT_SAVED";
+        return event;
+    }
+
+    public static OutboxEvent artifactFileUploaded(UUID milestoneId, String payloadJson, Instant now) {
+        OutboxEvent event = milestoneCreated(milestoneId, payloadJson, now);
+        event.aggregateType = "MILESTONE_ARTIFACT_DRAFT";
+        event.eventType = "ARTIFACT_FILE_UPLOADED";
+        return event;
+    }
 }

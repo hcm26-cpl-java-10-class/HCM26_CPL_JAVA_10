@@ -20,6 +20,7 @@ import java.util.*;
 
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice(assignableTypes = {MilestoneController.class,
+        com.example.starter_project_2025.system.project.milestone.submission.controller.ArtifactSubmissionController.class,
         com.example.starter_project_2025.system.project.milestone.risk.MilestoneRiskController.class})
 public class MilestoneExceptionHandler {
 
@@ -76,6 +77,23 @@ public class MilestoneExceptionHandler {
     public ResponseEntity<MilestoneErrorResponse> handleDependencyError(MilestoneDependencyException ex) {
         return error(HttpStatus.INTERNAL_SERVER_ERROR, "MILESTONE_DEPENDENCY_ERROR",
                 "Milestone detail could not be loaded", Map.of());
+    }
+
+    @ExceptionHandler(com.example.starter_project_2025.system.project.milestone.submission.service.ArtifactUploadRejectedException.class)
+    public ResponseEntity<MilestoneErrorResponse> artifactRejected(RuntimeException ex) {
+        return error(HttpStatus.UNPROCESSABLE_ENTITY, "ARTIFACT_UPLOAD_REJECTED", ex.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(com.example.starter_project_2025.system.project.milestone.submission.service.ArtifactUploadUnavailableException.class)
+    public ResponseEntity<MilestoneErrorResponse> artifactScannerUnavailable(RuntimeException ex) {
+        return error(HttpStatus.SERVICE_UNAVAILABLE, "ARTIFACT_UPLOAD_UNAVAILABLE",
+                "File upload is temporarily unavailable because validation services are not ready", Map.of());
+    }
+
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<MilestoneErrorResponse> uploadTooLarge(Exception ex) {
+        return error(HttpStatus.PAYLOAD_TOO_LARGE, "ARTIFACT_FILE_TOO_LARGE",
+                "File exceeds the configured upload limit", Map.of("file", List.of("Choose a smaller file")));
     }
 
     private ResponseEntity<MilestoneErrorResponse> error(

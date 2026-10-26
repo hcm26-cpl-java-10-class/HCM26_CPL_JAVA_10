@@ -75,4 +75,20 @@ public class MilestoneAuditLog {
         log.correlationId = correlationId;
         return log;
     }
+
+    public static MilestoneAuditLog artifactDraftSaved(UUID milestoneId, UUID projectId, UUID tenantId,
+            UUID actorId, String correlationId, String detailsJson, Instant now) {
+        MilestoneAuditLog log = created(milestoneId, projectId, tenantId, actorId, null, detailsJson, now);
+        log.action = "ARTIFACT_DRAFT_SAVED";
+        log.correlationId = correlationId;
+        return log;
+    }
+
+    public static MilestoneAuditLog artifactEvent(UUID milestoneId, UUID projectId, UUID tenantId,
+            UUID actorId, String action, String correlationId, String detailsJson, Instant now) {
+        MilestoneAuditLog log = created(milestoneId, projectId, tenantId, actorId, null, detailsJson, now);
+        log.action = action;
+        log.correlationId = correlationId;
+        return log;
+    }
 }

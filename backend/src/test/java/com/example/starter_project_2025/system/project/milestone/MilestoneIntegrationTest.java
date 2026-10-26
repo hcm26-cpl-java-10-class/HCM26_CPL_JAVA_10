@@ -7,12 +7,15 @@ import com.example.starter_project_2025.system.project.milestone.integration.moc
 import com.example.starter_project_2025.system.project.milestone.outbox.OutboxEventRepository;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneChecklistItemRepository;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
+import com.example.starter_project_2025.system.project.milestone.submission.repository.MilestoneArtifactDraftRepository;
+import com.example.starter_project_2025.system.project.milestone.submission.repository.ArtifactAttachmentRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
@@ -30,10 +33,13 @@ import java.util.concurrent.TimeUnit;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@ActiveProfiles("test")
 class MilestoneIntegrationTest {
 
     @Autowired MockMvc mockMvc;
@@ -41,6 +47,8 @@ class MilestoneIntegrationTest {
     @Autowired RefreshTokenService tokenService;
     @Autowired org.springframework.security.core.userdetails.UserDetailsService userDetailsService;
     @Autowired MilestoneRepository milestoneRepository;
+    @Autowired MilestoneArtifactDraftRepository artifactDraftRepository;
+    @Autowired ArtifactAttachmentRepository artifactAttachmentRepository;
     @Autowired MilestoneChecklistItemRepository checklistRepository;
     @Autowired MilestoneAuditRepository auditRepository;
     @Autowired OutboxEventRepository outboxRepository;
@@ -56,6 +64,8 @@ class MilestoneIntegrationTest {
         idempotencyRepository.deleteAll();
         outboxRepository.deleteAll();
         auditRepository.deleteAll();
+        artifactAttachmentRepository.deleteAll();
+        artifactDraftRepository.deleteAll();
         checklistRepository.deleteAll();
         milestoneRepository.deleteAll();
         var teacher = userDetailsService.loadUserByUsername("teacher@example.com");
@@ -392,6 +402,131 @@ class MilestoneIntegrationTest {
     }
 
     @Test
+    void studentCanLoadAndSavePersistentDraftWithoutChangingMilestoneChecklist() throws Exception {
+        String milestoneId = createMilestoneAndGetId(
+                "Artifact draft milestone", Instant.now().plusSeconds(86400), "artifact-draft-test"
+        );
+        String draftEndpoint = endpoint() + "/" + milestoneId + "/artifact-draft";
+        String initial = mockMvc.perform(get(draftEndpoint).header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.draft").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.milestone.title").value("Artifact draft milestone"))
+                .andReturn().getResponse().getContentAsString();
+        String itemId = objectMapper.readTree(initial).at("/milestone/checklist/0/id").asText();
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("repositoryUrl", "https://github.com/example/project");
+        body.put("deploymentUrl", "https://demo.example.com");
+        body.put("releaseNotes", "Initial draft for review");
+        body.put("checklist", Map.of(itemId, true));
+        mockMvc.perform(put(draftEndpoint)
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DRAFT"))
+                .andExpect(jsonPath("$.repositoryUrl").value("https://github.com/example/project"))
+                .andExpect(jsonPath("$.checklist." + itemId).value(true));
+
+        mockMvc.perform(put(draftEndpoint)
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DRAFT"));
+
+        mockMvc.perform(get(draftEndpoint).header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.draft.status").value("DRAFT"))
+                .andExpect(jsonPath("$.draft.releaseNotes").value("Initial draft for review"));
+
+        var milestone = milestoneRepository.findByIdAndProjectIdAndTenantId(
+                java.util.UUID.fromString(milestoneId), MockMilestoneData.PROJECT_ID, MockMilestoneData.TENANT_ID
+        ).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertFalse(milestone.getChecklistItems().get(0).isCompleted());
+        org.junit.jupiter.api.Assertions.assertEquals(1, artifactDraftRepository.count());
+        org.junit.jupiter.api.Assertions.assertEquals(2, auditRepository.countByMilestoneId(
+                java.util.UUID.fromString(milestoneId)));
+        org.junit.jupiter.api.Assertions.assertEquals(2, outboxRepository.count());
+    }
+
+    @Test
+    void failedDraftUpdateDoesNotReplacePreviouslySavedDraft() throws Exception {
+        String milestoneId = createMilestoneAndGetId(
+                "Draft rollback milestone", Instant.now().plusSeconds(86400), "artifact-draft-rollback"
+        );
+        String draftEndpoint = endpoint() + "/" + milestoneId + "/artifact-draft";
+        String initial = mockMvc.perform(get(draftEndpoint).header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String itemId = objectMapper.readTree(initial).at("/milestone/checklist/0/id").asText();
+        Map<String, Object> first = new LinkedHashMap<>();
+        first.put("repositoryUrl", "https://github.com/example/kept");
+        first.put("checklist", Map.of(itemId, true));
+        String firstSaved = mockMvc.perform(put(draftEndpoint)
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(first)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        long version = objectMapper.readTree(firstSaved).get("version").asLong();
+
+        Map<String, Object> invalidUpdate = new LinkedHashMap<>();
+        invalidUpdate.put("repositoryUrl", "javascript:alert(1)");
+        invalidUpdate.put("releaseNotes", "must not overwrite existing draft");
+        invalidUpdate.put("checklist", Map.of(itemId, false));
+        invalidUpdate.put("expectedVersion", version);
+        mockMvc.perform(put(draftEndpoint)
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidUpdate)))
+                .andExpect(status().isUnprocessableEntity());
+
+        mockMvc.perform(get(draftEndpoint).header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.draft.repositoryUrl").value("https://github.com/example/kept"))
+                .andExpect(jsonPath("$.draft.releaseNotes").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.draft.checklist." + itemId).value(true));
+    }
+
+    @Test
+    void artifactWorkspaceEnforcesAuthenticationStudentRoleAndMilestoneScope() throws Exception {
+        String milestoneId = createMilestoneAndGetId(
+                "Scoped artifact milestone", Instant.now().plusSeconds(86400), "artifact-draft-scope"
+        );
+        String draftEndpoint = endpoint() + "/" + milestoneId + "/artifact-draft";
+        mockMvc.perform(get(draftEndpoint))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get(draftEndpoint).header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(endpoint() + "/99999999-9999-9999-9999-999999999999/artifact-draft")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/projects/" + MockMilestoneData.OUT_OF_SCOPE_PROJECT_ID
+                        + "/milestones/" + milestoneId + "/artifact-draft")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.milestone").doesNotExist());
+        mockMvc.perform(get(draftEndpoint)
+                        .header("Authorization", "Bearer " + tokenForUnassignedStudent()))
+                .andExpect(status().isForbidden());
+        org.junit.jupiter.api.Assertions.assertEquals(0, artifactDraftRepository.count());
+    }
+
+    @Test
+    void fileUploadFailsClosedWhenMimeSizeAndScannerPolicyIsNotConfigured() throws Exception {
+        String milestoneId = createMilestoneAndGetId(
+                "Upload policy milestone", Instant.now().plusSeconds(86400), "artifact-upload-policy"
+        );
+        var file = new org.springframework.mock.web.MockMultipartFile(
+                "file", "demo.pdf", "application/pdf", "%PDF-test".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        mockMvc.perform(multipart(endpoint() + "/" + milestoneId + "/artifact-draft/attachments")
+                        .file(file).header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("ARTIFACT_UPLOAD_UNAVAILABLE"));
+        org.junit.jupiter.api.Assertions.assertEquals(0, artifactAttachmentRepository.count());
+        org.junit.jupiter.api.Assertions.assertEquals(0, artifactDraftRepository.count());
+    }
+
+    @Test
     void rejectsProjectOutsideCurrentScopeWithoutReturningProjectData() throws Exception {
         mockMvc.perform(get("/api/projects/" + MockMilestoneData.OUT_OF_SCOPE_PROJECT_ID + "/milestones")
                         .header("Authorization", "Bearer " + teacherToken))
@@ -500,6 +635,21 @@ class MilestoneIntegrationTest {
         user.setLastName("Test");
         user.setTenant(users.findByEmail("student@example.com").orElseThrow().getTenant());
         user.getRoles().add(role);
+        users.saveAndFlush(user);
+        var principal = userDetailsService.loadUserByUsername(user.getEmail());
+        return tokenService.generateAccessToken(new UsernamePasswordAuthenticationToken(
+                principal, null, principal.getAuthorities()));
+    }
+
+    private String tokenForUnassignedStudent() {
+        var studentRole = roles.findByName("STUDENT").orElseThrow();
+        var user = new com.example.starter_project_2025.system.rbac.user.User();
+        user.setEmail("unassigned-artifact-student@example.com");
+        user.setPasswordHash("unused");
+        user.setFirstName("Unassigned artifact");
+        user.setLastName("Student");
+        user.setTenant(users.findByEmail("student@example.com").orElseThrow().getTenant());
+        user.getRoles().add(studentRole);
         users.saveAndFlush(user);
         var principal = userDetailsService.loadUserByUsername(user.getEmail());
         return tokenService.generateAccessToken(new UsernamePasswordAuthenticationToken(

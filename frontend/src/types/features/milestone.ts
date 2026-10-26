@@ -125,6 +125,46 @@ export interface MilestoneDetailResponse {
   createdBy: string;
 }
 
+export interface ArtifactDraft {
+  milestoneId: string;
+  status: "DRAFT";
+  repositoryUrl?: string | null;
+  deploymentUrl?: string | null;
+  releaseNotes?: string | null;
+  checklist: Record<string, boolean>;
+  attachments: ArtifactAttachment[];
+  version: number;
+  createdBy: string;
+  createdAt: string;
+  updatedBy: string;
+  updatedAt: string;
+}
+
+export interface ArtifactAttachment {
+  id: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  scanStatus: "CLEAN";
+  uploadedBy: string;
+  uploadedAt: string;
+  draftVersion: number;
+}
+
+export interface ArtifactDraftRequest {
+  repositoryUrl?: string;
+  deploymentUrl?: string;
+  releaseNotes?: string;
+  checklist: Record<string, boolean>;
+  expectedVersion?: number;
+}
+
+export interface ArtifactSubmissionWorkspace {
+  milestone: MilestoneDetailResponse;
+  draft: ArtifactDraft | null;
+  uploadPolicy: { enabled: boolean; maxBytes: number; allowedMimeTypes: string[] };
+}
+
 export interface MilestoneApiError {
   status?: number;
   code?: string;

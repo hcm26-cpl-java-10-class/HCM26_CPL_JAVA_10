@@ -150,7 +150,8 @@ export function MilestoneDetailPage() {
           </div>
         </div>
 
-        <div><Button variant="outline" onClick={() => navigate(returnUrl)}><ArrowLeft className="size-4" /> Back to milestones</Button></div>
+        <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => navigate(returnUrl)}><ArrowLeft className="size-4" /> Back to milestones</Button>
+          <Button onClick={() => navigate(`/projects/${projectId}/milestones/${milestone.id}/submit`)}>Prepare artifact</Button></div>
       </div>
     </MainLayout>
   );
