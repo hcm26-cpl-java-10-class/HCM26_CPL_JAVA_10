@@ -275,7 +275,11 @@ export const ModuleGroupModulePage: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={handleAddModule}
+<<<<<<< HEAD
                                 className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs sm:text-sm font-medium shadow-xs transition-colors cursor-pointer"
+=======
+                                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium shadow-xs transition-colors cursor-pointer"
+>>>>>>> feature/user-profile-update
                             >
                                 <Plus className="h-4 w-4" />
                                 <span>+ Thêm mới</span>

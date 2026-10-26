@@ -29,26 +29,28 @@ export function SidebarMenu() {
                 name: group.name ?? "Menu",
                 items: group.modules
                     .filter((module) => !!module.url)
-                    // Temporarily hide standalone "Modules" navigation item under "System Management"
-                    .filter((module) => {
-                        const isUnderSystemManagement =
-                            (group.name || "").toLowerCase().includes("system");
-                        const isModulesMenu =
-                            module.url === "/menus" || (module.title || "").toLowerCase() === "modules";
-
-                        if (isUnderSystemManagement && isModulesMenu) {
-                            return false;
+                    .map((module) => {
+                        let normalizedUrl = module.url ?? "#";
+                        if (normalizedUrl === "/menu-groups") {
+                            normalizedUrl = "/module-groups";
+                        } else if (normalizedUrl === "/menus") {
+                            normalizedUrl = "/modules";
                         }
-                        return true;
-                    })
-                    .map((module) => ({
-                        title: module.title ?? "Untitled",
-                        url: module.url ?? "#",
-                        icon: resolveIcon(module.icon),
-                        isActive:
+
+                        const isCurrentActive =
                             !!module.url &&
-                            (location.pathname === module.url || location.pathname.startsWith(`${module.url}/`)),
-                    })),
+                            (location.pathname === normalizedUrl ||
+                                location.pathname === module.url ||
+                                (normalizedUrl !== "/" && location.pathname.startsWith(`${normalizedUrl}/`)) ||
+                                (module.url !== "/" && location.pathname.startsWith(`${module.url}/`)));
+
+                        return {
+                            title: module.title ?? "Untitled",
+                            url: normalizedUrl,
+                            icon: resolveIcon(module.icon),
+                            isActive: isCurrentActive,
+                        };
+                    }),
             }))
             .filter((group) => group.items.length > 0);
     }, [location.pathname, moduleGroups]);

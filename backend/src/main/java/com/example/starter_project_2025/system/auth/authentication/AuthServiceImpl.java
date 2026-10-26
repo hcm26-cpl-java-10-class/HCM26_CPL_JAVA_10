@@ -28,6 +28,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import java.time.Instant;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -52,7 +53,14 @@ public class AuthServiceImpl implements AuthService {
     PasswordEncoder passwordEncoder;
 
     @Override
+    @Transactional
     public AuthenticationResponse login(LoginRequest request) {
+        return login(request, request != null ? request.device() : null);
+    }
+
+    @Override
+    @Transactional
+    public AuthenticationResponse login(LoginRequest request, String device) {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         request.email(),
@@ -61,6 +69,12 @@ public class AuthServiceImpl implements AuthService {
         );
 
         UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
+        User user = principal.getUser();
+        user.setLastLoginAt(Instant.now());
+        if (StringUtils.hasText(device)) {
+            user.setLastLoginDevice(device.trim());
+        }
+        user = userRepository.save(user);
 
         refreshTokenService.revokeAllRefreshTokens(principal.getUser().getId());
 
@@ -73,13 +87,32 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public AuthenticationResponse loginWithGoogle(String email, String firstName, String lastName) {
+        return loginWithGoogle(email, firstName, lastName, null);
+    }
+
+    @Override
+    @Transactional
+    public AuthenticationResponse loginWithGoogle(String email, String firstName, String lastName, String device) {
         if (!StringUtils.hasText(email)) {
             throw new BadRequestException("Google account email is required");
         }
 
         User user = userRepository.findByEmail(email)
-                .map(existingUser -> updateUserFromGoogleProfile(existingUser, firstName, lastName))
                 .orElseGet(() -> createGoogleUser(email, firstName, lastName));
+
+        user.setLastLoginAt(Instant.now());
+        if (StringUtils.hasText(device)) {
+            user.setLastLoginDevice(device.trim());
+        }
+        user = userRepository.save(user);
+
+        if (Boolean.TRUE.equals(user.getLocked())) {
+            throw new org.springframework.security.authentication.LockedException(
+                    "Account is locked"
+            );
+        }
+
+        user = updateUserFromGoogleProfile(user, firstName, lastName);
 
         refreshTokenService.revokeAllRefreshTokens(user.getId());
 
@@ -124,6 +157,14 @@ public class AuthServiceImpl implements AuthService {
         RefreshToken refreshToken = refreshTokenService.verifyRefreshToken(request.token());
 
         User user = refreshToken.getUser();
+
+        if (Boolean.TRUE.equals(user.getLocked())) {
+            refreshTokenService.revokeAllRefreshTokens(user.getId());
+
+            throw new org.springframework.security.authentication.LockedException(
+                    "Account is locked"
+            );
+        }
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
 

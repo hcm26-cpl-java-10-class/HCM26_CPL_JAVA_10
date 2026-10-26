@@ -12,6 +12,11 @@ public record LoginRequest(
 
         @NotBlank(message = "Password is required")
         @Size(min = 5, message = "Password must be at least 5 characters long")
-        String password
+        String password,
+
+        String device
 ) {
+    public LoginRequest(String email, String password) {
+        this(email, password, null);
+    }
 }

@@ -1,4 +1,5 @@
 import axiosInstance from "../axios";
+import { getDeviceDescription } from "@/utils/device.utils";
 import { normalizeAuthRolePayload } from "@/utils/rbac.utils";
 import {
     type ForgotPasswordEmailRequest,
@@ -56,9 +57,13 @@ const clearAuthStorage = () => {
 
 export const authApi = {
     login: async (credentials: LoginRequest): Promise<LoginResponse> => {
+        const device = credentials.device || getDeviceDescription();
         const response = await axiosInstance.post<BackendAuthenticationResponse>("/auth/login", {
+            device,
             email: credentials.email,
             password: credentials.password,
+        }, {
+            headers: { "X-Device-Info": device },
         });
         return mapAuthResponse(response.data);
     },

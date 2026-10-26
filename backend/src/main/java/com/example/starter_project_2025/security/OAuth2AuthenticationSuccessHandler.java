@@ -3,6 +3,8 @@ package com.example.starter_project_2025.security;
 import com.example.starter_project_2025.system.auth.authentication.AuthService;
 import com.example.starter_project_2025.system.auth.authentication.dto.response.AuthenticationResponse;
 import com.example.starter_project_2025.system.auth.util.CookieUtil;
+import com.example.starter_project_2025.system.auth.util.DeviceUtil;
+import org.springframework.util.StringUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.AccessLevel;
@@ -48,7 +50,11 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
             String firstName = getStringAttribute(attributes, "given_name");
             String lastName = getStringAttribute(attributes, "family_name");
 
-            AuthenticationResponse authResponse = authService.loginWithGoogle(email, firstName, lastName);
+            String userAgent = request.getHeader("User-Agent");
+            String clientDevice = request.getHeader("X-Device-Info");
+            String device = StringUtils.hasText(clientDevice) ? clientDevice.trim() : DeviceUtil.parse(userAgent);
+
+            AuthenticationResponse authResponse = authService.loginWithGoogle(email, firstName, lastName, device);
             cookieUtil.setRefreshTokenCookie(response, authResponse.getRefreshToken());
 
             String redirectUrl = UriComponentsBuilder.fromHttpUrl(frontendUrl)
