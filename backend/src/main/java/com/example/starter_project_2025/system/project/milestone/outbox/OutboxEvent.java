@@ -85,4 +85,11 @@ public class OutboxEvent {
         event.eventType = "ARTIFACT_FILE_UPLOADED";
         return event;
     }
+
+    public static OutboxEvent artifactSubmitted(UUID submissionId, String payloadJson, Instant now) {
+        OutboxEvent event = milestoneCreated(submissionId, payloadJson, now);
+        event.aggregateType = "MILESTONE_ARTIFACT_SUBMISSION";
+        event.eventType = "ARTIFACT_SUBMITTED";
+        return event;
+    }
 }

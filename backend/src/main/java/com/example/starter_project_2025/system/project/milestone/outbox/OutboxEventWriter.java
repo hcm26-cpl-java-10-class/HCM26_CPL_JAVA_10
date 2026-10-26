@@ -66,4 +66,25 @@ public class OutboxEventWriter {
             throw new IllegalStateException("Unable to serialize artifact upload event", ex);
         }
     }
+
+    public void writeArtifactSubmitted(java.util.UUID submissionId, java.util.UUID milestoneId,
+            java.util.UUID projectId, java.util.UUID tenantId, java.util.UUID actorId,
+            long version, boolean submittedLate, Instant now) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("submissionId", submissionId);
+            payload.put("milestoneId", milestoneId);
+            payload.put("projectId", projectId);
+            payload.put("tenantId", tenantId);
+            payload.put("actorId", actorId);
+            payload.put("version", version);
+            payload.put("status", "SUBMITTED");
+            payload.put("submittedLate", submittedLate);
+            payload.put("occurredAt", now);
+            repository.save(OutboxEvent.artifactSubmitted(submissionId,
+                    objectMapper.writeValueAsString(payload), now));
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Unable to serialize artifact submission event", ex);
+        }
+    }
 }

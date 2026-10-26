@@ -3,6 +3,8 @@ import type {
   CreateMilestoneRequest,
   ArtifactDraft,
   ArtifactDraftRequest,
+  ArtifactSubmission,
+  ArtifactSubmissionRequest,
   ArtifactAttachment,
   ArtifactSubmissionWorkspace,
   MilestoneCreateOptions,
@@ -91,6 +93,15 @@ export const milestoneApi = {
     payload.append("file", file);
     const response = await axiosInstance.post<ArtifactAttachment>(
       `/projects/${projectId}/milestones/${milestoneId}/artifact-draft/attachments`, payload,
+    );
+    return response.data;
+  },
+
+  async submitArtifact(projectId: string, milestoneId: string, payload: ArtifactSubmissionRequest,
+    idempotencyKey: string): Promise<ArtifactSubmission> {
+    const response = await axiosInstance.post<ArtifactSubmission>(
+      `/projects/${projectId}/milestones/${milestoneId}/artifact-draft/submissions`, payload,
+      { headers: { "Idempotency-Key": idempotencyKey } },
     );
     return response.data;
   },

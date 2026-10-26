@@ -9,6 +9,8 @@ import com.example.starter_project_2025.system.project.milestone.repository.Mile
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
 import com.example.starter_project_2025.system.project.milestone.submission.repository.MilestoneArtifactDraftRepository;
 import com.example.starter_project_2025.system.project.milestone.submission.repository.ArtifactAttachmentRepository;
+import com.example.starter_project_2025.system.project.milestone.submission.repository.MilestoneArtifactSubmissionRepository;
+import com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneArtifactSubmission;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,12 +51,14 @@ class MilestoneIntegrationTest {
     @Autowired MilestoneRepository milestoneRepository;
     @Autowired MilestoneArtifactDraftRepository artifactDraftRepository;
     @Autowired ArtifactAttachmentRepository artifactAttachmentRepository;
+    @Autowired MilestoneArtifactSubmissionRepository artifactSubmissionRepository;
     @Autowired MilestoneChecklistItemRepository checklistRepository;
     @Autowired MilestoneAuditRepository auditRepository;
     @Autowired OutboxEventRepository outboxRepository;
     @Autowired IdempotencyRepository idempotencyRepository;
     @Autowired com.example.starter_project_2025.system.rbac.user.UserRepository users;
     @Autowired com.example.starter_project_2025.system.rbac.role.RoleRepository roles;
+    @Autowired org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     private String teacherToken;
     private String studentToken;
@@ -65,6 +69,7 @@ class MilestoneIntegrationTest {
         outboxRepository.deleteAll();
         auditRepository.deleteAll();
         artifactAttachmentRepository.deleteAll();
+        artifactSubmissionRepository.deleteAll();
         artifactDraftRepository.deleteAll();
         checklistRepository.deleteAll();
         milestoneRepository.deleteAll();
@@ -524,6 +529,212 @@ class MilestoneIntegrationTest {
                 .andExpect(jsonPath("$.code").value("ARTIFACT_UPLOAD_UNAVAILABLE"));
         org.junit.jupiter.api.Assertions.assertEquals(0, artifactAttachmentRepository.count());
         org.junit.jupiter.api.Assertions.assertEquals(0, artifactDraftRepository.count());
+    }
+
+    @Test
+    void studentSubmissionCreatesImmutableVersionAndReplaysSameIdempotencyKey() throws Exception {
+        String milestoneId = createMilestoneAndGetId(
+                "Artifact submission milestone", Instant.now().plusSeconds(86400), "artifact-submit-success"
+        );
+        String submitUrl = endpoint() + "/" + milestoneId + "/artifact-draft/submissions";
+        Map<String, Object> body = Map.of(
+                "repositoryUrl", "https://github.com/example/submitted-v1",
+                "releaseNotes", "Release one",
+                "checklist", Map.of()
+        );
+        String first = mockMvc.perform(post(submitUrl)
+                        .header("Authorization", "Bearer " + studentToken)
+                        .header("Idempotency-Key", "artifact-submit-retry-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("SUBMITTED"))
+                .andExpect(jsonPath("$.version").value(1))
+                .andExpect(jsonPath("$.repositoryUrl").value("https://github.com/example/submitted-v1"))
+                .andExpect(jsonPath("$.submittedLate").value(false))
+                .andReturn().getResponse().getContentAsString();
+
+        String replay = mockMvc.perform(post(submitUrl)
+                        .header("Authorization", "Bearer " + studentToken)
+                        .header("Idempotency-Key", "artifact-submit-retry-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        org.junit.jupiter.api.Assertions.assertEquals(
+                objectMapper.readTree(first).get("id").asText(), objectMapper.readTree(replay).get("id").asText());
+        String submittedId = objectMapper.readTree(first).get("id").asText();
+        MilestoneArtifactSubmission immutable = artifactSubmissionRepository
+                .findById(java.util.UUID.fromString(submittedId)).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals(1, immutable.getVersion());
+        org.junit.jupiter.api.Assertions.assertEquals("https://github.com/example/submitted-v1",
+                immutable.getRepositoryUrl());
+        mockMvc.perform(post(submitUrl)
+                        .header("Authorization", "Bearer " + studentToken)
+                        .header("Idempotency-Key", "artifact-submit-retry-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "repositoryUrl", "https://github.com/example/different",
+                                "checklist", Map.of()))))
+                .andExpect(status().isConflict());
+        org.junit.jupiter.api.Assertions.assertEquals(1, artifactSubmissionRepository.count());
+        org.junit.jupiter.api.Assertions.assertEquals(1, idempotencyRepository.countByOperation("ARTIFACT_SUBMISSION"));
+        org.junit.jupiter.api.Assertions.assertEquals(2, auditRepository.countByMilestoneId(
+                java.util.UUID.fromString(milestoneId)));
+        org.junit.jupiter.api.Assertions.assertEquals(2, outboxRepository.count());
+        mockMvc.perform(get(endpoint() + "/" + milestoneId + "/artifact-draft")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.latestSubmission.version").value(1))
+                .andExpect(jsonPath("$.latestSubmission.status").value("SUBMITTED"));
+    }
+
+    @Test
+    void invalidSubmissionAndRejectedLatePolicyDoNotCreateSubmittedVersion() throws Exception {
+        Instant futureDeadline = Instant.now().plusSeconds(3600);
+        Map<String, Object> noLateMilestone = validRequest("Artifact invalid submission", futureDeadline);
+        noLateMilestone.put("latePolicy", Map.of("type", "NO_LATE"));
+        String milestoneId = createMilestoneAndGetId(noLateMilestone, "artifact-submit-denied");
+        jdbcTemplate.update("update milestones set deadline = ? where milestone_id = ?",
+                java.sql.Timestamp.from(Instant.now().minusSeconds(600)), java.util.UUID.fromString(milestoneId));
+        String submitUrl = endpoint() + "/" + milestoneId + "/artifact-draft/submissions";
+        mockMvc.perform(post(submitUrl)
+                        .header("Authorization", "Bearer " + studentToken)
+                        .header("Idempotency-Key", "artifact-submit-empty")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("checklist", Map.of()))))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors.artifact").exists());
+        mockMvc.perform(post(submitUrl)
+                        .header("Authorization", "Bearer " + studentToken)
+                        .header("Idempotency-Key", "artifact-submit-late-denied")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "repositoryUrl", "https://github.com/example/project",
+                                "checklist", Map.of()))))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors.deadline").exists());
+        mockMvc.perform(post(submitUrl)
+                        .header("Authorization", "Bearer " + studentToken)
+                        .header("Idempotency-Key", "artifact-submit-invalid-url")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "repositoryUrl", "javascript:alert(1)", "checklist", Map.of()))))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors.repositoryUrl").exists());
+        mockMvc.perform(post(submitUrl)
+                        .header("Authorization", "Bearer " + studentToken)
+                        .header("Idempotency-Key", "artifact-submit-invalid-attachment")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "repositoryUrl", "https://github.com/example/project",
+                                "checklist", Map.of(),
+                                "attachmentIds", List.of(java.util.UUID.randomUUID())))))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors.attachments").exists());
+        org.junit.jupiter.api.Assertions.assertEquals(0, artifactSubmissionRepository.count());
+        org.junit.jupiter.api.Assertions.assertEquals(0, idempotencyRepository.countByOperation("ARTIFACT_SUBMISSION"));
+        org.junit.jupiter.api.Assertions.assertEquals(1, auditRepository.countByMilestoneId(
+                java.util.UUID.fromString(milestoneId)));
+        org.junit.jupiter.api.Assertions.assertEquals(1, outboxRepository.count());
+    }
+
+    @Test
+    void concurrentRetryWithSameSubmissionKeyCreatesOnlyOneVersionAndOutboxEvent() throws Exception {
+        String milestoneId = createMilestoneAndGetId(
+                "Concurrent artifact submission", Instant.now().plusSeconds(86400), "artifact-submit-concurrent"
+        );
+        String submitUrl = endpoint() + "/" + milestoneId + "/artifact-draft/submissions";
+        String body = objectMapper.writeValueAsString(Map.of(
+                "repositoryUrl", "https://github.com/example/concurrent", "checklist", Map.of()));
+        var start = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var submitRequest = (java.util.concurrent.Callable<org.springframework.test.web.servlet.MvcResult>) () -> {
+                start.await();
+                return mockMvc.perform(post(submitUrl)
+                                .header("Authorization", "Bearer " + studentToken)
+                                .header("Idempotency-Key", "artifact-submit-same-concurrent-key")
+                                .contentType(MediaType.APPLICATION_JSON).content(body))
+                        .andReturn();
+            };
+            var first = executor.submit(submitRequest);
+            var second = executor.submit(submitRequest);
+            start.countDown();
+            var firstResult = first.get(20, TimeUnit.SECONDS);
+            var secondResult = second.get(20, TimeUnit.SECONDS);
+            org.junit.jupiter.api.Assertions.assertEquals(201, firstResult.getResponse().getStatus());
+            org.junit.jupiter.api.Assertions.assertEquals(201, secondResult.getResponse().getStatus());
+            var firstResponse = objectMapper.readTree(firstResult.getResponse().getContentAsString());
+            var secondResponse = objectMapper.readTree(secondResult.getResponse().getContentAsString());
+            org.junit.jupiter.api.Assertions.assertEquals(firstResponse.get("id").asText(),
+                    secondResponse.get("id").asText());
+        }
+        org.junit.jupiter.api.Assertions.assertEquals(1, artifactSubmissionRepository.count());
+        org.junit.jupiter.api.Assertions.assertEquals(1, idempotencyRepository.countByOperation("ARTIFACT_SUBMISSION"));
+        org.junit.jupiter.api.Assertions.assertEquals(2, auditRepository.countByMilestoneId(
+                java.util.UUID.fromString(milestoneId)));
+        org.junit.jupiter.api.Assertions.assertEquals(2, outboxRepository.count());
+    }
+
+    @Test
+    void allowedLateSubmissionIsAcceptedAccordingToMilestonePolicyAndNewKeyCreatesNewVersion() throws Exception {
+        Instant deadline = Instant.now().plusSeconds(3600);
+        String milestoneId = createMilestoneAndGetId(
+                "Artifact late submission", deadline, "artifact-submit-late-allowed"
+        );
+        jdbcTemplate.update("update milestones set deadline = ? where milestone_id = ?",
+                java.sql.Timestamp.from(Instant.now().minusSeconds(600)), java.util.UUID.fromString(milestoneId));
+        String submitUrl = endpoint() + "/" + milestoneId + "/artifact-draft/submissions";
+        Map<String, Object> body = Map.of(
+                "deploymentUrl", "https://demo.example.com",
+                "releaseNotes", "Late delivery",
+                "checklist", Map.of()
+        );
+        mockMvc.perform(post(submitUrl)
+                        .header("Authorization", "Bearer " + studentToken)
+                        .header("Idempotency-Key", "artifact-submit-new-version-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("SUBMITTED"))
+                .andExpect(jsonPath("$.submittedLate").value(true))
+                .andExpect(jsonPath("$.latePenaltyPercent").value(10.0))
+                .andExpect(jsonPath("$.version").value(1));
+        mockMvc.perform(post(submitUrl)
+                        .header("Authorization", "Bearer " + studentToken)
+                        .header("Idempotency-Key", "artifact-submit-new-version-2")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.version").value(2));
+        org.junit.jupiter.api.Assertions.assertEquals(2, artifactSubmissionRepository.count());
+    }
+
+    @Test
+    void submissionEnforcesAuthenticationRoleAndProjectMilestoneScope() throws Exception {
+        String milestoneId = createMilestoneAndGetId(
+                "Artifact submission scope", Instant.now().plusSeconds(86400), "artifact-submit-scope"
+        );
+        String submitUrl = endpoint() + "/" + milestoneId + "/artifact-draft/submissions";
+        String body = objectMapper.writeValueAsString(Map.of(
+                "repositoryUrl", "https://github.com/example/project", "checklist", Map.of()));
+        mockMvc.perform(post(submitUrl).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post(submitUrl).header("Authorization", "Bearer " + teacherToken)
+                        .header("Idempotency-Key", "artifact-submit-teacher")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/projects/" + MockMilestoneData.OUT_OF_SCOPE_PROJECT_ID
+                        + "/milestones/" + milestoneId + "/artifact-draft/submissions")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .header("Idempotency-Key", "artifact-submit-out-of-scope")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post(endpoint() + "/99999999-9999-9999-9999-999999999999/artifact-draft/submissions")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .header("Idempotency-Key", "artifact-submit-missing")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isNotFound());
+        org.junit.jupiter.api.Assertions.assertEquals(0, artifactSubmissionRepository.count());
     }
 
     @Test

@@ -18,6 +18,7 @@ import com.example.starter_project_2025.system.project.milestone.submission.dto.
 import com.example.starter_project_2025.system.project.milestone.submission.dto.ArtifactDraftResponse;
 import com.example.starter_project_2025.system.project.milestone.submission.dto.ArtifactSubmissionWorkspaceResponse;
 import com.example.starter_project_2025.system.project.milestone.submission.repository.MilestoneArtifactDraftRepository;
+import com.example.starter_project_2025.system.project.milestone.submission.repository.MilestoneArtifactSubmissionRepository;
 import com.example.starter_project_2025.system.project.milestone.submission.port.ArtifactSubmissionScopePort;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -43,6 +44,8 @@ public class ArtifactDraftService {
     private final MilestoneRepository milestoneRepository;
     private final MilestoneQueryService milestoneQueryService;
     private final MilestoneArtifactDraftRepository draftRepository;
+    private final MilestoneArtifactSubmissionRepository submissionRepository;
+    private final ArtifactSubmissionService submissionService;
     private final ArtifactAttachmentRepository attachmentRepository;
     private final MilestoneAuditRepository auditRepository;
     private final OutboxEventWriter outboxWriter;
@@ -63,9 +66,13 @@ public class ArtifactDraftService {
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
         var draft = draftRepository.findByMilestoneIdAndProjectIdAndTenantId(milestoneId, projectId, scope.tenantId())
                 .map(this::toResponse).orElse(null);
+        var latestSubmission = submissionRepository
+                .findTopByTenantIdAndProjectIdAndMilestoneIdAndSubmitterIdOrderByVersionDesc(
+                        scope.tenantId(), projectId, milestoneId, scope.actorId())
+                .map(submissionService::toResponse).orElse(null);
         return new ArtifactSubmissionWorkspaceResponse(
                 milestoneQueryService.getDetail(projectId, milestoneId), draft,
-                uploadPolicy());
+                uploadPolicy(), latestSubmission);
     }
 
     @Transactional

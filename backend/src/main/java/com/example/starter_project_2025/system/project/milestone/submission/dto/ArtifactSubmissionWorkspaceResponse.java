@@ -5,5 +5,6 @@ import com.example.starter_project_2025.system.project.milestone.dto.response.Mi
 public record ArtifactSubmissionWorkspaceResponse(
         MilestoneDetailResponse milestone,
         ArtifactDraftResponse draft,
-        ArtifactUploadPolicyResponse uploadPolicy
+        ArtifactUploadPolicyResponse uploadPolicy,
+        ArtifactSubmissionResponse latestSubmission
 ) { }

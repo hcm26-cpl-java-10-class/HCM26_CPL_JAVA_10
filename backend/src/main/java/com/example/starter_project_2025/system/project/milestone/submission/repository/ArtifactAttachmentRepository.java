@@ -9,4 +9,8 @@ import java.util.UUID;
 public interface ArtifactAttachmentRepository extends JpaRepository<ArtifactAttachment, UUID> {
     List<ArtifactAttachment> findByMilestoneIdAndProjectIdAndTenantIdOrderByUploadedAtAsc(
             UUID milestoneId, UUID projectId, UUID tenantId);
+
+    List<ArtifactAttachment> findByIdInAndMilestoneIdAndProjectIdAndTenantIdAndUploadedByAndScanStatus(
+            java.util.Collection<UUID> ids, UUID milestoneId, UUID projectId, UUID tenantId,
+            UUID uploadedBy, String scanStatus);
 }

@@ -159,10 +159,41 @@ export interface ArtifactDraftRequest {
   expectedVersion?: number;
 }
 
+export interface ArtifactSubmissionRequest {
+  repositoryUrl?: string;
+  deploymentUrl?: string;
+  releaseNotes?: string;
+  checklist: Record<string, boolean>;
+  attachmentIds: string[];
+}
+
+export interface ArtifactSubmissionAttachment {
+  id: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+}
+
+export interface ArtifactSubmission {
+  id: string;
+  milestoneId: string;
+  version: number;
+  status: "SUBMITTED";
+  repositoryUrl?: string | null;
+  deploymentUrl?: string | null;
+  releaseNotes?: string | null;
+  checklist: Record<string, boolean>;
+  attachments: ArtifactSubmissionAttachment[];
+  submittedAt: string;
+  submittedLate: boolean;
+  latePenaltyPercent?: number | null;
+}
+
 export interface ArtifactSubmissionWorkspace {
   milestone: MilestoneDetailResponse;
   draft: ArtifactDraft | null;
   uploadPolicy: { enabled: boolean; maxBytes: number; allowedMimeTypes: string[] };
+  latestSubmission: ArtifactSubmission | null;
 }
 
 export interface MilestoneApiError {

@@ -4,6 +4,9 @@ import com.example.starter_project_2025.system.project.milestone.submission.dto.
 import com.example.starter_project_2025.system.project.milestone.submission.dto.ArtifactDraftResponse;
 import com.example.starter_project_2025.system.project.milestone.submission.dto.ArtifactSubmissionWorkspaceResponse;
 import com.example.starter_project_2025.system.project.milestone.submission.service.ArtifactDraftService;
+import com.example.starter_project_2025.system.project.milestone.submission.service.ArtifactSubmissionService;
+import com.example.starter_project_2025.system.project.milestone.submission.dto.ArtifactSubmissionRequest;
+import com.example.starter_project_2025.system.project.milestone.submission.dto.ArtifactSubmissionResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +25,7 @@ import com.example.starter_project_2025.system.project.milestone.submission.serv
 public class ArtifactSubmissionController {
     private final ArtifactDraftService draftService;
     private final ArtifactUploadService uploadService;
+    private final ArtifactSubmissionService submissionService;
 
     @GetMapping
     @PreAuthorize("hasAuthority('ARTIFACT_READ') and hasRole('STUDENT')")
@@ -45,5 +49,16 @@ public class ArtifactSubmissionController {
             @PathVariable UUID projectId, @PathVariable UUID milestoneId,
             @RequestPart("file") MultipartFile file) {
         return ResponseEntity.ok(uploadService.upload(projectId, milestoneId, file));
+    }
+
+    @PostMapping("/submissions")
+    @PreAuthorize("hasAuthority('ARTIFACT_SUBMIT') and hasRole('STUDENT')")
+    public ResponseEntity<ArtifactSubmissionResponse> submit(
+            @PathVariable UUID projectId,
+            @PathVariable UUID milestoneId,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @Valid @RequestBody ArtifactSubmissionRequest request) {
+        return ResponseEntity.status(201)
+                .body(submissionService.submit(projectId, milestoneId, idempotencyKey, request));
     }
 }
