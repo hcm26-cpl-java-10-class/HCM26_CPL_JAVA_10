@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -77,13 +78,17 @@ public class QuestionImportService {
             return result;
         }
 
-        // Tập hợp lưu các câu hỏi đã xuất hiện trong cùng file để chống trùng lặp nội bộ
+        // ======================================================================
+        // PHASE 1: VALIDATE TOÀN BỘ (Không lưu DB)
+        // Nếu có bất kỳ dòng nào lỗi -> Dừng lại, trả về danh sách lỗi (Rollback)
+        // ======================================================================
+        List<QuestionDTO> validDtos = new ArrayList<>();
         Set<String> seenInFile = new HashSet<>();
 
         for (QuestionCsvParser.ParsedRow row : rows) {
             int rowNumber = row.getRowNumber();
 
-            // 1. Kiểm tra lỗi parse ban đầu (sai định dạng cột, sai enum...)
+            // 1. Kiểm tra lỗi parse ban đầu (sai format cột, sai enum...)
             if (row.hasError()) {
                 result.getErrors().add(new RowError(rowNumber, row.getParseError()));
                 result.setFailureCount(result.getFailureCount() + 1);
@@ -100,9 +105,9 @@ public class QuestionImportService {
                 continue;
             }
 
-            // 3. Chống trùng lặp với CSDL (khi chạy lại sẽ không tạo trùng)
+            // 3. Chống trùng lặp với CSDL
             if (isDuplicateInDatabase(dto.getContent(), dto.getTopic())) {
-                result.getErrors().add(new RowError(rowNumber, "Câu hỏi đã tồn tại trong hệ thống (bỏ qua, không tạo trùng)"));
+                result.getErrors().add(new RowError(rowNumber, "Câu hỏi đã tồn tại trong hệ thống (trùng nội dung và chủ đề)"));
                 result.setFailureCount(result.getFailureCount() + 1);
                 continue;
             }
@@ -122,18 +127,30 @@ public class QuestionImportService {
                 continue;
             }
 
-            // 5. Lưu vào Database
+            validDtos.add(dto);
+        }
+
+        // Nếu Phase 1 có bất kỳ lỗi nào, dừng ngay lập tức và trả về lỗi (không lưu bất kỳ bản ghi nào)
+        if (!result.getErrors().isEmpty()) {
+            log.warn("Import bị hủy (Rollback): phát hiện {} dòng lỗi trong file '{}'", result.getFailureCount(), originalFilename);
+            return result;
+        }
+
+        // ======================================================================
+        // PHASE 2: PERSIST TẤT CẢ TRONG TRANSACTION (All-or-Nothing)
+        // ======================================================================
+        for (QuestionDTO dto : validDtos) {
             try {
                 Question question = questionMapper.toEntity(dto);
                 questionRepository.save(question);
                 result.setSuccessCount(result.getSuccessCount() + 1);
             } catch (Exception e) {
-                log.error("Lỗi khi lưu câu hỏi ở dòng {}", rowNumber, e);
-                result.getErrors().add(new RowError(rowNumber, "Lỗi khi lưu vào CSDL: " + e.getMessage()));
-                result.setFailureCount(result.getFailureCount() + 1);
+                log.error("Lỗi khi lưu câu hỏi vào CSDL — rollback toàn bộ import", e);
+                throw new RuntimeException("Lỗi khi lưu vào CSDL: " + e.getMessage(), e);
             }
         }
 
+        log.info("Import thành công {} câu hỏi từ file '{}'", result.getSuccessCount(), originalFilename);
         return result;
     }
 
