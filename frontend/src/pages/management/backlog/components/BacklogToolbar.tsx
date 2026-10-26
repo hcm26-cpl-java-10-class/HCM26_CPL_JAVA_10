@@ -10,16 +10,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import type { BacklogPriority, BacklogStatus } from "@/types";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import type { BacklogPriority, BacklogStatus, SprintDTO } from "@/types";
-import {
-  ClipboardList,
   Filter,
   Maximize2,
   Minimize2,
@@ -36,9 +28,6 @@ import {
 interface BacklogToolbarProps {
   keyword: string;
   onKeywordChange: (value: string) => void;
-  sprints: SprintDTO[];
-  sprintId: number | null;
-  onSprintChange: (id: number) => void;
   statusFilter: BacklogStatus | "ALL";
   onStatusFilterChange: (value: BacklogStatus | "ALL") => void;
   priorityFilter: BacklogPriority | "ALL";
@@ -47,7 +36,6 @@ interface BacklogToolbarProps {
   onToggleCollapseAll: () => void;
   canCreateSprint: boolean;
   onCreateSprint: () => void;
-  onCreateBacklogItem: () => void;
   currentUser?: { initials: string; label: string } | null;
 }
 
@@ -55,9 +43,6 @@ interface BacklogToolbarProps {
 export function BacklogToolbar({
   keyword,
   onKeywordChange,
-  sprints,
-  sprintId,
-  onSprintChange,
   statusFilter,
   onStatusFilterChange,
   priorityFilter,
@@ -66,7 +51,6 @@ export function BacklogToolbar({
   onToggleCollapseAll,
   canCreateSprint,
   onCreateSprint,
-  onCreateBacklogItem,
   currentUser,
 }: BacklogToolbarProps) {
   return (
@@ -138,24 +122,6 @@ export function BacklogToolbar({
       </DropdownMenu>
 
       <div className="ml-auto flex flex-wrap items-center gap-2">
-        {sprints.length > 1 && (
-          <Select
-            value={sprintId != null ? String(sprintId) : undefined}
-            onValueChange={(value) => onSprintChange(Number(value))}
-          >
-            <SelectTrigger size="sm" className="h-9 w-[190px] text-xs">
-              <SelectValue placeholder="Select sprint" />
-            </SelectTrigger>
-            <SelectContent>
-              {sprints.map((sprint) => (
-                <SelectItem key={sprint.id} value={String(sprint.id)}>
-                  {sprint.name ?? `Sprint ${sprint.id}`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-
         <Button
           type="button"
           variant="outline"
@@ -186,15 +152,9 @@ export function BacklogToolbar({
           </DropdownMenuTrigger>
 
           <DropdownMenuContent align="end" className="w-56">
-            {canCreateSprint && (
-              <DropdownMenuItem onClick={onCreateSprint}>
-                <Plus className="h-4 w-4" />
-                Create sprint
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuItem onClick={onCreateBacklogItem}>
-              <ClipboardList className="h-4 w-4" />
-              Create backlog item
+            <DropdownMenuItem disabled={!canCreateSprint} onClick={onCreateSprint}>
+              <Plus className="h-4 w-4" />
+              Create sprint
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

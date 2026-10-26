@@ -8,19 +8,23 @@ import {
 import {
     SPRINT_BACKLOG_PRIORITY_OPTIONS,
     SPRINT_BACKLOG_STATUS_OPTIONS,
+    SPRINT_BACKLOG_WORK_TYPE_OPTIONS,
 } from "./sprintBacklog.constants";
 
 /**
  * Sprint Backlog route (`/sprint-backlogs`).
  * <p>
  * The generic CRUD data table is enough: the schema only keeps the fields and
- * the rules enforced by `SprintBacklogServiceImpl`.
+ * the rules enforced by `SprintBacklogServiceImpl`. The schema is exported so
+ * the `/backlogs` page can reuse the exact same create form (the "+ Create"
+ * button under every sprint / backlog box).
  *
  * Business rules mirrored on the client (the backend stays authoritative and
  * answers 422 with the same field keys):
- * - owning sprint mandatory and must exist
  * - title mandatory, 1..200 characters
  * - description optional, at most 2000 characters
+ * - work type one of `SPRINT_BACKLOG_WORK_TYPE_OPTIONS` (fixed set, no custom
+ *   work types can be created)
  * - start / end date optional but both-or-none, start strictly before end
  * - status one of {@link SprintBacklogStatus}
  * - assignee id, when provided, must be a positive number
@@ -35,6 +39,9 @@ const statusOptions = SPRINT_BACKLOG_STATUS_OPTIONS;
 /** Priority of a Sprint Backlog item, shared with the `/backlogs` create form. */
 const priorityOptions = SPRINT_BACKLOG_PRIORITY_OPTIONS;
 
+/** Fixed work type list (Story / Bug / Task), shared with `/backlogs`. */
+const workTypeOptions = SPRINT_BACKLOG_WORK_TYPE_OPTIONS;
+
 /** New backlog items are active by default; boolean fields would otherwise start as false. */
 const auditFields = (auditableFieldsSchema as FieldSchema[]).map((field) =>
     field.name === "isActive"
@@ -42,7 +49,7 @@ const auditFields = (auditableFieldsSchema as FieldSchema[]).map((field) =>
         : field,
 );
 
-const sprintBacklogSchema: EntitySchema = {
+export const sprintBacklogSchema: EntitySchema = {
     entityName: "sprint-backlog",
     idField: "id",
     fields: [
@@ -58,6 +65,21 @@ const sprintBacklogSchema: EntitySchema = {
             maxLengthMessage: "Tiêu đề Sprint Backlog không vượt quá 200 ký tự",
             filterable: true,
             filterType: "text",
+        },
+        {
+            name: "workType",
+            label: "Work Type",
+            type: "select",
+            sortable: true,
+            options: workTypeOptions,
+            defaultValue: "TASK",
+            required: true,
+            requiredMessage: "Vui lòng chọn loại công việc",
+            filterable: true,
+            filterType: "select",
+            filterOptions: workTypeOptions,
+            helpText:
+                "Story / Bug / Task - danh sách cố định, không thể tạo loại mới",
         },
         {
             name: "description",
