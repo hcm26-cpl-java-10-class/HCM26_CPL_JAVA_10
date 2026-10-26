@@ -40,7 +40,7 @@ public class Course extends BaseEntity {
     String name;
 
     @Column(length = 500)
-    @ImportField(name = "Description", required = true)       // <-- thêm
+    @ImportField(name = "Description")
     String description;
 
     @Column(length = 255)
