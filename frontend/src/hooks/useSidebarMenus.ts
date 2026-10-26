@@ -1,7 +1,7 @@
 import { moduleApi, moduleGroupApi } from "@/api";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { ModuleDTO, ModuleGroupDTO, Pagination } from "@/types";
-import { canAccessByPermission, normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
+import { canAccessByPermission, normalizeRole, ADMIN_ROLE, STUDENT_ROLE } from "@/utils/rbac.utils";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
@@ -268,6 +268,35 @@ export function useActiveModuleGroups(enabled = true) {
                 if (!alreadyExists) {
                     groupedModules[projectGroupId].push(projectModule);
                 }
+            }
+
+            // US-07 / US-08: `/project-template-versions` is rendered as an entity
+            // route, which is module driven - the menu row is what makes the path
+            // reachable at all. The backend `@ResourceMenu` on the snapshot entity
+            // seeds that row, but databases created before the annotation existed
+            // never receive it, so the button is injected here to keep it visible
+            // for ADMIN and STUDENT.
+            const templateVersionUrl = "/project-template-versions";
+            const canBrowseTemplateVersions =
+                normalizeRole(activeRole) === ADMIN_ROLE ||
+                normalizeRole(activeRole) === STUDENT_ROLE ||
+                canAccessByPermission("PROJECT_TEMPLATE_VERSION_READ", hasPermission);
+            const hasTemplateVersionMenu =
+                modules.some((module) => module.url === templateVersionUrl) ||
+                groupedModules[projectGroupId].some((module) => module.url === templateVersionUrl);
+
+            if (canBrowseTemplateVersions && !hasTemplateVersionMenu) {
+                groupedModules[projectGroupId].push({
+                    id: 100006,
+                    moduleGroupId: projectGroupId,
+                    title: "Project Template Versions",
+                    name: "Project Template Versions",
+                    url: templateVersionUrl,
+                    icon: "layers",
+                    description: "Create, version and publish project templates",
+                    displayOrder: 4.5,
+                    isActive: true,
+                });
             }
 
             // Ensure Workspace Candidate menu is available for testing even when backend menu table is not yet updated
