@@ -1,0 +1,97 @@
+export interface TopicContextItem {
+  topicId: number;
+  topicCode: string;
+  topicName: string;
+  sequenceOrder: number;
+  totalHours: number;
+  assignedTrainerId?: number;
+  assignedTrainerName?: string;
+  teachingAssignmentId?: number;
+  defaultRoom?: string;
+}
+
+export interface ScheduleGenerationContextResponse {
+  classId: number;
+  classCode: string;
+  className: string;
+  programId?: number;
+  programName?: string;
+  programVersion?: string;
+  totalHours: number;
+  topics: TopicContextItem[];
+}
+
+export interface SlotTimeDTO {
+  startTime: string; // HH:mm:ss
+  endTime?: string;
+  hoursPerSession: number;
+}
+
+export interface TopicOverrideDTO {
+  topicId: number;
+  trainerId?: number;
+  trainerName?: string;
+  roomId?: number;
+  roomName?: string;
+}
+
+export interface BulkPreviewRequestDTO {
+  startDate: string; // YYYY-MM-DD
+  daysOfWeek: string[]; // ["MONDAY", "WEDNESDAY", "FRIDAY"]
+  slotTime: SlotTimeDTO;
+  defaultRoomId?: number;
+  defaultRoomName?: string;
+  skipHolidays: boolean;
+  checkConflicts: boolean;
+  topicOverrides?: TopicOverrideDTO[];
+}
+
+export interface ConflictDetailDTO {
+  type: string;
+  conflictingClassCode?: string;
+  message: string;
+}
+
+export interface PreviewSessionItemDTO {
+  tempId: string;
+  topicId: number;
+  topicName: string;
+  sessionNumber: number;
+  date: string; // YYYY-MM-DD
+  startTime: string; // ISO
+  endTime: string; // ISO
+  trainerId?: number;
+  trainerName?: string;
+  roomId?: number;
+  roomName?: string;
+  teachingAssignmentId?: number;
+  title: string;
+  status: "VALID" | "CONFLICT";
+  conflictDetails?: ConflictDetailDTO;
+}
+
+export interface BulkPreviewResponseDTO {
+  classId: number;
+  totalSessions: number;
+  totalHoursCalculated: number;
+  hasConflicts: boolean;
+  conflictCount: number;
+  startDate: string;
+  estimatedEndDate: string;
+  skippedHolidaysCount: number;
+  sessions: PreviewSessionItemDTO[];
+  correlationId: string;
+}
+
+export interface BulkSaveSessionsRequestDTO {
+  sessions: PreviewSessionItemDTO[];
+}
+
+export interface BulkSaveSessionsResponseDTO {
+  classId: number;
+  createdCount: number;
+  status: string;
+  message: string;
+  createdAt: string;
+  correlationId: string;
+}

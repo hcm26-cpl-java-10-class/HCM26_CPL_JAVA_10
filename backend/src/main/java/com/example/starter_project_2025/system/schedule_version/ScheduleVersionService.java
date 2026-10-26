@@ -42,6 +42,11 @@ public interface ScheduleVersionService extends BaseCrudService<Long, ScheduleVe
     ScheduleVersionDTO activateVersion(Long versionId, String activationReason);
 
     /**
+     * Cập nhật trạng thái lịch của lớp (ACTIVE / INACTIVE).
+     */
+    ScheduleVersionDTO updateStatus(String classId, ScheduleVersionStatus status);
+
+    /**
      * Kiểm tra xung đột lịch toàn bộ phiên bản (không ghi dữ liệu).
      * Trả về { valid, issues }.
      */

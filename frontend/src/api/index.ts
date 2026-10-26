@@ -11,7 +11,7 @@ export * from "./features/rbac/permission.api";
 export * from "./features/rbac/role.api";
 export * from "./features/rbac/user.api";
 export * from "./features/demo/enrollment.api";
-export * from "./features/demo/schedule_version.api";
+export * from "./features/schedule-generation.api";
 export * from "./features/subject.api";
 export * from "./features/demo/lesson.api";
 export * from "./features/demo/lesson.api";

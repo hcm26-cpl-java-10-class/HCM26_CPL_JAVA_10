@@ -5,6 +5,7 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import {
   AlertCircle,
@@ -110,6 +111,7 @@ export default function ClassSetupPage() {
   const canUpdateAssignment = hasPermission("ASSIGNMENT_UPDATE");
   const canDeleteAssignment = hasPermission("ASSIGNMENT_DELETE");
   const canManageAssignments = canCreateAssignment || canUpdateAssignment;
+  const navigate = useNavigate();
 
   const [classes, setClasses] = useState<SharedClass[]>([]);
   const [trainers, setTrainers] = useState<SharedTrainer[]>([]);
@@ -296,10 +298,19 @@ export default function ClassSetupPage() {
               </p>
             </div>
           </div>
-          <Button variant="outline" onClick={() => void refreshData()} disabled={loadingResources || loadingClass || saving}>
-            <RefreshCw className={`size-4 ${loadingResources ? "animate-spin" : ""}`} aria-hidden="true" />
-            Làm mới dữ liệu
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
+              onClick={() => navigate(`/schedule-generation${selectedClassId ? `?classId=${selectedClassId}` : ""}`)}
+            >
+              <CalendarDays className="size-4" />
+              Tạo lịch theo tuần
+            </Button>
+            <Button variant="outline" onClick={() => void refreshData()} disabled={loadingResources || loadingClass || saving}>
+              <RefreshCw className={`size-4 ${loadingResources ? "animate-spin" : ""}`} aria-hidden="true" />
+              Làm mới dữ liệu
+            </Button>
+          </div>
         </header>
 
         <StatusMessage error={error} notice={notice} />
