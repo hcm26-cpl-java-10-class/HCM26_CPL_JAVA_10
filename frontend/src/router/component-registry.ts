@@ -19,6 +19,8 @@ import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import { MilestoneCreatePage } from "@/pages/management/project/milestone/pages/MilestoneCreatePage";
 import { MilestoneDetailPage } from "@/pages/management/project/milestone/pages/MilestoneDetailPage";
 import { MilestoneListPage } from "@/pages/management/project/milestone/pages/MilestoneListPage";
+import { TeamMilestoneListPage } from "@/pages/management/project/milestone/pages/TeamMilestoneListPage";
+import { TeamMilestoneDetailPage } from "@/pages/management/project/milestone/pages/TeamMilestoneDetailPage";
 import { RubricListPage } from "@/pages/management/project/rubric/pages/RubricListPage";
 import { RubricCreatePage } from "@/pages/management/project/rubric/pages/RubricCreatePage";
 import { RubricDetailPage } from "@/pages/management/project/rubric/pages/RubricDetailPage";
@@ -95,6 +97,8 @@ export const routes: RouteConfig[] = [
     path: "/projects/:projectId/milestones",
     component: MilestoneListPage,
   },
+  { path: "/teams/:teamId/milestones", component: TeamMilestoneListPage, requiredPermission: "MILESTONE_READ" },
+  { path: "/teams/:teamId/milestones/:milestoneId", component: TeamMilestoneDetailPage, requiredPermission: "MILESTONE_READ" },
   {
     path: "/projects/:projectId/milestones/new",
     component: MilestoneCreatePage,
@@ -118,4 +122,3 @@ export const routes: RouteConfig[] = [
   { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true,},
   { path: "/unauthorized", component: Unauthorized, isPublic: true },
 ];
-

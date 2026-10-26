@@ -177,7 +177,7 @@ export function useActiveModuleGroups(enabled = true) {
             }
 
             const milestoneProjectId = import.meta.env.VITE_MILESTONE_MOCK_PROJECT_ID
-                || "11111111-1111-1111-1111-111111111111";
+                || "1";
             const projectWorkspaceModules: SidebarModule[] = [
                 {
                     id: 100002,

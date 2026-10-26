@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { MilestoneDetailRouteState } from "@/types";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, CalendarClock, Check, Clock, Globe2 } from "lucide-react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { MilestoneDetailError } from "../components/MilestoneDetailError";
 import { MilestoneRubricCard } from "../components/MilestoneRubricCard";
 import { MilestoneStatusBadge } from "../components/MilestoneStatusBadge";
@@ -30,6 +30,9 @@ export function MilestoneDetailPage() {
   const { projectId, milestoneId } = useParams<{ projectId: string; milestoneId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const teamIdParam = searchParams.get("teamId");
+  const teamId = teamIdParam ? Number(teamIdParam) : undefined;
   const routeState = location.state as MilestoneDetailRouteState | null;
   const defaultListUrl = projectId ? `/projects/${projectId}/milestones` : "/teacher";
   const returnUrl = routeState?.returnTo?.startsWith(`/projects/${projectId}/milestones`)
@@ -37,8 +40,8 @@ export function MilestoneDetailPage() {
     : defaultListUrl;
 
   const detailQuery = useQuery({
-    queryKey: ["projects", projectId, "milestones", milestoneId],
-    queryFn: () => milestoneApi.getDetail(projectId as string, milestoneId as string),
+    queryKey: ["projects", projectId, "milestones", milestoneId, teamId],
+    queryFn: () => milestoneApi.getDetail(projectId as string, milestoneId as string, teamId),
     enabled: Boolean(projectId && milestoneId),
     retry: false,
   });

@@ -49,6 +49,7 @@ function MilestoneStandardListPage() {
     () => parseMilestoneListParams(new URLSearchParams(serializedSearchParams)),
     [serializedSearchParams],
   );
+  const teamId = listParams.teamId;
 
   const filters = useMemo<MilestoneTableFilters>(() => ({
     status: listParams.status,
@@ -88,6 +89,7 @@ function MilestoneStandardListPage() {
       return milestoneApi.getList(projectId as string, {
         page: pagination.page ?? 0,
         size: pagination.size ?? 20,
+        teamId: listParams.teamId,
         sort: pagination.sort,
         search: normalizedSearch,
         status: nextFilters?.status,
@@ -97,11 +99,11 @@ function MilestoneStandardListPage() {
         deadlineTo,
       });
     },
-  }), [projectId]);
+  }), [projectId, listParams.teamId]);
 
   const table = useProTable(tableApi, milestoneListSchema, {
     enabled: Boolean(projectId),
-    queryKeyParts: [projectId],
+    queryKeyParts: [projectId, listParams.teamId],
     searchDebounceMs: 300,
     retry: false,
     staleTime: 30_000,
@@ -137,12 +139,12 @@ function MilestoneStandardListPage() {
   });
 
   const response = table.pageData as MilestonePageResponse | undefined;
-  const projectActive = response?.project.status === "ACTIVE";
-  const createUrl = `/projects/${projectId}/milestones/new`;
+  const projectActive = response?.project?.status === "ACTIVE";
+  const createUrl = `/projects/${projectId}/milestones/new${teamId ? `?teamId=${teamId}` : ""}`;
   const returnTo = `${location.pathname}${location.search}`;
   const filtered = hasMilestoneQuery(listParams);
   const breadcrumbs = response
-    ? { projects: "Projects", [projectId ?? "project"]: response.project.name, milestones: "Milestones" }
+    ? { projects: "Projects", [projectId ?? "project"]: response.project?.name ?? "Project", milestones: "Milestones" }
     : { projects: "Projects", milestones: "Milestones" };
 
   useEffect(() => {
@@ -170,10 +172,10 @@ function MilestoneStandardListPage() {
 
   const openDetail = (row: MilestoneListItem) => {
     const routeState: MilestoneDetailRouteState = {
-      projectName: response?.project.name,
+      projectName: response?.project?.name,
       returnTo,
     };
-    navigate(`/projects/${projectId}/milestones/${row.id}`, { state: routeState });
+    navigate(`/projects/${projectId}/milestones/${row.id}${teamId ? `?teamId=${teamId}` : ""}`, { state: routeState });
   };
 
   const clearSearchAndFilters = () => {
@@ -185,7 +187,7 @@ function MilestoneStandardListPage() {
       onClick={() => navigate(createUrl)}
       tooltip={projectActive
         ? "Create milestone"
-        : `Milestones cannot be created while the project is ${response?.project.status.toLowerCase() ?? "unavailable"}.`}
+        : `Milestones cannot be created while the project is ${response?.project?.status?.toLowerCase() ?? "unavailable"}.`}
       title="Create"
       variant="default"
       icon={<Plus size={16} />}

@@ -40,10 +40,13 @@ export function WorkspaceCreateDialog({ candidates, initialSelection, onClose, o
       {initialSelection ? <div className="space-y-2">
         <p className="font-medium">{team?.teamName}</p>
         <p className="text-sm text-muted-foreground">{team?.className} · {team?.memberCount ?? 0} members</p>
-      </div> : <select className="h-10 rounded-md border bg-background px-3" value={teamId} onChange={event => setTeamId(Number(event.target.value))}>
+      </div> : <select className="h-10 rounded-md border bg-background px-3" value={teamId} onChange={event => {
+        const nextTeamId = Number(event.target.value);
+        setTeamId(nextTeamId);
+      }}>
         {candidates.map(candidate => <option key={candidate.teamId} value={candidate.teamId}>{candidate.teamName} · {candidate.classCode}</option>)}
       </select>}
-      <p className="text-sm text-muted-foreground">Project template chưa triển khai. Workspace sẽ được khởi tạo tạm thời trực tiếp từ team ACTIVE.</p>
+      <p className="text-sm text-muted-foreground">Workspace này thuộc trực tiếp Team và không cần Project Template.</p>
       {error && <Alert variant="destructive"><AlertCircle /><AlertTitle>Workspace was not created</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
       <DialogFooter>
         <Button variant="outline" disabled={create.isPending} onClick={onClose}>Cancel</Button>
