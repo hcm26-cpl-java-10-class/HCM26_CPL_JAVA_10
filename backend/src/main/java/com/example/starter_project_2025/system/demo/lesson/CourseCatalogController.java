@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/catalog/courses")
@@ -30,6 +31,7 @@ import java.util.List;
 public class CourseCatalogController {
 
     private static final String ADMIN_ROLE = "ROLE_ADMIN";
+    private static final String COURSE_MANAGEMENT_PERMISSION = "COURSE_UPDATE";
 
     private final CourseCatalogService catalogService;
     private final CategoryService categoryService;
@@ -61,10 +63,12 @@ public class CourseCatalogController {
             @PathVariable Long id
     ) {
         Long userId = getUserId(principal);
-        boolean administrator = principal.getAuthorities().stream()
+        var authorities = principal.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
-                .anyMatch(ADMIN_ROLE::equals);
-        return ResponseEntity.ok(catalogService.getDetail(id, userId, administrator));
+                .collect(Collectors.toSet());
+        boolean administrator = authorities.contains(ADMIN_ROLE);
+        boolean canManageCourses = administrator || authorities.contains(COURSE_MANAGEMENT_PERMISSION);
+        return ResponseEntity.ok(catalogService.getDetail(id, userId, canManageCourses, administrator));
     }
 
     private Long getUserId(UserPrincipal principal) {
