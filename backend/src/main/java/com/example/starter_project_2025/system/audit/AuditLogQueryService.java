@@ -21,6 +21,7 @@ public class AuditLogQueryService {
             Long actorId,
             String action,
             String entityType,
+            String result,
             LocalDate fromDate,
             LocalDate toDate,
             Pageable pageable
@@ -40,6 +41,11 @@ public class AuditLogQueryService {
         if (entityType != null && !entityType.isBlank()) {
             spec = spec.and((root, query, cb) ->
                     cb.equal(root.get("entityType"), entityType));
+        }
+
+        if (result != null && !result.isBlank()) {
+            spec = spec.and((root, query, cb) ->
+                    cb.equal(root.get("result"), result));
         }
 
         if (fromDate != null) {

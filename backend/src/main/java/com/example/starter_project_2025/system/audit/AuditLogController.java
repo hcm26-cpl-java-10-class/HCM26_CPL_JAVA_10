@@ -27,6 +27,7 @@ public class AuditLogController {
             @RequestParam(required = false) Long actorId,
             @RequestParam(required = false) String action,
             @RequestParam(required = false) String entityType,
+            @RequestParam(required = false) String result,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             @RequestParam(required = false)
@@ -52,7 +53,7 @@ public class AuditLogController {
 
         return ResponseEntity.ok(
                 queryService.search(
-                        actorId, action, entityType,
+                        actorId, action, entityType, result,
                         fromDate, toDate, pageable
                 )
         );

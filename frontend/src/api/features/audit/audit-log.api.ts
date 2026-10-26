@@ -18,6 +18,7 @@ export interface AuditLogFilter {
     actorId?: number;
     action?: string;
     entityType?: string;
+    result?: string;
     fromDate?: string;
     toDate?: string;
     page?: number;

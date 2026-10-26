@@ -157,7 +157,6 @@ function AuditLogDetails({ log }: { log: AuditLogDTO }) {
 }
 
 
-
 function downloadCsv(logs: AuditLogDTO[]) {
   if (logs.length === 0) return;
 
@@ -218,6 +217,7 @@ export default function AuditLogPage() {
 
     const [actorId, setActorId] = useState("");
     const [entityType, setEntityType] = useState("");
+    const [result, setResult] = useState("");
     const [fromDate, setFromDate] = useState("");
     const [toDate, setToDate] = useState("");
     const [showAdvanced, setShowAdvanced] = useState(false);
@@ -280,6 +280,7 @@ export default function AuditLogPage() {
             actorId: parsedActorId,
             action: action || undefined,
             entityType: entityType.trim() || undefined,
+            result: result || undefined,
             ...dateRange,
         });
     }
@@ -289,6 +290,7 @@ export default function AuditLogPage() {
         setPeriod("7days");
         setActorId("");
         setEntityType("");
+        setResult("");
         setFromDate("");
         setToDate("");
         setAppliedFilters(getDateRange("7days"));
@@ -456,6 +458,26 @@ export default function AuditLogPage() {
                                             placeholder="e.g. USER, ROLE"
                                             className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                                         />
+                                    </div>
+
+                                    <div>
+                                        <label
+                                            htmlFor="audit-result"
+                                            className="mb-1.5 block text-sm font-medium text-slate-700"
+                                        >
+                                            Result
+                                        </label>
+
+                                        <select
+                                            id="audit-result"
+                                            value={result}
+                                            onChange={(event) => setResult(event.target.value)}
+                                            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                        >
+                                            <option value="">All results</option>
+                                            <option value="SUCCESS">Success</option>
+                                            <option value="FAILED">Failed</option>
+                                        </select>
                                     </div>
 
                                     <div>
