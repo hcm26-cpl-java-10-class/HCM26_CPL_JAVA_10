@@ -7,6 +7,7 @@ import NotFoundPage from "@/pages/error/NotFoundPage";
 import { Unauthorized } from "@/pages/error/Unauthorized";
 import WeeklyCalendarPage from "@/pages/management/calendar/WeeklyCalendarPage";
 import ClassSetupPage from "@/pages/management/class-setup";
+import BulkScheduleGenerationPage from "@/pages/management/schedule-generation";
 import { Dashboard } from "@/pages/management/dashboard";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
 import ExamManagementPage from "@/pages/management/exam";
@@ -32,6 +33,15 @@ export const routes: RouteConfig[] = [
     path: "/class-setup",
     component: ClassSetupPage,
     isModuleDriven: true,
+  },
+  {
+    path: "/schedule-generation",
+    component: BulkScheduleGenerationPage,
+    isModuleDriven: true,
+  },
+  {
+    path: "/class-schedule/generation",
+    component: BulkScheduleGenerationPage,
   },
   {
     path: "/calendar/preview",

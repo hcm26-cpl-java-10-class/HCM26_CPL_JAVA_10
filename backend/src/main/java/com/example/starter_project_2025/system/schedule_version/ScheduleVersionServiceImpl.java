@@ -294,6 +294,22 @@ public class ScheduleVersionServiceImpl
         return toResponseDTO(saved, 0, saved.getClonedFromVersionId(), previousActiveId);
     }
 
+    @Override
+    @Transactional
+    public ScheduleVersionDTO updateStatus(String classId, ScheduleVersionStatus status) {
+        ScheduleVersion version = scheduleVersionRepository.findByClassIdAndStatus(classId, ScheduleVersionStatus.ACTIVE)
+                .or(() -> scheduleVersionRepository.findByClassIdAndStatus(classId, ScheduleVersionStatus.INACTIVE))
+                .orElseGet(() -> ScheduleVersion.builder()
+                        .classId(classId)
+                        .versionNumber(1)
+                        .status(status)
+                        .build());
+
+        version.setStatus(status);
+        ScheduleVersion saved = scheduleVersionRepository.save(version);
+        return toResponseDTO(saved, 0, null, null);
+    }
+
     // ─────────────────── Helper: build response DTO ────────────────────────
 
     private ScheduleVersionDTO toResponseDTO(ScheduleVersion entity,
