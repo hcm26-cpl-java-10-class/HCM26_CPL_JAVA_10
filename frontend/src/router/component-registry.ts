@@ -16,6 +16,7 @@ import TeamAllocationClassListPage from "@/pages/management/team-allocation/clas
 import StudentExamList from "@/pages/student/StudentExamList";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import ExploreProjectsPage from "@/pages/student/projects/explore";
+import ProjectTemplateDetailPage from "@/pages/student/projects/detail";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import { MilestoneCreatePage } from "@/pages/management/project/milestone/pages/MilestoneCreatePage";
 import { MilestoneDetailPage } from "@/pages/management/project/milestone/pages/MilestoneDetailPage";
@@ -100,6 +101,12 @@ export const routes: RouteConfig[] = [
     path: "/student/projects/explore",
     component: ExploreProjectsPage,
     isModuleDriven: true,
+  },
+  {
+    // US-09 / AC02: full project brief on its own page (no modal).
+    // Reached from a catalogue card on `/student/projects/explore`.
+    path: "/student/projects/detail/:projectId",
+    component: ProjectTemplateDetailPage,
   },
   { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
   { path: "/project-board", component: ProjectBoardPage },

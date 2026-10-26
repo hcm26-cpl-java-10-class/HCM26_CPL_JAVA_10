@@ -15,7 +15,6 @@ import { CheckCircle2, RotateCcw, Search, SearchX, ShieldCheck } from "lucide-re
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ProjectTemplateCard } from "./ProjectTemplateCard";
-import { ProjectTemplateDetailDialog } from "./ProjectTemplateDetailDialog";
 import {
   DURATION_OPTIONS,
   LEVEL_OPTIONS,
@@ -23,6 +22,7 @@ import {
   type LevelFilter,
   matchesDuration,
 } from "./explore.constants";
+import { setSelectedProjectId, useSelectedProjectId } from "./selection.store";
 
 /**
  * US-09 - Browse Active Project Templates for Class.
@@ -31,14 +31,16 @@ import {
  * The catalogue is mock data because the Project Template module has no
  * backend endpoint yet; the filtering (keyword / domain / level / duration)
  * and the ACTIVE-only rule mirror the future API behaviour.
+ * <p>
+ * Opening a brief navigates to the dedicated detail page
+ * `/student/projects/detail/:projectId` (no modal).
  */
 export default function ExploreProjectsPage() {
   const [search, setSearch] = useState("");
   const [domain, setDomain] = useState("ALL");
   const [level, setLevel] = useState<LevelFilter>("ALL");
   const [duration, setDuration] = useState<DurationFilter>("ALL");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [detailId, setDetailId] = useState<string | null>(null);
+  const selectedId = useSelectedProjectId();
 
   /** ACTIVE templates only - DRAFT/ARCHIVED rows never reach the UI. */
   const templates = useMemo(() => getActiveProjectTemplates(), []);
@@ -73,8 +75,6 @@ export default function ExploreProjectsPage() {
 
   const selectedTemplate =
     templates.find((template) => template.projectId === selectedId) ?? null;
-  const detailTemplate =
-    templates.find((template) => template.projectId === detailId) ?? null;
 
   const hasActiveFilters =
     search.trim().length > 0 ||
@@ -91,8 +91,7 @@ export default function ExploreProjectsPage() {
 
   const handleSelect = (template: ProjectTemplate) => {
     const nextIsNew = selectedId !== template.projectId;
-    setSelectedId(template.projectId);
-    setDetailId(template.projectId);
+    setSelectedProjectId(template.projectId);
 
     if (nextIsNew) {
       toast.success(`"${template.name}" selected for your team.`);
@@ -249,7 +248,6 @@ export default function ExploreProjectsPage() {
                 key={template.projectId}
                 template={template}
                 isSelected={selectedId === template.projectId}
-                onOpenDetail={(item) => setDetailId(item.projectId)}
                 onSelect={handleSelect}
               />
             ))}
@@ -287,16 +285,6 @@ export default function ExploreProjectsPage() {
           scope (tenant / program) before they reach this page.
         </p>
       </div>
-
-      <ProjectTemplateDetailDialog
-        template={detailTemplate}
-        open={Boolean(detailTemplate)}
-        onOpenChange={(open) => {
-          if (!open) setDetailId(null);
-        }}
-        isSelected={Boolean(detailTemplate && selectedId === detailTemplate.projectId)}
-        onSelect={handleSelect}
-      />
     </MainLayout>
   );
 }
