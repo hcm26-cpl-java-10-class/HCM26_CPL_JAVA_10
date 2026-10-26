@@ -33,7 +33,23 @@ interface UseProTableOptions {
     canImport: boolean;
     canExport: boolean;
   }>;
+  state?: {
+    pagination?: Pagination;
+    filters?: any;
+    search?: string;
+  };
+  onPaginationChange?: (pagination: Pagination) => void;
+  onFiltersChange?: (filters: any) => void;
+  onSearchChange?: (search: string) => void;
+  searchDebounceMs?: number;
+  enabled?: boolean;
+  queryKeyParts?: readonly unknown[];
+  queryKeyRoot?: string;
+  retry?: boolean | number;
+  staleTime?: number;
 }
+
+type StateUpdater<T> = T | ((previous: T) => T);
 
 const resolvePermissionResource = (entityName: string) => {
   const normalizedName = (entityName || "").trim().toLowerCase();
@@ -154,10 +170,54 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
   const qc = useQueryClient();
   const { hasPermission } = usePermissions();
 
-  const [pagination, setPagination] = useState<Pagination>(DefaultPagination);
+  const [internalPagination, setInternalPagination] = useState<Pagination>(DefaultPagination);
   const [sortState, setSortState] = useState<SortEntry[]>([]);
-  const [filters, setFilters] = useState<any>({});
-  const [search, setSearch] = useState<string>("");
+  const [internalFilters, setInternalFilters] = useState<any>({});
+  const [internalSearch, setInternalSearch] = useState<string>("");
+  const queryKeyRoot = options.queryKeyRoot ?? schema.entityName;
+  const pagination = options.state?.pagination ?? internalPagination;
+  const filters = options.state?.filters ?? internalFilters;
+  const search = options.state?.search ?? internalSearch;
+  const [querySearch, setQuerySearch] = useState(search);
+
+  const setPagination = (updater: StateUpdater<Pagination>) => {
+    const next = typeof updater === "function" ? updater(pagination) : updater;
+    if (options.onPaginationChange) {
+      options.onPaginationChange(next);
+      return;
+    }
+    setInternalPagination(next);
+  };
+
+  const setFilters = (updater: StateUpdater<any>) => {
+    const next = typeof updater === "function" ? updater(filters) : updater;
+    if (options.onFiltersChange) {
+      options.onFiltersChange(next);
+      return;
+    }
+    setInternalFilters(next);
+  };
+
+  const setSearch = (next: string) => {
+    if (options.onSearchChange) {
+      options.onSearchChange(next);
+      return;
+    }
+    setInternalSearch(next);
+  };
+
+  useEffect(() => {
+    if (!options.searchDebounceMs) {
+      setQuerySearch(search);
+      return;
+    }
+
+    const timeout = window.setTimeout(
+      () => setQuerySearch(search),
+      options.searchDebounceMs,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [options.searchDebounceMs, search]);
 
   const [selected, setSelected] = useState<any[]>([]);
 
@@ -294,27 +354,30 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
   }, [relationFields, relationQueries, hasAuditUserFields, auditUsersQuery.data, schema.fields]);
 
   const queryKey = [
-    schema.entityName,
+    queryKeyRoot,
+    ...(options.queryKeyParts ?? []),
     pagination.page,
     pagination.size,
     currentSort,
     filters,
-    search,
+    querySearch,
   ];
 
   const query = useQuery({
     queryKey,
-    enabled: permission.canRead,
+    enabled: permission.canRead && options.enabled !== false,
     queryFn: () =>
       api.getPage(
         {
           ...pagination,
           sort: currentSort.length > 0 ? currentSort : undefined,
         },
-        search,
+        querySearch,
         filters,
       ),
     placeholderData: keepPreviousData,
+    retry: options.retry,
+    staleTime: options.staleTime,
   });
 
   const rawData = query.data?.content ?? [];
@@ -499,7 +562,7 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
   );
 
   const invalidate = () =>
-    qc.invalidateQueries({ queryKey: [schema.entityName] });
+    qc.invalidateQueries({ queryKey: [queryKeyRoot] });
 
   const handleMutationError = (error: unknown) => {
     if (!axios.isAxiosError(error)) return;
@@ -745,10 +808,13 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
   return {
     schema: resolvedSchema,
 
-    data,
+    data: query.isError ? [] : data,
     total: query.data?.totalElements ?? 0,
+    pageData: query.data,
     loading: query.isLoading,
     isFetching: query.isFetching,
+    error: query.error,
+    refetch: query.refetch,
 
     page: pagination.page,
     size: pagination.size,
@@ -756,7 +822,7 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
     toggleSort,
     clearSort,
     setPage: (page: number) => setPagination((prev) => ({ ...prev, page })),
-    setSize: (size: number) => setPagination((prev) => ({ ...prev, size })),
+    setSize: (size: number) => setPagination((prev) => ({ ...prev, page: 0, size })),
 
     filters,
     setFilters,

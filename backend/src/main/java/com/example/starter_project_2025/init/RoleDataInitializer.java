@@ -49,7 +49,7 @@ public class RoleDataInitializer implements CommandLineRunner {
 
         upsertRole(
                 STUDENT_ROLE,
-                "Student with read-only access to books and courses",
+                "Student with course access",
                 findPermissions(
                         "MENU_READ",
                         "BOOK_READ",
@@ -57,13 +57,16 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "ENROLLMENT_READ",
                         "ENROLLMENT_CREATE",
                         "LESSON_READ",
-                        "EXAM_TAKE"
+                        "EXAM_TAKE",
+                        "WORKSPACE_READ", "WORKSPACE_MEMBER_READ",
+                        "MILESTONE_READ", "SPRINT_READ", "TASK_WRITE", "ARTIFACT_READ", "ARTIFACT_SUBMIT",
+                        "FEEDBACK_READ", "WORKSPACE_ACTIVITY_READ"
                 )
         );
 
         upsertRole(
                 TEACHER_ROLE,
-                "Teacher with book, course and exam management permissions",
+                "Teacher with learning resource management permissions",
                 findPermissions(
                         "MENU_READ",
                         "BOOK_CREATE", "BOOK_READ", "BOOK_UPDATE", "BOOK_DELETE",
@@ -71,10 +74,22 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "LESSON_CREATE", "LESSON_READ", "LESSON_UPDATE", "LESSON_DELETE",
                         "EXAM_CREATE", "EXAM_READ", "EXAM_UPDATE", "EXAM_DELETE",
                         "QUESTION_CREATE", "QUESTION_READ", "QUESTION_UPDATE", "QUESTION_DELETE",
-                        "INVITATION_CREATE", "INVITATION_READ", "INVITATION_UPDATE", "INVITATION_DELETE"
+                        "INVITATION_CREATE", "INVITATION_READ", "INVITATION_UPDATE", "INVITATION_DELETE",
+                        "WORKSPACE_READ", "WORKSPACE_CREATE", "WORKSPACE_MEMBER_READ", "TEAM_READ", "TEAM_UPDATE",
+                        "MILESTONE_READ", "MILESTONE_WRITE", "SPRINT_READ", "SPRINT_WRITE",
+                        "ARTIFACT_READ", "ARTIFACT_WRITE", "ARTIFACT_REVIEW", "FEEDBACK_READ", "FEEDBACK_WRITE",
+                        "WORKSPACE_ACTIVITY_READ"
                 )
         );
 
+        // Grant an existing PM role; do not create extra roles/accounts or expand data scope.
+        roleRepository.findByName("PM").ifPresent(pm -> {
+            pm.getPermissions().addAll(findPermissions("WORKSPACE_READ", "WORKSPACE_MEMBER_READ",
+                    "MILESTONE_READ", "MILESTONE_WRITE", "SPRINT_READ", "SPRINT_WRITE",
+                    "ARTIFACT_READ", "ARTIFACT_WRITE", "ARTIFACT_SUBMIT", "ARTIFACT_REVIEW",
+                    "FEEDBACK_READ", "FEEDBACK_WRITE", "WORKSPACE_ACTIVITY_READ"));
+            roleRepository.save(pm);
+        });
         ensureAllocationPermissionForRole(
                 "PROGRAM_MANAGER", "Program manager with team allocation access");
         ensureAllocationPermissionForRole(
@@ -113,7 +128,6 @@ public class RoleDataInitializer implements CommandLineRunner {
                 .name(name).resource(resource).action(action)
                 .description("Manually defined permission").build());
     }
-
     private void ensureAllocationPermissionForRole(String roleName, String description) {
         Permission allocationPermission = permissionRepository.findByName("PEO_TEAM_ALLOCATE")
                 .orElseThrow(() -> new IllegalStateException(

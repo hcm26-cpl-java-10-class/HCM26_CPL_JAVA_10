@@ -8,6 +8,9 @@ import com.example.starter_project_2025.system.project.IdempotencyKeyConflictExc
 import com.example.starter_project_2025.system.project.IdempotencyRequestInProgressException;
 import com.example.starter_project_2025.system.project.TeamCapacityExceededException;
 import com.example.starter_project_2025.system.project.TeamErrorResponse;
+import com.example.starter_project_2025.system.project.TeamRoleAssignmentErrorResponse;
+import com.example.starter_project_2025.system.project.TeamRoleAssignmentException;
+import com.example.starter_project_2025.system.project.TeamVersionConflictException;
 import com.example.starter_project_2025.system.project.InvalidMentorForClassException;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
@@ -31,6 +34,32 @@ import java.util.Map;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(TeamRoleAssignmentException.class)
+    public ResponseEntity<TeamRoleAssignmentErrorResponse> handleTeamRoleAssignment(
+            TeamRoleAssignmentException ex
+    ) {
+        TeamRoleAssignmentErrorResponse response = new TeamRoleAssignmentErrorResponse(
+                HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                "ERR_INVALID_TEAM_MEMBER_ROLES",
+                ex.getMessage(),
+                ex.getInvalidMemberIds(),
+                LocalDateTime.now());
+        return ResponseEntity.unprocessableEntity().body(response);
+    }
+
+    @ExceptionHandler(TeamVersionConflictException.class)
+    public ResponseEntity<TeamErrorResponse> handleTeamVersionConflict(
+            TeamVersionConflictException ex
+    ) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new TeamErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                "ERR_TEAM_VERSION_CONFLICT",
+                ex.getMessage(),
+                null,
+                null,
+                LocalDateTime.now()));
+    }
 
     @ExceptionHandler(AllocationSessionConflictException.class)
     public ResponseEntity<TeamErrorResponse> handleAllocationSessionConflict(
@@ -105,6 +134,13 @@ public class GlobalExceptionHandler {
                 LocalDateTime.now()
         );
         return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResourceFound(
+            org.springframework.web.servlet.resource.NoResourceFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(
+                new ErrorResponse(HttpStatus.NOT_FOUND.value(), "Resource was not found", LocalDateTime.now()));
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
@@ -235,6 +271,15 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgumentException(IllegalArgumentException ex) {
+        ErrorResponse error = new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                ex.getMessage(),
+                LocalDateTime.now());
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<ErrorResponse> handleRuntimeException(RuntimeException ex) {
         ErrorResponse error = new ErrorResponse(
                 HttpStatus.BAD_REQUEST.value(),
                 ex.getMessage(),

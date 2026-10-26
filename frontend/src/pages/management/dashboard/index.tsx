@@ -1,10 +1,13 @@
-import { KeyRound, ListChevronsUpDown, Menu, Users } from "lucide-react";
+import { FolderPlus, KeyRound, ListChevronsUpDown, Menu, Users } from "lucide-react";
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { dashboardApi, type DashboardStats } from "../../../api/features/dashboard.api";
 import { MainLayout } from "../../../components/layout/MainLayout";
 import { usePermissions } from "@/hooks/usePermissions";
+import { Button } from "@/components/ui/button";
 
 export const Dashboard: React.FC = () => {
+    const navigate = useNavigate();
     const [stats, setStats] = useState<DashboardStats | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const { effectivePermissions } = usePermissions();
@@ -26,6 +29,19 @@ export const Dashboard: React.FC = () => {
 
     return (
         <MainLayout>
+            <div className="mb-6 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-5 shadow-sm">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div>
+                        <p className="text-sm font-medium text-blue-800">Quick Actions</p>
+                        <h2 className="mt-1 text-xl font-semibold text-slate-900">Workspace</h2>
+                    </div>
+                    <Button onClick={() => navigate("/management/workspaces/candidates")} className="gap-2">
+                        <FolderPlus className="h-4 w-4" />
+                        Open Workspace
+                    </Button>
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-4">
                 <div className="bg-white rounded-lg shadow p-6">
                     <div className="flex items-center justify-between">

@@ -1,55 +1,73 @@
-import type { BaseDTO, BaseFilter } from "@/types/common/base";
+export type TaskPriority = "HIGH" | "MEDIUM" | "LOW";
 
-/**
- * Backlog item lifecycle (UFR-PRJ-003-02):
- * Backlog -> Sprint Backlog -> In Progress -> Done.
- */
-export type TaskStatus = "BACKLOG" | "SPRINT_BACKLOG" | "IN_PROGRESS" | "DONE";
+export type TaskStatus = "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE" | "BLOCKED";
 
-export type TaskPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
-
-/**
- * Backlog item, served by the temporary `backlog_temp` backend module.
- * Reference ids (project, sprint, milestone, assignee) are plain numbers
- * because those modules are not implemented yet.
- */
-export interface TaskDTO extends BaseDTO {
-  projectId?: number;
-  sprintId?: number | null;
-  milestoneId?: number | null;
-  assigneeProjectMemberId?: number | null;
-  title?: string;
-  description?: string;
-  estimatedHours?: number | null;
-  priority?: TaskPriority;
-  status?: TaskStatus;
+export interface TaskPayload {
+  projectId: string;
+  sprintId: string | null;
+  milestoneId: string | null;
+  assigneeProjectMemberId: string | null;
+  title: string;
+  description: string | null;
+  estimatedHours: number | null;
+  deadline?: string | null;
+  priority: TaskPriority;
+  tags: string[];
+  version?: number;
 }
 
-export interface TaskFilter extends BaseFilter {
-  projectId?: number;
-  sprintId?: number;
-  milestoneId?: number;
-  assigneeProjectMemberId?: number;
-  priority?: TaskPriority;
-  status?: TaskStatus;
-  title?: string;
-  minEstimatedHours?: number;
-  maxEstimatedHours?: number;
-}
-
-/**
- * Audit entry of a backlog item mutation (actor, timestamp, before/after
- * state and correlation id).
- */
-export interface TaskAuditLog {
-  id: number;
-  taskId: number;
-  projectId?: number | null;
-  action: string;
-  actorId?: number | null;
-  actorEmail?: string | null;
-  correlationId?: string | null;
-  beforeState?: string | null;
-  afterState?: string | null;
+export interface TaskDTO extends TaskPayload {
+  id: string;
+  status: TaskStatus;
+  version: number;
+  isActive: boolean;
+  createdBy: number;
+  updatedBy: number;
   createdAt: string;
+  updatedAt: string;
+  predecessorTaskIds: string[];
+}
+
+export interface TaskFilter {
+  projectId: string;
+  priority?: TaskPriority;
+  status?: TaskStatus;
+  excludeIds?: string[];
+}
+
+export interface TaskDependencyDTO {
+  taskId: string;
+  title: string;
+  status: TaskStatus;
+  dependencyType: string;
+  createdAt: string;
+}
+
+export interface TaskWorkflowDTO {
+  task: TaskDTO;
+  allowedTransitions: TaskStatus[];
+  predecessors: TaskDependencyDTO[];
+  successors: TaskDependencyDTO[];
+  editable: boolean;
+  deletable: boolean;
+}
+
+export interface TaskActivityDTO {
+  id: string;
+  action: string;
+  actorId: number;
+  actorName: string;
+  occurredAt: string;
+  before: TaskDTO | null;
+  after: TaskDTO;
+}
+
+export interface TaskStatusPayload {
+  status: TaskStatus;
+  version: number;
+}
+
+export interface TaskDependencyPayload {
+  predecessorTaskId: string;
+  version: number;
 }

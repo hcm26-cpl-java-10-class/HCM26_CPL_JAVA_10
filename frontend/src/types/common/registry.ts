@@ -59,11 +59,18 @@ export interface EntityConfig {
      */
     browseModeActions?: boolean;
     /**
+<<<<<<< HEAD
      * Extra entity-specific row buttons rendered after the default
      * view / edit / delete actions (e.g. "Clone template" on the
      * project-template-version table).
      */
     extraRowActions?: (row: any) => ReactNode;
+=======
+     * Admin-only shortcut rendered in the table toolbar that navigates to the
+     * student backlog view (e.g. `/backlogs`). Ignored for non-admin roles.
+     */
+    backlogShortcutPath?: string;
+>>>>>>> feature/project
 }
 
 const registry: EntityConfig[] = [];

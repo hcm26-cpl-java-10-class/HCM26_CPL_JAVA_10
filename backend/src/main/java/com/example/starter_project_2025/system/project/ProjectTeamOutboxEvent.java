@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.project;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
+import java.time.LocalDateTime;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
@@ -34,4 +35,7 @@ public class ProjectTeamOutboxEvent extends BaseEntity {
 
     @Column(nullable = false, length = 20)
     String status;
+
+    @Column(name = "published_at")
+    LocalDateTime publishedAt;
 }

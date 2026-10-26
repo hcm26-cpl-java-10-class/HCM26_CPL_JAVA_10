@@ -1,6 +1,8 @@
 package com.example.starter_project_2025.system.project;
 
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
+import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -12,13 +14,31 @@ import java.util.List;
 public interface ProjectMemberRepository
         extends BaseCrudRepository<ProjectMember, Long> {
 
+    @EntityGraph(attributePaths = {"classMember", "classMember.user"})
+    List<ProjectMember> findAllByTeam_IdAndClassMember_StatusOrderByIdAsc(
+            Long teamId,
+            ClassMemberStatus status);
+
+    @EntityGraph(attributePaths = {"classMember", "classMember.user"})
     List<ProjectMember> findAllByTeam_IdOrderByIdAsc(Long teamId);
+
+    @EntityGraph(attributePaths = {"team", "classMember", "classMember.user"})
+    List<ProjectMember> findAllByIdIn(Collection<Long> ids);
 
     long countByTeam_Id(Long teamId);
 
     void deleteAllByTeam_Id(Long teamId);
 
     boolean existsByTeam_IdAndClassMember_Id(Long teamId, Long memberId);
+
+    boolean existsByTeam_IdAndClassMember_User_IdAndClassMember_Status(
+            Long teamId,
+            Long userId,
+            com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus status);
+
+    java.util.Optional<ProjectMember> findByTeam_IdAndClassMember_User_Id(Long teamId, Long userId);
+
+    void deleteByTeam_IdAndClassMember_Id(Long teamId, Long memberId);
 
     @Query("""
         select pm

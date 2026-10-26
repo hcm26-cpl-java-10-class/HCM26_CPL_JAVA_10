@@ -75,22 +75,12 @@ export default function TeamAllocationClassListPage() {
 
   return (
     <MainLayout pathName={{ "team-allocation": "Phân nhóm dự án" }}>
-      <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Lớp học</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Chọn lớp để tạo phiên và phân học viên vào các nhóm dự án.
-          </p>
-        </div>
-        <div className="min-h-[480px] flex-1">
-          <ProTable
-            table={table}
-            hideCreate
-            hideActions
-            onRowClick={openClass}
-          />
-        </div>
-      </div>
+      <ProTable
+        table={table}
+        hideCreate
+        hideActions
+        onRowClick={openClass}
+      />
     </MainLayout>
   );
 }

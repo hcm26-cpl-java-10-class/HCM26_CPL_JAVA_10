@@ -10,24 +10,28 @@ export type ViewMode = "table" | "card";
 interface ToolbarProps {
   table: any;
   headerActions?: React.ReactNode;
+  extraHeaderActions?: React.ReactNode;
   browseActions?: React.ReactNode;
   viewMode?: ViewMode;
   onViewModeChange?: (mode: ViewMode) => void;
   showViewModeToggle?: boolean;
   showActions?: boolean;
   showCardColumnToggle?: boolean;
+  compact?: boolean;
   hideCreate?: boolean;
 }
 
 export function Toolbar({
   table,
   headerActions,
+  extraHeaderActions,
   browseActions,
   viewMode = "table",
   onViewModeChange,
   showViewModeToggle = true,
   showActions = true,
   showCardColumnToggle = true,
+  compact = false,
   hideCreate = false,
 }: ToolbarProps) {
   const { schema } = table;
@@ -48,6 +52,10 @@ export function Toolbar({
     <ToolbarActions
       table={table}
       headerActions={headerActions}
+<<<<<<< HEAD
+=======
+      extraActions={extraHeaderActions}
+>>>>>>> feature/project
       hideCreate={hideCreate}
     />
   ) : browseActions ? (
@@ -56,14 +64,21 @@ export function Toolbar({
 
   return (
     <div
-      className={`grid ${rightSlot ? "lg:grid-cols-[1fr_auto]" : "grid-cols-1"} items-center gap-2 w-full`}
+      className={`grid ${rightSlot ? (compact ? "sm:grid-cols-[1fr_auto]" : "lg:grid-cols-[1fr_auto]") : "grid-cols-1"} items-center gap-2 w-full`}
     >
-      <div className="flex flex-col lg:flex-row justify-start items-center gap-2">
+      <div
+        className={
+          compact
+            ? "flex min-w-0 flex-wrap items-center gap-2"
+            : "flex flex-col lg:flex-row justify-start items-center gap-2"
+        }
+      >
         {viewMode === "card" && showCardColumnToggle && (
           <ColumnToggle
             schema={schema}
             columnVisibility={table.columnVisibility}
             toggleFieldVisibility={table.toggleFieldVisibility}
+            compact={compact}
           />
         )}
 
@@ -73,7 +88,7 @@ export function Toolbar({
           activeFilterCount={activeFilterCount}
         />
 
-        <SearchInput search={table.search} onSearchChange={table.setSearch} />
+        <SearchInput search={table.search} onSearchChange={table.setSearch} compact={compact} />
 
         {hasSorts && (
           <ActionButton

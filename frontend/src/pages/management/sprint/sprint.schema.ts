@@ -11,6 +11,23 @@ export const sprintStatusOptions = [
   { label: "Cancelled", value: "CANCELLED" },
 ];
 
+/**
+ * A new sprint always starts as Planned, so the create form only offers that
+ * status (the backend enforces the same rule).
+ */
+export const sprintCreateStatusOptions = sprintStatusOptions.filter(
+  (option) => option.value === "PLANNED",
+);
+
+/**
+ * Editing can only move the sprint forward to Active or Cancelled (Completed is
+ * reached with "Complete sprint"). The current status is always kept in the
+ * list by the form modal, so a Planned sprint still shows "Planned".
+ */
+export const sprintEditStatusOptions = sprintStatusOptions.filter((option) =>
+  ["ACTIVE", "CANCELLED"].includes(option.value),
+);
+
 /** New sprints are active by default; boolean fields would otherwise start as false. */
 const auditFields = (auditableFieldsSchema as FieldSchema[]).map((field) =>
   field.name === "isActive"
@@ -72,9 +89,13 @@ export const sprintSchema: EntitySchema = {
       type: "select",
       sortable: true,
       options: sprintStatusOptions,
+      createOptions: sprintCreateStatusOptions,
+      editOptions: sprintEditStatusOptions,
       defaultValue: "PLANNED",
       required: true,
       requiredMessage: "Vui lòng chọn trạng thái Sprint",
+      helpText:
+        "Sprint mới luôn ở trạng thái Planned. Khi cập nhật, chỉ có thể chuyển sang Active hoặc Cancelled.",
       filterable: true,
       filterType: "select",
       filterOptions: sprintStatusOptions,

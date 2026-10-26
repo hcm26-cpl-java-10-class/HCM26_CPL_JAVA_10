@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/hooks/usePermissions";
 import { formatRoleLabel } from "@/utils/rbac.utils";
 import { motion } from "motion/react";
-import { ArrowRight, BookOpen, ClipboardCheck, GraduationCap, PenSquare } from "lucide-react";
+import { ArrowRight, BookOpen, ClipboardCheck, FileCheck2, Flag, GraduationCap, PenSquare } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const teacherCapabilities = [
@@ -32,6 +32,7 @@ export default function TeacherLandingPage() {
   const { user, activeRole, hasPermission } = usePermissions();
 
   const displayName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email;
+  const mockProjectId = import.meta.env.VITE_MILESTONE_MOCK_PROJECT_ID || "11111111-1111-1111-1111-111111111111";
 
   return (
     <MainLayout>
@@ -68,6 +69,14 @@ export default function TeacherLandingPage() {
             <Link to="/books">
               <BookOpen className="mr-2 size-4" /> Manage books
             </Link>
+          </Button>
+          <Button asChild variant="outline" className="mt-3 border-slate-300 bg-white/80 sm:ml-3 sm:mt-0">
+            <Link to={`/projects/${mockProjectId}/milestones`}>
+              <Flag className="mr-2 size-4" /> Manage milestones
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="mt-3 border-slate-300 bg-white/80 sm:ml-3 sm:mt-0">
+            <Link to="/rubrics"><FileCheck2 className="mr-2 size-4" /> Manage rubrics</Link>
           </Button>
         </div>
       </motion.section>

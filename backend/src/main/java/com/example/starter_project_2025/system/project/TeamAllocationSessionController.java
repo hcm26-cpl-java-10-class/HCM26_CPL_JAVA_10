@@ -30,6 +30,7 @@ public class TeamAllocationSessionController {
     private final ProjectTeamDraftService draftService;
     private final ProjectTeamMembershipService membershipService;
     private final ProjectTeamMentorService mentorService;
+    private final ProjectTeamRoleService roleService;
 
     @GetMapping("/mentors")
     @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
@@ -41,7 +42,7 @@ public class TeamAllocationSessionController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('PEO_TEAM_ALLOCATE')")
+    @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
     public java.util.List<AllocationSessionResponse> getSessions(
             @PathVariable Long classId,
             Authentication authentication
@@ -96,7 +97,7 @@ public class TeamAllocationSessionController {
     }
 
     @GetMapping("/{sessionId}/teams")
-    @PreAuthorize("hasAuthority('PEO_TEAM_ALLOCATE')")
+    @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
     public BatchSaveDraftResponse getTeams(
             @PathVariable Long classId,
             @PathVariable Long sessionId,
@@ -133,8 +134,22 @@ public class TeamAllocationSessionController {
                 classId, sessionId, teamId, request, authentication);
     }
 
+    @PutMapping("/{sessionId}/teams/{teamId}/roles")
+    @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void updateTeamRoles(
+            @PathVariable Long classId,
+            @PathVariable Long sessionId,
+            @PathVariable Long teamId,
+            @RequestBody UpdateTeamRolesRequest request,
+            Authentication authentication
+    ) {
+        roleService.updateRoles(
+                classId, sessionId, teamId, request, authentication);
+    }
+
     @PostMapping("/{sessionId}/teams/{teamId}/members")
-    @PreAuthorize("hasAuthority('PEO_TEAM_ALLOCATE')")
+    @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void addActiveTeamMember(
             @PathVariable Long classId,
@@ -147,8 +162,23 @@ public class TeamAllocationSessionController {
                 classId, sessionId, teamId, request, authentication);
     }
 
+    @PostMapping("/{sessionId}/teams/{teamId}/members/{memberId}/transfer")
+    @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void transferActiveTeamMember(
+            @PathVariable Long classId,
+            @PathVariable Long sessionId,
+            @PathVariable Long teamId,
+            @PathVariable Long memberId,
+            @Valid @RequestBody TransferActiveTeamMemberRequest request,
+            Authentication authentication
+    ) {
+        membershipService.transferMember(
+                classId, sessionId, teamId, memberId, request, authentication);
+    }
+
     @DeleteMapping("/{sessionId}/teams/{teamId}/members/{memberId}")
-    @PreAuthorize("hasAuthority('PEO_TEAM_ALLOCATE')")
+    @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void removeActiveTeamMember(
             @PathVariable Long classId,
@@ -163,7 +193,7 @@ public class TeamAllocationSessionController {
     }
 
     @PostMapping("/{sessionId}/teams/{teamId}/members/{memberId}/swap")
-    @PreAuthorize("hasAuthority('PEO_TEAM_ALLOCATE')")
+    @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void swapActiveTeamMember(
             @PathVariable Long classId,

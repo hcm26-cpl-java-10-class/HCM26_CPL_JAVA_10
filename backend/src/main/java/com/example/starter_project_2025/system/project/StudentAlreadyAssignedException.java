@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.project;
 
 import lombok.Getter;
+import java.util.List;
 
 @Getter
 public class StudentAlreadyAssignedException extends RuntimeException {
@@ -28,5 +29,17 @@ public class StudentAlreadyAssignedException extends RuntimeException {
         this.memberId = memberId;
         this.conflictingTeamId = conflictingTeamId;
         this.memberName = memberName;
+    }
+
+    public StudentAlreadyAssignedException(
+            List<Long> memberIds,
+            Long conflictingTeamId,
+            List<String> memberNames
+    ) {
+        super("Các học viên " + String.join(", ", memberNames)
+                + " đã được xếp vào nhóm khác, vui lòng tải lại danh sách");
+        this.memberId = memberIds.isEmpty() ? null : memberIds.get(0);
+        this.conflictingTeamId = conflictingTeamId;
+        this.memberName = memberNames.isEmpty() ? null : String.join(", ", memberNames);
     }
 }

@@ -1,0 +1,542 @@
+{
+  "info": {
+    "name": "US-PRJ-001-02 - Standard accounts acceptance",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Use the existing admin/teacher/student accounts. Run the initial checks on Team Pixel before changing its roster or permissions. See MANUAL_TEST_AC01_AC10.md for the required UI steps, data setup and cleanup. No workspace is created by this collection."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "teacherToken",
+      "value": ""
+    },
+    {
+      "key": "studentToken",
+      "value": ""
+    },
+    {
+      "key": "workspaceId",
+      "value": ""
+    },
+    {
+      "key": "teamId",
+      "value": ""
+    },
+    {
+      "key": "projectId",
+      "value": ""
+    },
+    {
+      "key": "studentUserId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Login admin",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/login",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"password123\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Login returns 200\", () => pm.response.to.have.status(200));",
+              "if(pm.response.code === 200) {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.accessToken).to.be.a(\"string\").and.not.empty;",
+              "  pm.collectionVariables.set(\"adminToken\", data.accessToken.trim());",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 - Login teacher",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/login",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"teacher@example.com\",\n  \"password\": \"password123\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Login returns 200\", () => pm.response.to.have.status(200));",
+              "if(pm.response.code === 200) {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.accessToken).to.be.a(\"string\").and.not.empty;",
+              "  pm.collectionVariables.set(\"teacherToken\", data.accessToken.trim());",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 - Login student",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/login",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"student@example.com\",\n  \"password\": \"password123\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Login returns 200\", () => pm.response.to.have.status(200));",
+              "if(pm.response.code === 200) {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.accessToken).to.be.a(\"string\").and.not.empty;",
+              "  pm.collectionVariables.set(\"studentToken\", data.accessToken.trim());",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Discover Team Pixel IDs",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/workspaces/candidates",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{teacherToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Candidates returns 200\", () => pm.response.to.have.status(200));",
+              "const rows = pm.response.json();",
+              "const pixel = rows.find(row => row.teamCode === \"WS-DEMO-PIXEL\");",
+              "pm.test(\"Pixel has an existing workspace\", () => {",
+              "  pm.expect(pixel, \"Restart backend to prepare existing accounts and fixtures\").to.exist;",
+              "  pm.expect(pixel.workspaceId).to.be.a(\"number\");",
+              "});",
+              "if(pixel) {",
+              "  pm.collectionVariables.set(\"workspaceId\", pixel.workspaceId);",
+              "  pm.collectionVariables.set(\"teamId\", pixel.teamId);",
+              "  pm.collectionVariables.set(\"projectId\", pixel.projectId);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - AC01 Overview - teacher",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/workspaces/{{workspaceId}}",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{teacherToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Overview returns 200\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.test(\"Correct workspace/project/team\", () => {",
+              " pm.expect(String(data.id)).to.equal(String(pm.collectionVariables.get(\"workspaceId\")));",
+              " pm.expect(String(data.teamId)).to.equal(String(pm.collectionVariables.get(\"teamId\")));",
+              " pm.expect(String(data.projectId)).to.equal(String(pm.collectionVariables.get(\"projectId\")));",
+              " pm.expect(data).not.to.have.property(\"members\");",
+              "});",
+              "pm.collectionVariables.set(\"activeMemberCount\", data.member_count);",
+              "pm.collectionVariables.set(\"fixedSnapshot\", JSON.stringify(data.topic_snapshot));",
+              "",
+              "function inspect(value) {",
+              "  if (!value || typeof value !== \"object\") return;",
+              "  for (const [key, item] of Object.entries(value)) {",
+              "    pm.expect([\"password\",\"passwordHash\",\"password_hash\",\"token\",\"accessToken\",\"refreshToken\",\"email\",\"phone\",\"draftScores\",\"unreleasedFeedback\"]).not.to.include(key);",
+              "    inspect(item);",
+              "  }",
+              "}",
+              "pm.test(\"No restricted fields\", () => inspect(pm.response.json()));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - AC03 AC04 Members - teacher",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/workspaces/{{workspaceId}}/members",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{teacherToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Members returns 200\", () => pm.response.to.have.status(200));",
+              "const rows = pm.response.json();",
+              "pm.test(\"Exactly four approved fields and active roster\", () => {",
+              " pm.expect(rows).to.be.an(\"array\");",
+              " for (const member of rows) {",
+              "  pm.expect(Object.keys(member).sort()).to.eql([\"display_name\",\"project_role\",\"status\",\"user_code\"]);",
+              "  pm.expect(member.status).to.equal(\"ACTIVE\");",
+              "  pm.expect([\"UNASSIGNED\",\"TEAM_LEADER\",\"DEV\",\"FE_DEV\",\"BE_DEV\",\"BA\",\"QA\",\"TESTER\"]).to.include(member.project_role);",
+              " }",
+              " pm.expect(rows.length).to.equal(Number(pm.collectionVariables.get(\"activeMemberCount\")));",
+              " const codes = rows.map(row => row.user_code).filter(Boolean);",
+              " pm.expect(new Set(codes).size).to.equal(codes.length);",
+              "});",
+              "",
+              "function inspect(value) {",
+              "  if (!value || typeof value !== \"object\") return;",
+              "  for (const [key, item] of Object.entries(value)) {",
+              "    pm.expect([\"password\",\"passwordHash\",\"password_hash\",\"token\",\"accessToken\",\"refreshToken\",\"email\",\"phone\",\"draftScores\",\"unreleasedFeedback\"]).not.to.include(key);",
+              "    inspect(item);",
+              "  }",
+              "}",
+              "pm.test(\"No restricted fields\", () => inspect(pm.response.json()));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - AC08 Overview - student",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/workspaces/{{workspaceId}}",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{studentToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Student Overview returns 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Roster is not embedded\", () => pm.expect(pm.response.json()).not.to.have.property(\"members\"));",
+              "",
+              "function inspect(value) {",
+              "  if (!value || typeof value !== \"object\") return;",
+              "  for (const [key, item] of Object.entries(value)) {",
+              "    pm.expect([\"password\",\"passwordHash\",\"password_hash\",\"token\",\"accessToken\",\"refreshToken\",\"email\",\"phone\",\"draftScores\",\"unreleasedFeedback\"]).not.to.include(key);",
+              "    inspect(item);",
+              "  }",
+              "}",
+              "pm.test(\"No restricted fields\", () => inspect(pm.response.json()));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - AC03 AC08 Members - student",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/workspaces/{{workspaceId}}/members",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{studentToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Members returns 200\", () => pm.response.to.have.status(200));",
+              "const rows = pm.response.json();",
+              "pm.test(\"Exactly four approved fields and active roster\", () => {",
+              " pm.expect(rows).to.be.an(\"array\");",
+              " for (const member of rows) {",
+              "  pm.expect(Object.keys(member).sort()).to.eql([\"display_name\",\"project_role\",\"status\",\"user_code\"]);",
+              "  pm.expect(member.status).to.equal(\"ACTIVE\");",
+              "  pm.expect([\"UNASSIGNED\",\"TEAM_LEADER\",\"DEV\",\"FE_DEV\",\"BE_DEV\",\"BA\",\"QA\",\"TESTER\"]).to.include(member.project_role);",
+              " }",
+              " pm.expect(rows.length).to.equal(Number(pm.collectionVariables.get(\"activeMemberCount\")));",
+              " const codes = rows.map(row => row.user_code).filter(Boolean);",
+              " pm.expect(new Set(codes).size).to.equal(codes.length);",
+              "});",
+              "",
+              "function inspect(value) {",
+              "  if (!value || typeof value !== \"object\") return;",
+              "  for (const [key, item] of Object.entries(value)) {",
+              "    pm.expect([\"password\",\"passwordHash\",\"password_hash\",\"token\",\"accessToken\",\"refreshToken\",\"email\",\"phone\",\"draftScores\",\"unreleasedFeedback\"]).not.to.include(key);",
+              "    inspect(item);",
+              "  }",
+              "}",
+              "pm.test(\"No restricted fields\", () => inspect(pm.response.json()));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Management roster - teacher",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/project-hub/teams/{{teamId}}/members",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{teacherToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Assigned teacher may manage the roster\", () => pm.response.to.have.status(200));",
+              "const row = pm.response.json().find(member => member.userCode && member.userCode.startsWith(\"SE\"));",
+              "if(row) pm.collectionVariables.set(\"studentUserId\", row.userId);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - Student cannot access management roster",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/project-hub/teams/{{teamId}}/members",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{studentToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Student has no management permission\", () => pm.response.to.have.status(403));",
+              "pm.test(\"No member list returned\", () => pm.expect(pm.response.json()).not.to.be.an(\"array\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - AC09 Missing workspace - admin",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/workspaces/9223372036854775807",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Missing workspace returns 404\", () => pm.response.to.have.status(404));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - AC09 Invalid session",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer invalid-token-for-ac09"
+          }
+        ],
+        "url": "{{baseUrl}}/api/workspaces/{{workspaceId}}",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Invalid token returns 401\", () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 - AC02 Snapshot remains fixed - repeat after source update",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/workspaces/{{workspaceId}}",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{teacherToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Overview returns 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"The stored snapshot remains unchanged\", () => {",
+              " pm.expect(JSON.stringify(pm.response.json().topic_snapshot)).to.equal(pm.collectionVariables.get(\"fixedSnapshot\"));",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
+

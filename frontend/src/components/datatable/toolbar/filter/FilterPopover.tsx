@@ -31,7 +31,6 @@ export function FilterPopover({
             <Button
               variant="outline"
               className="h-9 gap-1.5"
-              onClick={() => setFiltersOpen((prev) => !prev)}
             >
               <Filter size={14} />
               Filters

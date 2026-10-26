@@ -1,11 +1,8 @@
 import type { EntityCardRendererProps } from "@/types";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { PermissionGate } from "@/components/PermissionGate";
 import { cn } from "@/lib/utils";
-import { CalendarClock, ClipboardList, Flag, Target } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { CalendarClock, Flag, Target } from "lucide-react";
 
 type SprintStatusKey = "PLANNED" | "ACTIVE" | "COMPLETED" | "CANCELLED";
 
@@ -107,7 +104,6 @@ export function SprintCard({
   disableBooleanToggle = true,
   idField,
 }: EntityCardRendererProps) {
-  const navigate = useNavigate();
   const id = row[idField];
   const status = String(row.status ?? "").toUpperCase() as SprintStatusKey;
   const statusStyle = STATUS_STYLES[status] ?? FALLBACK_STATUS;
@@ -200,26 +196,9 @@ export function SprintCard({
           </div>
 
           {/*
-           * UFR-PRJ-003-03: entry point to the Sprint Planning board. Available
-           * in every view mode (the board itself enforces the sprint status and
-           * the per-action permissions).
+           * The sprint planning board is not a separate route anymore: every
+           * scope change happens on the `/backlogs` board.
            */}
-          {id !== undefined && id !== null && (
-            <PermissionGate permission="SPRINT_READ">
-              <Button
-                variant="outline"
-                size="sm"
-                title="Sprint Planning"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate(`/sprints/${id}/planning`);
-                }}
-              >
-                <ClipboardList className="h-4 w-4" />
-                <span className="hidden xl:inline">Planning</span>
-              </Button>
-            </PermissionGate>
-          )}
 
           {showActions && renderRowActions && (
             <div
