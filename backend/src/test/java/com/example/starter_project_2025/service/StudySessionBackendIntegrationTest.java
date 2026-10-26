@@ -1,0 +1,144 @@
+package com.example.starter_project_2025.service;
+
+import com.example.starter_project_2025.base.crud.spec.AutoSpecBuilder;
+import com.example.starter_project_2025.base.dataio.exporter.service.ExportService;
+import com.example.starter_project_2025.base.dataio.importer.parser.ParserFactory;
+import com.example.starter_project_2025.base.dataio.importer.resolver.RelationGraphBuilder;
+import com.example.starter_project_2025.base.dataio.importer.resolver.RelationLookupEngine;
+import com.example.starter_project_2025.base.dataio.template.service.ImportTemplateService;
+import com.example.starter_project_2025.system.study_session.*;
+import com.example.starter_project_2025.system.subject.Subject;
+import com.example.starter_project_2025.system.subject.SubjectRepository;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.Arrays;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/** Real shared Subject/JPA repositories and real module beans; no external API calls. */
+@DataJpaTest
+@Import({StudySessionServiceImpl.class, StudySessionMapperImpl.class, StudySessionValidator.class,
+        MockStudySessionVersionLock.class, StudySessionController.class, StudySessionImportService.class,
+        AutoSpecBuilder.class, StudySessionBackendIntegrationTest.ValidationConfig.class})
+class StudySessionBackendIntegrationTest {
+    @TestConfiguration
+    @EnableMethodSecurity
+    static class ValidationConfig {
+        @Bean
+        LocalValidatorFactoryBean validator() { return new LocalValidatorFactoryBean(); }
+    }
+
+    @MockBean ExportService exports;
+    @MockBean ParserFactory fallbackParsers;
+    @MockBean RelationLookupEngine relations;
+    @MockBean RelationGraphBuilder graph;
+    @Autowired StudySessionService service;
+    @Autowired StudySessionController controller;
+    @Autowired StudySessionRepository sessions;
+    @Autowired SubjectRepository subjects;
+
+    @AfterEach
+    void clearSecurity() { SecurityContextHolder.clearContext(); }
+
+    @Test
+    void sharedSubjectMappingCrudAndLifecycleWorkWithRealSpringBeans() {
+        authenticate("STUDY_SESSION_CREATE", "STUDY_SESSION_READ", "STUDY_SESSION_UPDATE", "STUDY_SESSION_DELETE");
+        Subject subject = subject();
+        var created = service.create(request(subject.getId()));
+        assertEquals("Java integration", created.getSubjectName());
+        assertEquals(SessionStatus.SCHEDULED, created.getStatus());
+        var changes = new StudySessionDTO();
+        changes.setTitle("Updated Java lesson");
+        assertEquals("Updated Java lesson", service.update(created.getId(), changes).getTitle());
+        assertEquals(LocalTime.of(8, 0), service.getById(created.getId()).getStartTime());
+        assertEquals(SessionStatus.COMPLETED, service.complete(created.getId(), null).getStatus());
+
+        // Duplicate is a frontend new-create flow: the same business fields create a fresh identity.
+        var duplicate = service.create(request(subject.getId()));
+        assertNotEquals(created.getId(), duplicate.getId());
+        assertEquals(SessionStatus.SCHEDULED, duplicate.getStatus());
+        var reason = new CancelSessionRequest();
+        reason.setReason("Class unavailable");
+        assertEquals(SessionStatus.CANCELLED, service.cancel(duplicate.getId(), reason).getStatus());
+        assertEquals(StudySessionStatistics.of(0, 1, 1), service.statistics(subject.getId(), null, null));
+        service.delete(duplicate.getId());
+        assertFalse(sessions.existsById(duplicate.getId()));
+    }
+
+    @Test
+    void excelImportUsesLocalConvertersAndChecksCreatePermission() throws Exception {
+        Long subjectId = subject().getId();
+        byte[] template = new ImportTemplateService().generateTemplate(StudySession.class);
+        byte[] content;
+        try (var workbook = new XSSFWorkbook(new ByteArrayInputStream(template));
+             var output = new ByteArrayOutputStream()) {
+            var sheet = workbook.getSheetAt(0);
+            var row = sheet.createRow(1);
+            for (var header : sheet.getRow(0)) {
+                var cell = row.createCell(header.getColumnIndex());
+                switch (header.getStringCellValue()) {
+                    case "Subject ID" -> cell.setCellValue(subjectId.doubleValue());
+                    case "Title" -> cell.setCellValue("Excel integration lesson");
+                    case "Session Date" -> cell.setCellValue("2026-10-19");
+                    case "Start Time" -> cell.setCellValue("08:00");
+                    case "End Time" -> cell.setCellValue("09:00");
+                    case "Lecturer" -> cell.setCellValue("Nguyen Van An");
+                    case "Type" -> cell.setCellValue("LECTURE");
+                    default -> cell.setCellValue("");
+                }
+            }
+            workbook.write(output);
+            content = output.toByteArray();
+        }
+        var file = new MockMultipartFile("file", "sessions.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", content);
+        authenticate("STUDY_SESSION_READ");
+        assertThrows(AccessDeniedException.class, () -> controller.importFile(file));
+        assertEquals(0, sessions.count());
+        authenticate("STUDY_SESSION_CREATE");
+        var imported = controller.importFile(file);
+        assertEquals(1, imported.getSuccessCount());
+        assertEquals(0, imported.getFailureCount());
+        var saved = sessions.findAll().getFirst();
+        assertEquals(subjectId, saved.getSubjectId());
+        assertEquals(LocalTime.of(8, 0), saved.getStartTime());
+        assertEquals(SessionStatus.SCHEDULED, saved.getStatus());
+    }
+
+    private Subject subject() {
+        return subjects.saveAndFlush(Subject.builder().code("SS-JAVA").name("Java integration")
+                .version("1.0").durationHours(30).build());
+    }
+
+    private StudySessionDTO request(Long subjectId) {
+        var request = StudySessionDTO.builder().subjectId(subjectId).title("Java integration lesson")
+                .sessionDate(LocalDate.of(2026, 10, 19)).startTime(LocalTime.of(8, 0))
+                .endTime(LocalTime.of(9, 0)).lecturer("Nguyen Van An").type(StudySessionType.LECTURE).build();
+        request.setIsActive(true);
+        return request;
+    }
+
+    private void authenticate(String... permissions) {
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "study-session-test", "", Arrays.stream(permissions).map(SimpleGrantedAuthority::new).toList()));
+    }
+}
