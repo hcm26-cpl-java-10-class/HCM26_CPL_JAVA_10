@@ -34,8 +34,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { ExamDTO, ExamType, LatePolicy, QuestionDTO, QuestionDifficulty, QuestionFilter, QuestionType, ResultVisibility } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, ClipboardCheck, Mail, MoreVertical, Pencil, Plus, Search, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { BookOpen, CheckCheck, CheckSquare, ClipboardCheck, Dices, Layers, Mail, MoreVertical, Pencil, Plus, Search, Sparkles, Tags, Trash2, X } from "lucide-react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { EditExamQuestionDialog, isExamStarted, QuestionAnswers } from "./ExamQuestionParts";
@@ -186,6 +186,11 @@ export default function ExamManagementPage() {
   const [examToDelete, setExamToDelete] = useState<ExamDTO | null>(null);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
   const [editingQuestion, setEditingQuestion] = useState<QuestionDTO | null>(null);
+  const [isRandomOpen, setIsRandomOpen] = useState(false);
+  const [randomCount, setRandomCount] = useState(10);
+  const [randomTopic, setRandomTopic] = useState<string>("");
+  const [randomDifficulty, setRandomDifficulty] = useState<string>("ALL");
+  const [randomQuestionType, setRandomQuestionType] = useState<string>("ALL");
 
   const examsQuery = useQuery({
     queryKey: ["exam-management", examPage, examSearch],
@@ -215,6 +220,21 @@ export default function ExamManagementPage() {
             questionFilter,
         ),
     placeholderData: (previousData) => previousData,
+  });
+
+  const allBankQuestionsQuery = useQuery({
+    queryKey: ["exam-question-all-bank", effectiveQuestionType],
+    enabled: isPickerOpen && Boolean(activeExam?.id),
+    queryFn: () =>
+        questionApi.getPage(
+            { page: 0, size: 2000, sort: "id,desc" },
+            undefined,
+            {
+              isActive: true,
+              ...(effectiveQuestionType !== "ALL" ? { type: effectiveQuestionType as QuestionType } : {}),
+            },
+        ),
+    staleTime: 30_000,
   });
 
   const refreshExams = () => queryClient.invalidateQueries({ queryKey: ["exam-management"] });
@@ -295,11 +315,14 @@ export default function ExamManagementPage() {
   };
 
   const addQuestionsMutation = useMutation({
-    mutationFn: () => examApi.addQuestions(activeExam!.id!, [...selectedQuestionIds]),
+    mutationFn: (overrideIds?: number[]) =>
+      examApi.addQuestions(activeExam!.id!, overrideIds ?? [...selectedQuestionIds]),
     onSuccess: (exam) => {
       setActiveExam(exam);
       setSelectedQuestionIds(new Set());
       void refreshExams();
+      queryClient.invalidateQueries({ queryKey: ["exam-question-all-bank"] });
+      queryClient.invalidateQueries({ queryKey: ["exam-question-picker"] });
       toast.success("Questions added to exam");
     },
     onError: (error) => toast.error(getErrorMessage(error, "Failed to add questions to exam")),
@@ -311,6 +334,8 @@ export default function ExamManagementPage() {
     onSuccess: (exam) => {
       setActiveExam(exam);
       void refreshExams();
+      queryClient.invalidateQueries({ queryKey: ["exam-question-all-bank"] });
+      queryClient.invalidateQueries({ queryKey: ["exam-question-picker"] });
       toast.success("Question removed from exam");
     },
     onError: (error) => toast.error(getErrorMessage(error, "Failed to remove question from exam")),
@@ -344,9 +369,169 @@ export default function ExamManagementPage() {
     });
   };
 
-  const sourceIdsInExam = new Set(
-      (activeExam?.questions ?? []).map((question) => question.sourceQuestionId).filter((id): id is number => id != null),
-  );
+  const allBankQuestions = useMemo(() => allBankQuestionsQuery.data?.content ?? [], [allBankQuestionsQuery.data?.content]);
+
+  const { topicList, topicCounts } = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const q of allBankQuestions) {
+      const t = (q.topic || "").trim();
+      if (t) {
+        counts[t] = (counts[t] || 0) + 1;
+      }
+    }
+    const topics = Object.keys(counts).sort((a, b) => a.localeCompare(b));
+    return { topicList: topics, topicCounts: counts };
+  }, [allBankQuestions]);
+
+  const sourceIdsInExam = useMemo(() => {
+    const set = new Set<number>();
+    (activeExam?.questions ?? []).forEach((q) => {
+      if (q.sourceQuestionId != null) set.add(q.sourceQuestionId);
+      if (q.id != null) set.add(q.id);
+    });
+    return set;
+  }, [activeExam?.questions]);
+
+  const filterQuestionItem = (q: QuestionDTO) => {
+    if (effectiveQuestionType !== "ALL" && q.type !== effectiveQuestionType) return false;
+    if (difficulty !== "ALL" && q.difficulty !== difficulty) return false;
+    if (questionTopic.trim() && (q.topic || "").trim().toLowerCase() !== questionTopic.trim().toLowerCase()) return false;
+    if (questionSearch.trim()) {
+      const s = questionSearch.trim().toLowerCase();
+      const matchContent = (q.content || "").toLowerCase().includes(s);
+      const matchTopic = (q.topic || "").toLowerCase().includes(s);
+      if (!matchContent && !matchTopic) return false;
+    }
+    return true;
+  };
+
+  const eligibleFilteredQuestions = useMemo(() => {
+    return allBankQuestions.filter((q) => !sourceIdsInExam.has(q.id) && filterQuestionItem(q));
+  }, [allBankQuestions, sourceIdsInExam, effectiveQuestionType, difficulty, questionTopic, questionSearch]);
+
+  const eligibleTopicQuestions = useMemo(() => {
+    if (!questionTopic.trim()) return [];
+    return allBankQuestions.filter(
+      (q) => !sourceIdsInExam.has(q.id) && (q.topic || "").trim().toLowerCase() === questionTopic.trim().toLowerCase()
+    );
+  }, [allBankQuestions, sourceIdsInExam, questionTopic]);
+
+  const allAvailableBankQuestions = useMemo(() => {
+    return allBankQuestions.filter((q) => !sourceIdsInExam.has(q.id));
+  }, [allBankQuestions, sourceIdsInExam]);
+
+  const selectablePageQuestions = useMemo(() => {
+    return (questionsQuery.data?.content ?? []).filter((q) => !sourceIdsInExam.has(q.id));
+  }, [questionsQuery.data?.content, sourceIdsInExam]);
+
+  const isAllPageSelected =
+    selectablePageQuestions.length > 0 &&
+    selectablePageQuestions.every((q) => selectedQuestionIds.has(q.id));
+
+  const isAllFilteredSelected =
+    eligibleFilteredQuestions.length > 0 &&
+    eligibleFilteredQuestions.every((q) => selectedQuestionIds.has(q.id));
+
+  const isAllTopicSelected =
+    eligibleTopicQuestions.length > 0 &&
+    eligibleTopicQuestions.every((q) => selectedQuestionIds.has(q.id));
+
+  const handleToggleSelectAllPage = () => {
+    setSelectedQuestionIds((prev) => {
+      const next = new Set(prev);
+      if (isAllPageSelected) {
+        selectablePageQuestions.forEach((q) => next.delete(q.id));
+      } else {
+        selectablePageQuestions.forEach((q) => next.add(q.id));
+      }
+      return next;
+    });
+  };
+
+  const handleToggleSelectAllFiltered = () => {
+    if (eligibleFilteredQuestions.length === 0) {
+      toast.info("No unadded questions matching the current filter.");
+      return;
+    }
+    setSelectedQuestionIds((prev) => {
+      const next = new Set(prev);
+      if (isAllFilteredSelected) {
+        eligibleFilteredQuestions.forEach((q) => next.delete(q.id));
+        toast.info(`Deselected ${eligibleFilteredQuestions.length} filtered questions.`);
+      } else {
+        eligibleFilteredQuestions.forEach((q) => next.add(q.id));
+        toast.success(`Selected ${eligibleFilteredQuestions.length} questions matching filter.`);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleSelectAllInTopic = (topicName: string) => {
+    const list = allBankQuestions.filter(
+      (q) => !sourceIdsInExam.has(q.id) && (q.topic || "").trim().toLowerCase() === topicName.trim().toLowerCase()
+    );
+    if (list.length === 0) {
+      toast.info(`All questions in topic "${topicName}" are already in this exam.`);
+      return;
+    }
+    setSelectedQuestionIds((prev) => {
+      const next = new Set(prev);
+      if (isAllTopicSelected) {
+        list.forEach((q) => next.delete(q.id));
+        toast.info(`Deselected all questions in topic "${topicName}".`);
+      } else {
+        list.forEach((q) => next.add(q.id));
+        toast.success(`Selected ${list.length} questions from topic "${topicName}".`);
+      }
+      return next;
+    });
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedQuestionIds(new Set());
+    toast.info("Cleared all selected questions.");
+  };
+
+  const openRandomDialog = (preferredTopic?: string) => {
+    setRandomTopic(preferredTopic || questionTopic || "");
+    setRandomDifficulty(difficulty !== "ALL" ? difficulty : "ALL");
+    setRandomQuestionType(lockedQuestionType ?? (questionType !== "ALL" ? questionType : "ALL"));
+    setIsRandomOpen(true);
+  };
+
+  const eligibleForRandom = useMemo(() => {
+    return allBankQuestions.filter((q) => {
+      if (sourceIdsInExam.has(q.id)) return false;
+      const typeToFilter = lockedQuestionType ?? (randomQuestionType !== "ALL" ? randomQuestionType : null);
+      if (typeToFilter && q.type !== typeToFilter) return false;
+      if (randomDifficulty !== "ALL" && q.difficulty !== randomDifficulty) return false;
+      if (randomTopic.trim()) {
+        if ((q.topic || "").trim().toLowerCase() !== randomTopic.trim().toLowerCase()) return false;
+      }
+      return true;
+    });
+  }, [allBankQuestions, sourceIdsInExam, lockedQuestionType, randomQuestionType, randomDifficulty, randomTopic]);
+
+  const handleConfirmRandomAdd = () => {
+    if (eligibleForRandom.length === 0) {
+      toast.warning("No eligible questions available to add!");
+      return;
+    }
+    const count = Math.min(randomCount, eligibleForRandom.length);
+    const shuffled = [...eligibleForRandom];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const pickedIds = shuffled.slice(0, count).map((q) => q.id);
+
+    addQuestionsMutation.mutate(pickedIds, {
+      onSuccess: () => {
+        setIsRandomOpen(false);
+        toast.success(`Added ${pickedIds.length} random question(s) to exam!`);
+      },
+    });
+  };
 
   const activeExamStarted = isExamStarted(activeExam);
   const examRows = examsQuery.data?.content ?? [];
@@ -678,13 +863,13 @@ export default function ExamManagementPage() {
 
             <div className="grid min-h-0 flex-1 gap-5 overflow-y-auto lg:grid-cols-[minmax(0,1.5fr)_minmax(260px,0.8fr)] lg:overflow-hidden">
               <section className="flex min-h-0 flex-col gap-3">
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <div className="relative sm:col-span-2">
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="relative sm:col-span-3">
                     <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
                         aria-label="Search questions"
                         className="pl-9"
-                        placeholder="Search content or topic"
+                        placeholder="Search content or topic..."
                         value={questionSearch}
                         onChange={(event) => {
                           setQuestionSearch(event.target.value);
@@ -709,23 +894,168 @@ export default function ExamManagementPage() {
                       <SelectItem value="HARD">Hard</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Input
-                      aria-label="Filter topic"
-                      className="sm:col-span-2"
-                      placeholder="Filter exactly by topic"
-                      value={questionTopic}
-                      onChange={(event) => {
-                        setQuestionTopic(event.target.value);
-                        setQuestionPage(0);
-                      }}
-                  />
+                  <Select
+                    value={questionTopic || "ALL"}
+                    onValueChange={(value) => {
+                      setQuestionTopic(value === "ALL" ? "" : value);
+                      setQuestionPage(0);
+                    }}
+                  >
+                    <SelectTrigger aria-label="Filter topic">
+                      <SelectValue placeholder="All Topics" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">All Topics ({allBankQuestions.length})</SelectItem>
+                      {topicList.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t} ({topicCounts[t] ?? 0})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Topic Selector Chips */}
+                {topicList.length > 0 && (
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                    <span className="shrink-0 text-muted-foreground font-medium flex items-center gap-1">
+                      <Tags className="size-3 text-indigo-500" /> Topics:
+                    </span>
+                    <Badge
+                      variant={questionTopic === "" ? "default" : "outline"}
+                      className="cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => { setQuestionTopic(""); setQuestionPage(0); }}
+                    >
+                      All ({allBankQuestions.length})
+                    </Badge>
+                    {topicList.map((t) => (
+                      <Badge
+                        key={t}
+                        variant={questionTopic.toLowerCase() === t.toLowerCase() ? "default" : "secondary"}
+                        className="cursor-pointer hover:opacity-80 whitespace-nowrap transition-opacity"
+                        onClick={() => {
+                          setQuestionTopic(questionTopic.toLowerCase() === t.toLowerCase() ? "" : t);
+                          setQuestionPage(0);
+                        }}
+                      >
+                        {t} ({topicCounts[t] ?? 0})
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+
+                {/* Quick Action Toolbar */}
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/40 p-2 text-xs">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-medium text-muted-foreground text-[11px]">Select:</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs px-2"
+                      onClick={handleToggleSelectAllPage}
+                      disabled={selectablePageQuestions.length === 0}
+                    >
+                      <CheckSquare className="mr-1 size-3.5" />
+                      {isAllPageSelected ? "Deselect Page" : `Page (${selectablePageQuestions.length})`}
+                    </Button>
+
+                    {questionTopic.trim() ? (
+                      <>
+                        <Button
+                          type="button"
+                          variant={isAllTopicSelected ? "secondary" : "outline"}
+                          size="sm"
+                          className="h-7 text-xs px-2"
+                          onClick={() => handleToggleSelectAllInTopic(questionTopic)}
+                          disabled={eligibleTopicQuestions.length === 0}
+                          title={`Toggle select all questions in topic "${questionTopic}"`}
+                        >
+                          <Layers className="mr-1 size-3.5" />
+                          {isAllTopicSelected
+                            ? `Deselect Topic "${questionTopic}"`
+                            : `All Topic "${questionTopic}" (${eligibleTopicQuestions.length})`}
+                        </Button>
+
+                        {/* Only show filtered button if search/difficulty narrowed it down */}
+                        {eligibleFilteredQuestions.length !== eligibleTopicQuestions.length && (
+                          <Button
+                            type="button"
+                            variant={isAllFilteredSelected ? "secondary" : "outline"}
+                            size="sm"
+                            className="h-7 text-xs px-2"
+                            onClick={handleToggleSelectAllFiltered}
+                            disabled={eligibleFilteredQuestions.length === 0}
+                            title="Select questions matching search/difficulty inside this topic"
+                          >
+                            <CheckCheck className="mr-1 size-3.5" />
+                            {isAllFilteredSelected
+                              ? `Deselect Filtered (${eligibleFilteredQuestions.length})`
+                              : `Filtered (${eligibleFilteredQuestions.length})`}
+                          </Button>
+                        )}
+                      </>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant={isAllFilteredSelected ? "secondary" : "outline"}
+                        size="sm"
+                        className="h-7 text-xs px-2"
+                        onClick={handleToggleSelectAllFiltered}
+                        disabled={eligibleFilteredQuestions.length === 0}
+                        title="Select all unadded questions matching the current filter"
+                      >
+                        <CheckCheck className="mr-1 size-3.5" />
+                        {isAllFilteredSelected
+                          ? `Deselect All (${eligibleFilteredQuestions.length})`
+                          : `Select All (${eligibleFilteredQuestions.length})`}
+                      </Button>
+                    )}
+
+                    {selectedQuestionIds.size > 0 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        onClick={handleDeselectAll}
+                        title="Clear all selections across all pages"
+                      >
+                        <X className="mr-1 size-3.5" />
+                        Deselect All ({selectedQuestionIds.size})
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      type="button"
+                      variant="default"
+                      size="sm"
+                      className="h-7 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-sm"
+                      onClick={() => openRandomDialog(questionTopic)}
+                      disabled={allAvailableBankQuestions.length === 0}
+                    >
+                      <Dices className="mr-1 size-3.5" />
+                      {questionTopic.trim() ? `Random from "${questionTopic}"...` : "Random Questions..."}
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-y-auto rounded-md border bg-background">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-12 text-center">Select</TableHead>
+                        <TableHead className="w-12 text-center">
+                          <input
+                            type="checkbox"
+                            className="size-4 accent-primary"
+                            aria-label="Select all on this page"
+                            checked={isAllPageSelected}
+                            disabled={selectablePageQuestions.length === 0}
+                            onChange={handleToggleSelectAllPage}
+                          />
+                        </TableHead>
                         <TableHead>Content</TableHead>
                         <TableHead className="w-24">Type</TableHead>
                         <TableHead className="w-24">Difficulty</TableHead>
@@ -779,14 +1109,28 @@ export default function ExamManagementPage() {
                 </div>
 
                 <div className="flex items-center justify-between gap-2">
-                  <Button
-                      size="sm"
-                      onClick={() => addQuestionsMutation.mutate()}
-                      disabled={selectedQuestionIds.size === 0 || addQuestionsMutation.isPending}
-                  >
-                    <Plus className="mr-1 size-4" />
-                    {addQuestionsMutation.isPending ? "Adding..." : `Add ${selectedQuestionIds.size} Selected Question(s)`}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                        size="sm"
+                        onClick={() => addQuestionsMutation.mutate()}
+                        disabled={selectedQuestionIds.size === 0 || addQuestionsMutation.isPending}
+                    >
+                      <Plus className="mr-1 size-4" />
+                      {addQuestionsMutation.isPending ? "Adding..." : `Add ${selectedQuestionIds.size} Selected Question(s)`}
+                    </Button>
+                    {selectedQuestionIds.size > 0 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs text-muted-foreground hover:text-destructive"
+                        onClick={handleDeselectAll}
+                      >
+                        <X className="mr-1 size-3.5" />
+                        Clear selection
+                      </Button>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" disabled={questionPage === 0} onClick={() => setQuestionPage((p) => p - 1)}>Previous</Button>
                     <span className="text-xs text-muted-foreground">{questionTotalPages === 0 ? 0 : questionPage + 1} / {questionTotalPages}</span>
@@ -845,6 +1189,144 @@ export default function ExamManagementPage() {
                 </div>
               </section>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog Add Random Questions */}
+        <Dialog open={isRandomOpen} onOpenChange={setIsRandomOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Dices className="size-5 text-indigo-600" />
+                Add Random Questions
+              </DialogTitle>
+              <DialogDescription>
+                Select quantity and scope to randomly select and add questions into this exam.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">Quick Select Quantity</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[10, 20, 30, 50].map((num) => (
+                    <Button
+                      key={num}
+                      type="button"
+                      variant={randomCount === num ? "default" : "outline"}
+                      size="sm"
+                      className="text-xs h-8 font-medium"
+                      onClick={() => setRandomCount(num)}
+                    >
+                      {num} Questions
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">Or Enter Custom Number</label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={eligibleForRandom.length || 100}
+                  value={randomCount}
+                  onChange={(e) => setRandomCount(Math.max(1, parseInt(e.target.value) || 1))}
+                  placeholder="e.g. 15, 25, 50"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">Topic</label>
+                <Select value={randomTopic || "ALL"} onValueChange={(val) => setRandomTopic(val === "ALL" ? "" : val)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Topics" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">
+                      All Topics ({allAvailableBankQuestions.length} available)
+                    </SelectItem>
+                    {topicList.map((t) => {
+                      const count = allBankQuestions.filter(
+                        (q) => !sourceIdsInExam.has(q.id) && (q.topic || "").trim().toLowerCase() === t.toLowerCase()
+                      ).length;
+                      return (
+                        <SelectItem key={t} value={t} disabled={count === 0}>
+                          {t} ({count} available)
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground">Question Type</label>
+                  <Select
+                    value={lockedQuestionType ?? randomQuestionType}
+                    disabled={lockedQuestionType !== null}
+                    onValueChange={setRandomQuestionType}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Types" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">All Types</SelectItem>
+                      <SelectItem value="MULTIPLE_CHOICE">Multiple Choice</SelectItem>
+                      <SelectItem value="ESSAY">Essay</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {lockedQuestionType && (
+                    <p className="text-[10px] text-muted-foreground">Locked by exam type</p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground">Difficulty</label>
+                  <Select value={randomDifficulty} onValueChange={setRandomDifficulty}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">All Difficulties</SelectItem>
+                      <SelectItem value="EASY">Easy</SelectItem>
+                      <SelectItem value="MEDIUM">Medium</SelectItem>
+                      <SelectItem value="HARD">Hard</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="rounded-md bg-muted p-3 text-xs space-y-1">
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Available in {randomTopic ? `topic "${randomTopic}"` : "all topics"}:</span>
+                  <span className="font-semibold text-foreground">{eligibleForRandom.length} questions</span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Will add to exam:</span>
+                  <span className="font-semibold text-indigo-600">
+                    {Math.min(randomCount, eligibleForRandom.length)} question(s)
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" type="button" onClick={() => setIsRandomOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                disabled={eligibleForRandom.length === 0 || addQuestionsMutation.isPending}
+                onClick={handleConfirmRandomAdd}
+              >
+                {addQuestionsMutation.isPending
+                  ? "Adding..."
+                  : `Add ${Math.min(randomCount, eligibleForRandom.length)} Random Question(s)`}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 
