@@ -95,6 +95,8 @@ export default function StudentExamTakingPage() {
         onSuccess: (attempt) => {
             queryClient.setQueryData(attemptQueryKey(examId), attempt);
             clearAllPendingSaves();
+            // Điểm bài vừa nộp sẽ xuất hiện ở /my-scores ngay khi student qua lại.
+            queryClient.invalidateQueries({ queryKey: ["my-exam-scores"] });
             if (attempt.status === 'EXPIRED') {
                 toast.warning('Time is up! Your exam has been automatically submitted.');
             } else {

@@ -34,7 +34,7 @@ public class PublishedExamScoreService {
                     || attempt.getExam().getId() == null
                     || attempt.getFinalScore() == null
                     || attempt.getSubmittedAt() == null
-                    || !resultAccessService.canStudentViewScore(attempt.getExam())) {
+                    || !resultAccessService.canStudentSeeScoreOnMyScores(attempt.getExam())) {
                 continue;
             }
 

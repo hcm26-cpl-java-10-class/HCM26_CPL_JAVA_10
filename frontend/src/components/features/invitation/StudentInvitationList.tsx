@@ -4,6 +4,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
+import { studentInvitationsQueryKey } from "@/hooks/usePendingInvitations";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Clock3, KeyRound, Mail, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -11,8 +12,6 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { ExamPasswordDialog } from "@/pages/student/components/ExamPasswordDialog";
-
-const invitationsQueryKey = ["student-invitations"] as const;
 
 function formatDate(value?: string | null) {
     return value ? new Date(value).toLocaleString() : "Không giới hạn";
@@ -104,14 +103,14 @@ export default function StudentInvitationList() {
     } | null>(null);
 
     const invitationsQuery = useQuery({
-        queryKey: invitationsQueryKey,
+        queryKey: studentInvitationsQueryKey,
         queryFn: invitationApi.getMyInvitations,
     });
 
     const acceptMutation = useMutation({
         mutationFn: invitationApi.accept,
         onSuccess: (updated: InvitationDTO) => {
-            queryClient.setQueryData<InvitationDTO[]>(invitationsQueryKey, (current) =>
+            queryClient.setQueryData<InvitationDTO[]>(studentInvitationsQueryKey, (current) =>
                 current?.map((invitation) => (invitation.id === updated.id ? updated : invitation)),
             );
 

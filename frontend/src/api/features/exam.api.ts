@@ -4,8 +4,26 @@ import type { AiGradingResponse, EssayGradingDetail, EssayGradingSummary, ExamDT
 
 const examBase = createBaseApiService<ExamDTO, ExamFilter>({ path: "/exams" });
 
+/**
+ * Điểm một bài thi đã chấm xong của student, trả về từ GET /api/exams/my-scores.
+ * Mỗi đề chỉ trả về lần làm có attemptNumber cao nhất.
+ */
+export interface PublishedExamScore {
+  examId: number;
+  examTitle: string;
+  attemptNumber: number;
+  objectiveScore: number | null;
+  finalScore: number | null;
+  maxScore: number | null;
+  submittedAt: string;
+}
+
 export const examApi = {
   ...examBase,
+  getMyPublishedExamScores: async (): Promise<PublishedExamScore[]> => {
+    const response = await axiosInstance.get<PublishedExamScore[]>("/exams/my-scores");
+    return response.data;
+  },
   addQuestions: async (examId: number, questionIds: number[]): Promise<ExamDTO> => {
     const response = await axiosInstance.post<ExamDTO>(`/exams/${examId}/questions`, { questionIds });
     return response.data;

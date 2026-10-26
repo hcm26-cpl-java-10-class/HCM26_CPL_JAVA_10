@@ -5,6 +5,7 @@ import com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus;
 import com.example.starter_project_2025.system.exam.domain.ExamResultPublication;
 import com.example.starter_project_2025.system.exam.domain.ExamResultPublicationRepository;
 import com.example.starter_project_2025.system.exam.domain.ResultVisibility;
+import com.example.starter_project_2025.system.exam.domain.ScoreReleasePolicy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +19,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ExamResultAccessServiceTest {
@@ -81,5 +83,39 @@ class ExamResultAccessServiceTest {
     void allowsWhenAttemptsRemainButExamClosed() {
         exam.setEndTime(LocalDateTime.now().minusMinutes(1));
         assertTrue(service.canStudentViewAnswers(exam, ExamAttemptStatus.SUBMITTED, 2));
+    }
+
+    // --- canStudentSeeScoreOnMyScores: điểm hiện ở My Scores ngay khi chấm xong ---
+
+    @Test
+    void myScoresAllowsWhenNotPublished() {
+        publication.setPublished(false);
+        assertTrue(service.canStudentSeeScoreOnMyScores(exam));
+    }
+
+    @Test
+    void myScoresAllowsWhenNoPublicationConfigured() {
+        when(publicationRepository.findByExam_Id(1L)).thenReturn(Optional.empty());
+        assertTrue(service.canStudentSeeScoreOnMyScores(exam));
+    }
+
+    @Test
+    void myScoresDeniesWhenPolicyHidden() {
+        publication.setReleasePolicy(ScoreReleasePolicy.HIDDEN);
+        assertFalse(service.canStudentSeeScoreOnMyScores(exam));
+    }
+
+    @Test
+    void myScoresAllowsForBothVisiblePolicies() {
+        publication.setReleasePolicy(ScoreReleasePolicy.MY_SCORES_ONLY);
+        assertTrue(service.canStudentSeeScoreOnMyScores(exam));
+
+        publication.setReleasePolicy(ScoreReleasePolicy.MY_SCORES_AND_EMAIL);
+        assertTrue(service.canStudentSeeScoreOnMyScores(exam));
+    }
+
+    @Test
+    void myScoresDeniesWhenExamIsNull() {
+        assertFalse(service.canStudentSeeScoreOnMyScores(null));
     }
 }

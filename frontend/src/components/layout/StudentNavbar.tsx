@@ -10,6 +10,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useActiveModuleGroups } from "@/hooks/useSidebarMenus";
+import { usePendingInvitations } from "@/hooks/usePendingInvitations";
+import { InvitationBell } from "@/components/features/invitation/InvitationBell";
 import { cn } from "@/lib/utils";
 import { iconMap } from "@/components/datatable/iconMap";
 import { getHomePathByRole } from "@/utils/rbac.utils";
@@ -28,7 +30,26 @@ export function StudentNavbar() {
   const navigate = useNavigate();
   const { activeRole } = usePermissions();
   const { data: moduleGroups = [] } = useActiveModuleGroups();
+  const { count: pendingInvitationCount } = usePendingInvitations();
   const pathname = normalizePath(location.pathname);
+
+  // Badge đỏ cạnh mục menu: chỉ áp cho entry "Lời mời thi".
+  // Render trực tiếp trong JSX (không đưa vào navGroups) để useMemo bên dưới
+  // không phải phụ thuộc vào số lượng lời mời.
+  const renderPendingBadge = (url: string) => {
+    if (normalizePath(url) !== "/invitations" || pendingInvitationCount <= 0) {
+      return null;
+    }
+
+    return (
+        <span
+            aria-hidden="true"
+            className="ml-auto flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-none text-white"
+        >
+          {pendingInvitationCount > 9 ? "9+" : pendingInvitationCount}
+        </span>
+    );
+  };
 
   const navGroups = useMemo(() => {
     const resolveIcon = (iconName?: string) => {
@@ -117,6 +138,7 @@ export function StudentNavbar() {
                               >
                                 <item.icon className="h-4 w-4" />
                                 <span>{item.title}</span>
+                                {renderPendingBadge(item.url)}
                               </DropdownMenuItem>
                           ))}
                         </DropdownMenuContent>
@@ -161,6 +183,7 @@ export function StudentNavbar() {
                               >
                                 <item.icon className="h-4 w-4" />
                                 <span>{item.title}</span>
+                                {renderPendingBadge(item.url)}
                               </DropdownMenuItem>
                           ))}
 
@@ -173,6 +196,7 @@ export function StudentNavbar() {
               </DropdownMenuContent>
             </DropdownMenu>
 
+            <InvitationBell />
             <HeaderRight />
             <TooltipWrapper content="Logout">
               <Button

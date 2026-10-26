@@ -2,6 +2,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/hooks/usePermissions";
+import { usePendingInvitations } from "@/hooks/usePendingInvitations";
 import { formatRoleLabel } from "@/utils/rbac.utils";
 import { motion } from "motion/react";
 import { ArrowRight, BookOpen, Calendar, CheckCircle2 } from "lucide-react";
@@ -20,6 +21,7 @@ const checklistItems = [
 
 export default function StudentLandingPage() {
   const { user, activeRole, hasPermission } = usePermissions();
+  const { count: pendingInvitationCount } = usePendingInvitations();
 
   const displayName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email;
   const canReadBooks = hasPermission("BOOK_READ");
@@ -59,6 +61,14 @@ export default function StudentLandingPage() {
                 <Link to="/invitations">
                   <Calendar className="mr-2 size-4" />
                   Loi moi thi
+                  {pendingInvitationCount > 0 && (
+                      <span
+                          aria-hidden="true"
+                          className="ml-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-semibold leading-none text-white"
+                      >
+                        {pendingInvitationCount > 9 ? "9+" : pendingInvitationCount}
+                      </span>
+                  )}
                 </Link>
               </Button>
 
