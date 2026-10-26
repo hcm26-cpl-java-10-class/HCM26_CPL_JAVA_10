@@ -158,6 +158,45 @@ function getBoardError(error: unknown) {
   };
 }
 
+function createCorrelationId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (character) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = character === "x" ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}
+
+function getStatusUpdateError(error: unknown) {
+  if (axios.isAxiosError(error)) {
+    const responseMessage =
+      typeof error.response?.data?.message === "string"
+        ? error.response.data.message
+        : typeof error.response?.data?.detail === "string"
+          ? error.response.data.detail
+          : undefined;
+
+    if (error.response?.status === 409) {
+      return responseMessage ?? "Task đã thay đổi hoặc trạng thái mới không hợp lệ.";
+    }
+    if (error.response?.status === 403) {
+      return "Tài khoản không có quyền cập nhật Task trong Project này.";
+    }
+    if (!error.response) {
+      return "Không kết nối được máy chủ. Kiểm tra backend rồi thử lại.";
+    }
+
+    return responseMessage ?? `Không thể cập nhật trạng thái (HTTP ${error.response.status}).`;
+  }
+
+  return error instanceof Error
+    ? `Không thể cập nhật trạng thái: ${error.message}`
+    : "Không thể cập nhật trạng thái do lỗi không xác định.";
+}
+
 function formatDate(value: string | null) {
   if (!value) return "Chưa thiết lập";
   const date = new Date(value);
@@ -607,7 +646,7 @@ export default function ProjectBoardPage() {
         return;
       }
       try {
-        await projectBoardApi.moveTaskToSprint(board!.projectId, task.id, { sprintId: null, expectedVersion: task.version }, crypto.randomUUID());
+        await projectBoardApi.moveTaskToSprint(board!.projectId, task.id, { sprintId: null, expectedVersion: task.version }, createCorrelationId());
         toast.success(`${task.code}: đã chuyển về Backlog`);
         setRequestVersion((v) => v + 1);
       } catch (error) {
@@ -646,15 +685,15 @@ export default function ProjectBoardPage() {
       }
 
       try {
-        await projectBoardApi.updateTaskStatus(board!.projectId, task.id, targetStatus, task.version, crypto.randomUUID());
+        await projectBoardApi.updateTaskStatus(board!.projectId, task.id, targetStatus, task.version, createCorrelationId());
         toast.success(`${task.code}: đã chuyển sang ${targetStatus.replaceAll("_", " ")}`);
         setRequestVersion((v) => v + 1);
       } catch (error) {
         if (axios.isAxiosError(error) && error.response?.status === 409) {
-          toast.error("Task đã thay đổi hoặc version không khớp. Đang tải lại...");
+          toast.error(getStatusUpdateError(error));
           setRequestVersion((v) => v + 1);
         } else {
-          toast.error("Không thể cập nhật trạng thái.");
+          toast.error(getStatusUpdateError(error));
         }
       } finally {
         window.dragTask = null;
@@ -774,7 +813,7 @@ export default function ProjectBoardPage() {
         board.projectId,
         board.sprint.id,
         payload,
-        crypto.randomUUID(),
+        createCorrelationId(),
       );
       toast.success(`Đã tạo công việc ${task.code}`);
       setShowCreateNotice(false);

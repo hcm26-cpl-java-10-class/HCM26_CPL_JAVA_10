@@ -71,10 +71,16 @@ export function useActiveModuleGroups(enabled = true) {
                     acc[module.moduleGroupId] = [];
                 }
 
+                const menuTitle = module.url === "/tasks"
+                    ? "Tasks"
+                    : ["/management/workspaces/candidates", "/workspaces/candidates"].includes(module.url ?? "")
+                        ? "Workspace"
+                        : module.title;
+
                 acc[module.moduleGroupId].push({
                     ...module,
-                    title: ["/management/workspaces/candidates", "/workspaces/candidates"].includes(module.url ?? "") ? "Workspace" : module.title,
-                    name: ["/management/workspaces/candidates", "/workspaces/candidates"].includes(module.url ?? "") ? "Workspace" : module.title,
+                    title: menuTitle,
+                    name: menuTitle,
                 });
                 return acc;
             }, {});
@@ -176,6 +182,19 @@ export function useActiveModuleGroups(enabled = true) {
                 groupedModules[projectGroupId] = [];
             }
 
+            if (!modules.some((module) => module.url === "/project-board")) {
+                groupedModules[projectGroupId].push({
+                    id: 100004,
+                    moduleGroupId: projectGroupId,
+                    title: "Kanban Board",
+                    name: "Kanban Board",
+                    url: "/project-board",
+                    icon: "layers",
+                    displayOrder: 2.5,
+                    isActive: true,
+                });
+            }
+
             const milestoneProjectId = import.meta.env.VITE_MILESTONE_MOCK_PROJECT_ID
                 || "1";
             const projectWorkspaceModules: SidebarModule[] = [
@@ -234,6 +253,14 @@ export function useActiveModuleGroups(enabled = true) {
                     const groupMods = (groupedModules[groupId] ?? []).sort(
                         (a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0),
                     );
+                    if ((group.name ?? "").toLowerCase() === "project management") {
+                        const boardIndex = groupMods.findIndex((module) => module.url === "/project-board");
+                        const backlogIndex = groupMods.findIndex((module) => module.url === "/sprint-backlogs");
+                        if (boardIndex >= 0 && backlogIndex >= 0 && boardIndex !== backlogIndex + 1) {
+                            const [boardModule] = groupMods.splice(boardIndex, 1);
+                            groupMods.splice(backlogIndex + (boardIndex < backlogIndex ? 0 : 1), 0, boardModule);
+                        }
+                    }
                     return {
                         ...group,
                         modules: groupMods,
