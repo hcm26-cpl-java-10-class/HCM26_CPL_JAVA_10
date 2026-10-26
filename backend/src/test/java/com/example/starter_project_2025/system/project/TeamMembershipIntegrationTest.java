@@ -1,5 +1,16 @@
 package com.example.starter_project_2025.system.project;
 
+import com.example.starter_project_2025.system.project.domain.Project;
+import com.example.starter_project_2025.system.project.domain.ProjectStatus;
+import com.example.starter_project_2025.system.project.team.Team;
+import com.example.starter_project_2025.system.project.team.TeamMember;
+import com.example.starter_project_2025.system.project.team.TeamMemberRepository;
+import com.example.starter_project_2025.system.project.team.TeamRepository;
+import com.example.starter_project_2025.system.project.tenant.Tenant;
+import com.example.starter_project_2025.system.project.tenant.TenantRepository;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceActivityRepository;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceRepository;
+
 import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenService;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;

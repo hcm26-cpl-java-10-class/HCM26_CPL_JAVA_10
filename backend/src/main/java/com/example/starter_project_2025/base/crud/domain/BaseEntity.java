@@ -41,5 +41,6 @@ public abstract class BaseEntity {
     protected Long createdBy;
 
     @LastModifiedBy
+    @Column
     protected Long updatedBy;
 }

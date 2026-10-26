@@ -1,4 +1,5 @@
 import { taskApi } from "@/api/features/task.api";
+import { taskAlertApi } from "@/api/features/task-alert.api";
 import { FieldError } from "@/components/datatable/modal/form/FieldError";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -80,6 +81,11 @@ export function TaskForm({ projectId, task, onSaved, onCancel }: TaskFormProps) 
     queryKey: ["tasks", user.email, activeRole, "tags", projectId],
     queryFn: () => taskApi.getTags(projectId),
     retry: false,
+  });
+  const membersQuery = useQuery({
+    queryKey: ["task-alert-assignees", user.email, activeRole, projectId],
+    queryFn: ({ signal }) => taskAlertApi.assignees(projectId, signal),
+    retry: false, gcTime: 0,
   });
 
   const saveMutation = useMutation({
@@ -221,22 +227,30 @@ export function TaskForm({ projectId, task, onSaved, onCancel }: TaskFormProps) 
               label="Assignee"
               errors={errors.assigneeProjectMemberId}
             >
-              <Select value={values.assigneeProjectMemberId || "unassigned"} disabled>
+              <Select value={values.assigneeProjectMemberId || "unassigned"}
+                onValueChange={value => changeField("assigneeProjectMemberId", value === "unassigned" ? "" : value)}
+                disabled={membersQuery.isPending || membersQuery.isError}>
                 <SelectTrigger id="task-assigneeProjectMemberId" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="unassigned">Unassigned</SelectItem>
-                  {values.assigneeProjectMemberId && (
+                  {values.assigneeProjectMemberId && !membersQuery.data?.some(member => member.id === values.assigneeProjectMemberId) && (
                     <SelectItem value={values.assigneeProjectMemberId}>
                       Member {values.assigneeProjectMemberId.slice(0, 8)}
                     </SelectItem>
                   )}
+                  {membersQuery.data?.map(member => <SelectItem key={member.id} value={member.id}>{member.displayName}</SelectItem>)}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Project members are not available yet.
+                {membersQuery.isError ? "Project members are unavailable." : membersQuery.isPending ? "Loading project members..." : "Select an active project member."}
               </p>
+            </TaskField>
+            <TaskField name="deadline" label="Deadline (local time)" errors={errors.deadline}>
+              <Input id="task-deadline" type="datetime-local" value={values.deadline}
+                aria-invalid={!!errors.deadline?.length}
+                onChange={event => changeField("deadline", event.target.value)} />
             </TaskField>
             <TaskField
               name="estimatedHours"

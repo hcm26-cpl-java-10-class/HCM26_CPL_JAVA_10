@@ -44,6 +44,12 @@ public class Milestone {
     @Column(nullable = false, length = 30)
     private MilestoneStatus status;
 
+    @Column(name = "is_at_risk", nullable = false, columnDefinition = "boolean default false")
+    private boolean atRisk;
+
+    @Column(name = "is_active", nullable = false, columnDefinition = "boolean default true")
+    private boolean active = true;
+
     @Column(name = "rubric_snapshot_id", nullable = false, updatable = false)
     private UUID rubricSnapshotId;
 
@@ -119,5 +125,19 @@ public class Milestone {
 
     public void addChecklistItem(String content, boolean mandatory, int orderIndex) {
         checklistItems.add(MilestoneChecklistItem.create(this, content, mandatory, orderIndex));
+    }
+
+    public void openForWork(UUID actorId, Instant now) {
+        if (status != MilestoneStatus.PLANNED && status != MilestoneStatus.OPEN)
+            throw new IllegalStateException("Only a planned milestone can be opened");
+        status = MilestoneStatus.OPEN; updatedBy = actorId; updatedAt = now;
+    }
+
+    public void markAtRisk(UUID actorId, Instant now) {
+        atRisk = true; updatedBy = actorId; updatedAt = now;
+    }
+
+    public void softDelete(UUID actorId, Instant now) {
+        active = false; updatedBy = actorId; updatedAt = now;
     }
 }

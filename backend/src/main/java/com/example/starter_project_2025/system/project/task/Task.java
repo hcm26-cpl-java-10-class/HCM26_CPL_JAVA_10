@@ -15,7 +15,7 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
 
-@Entity
+@Entity(name = "ProjectTask")
 @Table(name = "task", indexes = @Index(name = "idx_task_project", columnList = "project_id"))
 @Getter
 @Setter
@@ -53,6 +53,9 @@ public class Task {
 
     @Column(name = "estimated_hours")
     Double estimatedHours;
+
+    @Column(name = "deadline")
+    java.time.Instant deadline;
 
     @Builder.Default
     @Enumerated(EnumType.STRING)

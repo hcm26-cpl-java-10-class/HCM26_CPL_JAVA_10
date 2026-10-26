@@ -49,7 +49,7 @@ public class RoleDataInitializer implements CommandLineRunner {
 
         upsertRole(
                 STUDENT_ROLE,
-                "Student with read-only access to books and courses",
+                "Student with course access",
                 findPermissions(
                         "MENU_READ",
                         "BOOK_READ",
@@ -66,7 +66,7 @@ public class RoleDataInitializer implements CommandLineRunner {
 
         upsertRole(
                 TEACHER_ROLE,
-                "Teacher with book, course and exam management permissions",
+                "Teacher with learning resource management permissions",
                 findPermissions(
                         "MENU_READ",
                         "BOOK_CREATE", "BOOK_READ", "BOOK_UPDATE", "BOOK_DELETE",

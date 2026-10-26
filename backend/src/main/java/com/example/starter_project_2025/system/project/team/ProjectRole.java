@@ -1,5 +1,5 @@
 package com.example.starter_project_2025.system.project.team;
 
 public enum ProjectRole {
-    UNASSIGNED, TEAM_LEADER, DEV, FE_DEV, BE_DEV, BA, QA, TESTER
+    UNASSIGNED, TEAM_LEADER, DEV, FE_DEV, BE_DEV, BA, QA, TESTER, MEMBER, TEAM_LEAD, MENTOR
 }

@@ -1,4 +1,4 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.team;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.system.rbac.user.User;
@@ -56,6 +56,14 @@ public class TeamMember extends BaseEntity {
     @Column(name = "participation_status", nullable = false,
             columnDefinition = "varchar(32) default 'ACTIVE'")
     private ParticipationStatus participationStatus = ParticipationStatus.ACTIVE;
+
+    @Column(name = "joined_at")
+    private java.time.Instant joinedAt;
+
+    @jakarta.persistence.PrePersist
+    void initializeJoinedAt() {
+        if (joinedAt == null) joinedAt = java.time.Instant.now();
+    }
 
     public boolean isCurrentParticipant() {
         return Boolean.TRUE.equals(getIsActive())

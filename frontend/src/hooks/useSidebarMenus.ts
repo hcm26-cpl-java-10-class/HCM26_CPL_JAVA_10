@@ -3,6 +3,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import type { ModuleDTO, ModuleGroupDTO, Pagination } from "@/types";
 import { canAccessByPermission } from "@/utils/rbac.utils";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 
 export type SidebarModule = ModuleDTO & {
     name?: string;
@@ -25,11 +26,15 @@ const modulePagination: Pagination = {
 };
 
 export function useActiveModuleGroups(enabled = true) {
-    const { activeRole, hasPermission } = usePermissions();
+    const { activeRole, effectivePermissions, hasPermission } = usePermissions();
+    const permissionCacheKey = useMemo(
+        () => [...effectivePermissions].sort().join("|"),
+        [effectivePermissions],
+    );
 
     return useQuery<SidebarModuleGroup[]>({
-        queryKey: ["sidebar-menu", "active-module-groups", activeRole],
-        enabled,
+        queryKey: ["sidebar-menu", "active-module-groups", activeRole, permissionCacheKey],
+        enabled: enabled && !!activeRole,
         /**
          * Keep the previous role's menu while the new role's menu is loading.
          * The App builds the module driven routes from this data: dropping it
@@ -151,35 +156,68 @@ export function useActiveModuleGroups(enabled = true) {
                 }
             }
 
+            let projectGroup = groups.find(
+                (group) => (group.name ?? "").toLowerCase() === "project management",
+            );
+
+            if (!projectGroup) {
+                projectGroup = {
+                    id: 100000,
+                    name: "Project Management",
+                    description: "Project management workspace",
+                    displayOrder: 1,
+                    isActive: true,
+                };
+                groups.push(projectGroup);
+            }
+
+            const projectGroupId = String(projectGroup.id ?? 100000);
+            if (!groupedModules[projectGroupId]) {
+                groupedModules[projectGroupId] = [];
+            }
+
+            const milestoneProjectId = import.meta.env.VITE_MILESTONE_MOCK_PROJECT_ID
+                || "11111111-1111-1111-1111-111111111111";
+            const projectWorkspaceModules: SidebarModule[] = [
+                {
+                    id: 100002,
+                    moduleGroupId: projectGroupId,
+                    title: "Milestones",
+                    name: "Milestones",
+                    url: `/projects/${milestoneProjectId}/milestones`,
+                    icon: "bookmark",
+                    displayOrder: 3,
+                    isActive: true,
+                },
+                {
+                    id: 100003,
+                    moduleGroupId: projectGroupId,
+                    title: "Rubrics",
+                    name: "Rubrics",
+                    url: "/rubrics",
+                    icon: "file-text",
+                    displayOrder: 4,
+                    isActive: true,
+                },
+            ];
+
+            for (const projectModule of projectWorkspaceModules) {
+                const alreadyExists = modules.some((module) => module.url === projectModule.url)
+                    || groupedModules[projectGroupId].some((module) => module.url === projectModule.url);
+
+                if (!alreadyExists) {
+                    groupedModules[projectGroupId].push(projectModule);
+                }
+            }
+
             // Ensure Workspace Candidate menu is available for testing even when backend menu table is not yet updated
             const hasWorkspaceMenu = modules.some(
                 (m) => m.url === "/management/workspaces/candidates" || m.url === "/workspaces/candidates",
             );
             if (!hasWorkspaceMenu && canAccessByPermission("WORKSPACE_READ", hasPermission)) {
-                const fallbackGroup = groups.find((g) => (g.name || "").toLowerCase() === "project management")
-                    ?? groups.find((g) => (g.name || "").toLowerCase() === "exam management")
-                    ?? groups[0];
-
-                const targetGroup = fallbackGroup ?? {
+                groupedModules[projectGroupId].push({
                     id: 99998,
-                    name: "Project Management",
-                    description: "Project Management Group",
-                    displayOrder: 100,
-                    isActive: true,
-                };
-
-                if (!groups.some((g) => (g.id ?? "") === (targetGroup.id ?? ""))) {
-                    groups.push(targetGroup);
-                }
-
-                const groupId = String(targetGroup.id ?? 99998);
-                if (!groupedModules[groupId]) {
-                    groupedModules[groupId] = [];
-                }
-
-                groupedModules[groupId].push({
-                    id: 99998,
-                    moduleGroupId: groupId,
+                    moduleGroupId: projectGroupId,
                     title: "Workspace",
                     name: "Workspace",
                     url: "/management/workspaces/candidates",

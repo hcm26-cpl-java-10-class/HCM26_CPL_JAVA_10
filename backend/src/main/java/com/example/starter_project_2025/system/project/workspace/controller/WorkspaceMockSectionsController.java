@@ -1,4 +1,9 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.controller;
+
+import com.example.starter_project_2025.system.project.workspace.service.MockWorkspaceSectionDataSource;
+import com.example.starter_project_2025.system.project.workspace.service.WorkspaceAccessService;
+import com.example.starter_project_2025.system.project.workspace.service.WorkspaceContextService;
+import com.example.starter_project_2025.system.project.workspace.service.WorkspaceSectionPolicy;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -8,7 +13,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import javax.sql.DataSource;
-import static com.example.starter_project_2025.system.project.WorkspaceSectionDtos.*;
+import static com.example.starter_project_2025.system.project.workspace.dto.WorkspaceSectionDtos.*;
 
 @RestController @RequiredArgsConstructor
 @ConditionalOnProperty(name = "app.workspace.sections.mock-controls.enabled", havingValue = "true")

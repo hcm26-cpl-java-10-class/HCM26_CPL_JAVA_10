@@ -28,6 +28,15 @@ public class MilestoneQueryService {
 
     private static final int MAX_PAGE_SIZE = 100;
     private static final int MAX_SEARCH_LENGTH = 120;
+    private static final Map<String, String> SORT_FIELDS = Map.of(
+            "title", "title",
+            "description", "description",
+            "status", "status",
+            "mandatory", "mandatory",
+            "deadline", "deadline",
+            "latePolicyType", "latePolicyType",
+            "createdAt", "createdAt"
+    );
 
     private final CurrentActorProvider actorProvider;
     private final CurrentTenantProvider tenantProvider;
@@ -64,7 +73,7 @@ public class MilestoneQueryService {
         PageRequest pageable = PageRequest.of(
                 query.page(),
                 query.size(),
-                Sort.by(Sort.Order.asc("deadline"), Sort.Order.asc("id"))
+                buildSort(query.sort())
         );
         return mapper.toPageResponse(
                 project,
@@ -91,6 +100,7 @@ public class MilestoneQueryService {
         ProjectReadContext project = projectPort.requireProjectForRead(projectId, actorId, tenantId);
         accessPolicy.requireReadAccess(project);
         var milestone = repository.findByIdAndProjectIdAndTenantId(milestoneId, projectId, tenantId)
+                .filter(com.example.starter_project_2025.system.project.milestone.domain.Milestone::isActive)
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
         var rubric = rubricPort.requireSnapshotForRead(milestone.getRubricSnapshotId(), projectId, tenantId);
         var reviewer = milestone.getReviewerId() == null
@@ -115,9 +125,60 @@ public class MilestoneQueryService {
                 && query.deadlineFrom().isAfter(query.deadlineTo())) {
             errors.put("deadlineFrom", List.of("Deadline from must be before or equal to deadline to"));
         }
+        validateSort(query.sort(), errors);
         if (!errors.isEmpty()) {
             throw new MilestoneValidationException(errors);
         }
+    }
+
+    private Sort buildSort(List<String> requestedSort) {
+        if (requestedSort == null || requestedSort.isEmpty()) {
+            return Sort.by(Sort.Order.asc("deadline"), Sort.Order.asc("id"));
+        }
+
+        List<Sort.Order> orders = requestedSort.stream()
+                .map(this::parseSort)
+                .map(term -> new Sort.Order(term.direction(), SORT_FIELDS.get(term.field())))
+                .toList();
+
+        if (orders.stream().noneMatch(order -> order.getProperty().equals("id"))) {
+            orders = new java.util.ArrayList<>(orders);
+            orders.add(Sort.Order.asc("id"));
+        }
+        return Sort.by(orders);
+    }
+
+    private void validateSort(List<String> requestedSort, Map<String, List<String>> errors) {
+        if (requestedSort == null) {
+            return;
+        }
+        for (String value : requestedSort) {
+            try {
+                SortTerm term = parseSort(value);
+                if (!SORT_FIELDS.containsKey(term.field())) {
+                    throw new IllegalArgumentException();
+                }
+            } catch (IllegalArgumentException exception) {
+                errors.put("sort", List.of("Sort must use a supported field and asc or desc direction"));
+                return;
+            }
+        }
+    }
+
+    private SortTerm parseSort(String value) {
+        if (value == null) {
+            throw new IllegalArgumentException();
+        }
+        String[] parts = value.trim().split("[:,]", -1);
+        if (parts.length != 2 || parts[0].isBlank()) {
+            throw new IllegalArgumentException();
+        }
+        Sort.Direction direction = Sort.Direction.fromOptionalString(parts[1])
+                .orElseThrow(IllegalArgumentException::new);
+        return new SortTerm(parts[0], direction);
+    }
+
+    private record SortTerm(String field, Sort.Direction direction) {
     }
 
     private String normalizeSearch(String search) {

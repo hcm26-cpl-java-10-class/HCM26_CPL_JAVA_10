@@ -6,6 +6,7 @@ export interface TaskFormValues {
   description: string;
   assigneeProjectMemberId: string;
   estimatedHours: string;
+  deadline: string;
   priority: TaskPriority;
   tags: string[];
 }
@@ -43,6 +44,8 @@ export function toTaskFormValues(task?: TaskDTO): TaskFormValues {
     description: task?.description ?? "",
     assigneeProjectMemberId: task?.assigneeProjectMemberId ?? "",
     estimatedHours: task?.estimatedHours == null ? "" : String(task.estimatedHours),
+    deadline: task?.deadline ? new Date(new Date(task.deadline).getTime()
+      - new Date(task.deadline).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "",
     priority: task?.priority ?? "MEDIUM",
     tags: task?.tags ?? [],
   };
@@ -67,6 +70,9 @@ export function validateTaskForm(values: TaskFormValues): TaskFieldErrors {
     errors.assigneeProjectMemberId = ["Please select a valid project member"];
   }
   const hours = values.estimatedHours.trim();
+  if (values.deadline && Number.isNaN(new Date(values.deadline).getTime())) {
+    errors.deadline = ["Please enter a valid deadline"];
+  }
   if (
     (values.assigneeProjectMemberId && !hours) ||
     (hours &&
@@ -98,6 +104,7 @@ export function toTaskPayload(
     title: values.title.trim(),
     description: values.description.trim() || null,
     estimatedHours: values.estimatedHours.trim() ? Number(values.estimatedHours) : null,
+    deadline: values.deadline ? new Date(values.deadline).toISOString() : null,
     priority: values.priority,
     tags: normalizeTags(values.tags),
     ...(task ? { version: task.version } : {}),

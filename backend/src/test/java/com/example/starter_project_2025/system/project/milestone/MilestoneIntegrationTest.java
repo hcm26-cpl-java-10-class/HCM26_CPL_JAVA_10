@@ -45,6 +45,8 @@ class MilestoneIntegrationTest {
     @Autowired MilestoneAuditRepository auditRepository;
     @Autowired OutboxEventRepository outboxRepository;
     @Autowired IdempotencyRepository idempotencyRepository;
+    @Autowired com.example.starter_project_2025.system.rbac.user.UserRepository users;
+    @Autowired com.example.starter_project_2025.system.rbac.role.RoleRepository roles;
 
     private String teacherToken;
     private String studentToken;
@@ -217,6 +219,30 @@ class MilestoneIntegrationTest {
     }
 
     @Test
+    void sortsMilestonesByRequestedColumnAndDirection() throws Exception {
+        createMilestone("Alpha milestone", Instant.now().plusSeconds(3 * 86400L), "sort-alpha");
+        createMilestone("Zulu milestone", Instant.now().plusSeconds(86400L), "sort-zulu");
+
+        mockMvc.perform(get(endpoint())
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .param("sort", "title:desc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].title").value("Zulu milestone"))
+                .andExpect(jsonPath("$.content[1].title").value("Alpha milestone"));
+    }
+
+    @Test
+    void sortsRubricsByRequestedColumnAndDirection() throws Exception {
+        mockMvc.perform(get("/api/rubrics")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .param("sort", "name:desc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].name").value("Technical Documentation Rubric"))
+                .andExpect(jsonPath("$.content[1].name").value("Milestone Delivery Rubric"))
+                .andExpect(jsonPath("$.content[2].name").value("Demo and Presentation Rubric"));
+    }
+
+    @Test
     void searchesTitleAndDescriptionCaseInsensitivelyAndEscapesWildcards() throws Exception {
         createMilestone("Alpha Release", Instant.now().plusSeconds(86400L), "search-alpha");
         createMilestone("Release 100%", Instant.now().plusSeconds(2 * 86400L), "search-percent");
@@ -343,7 +369,25 @@ class MilestoneIntegrationTest {
     @Test
     void rejectsListRequestWithoutReadPermission() throws Exception {
         mockMvc.perform(get(endpoint())
-                        .header("Authorization", "Bearer " + studentToken))
+                        .header("Authorization", "Bearer " + tokenWithoutMilestonePermissions()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void studentWithReadPermissionCanReadButCannotCreate() throws Exception {
+        String milestoneId = createMilestoneAndGetId(
+                "Student readable milestone", Instant.now().plusSeconds(86400), "student-read"
+        );
+        mockMvc.perform(get(endpoint()).header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk());
+        mockMvc.perform(get(endpoint() + "/" + milestoneId).header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk());
+        mockMvc.perform(post(endpoint()).header("Authorization", "Bearer " + studentToken)
+                        .header("Idempotency-Key", "student-must-not-create")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(validRequest())))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(endpoint() + "/create-options").header("Authorization", "Bearer " + studentToken))
                 .andExpect(status().isForbidden());
     }
 
@@ -385,12 +429,12 @@ class MilestoneIntegrationTest {
                 .andExpect(jsonPath("$.checklist[0].content").value("Source code is pushed"))
                 .andExpect(jsonPath("$.checklist[1].orderIndex").value(1))
                 .andExpect(jsonPath("$.rubric.name").value("Milestone Delivery Rubric"))
-                .andExpect(jsonPath("$.rubric.version").value("1.0"))
+                .andExpect(jsonPath("$.rubric.version").value("v1"))
                 .andExpect(jsonPath("$.rubric.criteria.length()").value(3))
                 .andExpect(jsonPath("$.rubric.criteria[0].code").value("FUNCTIONALITY"))
                 .andExpect(jsonPath("$.rubric.criteria[0].weight").value(50.00))
                 .andExpect(jsonPath("$.rubric.criteria[0].maxScore").value(5.00))
-                .andExpect(jsonPath("$.reviewer.displayName").value("Mentor Reviewer"))
+                .andExpect(jsonPath("$.reviewer").doesNotExist())
                 .andExpect(jsonPath("$.latePolicy.type").value("ALLOW_LATE"))
                 .andExpect(jsonPath("$.latePolicy.penaltyPercent").value(10.00));
     }
@@ -441,8 +485,25 @@ class MilestoneIntegrationTest {
         );
 
         mockMvc.perform(get(endpoint() + "/" + milestoneId)
-                        .header("Authorization", "Bearer " + studentToken))
+                        .header("Authorization", "Bearer " + tokenWithoutMilestonePermissions()))
                 .andExpect(status().isForbidden());
+    }
+
+    private String tokenWithoutMilestonePermissions() {
+        var role = roles.findByName("MILESTONE_NO_PERMISSION_TEST").orElseGet(() -> roles.saveAndFlush(
+                com.example.starter_project_2025.system.rbac.role.Role.builder()
+                        .name("MILESTONE_NO_PERMISSION_TEST").build()));
+        var user = new com.example.starter_project_2025.system.rbac.user.User();
+        user.setEmail(java.util.UUID.randomUUID() + "@milestone.test");
+        user.setPasswordHash("unused");
+        user.setFirstName("No milestone permission");
+        user.setLastName("Test");
+        user.setTenant(users.findByEmail("student@example.com").orElseThrow().getTenant());
+        user.getRoles().add(role);
+        users.saveAndFlush(user);
+        var principal = userDetailsService.loadUserByUsername(user.getEmail());
+        return tokenService.generateAccessToken(new UsernamePasswordAuthenticationToken(
+                principal, null, principal.getAuthorities()));
     }
 
     private String endpoint() {

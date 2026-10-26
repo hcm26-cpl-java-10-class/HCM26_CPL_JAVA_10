@@ -1,4 +1,16 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.service;
+
+import com.example.starter_project_2025.system.project.cohort.Cohort;
+import com.example.starter_project_2025.system.project.domain.Project;
+import com.example.starter_project_2025.system.project.domain.ProjectTopicSnapshot;
+import com.example.starter_project_2025.system.project.dto.ProjectHubDtos;
+import com.example.starter_project_2025.system.project.team.Team;
+import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceSection;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceDetailResponse;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceMemberResponse;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceTopicSnapshotResponse;
+import com.example.starter_project_2025.system.project.workspace.repository.ProjectTopicSnapshotRepository;
 
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;

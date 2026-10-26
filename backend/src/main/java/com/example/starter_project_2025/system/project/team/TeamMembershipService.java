@@ -1,4 +1,10 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.team;
+
+import com.example.starter_project_2025.system.project.ProjectMember;
+import com.example.starter_project_2025.system.project.ProjectMemberRepository;
+import com.example.starter_project_2025.system.project.ProjectTeam;
+import com.example.starter_project_2025.system.project.dto.ProjectHubDtos;
+import com.example.starter_project_2025.system.project.workspace.service.WorkspaceAccessService;
 
 import com.example.starter_project_2025.system.project.team.ProjectRole;
 import com.example.starter_project_2025.system.project.team.ParticipationStatus;
@@ -79,6 +85,21 @@ public class TeamMembershipService {
         ProjectMember membership = memberships.findByTeam_IdAndClassMember_User_Id(teamId, userId)
                 .orElseGet(() -> ProjectMember.builder().team(team).classMember(classMember).build());
         membership.setRole(request.projectRole().name());
+                HttpStatus.UNPROCESSABLE_ENTITY, "Select an existing user in this tenant"));
+        if (user.getTenant() == null || !user.getTenant().getId().equals(team.getTenant().getId()))
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "The member belongs to another tenant");
+        if (request.status() == ParticipationStatus.ACTIVE
+                && (!Boolean.TRUE.equals(user.getIsActive()) || Boolean.TRUE.equals(user.getLocked())))
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Select an active, unlocked user");
+        TeamMember membership = memberships.findByTeamIdAndUserId(teamId, userId).orElseGet(() -> {
+            TeamMember created = new TeamMember(); created.setTeam(team); created.setUser(user); return created;
+        });
+        users.lockForContribution(java.util.List.of(userId));
+        if (request.status() == ParticipationStatus.ACTIVE && !membership.isCurrentParticipant())
+            membership.setJoinedAt(java.time.Instant.now());
+        membership.setIsActive(true);
+        membership.setProjectRole(request.projectRole());
+        membership.setParticipationStatus(request.status());
         return response(memberships.saveAndFlush(membership));
     }
 

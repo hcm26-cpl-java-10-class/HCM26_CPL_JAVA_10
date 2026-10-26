@@ -30,9 +30,18 @@ import java.util.Map;
 import java.util.LinkedHashMap;
 
 @Slf4j
-@RestControllerAdvice(assignableTypes = {TaskController.class, TaskWorkflowController.class})
+@RestControllerAdvice(assignableTypes = {TaskController.class, TaskWorkflowController.class,
+        com.example.starter_project_2025.system.project.task.alert.TaskAlertController.class,
+        com.example.starter_project_2025.system.project.task.reminder.MemberReminderController.class})
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class TaskExceptionHandler {
+    @ExceptionHandler(com.example.starter_project_2025.system.project.task.reminder.MemberReminderCooldownException.class)
+    public ResponseEntity<com.example.starter_project_2025.system.project.task.reminder.MemberReminderDtos.CooldownError> cooldown(
+            com.example.starter_project_2025.system.project.task.reminder.MemberReminderCooldownException ex) {
+        return ResponseEntity.unprocessableEntity().header("X-Correlation-ID",TaskRequestContext.currentCorrelationId())
+                .body(new com.example.starter_project_2025.system.project.task.reminder.MemberReminderDtos.CooldownError(
+                        ex.getMessage(),ex.getErrors(),ex.getMembers()));
+    }
 
     @ExceptionHandler(TaskValidationException.class)
     public ResponseEntity<ValidationErrorResponse> validation(TaskValidationException ex) {

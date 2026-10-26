@@ -1,4 +1,7 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.domain;
+
+import com.example.starter_project_2025.system.project.cohort.Cohort;
+import com.example.starter_project_2025.system.project.tenant.Tenant;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
@@ -44,8 +47,11 @@ public class Project extends BaseEntity {
     @Column(length = 2000)
     private String description;
 
+    @Column(name = "tenant_id", nullable = false)
+    private Long tenantId;
+
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "tenant_id", nullable = false)
+    @JoinColumn(name = "tenant_id", insertable = false, updatable = false)
     private Tenant tenant;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -55,5 +61,17 @@ public class Project extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private ProjectStatus status;
+
+    public void setTenant(Tenant tenant) {
+        this.tenant = tenant;
+        this.tenantId = tenant == null ? null : tenant.getId();
+    }
+
+    @jakarta.persistence.PrePersist
+    @jakarta.persistence.PreUpdate
+    private void initializeTenantId() {
+        // Existing Workspace code and builders assign the association; Board assigns its ID.
+        if (tenantId == null && tenant != null) tenantId = tenant.getId();
+    }
 
 }

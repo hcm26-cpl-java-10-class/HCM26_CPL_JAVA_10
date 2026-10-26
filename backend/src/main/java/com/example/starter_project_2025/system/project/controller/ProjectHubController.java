@@ -1,4 +1,9 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.controller;
+
+import com.example.starter_project_2025.system.project.dto.ProjectHubDtos;
+import com.example.starter_project_2025.system.project.service.ProjectHubService;
+import com.example.starter_project_2025.system.project.team.TeamMembershipService;
+import com.example.starter_project_2025.system.project.workspace.controller.WorkspaceCorrelation;
 
 import com.example.starter_project_2025.exception.error.ErrorResponse;
 import jakarta.validation.Valid;

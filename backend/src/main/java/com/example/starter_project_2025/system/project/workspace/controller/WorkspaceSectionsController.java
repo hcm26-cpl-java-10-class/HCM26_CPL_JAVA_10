@@ -1,11 +1,14 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.controller;
+
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceSection;
+import com.example.starter_project_2025.system.project.workspace.service.WorkspaceSectionService;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import static com.example.starter_project_2025.system.project.WorkspaceSectionDtos.*;
+import static com.example.starter_project_2025.system.project.workspace.dto.WorkspaceSectionDtos.*;
 
 @RestController @RequiredArgsConstructor
 @RequestMapping("/api/workspaces/{id}")

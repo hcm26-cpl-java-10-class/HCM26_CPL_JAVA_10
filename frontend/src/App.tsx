@@ -40,7 +40,9 @@ function AppRoutes() {
                     const Component = componentRegistry[m.url];
 
                     if (!Component) {
-                        return <Route key={`missing-${m.id ?? m.url}`} path={m.url} element={<Navigate to="/not-found-page" replace />} />;
+                        // Frontend-controlled pages can still be exposed in the sidebar.
+                        // Their static route below is responsible for rendering them.
+                        return null;
                     }
 
                     return (

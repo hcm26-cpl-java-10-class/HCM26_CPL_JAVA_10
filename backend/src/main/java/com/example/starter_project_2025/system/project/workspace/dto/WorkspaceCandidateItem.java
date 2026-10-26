@@ -1,4 +1,7 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.dto;
+
+import com.example.starter_project_2025.system.project.domain.ProjectStatus;
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceStatus;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

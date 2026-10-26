@@ -1,4 +1,4 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.controller;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;

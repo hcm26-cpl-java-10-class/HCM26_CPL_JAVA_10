@@ -4,8 +4,8 @@ import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
-import com.example.starter_project_2025.system.project.Tenant;
-import com.example.starter_project_2025.system.project.TenantRepository;
+import com.example.starter_project_2025.system.project.tenant.Tenant;
+import com.example.starter_project_2025.system.project.tenant.TenantRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -96,6 +96,7 @@ public class UserDataInitializer implements CommandLineRunner {
       Tenant tenant = tenantRepository.findByCode("LOCAL_TRAINING").orElseGet(() ->
               tenantRepository.save(Tenant.builder().code("LOCAL_TRAINING").name("Local training").build()));
       user.setTenant(tenant);
+      user.setTenantId(tenant.getId());
     }
 
     if (replaceExistingRoles) {

@@ -1,4 +1,7 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.service;
+
+import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceSection;
 
 import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.RequiredArgsConstructor;
@@ -6,7 +9,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.Arrays;
-import static com.example.starter_project_2025.system.project.WorkspaceSectionDtos.*;
+import static com.example.starter_project_2025.system.project.workspace.dto.WorkspaceSectionDtos.*;
 
 @Service @RequiredArgsConstructor @Transactional(readOnly = true)
 public class WorkspaceSectionService {

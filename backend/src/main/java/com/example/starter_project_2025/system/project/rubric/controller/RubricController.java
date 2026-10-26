@@ -9,6 +9,7 @@ import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -20,9 +21,10 @@ public class RubricController {
     @GetMapping
     public RubricPageResponse getList(@RequestParam(defaultValue = "0") int page,
                                       @RequestParam(defaultValue = "20") int size,
+                                      @RequestParam(required = false) List<String> sort,
                                       @RequestParam(required = false) String search,
                                       @RequestParam(required = false) RubricVersionStatus status) {
-        return service.getList(page, size, search, status);
+        return service.getList(page, size, sort, search, status);
     }
 
     @PostMapping

@@ -83,6 +83,7 @@ export interface RubricPage {
 export interface RubricListParams {
   page: number;
   size: number;
+  sort?: string | string[];
   search?: string;
   status?: RubricVersionStatus;
 }

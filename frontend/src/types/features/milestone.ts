@@ -172,6 +172,7 @@ export interface MilestonePageResponse {
 export interface MilestoneListParams {
   page: number;
   size: number;
+  sort?: string | string[];
   search?: string;
   status?: MilestoneStatus[];
   mandatory?: boolean;

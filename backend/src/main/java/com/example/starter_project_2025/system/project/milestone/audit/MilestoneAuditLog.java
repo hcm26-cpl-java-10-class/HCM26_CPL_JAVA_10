@@ -37,6 +37,9 @@ public class MilestoneAuditLog {
     @Column(name = "idempotency_key", length = 100, updatable = false)
     private String idempotencyKey;
 
+    @Column(name = "correlation_id", length = 100, updatable = false)
+    private String correlationId;
+
     @Lob
     @Column(name = "details_json", updatable = false)
     private String detailsJson;
@@ -62,6 +65,14 @@ public class MilestoneAuditLog {
         log.idempotencyKey = idempotencyKey;
         log.detailsJson = detailsJson;
         log.createdAt = now;
+        return log;
+    }
+
+    public static MilestoneAuditLog riskAlerted(UUID milestoneId, UUID projectId, UUID tenantId, UUID actorId,
+            String key, String correlationId, String details, Instant now) {
+        MilestoneAuditLog log = created(milestoneId, projectId, tenantId, actorId, key, details, now);
+        log.action = "MILESTONE_AT_RISK_ALERT_SENT";
+        log.correlationId = correlationId;
         return log;
     }
 }

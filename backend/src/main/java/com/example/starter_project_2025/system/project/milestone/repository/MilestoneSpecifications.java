@@ -32,6 +32,7 @@ public final class MilestoneSpecifications {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(criteriaBuilder.equal(root.get("tenantId"), tenantId));
             predicates.add(criteriaBuilder.equal(root.get("projectId"), projectId));
+            predicates.add(criteriaBuilder.isTrue(root.get("active")));
 
             if (search != null) {
                 String pattern = "%" + escapeLike(search.toLowerCase(Locale.ROOT)) + "%";
