@@ -1,3 +1,4 @@
+
 import axiosInstance from "@/api/axios";
 
 export interface AuditLogDTO {
@@ -52,5 +53,28 @@ export const auditLogApi = {
         );
 
         return response.data;
+    },
+
+    getAll: async (
+        filter: AuditLogFilter = {},
+    ): Promise<AuditLogDTO[]> => {
+        const firstPage = await auditLogApi.getPage({
+            ...filter,
+            page: 0,
+        });
+
+        const allLogs = [...firstPage.content];
+
+        for (let page = 1; page < firstPage.totalPages; page++) {
+            const result = await auditLogApi.getPage({
+                ...filter,
+                page,
+                size: firstPage.size,
+            });
+
+            allLogs.push(...result.content);
+        }
+
+        return allLogs;
     },
 };

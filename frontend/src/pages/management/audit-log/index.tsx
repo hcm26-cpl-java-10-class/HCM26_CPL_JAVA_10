@@ -1,6 +1,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
+import ExcelJS from "exceljs";
 import { MainLayout } from "@/components/layout/MainLayout";
 import {
   auditLogApi,
@@ -200,7 +201,7 @@ const blob = new Blob(["\uFEFF", csv], {
 const url = URL.createObjectURL(blob);
 const link = document.createElement("a");
 
-link.href = url;
+link.href = url;downloadExcel
 link.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
 
 document.body.appendChild(link);
@@ -210,8 +211,319 @@ link.remove();
 URL.revokeObjectURL(url);
 }
 
+async function downloadExcel(logs: AuditLogDTO[]) {
+    if (logs.length === 0) {
+        window.alert("No audit records available to export.");
+        return;
+    }
+
+    const workbook = new ExcelJS.Workbook();
+
+    workbook.creator = "RBAC System";
+    workbook.created = new Date();
+    workbook.modified = new Date();
+
+    const worksheet = workbook.addWorksheet("Audit Logs", {
+        views: [{ state: "frozen", ySplit: 5 }],
+        properties: {
+            defaultRowHeight: 22,
+        },
+    });
+
+    const borderStyle: Partial<ExcelJS.Borders> = {
+        top: { style: "thin", color: { argb: "FFCBD5E1" } },
+        left: { style: "thin", color: { argb: "FFCBD5E1" } },
+        bottom: { style: "thin", color: { argb: "FFCBD5E1" } },
+        right: { style: "thin", color: { argb: "FFCBD5E1" } },
+    };
+
+    const headers = [
+        "Time",
+        "Actor",
+        "Actor ID",
+        "Action",
+        "Object",
+        "Object ID",
+        "Result",
+        "Old Value",
+        "New Value",
+        "Correlation ID",
+    ];
+
+    // Merge tiêu đề trên toàn bộ 10 cột
+    worksheet.mergeCells("A1:J1");
+
+    // Tiêu đề báo cáo
+
+
+    const titleCell = worksheet.getCell("A1");
+    titleCell.value = "AUDIT LOG REPORT";
+    titleCell.font = {
+        name: "Arial",
+        size: 16,
+        bold: true,
+        color: { argb: "FFFFFFFF" },
+    };
+    titleCell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FF1E3A5F" },
+    };
+    titleCell.alignment = {
+        horizontal: "center",
+        vertical: "middle",
+    };
+    worksheet.getRow(1).height = 34;
+
+    // Thông tin báo cáo
+    worksheet.mergeCells("A2:J2");
+    worksheet.getCell("A2").value =
+        `Exported at: ${new Date().toLocaleString("vi-VN")}`;
+    worksheet.getCell("A2").font = {
+        name: "Arial",
+        size: 10,
+        italic: true,
+        color: { argb: "FF475569" },
+    };
+    worksheet.getCell("A2").alignment = {
+        vertical: "middle",
+    };
+    worksheet.getRow(2).height = 23;
+
+    worksheet.mergeCells("A3:J3");
+    worksheet.getCell("A3").value =
+        `Total records exported: ${logs.length}`;
+    worksheet.getCell("A3").font = {
+        name: "Arial",
+        size: 10,
+        bold: true,
+        color: { argb: "FF334155" },
+    };
+    worksheet.getCell("A3").alignment = {
+        vertical: "middle",
+    };
+    worksheet.getRow(3).height = 23;
+
+    // Dòng trống tạo khoảng cách giữa thông tin và bảng
+    worksheet.getRow(4).height = 8;
+
+    // Header của bảng ở dòng 5
+
+// Header của bảng ở dòng 5
+const headerRow = worksheet.getRow(5);
+headerRow.values = headers;
+headerRow.height = 30;
+
+headerRow.font = {
+    name: "Arial",
+    size: 10,
+    bold: true,
+    color: { argb: "FFFFFFFF" },
+};
+
+headerRow.alignment = {
+    horizontal: "center",
+    vertical: "middle",
+    wrapText: true,
+};
+
+// Chỉ định dạng đúng 10 cột A:J, không tô màu cả hàng
+for (let columnNumber = 1; columnNumber <= 10; columnNumber++) {
+    const cell = headerRow.getCell(columnNumber);
+
+    cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FF1E293B" },
+    };
+
+    cell.border = borderStyle;
+}
+
+
+    // Dữ liệu bắt đầu từ dòng 6
+    logs.forEach((log) => {
+        const row = worksheet.addRow([
+            formatDate(log.createdAt),
+            log.actorEmail || "Unknown",
+            log.actorId ?? "",
+            log.action || "Unknown",
+            log.entityType || "",
+            log.entityId || "",
+            (log.result || "Unknown").toUpperCase(),
+            log.oldValue || "",
+            log.newValue || "",
+            log.correlationId || "",
+        ]);
+
+        row.height = 36;
+
+        row.eachCell((cell) => {
+            cell.font = {
+                name: "Arial",
+                size: 10,
+                color: { argb: "FF0F172A" },
+            };
+
+            cell.alignment = {
+                horizontal: "center",
+                vertical: "middle",
+                wrapText: true,
+            };
+
+            cell.border = borderStyle;
+
+            if (row.number % 2 === 0) {
+                cell.fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: "FFF8FAFC" },
+                };
+            }
+        });
+
+        // Tô màu riêng cho trạng thái
+        const resultCell = row.getCell(7);
+        const normalizedResult = String(resultCell.value ?? "").toUpperCase();
+
+        if (normalizedResult === "SUCCESS") {
+            resultCell.font = {
+                name: "Arial",
+                size: 10,
+                bold: true,
+                color: { argb: "FF166534" },
+            };
+            resultCell.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "FFDCFCE7" },
+            };
+        } else if (
+            normalizedResult === "FAILED" ||
+            normalizedResult === "FAIL"
+        ) {
+            resultCell.font = {
+                name: "Arial",
+                size: 10,
+                bold: true,
+                color: { argb: "FF991B1B" },
+            };
+            resultCell.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "FFFEE2E2" },
+            };
+        } else {
+            resultCell.font = {
+                name: "Arial",
+                size: 10,
+                bold: true,
+                color: { argb: "FF475569" },
+            };
+            resultCell.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "FFF1F5F9" },
+            };
+        }
+    });
+
+    // Tự điều chỉnh độ rộng cột theo nội dung, giới hạn để tránh bảng quá rộng
+    const minWidths = [21, 26, 12, 14, 18, 14, 14, 35, 35, 36];
+    const maxWidths = [24, 32, 12, 16, 20, 16, 14, 45, 45, 40];
+
+    worksheet.columns.forEach((column, index) => {
+        let maxLength = headers[index].length;
+
+        column.eachCell?.({ includeEmpty: false }, (cell) => {
+            if ([1, 2, 3, 5].includes(Number(cell.row))) {
+                return;
+            }
+
+            const value = cell.value;
+            const text =
+                value === null || value === undefined
+                    ? ""
+                    : String(value);
+
+            maxLength = Math.max(maxLength, text.length);
+        });
+
+        column.width = Math.min(
+            Math.max(maxLength + 2, minWidths[index]),
+            maxWidths[index],
+        );
+    });
+
+    // Dropdown lọc tại hàng header của bảng
+    worksheet.autoFilter = {
+        from: "A5",
+        to: `J${logs.length + 5}`,
+    };
+
+    // In báo cáo theo chiều ngang
+    worksheet.pageSetup = {
+        orientation: "landscape",
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+    };
+
+    worksheet.pageSetup.printTitlesRow = "5:5";
+
+    worksheet.headerFooter.oddFooter =
+        "&LConfidential - RBAC System&CPage &P of &N";
+
+    // Giới hạn vùng in trong phạm vi báo cáo
+    worksheet.pageSetup.printArea = `A1:J${logs.length + 5}`;
+
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = `audit-log-${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function getAllAuditLogs(
+    filters: AuditLogFilter,
+): Promise<AuditLogDTO[]> {
+    const firstPage = await auditLogApi.getPage({
+        ...filters,
+        page: 0,
+        size: PAGE_SIZE,
+    });
+
+    const allLogs = [...firstPage.content];
+
+    for (let page = 1; page < firstPage.totalPages; page++) {
+        const result = await auditLogApi.getPage({
+            ...filters,
+            page,
+            size: PAGE_SIZE,
+        });
+
+        allLogs.push(...result.content);
+    }
+
+    return allLogs;
+}
 
 export default function AuditLogPage() {
+    const [showExportModal, setShowExportModal] = useState(false);
+    const [exporting, setExporting] = useState(false);
+
     const [action, setAction] = useState("");
     const [period, setPeriod] = useState<Period>("7days");
 
@@ -328,28 +640,33 @@ export default function AuditLogPage() {
                             </p>
                         </div>
 
-                        <button
-                            type="button"
-                            onClick={() => downloadCsv(logs)}
-                            disabled={logs.length === 0 || auditQuery.isPending}
-                            className="inline-flex min-h-10 items-center justify-center gap-2 self-start rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            <svg
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="1.8"
-                                className="h-4 w-4"
-                                aria-hidden="true"
+
+
+                        <div className="flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setShowExportModal(true)}
+                                disabled={logs.length === 0 || auditQuery.isPending}
+                                className="inline-flex min-h-10 items-center justify-center gap-2 self-start rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3"
-                                />
-                            </svg>
-                            Export audit
-                        </button>
+                                <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="1.8"
+                                    className="h-4 w-4"
+                                    aria-hidden="true"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3"
+                                    />
+                                </svg>
+                                Export
+                            </button>
+                        </div>
+
                     </header>
 
                     {/* Filters and audit table */}
@@ -607,8 +924,8 @@ export default function AuditLogPage() {
                             ) : (
                                 <>
                                     <div className="overflow-x-auto">
-                                        <table className="w-full min-w-[760px] text-left text-sm">
-                                            <thead className="border-y border-slate-100 bg-white text-xs text-slate-500">
+                                        <table className="w-full min-w-[760px] border-collapse border border-black text-left text-sm">
+                                            <thead className="border border-black bg-slate-100 text-xs text-slate-700">
                                             <tr>
                                                 <th className="px-5 py-3 font-medium">Time</th>
                                                 <th className="px-5 py-3 font-medium">Actor</th>
@@ -675,6 +992,200 @@ export default function AuditLogPage() {
                     </section>
                 </div>
             </div>
+
+            {showExportModal && (
+                <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm"
+                    onMouseDown={(event) => {
+                        if (event.target === event.currentTarget && !exporting) {
+                            setShowExportModal(false);
+                        }
+                    }}
+                >
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="audit-export-title"
+                        className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+                    >
+                        <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
+                            <div>
+                                <h2
+                                    id="audit-export-title"
+                                    className="text-base font-semibold text-slate-900"
+                                >
+                                    Export Audit Log
+                                </h2>
+                                <p className="mt-1 text-sm text-slate-500">
+                                    Choose an output format to export audit records.
+                                </p>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => setShowExportModal(false)}
+                                disabled={exporting}
+                                aria-label="Close export dialog"
+                                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+                            >
+                                <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="1.8"
+                                    className="h-5 w-5"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="m18 6-12 12M6 6l12 12"
+                                    />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div className="space-y-3 p-5">
+                            <p className="text-center text-sm font-semibold text-slate-800">
+                                Select Export Format
+                            </p>
+
+                            <p className="mb-4 text-center text-xs text-slate-500">
+                                {totalElements} audit records found
+                            </p>
+
+                            <button
+                                type="button"
+                                disabled={exporting}
+                                onClick={async () => {
+                                    setExporting(true);
+
+                                    try {
+                                        const allLogs = await getAllAuditLogs(appliedFilters);
+
+                                        if (allLogs.length === 0) {
+                                            window.alert("No audit records available to export.");
+                                            return;
+                                        }
+
+                                        downloadCsv(allLogs);
+                                        setShowExportModal(false);
+                                    } catch (error) {
+                                        console.error("CSV export failed:", error);
+                                        window.alert("Unable to export CSV file.");
+                                    } finally {
+                                        setExporting(false);
+                                    }
+                                }}
+                                className="flex w-full items-center gap-3 rounded-xl border border-slate-200 p-4 text-left transition hover:border-blue-300 hover:bg-blue-50/50 disabled:opacity-50"
+                            >
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
+                        <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.7"
+                            className="h-6 w-6"
+                        >
+                            <rect x="4" y="3" width="16" height="18" rx="2" />
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M8 8h8M8 12h8M8 16h3"
+                            />
+                        </svg>
+                    </span>
+
+                                <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold text-slate-900">
+                            CSV
+                        </span>
+                        <span className="mt-1 block text-xs text-slate-500">
+                            Download as CSV file (.csv)
+                        </span>
+                    </span>
+
+                                <span className="text-xs font-medium text-slate-400">
+                        .csv
+                    </span>
+                            </button>
+
+                            <button
+                                type="button"
+                                disabled={exporting}
+                                onClick={async () => {
+                                    setExporting(true);
+
+                                    try {
+                                        const allLogs = await getAllAuditLogs(appliedFilters);
+
+                                        if (allLogs.length === 0) {
+                                            window.alert("No audit records available to export.");
+                                            return;
+                                        }
+
+                                        await downloadExcel(allLogs);
+                                        setShowExportModal(false);
+                                    } catch (error) {
+                                        console.error("Excel export failed:", error);
+                                        window.alert("Unable to export Excel file.");
+                                    } finally {
+                                        setExporting(false);
+                                    }
+                                }}
+                                className="flex w-full items-center gap-3 rounded-xl border border-slate-200 p-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50/50 disabled:opacity-50"
+                            >
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                        <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.7"
+                            className="h-6 w-6"
+                        >
+                            <rect x="4" y="3" width="16" height="18" rx="2" />
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M8 8h3v3H8zM13 8h3M13 11h3M8 14h3v3H8zM13 14h3M13 17h3"
+                            />
+                        </svg>
+                    </span>
+
+                                <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold text-slate-900">
+                            Excel
+                        </span>
+                        <span className="mt-1 block text-xs text-slate-500">
+                            Download as Excel file (.xlsx)
+                        </span>
+                    </span>
+
+                                <span className="text-xs font-medium text-slate-400">
+                        .xlsx
+                    </span>
+                            </button>
+
+                            {exporting && (
+                                <p className="pt-2 text-center text-sm text-slate-500">
+                                    Preparing export file...
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="flex justify-end border-t border-slate-100 bg-slate-50/70 px-5 py-4">
+                            <button
+                                type="button"
+                                disabled={exporting}
+                                onClick={() => setShowExportModal(false)}
+                                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </MainLayout>
     );
 }
