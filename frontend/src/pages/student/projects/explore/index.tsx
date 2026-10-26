@@ -104,19 +104,19 @@ export default function ExploreProjectsPage() {
       <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <h1 className="text-[28px] font-bold tracking-tight text-slate-900">
+            <h1 className="text-[28px] font-bold tracking-tight text-slate-900 dark:text-foreground">
               Choose your Mock Project
             </h1>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-slate-500 dark:text-muted-foreground">
               Compare real-world briefs for{" "}
-              <span className="font-medium text-slate-700">
+              <span className="font-medium text-slate-700 dark:text-foreground">
                 {MOCK_CLASS_CONTEXT.className} · {MOCK_CLASS_CONTEXT.programName}
               </span>{" "}
               before your team confirms one project.
             </p>
           </div>
 
-          <span className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-full border border-sky-100 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700">
+          <span className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-full border border-sky-100 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 dark:border-border dark:bg-card dark:text-foreground">
             {selectedTemplate ? (
               <>
                 <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -138,12 +138,12 @@ export default function ExploreProjectsPage() {
           className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]"
         >
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="project-search" className="text-xs font-medium text-slate-500">
+            <Label htmlFor="project-search" className="text-xs font-medium text-slate-500 dark:text-muted-foreground">
               Search
             </Label>
             <div className="relative">
               <Search
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-muted-foreground"
                 aria-hidden="true"
               />
               <Input
@@ -152,19 +152,19 @@ export default function ExploreProjectsPage() {
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search by name, code or skill…"
                 autoComplete="off"
-                className="h-9 rounded-lg border-slate-200 bg-white pl-9 text-sm shadow-xs"
+                className="h-9 rounded-lg border-slate-200 bg-white pl-9 text-sm shadow-xs dark:border-border dark:text-foreground dark:placeholder:text-muted-foreground"
               />
             </div>
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="project-domain" className="text-xs font-medium text-slate-500">
+            <Label htmlFor="project-domain" className="text-xs font-medium text-slate-500 dark:text-muted-foreground">
               Domain
             </Label>
             <Select value={domain} onValueChange={setDomain}>
               <SelectTrigger
                 id="project-domain"
-                className="h-9 w-full rounded-lg border-slate-200 bg-white text-sm text-slate-700 shadow-xs"
+                className="h-9 w-full rounded-lg border-slate-200 bg-white text-sm text-slate-700 shadow-xs dark:border-border dark:text-foreground dark:hover:bg-input/50"
               >
                 <SelectValue placeholder="All domains" />
               </SelectTrigger>
@@ -180,7 +180,7 @@ export default function ExploreProjectsPage() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="project-level" className="text-xs font-medium text-slate-500">
+            <Label htmlFor="project-level" className="text-xs font-medium text-slate-500 dark:text-muted-foreground">
               Difficulty
             </Label>
             <Select
@@ -189,7 +189,7 @@ export default function ExploreProjectsPage() {
             >
               <SelectTrigger
                 id="project-level"
-                className="h-9 w-full rounded-lg border-slate-200 bg-white text-sm text-slate-700 shadow-xs"
+                className="h-9 w-full rounded-lg border-slate-200 bg-white text-sm text-slate-700 shadow-xs dark:border-border dark:text-foreground dark:hover:bg-input/50"
               >
                 <SelectValue placeholder="All levels" />
               </SelectTrigger>
@@ -204,7 +204,7 @@ export default function ExploreProjectsPage() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="project-duration" className="text-xs font-medium text-slate-500">
+            <Label htmlFor="project-duration" className="text-xs font-medium text-slate-500 dark:text-muted-foreground">
               Duration
             </Label>
             <Select
@@ -213,7 +213,7 @@ export default function ExploreProjectsPage() {
             >
               <SelectTrigger
                 id="project-duration"
-                className="h-9 w-full rounded-lg border-slate-200 bg-white text-sm text-slate-700 shadow-xs"
+                className="h-9 w-full rounded-lg border-slate-200 bg-white text-sm text-slate-700 shadow-xs dark:border-border dark:text-foreground dark:hover:bg-input/50"
               >
                 <SelectValue placeholder="All durations" />
               </SelectTrigger>
@@ -228,9 +228,9 @@ export default function ExploreProjectsPage() {
           </div>
         </section>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">
-            <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
+            <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
             Only ACTIVE templates in your class scope are listed
           </span>
           <span>
@@ -255,15 +255,15 @@ export default function ExploreProjectsPage() {
             ))}
           </section>
         ) : (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-6 py-16 text-center">
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-slate-400 shadow-sm">
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-6 py-16 text-center dark:border-border dark:bg-card/50">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-slate-400 shadow-sm dark:bg-muted dark:text-muted-foreground">
               <SearchX className="h-6 w-6" aria-hidden="true" />
             </span>
             <div>
-              <p className="text-sm font-semibold text-slate-800">
+              <p className="text-sm font-semibold text-slate-800 dark:text-foreground">
                 No project briefs match your filters
               </p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-slate-500 dark:text-muted-foreground">
                 Try another keyword, domain, difficulty or duration.
               </p>
             </div>
@@ -273,7 +273,7 @@ export default function ExploreProjectsPage() {
                 variant="outline"
                 size="sm"
                 onClick={clearFilters}
-                className="rounded-lg border-slate-200 bg-white"
+                className="rounded-lg border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-border dark:bg-muted dark:text-foreground dark:hover:bg-muted/70"
               >
                 <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
                 Clear filters
@@ -282,7 +282,7 @@ export default function ExploreProjectsPage() {
           </div>
         )}
 
-        <p className="text-[11px] text-slate-400">
+        <p className="text-[11px] text-slate-400 dark:text-muted-foreground">
           Mock catalogue for US-09 · Templates are filtered by the class data
           scope (tenant / program) before they reach this page.
         </p>

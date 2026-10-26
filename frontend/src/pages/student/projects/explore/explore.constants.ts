@@ -24,17 +24,17 @@ export const LEVEL_META: Record<
 > = {
   BEGINNER: {
     label: "Beginner",
-    badgeClass: "bg-emerald-50 text-emerald-700",
+    badgeClass: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
     dotClass: "bg-emerald-500",
   },
   INTERMEDIATE: {
     label: "Intermediate",
-    badgeClass: "bg-sky-50 text-sky-700",
+    badgeClass: "bg-sky-50 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300",
     dotClass: "bg-sky-500",
   },
   ADVANCED: {
     label: "Advanced",
-    badgeClass: "bg-violet-50 text-violet-700",
+    badgeClass: "bg-violet-50 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
     dotClass: "bg-violet-500",
   },
 };
