@@ -15,10 +15,7 @@ export interface UserDTO extends BaseDTO {
   password?: string;
   firstName?: string;
   lastName?: string;
- feature/user-profile-update
   fullName?: string;
-  roleIds?: string[];
-
   employeeCode?: string;
   phone?: string;
   description?: string;
@@ -28,7 +25,6 @@ export interface UserDTO extends BaseDTO {
   /** Quan hệ N-N user_departments. */
   departmentIds?: Array<string | number>;
   lastLoginAt?: string;
- dev
 }
 
 export interface UserFilter extends BaseFilter {

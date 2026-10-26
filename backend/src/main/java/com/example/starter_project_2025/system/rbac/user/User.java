@@ -58,22 +58,6 @@ public class User extends BaseEntity {
     @Column(length = 100)
     String lastName;
 
- feature/user-profile-update
-    @Column(length = 20)
-    String phoneNumber;
-
-    @Column(length = 50)
-    String employeeCode;
-
-    @Column(length = 100)
-    String department;
-
-    @Column(name = "last_login_at")
-    Instant lastLoginAt;
-
-    @Column(name = "last_login_device", length = 150)
-    String lastLoginDevice;
-
     @Column(unique = true, length = 50)
     @ImportField(name = "Username")
     @ExportField(name = "Username")
@@ -89,6 +73,18 @@ public class User extends BaseEntity {
     @ExportField(name = "Phone")
     String phone;
 
+    @Column(length = 20)
+    String phoneNumber;
+
+    @Column(length = 100)
+    String department;
+
+    @Column(name = "last_login_at")
+    Instant lastLoginAt;
+
+    @Column(name = "last_login_device", length = 150)
+    String lastLoginDevice;
+
     @Column(length = 500)
     @ImportField(name = "Description")
     @ExportField(name = "Description")
@@ -97,7 +93,6 @@ public class User extends BaseEntity {
     @Builder.Default
     @Column(nullable = false)
     Boolean locked = false;
- dev
 
     @Builder.Default
     @ManyToMany(fetch = FetchType.LAZY)

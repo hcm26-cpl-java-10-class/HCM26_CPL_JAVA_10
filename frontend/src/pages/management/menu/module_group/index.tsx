@@ -5,7 +5,7 @@ import {
   type EntitySchema,
   type FieldSchema,
 } from "@/types";
-import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
+import { ModuleGroupsPage } from "@/pages/management/fams/ModuleGroupsPage";
 
 const moduleGroupSchema: EntitySchema = {
   entityName: "module-group",
@@ -36,9 +36,9 @@ const moduleGroupSchema: EntitySchema = {
 
 export const entityConfig: EntityConfig = {
   name: "Module Group",
-  path: "/menu-groups",
+  path: "/module-groups",
   api: moduleGroupApi,
   schema: moduleGroupSchema,
 };
 
-export default ModuleGroupModulePage;
+export default ModuleGroupsPage;

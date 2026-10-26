@@ -100,7 +100,6 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseGet(() -> createGoogleUser(email, firstName, lastName));
 
- feature/user-profile-update
         user.setLastLoginAt(Instant.now());
         if (StringUtils.hasText(device)) {
             user.setLastLoginDevice(device.trim());
@@ -114,7 +113,6 @@ public class AuthServiceImpl implements AuthService {
         }
 
         user = updateUserFromGoogleProfile(user, firstName, lastName);
- dev
 
         refreshTokenService.revokeAllRefreshTokens(user.getId());
 
