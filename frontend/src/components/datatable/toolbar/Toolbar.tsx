@@ -52,10 +52,7 @@ export function Toolbar({
     <ToolbarActions
       table={table}
       headerActions={headerActions}
-<<<<<<< HEAD
-=======
       extraActions={extraHeaderActions}
->>>>>>> feature/project
       hideCreate={hideCreate}
     />
   ) : browseActions ? (

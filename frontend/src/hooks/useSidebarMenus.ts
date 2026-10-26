@@ -162,7 +162,6 @@ export function useActiveModuleGroups(enabled = true) {
                 }
             }
 
-<<<<<<< HEAD
             // US-09: the Project Template module is not seeded in the backend
             // yet, so expose the mock Explore Projects catalogue under the
             // "Project Management" tab for students.
@@ -171,12 +170,12 @@ export function useActiveModuleGroups(enabled = true) {
                 const alreadyRegistered = modules.some((module) => module.url === exploreUrl);
 
                 if (!alreadyRegistered) {
-                    const projectGroup = groups.find(
+                    const exploreGroup = groups.find(
                         (group) => (group.name ?? "").toLowerCase() === "project management",
                     );
                     const exploreModule: SidebarModule = {
-                        id: 100002,
-                        moduleGroupId: String(projectGroup?.id ?? 100000),
+                        id: 100005,
+                        moduleGroupId: String(exploreGroup?.id ?? 100000),
                         title: "Explore Projects",
                         name: "Explore Projects",
                         url: exploreUrl,
@@ -186,8 +185,8 @@ export function useActiveModuleGroups(enabled = true) {
                         isActive: true,
                     };
 
-                    if (projectGroup) {
-                        const groupId = String(projectGroup.id ?? "");
+                    if (exploreGroup) {
+                        const groupId = String(exploreGroup.id ?? "");
                         if (!groupedModules[groupId]) groupedModules[groupId] = [];
                         groupedModules[groupId].push(exploreModule);
                     } else {
@@ -204,7 +203,6 @@ export function useActiveModuleGroups(enabled = true) {
                 }
             }
 
-=======
             let projectGroup = groups.find(
                 (group) => (group.name ?? "").toLowerCase() === "project management",
             );
@@ -290,7 +288,6 @@ export function useActiveModuleGroups(enabled = true) {
                 });
             }
 
->>>>>>> feature/project
             return groups
                 .map((group) => {
                     const groupId = String(group.id ?? "");

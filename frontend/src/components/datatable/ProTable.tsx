@@ -62,19 +62,20 @@ interface ProTableProps<TData = any> {
     /** Optional: Complete override of row actions. If provided, you have full control */
     renderRowActions?: (row: TData) => React.ReactNode;
 
-<<<<<<< HEAD
     /**
      * Optional: extra entity-specific row buttons appended after the default
      * view / edit / delete actions (e.g. "Clone template").
      */
     renderExtraRowActions?: (row: TData) => React.ReactNode;
-=======
+
+    /** Optional: per-field cell override (Task table). */
     renderCell?: (row: TData, field: FieldSchema) => React.ReactNode;
 
+    /** Optional: denser toolbar layout (Task table). */
     compactToolbar?: boolean;
 
+    /** Optional: render cards instead of the table on small screens (Task table). */
     responsiveCards?: boolean;
->>>>>>> feature/project
 
     /** Optional: Custom card renderer for card view */
     renderCard?: (props: EntityCardRendererProps) => React.ReactNode;
@@ -156,13 +157,10 @@ export function ProTable<TData = any>({
     extraHeaderActions,
     browseActions,
     renderRowActions,
-<<<<<<< HEAD
     renderExtraRowActions,
-=======
     renderCell,
     compactToolbar = false,
     responsiveCards = false,
->>>>>>> feature/project
     renderCard,
     cardLayout = "grid",
     onView,
