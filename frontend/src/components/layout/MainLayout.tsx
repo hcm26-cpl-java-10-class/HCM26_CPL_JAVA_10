@@ -18,14 +18,14 @@ export function MainLayout({
 
     if (isStudentView) {
         return (
-            <div className="flex h-screen max-h-[calc(100vh-18px)] flex-col overflow-hidden">
+            <div className="flex min-h-screen flex-col">
                 <StudentNavbar />
 
                 <header className="flex min-h-14 shrink-0 items-center border-b px-6 py-2">
                     <DynamicBreadcrumbs pathTitles={pathName} variant="student" />
                 </header>
 
-                <main className="flex flex-1 min-h-0 flex-col overflow-y-auto px-6 pb-6 pt-4">
+                <main className="flex-1 px-6 pb-6 pt-4">
                     {children}
                 </main>
             </div>
