@@ -32,7 +32,7 @@ export default function TaskManagementPage() {
     <MainLayout pathName={{ tasks: "Tasks" }}>
       <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-xl font-semibold">Task Management</h1>
+          <h1 className="text-xl font-semibold">Tasks</h1>
           {projectSelected && (
             <Popover open={projectOpen} onOpenChange={setProjectOpen}>
               <PopoverTrigger asChild>
