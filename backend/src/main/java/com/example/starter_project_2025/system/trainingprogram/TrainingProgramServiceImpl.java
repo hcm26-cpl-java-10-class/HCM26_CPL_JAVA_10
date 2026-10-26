@@ -19,7 +19,17 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
 
     @Override
     @Transactional(readOnly = true)
-    
+    public List<TrainingProgramResponse> findAll(String search, ProgramStatus status, String region) {
+        String q = search == null ? "" : search.trim().toLowerCase(Locale.ROOT);
+        String r = region == null ? "" : region.trim().toLowerCase(Locale.ROOT);
+        return programRepository.findAll().stream()
+                .filter(p -> q.isEmpty() || p.getCode().toLowerCase(Locale.ROOT).contains(q)
+                        || p.getName().toLowerCase(Locale.ROOT).contains(q))
+                .filter(p -> status == null || p.getStatus() == status)
+                .filter(p -> r.isEmpty() || (p.getRegion() != null && p.getRegion().toLowerCase(Locale.ROOT).contains(r)))
+                .sorted(Comparator.comparing(TrainingProgram::getId).reversed())
+                .map(this::toResponse).toList();
+    }
 
     @Override
     @Transactional(readOnly = true)
