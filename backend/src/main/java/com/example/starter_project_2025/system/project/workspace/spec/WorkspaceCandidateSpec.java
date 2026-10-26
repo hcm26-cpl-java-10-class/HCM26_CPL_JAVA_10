@@ -1,6 +1,9 @@
 package com.example.starter_project_2025.system.project.workspace.spec;
 
 import com.example.starter_project_2025.system.project.team.ParticipationStatus;
+import com.example.starter_project_2025.system.project.ProjectMember;
+import com.example.starter_project_2025.system.project.ProjectTeam;
+import com.example.starter_project_2025.system.project.ProjectTeamStatus;
 import com.example.starter_project_2025.system.project.team.Team;
 import com.example.starter_project_2025.system.project.team.TeamMember;
 import com.example.starter_project_2025.system.project.workspace.domain.Workspace;

@@ -19,8 +19,9 @@ public final class MilestoneSpecifications {
     }
 
     public static Specification<Milestone> matching(
-            UUID tenantId,
-            UUID projectId,
+            Long tenantId,
+            Long projectId,
+            Long teamId,
             String search,
             List<MilestoneStatus> statuses,
             Boolean mandatory,
@@ -31,8 +32,15 @@ public final class MilestoneSpecifications {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(criteriaBuilder.equal(root.get("tenantId"), tenantId));
-            predicates.add(criteriaBuilder.equal(root.get("projectId"), projectId));
+            if (projectId != null) {
+                predicates.add(criteriaBuilder.equal(root.get("projectId"), projectId));
+            } else {
+                predicates.add(criteriaBuilder.isNull(root.get("projectId")));
+            }
             predicates.add(criteriaBuilder.isTrue(root.get("active")));
+            if (teamId != null) {
+                predicates.add(criteriaBuilder.equal(root.get("teamId"), teamId));
+            }
 
             if (search != null) {
                 String pattern = "%" + escapeLike(search.toLowerCase(Locale.ROOT)) + "%";

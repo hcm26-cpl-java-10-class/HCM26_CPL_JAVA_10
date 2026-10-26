@@ -7,5 +7,5 @@ import java.util.UUID;
 
 public interface IdempotencyRepository extends JpaRepository<IdempotencyRecord, UUID> {
     Optional<IdempotencyRecord> findByTenantIdAndActorIdAndOperationAndIdempotencyKey(
-            UUID tenantId, UUID actorId, String operation, String idempotencyKey);
+            Long tenantId, UUID actorId, String operation, String idempotencyKey);
 }

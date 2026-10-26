@@ -1,6 +1,9 @@
 package com.example.starter_project_2025.system.project.workspace.service;
 
 import com.example.starter_project_2025.system.project.team.ParticipationStatus;
+import com.example.starter_project_2025.system.project.ProjectMember;
+import com.example.starter_project_2025.system.project.ProjectMemberRepository;
+import com.example.starter_project_2025.system.project.ProjectTeam;
 import com.example.starter_project_2025.system.project.team.ProjectRole;
 import com.example.starter_project_2025.system.project.team.Team;
 import com.example.starter_project_2025.system.project.team.TeamMember;

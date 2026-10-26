@@ -14,15 +14,15 @@ import java.util.UUID;
 public class MilestoneCreateOptionsService {
 
     private final CurrentActorProvider actorProvider;
-    private final CurrentTenantProvider tenantProvider;
+    private final MilestoneTenantProvider tenantProvider;
     private final ProjectMilestonePort projectPort;
     private final RubricCatalogPort rubricPort;
     private final MilestoneAccessPolicy accessPolicy;
 
     @Transactional(readOnly = true)
-    public MilestoneCreateOptionsResponse getOptions(UUID projectId) {
+    public MilestoneCreateOptionsResponse getOptions(Long projectId) {
         UUID actorId = actorProvider.requireCurrentActorId();
-        UUID tenantId = tenantProvider.requireCurrentTenantId();
+        Long tenantId = tenantProvider.requireCurrentTenantId();
         ProjectCreationContext project = projectPort.requireProjectForCreation(projectId, actorId, tenantId);
         accessPolicy.requireAccess(project);
         accessPolicy.requireCreatableState(project);
@@ -40,6 +40,25 @@ public class MilestoneCreateOptionsService {
                                                 c.ratings().stream().map(rating -> new RubricRatingOptionResponse(
                                                         rating.level(), rating.percentage(), rating.description(), rating.orderIndex())).toList()))
                         .toList()))
+                        .toList()
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public MilestoneCreateOptionsResponse getTeamOptions(Long teamId) {
+        UUID actorId = actorProvider.requireCurrentActorId();
+        Long tenantId = tenantProvider.requireCurrentTenantId();
+        if (teamId == null || teamId <= 0) {
+            throw new IllegalArgumentException("Team ID is required");
+        }
+        return new MilestoneCreateOptionsResponse(
+                new ProjectOptionResponse(null, "Team workspace", "TEAM_ONLY"),
+                rubricPort.findAllowedRubrics(null, actorId, tenantId).stream()
+                        .map(r -> new RubricOptionResponse(r.id(), r.name(), r.version(),
+                                r.criteria().stream().map(c -> new RubricCriterionOptionResponse(
+                                        c.code(), c.name(), c.weight(), c.maxScore(),
+                                        c.ratings().stream().map(rating -> new RubricRatingOptionResponse(
+                                                rating.level(), rating.percentage(), rating.description(), rating.orderIndex())).toList())).toList()))
                         .toList()
         );
     }

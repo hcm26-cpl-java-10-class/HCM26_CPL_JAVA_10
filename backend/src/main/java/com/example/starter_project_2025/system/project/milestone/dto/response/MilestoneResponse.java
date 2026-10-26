@@ -10,7 +10,8 @@ import java.util.UUID;
 
 public record MilestoneResponse(
         UUID id,
-        UUID projectId,
+        Long projectId,
+        Long teamId,
         String title,
         String description,
         Instant deadline,

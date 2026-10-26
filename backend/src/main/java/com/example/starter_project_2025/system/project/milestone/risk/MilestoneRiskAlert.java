@@ -9,7 +9,7 @@ import java.util.UUID;
 @Getter @Setter @NoArgsConstructor
 public class MilestoneRiskAlert {
     @Id private UUID id;
-    @Column(nullable = false) private UUID projectId;
+    @Column(nullable = false) private Long projectId;
     @Column(name = "milestone_id", nullable = false) private UUID milestoneId;
     @Column(nullable = false) private Long tenantId;
     @Column(name = "actor_id", nullable = false) private Long actorId;

@@ -5,8 +5,6 @@ import com.example.starter_project_2025.system.project.milestone.integration.mod
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.AccessDeniedException;
 
-import java.util.UUID;
-
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -38,7 +36,7 @@ class MilestoneAccessPolicyTest {
             boolean mentorAssigned
     ) {
         return new ProjectReadContext(
-                UUID.randomUUID(), UUID.randomUUID(), "Project", status, tenantActive, mentorAssigned
+                1L, 1L, "Project", status, tenantActive, mentorAssigned
         );
     }
 }

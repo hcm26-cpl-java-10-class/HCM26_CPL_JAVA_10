@@ -53,7 +53,8 @@ public class RubricDataInitializer implements CommandLineRunner {
                       List<RubricVersion.CriterionValue> criteria) {
         if (repository.existsById(rubricId)) return;
         Instant now = milestoneClock.instant();
-        Rubric rubric = Rubric.create(rubricId, MockMilestoneData.TENANT_ID, name, description, ACTOR_ID, now);
+        Rubric rubric = Rubric.create(rubricId, java.util.UUID.nameUUIDFromBytes(("tenant:" + MockMilestoneData.TENANT_ID)
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8)), name, description, ACTOR_ID, now);
         RubricVersion version = RubricVersion.draft(versionId, rubric, 1, ACTOR_ID, now);
         version.replaceDraft(name, description, criteria, ACTOR_ID, now);
         version.publish(ACTOR_ID, now);

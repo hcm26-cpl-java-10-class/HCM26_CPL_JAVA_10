@@ -13,7 +13,7 @@ import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
-import com.example.starter_project_2025.system.project.Tenant;
+import com.example.starter_project_2025.system.project.tenant.Tenant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;

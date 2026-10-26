@@ -206,6 +206,7 @@ public class MockMilestoneDataInitializer implements CommandLineRunner {
         Milestone milestone = Milestone.create(
                 MockMilestoneData.TENANT_ID,
                 sample.projectId(),
+                1L,
                 sample.title(),
                 sample.description(),
                 sample.deadline(),
@@ -225,7 +226,7 @@ public class MockMilestoneDataInitializer implements CommandLineRunner {
     }
 
     private record SampleMilestone(
-            UUID projectId,
+            Long projectId,
             String title,
             String description,
             Instant deadline,

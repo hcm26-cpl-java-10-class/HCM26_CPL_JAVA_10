@@ -17,6 +17,10 @@ import com.example.starter_project_2025.system.project.workspace.repository.Work
 import com.example.starter_project_2025.system.project.workspace.spec.WorkspaceCandidateSpec;
 
 import com.example.starter_project_2025.system.project.trainingclass.TrainingClass;
+import com.example.starter_project_2025.system.project.ProjectMemberRepository;
+import com.example.starter_project_2025.system.project.ProjectTeam;
+import com.example.starter_project_2025.system.project.ProjectTeamRepository;
+import com.example.starter_project_2025.system.project.ProjectTeamStatus;
 import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -88,6 +92,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
                 && (project == null || (Boolean.TRUE.equals(project.getIsActive()) && access.projectCanStart(project)));
         String reason = eligible ? null : existing != null ? "This team already has a workspace."
                 : memberCount == 0 ? "Add at least one active member to this team before creating a workspace."
+                : project == null ? "Select a project template before creating a workspace."
                 : "The assigned project must be Planning or Active.";
 
         return WorkspaceCandidateItem.builder()
@@ -119,10 +124,10 @@ public class WorkspaceServiceImpl implements WorkspaceService {
         var chosen = selection.resolve(user, request, false);
         var result = toCandidateItem(chosen.team());
         Project project = chosen.project();
-        result.setProjectId(project.getId());
-        result.setProjectName(project.getName());
-        result.setProjectCode(project.getCode());
-        result.setProjectStatus(project.getStatus());
+        result.setProjectId(project == null ? null : project.getId());
+        result.setProjectName(project == null ? null : project.getName());
+        result.setProjectCode(project == null ? null : project.getCode());
+        result.setProjectStatus(project == null ? null : project.getStatus());
         result.setEligibleForWorkspace(true);
         result.setIneligibleReason(null);
         return result;
@@ -154,6 +159,10 @@ public class WorkspaceServiceImpl implements WorkspaceService {
             }
             if (message.contains("uk_workspace_tenant_project_team") || message.contains("uk_workspace_project_team")) {
                 throw new WorkspaceConflictException("Project/team đã có workspace", null);
+            }
+            if (message.contains("project_id") && message.contains("null")) {
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                        "Database schema chưa cho phép Workspace không gắn Project. Vui lòng restart backend để chạy migration.", exception);
             }
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                     "Không thể hoàn tất khởi tạo workspace. Vui lòng thử lại.", exception);

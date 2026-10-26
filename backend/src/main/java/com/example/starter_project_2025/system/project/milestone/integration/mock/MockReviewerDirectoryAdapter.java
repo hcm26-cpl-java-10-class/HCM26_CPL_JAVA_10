@@ -22,13 +22,13 @@ public class MockReviewerDirectoryAdapter implements ReviewerDirectoryPort {
     );
 
     @Override
-    public List<ReviewerData> findEligibleReviewers(UUID projectId, UUID actorId, UUID tenantId) {
+    public List<ReviewerData> findEligibleReviewers(Long projectId, UUID actorId, Long tenantId) {
         return reviewers;
     }
 
     @Override
     public ReviewerData requireEligibleReviewer(
-            UUID reviewerId, UUID projectId, UUID actorId, UUID tenantId) {
+            UUID reviewerId, Long projectId, UUID actorId, Long tenantId) {
         return reviewers.stream()
                 .filter(reviewer -> reviewer.id().equals(reviewerId)
                         && reviewer.active()
@@ -40,7 +40,7 @@ public class MockReviewerDirectoryAdapter implements ReviewerDirectoryPort {
     }
 
     @Override
-    public ReviewerData requireReviewerForRead(UUID reviewerId, UUID projectId, UUID tenantId) {
+    public ReviewerData requireReviewerForRead(UUID reviewerId, Long projectId, Long tenantId) {
         if (!MockMilestoneData.TENANT_ID.equals(tenantId)) {
             throw new MilestoneDependencyException("Milestone reviewer could not be loaded");
         }

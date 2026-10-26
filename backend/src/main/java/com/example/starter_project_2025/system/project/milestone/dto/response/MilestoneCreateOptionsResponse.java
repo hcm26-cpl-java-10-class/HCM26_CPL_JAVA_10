@@ -7,3 +7,4 @@ public record MilestoneCreateOptionsResponse(
         List<RubricOptionResponse> rubrics
 ) {
 }
+

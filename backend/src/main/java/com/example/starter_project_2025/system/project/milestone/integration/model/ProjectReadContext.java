@@ -3,8 +3,8 @@ package com.example.starter_project_2025.system.project.milestone.integration.mo
 import java.util.UUID;
 
 public record ProjectReadContext(
-        UUID projectId,
-        UUID tenantId,
+        Long projectId,
+        Long tenantId,
         String projectName,
         ProjectStatus status,
         boolean tenantActive,

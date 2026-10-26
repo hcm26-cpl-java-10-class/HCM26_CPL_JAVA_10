@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.project.workspace.service;
 
 import com.example.starter_project_2025.system.project.cohort.Cohort;
 import com.example.starter_project_2025.system.project.domain.Project;
+import com.example.starter_project_2025.system.project.ProjectTeam;
 import com.example.starter_project_2025.system.project.domain.ProjectTopicSnapshot;
 import com.example.starter_project_2025.system.project.dto.ProjectHubDtos;
 import com.example.starter_project_2025.system.project.team.Team;
@@ -43,14 +44,16 @@ public class WorkspaceReadService {
         Project project = workspace.getProject();
         ProjectTeam team = workspace.getTeam();
         var trainingClass = team.getTrainingClass();
-        var snapshot = snapshots.findByProjectId(project.getId()).map(this::snapshotResponse).orElse(null);
+        var snapshot = project == null ? null : snapshots.findByProjectId(project.getId()).map(this::snapshotResponse).orElse(null);
         // A blank snapshot description stays blank; do not substitute newer project content.
-        String description = snapshot != null ? snapshot.description() : project.getDescription();
+        String description = snapshot != null ? snapshot.description() : project == null ? null : project.getDescription();
         return WorkspaceDetailResponse.builder()
                 .id(workspace.getId()).code(workspace.getCode()).name(workspace.getName())
                 .status(workspace.getStatus())
-                .projectId(project.getId()).projectCode(project.getCode()).projectName(project.getName())
-                .projectDescription(description).projectStatus(project.getStatus())
+                .projectId(project == null ? null : project.getId())
+                .projectCode(project == null ? null : project.getCode())
+                .projectName(project == null ? null : project.getName())
+                .projectDescription(description).projectStatus(project == null ? null : project.getStatus())
                 .teamId(team.getId()).teamCode(team.getCode()).teamName(team.getTeamName())
                 .mentorName(team.getAssignedMentorId() == null ? null :
                         users.findById(team.getAssignedMentorId()).map(User::getFullName).orElse(null))

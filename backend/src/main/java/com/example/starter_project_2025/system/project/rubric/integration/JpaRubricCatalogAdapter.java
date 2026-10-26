@@ -18,14 +18,14 @@ public class JpaRubricCatalogAdapter implements RubricCatalogPort {
     private final RubricVersionRepository repository;
 
     @Override
-    public List<RubricSnapshotData> findAllowedRubrics(UUID projectId, UUID actorId, UUID tenantId) {
+    public List<RubricSnapshotData> findAllowedRubrics(Long projectId, UUID actorId, Long tenantId) {
         return repository.findAllByRubricTenantIdAndStatusOrderByNameSnapshotAscVersionNumberDesc(
-                tenantId, RubricVersionStatus.PUBLISHED).stream().map(this::map).toList();
+                tenantAlias(tenantId), RubricVersionStatus.PUBLISHED).stream().map(this::map).toList();
     }
 
     @Override
-    public RubricSnapshotData requireAllowedSnapshot(UUID id, UUID projectId, UUID actorId, UUID tenantId) {
-        RubricVersion version = repository.findByIdAndRubricTenantId(id, tenantId)
+    public RubricSnapshotData requireAllowedSnapshot(UUID id, Long projectId, UUID actorId, Long tenantId) {
+        RubricVersion version = repository.findByIdAndRubricTenantId(id, tenantAlias(tenantId))
                 .filter(item -> item.getStatus() == RubricVersionStatus.PUBLISHED)
                 .orElseThrow(() -> new MilestoneValidationException(Map.of(
                         "rubricSnapshotId", List.of("Rubric is not available"))));
@@ -33,11 +33,18 @@ public class JpaRubricCatalogAdapter implements RubricCatalogPort {
     }
 
     @Override
-    public RubricSnapshotData requireSnapshotForRead(UUID id, UUID projectId, UUID tenantId) {
-        return repository.findByIdAndRubricTenantId(id, tenantId)
+    public RubricSnapshotData requireSnapshotForRead(UUID id, Long projectId, Long tenantId) {
+        return repository.findByIdAndRubricTenantId(id, tenantAlias(tenantId))
                 .filter(item -> item.getStatus() == RubricVersionStatus.PUBLISHED)
                 .map(this::map)
                 .orElseThrow(() -> new MilestoneDependencyException("Milestone rubric version could not be loaded"));
+    }
+
+    private UUID tenantAlias(Long tenantId) {
+        if (Long.valueOf(1L).equals(tenantId)) {
+            return UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        }
+        return UUID.nameUUIDFromBytes(("milestone:tenant:" + tenantId).getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     private RubricSnapshotData map(RubricVersion version) {

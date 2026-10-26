@@ -10,3 +10,4 @@ public record MilestoneRubricDetailResponse(
         List<MilestoneRubricCriterionResponse> criteria
 ) {
 }
+

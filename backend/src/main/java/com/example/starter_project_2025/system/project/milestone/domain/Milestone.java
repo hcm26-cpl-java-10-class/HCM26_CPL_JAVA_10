@@ -23,10 +23,13 @@ public class Milestone {
     private UUID id;
 
     @Column(name = "tenant_id", nullable = false, updatable = false)
-    private UUID tenantId;
+    private Long tenantId;
 
-    @Column(name = "project_id", nullable = false, updatable = false)
-    private UUID projectId;
+    @Column(name = "project_id", updatable = false)
+    private Long projectId;
+
+    @Column(name = "team_id", nullable = false, updatable = false)
+    private Long teamId;
 
     @Column(nullable = false, length = 120)
     private String title;
@@ -89,8 +92,9 @@ public class Milestone {
     private List<MilestoneChecklistItem> checklistItems = new ArrayList<>();
 
     public static Milestone create(
-            UUID tenantId,
-            UUID projectId,
+            Long tenantId,
+            Long projectId,
+            Long teamId,
             String title,
             String description,
             Instant deadline,
@@ -106,6 +110,7 @@ public class Milestone {
         Milestone milestone = new Milestone();
         milestone.tenantId = tenantId;
         milestone.projectId = projectId;
+        milestone.teamId = teamId;
         milestone.title = title;
         milestone.description = description;
         milestone.deadline = deadline;

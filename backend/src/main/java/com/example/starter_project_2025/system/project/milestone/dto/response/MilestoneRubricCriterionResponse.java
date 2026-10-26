@@ -14,3 +14,4 @@ public record MilestoneRubricCriterionResponse(
         this(code, name, weight, maxScore, List.of());
     }
 }
+

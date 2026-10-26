@@ -6,9 +6,9 @@ import java.util.List;
 import java.util.UUID;
 
 public interface ReviewerDirectoryPort {
-    List<ReviewerData> findEligibleReviewers(UUID projectId, UUID actorId, UUID tenantId);
+    List<ReviewerData> findEligibleReviewers(Long projectId, UUID actorId, Long tenantId);
 
-    ReviewerData requireEligibleReviewer(UUID reviewerId, UUID projectId, UUID actorId, UUID tenantId);
+    ReviewerData requireEligibleReviewer(UUID reviewerId, Long projectId, UUID actorId, Long tenantId);
 
-    ReviewerData requireReviewerForRead(UUID reviewerId, UUID projectId, UUID tenantId);
+    ReviewerData requireReviewerForRead(UUID reviewerId, Long projectId, Long tenantId);
 }
