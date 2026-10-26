@@ -5,47 +5,54 @@ import org.springframework.stereotype.Component;
 
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 
 @Component
 public class CsvParser implements FileParser {
 
     @Override
     public boolean supports(String filename) {
-        return filename.endsWith(".csv");
+        return filename != null && filename.toLowerCase(Locale.ROOT).endsWith(".csv");
     }
 
     @Override
     public List<Map<String, String>> parse(InputStream input) {
 
-        List<Map<String, String>> result = new ArrayList<>();
-
-        try (CSVReader reader = new CSVReader(new InputStreamReader(input))) {
-
-            List<String[]> rows = reader.readAll();
-
-            if (rows.size() < 2) return result;
-
-            String[] headers = rows.get(0);
-
-            for (int i = 1; i < rows.size(); i++) {
-                Map<String, String> rowMap = new HashMap<>();
-
-                String[] row = rows.get(i);
-
-                for (int j = 0; j < headers.length; j++) {
-                    rowMap.put(headers[j], j < row.length ? row[j] : "");
-                }
-
-                result.add(rowMap);
+        try (CSVReader reader = new CSVReader(new InputStreamReader(input, StandardCharsets.UTF_8))) {
+            List<String[]> records = reader.readAll();
+            if (records.isEmpty()) {
+                throw new IllegalArgumentException("The CSV file is missing its header row");
             }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+            String[] headers = records.getFirst();
+            Set<String> seen = new HashSet<>();
+            for (int column = 0; column < headers.length; column++) {
+                headers[column] = headers[column].replace("\uFEFF", "").trim();
+                if (headers[column].isEmpty()) {
+                    throw new IllegalArgumentException("Missing column header at column " + (column + 1));
+                }
+                if (!seen.add(headers[column].toLowerCase(Locale.ROOT))) {
+                    throw new IllegalArgumentException("Duplicate column header: " + headers[column]);
+                }
+            }
 
-        return result;
+            List<Map<String, String>> result = new ArrayList<>();
+            for (int index = 1; index < records.size(); index++) {
+                Map<String, String> values = new LinkedHashMap<>();
+                String[] record = records.get(index);
+                if (record.length > headers.length) {
+                    throw new IllegalArgumentException("CSV row " + (index + 1) + " has more values than column headers");
+                }
+                for (int column = 0; column < headers.length; column++) {
+                    values.put(headers[column], column < record.length ? record[column] : "");
+                }
+                result.add(values);
+            }
+            return result;
+        } catch (IllegalArgumentException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("Unable to read the CSV file. Upload a valid UTF-8 CSV file.", exception);
+        }
     }
 }

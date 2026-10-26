@@ -7,9 +7,10 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.io.PrintWriter;
+import java.io.OutputStreamWriter;
+import java.io.BufferedWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Component
 public class CsvExporter implements Exporter {
@@ -26,29 +27,31 @@ public class CsvExporter implements Exporter {
             OutputStream os
     ) throws IOException {
 
-        PrintWriter writer = new PrintWriter(os);
+        BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os, StandardCharsets.UTF_8));
+        writer.write('\uFEFF');
 
-        // Header
-        writer.println(
-                config.columns().stream()
-                        .map(ExportColumn::header)
-                        .collect(Collectors.joining(","))
-        );
+        writeRow(writer, config.columns().stream().map(ExportColumn::header).toList());
 
-        // Data
         for (T item : data) {
-            String line = config.columns().stream()
-                    .map(c -> {
-                        Object v = c.valueExtractor().apply(item);
-                        return v != null ? v.toString() : "";
+            writeRow(writer, config.columns().stream()
+                    .map(column -> {
+                        Object value = column.valueExtractor().apply(item);
+                        return value == null ? "" : value.toString();
                     })
-                    .collect(Collectors.joining(","));
-
-            writer.println(line);
+                    .toList());
         }
-
         writer.flush();
     }
-}
 
+    private void writeRow(BufferedWriter writer, List<String> values) throws IOException {
+        for (int index = 0; index < values.size(); index++) {
+            if (index > 0) writer.write(',');
+            String value = values.get(index);
+            writer.write('"');
+            writer.write(value.replace("\"", "\"\""));
+            writer.write('"');
+        }
+        writer.write("\r\n");
+    }
+}
 

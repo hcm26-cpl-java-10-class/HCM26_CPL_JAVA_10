@@ -16,7 +16,10 @@ import { ExportTab } from "./ExportTab";
 interface ExportModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  table: any;
+  table: {
+    schema?: { entityName?: string; exportFormats?: FileFormat[] };
+    exportFile?: (format: FileFormat) => Promise<unknown>;
+  };
   title?: string;
   description?: string;
   canExport?: boolean;
@@ -67,7 +70,7 @@ export function ExportModal({
         </DialogHeader>
 
         <Tabs defaultValue="export" className="w-full flex-1 flex flex-col">
-          <ExportTab loading={exportLoading} onExport={handleExport} />
+          <ExportTab loading={exportLoading} onExport={handleExport} formats={schema?.exportFormats} />
         </Tabs>
 
         <DialogFooter>

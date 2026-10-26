@@ -30,7 +30,24 @@ import java.util.stream.Collectors;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Tag(name = "Study Session", description = "APIs for managing study sessions")
 public class StudySessionController
-        extends BaseCrudDataIoController<StudySession, Long, StudySessionDTO, StudySessionFilter> {
+        extends com.example.starter_project_2025.base.crud.controller.BaseCrudController<Long, StudySessionDTO, StudySessionFilter> {
+
+    @org.springframework.beans.factory.annotation.Autowired
+    @lombok.experimental.NonFinal
+    com.example.starter_project_2025.base.dataio.exporter.service.ExportService exportService;
+
+    @org.springframework.web.bind.annotation.GetMapping("/export")
+    public void exportFile(
+            @RequestParam(defaultValue = "EXCEL") com.example.starter_project_2025.base.dataio.common.FileFormat format,
+            @RequestParam(required = false) String search,
+            @org.springframework.web.bind.annotation.ModelAttribute StudySessionFilter filter,
+            org.springframework.data.domain.Pageable pageable,
+            jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
+        var sort = pageable.getSort().isUnsorted()
+                ? org.springframework.data.domain.Sort.by("sessionDate", "startTime", "id") : pageable.getSort();
+        var sessions = studySessionService.getAll(org.springframework.data.domain.Pageable.unpaged(sort), search, filter).getContent();
+        exportService.export(format, sessions, StudySessionDTO.class, response);
+    }
 
     StudySessionService studySessionService;
     StudySessionRepository studySessionRepository;
@@ -46,7 +63,6 @@ public class StudySessionController
         return studySessionService.statistics(subjectId, sessionDateFrom, sessionDateTo);
     }
 
-    @Override
     @PostMapping(value = "/import", consumes = "multipart/form-data")
     public ImportResult importFile(@RequestParam("file") MultipartFile file) {
         return studySessionImportService.importFile(file, StudySession.class, studySessionRepository, session -> {
@@ -70,12 +86,10 @@ public class StudySessionController
         return studySessionService;
     }
 
-    @Override
     protected BaseCrudRepository<StudySession, Long> getRepository() {
         return studySessionRepository;
     }
 
-    @Override
     protected Class<StudySession> getEntityClass() {
         return StudySession.class;
     }

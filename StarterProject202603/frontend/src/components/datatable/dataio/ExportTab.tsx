@@ -34,9 +34,10 @@ const exportOptions = [
 interface ExportTabProps {
   loading: boolean;
   onExport: (format: FileFormat) => Promise<void>;
+  formats?: FileFormat[];
 }
 
-export function ExportTab({ loading, onExport }: ExportTabProps) {
+export function ExportTab({ loading, onExport, formats }: ExportTabProps) {
   const [selectedFormat, setSelectedFormat] = useState<FileFormat | null>(null);
 
   const handleExportClick = async () => {
@@ -60,7 +61,7 @@ export function ExportTab({ loading, onExport }: ExportTabProps) {
       </div>
 
       <div className="space-y-2">
-        {exportOptions.map((option) => {
+        {exportOptions.filter((option) => !formats || formats.includes(option.format)).map((option) => {
           const IconComponent = option.icon;
           return (
             <div

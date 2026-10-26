@@ -1,6 +1,6 @@
 import { createBaseApiService } from "@/api/base-service.api";
 import axiosInstance from "@/api/axios";
-import type { Pagination, StudySessionDTO, StudySessionFilter } from "@/types";
+import type { FileFormat, Pagination, StudySessionDTO, StudySessionFilter } from "@/types";
 
 const path = "/study-sessions";
 
@@ -58,6 +58,16 @@ export const studySessionApi = Object.assign({}, base, {
         sessionDateTo: sessionDate?.to ?? filter?.sessionDateTo,
       } as StudySessionFilter,
     );
+  },
+  export: (format: FileFormat, search?: string, filter?: StudySessionFilter, sort?: string[]) => {
+    const { sessionDate, ...rest } = filter ?? {};
+    return axiosInstance.get(`${path}/export`, {
+      params: { format, search, ...rest,
+        sessionDateFrom: sessionDate?.from ?? filter?.sessionDateFrom,
+        sessionDateTo: sessionDate?.to ?? filter?.sessionDateTo, sort },
+      paramsSerializer: { indexes: null },
+      responseType: "blob",
+    });
   },
   update: async (id: string, data: StudySessionDTO) => {
     if (data.subjectId !== undefined) {

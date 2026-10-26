@@ -92,6 +92,7 @@ export interface FieldSchema {
 }
 
 export interface EntitySchema {
+  exportFormats?: import("./file-format").FileFormat[];
   duplicateInitial?: (row: any) => Promise<Record<string, unknown>>;
   entityName: string;
   idField: string;

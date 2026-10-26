@@ -14,6 +14,7 @@ import {
 const studySessionSchema: EntitySchema = {
   entityName: "study-session",
   idField: "id",
+  exportFormats: ["EXCEL", "CSV", "PDF"],
   validateForm: validateStudySession,
   duplicateInitial: async (row) => {
     const initial = toDuplicateInitial(row);
