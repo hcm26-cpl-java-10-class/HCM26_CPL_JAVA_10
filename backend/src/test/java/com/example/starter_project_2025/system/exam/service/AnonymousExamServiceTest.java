@@ -21,6 +21,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -111,8 +112,8 @@ class AnonymousExamServiceTest {
         attempt.setExam(exam);
         attempt.setStudent(student);
         attempt.setStatus(ExamAttemptStatus.SUBMITTED);
-        attempt.setObjectiveScore(7);
-        attempt.setFinalScore(7);
+        attempt.setObjectiveScore(new BigDecimal(7));
+        attempt.setFinalScore(new BigDecimal(7));
         attempt.setTotalPoints(10);
         attempt.setSubmittedAt(Instant.now().minusSeconds(60));
     }
@@ -240,8 +241,8 @@ class AnonymousExamServiceTest {
                 eq("sv@example.com"),
                 eq("Nguyen Van A"),
                 eq("Kỳ thi giữa kỳ"),
-                eq(7),
-                eq(10),
+                eq(new BigDecimal(7)),
+                eq(BigDecimal.TEN),
                 anyString(),
                 eq(false)
         );
@@ -298,7 +299,7 @@ class AnonymousExamServiceTest {
     void essayPendingUsesObjectiveScore() {
         givenValidSession();
         attempt.setFinalScore(null);
-        attempt.setObjectiveScore(6);
+        attempt.setObjectiveScore(new BigDecimal(6));
         attempt.setStatus(ExamAttemptStatus.PENDING_REVIEW);
         when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
         ExamAttemptDTO dto = new ExamAttemptDTO();
@@ -311,7 +312,7 @@ class AnonymousExamServiceTest {
         service.submit(TOKEN, ATTEMPT_ID, List.of());
 
         verify(emailService, times(1)).sendAnonymousExamResult(
-                eq("sv@example.com"), anyString(), anyString(), eq(6), eq(10), anyString(), eq(true));
+                eq("sv@example.com"), anyString(), anyString(), eq(new BigDecimal(6)), eq(BigDecimal.TEN), anyString(), eq(true));
     }
 
     @Test
@@ -341,7 +342,7 @@ class AnonymousExamServiceTest {
     @DisplayName("Gửi kết quả cuối cho học sinh anonymous sau khi chấm")
     void sendsFinalResultToGuest() {
         when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
-        attempt.setFinalScore(9);
+        attempt.setFinalScore(new BigDecimal(9));
 
         service.sendFinalResultToGuest(ATTEMPT_ID);
 
@@ -349,8 +350,8 @@ class AnonymousExamServiceTest {
                 eq("sv@example.com"),
                 eq("Nguyen Van A"),
                 eq("Kỳ thi giữa kỳ"),
-                eq(9),
-                eq(10),
+                eq(new BigDecimal(9)),
+                eq(BigDecimal.TEN),
                 anyString(),
                 eq(false)
         );
@@ -360,7 +361,7 @@ class AnonymousExamServiceTest {
     @DisplayName("Bài thi của tài khoản thật thì không gửi email kiểu anonymous")
     void doesNotSendFinalResultToRealAccount() {
         attempt.getStudent().setIsGuest(false);
-        attempt.setFinalScore(9);
+        attempt.setFinalScore(new BigDecimal(9));
         when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
 
         service.sendFinalResultToGuest(ATTEMPT_ID);
@@ -378,6 +379,6 @@ class AnonymousExamServiceTest {
         service.sendFinalResultToGuest(ATTEMPT_ID);
 
         verify(emailService, never()).sendAnonymousExamResult(
-                any(), any(), any(), anyInt(), anyInt(), any(), anyBoolean());
+                any(), any(), any(), any(), any(), any(), anyBoolean());
     }
 }

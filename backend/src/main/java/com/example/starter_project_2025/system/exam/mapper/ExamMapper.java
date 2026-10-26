@@ -5,6 +5,7 @@ import com.example.starter_project_2025.system.exam.domain.Exam;
 import com.example.starter_project_2025.system.exam.dto.ExamDTO;
 import com.example.starter_project_2025.system.exam.service.ExamScoring;
 import com.example.starter_project_2025.system.exam.service.ExamTypePolicy; // NEW
+import com.example.starter_project_2025.system.exam.domain.ExamCategory;
 import com.example.starter_project_2025.system.question.domain.Question;
 import com.example.starter_project_2025.system.question.mapper.QuestionMapper;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +53,7 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setLateGraceMinutes(e.getLateGraceMinutes());
         d.setResultVisibility(e.getResultVisibility());
         d.setExamType(ExamTypePolicy.effective(e.getExamType())); // NEW
+        d.setCategory(e.getCategory() == null ? ExamCategory.ASSESSMENT : e.getCategory());
 
         List<Question> sorted = e.getQuestions().stream()
                 .sorted(Comparator.comparing(Question::getId)).toList();
@@ -88,6 +90,7 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         if (d.getLateGraceMinutes() != null) e.setLateGraceMinutes(d.getLateGraceMinutes());
         if (d.getResultVisibility() != null) e.setResultVisibility(d.getResultVisibility());
         if (d.getExamType() != null) e.setExamType(d.getExamType()); // NEW
+        if (d.getCategory() != null) e.setCategory(d.getCategory());
         if (d.getAccessCode() != null) {
             String trimmed = d.getAccessCode().trim();
             e.setAccessCode(trimmed.isEmpty() ? null : trimmed);

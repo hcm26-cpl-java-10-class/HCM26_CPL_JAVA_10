@@ -78,6 +78,11 @@ public class Exam extends BaseEntity {
     @Column(nullable = false, length = 30)
     private ExamType examType = ExamType.MIXED;
 
+    // Loại thi theo mục đích (assessment / progress test / final test). Đề cũ mặc định ASSESSMENT.
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    private ExamCategory category = ExamCategory.ASSESSMENT;
+
     @Column(length = 100)
     private String accessCode;
 

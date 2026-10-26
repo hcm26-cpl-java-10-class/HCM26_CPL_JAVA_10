@@ -204,8 +204,8 @@ class ExamAttemptServiceTest {
 
         var result = service.submit(30L, 40L, List.of());
 
-        assertEquals(5, result.getObjectiveScore());
-        assertEquals(5, result.getFinalScore());
+        assertScore("10", result.getObjectiveScore());
+        assertScore("10", result.getFinalScore());
         assertEquals(ExamAttemptStatus.SUBMITTED, result.getStatus());
     }
 
@@ -218,8 +218,8 @@ class ExamAttemptServiceTest {
 
         var result = service.submit(30L, 40L, List.of());
 
-        assertEquals(0, result.getObjectiveScore());
-        assertEquals(0, result.getFinalScore());
+        assertScore("0", result.getObjectiveScore());
+        assertScore("0", result.getFinalScore());
     }
 
     @Test
@@ -235,7 +235,7 @@ class ExamAttemptServiceTest {
 
         var result = service.submit(30L, 40L, List.of());
 
-        assertEquals(4, result.getFinalScore());
+        assertScore("8", result.getFinalScore()); // 10 điểm trừ 20%
         assertEquals(20, result.getLatePenaltyPercentApplied());
         assertEquals(true, result.isLate());
     }
@@ -251,7 +251,7 @@ class ExamAttemptServiceTest {
 
         var result = service.submit(30L, 40L, List.of());
 
-        assertEquals(0, result.getObjectiveScore());
+        assertScore("0", result.getObjectiveScore());
         assertNull(result.getFinalScore());
         assertEquals(ExamAttemptStatus.PENDING_REVIEW, result.getStatus());
     }
@@ -309,6 +309,10 @@ class ExamAttemptServiceTest {
     }
 
     // ----- live entities (used by the start-attempt tests) -----
+    private static void assertScore(String expected, java.math.BigDecimal actual) {
+        assertTrue(actual != null && new java.math.BigDecimal(expected).compareTo(actual) == 0,
+                "expected " + expected + " but was " + actual);
+    }
     private Question question(Long id, QuestionType type, int points) {
         Question question = new Question();
         question.setId(id);

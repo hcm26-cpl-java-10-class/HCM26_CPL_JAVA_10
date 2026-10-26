@@ -4,6 +4,7 @@ import java.math.BigDecimal; // NEW
 import com.example.starter_project_2025.base.crud.dto.BaseDTO;
 import com.example.starter_project_2025.base.crud.dto.OnCreate;
 import com.example.starter_project_2025.base.crud.dto.OnUpdate;
+import com.example.starter_project_2025.system.exam.domain.ExamCategory;
 import com.example.starter_project_2025.system.exam.domain.ExamType;
 import com.example.starter_project_2025.system.exam.domain.LatePolicy;
 import com.example.starter_project_2025.system.exam.domain.ResultVisibility;
@@ -69,6 +70,8 @@ public class ExamDTO extends BaseDTO {
     private ResultVisibility resultVisibility;
 
     private ExamType examType;
+
+    private ExamCategory category;
 
     private List<Long> questionIds;
 

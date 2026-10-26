@@ -122,6 +122,10 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 	// ===== Create: Gắn câu hỏi nếu request có questionIds, rồi kiểm tra cấu hình kỳ thi =====
 	@Override
 	protected void beforeCreate(Exam exam, ExamDTO request, ValidationContext context) {
+		// Không gửi showAnswersAfterExam -> theo luật mặc định của loại thi
+		if (request.getShowAnswersAfterExam() == null) {
+			exam.setShowAnswersAfterExam(exam.getCategory().isShowAnswersByDefault());
+		}
 		if (request.getQuestionIds() != null) {
 			// CHANGED: truyền kiểu bài thi để chỉ nhận loại câu hỏi phù hợp
 			ExamType examType = request.getExamType() != null ? request.getExamType() : exam.getExamType();

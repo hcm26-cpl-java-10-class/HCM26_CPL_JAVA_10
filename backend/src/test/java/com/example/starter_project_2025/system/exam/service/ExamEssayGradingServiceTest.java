@@ -15,6 +15,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.*;
 
@@ -52,8 +53,10 @@ class ExamEssayGradingServiceTest {
         attempt.setId(100L);
         attempt.setExam(exam);
         attempt.setStatus(ExamAttemptStatus.PENDING_REVIEW);
-        attempt.setObjectiveScore(20);
+        attempt.setObjectiveScore(new BigDecimal(20));
         attempt.setTotalPoints(30);
+        // thang điểm 30 = tổng tỉ lệ điểm, nên câu tự luận (tỉ lệ 10) được tối đa 10 điểm
+        attempt.setMaxScore(new BigDecimal(30));
         attempt.setStartedAt(Instant.now().minusSeconds(3600));
         attempt.setSubmittedAt(Instant.now().minusSeconds(100));
 
@@ -91,7 +94,7 @@ class ExamEssayGradingServiceTest {
 
         EssayGradingDTO.QuestionGrade grade = new EssayGradingDTO.QuestionGrade();
         grade.setQuestionId(101L);
-        grade.setScore(8);
+        grade.setScore(new BigDecimal(8));
         grade.setFeedback("Clear explanation of runtime polymorphism.");
 
         EssayGradingDTO.GradeSubmissionRequest request = new EssayGradingDTO.GradeSubmissionRequest();
@@ -100,10 +103,10 @@ class ExamEssayGradingServiceTest {
         EssayGradingDTO.Detail result = gradingService.submitOfficialGrade(10L, 100L, request);
 
         assertNotNull(result);
-        assertEquals(8, essayAnswer.getScore());
+        assertScore("8", essayAnswer.getScore());
         assertEquals("Clear explanation of runtime polymorphism.", essayAnswer.getFeedback());
         assertEquals(ExamAttemptStatus.SUBMITTED, attempt.getStatus());
-        assertEquals(28, attempt.getFinalScore()); // 20 objective + 8 essay
+        assertScore("28", attempt.getFinalScore()); // 20 objective + 8 essay
         verify(attemptRepository).save(attempt);
     }
 
@@ -114,7 +117,7 @@ class ExamEssayGradingServiceTest {
 
         EssayGradingDTO.QuestionGrade grade = new EssayGradingDTO.QuestionGrade();
         grade.setQuestionId(101L);
-        grade.setScore(15); // max is 10
+        grade.setScore(new BigDecimal(15)); // max is 10
         grade.setFeedback("Too high");
 
         EssayGradingDTO.GradeSubmissionRequest request = new EssayGradingDTO.GradeSubmissionRequest();
@@ -136,7 +139,7 @@ class ExamEssayGradingServiceTest {
 
         EssayGradingDTO.QuestionGrade grade = new EssayGradingDTO.QuestionGrade();
         grade.setQuestionId(101L);
-        grade.setScore(-1);
+        grade.setScore(new BigDecimal(-1));
 
         EssayGradingDTO.GradeSubmissionRequest request = new EssayGradingDTO.GradeSubmissionRequest();
         request.setGrades(List.of(grade));
@@ -152,7 +155,7 @@ class ExamEssayGradingServiceTest {
 
     @Test
     void submitOfficialGradeRejectsSilentOverwriteWhenAlreadyGraded() {
-        attempt.setFinalScore(25);
+        attempt.setFinalScore(new BigDecimal(25));
         attempt.setStatus(ExamAttemptStatus.SUBMITTED);
 
         when(examRepository.findById(10L)).thenReturn(Optional.of(exam));
@@ -160,7 +163,7 @@ class ExamEssayGradingServiceTest {
 
         EssayGradingDTO.QuestionGrade grade = new EssayGradingDTO.QuestionGrade();
         grade.setQuestionId(101L);
-        grade.setScore(7);
+        grade.setScore(new BigDecimal(7));
 
         EssayGradingDTO.GradeSubmissionRequest request = new EssayGradingDTO.GradeSubmissionRequest();
         request.setGrades(List.of(grade));
@@ -177,7 +180,7 @@ class ExamEssayGradingServiceTest {
 
     @Test
     void submitOfficialGradeAllowsOverwriteWhenConfirmed() {
-        attempt.setFinalScore(25);
+        attempt.setFinalScore(new BigDecimal(25));
         attempt.setStatus(ExamAttemptStatus.SUBMITTED);
 
         when(examRepository.findById(10L)).thenReturn(Optional.of(exam));
@@ -186,7 +189,7 @@ class ExamEssayGradingServiceTest {
 
         EssayGradingDTO.QuestionGrade grade = new EssayGradingDTO.QuestionGrade();
         grade.setQuestionId(101L);
-        grade.setScore(9);
+        grade.setScore(new BigDecimal(9));
         grade.setFeedback("Regraded with full credit on design patterns.");
 
         EssayGradingDTO.GradeSubmissionRequest request = new EssayGradingDTO.GradeSubmissionRequest();
@@ -196,7 +199,7 @@ class ExamEssayGradingServiceTest {
         EssayGradingDTO.Detail result = gradingService.submitOfficialGrade(10L, 100L, request);
 
         assertNotNull(result);
-        assertEquals(29, attempt.getFinalScore());
+        assertScore("29", attempt.getFinalScore());
         verify(attemptRepository).save(attempt);
     }
 
@@ -211,11 +214,16 @@ class ExamEssayGradingServiceTest {
         BadRequestException ex = assertThrows(
                 BadRequestException.class,
                 () -> realAiClient.requestProposal(List.of(new AiEssayGradingClient.EssayQuestionPayload(
-                        101L, 1, "Explain OOP", 10, "OOP is..."
+                        101L, 1, "Explain OOP", BigDecimal.TEN, "OOP is..."
                 )))
         );
 
         assertTrue(ex.getMessage().contains("AI grading provider is not configured"));
         assertTrue(ex.getMessage().contains("app.ai.api-key"));
+    }
+
+    private static void assertScore(String expected, BigDecimal actual) {
+        assertNotNull(actual);
+        assertEquals(0, new BigDecimal(expected).compareTo(actual), "expected " + expected + " but was " + actual);
     }
 }
