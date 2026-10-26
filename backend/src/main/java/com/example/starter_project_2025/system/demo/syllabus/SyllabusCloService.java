@@ -1,3 +1,4 @@
+
 package com.example.starter_project_2025.system.demo.syllabus;
 
 import com.example.starter_project_2025.exception.BusinessValidationException;
@@ -18,15 +19,28 @@ public class SyllabusCloService {
 
     private final SyllabusRepository syllabuses;
     private final SyllabusCloRepository clos;
+    private final SyllabusWorkflowService workflow;
 
-    public record CloInput(String details) {}
+    // =========================
+    // DTOs
+    // =========================
+
+    public record CloInput(
+            String details
+    ) {
+    }
 
     public record CloView(
             Long id,
             String code,
             String details,
             Integer orderIndex
-    ) {}
+    ) {
+    }
+
+    // =========================
+    // VALIDATION HELPERS
+    // =========================
 
     private static void fail(String field, String message) {
         throw new BusinessValidationException(
@@ -51,6 +65,13 @@ public class SyllabusCloService {
             Long syllabusId,
             Long cloId
     ) {
+        // Check the parent Syllabus.
+        requireSyllabus(syllabusId);
+
+        if (cloId == null || cloId <= 0) {
+            fail("cloId", "Invalid CLO ID");
+        }
+
         SyllabusClo clo = clos.findById(cloId)
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
@@ -83,7 +104,10 @@ public class SyllabusCloService {
         }
 
         if (value.codePoints().noneMatch(Character::isLetter)) {
-            fail("details", "CLO Details must contain letters");
+            fail(
+                    "details",
+                    "CLO Details must contain letters"
+            );
         }
 
         return value;
@@ -98,6 +122,11 @@ public class SyllabusCloService {
         );
     }
 
+    // =========================
+    // READ CLOs
+    // Allowed in DRAFT and PUBLISHED
+    // =========================
+
     @Transactional(readOnly = true)
     public List<CloView> list(Long syllabusId) {
         requireSyllabus(syllabusId);
@@ -109,7 +138,17 @@ public class SyllabusCloService {
                 .toList();
     }
 
-    public CloView create(Long syllabusId, CloInput input) {
+    // =========================
+    // CREATE CLO
+    // Only allowed in DRAFT
+    // =========================
+
+    public CloView create(
+            Long syllabusId,
+            CloInput input
+    ) {
+        workflow.requireDraft(syllabusId);
+
         Syllabus syllabus = requireSyllabus(syllabusId);
 
         if (input == null) {
@@ -123,8 +162,12 @@ public class SyllabusCloService {
                         syllabusId
                 );
 
-        if (existing.stream().anyMatch(c ->
-                c.getDetails().equalsIgnoreCase(details))) {
+        boolean duplicate = existing.stream()
+                .anyMatch(clo ->
+                        clo.getDetails().equalsIgnoreCase(details)
+                );
+
+        if (duplicate) {
             fail("details", "This CLO already exists");
         }
 
@@ -155,10 +198,14 @@ public class SyllabusCloService {
 
         if (highestNumber == Integer.MAX_VALUE ||
                 highestOrder == Integer.MAX_VALUE) {
-            fail("code", "CLO numbering limit exceeded");
+            fail(
+                    "code",
+                    "CLO numbering limit exceeded"
+            );
         }
 
         SyllabusClo clo = new SyllabusClo();
+
         clo.setSyllabus(syllabus);
         clo.setCode("CLO" + (highestNumber + 1));
         clo.setOrderIndex(highestOrder + 1);
@@ -167,11 +214,18 @@ public class SyllabusCloService {
         return view(clos.saveAndFlush(clo));
     }
 
+    // =========================
+    // UPDATE CLO
+    // Only allowed in DRAFT
+    // =========================
+
     public CloView update(
             Long syllabusId,
             Long cloId,
             CloInput input
     ) {
+        workflow.requireDraft(syllabusId);
+
         SyllabusClo clo = requireClo(syllabusId, cloId);
 
         if (input == null) {
@@ -185,7 +239,8 @@ public class SyllabusCloService {
                 .stream()
                 .anyMatch(other ->
                         !Objects.equals(other.getId(), cloId)
-                                && other.getDetails().equalsIgnoreCase(details)
+                                && other.getDetails()
+                                .equalsIgnoreCase(details)
                 );
 
         if (duplicate) {
@@ -197,8 +252,19 @@ public class SyllabusCloService {
         return view(clos.saveAndFlush(clo));
     }
 
-    public void delete(Long syllabusId, Long cloId) {
+    // =========================
+    // DELETE CLO
+    // Only allowed in DRAFT
+    // =========================
+
+    public void delete(
+            Long syllabusId,
+            Long cloId
+    ) {
+        workflow.requireDraft(syllabusId);
+
         SyllabusClo clo = requireClo(syllabusId, cloId);
+
         clos.delete(clo);
     }
 }
