@@ -22,7 +22,9 @@ import com.example.starter_project_2025.system.project.tenant.TenantRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
@@ -42,6 +44,7 @@ public class BoardDemoDataInitializer implements CommandLineRunner {
 
     private static final String STUDENT_EMAIL = "student@example.com";
     private static final String TEACHER_EMAIL = "teacher@example.com";
+    private static final String DEFAULT_ADMIN_EMAIL = "admin@example.com";
     private static final String DEMO_ACTIVITY_CORRELATION_ID = "board-demo-seed-v1";
 
     TenantRepository tenantRepository;
@@ -52,11 +55,16 @@ public class BoardDemoDataInitializer implements CommandLineRunner {
     ProjectActivityRepository projectActivityRepository;
     UserRepository userRepository;
 
+    @Value("${app.seed.admin.email:" + DEFAULT_ADMIN_EMAIL + "}")
+    @NonFinal
+    String adminEmail;
+
     @Override
     @Transactional
     public void run(String... args) {
         User student = requireUser(STUDENT_EMAIL);
         User teacher = requireUser(TEACHER_EMAIL);
+        User admin = requireUser(adminEmail);
         Tenant tenant = student.getTenant();
         if (tenant == null || teacher.getTenant() == null
                 || !tenant.getId().equals(teacher.getTenant().getId())
@@ -97,6 +105,29 @@ public class BoardDemoDataInitializer implements CommandLineRunner {
         upsertMembership(project.getId(), teacher.getId(), ProjectRole.MENTOR);
         upsertMembership(emptyProject.getId(), student.getId(), ProjectRole.MEMBER);
 
+        // The role switch changes only the frontend preview. Keep the admin's
+        // demo Board data in the admin's own tenant so tenant isolation remains intact.
+        Long adminTenantId = admin.getTenantId();
+        if (adminTenantId == null || !tenantRepository.existsByIdAndIsActiveTrue(adminTenantId)) {
+            throw new IllegalStateException("Admin user must belong to an active tenant: " + adminEmail);
+        }
+        Project adminProject = upsertProject(
+                adminTenantId,
+                "DEMO-ADMIN-BOARD",
+                "Kanban Board Demo",
+                ProjectStatus.ACTIVE
+        );
+        Project adminEmptyProject = upsertProject(
+                adminTenantId,
+                "DEMO-ADMIN-EMPTY-BOARD",
+                "Board Demo - Empty",
+                ProjectStatus.ACTIVE
+        );
+        BoardProjectMember adminMembership = upsertMembership(
+                adminProject.getId(), admin.getId(), ProjectRole.MENTOR
+        );
+        upsertMembership(adminEmptyProject.getId(), admin.getId(), ProjectRole.MENTOR);
+
         Sprint sprint = upsertSprint(
                 project.getId(),
                 "Board Demo Sprint",
@@ -121,6 +152,18 @@ public class BoardDemoDataInitializer implements CommandLineRunner {
                 "Used to verify tenant scope enforcement",
                 SprintStatus.ACTIVE
         );
+        Sprint adminSprint = upsertSprint(
+                adminProject.getId(),
+                "Admin Board Demo Sprint",
+                "Sample sprint for Admin and role-preview Board access",
+                SprintStatus.ACTIVE
+        );
+        upsertSprint(
+                adminEmptyProject.getId(),
+                "Admin Board Demo Empty Sprint",
+                "Empty project sprint for testing the no-tasks state",
+                SprintStatus.PLANNED
+        );
 
         seedTask(project.getId(), sprint.getId(), studentMembership.getId(),
                 "DEMO-101", "Prepare sprint backlog", TaskStatus.TODO, TaskPriority.MEDIUM, 1);
@@ -134,6 +177,12 @@ public class BoardDemoDataInitializer implements CommandLineRunner {
                 "DEMO-105", "Resolve test environment issue", TaskStatus.BLOCKED, TaskPriority.CRITICAL, 5);
         seedTask(project.getId(), null, null,
                 "DEMO-106", "Add accessibility checks", TaskStatus.TODO, TaskPriority.HIGH, 6);
+        seedTask(adminProject.getId(), adminSprint.getId(), adminMembership.getId(),
+                "ADMIN-DEMO-101", "Prepare sprint backlog", TaskStatus.TODO, TaskPriority.MEDIUM, 1);
+        seedTask(adminProject.getId(), adminSprint.getId(), adminMembership.getId(),
+                "ADMIN-DEMO-102", "Implement board endpoint", TaskStatus.IN_PROGRESS, TaskPriority.HIGH, 2);
+        seedTask(adminProject.getId(), adminSprint.getId(), null,
+                "ADMIN-DEMO-103", "Review acceptance criteria", TaskStatus.REVIEW, TaskPriority.MEDIUM, 3);
 
         if (!projectActivityRepository.existsByCorrelationId(DEMO_ACTIVITY_CORRELATION_ID)) {
             projectActivityRepository.save(ProjectActivityLog.builder()
@@ -153,6 +202,7 @@ public class BoardDemoDataInitializer implements CommandLineRunner {
                 "Board demo data enabled: login student@example.com / password123; " +
                         "projectId={}, sprintId={}, emptyProjectId={}, emptySprintId={}, " +
                         "nonMemberProjectId={}, nonMemberSprintId={}, " +
+                        "adminProjectId={}, adminSprintId={}, adminEmptyProjectId={}, " +
                         "otherTenantProjectId={}, otherTenantSprintId={}",
                 project.getId(),
                 sprint.getId(),
@@ -160,6 +210,9 @@ public class BoardDemoDataInitializer implements CommandLineRunner {
                 emptySprint.getId(),
                 nonMemberProject.getId(),
                 nonMemberSprint.getId(),
+                adminProject.getId(),
+                adminSprint.getId(),
+                adminEmptyProject.getId(),
                 otherTenantProject.getId(),
                 otherTenantSprint.getId()
         );
