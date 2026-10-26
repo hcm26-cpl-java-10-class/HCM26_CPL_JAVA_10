@@ -22,6 +22,7 @@ class AuditLogIntegrationTest {
                 .action("CREATE")
                 .entityType("USER")
                 .entityId("12")
+                .result("SUCCESS")
                 .newValue("{\"email\":\"test@example.com\"}")
                 .correlationId("request-001")
                 .build();

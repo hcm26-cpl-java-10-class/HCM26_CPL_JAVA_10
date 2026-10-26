@@ -258,7 +258,7 @@ public class QuestionIntegrationTest {
         mockMvc.perform(delete("/api/questions/" + savedQ.getId())
                         .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors.question", hasItem("Câu hỏi đang được dùng trong đề thi, không thể xóa")));
+                .andExpect(jsonPath("$.errors.question", hasItem("Câu hỏi đang được dùng trong đề thi, không thể xóa. ")));
     }
 
     @Test

@@ -44,7 +44,8 @@ class AuditLogServiceImplTest {
                 "12",
                 null,
                 "{\"email\":\"test@example.com\"}",
-                "request-001"
+                "request-001",
+                "SUCCESS"
         );
 
         verify(auditLogRepository).save(argThat(log ->
