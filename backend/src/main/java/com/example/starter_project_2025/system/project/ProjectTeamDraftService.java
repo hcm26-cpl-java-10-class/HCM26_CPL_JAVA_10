@@ -118,7 +118,7 @@ public class ProjectTeamDraftService {
                 newMembers.add(ProjectMember.builder()
                         .team(team)
                         .classMember(membersById.get(assignment.memberId()))
-                        .role(assignment.role())
+                        .role(defaultRole(assignment.role()))
                         .build());
             }
         }
@@ -268,7 +268,7 @@ public class ProjectTeamDraftService {
             newMembers.add(ProjectMember.builder()
                     .team(team)
                     .classMember(membersById.get(assignment.memberId()))
-                    .role(assignment.role())
+                    .role(defaultRole(assignment.role()))
                     .build());
         }
         projectMemberRepository.saveAllAndFlush(newMembers);
@@ -348,6 +348,10 @@ public class ProjectTeamDraftService {
                 }
             }
         }
+    }
+
+    private String defaultRole(String role) {
+        return role == null || role.isBlank() ? ProjectMemberRole.DEV.name() : role;
     }
 
     private BatchSaveDraftResponse buildResponse(

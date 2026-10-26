@@ -92,12 +92,15 @@ public class ProjectTeamRoleService {
                 }
                 continue;
             }
+            String role = member.role() == null || member.role().isBlank()
+                    ? ProjectMemberRole.DEV.name()
+                    : member.role();
             if (!assignmentsByMemberId.containsKey(member.memberId())
-                    || !ProjectMemberRole.isValid(member.role())) {
+                    || !ProjectMemberRole.isValid(role)) {
                 invalidMemberIds.add(member.memberId());
                 continue;
             }
-            requestedRoles.put(member.memberId(), member.role());
+            requestedRoles.put(member.memberId(), role);
         }
 
         assignmentsByMemberId.keySet().stream()

@@ -28,7 +28,7 @@ public class WorkspaceCreationTransaction {
         }
         var previous = idempotency.find(tenant.getId(), user.getId(), key);
         if (previous != null) idempotency.checkPayload(previous, request);
-        Team team = access.requireTeam(user, request.getTeamId(), true);
+        ProjectTeam team = access.requireTeam(user, request.getTeamId(), true);
         // Re-read after acquiring the team lock: another request may have committed while this one waited.
         previous = idempotency.find(tenant.getId(), user.getId(), key);
         if (previous != null) {
@@ -42,7 +42,7 @@ public class WorkspaceCreationTransaction {
         Workspace workspace = new Workspace();
         workspace.setTenant(tenant); workspace.setProject(project); workspace.setTeam(team);
         workspace.setCode("WS-" + project.getId() + "-" + request.getTeamId());
-        workspace.setName(project.getName() + " / " + team.getName());
+        workspace.setName(project.getName() + " / " + team.getTeamName());
         workspace.setStatus(WorkspaceStatus.ACTIVE);
         workspace.setCreatedBy(user.getId());
         workspace.setSections(new ArrayList<>(Arrays.asList(WorkspaceSection.values())));

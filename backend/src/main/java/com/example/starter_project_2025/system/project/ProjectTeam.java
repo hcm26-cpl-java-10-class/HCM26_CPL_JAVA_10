@@ -11,7 +11,9 @@ import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
 
 @Entity
-@Table(name = "project_teams")
+@Table(name = "project_teams", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_project_team_project", columnNames = {"project_id"})
+})
 @Getter
 @Setter
 @SuperBuilder
@@ -27,8 +29,32 @@ public class ProjectTeam extends BaseEntity {
     @JoinColumn(name = "allocation_session_id", nullable = false)
     TeamAllocationSession allocationSession;
 
-    @Column(name = "project_id")
-    Long projectId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "project_id")
+    Project project;
+
+    public Long getProjectId() {
+        return project == null ? null : project.getId();
+    }
+
+    public String getCode() {
+        return trainingClass == null ? "PT-" + getId() : trainingClass.getCode() + "-T" + getId();
+    }
+
+    @Column(length = 2000)
+    String mission;
+
+    @Column(length = 2000)
+    String definitionOfDone;
+
+    @Column(length = 255)
+    String primaryChannel;
+
+    @Column(length = 255)
+    String coreHours;
+
+    @Column(length = 2000)
+    String conflictResolution;
 
     @Column(name = "team_name", nullable = false, length = 255)
     String teamName;

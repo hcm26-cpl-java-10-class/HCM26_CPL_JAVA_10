@@ -13,8 +13,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class WorkspaceCreateRequest {
 
-    @NotNull(message = "Project ID is required")
-    @Positive(message = "Project ID must be positive")
     private Long projectId;
 
     @NotNull(message = "Team ID is required")
@@ -22,4 +20,3 @@ public class WorkspaceCreateRequest {
     private Long teamId;
 
 }
-

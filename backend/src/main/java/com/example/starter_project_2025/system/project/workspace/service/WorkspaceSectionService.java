@@ -33,7 +33,7 @@ public class WorkspaceSectionService {
         Context context = context(id);
         return new Navigation(id, context.scope().projectId(), context.scope().teamId(),
                 context.workspace().getProject().getCode(), context.workspace().getProject().getName(),
-                context.workspace().getTeam().getName(), context.workspace().getProject().getStatus(),
+                context.workspace().getTeam().getTeamName(), context.workspace().getProject().getStatus(),
                 Arrays.stream(WorkspaceSection.values())
                 .map(section -> policy.describe(context.user(), section)).toList());
     }

@@ -2,6 +2,8 @@ package com.example.starter_project_2025.system.project;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.system.rbac.user.User;
+import com.example.starter_project_2025.system.project.team.ProjectRole;
+import com.example.starter_project_2025.system.project.team.ParticipationStatus;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Column;
 import jakarta.persistence.EnumType;
@@ -60,4 +62,3 @@ public class TeamMember extends BaseEntity {
                 && participationStatus == ParticipationStatus.ACTIVE;
     }
 }
-

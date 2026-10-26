@@ -61,6 +61,11 @@ public class TeamPublishItemService {
             throw new TeamPublishValidationException(
                     "A team without members cannot be published");
         }
+        assignments.forEach(assignment -> {
+            if (assignment.getRole() == null || assignment.getRole().isBlank()) {
+                assignment.setRole(ProjectMemberRole.DEV.name());
+            }
+        });
         if (assignments.stream().anyMatch(assignment ->
                 !ProjectMemberRole.isValid(assignment.getRole()))) {
             throw new TeamPublishValidationException(
@@ -87,11 +92,18 @@ public class TeamPublishItemService {
                 memberRepository.findMembersBySessionAndTeamStatus(
                         memberIds, sessionId, ProjectTeamStatus.ACTIVE);
         if (!activeConflicts.isEmpty()) {
-            ProjectMember conflict = activeConflicts.get(0);
+            List<Long> conflictMemberIds = activeConflicts.stream()
+                    .map(conflict -> conflict.getClassMember().getId())
+                    .distinct()
+                    .toList();
+            List<String> conflictNames = activeConflicts.stream()
+                    .map(conflict -> conflict.getClassMember().getUser().getFullName())
+                    .distinct()
+                    .toList();
             throw new StudentAlreadyAssignedException(
-                    conflict.getClassMember().getId(),
-                    conflict.getTeam().getId(),
-                    conflict.getClassMember().getUser().getFullName());
+                    conflictMemberIds,
+                    activeConflicts.get(0).getTeam().getId(),
+                    conflictNames);
         }
 
         Long assignedMentorId = teamMentorService.resolveMentorForPublish(team);

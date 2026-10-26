@@ -55,7 +55,7 @@ public class Workspace extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "team_id", nullable = false)
-    private Team team;
+    private ProjectTeam team;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tenant_id", nullable = false)
@@ -74,4 +74,3 @@ public class Workspace extends BaseEntity {
     @Column(name = "section", nullable = false, length = 32)
     private List<WorkspaceSection> sections = new ArrayList<>();
 }
-

@@ -22,7 +22,8 @@ import java.util.Set;
 @Transactional(readOnly = true)
 public class ProjectHubService {
     private final TenantRepository tenants;
-    private final TeamRepository teams;
+    private final ProjectTeamRepository teams;
+    private final ProjectMemberRepository members;
     private final UserRepository users;
     private static final Set<String> MENTOR_ROLES = Set.of("MENTOR", "TRAINER", "TEACHER");
 
@@ -40,17 +41,21 @@ public class ProjectHubService {
         return tenant;
     }
 
-    private Specification<Team> scope() {
+    private Specification<ProjectTeam> scope() {
         return WorkspaceCandidateSpec.forScope(principal().getUser().getId(), tenant().getId());
     }
 
-    private Team scopedTeam(Long id) {
-        return teams.findOne(scope().and((root, query, cb) -> cb.equal(root.get("id"), id)))
+    private ProjectTeam scopedTeam(Long id) {
+        return teams.findOne(scope().and((root, query, cb) -> cb.and(
+                        cb.equal(root.get("id"), id),
+                        cb.equal(root.get("status"), ProjectTeamStatus.ACTIVE),
+                        cb.isTrue(root.get("isActive")))))
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy team trong phạm vi được phép"));
     }
 
     public List<ProjectHubDtos.TeamView> getTeams() {
-        return teams.findAll(scope()).stream().map(this::teamView)
+        return teams.findAll(scope()).stream().filter(team -> team.getStatus() == ProjectTeamStatus.ACTIVE)
+                .map(this::teamView)
                 .sorted(Comparator.comparing(ProjectHubDtos.TeamView::name)).toList();
     }
 
@@ -68,21 +73,21 @@ public class ProjectHubService {
 
     @Transactional
     public ProjectHubDtos.TeamView assignMentor(Long id, ProjectHubDtos.MentorAssignment request) {
-        Team team = scopedTeam(id);
+        ProjectTeam team = scopedTeam(id);
         User mentor = null;
         if (request.mentorId() != null) {
             mentor = users.findById(request.mentorId()).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy mentor"));
-            if (mentor.getTenant() == null || !mentor.getTenant().getId().equals(team.getTenant().getId()) || !eligibleMentor(mentor)) {
+            if (mentor.getTenant() == null || !mentor.getTenant().getId().equals(team.getTrainingClass().getTenantId()) || !eligibleMentor(mentor)) {
                 throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Mentor không hợp lệ hoặc không thuộc tenant của team");
             }
         }
-        team.setMentor(mentor);
+        team.setAssignedMentorId(mentor == null ? null : mentor.getId());
         return teamView(teams.saveAndFlush(team));
     }
 
     @Transactional
     public ProjectHubDtos.TeamView saveCharter(Long id, ProjectHubDtos.Charter charter) {
-        Team team = scopedTeam(id);
+        ProjectTeam team = scopedTeam(id);
         team.setMission(charter.mission());
         team.setDefinitionOfDone(charter.definitionOfDone());
         String channel = charter.primaryChannel();
@@ -96,15 +101,20 @@ public class ProjectHubService {
         return teamView(teams.saveAndFlush(team));
     }
 
-    private ProjectHubDtos.TeamView teamView(Team team) {
+    private ProjectHubDtos.TeamView teamView(ProjectTeam team) {
         Project project = team.getProject();
-        Cohort cohort = project != null ? project.getCohort() : null;
-        var members = team.getMembers().stream().map(TeamMember::getUser)
+        var trainingClass = team.getTrainingClass();
+        var teamMembers = members.findAllByTeam_IdAndClassMember_StatusOrderByIdAsc(
+                team.getId(), com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus.ACTIVE);
+        var memberViews = teamMembers.stream().map(ProjectMember::getClassMember)
+                .map(member -> member.getUser())
                 .map(user -> new ProjectHubDtos.Member(user.getId(), user.getFullName(), user.getEmail()))
                 .sorted(Comparator.comparing(ProjectHubDtos.Member::name)).toList();
-        return new ProjectHubDtos.TeamView(team.getId(), team.getCode(), team.getName(), project != null ? project.getId() : null, project != null ? project.getName() : null,
-                cohort != null ? cohort.getId() : null, cohort != null ? cohort.getName() : null,
-                team.getMentor() != null ? team.getMentor().getId() : null,
-                team.getMentor() != null ? team.getMentor().getFullName() : null, members, ProjectHubDtos.Charter.from(team));
+        String mentorName = team.getAssignedMentorId() == null ? null :
+                users.findById(team.getAssignedMentorId()).map(User::getFullName).orElse(null);
+        return new ProjectHubDtos.TeamView(team.getId(), team.getCode(), team.getTeamName(),
+                project != null ? project.getId() : null, project != null ? project.getName() : null,
+                trainingClass.getCohortId(), trainingClass.getCohortName(),
+                team.getAssignedMentorId(), mentorName, memberViews, ProjectHubDtos.Charter.from(team));
     }
 }
