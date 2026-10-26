@@ -36,6 +36,20 @@ export const projectBoardApi = {
     return response.data;
   },
 
+  getTeamSprints: async (teamId: number): Promise<ProjectBoardSprintOption[]> => {
+    const response = await axiosInstance.get<ProjectBoardSprintOption[]>(
+      `/projects/teams/${teamId}/board-sprints`,
+    );
+    return response.data;
+  },
+
+  getTeamBoard: async (teamId: number, sprintId: number): Promise<ProjectBoard> => {
+    const response = await axiosInstance.get<ProjectBoard>(
+      `/teams/${teamId}/sprints/${sprintId}/board`,
+    );
+    return response.data;
+  },
+
   getTaskAssignees: async (projectId: number): Promise<ProjectTaskAssignee[]> => {
     const response = await axiosInstance.get<ProjectTaskAssignee[]>(
       `/projects/${projectId}/task-assignees`,

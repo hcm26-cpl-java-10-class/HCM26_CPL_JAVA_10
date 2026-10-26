@@ -4,6 +4,7 @@ import java.util.List;
 
 public record ProjectBoardResponse(
         Long projectId,
+        Long teamId,
         SprintSummaryResponse sprint,
         List<BoardColumnResponse> columns,
         List<ActivityItemResponse> activityTrail

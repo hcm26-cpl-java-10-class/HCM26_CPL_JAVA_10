@@ -16,4 +16,6 @@ public interface SprintRepository extends BaseCrudRepository<Sprint, Long> {
     boolean existsByNameAndIdNot(String name, Long id);
 
     List<Sprint> findAllByProjectIdAndIsActiveTrueOrderByStartDateDescIdDesc(Long projectId);
+
+    List<Sprint> findAllByTeamIdAndIsActiveTrueOrderByStartDateDescIdDesc(Long teamId);
 }

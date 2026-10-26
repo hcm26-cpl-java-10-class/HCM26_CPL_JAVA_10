@@ -83,6 +83,10 @@ public interface TaskRepository extends BaseCrudRepository<Task, Long> {
             Long sprintId
     );
 
+    List<Task> findByTeamIdAndSprintIdIsNullAndIsActiveTrueOrderByOrderIndexAscIdAsc(Long teamId);
+
+    List<Task> findByTeamIdAndSprintIdAndIsActiveTrueOrderByOrderIndexAscIdAsc(Long teamId, Long sprintId);
+
     List<Task> findBySprintIdOrderByOrderIndexAsc(@Param("sprintId") Long sprintId);
 
     List<Task> findBySprintIdAndStatus(@Param("sprintId") Long sprintId, @Param("status") TaskStatus status);

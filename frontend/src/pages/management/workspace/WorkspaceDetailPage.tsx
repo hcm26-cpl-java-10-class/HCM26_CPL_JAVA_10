@@ -17,6 +17,7 @@ import { WorkspaceMilestonesPanel } from "./WorkspaceMilestonesPanel";
 import { WorkspaceOverviewSection } from "./WorkspaceOverviewSection";
 import { WorkspaceMembersPanel } from "./WorkspaceMembersPanel";
 import { sectionAccess } from "./workspace.section-access";
+import { WorkspaceTeamBoardPanel } from "./WorkspaceTeamBoardPanel";
 
 export default function WorkspaceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -46,7 +47,14 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
     }, { replace: true });
   }
   const context = navigation.data?.workspaceId === workspaceId ? navigation.data : undefined;
-  const sections = context?.sections.map(item => sectionAccess(item, hasPermission)) ?? [];
+  const sections = context?.sections.map(item => {
+    const resolved = sectionAccess(item, hasPermission);
+    // Team-only workspaces own their Board through the workspace Team, so the
+    // Board remains available even when legacy section permissions are absent.
+    return item.key === "sprints" && Number.isSafeInteger(context.teamId)
+      ? { ...resolved, canRead: hasPermission("WORKSPACE_READ") || hasPermission("VIEW_PROJECT_WORKSPACE") }
+      : resolved;
+  }) ?? [];
   const current = sections.find(item => item.key === tab);
   const members = sections.find(item => item.key === "members");
   const denied = blocked === tab || !current?.canRead;
@@ -91,6 +99,7 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                   </>
                 : tab === "milestones" ? <WorkspaceMilestonesPanel workspaceId={workspaceId} projectId={context.projectId}
                     teamId={context.teamId} access={current} />
+                : tab === "sprints" ? <WorkspaceTeamBoardPanel teamId={context.teamId} />
                 : <WorkspaceBusinessSectionPanel key={workspaceId + ":" + tab} workspaceId={workspaceId}
                     projectId={context.projectId} teamId={context.teamId} section={tab}
                     label={WORKSPACE_SECTIONS.find(section => section.id === tab)!.label}

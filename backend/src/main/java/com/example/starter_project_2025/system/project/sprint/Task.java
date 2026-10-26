@@ -23,8 +23,11 @@ import lombok.experimental.SuperBuilder;
 @AttributeOverride(name = "id", column = @Column(name = "task_id"))
 public class Task extends BaseEntity {
 
-    @Column(name = "project_id", nullable = false)
+    @Column(name = "project_id")
     Long projectId;
+
+    @Column(name = "team_id")
+    Long teamId;
 
     @Column(name = "sprint_id")
     Long sprintId;

@@ -22,6 +22,9 @@ public interface ProjectMemberRepository
     @EntityGraph(attributePaths = {"classMember", "classMember.user"})
     List<ProjectMember> findAllByTeam_IdOrderByIdAsc(Long teamId);
 
+    @EntityGraph(attributePaths = {"team", "classMember", "classMember.user"})
+    List<ProjectMember> findAllByIdIn(Collection<Long> ids);
+
     long countByTeam_Id(Long teamId);
 
     void deleteAllByTeam_Id(Long teamId);
