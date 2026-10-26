@@ -12,6 +12,9 @@ import java.util.List;
 
 public interface TeachingAssignmentRepository extends JpaRepository<TeachingAssignment, Long>,
         JpaSpecificationExecutor<TeachingAssignment> {
+    @Query("select distinct a.programSubject.subject from TeachingAssignment a order by a.programSubject.subject.code")
+    List<com.example.starter_project_2025.system.subject.Subject> findAssignedSubjects();
+
     List<TeachingAssignment> findByClassIdOrderByEffectiveFromAscIdAsc(Long classId);
 
     boolean existsByClassId(Long classId);

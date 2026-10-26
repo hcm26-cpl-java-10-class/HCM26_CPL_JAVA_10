@@ -17,7 +17,9 @@ public interface ClassSetupService {
 
     Page<TeachingAssignmentResponse> searchAssignments(Long classId, Long programSubjectId,
                                                          Long trainerId, AssignmentRole role,
-                                                         LocalDate effectiveOn, Pageable pageable);
+                                                         LocalDate effectiveOn, String search, Long subjectId, Pageable pageable);
+
+    TeachingAssignmentOptions getAssignmentOptions();
 
     TeachingAssignmentResponse getAssignment(Long id);
 

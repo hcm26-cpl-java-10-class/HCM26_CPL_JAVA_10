@@ -62,9 +62,17 @@ public class ClassSetupController {
             @RequestParam(required = false) Long trainerId,
             @RequestParam(required = false) AssignmentRole role,
             @RequestParam(required = false) LocalDate effectiveOn,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Long subjectId,
             @PageableDefault(size = 20, sort = "effectiveFrom") Pageable pageable) {
         return ResponseEntity.ok(service.searchAssignments(classId, programSubjectId, trainerId,
-                role, effectiveOn, pageable));
+                role, effectiveOn, search, subjectId, pageable));
+    }
+
+    @GetMapping("/teaching-assignments/options")
+    @PreAuthorize("hasAuthority('ASSIGNMENT_READ')")
+    public ResponseEntity<TeachingAssignmentOptions> getAssignmentOptions() {
+        return ResponseEntity.ok(service.getAssignmentOptions());
     }
 
     @GetMapping("/teaching-assignments/{id}")

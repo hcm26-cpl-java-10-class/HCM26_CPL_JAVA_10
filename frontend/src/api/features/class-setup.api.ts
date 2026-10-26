@@ -63,12 +63,32 @@ export interface ClassProgramSubjects {
   }>;
 }
 
-interface AssignmentPage<T> {
+export interface AssignmentPage<T> {
   content: T[];
   number: number;
   size: number;
   totalPages: number;
   totalElements: number;
+}
+
+export interface AssignmentSearchParams {
+  search?: string;
+  classId?: number;
+  subjectId?: number;
+  programSubjectId?: number;
+  trainerId?: number;
+  role?: AssignmentRole;
+  effectiveOn?: string;
+  page?: number;
+  size?: number;
+  sort?: string;
+}
+
+export interface AssignmentOptions {
+  classes: SharedClass[];
+  trainers: SharedTrainer[];
+  subjects: Array<{ id: number; code: string; name: string; version: string }>;
+  sampleData: boolean;
 }
 
 export const classSetupApi = {
@@ -86,17 +106,10 @@ export const classSetupApi = {
     (await axiosInstance.get<TeachingAssignment[]>(`/classes/${classId}/teaching-assignments`)).data,
   getAvailableAssignments: async (classId: number, date: string) =>
     (await axiosInstance.get<TeachingAssignment[]>(`/classes/${classId}/teaching-assignments/available`, { params: { date } })).data,
-  searchAssignments: async (params: {
-    classId?: number;
-    programSubjectId?: number;
-    trainerId?: number;
-    role?: AssignmentRole;
-    effectiveOn?: string;
-    page?: number;
-    size?: number;
-    sort?: string;
-  }) =>
-    (await axiosInstance.get<AssignmentPage<TeachingAssignment>>("/teaching-assignments", { params })).data,
+  getAssignmentOptions: async (signal?: AbortSignal) =>
+    (await axiosInstance.get<AssignmentOptions>("/teaching-assignments/options", { signal })).data,
+  searchAssignments: async (params: AssignmentSearchParams, signal?: AbortSignal) =>
+    (await axiosInstance.get<AssignmentPage<TeachingAssignment>>("/teaching-assignments", { params, signal })).data,
   getAssignment: async (id: number) =>
     (await axiosInstance.get<TeachingAssignment>(`/teaching-assignments/${id}`)).data,
   createAssignment: async (request: TeachingAssignmentRequest) =>

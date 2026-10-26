@@ -12,6 +12,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -97,11 +100,44 @@ public class ClassSetupServiceImpl implements ClassSetupService {
     @Transactional(readOnly = true)
     public Page<TeachingAssignmentResponse> searchAssignments(Long classId, Long programSubjectId,
                                                                 Long trainerId, AssignmentRole role,
-                                                                LocalDate effectiveOn, Pageable pageable) {
+                                                                LocalDate effectiveOn, String search, Long subjectId, Pageable pageable) {
+        if (pageable.getPageSize() > 100 || pageable.getPageNumber() > 100000) {
+            throw new IllegalArgumentException("Page size must be at most 100 and page at most 100000.");
+        }
+        String term = search == null ? "" : search.trim().toLowerCase(Locale.ROOT);
+        if (term.length() > 100) throw new IllegalArgumentException("Search must be at most 100 characters.");
+        Set<String> sortable = Set.of("id", "effectiveFrom", "effectiveTo", "role", "classId", "trainerId");
+        for (Sort.Order order : pageable.getSort()) {
+            if (!sortable.contains(order.getProperty())) throw new IllegalArgumentException("Unsupported assignment sort field.");
+        }
+        // A unique tie breaker keeps records stable between server pages.
+        Sort sort = pageable.getSort().getOrderFor("id") == null
+                ? pageable.getSort().and(Sort.by("id")) : pageable.getSort();
+        Pageable stablePage = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
+        Map<Long, ExternalClassDTO> classes = externalApiService.fetchClasses(null).stream()
+                .filter(item -> item.getId() != null).collect(Collectors.toMap(ExternalClassDTO::getId, item -> item, (a, b) -> a));
+        Map<Long, ExternalTrainerDTO> trainers = fetchTrainerLookup();
+        List<Long> matchingClasses = classes.values().stream()
+                .filter(item -> contains(item.getCode(), term) || contains(item.getName(), term))
+                .map(ExternalClassDTO::getId).toList();
+        List<Long> matchingTrainers = trainers.values().stream()
+                .filter(item -> contains(item.getName(), term) || contains(item.getEmail(), term))
+                .map(ExternalTrainerDTO::getId).toList();
+        String pattern = "%" + term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
         Specification<TeachingAssignment> specification = (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (classId != null) predicates.add(criteriaBuilder.equal(root.get("classId"), classId));
             if (programSubjectId != null) predicates.add(criteriaBuilder.equal(root.get("programSubject").get("id"), programSubjectId));
+            if (subjectId != null) predicates.add(criteriaBuilder.equal(root.get("programSubject").get("subject").get("id"), subjectId));
+            if (!term.isEmpty()) {
+                List<Predicate> matches = new ArrayList<>();
+                var subject = root.get("programSubject").get("subject");
+                matches.add(criteriaBuilder.like(criteriaBuilder.lower(subject.get("code")), pattern, '\\'));
+                matches.add(criteriaBuilder.like(criteriaBuilder.lower(subject.get("name")), pattern, '\\'));
+                if (!matchingClasses.isEmpty()) matches.add(root.get("classId").in(matchingClasses));
+                if (!matchingTrainers.isEmpty()) matches.add(root.get("trainerId").in(matchingTrainers));
+                predicates.add(criteriaBuilder.or(matches.toArray(Predicate[]::new)));
+            }
             if (trainerId != null) predicates.add(criteriaBuilder.equal(root.get("trainerId"), trainerId));
             if (role != null) predicates.add(criteriaBuilder.equal(root.get("role"), role));
             if (effectiveOn != null) {
@@ -113,13 +149,22 @@ public class ClassSetupServiceImpl implements ClassSetupService {
             return criteriaBuilder.and(predicates.toArray(Predicate[]::new));
         };
 
-        Page<TeachingAssignment> page = teachingAssignmentRepository.findAll(specification, pageable);
-        Set<Long> classIds = page.getContent().stream().map(TeachingAssignment::getClassId).collect(Collectors.toSet());
-        Map<Long, ExternalClassDTO> classes = new HashMap<>();
-        for (Long id : classIds) classes.put(id, findClassOrNull(id));
-        Map<Long, ExternalTrainerDTO> trainers = fetchTrainerLookup();
+        Page<TeachingAssignment> page = teachingAssignmentRepository.findAll(specification, stablePage);
         return page.map(assignment -> toResponse(assignment, classes.get(assignment.getClassId()),
                 trainers.get(assignment.getTrainerId())));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public TeachingAssignmentOptions getAssignmentOptions() {
+        return new TeachingAssignmentOptions(externalApiService.fetchClasses(null), externalApiService.fetchTrainers(null),
+                teachingAssignmentRepository.findAssignedSubjects().stream()
+                        .map(s -> new TeachingAssignmentOptions.SubjectOption(s.getId(), s.getCode(), s.getName(), s.getVersion())).toList(),
+                externalApiService.isSampleData());
+    }
+
+    private boolean contains(String value, String term) {
+        return value != null && value.toLowerCase(Locale.ROOT).contains(term);
     }
 
     @Override
