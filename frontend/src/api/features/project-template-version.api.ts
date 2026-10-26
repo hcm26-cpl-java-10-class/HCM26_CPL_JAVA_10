@@ -37,7 +37,7 @@ export const projectTemplateVersionApi = Object.assign({}, base, {
    */
   duplicateTemplate: async (
     sourceVersionId: number | string,
-    payload: { code: string; name: string },
+    payload: { name: string },
   ): Promise<ProjectTemplateVersionDTO> => {
     const response = await axiosInstance.post<ProjectTemplateVersionDTO>(
       `${path}/${sourceVersionId}/duplicate`,

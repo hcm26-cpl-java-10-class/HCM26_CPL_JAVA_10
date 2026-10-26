@@ -23,8 +23,8 @@ public interface ProjectTemplateSnapshotService
      * Duplicates an existing version into a brand new, fully independent
      * Project Template (US-08 / AC01).
      * <p>
-     * The copy gets the client supplied {@code code} and {@code name} (the code
-     * must be unique), the default version {@code v1.0} and the status
+     * The copy gets the client supplied {@code name}, the default version
+     * {@code v1.0} and the status
      * {@link ProjectTemplateVersionStatus#DRAFT}. The whole configuration
      * (rules, milestones, rubric - i.e. {@code contentJson}) is copied from the
      * source version, while {@code parentTemplateId} stays {@code null} so the
@@ -35,7 +35,7 @@ public interface ProjectTemplateSnapshotService
      * {@code templateId} and links {@code parentTemplateId}; this method
      * creates a new template instead.
      */
-    ProjectTemplateSnapshotDTO duplicateTemplate(Long sourceVersionId, String code, String name);
+    ProjectTemplateSnapshotDTO duplicateTemplate(Long sourceVersionId, String name);
 
     /**
      * All versions of a project template, newest first.

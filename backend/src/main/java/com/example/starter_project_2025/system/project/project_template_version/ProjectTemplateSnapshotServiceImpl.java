@@ -45,8 +45,8 @@ import java.util.regex.Pattern;
  *     automatically ({@code v1.0 -> v2.0}) and keeps
  *     {@code parentTemplateId} for traceability while leaving the source
  *     snapshot untouched (snapshot isolation)</li>
- *     <li>{@link #duplicateTemplate(Long, String, String)} creates a brand new
- *     Project Template (new unique code + name) whose first version is always
+ *     <li>{@link #duplicateTemplate(Long, String)} creates a brand new
+ *     Project Template (new name) whose first version is always
  *     {@code v1.0} / {@code DRAFT}, copies the configuration and keeps
  *     {@code parentTemplateId} empty (no version-tree link to the source)</li>
  *     <li>audit log (actor, timestamp, before/after, correlation id) + outbox
@@ -82,14 +82,12 @@ public class ProjectTemplateSnapshotServiceImpl
     static final String TEMPLATE_ID_FIELD = "templateId";
     static final String VERSION_FIELD = "version";
     static final String CONTENT_JSON_FIELD = "contentJson";
-    static final String CODE_FIELD = "code";
     static final String NAME_FIELD = "name";
 
     /** US-08: the copy always starts at the default version label. */
     static final String DUPLICATE_INITIAL_VERSION = "v1.0";
 
-    /** Mirrors {@code ProjectTemplate.code} / {@code ProjectTemplate.name} columns. */
-    static final int MAX_CODE_LENGTH = 100;
+    /** Mirrors the {@code ProjectTemplate.name} column. */
     static final int MAX_NAME_LENGTH = 255;
 
     /** Fallback when the source template row is unknown (owned by another team). */
@@ -106,8 +104,8 @@ public class ProjectTemplateSnapshotServiceImpl
     ProjectTemplateSnapshotAuditService snapshotAuditService;
     ProjectTemplateSnapshotOutboxService snapshotOutboxService;
     /**
-     * Used by {@link #duplicateTemplate(Long, String, String)} (US-08) to store
-     * the {@code code} / {@code name} of the copy.
+     * Used by {@link #duplicateTemplate(Long, String)} (US-08) to store
+     * the {@code name} of the copy.
      * <p>
      * TODO(project-template): when the Project Template module exposes its own
      * service/DTO layer, replace these repository calls with that service so the
@@ -225,10 +223,10 @@ public class ProjectTemplateSnapshotServiceImpl
      * <p>
      * Steps:
      * <ol>
-     *     <li>validate the mandatory {@code code} (unique) and {@code name} of
-     *     the copy, plus the source configuration (must still be valid JSON)</li>
+     *     <li>validate the mandatory {@code name} of the copy, plus the source
+     *     configuration (must still be valid JSON)</li>
      *     <li>insert an independent {@code ProjectTemplate} row carrying the new
-     *     code / name and a copy of the source {@code constraintsJson}</li>
+     *     name and a copy of the source {@code constraintsJson}</li>
      *     <li>insert the first version of that template: {@code v1.0},
      *     {@code DRAFT}, copied {@code contentJson},
      *     {@code parentTemplateId = null} (no version-tree link to the
@@ -244,28 +242,24 @@ public class ProjectTemplateSnapshotServiceImpl
      * instead of leaving it orphaned.
      */
     @Override
-    public ProjectTemplateSnapshotDTO duplicateTemplate(Long sourceVersionId, String code, String name) {
+    public ProjectTemplateSnapshotDTO duplicateTemplate(Long sourceVersionId, String name) {
 
         checkPermission(CrudAction.CREATE);
 
         ProjectTemplateSnapshot source = findSnapshot(sourceVersionId);
 
-        String newCode = trimToNull(code);
         String newName = trimToNull(name);
 
         Map<String, List<String>> errors = new LinkedHashMap<>();
 
-        validateCode(newCode, errors);
         validateName(newName, errors);
         validateContentJson(source.getContentJson(), errors);
 
         throwIfInvalid(errors);
 
-        ensureUniqueCode(newCode);
-
-        // 1) The copy owns a brand new ProjectTemplate (new code / name).
+        // 1) The copy owns a brand new ProjectTemplate (new name).
         ProjectTemplate duplicatedTemplate =
-                createIndependentTemplate(source.getTemplateId(), newCode, newName);
+                createIndependentTemplate(source.getTemplateId(), newName);
 
         // 2) v1.0 DRAFT snapshot of the new template: configuration copied,
         //    but no parent_template_id link back to the source version.
@@ -288,7 +282,6 @@ public class ProjectTemplateSnapshotServiceImpl
         Map<String, Object> after = snapshot(saved);
         after.put("duplicatedFromSnapshotId", source.getId());
         after.put("duplicatedFromTemplateId", source.getTemplateId());
-        after.put("duplicateCode", duplicatedTemplate.getCode());
         after.put("duplicateName", duplicatedTemplate.getName());
 
         snapshotAuditService.record(
@@ -315,7 +308,6 @@ public class ProjectTemplateSnapshotServiceImpl
      * does not change the API, the database or the rules implemented above.
      */
     private ProjectTemplate createIndependentTemplate(Long sourceTemplateId,
-                                                      String code,
                                                       String name) {
 
         String constraintsJson = sourceTemplateId == null
@@ -327,7 +319,6 @@ public class ProjectTemplateSnapshotServiceImpl
 
         return projectTemplateRepository.save(
                 ProjectTemplate.builder()
-                        .code(code)
                         .name(name)
                         .constraintsJson(constraintsJson)
                         .isActive(true)
@@ -614,23 +605,6 @@ public class ProjectTemplateSnapshotServiceImpl
     }
 
     /**
-     * US-08: the code of the copy is mandatory and must fit
-     * {@code project_templates.code} (unique, 100 chars).
-     */
-    private void validateCode(String code, Map<String, List<String>> errors) {
-
-        if (code == null) {
-            errors.put(CODE_FIELD, List.of("Vui lòng nhập mã Project Template"));
-            return;
-        }
-
-        if (code.length() > MAX_CODE_LENGTH) {
-            errors.put(CODE_FIELD,
-                    List.of("Mã Project Template không vượt quá " + MAX_CODE_LENGTH + " ký tự"));
-        }
-    }
-
-    /**
      * US-08: the name of the copy is mandatory and must fit
      * {@code project_templates.name} (255 chars).
      */
@@ -644,24 +618,6 @@ public class ProjectTemplateSnapshotServiceImpl
         if (name.length() > MAX_NAME_LENGTH) {
             errors.put(NAME_FIELD,
                     List.of("Tên Project Template không vượt quá " + MAX_NAME_LENGTH + " ký tự"));
-        }
-    }
-
-    /**
-     * US-08 / AC01: the code of the copy must not collide with an existing
-     * (active) template. Concurrent inserts are still stopped by the unique
-     * constraint of {@code project_templates.code}, mapped to 409 by the
-     * controller.
-     */
-    private void ensureUniqueCode(String code) {
-
-        if (code == null) {
-            return;
-        }
-
-        if (projectTemplateRepository.findByCodeAndIsActiveTrue(code).isPresent()) {
-            throw new ProjectTemplateSnapshotConflictException(
-                    CODE_FIELD, "Mã Project Template đã tồn tại");
         }
     }
 

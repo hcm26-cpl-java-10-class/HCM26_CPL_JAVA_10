@@ -176,14 +176,10 @@ export default function ProjectTemplateVersionWorkspacePage() {
 
   /**
    * US-08: duplicate the template of the selected version into a brand new one.
-   * The backend owns the new code uniqueness check, the copied configuration,
-   * `v1.0` / `DRAFT` and the absence of a `parentTemplateId` link; the source
-   * template is never modified.
+   * The backend owns the copied configuration, `v1.0` / `DRAFT` and the absence
+   * of a `parentTemplateId` link; the source template is never modified.
    */
-  const handleDuplicateTemplate = async (payload: {
-    code: string;
-    name: string;
-  }) => {
+  const handleDuplicateTemplate = async (payload: { name: string }) => {
     if (!selectedVersion?.id || submitting) return;
 
     setSubmitting(true);

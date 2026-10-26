@@ -43,7 +43,7 @@ const extractErrorMessage = (error: unknown, fallback: string) => {
  * Self-contained "Clone template" action (US-08) usable from any data table.
  * <p>
  * Renders a small icon button plus the {@link DuplicateTemplateDialog}: the
- * dialog collects the new template code / name, then
+ * dialog collects the new template name, then
  * `POST /api/project-template-versions/{id}/duplicate` creates a brand new
  * template stored as `v1.0` / `DRAFT` with no `parentTemplateId` link. The
  * source template and its versions are never modified.
@@ -56,7 +56,7 @@ export function CloneTemplateButton({
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleConfirm = async (payload: { code: string; name: string }) => {
+  const handleConfirm = async (payload: { name: string }) => {
     if (!version?.id || loading) return;
 
     setLoading(true);

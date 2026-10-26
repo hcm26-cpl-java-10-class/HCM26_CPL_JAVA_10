@@ -91,9 +91,9 @@ public class ProjectTemplateSnapshotController
      * US-08: duplicates the template behind the given version into a brand new,
      * fully independent Project Template.
      * <p>
-     * The client supplies the new {@code code} (must be unique) and {@code name};
-     * the server copies the configuration (rules, milestones, rubric), stores the
-     * row as {@code v1.0} / {@code DRAFT} and leaves {@code parentTemplateId}
+     * The client supplies the new {@code name}; the server copies the
+     * configuration (rules, milestones, rubric), stores the row as
+     * {@code v1.0} / {@code DRAFT} and leaves {@code parentTemplateId}
      * empty, so the copy keeps no version-tree link to the source template. The
      * source template and its versions are never modified.
      */
@@ -108,7 +108,7 @@ public class ProjectTemplateSnapshotController
                 : new DuplicateProjectTemplateRequest();
 
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(snapshotService.duplicateTemplate(id, payload.getCode(), payload.getName()));
+                .body(snapshotService.duplicateTemplate(id, payload.getName()));
     }
 
     /**

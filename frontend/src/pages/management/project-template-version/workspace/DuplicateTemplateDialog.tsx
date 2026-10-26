@@ -20,22 +20,21 @@ interface DuplicateTemplateDialogProps {
   /** Version whose template will be duplicated. */
   source: ProjectTemplateVersionDTO | null;
   loading?: boolean;
-  onConfirm: (payload: { code: string; name: string }) => void | Promise<void>;
+  onConfirm: (payload: { name: string }) => void | Promise<void>;
 }
 
 interface FieldErrors {
-  code?: string;
   name?: string;
 }
 
 /**
  * Confirmation of the "Duplicate" action (US-08 / AC01).
  * <p>
- * Only the identity of the copy is asked for: a new (unique) code and a new
- * name. Everything else is handled by the server - the configuration (rules,
- * milestones, rubric) is copied from the selected template, the version is
- * always `v1.0`, the status always `DRAFT` and the copy keeps no
- * `parentTemplateId` link back to the original.
+ * Only the identity of the copy is asked for: a new name. Everything else is
+ * handled by the server - the configuration (rules, milestones, rubric) is
+ * copied from the selected template, the version is always `v1.0`, the status
+ * always `DRAFT` and the copy keeps no `parentTemplateId` link back to the
+ * original.
  * <p>
  * The template code / name are not displayed because the Project Template
  * module is owned by another team and is not resolved by this page yet.
@@ -47,14 +46,12 @@ export function DuplicateTemplateDialog({
   loading = false,
   onConfirm,
 }: DuplicateTemplateDialogProps) {
-  const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [errors, setErrors] = useState<FieldErrors>({});
 
   /** Reset the form every time the dialog opens for a (possibly) new source. */
   useEffect(() => {
     if (!open) return;
-    setCode("");
     setName("");
     setErrors({});
   }, [open, source?.id]);
@@ -62,7 +59,6 @@ export function DuplicateTemplateDialog({
   const validate = () => {
     const next: FieldErrors = {};
 
-    if (!code.trim()) next.code = "Vui lòng nhập mã Project Template";
     if (!name.trim()) next.name = "Vui lòng nhập tên Project Template";
 
     setErrors(next);
@@ -73,7 +69,7 @@ export function DuplicateTemplateDialog({
     if (loading || !source?.id) return;
     if (!validate()) return;
 
-    void onConfirm({ code: code.trim(), name: name.trim() });
+    void onConfirm({ name: name.trim() });
   };
 
   return (
@@ -96,28 +92,6 @@ export function DuplicateTemplateDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="duplicate-template-code" className="text-xs">
-              New code <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="duplicate-template-code"
-              value={code}
-              maxLength={100}
-              placeholder="e.g. TPL-CAPSTONE-2026"
-              autoComplete="off"
-              disabled={loading}
-              aria-invalid={Boolean(errors.code)}
-              onChange={(event) => {
-                setCode(event.target.value);
-                if (errors.code) setErrors((prev) => ({ ...prev, code: undefined }));
-              }}
-            />
-            {errors.code && (
-              <p className="text-[11px] font-medium text-destructive">{errors.code}</p>
-            )}
-          </div>
-
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="duplicate-template-name" className="text-xs">
               New name <span className="text-destructive">*</span>
@@ -142,8 +116,7 @@ export function DuplicateTemplateDialog({
 
           <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
             <li>
-              The code must not be used by another Project Template and the copy
-              is stored as{" "}
+              The copy is stored as{" "}
               <span className="font-semibold text-foreground">DRAFT</span>.
             </li>
             <li>

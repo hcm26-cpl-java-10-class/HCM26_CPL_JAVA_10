@@ -20,7 +20,8 @@ import lombok.experimental.SuperBuilder;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class ProjectTemplate extends BaseEntity {
 
-    @Column(nullable = false, unique = true, length = 100)
+    /** Optional business code; US-08 duplication no longer asks for one. */
+    @Column(unique = true, length = 100)
     String code;
 
     @Column(nullable = false, length = 255)

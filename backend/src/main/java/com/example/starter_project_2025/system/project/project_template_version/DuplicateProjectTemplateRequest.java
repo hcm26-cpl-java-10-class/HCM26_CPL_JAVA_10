@@ -11,10 +11,10 @@ import lombok.experimental.FieldDefaults;
 /**
  * Payload of US-08 "Duplicate Project Template".
  * <p>
- * Only the identity of the copy is provided by the client: a brand new,
- * unique {@code code} and a new {@code name}. Everything else (rules,
- * milestones, rubric - stored in {@code contentJson}) is copied from the
- * source version by the server, the version is always {@code v1.0} and the
+ * Only the identity of the copy is provided by the client: a new {@code name}
+ * (the {@code code} is optional and no longer asked for). Everything else
+ * (rules, milestones, rubric - stored in {@code contentJson}) is copied from
+ * the source version by the server, the version is always {@code v1.0} and the
  * status always {@code DRAFT}.
  * <p>
  * Values are validated in {@link ProjectTemplateSnapshotServiceImpl} so the
@@ -27,9 +27,6 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class DuplicateProjectTemplateRequest {
-
-    /** New unique code of the duplicated Project Template. */
-    String code;
 
     /** New display name of the duplicated Project Template. */
     String name;
