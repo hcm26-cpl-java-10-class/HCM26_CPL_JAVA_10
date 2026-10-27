@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.project.milestone.submission.ser
 import com.example.starter_project_2025.system.project.ProjectTeamRepository;
 import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
 import com.example.starter_project_2025.system.project.milestone.submission.domain.*;
+import com.example.starter_project_2025.system.project.milestone.submission.repository.MilestoneArtifactSubmissionRepository;
 import com.example.starter_project_2025.system.project.milestone.submission.repository.MilestoneSubmissionRepository;
 import com.example.starter_project_2025.system.project.milestone.submission.repository.SubmissionVersionRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
@@ -22,9 +23,12 @@ public class ArtifactReviewSubmissionSyncService {
 
     private final MilestoneSubmissionRepository submissions;
     private final SubmissionVersionRepository versions;
+    private final MilestoneArtifactSubmissionRepository artifactSubmissions;
     private final ProjectTeamRepository teams;
     private final UserRepository users;
     private final SubmissionQueryService submissionQueryService;
+
+    public record ArtifactReviewState(String status, UUID reviewSubmissionId) { }
 
     public UUID synchronize(Milestone milestone, MilestoneArtifactSubmission artifact) {
         var alreadyLinked = versions.findByArtifactSubmissionId(artifact.getId());
@@ -51,6 +55,10 @@ public class ArtifactReviewSubmissionSyncService {
 
         SubmissionVersion version;
         if (submission.getStatus() == SubmissionStatus.CHANGES_REQUESTED) {
+            // Guard: Never allow an older artifact submitted at or before reviewedAt to reopen a reviewed submission
+            if (submission.getReviewedAt() != null && !artifact.getSubmittedAt().isAfter(submission.getReviewedAt())) {
+                return submission.getId();
+            }
             if (!submissionQueryService.canRequestChanges(submission)) {
                 throw new com.example.starter_project_2025.system.project.milestone.exception.MilestoneValidationException(
                         java.util.Map.of("submission", java.util.List.of(
@@ -64,12 +72,36 @@ public class ArtifactReviewSubmissionSyncService {
             version.updateDraft(versionTitle(milestone, artifact), artifact.getReleaseNotes(), primaryUrl(artifact));
             if (version.getArtifacts().isEmpty()) addArtifacts(version, artifact);
             if (version.getChecklist().isEmpty()) snapshotChecklist(version, milestone);
-        } else {
+        } else if (submission.getStatus() == SubmissionStatus.SUBMITTED) {
             version = versions.findBySubmissionIdAndVersionNumber(submission.getId(), submission.getCurrentVersionNumber())
                     .orElse(null);
-            if (version == null || version.getArtifactSubmissionId() != null) return null;
-            version.linkArtifactSubmission(artifact.getId());
-            versions.save(version);
+            if (version != null) {
+                if (version.getArtifactSubmissionId() == null) {
+                    version.linkArtifactSubmission(artifact.getId());
+                    versions.save(version);
+                } else if (!version.getArtifactSubmissionId().equals(artifact.getId())) {
+                    boolean isNewerArtifact = artifactSubmissions.findById(version.getArtifactSubmissionId())
+                            .map(existing -> artifact.getVersion() > existing.getVersion())
+                            .orElse(true);
+                    if (isNewerArtifact) {
+                        version.refreshSubmittedArtifact(
+                                artifact.getId(),
+                                versionTitle(milestone, artifact),
+                                artifact.getReleaseNotes(),
+                                primaryUrl(artifact),
+                                buildArtifactValues(artifact),
+                                artifact.getSubmittedAt(),
+                                artifact.isSubmittedLate(),
+                                artifact.getLatePenaltyPercent()
+                        );
+                        submission.refreshSubmittedAt(artifact.getSubmittedAt());
+                        versions.saveAndFlush(version);
+                        submissions.saveAndFlush(submission);
+                    }
+                }
+            }
+            return submission.getId();
+        } else {
             return submission.getId();
         }
 
@@ -79,6 +111,51 @@ public class ArtifactReviewSubmissionSyncService {
         versions.save(version);
         submissions.saveAndFlush(submission);
         return submission.getId();
+    }
+
+    public ArtifactReviewState resolveViewState(Milestone milestone,
+                                                MilestoneArtifactSubmission artifact,
+                                                boolean isLatestForMilestone) {
+        if (milestone == null || milestone.getProjectId() == null || artifact.getTeamId() == null) {
+            return new ArtifactReviewState(artifact.getStatus().name(), null);
+        }
+        if (isLatestForMilestone) {
+            synchronize(milestone, artifact);
+        }
+        var submissionOpt = submissions.findByMilestoneIdAndTeamId(milestone.getId(), artifact.getTeamId());
+        if (submissionOpt.isEmpty()) {
+            return new ArtifactReviewState(artifact.getStatus().name(), null);
+        }
+        MilestoneSubmission submission = submissionOpt.get();
+        var linkedVersion = versions.findByArtifactSubmissionId(artifact.getId());
+
+        if (isLatestForMilestone) {
+            if (submission.getStatus() != SubmissionStatus.SUBMITTED
+                    && submission.getStatus() != SubmissionStatus.DRAFT
+                    && (submission.getReviewedAt() == null || !artifact.getSubmittedAt().isAfter(submission.getReviewedAt()))) {
+                return new ArtifactReviewState(submission.getStatus().name(), submission.getId());
+            }
+            String latestStatus = linkedVersion.map(v -> v.getStatus().name())
+                    .orElseGet(() -> submission.getStatus().name());
+            return new ArtifactReviewState(latestStatus, submission.getId());
+        }
+
+        // Historical (older) artifact version: never reviewable again
+        if (linkedVersion.isPresent()) {
+            SubmissionStatus vStatus = linkedVersion.get().getStatus();
+            if (vStatus != SubmissionStatus.SUBMITTED && vStatus != SubmissionStatus.DRAFT) {
+                return new ArtifactReviewState(vStatus.name(), null);
+            }
+        }
+        var byVersionNum = versions.findBySubmissionIdAndVersionNumber(
+                submission.getId(), (int) artifact.getVersion());
+        if (byVersionNum.isPresent()) {
+            SubmissionStatus vStatus = byVersionNum.get().getStatus();
+            if (vStatus != SubmissionStatus.SUBMITTED && vStatus != SubmissionStatus.DRAFT) {
+                return new ArtifactReviewState(vStatus.name(), null);
+            }
+        }
+        return new ArtifactReviewState(SubmissionStatus.CHANGES_REQUESTED.name(), null);
     }
 
     private SubmissionVersion createVersion(MilestoneSubmission submission,
@@ -93,13 +170,17 @@ public class ArtifactReviewSubmissionSyncService {
         return version;
     }
 
-    private void addArtifacts(SubmissionVersion version, MilestoneArtifactSubmission artifact) {
+    private List<SubmissionVersion.ArtifactValue> buildArtifactValues(MilestoneArtifactSubmission artifact) {
         List<SubmissionVersion.ArtifactValue> values = new ArrayList<>();
         if (artifact.getRepositoryUrl() != null) values.add(new SubmissionVersion.ArtifactValue(
                 SubmissionArtifactType.REPOSITORY, "Source repository", artifact.getRepositoryUrl()));
         if (artifact.getDeploymentUrl() != null) values.add(new SubmissionVersion.ArtifactValue(
                 SubmissionArtifactType.DEMO, "Deployment", artifact.getDeploymentUrl()));
-        version.replaceArtifacts(values);
+        return values;
+    }
+
+    private void addArtifacts(SubmissionVersion version, MilestoneArtifactSubmission artifact) {
+        version.replaceArtifacts(buildArtifactValues(artifact));
     }
 
     private void snapshotChecklist(SubmissionVersion version, Milestone milestone) {

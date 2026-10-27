@@ -114,6 +114,13 @@ public class MilestoneSubmission {
         updatedAt = now;
     }
 
+    public void refreshSubmittedAt(Instant now) {
+        if (status == SubmissionStatus.SUBMITTED) {
+            this.submittedAt = now;
+            this.updatedAt = now;
+        }
+    }
+
     public void reviewed(ReviewDecision decision, Instant now) {
         requireStatus(SubmissionStatus.SUBMITTED);
         switch (decision) {

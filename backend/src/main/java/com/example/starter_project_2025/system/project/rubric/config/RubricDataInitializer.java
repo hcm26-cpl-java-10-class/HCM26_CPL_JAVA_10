@@ -25,7 +25,7 @@ public class RubricDataInitializer implements CommandLineRunner {
     private final RubricRepository repository;
     private final Clock milestoneClock;
 
-    @Value("${milestone.mock.seed-enabled:false}")
+    @Value("${rubric.seed-enabled:true}")
     private boolean enabled;
 
     @Override

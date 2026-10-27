@@ -147,13 +147,16 @@ public class TeamArtifactSubmissionService {
         userRepository.findByTenantIdAndIsActiveTrue(s.tenantId).forEach(user -> {
             UUID id = UUID.nameUUIDFromBytes(user.getEmail().getBytes(StandardCharsets.UTF_8)); actors.put(id, user);
         });
+        Map<UUID, Long> maxVersionByMilestone = new HashMap<>();
+        rows.forEach(row -> maxVersionByMilestone.merge(row.getMilestoneId(), row.getVersion(), Math::max));
         return rows.stream().map(row -> {
             var user = actors.get(row.getSubmitterId());
             String name = user == null ? null : (Objects.toString(user.getFirstName(), "") + " " + Objects.toString(user.getLastName(), "")).trim();
-            UUID reviewSubmissionId = milestoneRepository.findByIdAndTeamIdAndTenantId(
-                            row.getMilestoneId(), teamId, s.tenantId)
-                    .map(milestone -> reviewSyncService.synchronize(milestone, row)).orElse(null);
-            return new TeamSubmissionView(submissionResponse(row), reviewSubmissionId,
+            boolean isLatest = row.getVersion() == maxVersionByMilestone.getOrDefault(row.getMilestoneId(), row.getVersion());
+            var milestone = milestoneRepository.findByIdAndTeamIdAndTenantId(
+                    row.getMilestoneId(), teamId, s.tenantId).orElse(null);
+            var reviewState = reviewSyncService.resolveViewState(milestone, row, isLatest);
+            return new TeamSubmissionView(submissionResponse(row, reviewState.status()), reviewState.reviewSubmissionId(),
                     row.getSubmitterId(), name, user == null ? null : user.getEmail());
         }).toList();
     }
@@ -190,7 +193,10 @@ public class TeamArtifactSubmissionService {
         catch (JsonProcessingException e) { throw new IllegalStateException("Invalid team draft checklist", e); }
     }
     private ArtifactSubmissionResponse submissionResponse(MilestoneArtifactSubmission row) {
-        try { return new ArtifactSubmissionResponse(row.getId(), row.getMilestoneId(), row.getVersion(), row.getStatus().name(), row.getRepositoryUrl(), row.getDeploymentUrl(), row.getReleaseNotes(), objectMapper.readValue(row.getChecklistJson(), new TypeReference<>() {}), objectMapper.readValue(row.getAttachmentsJson(), new TypeReference<>() {}), row.getSubmittedAt(), row.isSubmittedLate(), row.getLatePenaltyPercent()); }
+        return submissionResponse(row, row.getStatus().name());
+    }
+    private ArtifactSubmissionResponse submissionResponse(MilestoneArtifactSubmission row, String resolvedStatus) {
+        try { return new ArtifactSubmissionResponse(row.getId(), row.getMilestoneId(), row.getVersion(), resolvedStatus != null ? resolvedStatus : row.getStatus().name(), row.getRepositoryUrl(), row.getDeploymentUrl(), row.getReleaseNotes(), objectMapper.readValue(row.getChecklistJson(), new TypeReference<>() {}), objectMapper.readValue(row.getAttachmentsJson(), new TypeReference<>() {}), row.getSubmittedAt(), row.isSubmittedLate(), row.getLatePenaltyPercent()); }
         catch (JsonProcessingException e) { throw new IllegalStateException("Invalid stored team submission", e); }
     }
     private void validateUrl(String field, String value) { if (blank(value) == null) return; try { var u = java.net.URI.create(value.trim()); if (!u.isAbsolute() || u.getHost() == null || !(u.getScheme().equalsIgnoreCase("http") || u.getScheme().equalsIgnoreCase("https"))) throw new IllegalArgumentException(); } catch (RuntimeException e) { throw validation(field, "Enter a valid absolute HTTP or HTTPS URL"); } }

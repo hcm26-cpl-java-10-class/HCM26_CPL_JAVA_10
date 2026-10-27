@@ -37,6 +37,8 @@ export function SubmissionReviewPage() {
     onSuccess: (data, variables) => {
       client.setQueryData(["milestone-submissions", submissionId], data);
       void client.invalidateQueries({ queryKey: ["milestone-submissions"] });
+      void client.invalidateQueries({ queryKey: ["team-milestone-submissions"] });
+      void client.invalidateQueries({ queryKey: ["team-milestone"] });
       retryKey.current = null;
       toast.success(variables.payload.decision === "ACCEPT" ? "Submission accepted" : variables.payload.decision === "REJECT" ? "Submission rejected" : "Student revision requested");
     },

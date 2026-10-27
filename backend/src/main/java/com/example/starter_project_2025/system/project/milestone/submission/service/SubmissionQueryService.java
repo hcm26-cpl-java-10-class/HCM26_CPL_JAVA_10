@@ -46,7 +46,7 @@ public class SubmissionQueryService {
         int safePage = Math.max(0, page);
         int safeSize = Math.min(100, Math.max(1, size));
         var result = submissions.findAll(MilestoneSubmissionSpecifications.matching(
-                        tenantProvider.requireCurrentTenantId(), projectId, normalize(search), status,
+                        tenantProvider.requireCurrentTenantId(), projectId, null, null, normalize(search), status,
                         executionStatus, mandatory, late, null, null, normalizeBucket(bucket)),
                 PageRequest.of(safePage, safeSize, parseSort(sort)));
         return new SubmissionDtos.PageResponse(result.getContent().stream().map(this::toListItem).toList(),
@@ -60,7 +60,7 @@ public class SubmissionQueryService {
         int safePage = Math.max(0, page);
         int safeSize = Math.min(100, Math.max(1, size));
         var result = submissions.findAll(MilestoneSubmissionSpecifications.matching(
-                        tenantProvider.requireCurrentTenantId(), projectId, normalize(search), status,
+                        tenantProvider.requireCurrentTenantId(), projectId, null, null, normalize(search), status,
                         null, null, null, null, actorProvider.requireCurrentActorId(), "ALL"),
                 PageRequest.of(safePage, safeSize, parseSort(sort)));
         return new SubmissionDtos.PageResponse(result.getContent().stream().map(this::toListItem).toList(),

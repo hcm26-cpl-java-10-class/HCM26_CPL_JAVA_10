@@ -137,6 +137,30 @@ public class SubmissionVersion {
         this.artifactSubmissionId = artifactSubmissionId;
     }
 
+    public void unlinkArtifactSubmission() {
+        this.artifactSubmissionId = null;
+    }
+
+    public void refreshSubmittedArtifact(UUID artifactSubmissionId, String title, String notes,
+                                         String url, List<ArtifactValue> values, Instant now,
+                                         boolean isLate, BigDecimal penalty) {
+        if (status != SubmissionStatus.SUBMITTED) {
+            throw new IllegalStateException("Only an unreviewed submitted version can be refreshed");
+        }
+        this.artifactSubmissionId = artifactSubmissionId;
+        this.title = title.trim();
+        this.notes = normalize(notes);
+        this.submissionUrl = normalize(url);
+        this.submittedAt = now;
+        this.late = isLate;
+        this.penaltyPercent = penalty == null ? BigDecimal.ZERO.setScale(2) : penalty.setScale(2);
+        artifacts.clear();
+        for (int index = 0; index < values.size(); index++) {
+            ArtifactValue item = values.get(index);
+            artifacts.add(SubmissionArtifact.create(this, item.type(), item.name(), item.url(), index));
+        }
+    }
+
     public record ArtifactValue(SubmissionArtifactType type, String name, String url) { }
     public record ChecklistValue(UUID sourceId, String content, boolean mandatory,
                                  boolean completed, String evidenceNote) { }

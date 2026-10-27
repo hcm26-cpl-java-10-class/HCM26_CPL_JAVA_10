@@ -192,7 +192,7 @@ export interface ArtifactSubmission {
   id: string;
   milestoneId: string;
   version: number;
-  status: "SUBMITTED";
+  status: "DRAFT" | "SUBMITTED" | "ACCEPTED" | "REJECTED" | "CHANGES_REQUESTED";
   repositoryUrl?: string | null;
   deploymentUrl?: string | null;
   releaseNotes?: string | null;
