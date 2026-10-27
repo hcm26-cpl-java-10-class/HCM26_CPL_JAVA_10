@@ -145,7 +145,7 @@ export function MilestoneDetailPage() {
                   <div className="grid gap-3">
                     <Badge variant="secondary">Late submissions allowed</Badge>
                     <div><p className="text-muted-foreground">Accepted until</p><p className="mt-1 font-semibold">{formatTenantDateTime(milestone.latePolicy.lateUntil, milestone.tenantTimeZone)}</p></div>
-                    <div><p className="text-muted-foreground">Penalty</p><p className="mt-1 font-semibold">{formatPenalty(milestone.latePolicy.penaltyPercent)}</p></div>
+                    <div><p className="text-muted-foreground">Penalty</p><p className="mt-1 font-semibold">{formatPenalty(milestone.latePolicy.penaltyPercent, milestone.latePolicy.penaltyBasis)}</p></div>
                   </div>
                 )}
               </CardContent>

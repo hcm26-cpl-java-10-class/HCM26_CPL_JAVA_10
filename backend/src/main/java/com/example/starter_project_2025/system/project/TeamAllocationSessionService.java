@@ -10,6 +10,7 @@ import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.project.trainingclass.ScopeAuthorizationService;
 import com.example.starter_project_2025.system.project.trainingclass.TrainingClass;
 import com.example.starter_project_2025.system.project.trainingclass.TrainingClassRepository;
+import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -56,7 +57,7 @@ public class TeamAllocationSessionService {
         ProjectTemplate template;
         if (selectedTemplateId == null) {
             template = projectTemplateRepository
-                    .findByCodeAndIsActiveTrue("MANUAL-GROUPING-DEFAULT")
+                    .findByCodeAndTenantIdIsNullAndIsActiveTrue("MANUAL-GROUPING-DEFAULT")
                     .orElseGet(() -> projectTemplateRepository.saveAndFlush(
                             ProjectTemplate.builder()
                                     .code("MANUAL-GROUPING-DEFAULT")
@@ -68,6 +69,11 @@ public class TeamAllocationSessionService {
                     .findByIdAndIsActiveTrue(selectedTemplateId)
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "Active ProjectTemplate", "id", selectedTemplateId));
+        }
+
+        if (template.getTenantId() != null && (!template.getTenantId().equals(trainingClass.getTenantId())
+                || template.getStatus() != ProjectTemplateStatus.ACTIVE)) {
+            throw new ResourceNotFoundException("Available ProjectTemplate", "id", selectedTemplateId);
         }
 
         int maxMembers = request.maxMembers() != null

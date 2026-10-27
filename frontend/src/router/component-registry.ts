@@ -34,6 +34,9 @@ import { Navigate } from "react-router-dom";
 import TaskManagementPage from "@/pages/management/task";
 import { TaskFormPage } from "@/pages/management/task/pages/TaskFormPage";
 import { TaskDetailPage } from "@/pages/management/task/pages/TaskDetailPage";
+import ProjectTemplateListPage from "@/pages/management/project-template";
+import { ProjectTemplateFormPage } from "@/pages/management/project-template/pages/ProjectTemplateFormPage";
+import { ProjectTemplateDetailPage } from "@/pages/management/project-template/pages/ProjectTemplateDetailPage";
 import ArtifactDraftPage from "@/pages/student/ArtifactDraftPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
@@ -58,6 +61,10 @@ export const routes: RouteConfig[] = [
   { path: "/tasks/create", component: TaskFormPage, requiredPermission: "TASK_CREATE" },
   { path: "/tasks/:id/edit", component: TaskFormPage, requiredPermission: "TASK_UPDATE" },
   { path: "/tasks/:id/detail", component: TaskDetailPage, requiredPermission: "TASK_READ" },
+  { path: "/project-templates", component: ProjectTemplateListPage, requiredPermission: "PROJECT_TEMPLATE_READ" },
+  { path: "/project-templates/create", component: ProjectTemplateFormPage, requiredPermission: "PROJECT_TEMPLATE_CREATE" },
+  { path: "/project-templates/:id/edit", component: ProjectTemplateFormPage, requiredPermission: "PROJECT_TEMPLATE_UPDATE" },
+  { path: "/project-templates/:id/detail", component: ProjectTemplateDetailPage, requiredPermission: "PROJECT_TEMPLATE_READ" },
   {
     path: "/invitations",
     component: InvitationManagementPage,
