@@ -63,6 +63,8 @@ export function EditExamQuestionDialog({ exam, question, onClose, onSaved }: Edi
       topic: question.topic || "",
       points: question.points ?? 1,
       isActive: question.isActive ?? true,
+      imageUrl: question.imageUrl ?? "",
+      gradingCriteria: question.gradingCriteria ?? [],
       options: (question.options ?? []).map((option) => ({
         id: option.id,
         content: option.content,

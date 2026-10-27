@@ -11,6 +11,7 @@ import com.example.starter_project_2025.system.exam.domain.ExamAttemptRepository
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus;
 import com.example.starter_project_2025.system.exam.domain.ExamRepository;
 import com.example.starter_project_2025.system.exam.dto.EssayGradingDTO;
+import com.example.starter_project_2025.system.question.domain.EssayGradingCriterion;
 import com.example.starter_project_2025.system.exam.service.ai.AiEssayGradingClient;
 import com.example.starter_project_2025.system.question.domain.QuestionType;
 import com.example.starter_project_2025.system.rbac.user.User;
@@ -191,12 +192,15 @@ public class ExamEssayGradingService {
                 .sorted(Comparator.comparingInt(ExamAttemptQuestion::getDisplayOrder))
                 .map(q -> {
                     String refAnswer = null;
-                    String rubric = null;
+                    String rubric = formatGradingCriteria(q.getGradingCriteria());
                     if (request != null && request.getQuestions() != null) {
                         EssayGradingDTO.QuestionContext ctx = request.getQuestions().get(q.getSourceQuestionId());
                         if (ctx != null) {
                             refAnswer = ctx.getReferenceAnswer();
-                            rubric = ctx.getRubric();
+                            if (ctx.getRubric() != null && !ctx.getRubric().isBlank()) {
+                                rubric = rubric == null ? ctx.getRubric().trim()
+                                        : rubric + "\n\nAdditional teacher guidance:\n" + ctx.getRubric().trim();
+                            }
                         }
                     }
                     BigDecimal maxPoints = ExamScoring.gradingCap(
@@ -217,6 +221,15 @@ public class ExamEssayGradingService {
                 .toList();
 
         return aiClient.requestProposal(payloads);
+    }
+
+    private String formatGradingCriteria(List<EssayGradingCriterion> criteria) {
+        if (criteria == null || criteria.isEmpty()) return null;
+        return criteria.stream()
+                .map(criterion -> criterion.getName() + " (" + criterion.getWeightPercentage() + "%)"
+                        + (criterion.getDescription() == null || criterion.getDescription().isBlank()
+                        ? "" : ": " + criterion.getDescription().trim()))
+                .collect(java.util.stream.Collectors.joining("\n"));
     }
 
 
@@ -250,6 +263,13 @@ public class ExamEssayGradingService {
         item.setPoints(question.getPoints());
         item.setMaxScore(ExamScoring.gradingCap(ExamScoring.effectiveMax(attempt.getMaxScore()), question.getPoints(), attempt.getTotalPoints()));
         item.setAnswerText(answerText(attempt, question));
+        item.setGradingCriteria(question.getGradingCriteria().stream().map(criterion -> {
+            EssayGradingDTO.GradingCriterion dto = new EssayGradingDTO.GradingCriterion();
+            dto.setName(criterion.getName());
+            dto.setDescription(criterion.getDescription());
+            dto.setWeightPercentage(criterion.getWeightPercentage());
+            return dto;
+        }).toList());
 
         ExamAttemptAnswer answer = findAnswer(attempt, question);
         if (answer != null) {

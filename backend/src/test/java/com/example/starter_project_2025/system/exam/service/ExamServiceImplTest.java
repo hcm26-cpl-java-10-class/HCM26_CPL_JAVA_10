@@ -29,6 +29,7 @@ import com.example.starter_project_2025.system.exam.domain.ExamRepository;
 import com.example.starter_project_2025.system.exam.dto.ExamDTO;
 import com.example.starter_project_2025.system.exam.mapper.ExamMapper;
 import com.example.starter_project_2025.system.question.domain.Difficulty;
+import com.example.starter_project_2025.system.question.domain.EssayGradingCriterion;
 import com.example.starter_project_2025.system.question.domain.Question;
 import com.example.starter_project_2025.system.question.domain.QuestionRepository;
 import com.example.starter_project_2025.system.question.domain.QuestionType;
@@ -99,6 +100,31 @@ class ExamServiceImplTest {
         assertNull(question.getSourceQuestionId());
 
         verify(examRepository).save(exam);
+    }
+
+    @Test
+    void addQuestionsCopiesEssayGradingCriteriaIndependently() {
+        question.setType(QuestionType.ESSAY);
+        EssayGradingCriterion sourceCriterion = new EssayGradingCriterion();
+        sourceCriterion.setName("Correctness");
+        sourceCriterion.setDescription("Core concepts are correct");
+        sourceCriterion.setWeightPercentage(100);
+        question.getGradingCriteria().add(sourceCriterion);
+
+        when(examRepository.findById(1L)).thenReturn(Optional.of(exam));
+        when(questionRepository.findAllById(any())).thenReturn(List.of(question));
+        when(examRepository.save(exam)).thenReturn(exam);
+        when(examMapper.toResponse(exam)).thenReturn(new ExamDTO());
+        when(questionRepository.save(any(Question.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        examService.addQuestions(1L, List.of(10L));
+
+        Question copy = exam.getQuestions().iterator().next();
+        assertEquals(1, copy.getGradingCriteria().size());
+        assertNotSame(sourceCriterion, copy.getGradingCriteria().get(0));
+        assertEquals("Correctness", copy.getGradingCriteria().get(0).getName());
+        assertEquals(100, copy.getGradingCriteria().get(0).getWeightPercentage());
     }
 
     @Test

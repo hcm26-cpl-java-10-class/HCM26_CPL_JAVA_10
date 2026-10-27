@@ -61,6 +61,15 @@ public class EssayGradingDTO {
         private String feedback;
         private String referenceAnswer;
         private String rubric;
+        private List<GradingCriterion> gradingCriteria;
+    }
+
+    @Getter
+    @Setter
+    public static class GradingCriterion {
+        private String name;
+        private String description;
+        private int weightPercentage;
     }
 
     @Getter

@@ -8,6 +8,12 @@ export interface QuestionOptionDTO {
   imageUrl?: string | null;
 }
 
+export interface EssayGradingCriterion {
+  name: string;
+  description?: string | null;
+  weightPercentage: number;
+}
+
 export interface QuestionDTO {
   id: number;
   isActive: boolean;
@@ -17,6 +23,7 @@ export interface QuestionDTO {
   topic?: string | null;
   points: number;
   sourceQuestionId?: number | null;
+  gradingCriteria?: EssayGradingCriterion[];
   options: QuestionOptionDTO[];
   imageUrl?: string | null;
 }
@@ -107,6 +114,7 @@ export interface EssayGradingItem {
   answerText: string;
   score?: number | null;
   feedback?: string | null;
+  gradingCriteria?: EssayGradingCriterion[];
 }
 
 export interface EssayGradingDetail {

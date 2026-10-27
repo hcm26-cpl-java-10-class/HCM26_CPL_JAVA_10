@@ -10,6 +10,7 @@ import com.example.starter_project_2025.system.exam.dto.ExamAttemptSummaryDTO;
 import com.example.starter_project_2025.system.exam.dto.SaveExamAnswerRequest;
 
 import com.example.starter_project_2025.system.question.domain.Question;
+import com.example.starter_project_2025.system.question.domain.EssayGradingCriterion;
 import com.example.starter_project_2025.system.question.domain.QuestionOption;
 import com.example.starter_project_2025.system.question.domain.QuestionType;
 import com.example.starter_project_2025.system.question.mapper.QuestionTakerMapper;
@@ -141,6 +142,13 @@ public class ExamAttemptService {
             snap.setType(q.getType());
             snap.setPoints(q.getPoints());
             snap.setDisplayOrder(questionOrder++);
+            q.getGradingCriteria().forEach(sourceCriterion -> {
+                EssayGradingCriterion criterion = new EssayGradingCriterion();
+                criterion.setName(sourceCriterion.getName());
+                criterion.setDescription(sourceCriterion.getDescription());
+                criterion.setWeightPercentage(sourceCriterion.getWeightPercentage());
+                snap.getGradingCriteria().add(criterion);
+            });
 
             List<QuestionOption> options = new ArrayList<>(q.getOptions());
             options.sort(Comparator.comparing(QuestionOption::getId));
