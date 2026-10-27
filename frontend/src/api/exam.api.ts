@@ -19,6 +19,19 @@ export interface Exam {
     updatedAt?: string;
 }
 
+// NEW (anti-cheat)
+export type IntegrityEventType =
+    | 'TAB_HIDDEN' | 'WINDOW_BLUR' | 'FULLSCREEN_EXIT' | 'COPY' | 'CUT' | 'PASTE'
+    | 'CONTEXT_MENU' | 'DEVTOOLS_KEY' | 'PRINT_ATTEMPT' | 'MULTI_SESSION';
+
+export interface ExamIntegrityConfig {
+    enabled: boolean;
+    detectTabSwitch: boolean;
+    blockCopyPaste: boolean;
+    requireFullscreen: boolean;
+    singleSession: boolean;
+}
+
 export type ExamAttemptStatus =
     | 'NOT_STARTED'
     | 'IN_PROGRESS'
@@ -68,6 +81,7 @@ export interface ExamAttempt {
     bestScore?: number | null;
     questions: ExamAttemptQuestion[];
     answers: ExamAttemptAnswer[];
+    integrity?: ExamIntegrityConfig; // NEW (anti-cheat)
 }
 
 export interface ExamAttemptSummary {
@@ -216,6 +230,91 @@ export const submitAnonymousExam = async (
         `/exams/anonymous/attempts/${attemptId}/submit`,
         answers,
         { headers: { 'X-Anonymous-Session': sessionToken } },
+    );
+    return response.data;
+};
+
+// ===== NEW (anti-cheat) =====
+export interface IntegrityEventsPayload {
+    clientId: string;
+    events: { type: IntegrityEventType; durationSeconds?: number; detail?: string }[];
+}
+
+export const sendIntegrityEvents = async (attemptId: number, payload: IntegrityEventsPayload) => {
+    await api.post(`/exams/attempts/${attemptId}/integrity-events`, payload);
+};
+
+export const sendAnonymousIntegrityEvents = async (
+    attemptId: number,
+    sessionToken: string,
+    payload: IntegrityEventsPayload,
+) => {
+    await api.post(`/exams/anonymous/attempts/${attemptId}/integrity-events`, payload, {
+        headers: { 'X-Anonymous-Session': sessionToken },
+    });
+};
+
+export interface IntegrityReportRow {
+    studentId: number;
+    studentName: string;
+    email: string | null;
+    username: string | null;
+    employeeCode: string | null;
+    phone: string | null;
+    description: string | null;
+    guest: boolean;
+    attemptId: number;
+    attemptNumber: number;
+    status: ExamAttemptStatus;
+    startedAt: string | null;
+    submittedAt: string | null;
+    objectiveScore: number | null;
+    finalScore: number | null;
+    maxScore: number | null;
+    totalViolations: number;
+    tabSwitchCount: number;
+    windowBlurCount: number;
+    fullscreenExitCount: number;
+    copyPasteCount: number;
+    contextMenuCount: number;
+    shortcutCount: number;
+    multiSessionCount: number;
+    totalAwaySeconds: number;
+    lastViolationAt: string | null;
+    flagged: boolean;
+}
+
+export interface IntegrityReport {
+    examId: number;
+    examTitle: string;
+    antiCheatEnabled: boolean;
+    flagThreshold: number | null;
+    totalAttempts: number;
+    attemptsWithViolations: number;
+    flaggedAttempts: number;
+    totalViolations: number;
+    totalsByType: Record<string, number>;
+    rows: IntegrityReportRow[];
+}
+
+export interface IntegrityEventRecord {
+    id: number;
+    type: IntegrityEventType;
+    occurredAt: string;
+    durationSeconds: number | null;
+    detail: string | null;
+    userAgent: string | null;
+    ipAddress: string | null;
+}
+
+export const getIntegrityReport = async (examId: number) => {
+    const response = await api.get<IntegrityReport>(`/exams/${examId}/integrity-report`);
+    return response.data;
+};
+
+export const getIntegrityEvents = async (examId: number, attemptId: number) => {
+    const response = await api.get<IntegrityEventRecord[]>(
+        `/exams/${examId}/integrity-report/attempts/${attemptId}/events`,
     );
     return response.data;
 };

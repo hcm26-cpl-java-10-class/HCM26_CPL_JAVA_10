@@ -1,5 +1,6 @@
 import {
     saveExamAnswers,
+    sendIntegrityEvents, // NEW (anti-cheat)
     startOrResumeExam,
     submitExamAttempt,
     type ExamAttemptAnswer,
@@ -14,6 +15,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Save, Star } from 'lucide-react';
 import { toast } from 'sonner';
+import { ExamIntegrityNotice, useExamIntegrity } from '@/hooks/useExamIntegrity'; // NEW (anti-cheat)
 
 const attemptQueryKey = (examId: number) => ['student-exam-attempt', examId] as const;
 
@@ -106,6 +108,14 @@ export default function StudentExamTakingPage() {
     });
 
     const attempt = attemptQuery.data;
+
+    // NEW (anti-cheat): theo doi tab / chan copy-paste / toan man hinh
+    const integrity = useExamIntegrity({
+        attemptId: attempt?.id,
+        config: attempt?.integrity,
+        active: attempt?.status === 'IN_PROGRESS',
+        send: sendIntegrityEvents,
+    });
 
     const [flagged, setFlagged] = useState<Set<number>>(new Set());
     const [activeQuestionId, setActiveQuestionId] = useState<number | null>(null);
@@ -518,6 +528,7 @@ export default function StudentExamTakingPage() {
         return (
             <MainLayout pathName={{ exams: 'Exam Schedule', take: 'Take Exam' }}>
                 <main className="flex h-[calc(100dvh-10rem)] w-full flex-col gap-4 overflow-hidden">
+                    <ExamIntegrityNotice config={attempt.integrity} state={integrity} />
                     <header className="flex shrink-0 flex-wrap items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
                             {timerBox}
@@ -578,6 +589,7 @@ export default function StudentExamTakingPage() {
         <MainLayout pathName={{ exams: 'Exam Schedule', take: 'Take Exam' }}>
             <main className="flex w-full flex-col gap-5">
                 {!isFinished && pinnedBar}
+                {!isFinished && <ExamIntegrityNotice config={attempt.integrity} state={integrity} />}
                 <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
                     <header className="flex flex-wrap items-start justify-between gap-4 border-b pb-4">
                         <div>

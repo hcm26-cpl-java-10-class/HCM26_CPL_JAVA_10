@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { EXAM_CATEGORY_LABEL, EXAM_CATEGORY_SHOW_ANSWERS_DEFAULT, type ExamCategory, type ExamDTO, type ExamType, type LatePolicy, type QuestionDTO, type QuestionDifficulty, type QuestionFilter, type QuestionType, type ResultVisibility } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, CheckCheck, CheckSquare, ClipboardCheck, Dices, Layers, Mail, MoreVertical, Pencil, Plus, Search, Sparkles, Tags, Trash2, X } from "lucide-react";
+import { BookOpen, CheckCheck, CheckSquare, ClipboardCheck, Dices, Layers, Mail, MoreVertical, Pencil, Plus, Search, Tags, Trash2, X } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -58,6 +58,13 @@ interface ExamConfigForm {
   resultVisibility: ResultVisibility;
   examType: ExamType;
   accessCode: string;
+  // NEW (anti-cheat)
+  antiCheatEnabled: boolean;
+  detectTabSwitch: boolean;
+  blockCopyPaste: boolean;
+  requireFullscreen: boolean;
+  singleSession: boolean;
+  flagThreshold: string;
 }
 
 const DEFAULT_CONFIG: ExamConfigForm = {
@@ -76,6 +83,12 @@ const DEFAULT_CONFIG: ExamConfigForm = {
   resultVisibility: "IMMEDIATE",
   examType: "MIXED",
   accessCode: "",
+  antiCheatEnabled: false,
+  detectTabSwitch: true,
+  blockCopyPaste: true,
+  requireFullscreen: false,
+  singleSession: true,
+  flagThreshold: "5",
 };
 
 const LATE_POLICY_LABEL: Record<LatePolicy, string> = {
@@ -116,6 +129,12 @@ const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   resultVisibility: exam.resultVisibility ?? "IMMEDIATE",
   examType: exam.examType ?? "MIXED",
   accessCode: exam.accessCode ?? "",
+  antiCheatEnabled: exam.antiCheatEnabled ?? false,
+  detectTabSwitch: exam.detectTabSwitch ?? false,
+  blockCopyPaste: exam.blockCopyPaste ?? false,
+  requireFullscreen: exam.requireFullscreen ?? false,
+  singleSession: exam.singleSession ?? false,
+  flagThreshold: exam.flagThreshold != null ? String(exam.flagThreshold) : "",
 });
 
 function validateConfig(
@@ -273,6 +292,13 @@ export default function ExamManagementPage() {
         resultVisibility: cfg.resultVisibility,
         examType: cfg.examType,
         accessCode: cfg.accessCode ? cfg.accessCode.trim() : "",
+        // NEW (anti-cheat)
+        antiCheatEnabled: cfg.antiCheatEnabled,
+        detectTabSwitch: cfg.detectTabSwitch,
+        blockCopyPaste: cfg.blockCopyPaste,
+        requireFullscreen: cfg.requireFullscreen,
+        singleSession: cfg.singleSession,
+        flagThreshold: cfg.flagThreshold !== "" ? Number(cfg.flagThreshold) : 0,
       };
       return editingExam?.id
           ? examApi.update(String(editingExam.id), request)
@@ -327,7 +353,7 @@ export default function ExamManagementPage() {
 
   const addQuestionsMutation = useMutation({
     mutationFn: (overrideIds?: number[]) =>
-      examApi.addQuestions(activeExam!.id!, overrideIds ?? [...selectedQuestionIds]),
+        examApi.addQuestions(activeExam!.id!, overrideIds ?? [...selectedQuestionIds]),
     onSuccess: (exam) => {
       setActiveExam(exam);
       setSelectedQuestionIds(new Set());
@@ -423,7 +449,7 @@ export default function ExamManagementPage() {
   const eligibleTopicQuestions = useMemo(() => {
     if (!questionTopic.trim()) return [];
     return allBankQuestions.filter(
-      (q) => !sourceIdsInExam.has(q.id) && (q.topic || "").trim().toLowerCase() === questionTopic.trim().toLowerCase()
+        (q) => !sourceIdsInExam.has(q.id) && (q.topic || "").trim().toLowerCase() === questionTopic.trim().toLowerCase()
     );
   }, [allBankQuestions, sourceIdsInExam, questionTopic]);
 
@@ -436,16 +462,16 @@ export default function ExamManagementPage() {
   }, [questionsQuery.data?.content, sourceIdsInExam]);
 
   const isAllPageSelected =
-    selectablePageQuestions.length > 0 &&
-    selectablePageQuestions.every((q) => selectedQuestionIds.has(q.id));
+      selectablePageQuestions.length > 0 &&
+      selectablePageQuestions.every((q) => selectedQuestionIds.has(q.id));
 
   const isAllFilteredSelected =
-    eligibleFilteredQuestions.length > 0 &&
-    eligibleFilteredQuestions.every((q) => selectedQuestionIds.has(q.id));
+      eligibleFilteredQuestions.length > 0 &&
+      eligibleFilteredQuestions.every((q) => selectedQuestionIds.has(q.id));
 
   const isAllTopicSelected =
-    eligibleTopicQuestions.length > 0 &&
-    eligibleTopicQuestions.every((q) => selectedQuestionIds.has(q.id));
+      eligibleTopicQuestions.length > 0 &&
+      eligibleTopicQuestions.every((q) => selectedQuestionIds.has(q.id));
 
   const handleToggleSelectAllPage = () => {
     setSelectedQuestionIds((prev) => {
@@ -479,7 +505,7 @@ export default function ExamManagementPage() {
 
   const handleToggleSelectAllInTopic = (topicName: string) => {
     const list = allBankQuestions.filter(
-      (q) => !sourceIdsInExam.has(q.id) && (q.topic || "").trim().toLowerCase() === topicName.trim().toLowerCase()
+        (q) => !sourceIdsInExam.has(q.id) && (q.topic || "").trim().toLowerCase() === topicName.trim().toLowerCase()
     );
     if (list.length === 0) {
       toast.info(`All questions in topic "${topicName}" are already in this exam.`);
@@ -888,6 +914,41 @@ export default function ExamManagementPage() {
                       </p>
                   )}
                 </div>
+
+                {/* NEW (anti-cheat): cau hinh chong gian lan theo tung de */}
+                <div className="grid gap-3 border-t pt-4">
+                  <label className="flex items-center gap-2 text-sm font-semibold">
+                    <input type="checkbox" className="size-4 accent-primary" checked={cfg.antiCheatEnabled} onChange={(event) => setCfg((c) => ({ ...c, antiCheatEnabled: event.target.checked }))} />
+                    Anti-cheating monitoring (chống gian lận)
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    Violations are only logged (the exam is never auto-submitted). View them in Result Statistics → Integrity Report.
+                  </p>
+                  {cfg.antiCheatEnabled && (
+                      <div className="grid gap-3 pl-6 sm:grid-cols-2">
+                        <label className="flex items-center gap-2 text-sm">
+                          <input type="checkbox" className="size-4 accent-primary" checked={cfg.detectTabSwitch} onChange={(event) => setCfg((c) => ({ ...c, detectTabSwitch: event.target.checked }))} />
+                          Count tab / window switches
+                        </label>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input type="checkbox" className="size-4 accent-primary" checked={cfg.blockCopyPaste} onChange={(event) => setCfg((c) => ({ ...c, blockCopyPaste: event.target.checked }))} />
+                          Block copy / paste / right-click / dev shortcuts
+                        </label>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input type="checkbox" className="size-4 accent-primary" checked={cfg.requireFullscreen} onChange={(event) => setCfg((c) => ({ ...c, requireFullscreen: event.target.checked }))} />
+                          Require fullscreen
+                        </label>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input type="checkbox" className="size-4 accent-primary" checked={cfg.singleSession} onChange={(event) => setCfg((c) => ({ ...c, singleSession: event.target.checked }))} />
+                          Detect multiple tabs / devices
+                        </label>
+                        <label className="grid gap-1 text-sm sm:col-span-2">
+                          Flag as suspicious after N violations (empty = no flag)
+                          <Input type="number" min={0} max={1000} value={cfg.flagThreshold} onChange={(event) => setCfg((c) => ({ ...c, flagThreshold: event.target.value }))} />
+                        </label>
+                      </div>
+                  )}
+                </div>
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
@@ -942,11 +1003,11 @@ export default function ExamManagementPage() {
                     </SelectContent>
                   </Select>
                   <Select
-                    value={questionTopic || "ALL"}
-                    onValueChange={(value) => {
-                      setQuestionTopic(value === "ALL" ? "" : value);
-                      setQuestionPage(0);
-                    }}
+                      value={questionTopic || "ALL"}
+                      onValueChange={(value) => {
+                        setQuestionTopic(value === "ALL" ? "" : value);
+                        setQuestionPage(0);
+                      }}
                   >
                     <SelectTrigger aria-label="Filter topic">
                       <SelectValue placeholder="All Topics" />
@@ -954,131 +1015,131 @@ export default function ExamManagementPage() {
                     <SelectContent>
                       <SelectItem value="ALL">All Topics ({allBankQuestions.length})</SelectItem>
                       {topicList.map((t) => (
-                        <SelectItem key={t} value={t}>
-                          {t} ({topicCounts[t] ?? 0})
-                        </SelectItem>
+                          <SelectItem key={t} value={t}>
+                            {t} ({topicCounts[t] ?? 0})
+                          </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
 
                 {topicList.length > 0 && (
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
                     <span className="shrink-0 text-muted-foreground font-medium flex items-center gap-1">
                       <Tags className="size-3 text-indigo-500" /> Topics:
                     </span>
-                    <Badge
-                      variant={questionTopic === "" ? "default" : "outline"}
-                      className="cursor-pointer hover:opacity-80 transition-opacity"
-                      onClick={() => { setQuestionTopic(""); setQuestionPage(0); }}
-                    >
-                      All ({allBankQuestions.length})
-                    </Badge>
-                    {topicList.map((t) => (
                       <Badge
-                        key={t}
-                        variant={questionTopic.toLowerCase() === t.toLowerCase() ? "default" : "secondary"}
-                        className="cursor-pointer hover:opacity-80 whitespace-nowrap transition-opacity"
-                        onClick={() => {
-                          setQuestionTopic(questionTopic.toLowerCase() === t.toLowerCase() ? "" : t);
-                          setQuestionPage(0);
-                        }}
+                          variant={questionTopic === "" ? "default" : "outline"}
+                          className="cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => { setQuestionTopic(""); setQuestionPage(0); }}
                       >
-                        {t} ({topicCounts[t] ?? 0})
+                        All ({allBankQuestions.length})
                       </Badge>
-                    ))}
-                  </div>
+                      {topicList.map((t) => (
+                          <Badge
+                              key={t}
+                              variant={questionTopic.toLowerCase() === t.toLowerCase() ? "default" : "secondary"}
+                              className="cursor-pointer hover:opacity-80 whitespace-nowrap transition-opacity"
+                              onClick={() => {
+                                setQuestionTopic(questionTopic.toLowerCase() === t.toLowerCase() ? "" : t);
+                                setQuestionPage(0);
+                              }}
+                          >
+                            {t} ({topicCounts[t] ?? 0})
+                          </Badge>
+                      ))}
+                    </div>
                 )}
 
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/40 p-2 text-xs">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="font-medium text-muted-foreground text-[11px]">Select:</span>
                     <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs px-2"
-                      onClick={handleToggleSelectAllPage}
-                      disabled={selectablePageQuestions.length === 0}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs px-2"
+                        onClick={handleToggleSelectAllPage}
+                        disabled={selectablePageQuestions.length === 0}
                     >
                       <CheckSquare className="mr-1 size-3.5" />
                       {isAllPageSelected ? "Deselect Page" : `Page (${selectablePageQuestions.length})`}
                     </Button>
 
                     {questionTopic.trim() ? (
-                      <>
-                        <Button
-                          type="button"
-                          variant={isAllTopicSelected ? "secondary" : "outline"}
-                          size="sm"
-                          className="h-7 text-xs px-2"
-                          onClick={() => handleToggleSelectAllInTopic(questionTopic)}
-                          disabled={eligibleTopicQuestions.length === 0}
-                          title={`Toggle select all questions in topic "${questionTopic}"`}
-                        >
-                          <Layers className="mr-1 size-3.5" />
-                          {isAllTopicSelected
-                            ? `Deselect Topic "${questionTopic}"`
-                            : `All Topic "${questionTopic}" (${eligibleTopicQuestions.length})`}
-                        </Button>
-
-                        {eligibleFilteredQuestions.length !== eligibleTopicQuestions.length && (
+                        <>
                           <Button
+                              type="button"
+                              variant={isAllTopicSelected ? "secondary" : "outline"}
+                              size="sm"
+                              className="h-7 text-xs px-2"
+                              onClick={() => handleToggleSelectAllInTopic(questionTopic)}
+                              disabled={eligibleTopicQuestions.length === 0}
+                              title={`Toggle select all questions in topic "${questionTopic}"`}
+                          >
+                            <Layers className="mr-1 size-3.5" />
+                            {isAllTopicSelected
+                                ? `Deselect Topic "${questionTopic}"`
+                                : `All Topic "${questionTopic}" (${eligibleTopicQuestions.length})`}
+                          </Button>
+
+                          {eligibleFilteredQuestions.length !== eligibleTopicQuestions.length && (
+                              <Button
+                                  type="button"
+                                  variant={isAllFilteredSelected ? "secondary" : "outline"}
+                                  size="sm"
+                                  className="h-7 text-xs px-2"
+                                  onClick={handleToggleSelectAllFiltered}
+                                  disabled={eligibleFilteredQuestions.length === 0}
+                                  title="Select questions matching search/difficulty inside this topic"
+                              >
+                                <CheckCheck className="mr-1 size-3.5" />
+                                {isAllFilteredSelected
+                                    ? `Deselect Filtered (${eligibleFilteredQuestions.length})`
+                                    : `Filtered (${eligibleFilteredQuestions.length})`}
+                              </Button>
+                          )}
+                        </>
+                    ) : (
+                        <Button
                             type="button"
                             variant={isAllFilteredSelected ? "secondary" : "outline"}
                             size="sm"
                             className="h-7 text-xs px-2"
                             onClick={handleToggleSelectAllFiltered}
                             disabled={eligibleFilteredQuestions.length === 0}
-                            title="Select questions matching search/difficulty inside this topic"
-                          >
-                            <CheckCheck className="mr-1 size-3.5" />
-                            {isAllFilteredSelected
-                              ? `Deselect Filtered (${eligibleFilteredQuestions.length})`
-                              : `Filtered (${eligibleFilteredQuestions.length})`}
-                          </Button>
-                        )}
-                      </>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant={isAllFilteredSelected ? "secondary" : "outline"}
-                        size="sm"
-                        className="h-7 text-xs px-2"
-                        onClick={handleToggleSelectAllFiltered}
-                        disabled={eligibleFilteredQuestions.length === 0}
-                        title="Select all unadded questions matching the current filter"
-                      >
-                        <CheckCheck className="mr-1 size-3.5" />
-                        {isAllFilteredSelected
-                          ? `Deselect All (${eligibleFilteredQuestions.length})`
-                          : `Select All (${eligibleFilteredQuestions.length})`}
-                      </Button>
+                            title="Select all unadded questions matching the current filter"
+                        >
+                          <CheckCheck className="mr-1 size-3.5" />
+                          {isAllFilteredSelected
+                              ? `Deselect All (${eligibleFilteredQuestions.length})`
+                              : `Select All (${eligibleFilteredQuestions.length})`}
+                        </Button>
                     )}
 
                     {selectedQuestionIds.size > 0 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        onClick={handleDeselectAll}
-                        title="Clear all selections across all pages"
-                      >
-                        <X className="mr-1 size-3.5" />
-                        Deselect All ({selectedQuestionIds.size})
-                      </Button>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            onClick={handleDeselectAll}
+                            title="Clear all selections across all pages"
+                        >
+                          <X className="mr-1 size-3.5" />
+                          Deselect All ({selectedQuestionIds.size})
+                        </Button>
                     )}
                   </div>
 
                   <div className="flex items-center gap-1.5">
                     <Button
-                      type="button"
-                      variant="default"
-                      size="sm"
-                      className="h-7 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-sm"
-                      onClick={() => openRandomDialog(questionTopic)}
-                      disabled={allAvailableBankQuestions.length === 0}
+                        type="button"
+                        variant="default"
+                        size="sm"
+                        className="h-7 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-sm"
+                        onClick={() => openRandomDialog(questionTopic)}
+                        disabled={allAvailableBankQuestions.length === 0}
                     >
                       <Dices className="mr-1 size-3.5" />
                       {questionTopic.trim() ? `Random from "${questionTopic}"...` : "Random Questions..."}
@@ -1092,12 +1153,12 @@ export default function ExamManagementPage() {
                       <TableRow>
                         <TableHead className="w-12 text-center">
                           <input
-                            type="checkbox"
-                            className="size-4 accent-primary"
-                            aria-label="Select all on this page"
-                            checked={isAllPageSelected}
-                            disabled={selectablePageQuestions.length === 0}
-                            onChange={handleToggleSelectAllPage}
+                              type="checkbox"
+                              className="size-4 accent-primary"
+                              aria-label="Select all on this page"
+                              checked={isAllPageSelected}
+                              disabled={selectablePageQuestions.length === 0}
+                              onChange={handleToggleSelectAllPage}
                           />
                         </TableHead>
                         <TableHead>Content</TableHead>
@@ -1156,23 +1217,23 @@ export default function ExamManagementPage() {
                   <div className="flex items-center gap-2">
                     <Button
                         size="sm"
-                        onClick={() => addQuestionsMutation.mutate()}
+                        onClick={() => addQuestionsMutation.mutate(undefined)}
                         disabled={selectedQuestionIds.size === 0 || addQuestionsMutation.isPending}
                     >
                       <Plus className="mr-1 size-4" />
                       {addQuestionsMutation.isPending ? "Adding..." : `Add ${selectedQuestionIds.size} Selected Question(s)`}
                     </Button>
                     {selectedQuestionIds.size > 0 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="text-xs text-muted-foreground hover:text-destructive"
-                        onClick={handleDeselectAll}
-                      >
-                        <X className="mr-1 size-3.5" />
-                        Clear selection
-                      </Button>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs text-muted-foreground hover:text-destructive"
+                            onClick={handleDeselectAll}
+                        >
+                          <X className="mr-1 size-3.5" />
+                          Clear selection
+                        </Button>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
@@ -1253,16 +1314,16 @@ export default function ExamManagementPage() {
                 <label className="text-xs font-semibold text-muted-foreground">Quick Select Quantity</label>
                 <div className="grid grid-cols-4 gap-2">
                   {[10, 20, 30, 50].map((num) => (
-                    <Button
-                      key={num}
-                      type="button"
-                      variant={randomCount === num ? "default" : "outline"}
-                      size="sm"
-                      className="text-xs h-8 font-medium"
-                      onClick={() => setRandomCount(num)}
-                    >
-                      {num} Questions
-                    </Button>
+                      <Button
+                          key={num}
+                          type="button"
+                          variant={randomCount === num ? "default" : "outline"}
+                          size="sm"
+                          className="text-xs h-8 font-medium"
+                          onClick={() => setRandomCount(num)}
+                      >
+                        {num} Questions
+                      </Button>
                   ))}
                 </div>
               </div>
@@ -1270,12 +1331,12 @@ export default function ExamManagementPage() {
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-muted-foreground">Or Enter Custom Number</label>
                 <Input
-                  type="number"
-                  min={1}
-                  max={eligibleForRandom.length || 100}
-                  value={randomCount}
-                  onChange={(e) => setRandomCount(Math.max(1, parseInt(e.target.value) || 1))}
-                  placeholder="e.g. 15, 25, 50"
+                    type="number"
+                    min={1}
+                    max={eligibleForRandom.length || 100}
+                    value={randomCount}
+                    onChange={(e) => setRandomCount(Math.max(1, parseInt(e.target.value) || 1))}
+                    placeholder="e.g. 15, 25, 50"
                 />
               </div>
 
@@ -1291,12 +1352,12 @@ export default function ExamManagementPage() {
                     </SelectItem>
                     {topicList.map((t) => {
                       const count = allBankQuestions.filter(
-                        (q) => !sourceIdsInExam.has(q.id) && (q.topic || "").trim().toLowerCase() === t.toLowerCase()
+                          (q) => !sourceIdsInExam.has(q.id) && (q.topic || "").trim().toLowerCase() === t.toLowerCase()
                       ).length;
                       return (
-                        <SelectItem key={t} value={t} disabled={count === 0}>
-                          {t} ({count} available)
-                        </SelectItem>
+                          <SelectItem key={t} value={t} disabled={count === 0}>
+                            {t} ({count} available)
+                          </SelectItem>
                       );
                     })}
                   </SelectContent>
@@ -1307,9 +1368,9 @@ export default function ExamManagementPage() {
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-muted-foreground">Question Type</label>
                   <Select
-                    value={lockedQuestionType ?? randomQuestionType}
-                    disabled={lockedQuestionType !== null}
-                    onValueChange={setRandomQuestionType}
+                      value={lockedQuestionType ?? randomQuestionType}
+                      disabled={lockedQuestionType !== null}
+                      onValueChange={setRandomQuestionType}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="All Types" />
@@ -1321,7 +1382,7 @@ export default function ExamManagementPage() {
                     </SelectContent>
                   </Select>
                   {lockedQuestionType && (
-                    <p className="text-[10px] text-muted-foreground">Locked by exam type</p>
+                      <p className="text-[10px] text-muted-foreground">Locked by exam type</p>
                   )}
                 </div>
 
@@ -1360,14 +1421,14 @@ export default function ExamManagementPage() {
                 Cancel
               </Button>
               <Button
-                type="button"
-                className="bg-indigo-600 hover:bg-indigo-700 text-white"
-                disabled={eligibleForRandom.length === 0 || addQuestionsMutation.isPending}
-                onClick={handleConfirmRandomAdd}
+                  type="button"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                  disabled={eligibleForRandom.length === 0 || addQuestionsMutation.isPending}
+                  onClick={handleConfirmRandomAdd}
               >
                 {addQuestionsMutation.isPending
-                  ? "Adding..."
-                  : `Add ${Math.min(randomCount, eligibleForRandom.length)} Random Question(s)`}
+                    ? "Adding..."
+                    : `Add ${Math.min(randomCount, eligibleForRandom.length)} Random Question(s)`}
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -77,6 +77,12 @@ public class ExamAttempt extends BaseEntity {
     @Column(nullable = false, length = 20)
     private ExamAttemptStatus status = ExamAttemptStatus.IN_PROGRESS;
 
+    // NEW (anti-cheat): tab/thiet bi gan nhat dang lam bai (phat hien mo nhieu noi)
+    @Column(length = 64)
+    private String lastClientId;
+
+    private Instant lastClientSeenAt;
+
     @OneToMany(mappedBy = "attempt", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<ExamAttemptAnswer> answers = new HashSet<>();
 

@@ -69,6 +69,13 @@ export interface ExamDTO {
   totalPoints?: number;
   accessCode?: string | null;
   hasPassword?: boolean;
+  // NEW (anti-cheat)
+  antiCheatEnabled?: boolean;
+  detectTabSwitch?: boolean;
+  blockCopyPaste?: boolean;
+  requireFullscreen?: boolean;
+  singleSession?: boolean;
+  flagThreshold?: number | null;
 }
 
 export interface ExamFilter {

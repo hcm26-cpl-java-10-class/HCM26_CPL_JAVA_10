@@ -61,6 +61,13 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setQuestions(sorted.stream().map(questionMapper::toResponse).toList());
         d.setTotalPoints(sorted.stream().mapToInt(Question::getPoints).sum());
         d.setAccessCode(e.getAccessCode());
+        // NEW (anti-cheat)
+        d.setAntiCheatEnabled(Boolean.TRUE.equals(e.getAntiCheatEnabled()));
+        d.setDetectTabSwitch(Boolean.TRUE.equals(e.getDetectTabSwitch()));
+        d.setBlockCopyPaste(Boolean.TRUE.equals(e.getBlockCopyPaste()));
+        d.setRequireFullscreen(Boolean.TRUE.equals(e.getRequireFullscreen()));
+        d.setSingleSession(Boolean.TRUE.equals(e.getSingleSession()));
+        d.setFlagThreshold(e.getFlagThreshold());
         d.setHasPassword(e.getAccessCode() != null && !e.getAccessCode().trim().isEmpty());
         return d;
     }
@@ -90,6 +97,13 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         if (d.getResultVisibility() != null) e.setResultVisibility(d.getResultVisibility());
         if (d.getExamType() != null) e.setExamType(d.getExamType());
         if (d.getCategory() != null) e.setCategory(d.getCategory());
+        // NEW (anti-cheat)
+        if (d.getAntiCheatEnabled() != null) e.setAntiCheatEnabled(d.getAntiCheatEnabled());
+        if (d.getDetectTabSwitch() != null) e.setDetectTabSwitch(d.getDetectTabSwitch());
+        if (d.getBlockCopyPaste() != null) e.setBlockCopyPaste(d.getBlockCopyPaste());
+        if (d.getRequireFullscreen() != null) e.setRequireFullscreen(d.getRequireFullscreen());
+        if (d.getSingleSession() != null) e.setSingleSession(d.getSingleSession());
+        if (d.getFlagThreshold() != null) e.setFlagThreshold(d.getFlagThreshold() == 0 ? null : d.getFlagThreshold());
         if (d.getAccessCode() != null) {
             String trimmed = d.getAccessCode().trim();
             e.setAccessCode(trimmed.isEmpty() ? null : trimmed);

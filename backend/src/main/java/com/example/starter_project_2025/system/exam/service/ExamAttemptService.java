@@ -524,6 +524,15 @@ public class ExamAttemptService {
         int attemptsUsed = Math.max(attempt.getAttemptNumber(), attempts.size());
         response.setAttemptsUsed(attemptsUsed);
         response.setAttemptsRemaining(Math.max(0, maxAttempts(attempt.getExam()) - attemptsUsed));
+        // NEW (anti-cheat)
+        Exam ex = attempt.getExam();
+        ExamAttemptDTO.Integrity integrity = new ExamAttemptDTO.Integrity();
+        integrity.setEnabled(Boolean.TRUE.equals(ex.getAntiCheatEnabled()));
+        integrity.setDetectTabSwitch(integrity.isEnabled() && Boolean.TRUE.equals(ex.getDetectTabSwitch()));
+        integrity.setBlockCopyPaste(integrity.isEnabled() && Boolean.TRUE.equals(ex.getBlockCopyPaste()));
+        integrity.setRequireFullscreen(integrity.isEnabled() && Boolean.TRUE.equals(ex.getRequireFullscreen()));
+        integrity.setSingleSession(integrity.isEnabled() && Boolean.TRUE.equals(ex.getSingleSession()));
+        response.setIntegrity(integrity);
         response.setQuestions(attempt.getQuestions().stream()
                 .map(questionTakerMapper::toTakerResponse)
                 .toList());

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, FileSpreadsheet, FileText, Download } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { IntegrityReportSection } from "./IntegrityReportSection"; // NEW (anti-cheat)
 import { downloadBlob, getFilenameFromHeader } from "@/components/datatable/util/dataio.utils";
 
 
@@ -470,108 +471,108 @@ export default function ResultStatisticsPage() {
 
                 {statistics && (
                     <>
-                    <div>
-                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                            <h2 className="text-lg font-semibold">
-                                {statistics.examTitle}
-                            </h2>
+                        <div>
+                            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                <h2 className="text-lg font-semibold">
+                                    {statistics.examTitle}
+                                </h2>
 
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        disabled={!validExamId || exportingFormat !== null}
-                                    >
-                                        <Download className="mr-2 size-4" />
-                                        {exportingFormat ? "Exporting..." : "Export"}
-                                    </Button>
-                                </DropdownMenuTrigger>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            disabled={!validExamId || exportingFormat !== null}
+                                        >
+                                            <Download className="mr-2 size-4" />
+                                            {exportingFormat ? "Exporting..." : "Export"}
+                                        </Button>
+                                    </DropdownMenuTrigger>
 
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuItem
-                                        disabled={exportingFormat !== null}
-                                        onSelect={() => void handleExport("xlsx")}
-                                    >
-                                        <FileSpreadsheet className="mr-2 size-4" />
-                                        Export Excel (.xlsx)
-                                    </DropdownMenuItem>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuItem
+                                            disabled={exportingFormat !== null}
+                                            onSelect={() => void handleExport("xlsx")}
+                                        >
+                                            <FileSpreadsheet className="mr-2 size-4" />
+                                            Export Excel (.xlsx)
+                                        </DropdownMenuItem>
 
-                                    <DropdownMenuItem
-                                        disabled={exportingFormat !== null}
-                                        onSelect={() => void handleExport("csv")}
-                                    >
-                                        <FileText className="mr-2 size-4" />
-                                        Export CSV (.csv)
-                                    </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            disabled={exportingFormat !== null}
+                                            onSelect={() => void handleExport("csv")}
+                                        >
+                                            <FileText className="mr-2 size-4" />
+                                            Export CSV (.csv)
+                                        </DropdownMenuItem>
 
-                                    <DropdownMenuItem
-                                        disabled={exportingFormat !== null}
-                                        onSelect={() => void handleExport("pdf")}
-                                    >
-                                        <FileText className="mr-2 size-4" />
-                                        Export PDF (.pdf)
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </div>
+                                        <DropdownMenuItem
+                                            disabled={exportingFormat !== null}
+                                            onSelect={() => void handleExport("pdf")}
+                                        >
+                                            <FileText className="mr-2 size-4" />
+                                            Export PDF (.pdf)
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
 
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                            <StatCard
-                                label="Total Attempts"
-                                value={statistics.totalAttempts}
-                            />
-                            <StatCard
-                                label="Participating Students"
-                                value={statistics.uniqueStudents}
-                            />
-                            <StatCard
-                                label="Average Score"
-                                value={formatScore(statistics.averageFinalScore)}
-                            />
-                            <StatCard
-                                label="Pending Grading"
-                                value={statistics.pendingGradingAttempts}
-                                detail={`${statistics.fullyGradedAttempts} fully graded attempts`}
-                            />
-                            <StatCard
-                                label="Highest Score"
-                                value={formatScore(statistics.highestFinalScore)}
-                            />
-                            <StatCard
-                                label="Lowest Score"
-                                value={formatScore(statistics.lowestFinalScore)}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                        <section className="min-w-0 rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
-                            <h2 className="text-lg font-semibold">
-                                Score Distribution
-                            </h2>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                                Number of attempts in each score range.
-                            </p>
-                            <div className="mt-4">
-                                <ScoreDistributionChart
-                                    bands={statistics.scoreDistribution ?? []}
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                                <StatCard
+                                    label="Total Attempts"
+                                    value={statistics.totalAttempts}
+                                />
+                                <StatCard
+                                    label="Participating Students"
+                                    value={statistics.uniqueStudents}
+                                />
+                                <StatCard
+                                    label="Average Score"
+                                    value={formatScore(statistics.averageFinalScore)}
+                                />
+                                <StatCard
+                                    label="Pending Grading"
+                                    value={statistics.pendingGradingAttempts}
+                                    detail={`${statistics.fullyGradedAttempts} fully graded attempts`}
+                                />
+                                <StatCard
+                                    label="Highest Score"
+                                    value={formatScore(statistics.highestFinalScore)}
+                                />
+                                <StatCard
+                                    label="Lowest Score"
+                                    value={formatScore(statistics.lowestFinalScore)}
                                 />
                             </div>
-                        </section>
+                        </div>
 
-                        <section className="min-w-0 rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
-                            <h2 className="text-lg font-semibold">
-                                Grading Status
-                            </h2>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                                Grading completion status for all attempts.
-                            </p>
-                            <AttemptStatusChart
-                                completed={statistics.fullyGradedAttempts}
-                                pending={statistics.pendingGradingAttempts}
-                            />
-                        </section>
-                    </div>
+                        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                            <section className="min-w-0 rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
+                                <h2 className="text-lg font-semibold">
+                                    Score Distribution
+                                </h2>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    Number of attempts in each score range.
+                                </p>
+                                <div className="mt-4">
+                                    <ScoreDistributionChart
+                                        bands={statistics.scoreDistribution ?? []}
+                                    />
+                                </div>
+                            </section>
+
+                            <section className="min-w-0 rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
+                                <h2 className="text-lg font-semibold">
+                                    Grading Status
+                                </h2>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    Grading completion status for all attempts.
+                                </p>
+                                <AttemptStatusChart
+                                    completed={statistics.fullyGradedAttempts}
+                                    pending={statistics.pendingGradingAttempts}
+                                />
+                            </section>
+                        </div>
                     </>
                 )}
 
@@ -684,6 +685,9 @@ export default function ResultStatisticsPage() {
                         </div>
                     </div>
                 </section>
+
+                {/* NEW (anti-cheat): bao cao vi pham tung luot thi */}
+                {validExamId && <IntegrityReportSection examId={examId} />}
             </div>
         </MainLayout>
     );
