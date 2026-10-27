@@ -13,6 +13,7 @@ import com.example.starter_project_2025.system.project.milestone.integration.por
 import com.example.starter_project_2025.system.project.milestone.outbox.OutboxEventWriter;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
 import com.example.starter_project_2025.system.project.milestone.service.MilestoneQueryService;
+import com.example.starter_project_2025.system.project.milestone.service.WorkspaceMilestoneScopeService;
 import com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneArtifactDraft;
 import com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneArtifactSubmission;
 import com.example.starter_project_2025.system.project.milestone.submission.dto.*;
@@ -50,6 +51,8 @@ public class TeamArtifactSubmissionService {
     private final ObjectMapper objectMapper;
     private final com.example.starter_project_2025.system.rbac.user.UserRepository userRepository;
     private final com.example.starter_project_2025.system.project.ProjectTeamRepository projectTeamRepository;
+    private final WorkspaceMilestoneScopeService milestoneScopeService;
+    private final ArtifactReviewSubmissionSyncService reviewSyncService;
 
     @Transactional(readOnly = true)
     public ArtifactSubmissionWorkspaceResponse workspace(Long teamId, UUID milestoneId) {
@@ -76,7 +79,7 @@ public class TeamArtifactSubmissionService {
         String json = write(checklist); Instant now = Instant.now();
         var existing = draftRepository.findByMilestoneIdAndTeamIdAndTenantId(milestoneId, teamId, s.tenantId);
         boolean creating = existing.isEmpty();
-        var draft = existing.orElseGet(() -> MilestoneArtifactDraft.create(milestoneId, null, teamId,
+        var draft = existing.orElseGet(() -> MilestoneArtifactDraft.create(milestoneId, s.projectId, teamId,
                 s.tenantId, s.actorId, now, json));
         boolean same = Objects.equals(draft.getRepositoryUrl(), blank(request.repositoryUrl()))
                 && Objects.equals(draft.getDeploymentUrl(), blank(request.deploymentUrl()))
@@ -88,9 +91,9 @@ public class TeamArtifactSubmissionService {
         draft.update(s.actorId, now, blank(request.repositoryUrl()), blank(request.deploymentUrl()), blank(request.releaseNotes()), json);
         draft = draftRepository.saveAndFlush(draft);
         try {
-            auditRepository.save(MilestoneAuditLog.artifactDraftSaved(milestoneId, null, s.tenantId, s.actorId,
+            auditRepository.save(MilestoneAuditLog.artifactDraftSaved(milestoneId, s.projectId, s.tenantId, s.actorId,
                     CorrelationIdFilter.currentId(), objectMapper.writeValueAsString(Map.of("status", "DRAFT", "version", draft.getVersion())), now));
-            outboxWriter.writeArtifactDraftSaved(milestoneId, null, s.tenantId, s.actorId, draft.getVersion(), now);
+            outboxWriter.writeArtifactDraftSaved(milestoneId, s.projectId, s.tenantId, s.actorId, draft.getVersion(), now);
         } catch (JsonProcessingException e) { throw new IllegalStateException("Unable to record team artifact draft", e); }
         return draftResponse(draft, teamId);
     }
@@ -121,20 +124,21 @@ public class TeamArtifactSubmissionService {
         var previous = submissionRepository.findTopByTenantIdAndTeamIdAndMilestoneIdAndSubmitterIdOrderByVersionDesc(s.tenantId, teamId, milestoneId, s.actorId);
         long version = previous.map(row -> row.getVersion() + 1).orElse(1L);
         String checklistJson = write(checklist);
-        var row = submissionRepository.saveAndFlush(MilestoneArtifactSubmission.submit(s.tenantId, null, teamId,
+        var row = submissionRepository.saveAndFlush(MilestoneArtifactSubmission.submit(s.tenantId, s.projectId, teamId,
                 milestoneId, s.actorId, version, blank(request.repositoryUrl()), blank(request.deploymentUrl()),
                 blank(request.releaseNotes()), checklistJson, "[]", now, late, milestone.latePenaltyAt(now)));
+        reviewSyncService.synchronize(milestone, row);
         var response = submissionResponse(row);
         try {
-            auditRepository.save(MilestoneAuditLog.artifactEvent(milestoneId, null, s.tenantId, s.actorId,
+            auditRepository.save(MilestoneAuditLog.artifactEvent(milestoneId, s.projectId, s.tenantId, s.actorId,
                     "ARTIFACT_SUBMITTED", CorrelationIdFilter.currentId(), objectMapper.writeValueAsString(response), now));
         } catch (JsonProcessingException e) { throw new IllegalStateException("Unable to record team artifact submission", e); }
-        outboxWriter.writeArtifactSubmitted(row.getId(), milestoneId, null, s.tenantId, s.actorId, version, late, now);
+        outboxWriter.writeArtifactSubmitted(row.getId(), milestoneId, s.projectId, s.tenantId, s.actorId, version, late, now);
         idempotencyRepository.save(IdempotencyRecord.completed(s.tenantId, s.actorId, OPERATION, key, hash, row.getId(), 201, now));
         return response;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<TeamSubmissionView> submissions(Long teamId, UUID milestoneId) {
         Scope s = reviewerScope(teamId);
         var rows = milestoneId == null ? submissionRepository.findByTenantIdAndTeamIdOrderBySubmittedAtDesc(s.tenantId, teamId)
@@ -143,25 +147,33 @@ public class TeamArtifactSubmissionService {
         userRepository.findByTenantIdAndIsActiveTrue(s.tenantId).forEach(user -> {
             UUID id = UUID.nameUUIDFromBytes(user.getEmail().getBytes(StandardCharsets.UTF_8)); actors.put(id, user);
         });
+        Map<UUID, Long> maxVersionByMilestone = new HashMap<>();
+        rows.forEach(row -> maxVersionByMilestone.merge(row.getMilestoneId(), row.getVersion(), Math::max));
         return rows.stream().map(row -> {
             var user = actors.get(row.getSubmitterId());
             String name = user == null ? null : (Objects.toString(user.getFirstName(), "") + " " + Objects.toString(user.getLastName(), "")).trim();
-            return new TeamSubmissionView(submissionResponse(row), row.getSubmitterId(), name, user == null ? null : user.getEmail());
+            boolean isLatest = row.getVersion() == maxVersionByMilestone.getOrDefault(row.getMilestoneId(), row.getVersion());
+            var milestone = milestoneRepository.findByIdAndTeamIdAndTenantId(
+                    row.getMilestoneId(), teamId, s.tenantId).orElse(null);
+            var reviewState = reviewSyncService.resolveViewState(milestone, row, isLatest);
+            return new TeamSubmissionView(submissionResponse(row, reviewState.status()), reviewState.reviewSubmissionId(),
+                    row.getSubmitterId(), name, user == null ? null : user.getEmail());
         }).toList();
     }
 
     private Scope studentScope(Long teamId) {
         UUID actor = actorProvider.requireCurrentActorId(); Long tenant = tenantProvider.requireCurrentTenantId();
-        scopePort.requireStudentTeamAccess(teamId, actor, tenant); return new Scope(actor, tenant);
+        var milestoneScope = milestoneScopeService.requireTeamScope(null, teamId, tenant);
+        scopePort.requireStudentTeamAccess(teamId, actor, tenant);
+        return new Scope(actor, tenant, milestoneScope.projectId());
     }
     private Scope reviewerScope(Long teamId) {
         UUID actor = actorProvider.requireCurrentActorId(); Long tenant = tenantProvider.requireCurrentTenantId();
+        var milestoneScope = milestoneScopeService.requireTeamScope(null, teamId, tenant);
         if (!milestoneRepository.existsByTeamIdAndTenantIdAndActiveTrue(teamId, tenant)) throw new ResourceNotFoundException("Team milestone not found");
-        return new Scope(actor, tenant);
+        return new Scope(actor, tenant, milestoneScope.projectId());
     }
     private void requireActiveTeamWorkspace(Long teamId, Long tenantId) {
-        if (com.example.starter_project_2025.system.project.milestone.integration.mock.MockMilestoneData.TEAM_ID.equals(teamId)
-                && com.example.starter_project_2025.system.project.milestone.integration.mock.MockMilestoneData.TENANT_ID.equals(tenantId)) return;
         var team = projectTeamRepository.findByIdAndTrainingClass_TenantId(teamId, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Team workspace not found"));
         if (team.getStatus() != com.example.starter_project_2025.system.project.ProjectTeamStatus.ACTIVE
@@ -172,14 +184,19 @@ public class TeamArtifactSubmissionService {
     private Map<UUID, Boolean> validateChecklist(com.example.starter_project_2025.system.project.milestone.domain.Milestone m, Map<UUID, Boolean> requested) {
         var allowed = m.getChecklistItems().stream().map(x -> x.getId()).collect(java.util.stream.Collectors.toSet());
         if (requested != null && !allowed.containsAll(requested.keySet())) throw validation("checklist", "Checklist contains an item outside this milestone");
-        Map<UUID, Boolean> result = new LinkedHashMap<>(); m.getChecklistItems().forEach(x -> result.put(x.getId(), requested != null && Boolean.TRUE.equals(requested.get(x.getId())))); return result;
+        Map<UUID, Boolean> result = new LinkedHashMap<>();
+        m.getChecklistItems().forEach(x -> result.put(x.getId(), false));
+        return result;
     }
     private ArtifactDraftResponse draftResponse(MilestoneArtifactDraft d, Long teamId) {
         try { return new ArtifactDraftResponse(d.getMilestoneId(), "DRAFT", d.getRepositoryUrl(), d.getDeploymentUrl(), d.getReleaseNotes(), objectMapper.readValue(d.getChecklistJson(), new TypeReference<>() {}), attachmentRepository.findByMilestoneIdAndTeamIdAndTenantIdOrderByUploadedAtAsc(d.getMilestoneId(), teamId, d.getTenantId()).stream().map(a -> new ArtifactAttachmentResponse(a.getId(), a.getOriginalName(), a.getContentType(), a.getSizeBytes(), a.getScanStatus(), a.getUploadedBy(), a.getUploadedAt(), d.getVersion())).toList(), d.getVersion(), d.getCreatedBy(), d.getCreatedAt(), d.getUpdatedBy(), d.getUpdatedAt()); }
         catch (JsonProcessingException e) { throw new IllegalStateException("Invalid team draft checklist", e); }
     }
     private ArtifactSubmissionResponse submissionResponse(MilestoneArtifactSubmission row) {
-        try { return new ArtifactSubmissionResponse(row.getId(), row.getMilestoneId(), row.getVersion(), row.getStatus().name(), row.getRepositoryUrl(), row.getDeploymentUrl(), row.getReleaseNotes(), objectMapper.readValue(row.getChecklistJson(), new TypeReference<>() {}), objectMapper.readValue(row.getAttachmentsJson(), new TypeReference<>() {}), row.getSubmittedAt(), row.isSubmittedLate(), row.getLatePenaltyPercent()); }
+        return submissionResponse(row, row.getStatus().name());
+    }
+    private ArtifactSubmissionResponse submissionResponse(MilestoneArtifactSubmission row, String resolvedStatus) {
+        try { return new ArtifactSubmissionResponse(row.getId(), row.getMilestoneId(), row.getVersion(), resolvedStatus != null ? resolvedStatus : row.getStatus().name(), row.getRepositoryUrl(), row.getDeploymentUrl(), row.getReleaseNotes(), objectMapper.readValue(row.getChecklistJson(), new TypeReference<>() {}), objectMapper.readValue(row.getAttachmentsJson(), new TypeReference<>() {}), row.getSubmittedAt(), row.isSubmittedLate(), row.getLatePenaltyPercent()); }
         catch (JsonProcessingException e) { throw new IllegalStateException("Invalid stored team submission", e); }
     }
     private void validateUrl(String field, String value) { if (blank(value) == null) return; try { var u = java.net.URI.create(value.trim()); if (!u.isAbsolute() || u.getHost() == null || !(u.getScheme().equalsIgnoreCase("http") || u.getScheme().equalsIgnoreCase("https"))) throw new IllegalArgumentException(); } catch (RuntimeException e) { throw validation(field, "Enter a valid absolute HTTP or HTTPS URL"); } }
@@ -187,6 +204,7 @@ public class TeamArtifactSubmissionService {
     private String hash(Long team, UUID milestone, UUID actor, Object request) { try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest((team+"|"+milestone+"|"+actor+"|"+objectMapper.writeValueAsString(request)).getBytes(StandardCharsets.UTF_8))); } catch (Exception e) { throw new IllegalStateException(e); } }
     private MilestoneValidationException validation(String f, String m) { return new MilestoneValidationException(Map.of(f, List.of(m))); }
     private String blank(String s) { return s == null || s.isBlank() ? null : s.trim(); }
-    private record Scope(UUID actorId, Long tenantId) { }
-    public record TeamSubmissionView(ArtifactSubmissionResponse submission, UUID submitterId, String submitterName, String submitterEmail) { }
+    private record Scope(UUID actorId, Long tenantId, Long projectId) { }
+    public record TeamSubmissionView(ArtifactSubmissionResponse submission, UUID reviewSubmissionId,
+                                     UUID submitterId, String submitterName, String submitterEmail) { }
 }

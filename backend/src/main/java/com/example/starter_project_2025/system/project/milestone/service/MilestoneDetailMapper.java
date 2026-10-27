@@ -49,6 +49,8 @@ public class MilestoneDetailMapper {
                 new MilestoneLatePolicyResponse(
                         milestone.getLatePolicyType(), milestone.getLateUntil(), milestone.getLatePenaltyPercent(),
                         milestone.getLatePenaltyBasis()),
+                new MilestoneResubmissionPolicyResponse(
+                        milestone.isAllowResubmission(), milestone.getMaxSubmissionAttempts()),
                 milestone.getVersion(),
                 milestone.getCreatedAt(),
                 milestone.getCreatedBy(), milestone.getWeight()

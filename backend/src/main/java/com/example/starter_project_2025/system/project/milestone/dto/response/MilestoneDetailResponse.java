@@ -20,6 +20,7 @@ public record MilestoneDetailResponse(
         MilestoneRubricDetailResponse rubric,
         MilestoneReviewerResponse reviewer,
         MilestoneLatePolicyResponse latePolicy,
+        MilestoneResubmissionPolicyResponse resubmissionPolicy,
         long version,
         Instant createdAt,
         UUID createdBy,

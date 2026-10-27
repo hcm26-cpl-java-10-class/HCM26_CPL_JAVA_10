@@ -1,4 +1,4 @@
-import { milestoneApi } from "@/api";
+import { milestoneApi, milestoneSubmissionApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -11,15 +11,24 @@ import { MilestoneRubricCard } from "@/pages/management/project/milestone/compon
 import { formatTenantDateTime, getMilestoneApiError } from "@/pages/management/project/milestone/milestone.utils";
 import type { ArtifactAttachment, ArtifactDraftRequest, ArtifactSubmission, ArtifactSubmissionRequest } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, ArrowLeft, CheckCircle2, Eye, FileUp, Save, ShieldCheck } from "lucide-react";
+import { AlertCircle, ArrowLeft, CheckCircle2, Eye, FileUp, RotateCcw, Save, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 type PendingArtifactSubmission = { key: string; payload: ArtifactSubmissionRequest };
+
+const artifactFieldName: Record<string, string> = {
+  repositoryUrl: "Repository URL",
+  deploymentUrl: "Deployment URL",
+  releaseNotes: "Release notes",
+  checklist: "Acceptance checklist",
+  expectedVersion: "Phiên bản bản nháp",
+};
 
 export default function ArtifactDraftPage() {
   const { projectId, milestoneId } = useParams<{ projectId: string; milestoneId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [repositoryUrl, setRepositoryUrl] = useState("");
   const [deploymentUrl, setDeploymentUrl] = useState("");
@@ -36,6 +45,14 @@ export default function ArtifactDraftPage() {
   const pendingStorageKey = projectId && milestoneId
     ? "artifact-submit-pending:" + projectId + ":" + milestoneId
     : null;
+  const reviewSubmissionId = searchParams.get("reviewSubmissionId");
+
+  const reviewSubmissionQuery = useQuery({
+    queryKey: ["student-submission", reviewSubmissionId],
+    queryFn: () => milestoneSubmissionApi.getMyDetail(reviewSubmissionId as string),
+    enabled: Boolean(reviewSubmissionId),
+    retry: false,
+  });
 
   const workspaceQuery = useQuery({
     queryKey: ["artifact-submission-workspace", projectId, milestoneId],
@@ -114,6 +131,8 @@ export default function ArtifactDraftPage() {
       if (pendingStorageKey) {
         try { sessionStorage.removeItem(pendingStorageKey); } catch { /* Storage may be disabled by the browser. */ }
       }
+      void queryClient.invalidateQueries({ queryKey: ["my-milestone-submissions"] });
+      if (reviewSubmissionId) void queryClient.invalidateQueries({ queryKey: ["student-submission", reviewSubmissionId] });
     },
   });
 
@@ -169,19 +188,29 @@ export default function ArtifactDraftPage() {
     submissionMutation.reset();
   };
 
+  const markDraftEdited = () => {
+    setSaved(false);
+    if (saveMutation.isError) saveMutation.reset();
+  };
+
+  const saveError = saveMutation.isError ? getMilestoneApiError(saveMutation.error) : null;
   const submissionError = submissionMutation.isError ? getMilestoneApiError(submissionMutation.error) : null;
 
   return <MainLayout pathName={{ projects: "Dự án", [projectId ?? "project"]: milestone.project.name, milestones: "Milestone", [milestone.id]: milestone.title, submit: "Chuẩn bị artifact" }}>
     <main className="mx-auto grid w-full max-w-5xl gap-5">
+      {reviewSubmissionQuery.data?.status === "CHANGES_REQUESTED" ? <Alert className="border-amber-400 bg-amber-50 dark:bg-amber-950/20"><RotateCcw /><AlertTitle>Đang chuẩn bị bài nộp lại Version {reviewSubmissionQuery.data.currentVersionNumber + 1}</AlertTitle><AlertDescription><p>{reviewSubmissionQuery.data.reviews[0]?.overallFeedback || "Hãy cập nhật sản phẩm theo feedback của reviewer."}</p><Button className="mt-2" size="sm" variant="outline" onClick={() => navigate(`/student/milestone-submissions/${reviewSubmissionQuery.data?.id}`)}>Xem toàn bộ feedback</Button></AlertDescription></Alert> : null}
       {milestone.status !== "OPEN" && <Alert><AlertCircle /><AlertTitle>Milestone chưa mở nhận bài</AlertTitle><AlertDescription>Bạn vẫn có thể chuẩn bị và lưu nháp. Chỉ có thể Review &amp; submit sau khi người phụ trách mở milestone.</AlertDescription></Alert>}
       <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-background"><CardHeader>
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><span>Trạng thái milestone: {milestone.status}</span><span>·</span><span>Hạn: {formatTenantDateTime(milestone.deadline, milestone.tenantTimeZone)}</span></div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><span>Trạng thái milestone: {milestone.status}</span><span>·</span><span>Hạn: {formatTenantDateTime(milestone.deadline, milestone.tenantTimeZone)}</span></div><Button asChild size="sm" variant="outline"><Link to="/student/milestone-submissions"><Eye className="size-4" /> Xem bài nộp của tôi</Link></Button></div>
         <CardTitle className="text-2xl">Chuẩn bị sản phẩm: {milestone.title}</CardTitle><CardDescription>{milestone.description}</CardDescription>
         <div className="flex items-center gap-2 pt-2 text-xs text-muted-foreground"><ShieldCheck className="size-4 text-emerald-600" /> Dữ liệu được kiểm tra quyền truy cập ở backend</div>
       </CardHeader></Card>
 
       {saved && <Alert><CheckCircle2 /><AlertTitle>Đã lưu bản nháp</AlertTitle><AlertDescription>Trạng thái là DRAFT; chưa phải sản phẩm đã nộp chính thức.</AlertDescription></Alert>}
-      {saveMutation.isError && <Alert variant="destructive"><AlertCircle /><AlertTitle>Bản nháp chưa được lưu</AlertTitle><AlertDescription>{getMilestoneApiError(saveMutation.error).message || "Hãy thử lại. Nội dung bạn nhập vẫn được giữ trên màn hình."}</AlertDescription></Alert>}
+      {saveError && <Alert variant="destructive"><AlertCircle /><AlertTitle>Bản nháp chưa được lưu</AlertTitle><AlertDescription>
+        <p>{saveError.status === 422 ? "Một số thông tin chưa hợp lệ. Hãy sửa các mục bên dưới rồi lưu lại; dữ liệu đang nhập vẫn được giữ nguyên." : saveError.message || "Hãy thử lại. Nội dung bạn nhập vẫn được giữ trên màn hình."}</p>
+        {saveError.errors && <ul className="mt-2 list-disc space-y-1 pl-5">{Object.entries(saveError.errors).flatMap(([field, messages]) => messages.map((message, index) => <li key={`${field}-${index}`}><strong>{artifactFieldName[field] ?? field}:</strong> {message}</li>))}</ul>}
+      </AlertDescription></Alert>}
       {uploadMutation.isError && <Alert variant="destructive"><AlertCircle /><AlertTitle>Tệp chưa tải lên thành công</AlertTitle><AlertDescription>{getMilestoneApiError(uploadMutation.error).message || "Hãy thử lại hoặc chọn tệp khác. Các trường bạn đã nhập vẫn được giữ."}</AlertDescription></Alert>}
       {submission && <Alert><CheckCircle2 /><AlertTitle>Phiên bản đã nộp gần nhất: {submission.version} (SUBMITTED)</AlertTitle><AlertDescription>
         Trạng thái: SUBMITTED · {formatTenantDateTime(submission.submittedAt, milestone.tenantTimeZone)}.
@@ -193,20 +222,20 @@ export default function ArtifactDraftPage() {
         {submissionError.errors && <ul className="mt-2 list-disc pl-5">{Object.entries(submissionError.errors).flatMap(([field, messages]) => messages.map((message, index) => <li key={field + "-" + index}><strong>{field}:</strong> {message}</li>))}</ul>}
       </AlertDescription></Alert>}
 
-      <Card><CardHeader><CardTitle>Acceptance checklist</CardTitle><CardDescription>Đánh dấu tiêu chí đã hoàn thành. Cấu hình milestone không bị thay đổi.</CardDescription></CardHeader>
-        <CardContent className="grid gap-3">{milestone.checklist.length ? milestone.checklist.map((item) => <label key={item.id} className="flex cursor-pointer items-start gap-3 rounded-lg border p-3">
-          <Checkbox disabled={submissionMutation.isPending} checked={checklist[item.id] ?? false} onCheckedChange={(checked) => { markSubmissionEdited(); setSaved(false); setChecklist((old) => ({ ...old, [item.id]: checked === true })); }} />
+      <Card><CardHeader><CardTitle>Acceptance checklist</CardTitle><CardDescription>Các tiêu chí này do reviewer đánh giá sau khi bạn nộp sản phẩm.</CardDescription></CardHeader>
+        <CardContent className="grid gap-3">{milestone.checklist.length ? milestone.checklist.map((item) => <div key={item.id} className="flex items-start gap-3 rounded-lg border p-3">
+          <Checkbox disabled checked={false} aria-label={`${item.content} — reviewer assessment`} />
           <span className="flex-1 text-sm">{item.content}{item.mandatory && <span className="ml-2 text-xs text-muted-foreground">Bắt buộc</span>}</span>
-        </label>) : <p className="text-sm text-muted-foreground">Milestone chưa cấu hình checklist.</p>}</CardContent>
+        </div>) : <p className="text-sm text-muted-foreground">Milestone chưa cấu hình checklist.</p>}{saveError?.errors?.checklist?.map((message) => <p key={message} className="text-sm text-destructive">{message}</p>)}</CardContent>
       </Card>
 
       <MilestoneRubricCard rubric={milestone.rubric} />
 
       <Card><CardHeader><CardTitle>Thông tin sản phẩm</CardTitle><CardDescription>Các trường không bắt buộc; có thể lưu nháp khi chưa điền đủ.</CardDescription></CardHeader>
         <CardContent className="grid gap-4">
-          <label className="grid gap-2 text-sm font-medium">Repository URL<Input disabled={submissionMutation.isPending} type="url" value={repositoryUrl} onChange={(event) => { markSubmissionEdited(); setSaved(false); setRepositoryUrl(event.target.value); }} placeholder="https://github.com/..." /></label>
-          <label className="grid gap-2 text-sm font-medium">Deployment URL<Input disabled={submissionMutation.isPending} type="url" value={deploymentUrl} onChange={(event) => { markSubmissionEdited(); setSaved(false); setDeploymentUrl(event.target.value); }} placeholder="https://..." /></label>
-          <label className="grid gap-2 text-sm font-medium">Release notes<Textarea disabled={submissionMutation.isPending} value={releaseNotes} maxLength={10000} onChange={(event) => { markSubmissionEdited(); setSaved(false); setReleaseNotes(event.target.value); }} placeholder="Mô tả ngắn nội dung bàn giao" rows={5} className="max-h-48 resize-none overflow-y-auto" /></label>
+          <label className="grid gap-2 text-sm font-medium">Repository URL<Input disabled={submissionMutation.isPending} type="url" value={repositoryUrl} aria-invalid={Boolean(saveError?.errors?.repositoryUrl)} onChange={(event) => { markSubmissionEdited(); markDraftEdited(); setRepositoryUrl(event.target.value); }} placeholder="https://github.com/..." />{saveError?.errors?.repositoryUrl?.map((message) => <span key={message} className="text-xs font-normal text-destructive">{message}</span>)}</label>
+          <label className="grid gap-2 text-sm font-medium">Deployment URL<Input disabled={submissionMutation.isPending} type="url" value={deploymentUrl} aria-invalid={Boolean(saveError?.errors?.deploymentUrl)} onChange={(event) => { markSubmissionEdited(); markDraftEdited(); setDeploymentUrl(event.target.value); }} placeholder="https://..." />{saveError?.errors?.deploymentUrl?.map((message) => <span key={message} className="text-xs font-normal text-destructive">{message}</span>)}</label>
+          <label className="grid gap-2 text-sm font-medium">Release notes<Textarea disabled={submissionMutation.isPending} value={releaseNotes} maxLength={10000} aria-invalid={Boolean(saveError?.errors?.releaseNotes)} onChange={(event) => { markSubmissionEdited(); markDraftEdited(); setReleaseNotes(event.target.value); }} placeholder="Mô tả ngắn nội dung bàn giao" rows={5} className="max-h-48 resize-none overflow-y-auto" />{saveError?.errors?.releaseNotes?.map((message) => <span key={message} className="text-xs font-normal text-destructive">{message}</span>)}</label>
           <div className="grid gap-2 text-sm font-medium">Tệp đính kèm
             <label className={`flex items-center gap-3 rounded-lg border border-dashed p-4 ${workspaceQuery.data.uploadPolicy.enabled ? "cursor-pointer" : "cursor-not-allowed text-muted-foreground"}`}>
               <FileUp className="size-5" /><span>{uploadMutation.isPending ? "Đang kiểm tra và tải tệp…" : workspaceQuery.data.uploadPolicy.enabled ? "Chọn tệp để tải lên" : "Tải tệp đang khóa: policy hoặc scanner chưa được cấu hình."}</span>

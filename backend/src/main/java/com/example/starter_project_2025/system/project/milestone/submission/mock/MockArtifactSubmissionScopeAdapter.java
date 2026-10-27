@@ -5,6 +5,8 @@ import com.example.starter_project_2025.system.project.milestone.submission.port
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
@@ -16,7 +18,7 @@ import java.util.stream.Collectors;
 
 /** Local/demo assignment fixture. Production must provide a scope adapter backed by Project/Team membership. */
 @Component
-@Profile("!milestone-real-integrations")
+@Profile("milestone-mock | test")
 public class MockArtifactSubmissionScopeAdapter implements ArtifactSubmissionScopePort {
     private final Map<UUID, Set<Long>> projectAssignments;
     private final Map<UUID, Set<Long>> teamAssignments;
@@ -47,6 +49,9 @@ public class MockArtifactSubmissionScopeAdapter implements ArtifactSubmissionSco
 
     @Override
     public void requireStudentProjectAccess(Long projectId, UUID actorId, Long tenantId) {
+        if (isAdministrator()) {
+            return;
+        }
         if (!MockMilestoneData.TENANT_ID.equals(tenantId)
                 || !projectAssignments.getOrDefault(actorId, Set.of()).contains(projectId)) {
             throw new AccessDeniedException("Student is not assigned to this demo project");
@@ -55,9 +60,19 @@ public class MockArtifactSubmissionScopeAdapter implements ArtifactSubmissionSco
 
     @Override
     public void requireStudentTeamAccess(Long teamId, UUID actorId, Long tenantId) {
+        if (isAdministrator()) {
+            return;
+        }
         if (!MockMilestoneData.TENANT_ID.equals(tenantId)
                 || !teamAssignments.getOrDefault(actorId, Set.of()).contains(teamId)) {
             throw new AccessDeniedException("Student is not assigned to this demo team");
         }
+    }
+
+    private boolean isAdministrator() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority())
+                        || "ROLE_ADMINISTRATOR".equals(authority.getAuthority()));
     }
 }

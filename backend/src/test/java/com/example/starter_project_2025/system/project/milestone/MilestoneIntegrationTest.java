@@ -72,6 +72,16 @@ class MilestoneIntegrationTest {
         artifactSubmissionRepository.deleteAll();
         artifactDraftRepository.deleteAll();
         checklistRepository.deleteAll();
+        jdbcTemplate.execute("DELETE FROM milestone_review_criteria");
+        jdbcTemplate.execute("DELETE FROM milestone_submission_reviews");
+        jdbcTemplate.execute("DELETE FROM milestone_submission_artifacts");
+        jdbcTemplate.execute("DELETE FROM submission_checklist_snapshots");
+        jdbcTemplate.execute("DELETE FROM milestone_submission_versions");
+        jdbcTemplate.execute("DELETE FROM milestone_submission_audit_logs");
+        jdbcTemplate.execute("DELETE FROM milestone_submission_outbox");
+        jdbcTemplate.execute("DELETE FROM final_project_grades");
+        jdbcTemplate.execute("DELETE FROM milestone_waivers");
+        jdbcTemplate.execute("DELETE FROM milestone_submissions");
         milestoneRepository.deleteAll();
         var teacher = userDetailsService.loadUserByUsername("teacher@example.com");
         teacherToken = tokenService.generateAccessToken(
