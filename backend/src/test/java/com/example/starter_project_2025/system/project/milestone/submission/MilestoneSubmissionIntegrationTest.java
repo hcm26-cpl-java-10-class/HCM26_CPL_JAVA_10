@@ -170,7 +170,8 @@ class MilestoneSubmissionIntegrationTest {
                 .andExpect(jsonPath("$.currentVersion.artifacts.length()").value(2))
                 .andExpect(jsonPath("$.currentVersion.artifacts[0].type").value("REPOSITORY"))
                 .andExpect(jsonPath("$.currentVersion.checklist.length()").value(2))
-                .andExpect(jsonPath("$.currentVersion.checklist[0].completed").value(true))
+                // A student's draft payload cannot complete acceptance criteria; only the reviewer can.
+                .andExpect(jsonPath("$.currentVersion.checklist[0].completed").value(false))
                 .andExpect(jsonPath("$.versions[1].versionNumber").value(1))
                 .andExpect(jsonPath("$.versions[1].status").value("CHANGES_REQUESTED"));
 
@@ -295,7 +296,12 @@ class MilestoneSubmissionIntegrationTest {
             evaluation.put("feedback", feedback);
             criteria.add(evaluation);
         }
-        return Map.of("decision", decision, "expectedVersion", detail.get("lockVersion").asLong(), "criteria", criteria);
+        List<Map<String, Object>> checklist = new ArrayList<>();
+        for (JsonNode item : detail.get("currentVersion").get("checklist")) {
+            checklist.add(Map.of("checklistItemId", item.get("id").asText(), "completed", true));
+        }
+        return Map.of("decision", decision, "expectedVersion", detail.get("lockVersion").asLong(),
+                "criteria", criteria, "checklist", checklist);
     }
 
     private String bearer() {

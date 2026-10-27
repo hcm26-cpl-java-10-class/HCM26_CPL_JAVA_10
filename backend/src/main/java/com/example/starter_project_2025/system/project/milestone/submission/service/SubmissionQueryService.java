@@ -134,7 +134,7 @@ public class SubmissionQueryService {
         if (checklist.isEmpty()) {
             checklist = value.getSubmission().getMilestone().getChecklistItems().stream().map(item ->
                     new SubmissionDtos.ChecklistSnapshot(null, item.getId(), item.getContent(),
-                            item.isMandatory(), item.isCompleted(), null, item.getOrderIndex())).toList();
+                            item.isMandatory(), false, null, item.getOrderIndex())).toList();
         }
         return new SubmissionDtos.Version(value.getId(), value.getVersionNumber(), value.getTitle(),
                 value.getNotes(), value.getSubmissionUrl(), value.getStatus(), value.getSubmittedAt(),

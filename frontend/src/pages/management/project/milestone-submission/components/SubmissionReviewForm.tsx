@@ -1,6 +1,7 @@
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import ConfirmDialog from "@/components/ui/confirmdialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,13 +17,16 @@ export function SubmissionReviewForm({ submission, pending, apiError, onReview }
   submission: SubmissionDetail;
   pending: boolean;
   apiError?: ReviewFormError | null;
-  onReview: (decision: ReviewDecision, values: Draft, overallFeedback?: string) => void;
+  onReview: (decision: ReviewDecision, values: Draft, checklist: Record<string, boolean>, overallFeedback?: string) => void;
 }) {
   const [draft, setDraft] = useState<Draft>(() => Object.fromEntries(
     submission.rubric.criteria.map((item) => [item.id, { feedback: "" }]),
   ));
   const [decision, setDecision] = useState<ReviewDecision | null>(null);
   const [overallFeedback, setOverallFeedback] = useState("");
+  const [checklist, setChecklist] = useState<Record<string, boolean>>(() => Object.fromEntries(
+    submission.currentVersion.checklist.filter((item) => item.id).map((item) => [item.id as string, item.completed]),
+  ));
   const [localErrors, setLocalErrors] = useState<Record<string, string>>({});
   const ordered = useMemo(() => [...submission.rubric.criteria].sort((a, b) => a.orderIndex - b.orderIndex), [submission]);
   const evaluated = ordered.filter((item) => draft[item.id]?.ratingLevel).length;
@@ -40,12 +44,15 @@ export function SubmissionReviewForm({ submission, pending, apiError, onReview }
       if ((value?.feedback.length ?? 0) > 500) errors[`${item.id}.feedback`] = "Feedback must not exceed 500 characters";
     });
     if (overallFeedback.length > 1000) errors.overallFeedback = "Overall feedback must not exceed 1,000 characters";
+    if (next === "ACCEPT" && submission.currentVersion.checklist.some((item) => item.mandatory && !checklist[item.id as string])) {
+      errors.checklist = "Check every required acceptance item before accepting";
+    }
     setLocalErrors(errors);
     if (Object.keys(errors).length) {
       document.getElementById(`criterion-${Object.keys(errors)[0].split(".")[0]}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
-    if (next === "ACCEPT") onReview(next, draft, overallFeedback.trim() || undefined);
+    if (next === "ACCEPT") onReview(next, draft, checklist, overallFeedback.trim() || undefined);
     else setDecision(next);
   };
 
@@ -97,6 +104,11 @@ export function SubmissionReviewForm({ submission, pending, apiError, onReview }
             );
           })}
           <section className="rounded-xl border p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold">Acceptance checklist</h3><p className="mt-1 text-sm text-muted-foreground">Verify each item against the submitted artifacts. Required items must be checked to accept.</p></div><span className="text-sm font-medium">{Object.values(checklist).filter(Boolean).length}/{submission.currentVersion.checklist.length} checked</span></div>
+            <div className="mt-4 grid gap-3">{submission.currentVersion.checklist.map((item, index) => <label key={item.id ?? index} className="flex cursor-pointer items-start gap-3 rounded-lg border p-3"><Checkbox checked={Boolean(checklist[item.id as string])} disabled={pending || submission.status !== "SUBMITTED" || !item.id} onCheckedChange={(checked) => item.id && setChecklist((current) => ({ ...current, [item.id as string]: checked === true }))} /><span><span className="font-medium">{item.content}</span>{item.mandatory ? <span className="ml-2 text-sm text-muted-foreground">Required</span> : null}</span></label>)}</div>
+            {localErrors.checklist || apiError?.errors?.checklist?.[0] ? <p className="mt-3 text-sm text-destructive">{localErrors.checklist ?? apiError?.errors?.checklist?.[0]}</p> : null}
+          </section>
+          <section className="rounded-xl border p-4">
             <div className="flex justify-between gap-2"><Label htmlFor="overall-feedback">Overall feedback <span className="font-normal text-muted-foreground">(optional)</span></Label><span className={`text-xs ${overallFeedback.length > 1000 ? "text-destructive" : "text-muted-foreground"}`}>{overallFeedback.length}/1000</span></div>
             <Textarea id="overall-feedback" className="mt-3" rows={4} maxLength={1100} value={overallFeedback} placeholder="Overall review and recommended improvements" onChange={(event) => { setOverallFeedback(event.target.value); setLocalErrors((current) => { const next = { ...current }; delete next.overallFeedback; return next; }); }} />
             {localErrors.overallFeedback ? <p className="mt-2 text-sm text-destructive">{localErrors.overallFeedback}</p> : null}
@@ -123,7 +135,7 @@ export function SubmissionReviewForm({ submission, pending, apiError, onReview }
         destructive={decision === "REJECT"}
         loading={pending}
         onCancel={() => !pending && setDecision(null)}
-        onConfirm={() => decision && onReview(decision, draft, overallFeedback.trim() || undefined)}
+        onConfirm={() => decision && onReview(decision, draft, checklist, overallFeedback.trim() || undefined)}
       />
     </>
   );

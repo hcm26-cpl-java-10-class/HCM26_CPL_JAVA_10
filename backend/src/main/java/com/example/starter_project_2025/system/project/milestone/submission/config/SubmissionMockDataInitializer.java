@@ -103,10 +103,9 @@ public class SubmissionMockDataInitializer implements CommandLineRunner {
                 new SubmissionVersion.ArtifactValue(SubmissionArtifactType.DOCUMENTATION,
                         sample.teamName() + " documentation", "https://example.com/docs/" + slug)
         ));
-        int completedItems = Math.max(1, milestone.getChecklistItems().size() - (index % 2));
         version.replaceChecklist(milestone.getChecklistItems().stream().map(item ->
                 new SubmissionVersion.ChecklistValue(item.getId(), item.getContent(), item.isMandatory(),
-                        item.getOrderIndex() < completedItems, null)).toList());
+                        false, null)).toList());
         boolean late = submittedAt.isAfter(milestone.getDeadline());
         BigDecimal penalty = late && milestone.getLatePenaltyPercent() != null
                 ? milestone.getLatePenaltyPercent() : BigDecimal.ZERO;
@@ -177,6 +176,8 @@ public class SubmissionMockDataInitializer implements CommandLineRunner {
                     criterion.getOrderIndex());
         }
         reviews.save(review);
+        version.applyChecklistReview(version.getChecklist().stream()
+                .collect(java.util.stream.Collectors.toMap(SubmissionChecklistSnapshot::getId, item -> true)));
         version.applyDecision(decision);
         submission.reviewed(decision, reviewedAt);
     }
@@ -203,7 +204,7 @@ public class SubmissionMockDataInitializer implements CommandLineRunner {
         ));
         version.replaceChecklist(milestone.getChecklistItems().stream().map(item ->
                 new SubmissionVersion.ChecklistValue(item.getId(), item.getContent(), item.isMandatory(),
-                        item.getOrderIndex() < Math.max(1, milestone.getChecklistItems().size() - 1), null)).toList());
+                        false, null)).toList());
     }
 
     private Milestone requireMilestone(String title) {

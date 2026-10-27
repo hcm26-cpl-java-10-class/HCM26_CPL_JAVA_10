@@ -60,6 +60,7 @@ public class SubmissionReviewService {
         if (reviews.existsBySubmissionVersionId(version.getId())) {
             throw new MilestoneConflictException("This submission version has already been reviewed");
         }
+        Map<UUID, Boolean> checklist = validateChecklist(request, version);
         RubricVersion rubric = rubrics.findByIdAndRubricTenantId(
                         submission.getMilestone().getRubricSnapshotId(), submission.getTenantId())
                 .orElseThrow(() -> new MilestoneDependencyException("Submission rubric could not be loaded"));
@@ -93,6 +94,7 @@ public class SubmissionReviewService {
                     item.criterion().getOrderIndex());
         }
         reviews.save(review);
+        version.applyChecklistReview(checklist);
         version.applyDecision(request.decision());
         submission.reviewed(request.decision(), now);
         versions.save(version);
@@ -134,6 +136,31 @@ public class SubmissionReviewService {
                 .collect(java.util.stream.Collectors.toSet());
         if (!result.keySet().equals(expected)) {
             errors.put("criteria", List.of("Every rubric criterion must be evaluated exactly once"));
+        }
+        if (!errors.isEmpty()) throw new MilestoneValidationException(errors);
+        return result;
+    }
+
+    private Map<UUID, Boolean> validateChecklist(SubmissionDtos.ReviewRequest request,
+                                                  SubmissionVersion version) {
+        Map<String, List<String>> errors = new LinkedHashMap<>();
+        Map<UUID, Boolean> result = new LinkedHashMap<>();
+        List<SubmissionDtos.ChecklistEvaluationRequest> inputs =
+                request.checklist() == null ? List.of() : request.checklist();
+        for (int i = 0; i < inputs.size(); i++) {
+            var item = inputs.get(i);
+            if (result.putIfAbsent(item.checklistItemId(), item.completed()) != null) {
+                errors.put("checklist[" + i + "].checklistItemId", List.of("Checklist item must be evaluated once"));
+            }
+        }
+        Set<UUID> expected = version.getChecklist().stream().map(SubmissionChecklistSnapshot::getId)
+                .collect(java.util.stream.Collectors.toSet());
+        if (!result.keySet().equals(expected)) {
+            errors.put("checklist", List.of("Every acceptance checklist item must be evaluated exactly once"));
+        }
+        if (request.decision() == ReviewDecision.ACCEPT && version.getChecklist().stream()
+                .anyMatch(item -> item.isMandatory() && !Boolean.TRUE.equals(result.get(item.getId())))) {
+            errors.put("checklist", List.of("All mandatory acceptance checklist items must be checked before accepting"));
         }
         if (!errors.isEmpty()) throw new MilestoneValidationException(errors);
         return result;

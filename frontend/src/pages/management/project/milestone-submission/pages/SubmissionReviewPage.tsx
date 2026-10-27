@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ReviewDecision, ReviewSubmissionRequest, RubricRatingLevel, SubmissionArtifactType } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, ArrowLeft, CalendarClock, CheckCircle2, ExternalLink, FileText, Github, MonitorPlay, UserRound, Users } from "lucide-react";
+import { AlertCircle, ArrowLeft, CalendarClock, ExternalLink, FileText, Github, MonitorPlay, UserRound, Users } from "lucide-react";
 import { useRef } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -48,9 +48,9 @@ export function SubmissionReviewPage() {
   const item = query.data;
   const returnTo = (location.state as { returnTo?: string } | null)?.returnTo;
   const back = () => navigate(returnTo?.startsWith("/milestone-submissions") ? returnTo : "/milestone-submissions");
-  const review = (decision: ReviewDecision, values: Record<string, { ratingLevel?: RubricRatingLevel; feedback: string }>, overallFeedback?: string) => {
+  const review = (decision: ReviewDecision, values: Record<string, { ratingLevel?: RubricRatingLevel; feedback: string }>, checklist: Record<string, boolean>, overallFeedback?: string) => {
     retryKey.current ??= crypto.randomUUID();
-    mutation.mutate({ key: retryKey.current, payload: { decision, expectedVersion: item.lockVersion, overallFeedback, criteria: item.rubric.criteria.map((criterion) => ({ criterionId: criterion.id, ratingLevel: values[criterion.id].ratingLevel as RubricRatingLevel, feedback: values[criterion.id].feedback.trim() || undefined })) } });
+    mutation.mutate({ key: retryKey.current, payload: { decision, expectedVersion: item.lockVersion, overallFeedback, criteria: item.rubric.criteria.map((criterion) => ({ criterionId: criterion.id, ratingLevel: values[criterion.id].ratingLevel as RubricRatingLevel, feedback: values[criterion.id].feedback.trim() || undefined })), checklist: item.currentVersion.checklist.filter((entry) => entry.id).map((entry) => ({ checklistItemId: entry.id as string, completed: Boolean(checklist[entry.id as string]) })) } });
   };
 
   return (
@@ -64,7 +64,6 @@ export function SubmissionReviewPage() {
           <CardContent className="grid gap-5 border-t pt-5">
             <div><h2 className="text-lg font-semibold">Submission information</h2><div className="mt-3 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4"><div><p className="flex items-center gap-2 text-muted-foreground"><Users className="size-4" /> Team</p><p className="mt-1 font-medium">{item.teamName}</p></div><div><p className="flex items-center gap-2 text-muted-foreground"><UserRound className="size-4" /> Submitted by</p><p className="mt-1 font-medium">{item.studentName}</p></div><div><p className="flex items-center gap-2 text-muted-foreground"><CalendarClock className="size-4" /> Submitted at</p><p className="mt-1 font-medium">{date(item.currentVersion.submittedAt)}</p></div><div><p className="text-muted-foreground">Rubric</p><p className="mt-1 font-medium">{item.rubric.name} · {item.rubric.version}</p></div></div></div>
             <div className="grid gap-3"><h2 className="text-lg font-semibold">Artifacts</h2>{item.currentVersion.artifacts.length ? <div className="grid gap-3 sm:grid-cols-2">{item.currentVersion.artifacts.map((artifact, index) => { const Icon = artifactIcon(artifact.type); return <a key={artifact.id ?? index} href={artifact.url} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-3 rounded-xl border p-4 transition hover:border-primary hover:bg-muted/30"><span className="flex min-w-0 items-center gap-3"><Icon className="size-5 shrink-0" /><span className="min-w-0"><span className="block truncate font-medium">{artifact.name}</span><span className="text-xs text-muted-foreground">{artifact.type.replace("_", " ")}</span></span></span><ExternalLink className="size-4 shrink-0" /></a>; })}</div> : <p className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">No artifact links were submitted.</p>}</div>
-            <div className="grid gap-3"><h2 className="text-lg font-semibold">Mandatory checklist</h2><div className="grid gap-2">{item.currentVersion.checklist.map((checklist, index) => <div key={checklist.id ?? index} className="flex items-start gap-3 rounded-lg border p-3"><span className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border ${checklist.completed ? "border-primary bg-primary text-primary-foreground" : "text-muted-foreground"}`}>{checklist.completed ? <CheckCircle2 className="size-4" /> : index + 1}</span><div><p className="font-medium">{checklist.content}</p>{checklist.evidenceNote ? <p className="mt-1 text-sm text-muted-foreground">{checklist.evidenceNote}</p> : null}</div></div>)}</div></div>
           </CardContent>
         </Card>
         {item.status === "SUBMITTED" ? <SubmissionReviewForm key={`${item.id}-${item.currentVersionNumber}`} submission={item} pending={mutation.isPending} apiError={mutation.isError ? errorOf(mutation.error) : null} onReview={review} /> : <Alert><AlertCircle /><AlertTitle>This submission is not awaiting review</AlertTitle><AlertDescription>The review form is read-only because its current status is {item.status.replace("_", " ")}.</AlertDescription></Alert>}

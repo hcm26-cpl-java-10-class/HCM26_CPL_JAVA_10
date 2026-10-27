@@ -117,6 +117,16 @@ public class SubmissionVersion {
         checklist.clear();
     }
 
+    /** Checklist completion is an assessment made only while the version is under review. */
+    public void applyChecklistReview(java.util.Map<UUID, Boolean> decisions) {
+        if (status != SubmissionStatus.SUBMITTED) {
+            throw new IllegalStateException("Only a submitted version can have its checklist reviewed");
+        }
+        for (SubmissionChecklistSnapshot item : checklist) {
+            item.markReviewed(Boolean.TRUE.equals(decisions.get(item.getId())));
+        }
+    }
+
     public record ArtifactValue(SubmissionArtifactType type, String name, String url) { }
     public record ChecklistValue(UUID sourceId, String content, boolean mandatory,
                                  boolean completed, String evidenceNote) { }

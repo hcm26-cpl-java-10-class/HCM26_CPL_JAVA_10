@@ -72,11 +72,17 @@ public final class SubmissionDtos {
             @NotNull(message = "Rating level is required") RubricRatingLevel ratingLevel,
             @Size(max = 500, message = "Feedback must not exceed 500 characters") String feedback) { }
 
+    /** A reviewer decision for one immutable acceptance-checklist snapshot item. */
+    public record ChecklistEvaluationRequest(
+            @NotNull(message = "Checklist item is required") UUID checklistItemId,
+            boolean completed) { }
+
     public record ReviewRequest(
             @NotNull(message = "Decision is required") ReviewDecision decision,
             @NotNull(message = "Expected submission version is required") @Min(0) Long expectedVersion,
             @NotEmpty(message = "Rubric evaluation is required")
             List<@Valid CriterionEvaluationRequest> criteria,
+            List<@Valid ChecklistEvaluationRequest> checklist,
             @Size(max = 1000, message = "Overall feedback must not exceed 1000 characters")
             String overallFeedback) { }
 
@@ -84,10 +90,9 @@ public final class SubmissionDtos {
             @NotBlank @Size(max = 160) String title,
             @Size(max = 2000) String notes,
             @Size(max = 1000) String submissionUrl,
-            List<@Valid ArtifactRequest> artifacts,
-            List<@Valid ChecklistRequest> checklist) {
+            List<@Valid ArtifactRequest> artifacts) {
         public CreateVersionRequest(String title, String notes, String submissionUrl) {
-            this(title, notes, submissionUrl, List.of(), List.of());
+            this(title, notes, submissionUrl, List.of());
         }
     }
 
@@ -95,20 +100,12 @@ public final class SubmissionDtos {
             @NotBlank @Size(max = 160) String title,
             @Size(max = 2000) String notes,
             @Size(max = 1000) String submissionUrl,
-            @Size(max = 20) List<@Valid ArtifactRequest> artifacts,
-            @Size(max = 100) List<@Valid ChecklistRequest> checklist) { }
+            @Size(max = 20) List<@Valid ArtifactRequest> artifacts) { }
 
     public record ArtifactRequest(
             @NotNull SubmissionArtifactType type,
             @NotBlank @Size(max = 160) String name,
             @NotBlank @Size(max = 1000) String url) { }
-
-    public record ChecklistRequest(
-            UUID sourceChecklistItemId,
-            @NotBlank @Size(max = 500) String content,
-            boolean mandatory,
-            boolean completed,
-            @Size(max = 500) String evidenceNote) { }
 
     public record LockFinalGradeRequest(
             @NotNull @DecimalMin("0.00") @DecimalMax("100.00") @Digits(integer = 3, fraction = 2)

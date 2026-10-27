@@ -38,8 +38,8 @@ public class SubmissionVersionService {
         int number = submission.openNextDraft(now);
         SubmissionVersion version = SubmissionVersion.draft(submission, number, request.title(), request.notes(),
                 request.submissionUrl(), actorProvider.requireCurrentActorId(), now);
-        applyDraftContent(version, request.artifacts(), request.checklist());
-        if (request.checklist() == null || request.checklist().isEmpty()) snapshotMilestoneChecklist(version, submission);
+        applyDraftContent(version, request.artifacts());
+        snapshotMilestoneChecklist(version, submission);
         versions.save(version);
         submissions.saveAndFlush(submission);
         return queryService.getDetail(id);
@@ -60,9 +60,8 @@ public class SubmissionVersionService {
         // Flush orphan removals before recreating ordered rows. Otherwise inserts using
         // order_index=0 can run before the old row is deleted and violate the unique key.
         if (request.artifacts() != null) version.clearArtifacts();
-        if (request.checklist() != null && !request.checklist().isEmpty()) version.clearChecklist();
         versions.saveAndFlush(version);
-        applyDraftContent(version, request.artifacts(), request.checklist());
+        applyDraftContent(version, request.artifacts());
         versions.saveAndFlush(version);
         return queryService.getDetail(id);
     }
@@ -112,13 +111,9 @@ public class SubmissionVersionService {
     }
 
     private void applyDraftContent(SubmissionVersion version,
-                                   List<SubmissionDtos.ArtifactRequest> artifacts,
-                                   List<SubmissionDtos.ChecklistRequest> checklist) {
+                                   List<SubmissionDtos.ArtifactRequest> artifacts) {
         if (artifacts != null) version.replaceArtifacts(artifacts.stream().map(item ->
                 new SubmissionVersion.ArtifactValue(item.type(), item.name(), item.url())).toList());
-        if (checklist != null && !checklist.isEmpty()) version.replaceChecklist(checklist.stream().map(item ->
-                new SubmissionVersion.ChecklistValue(item.sourceChecklistItemId(), item.content(),
-                        item.mandatory(), item.completed(), item.evidenceNote())).toList());
     }
 
     private void snapshotMilestoneChecklist(SubmissionVersion version, MilestoneSubmission submission) {

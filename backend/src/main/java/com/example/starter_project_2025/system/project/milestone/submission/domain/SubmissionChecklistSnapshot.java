@@ -46,6 +46,10 @@ public class SubmissionChecklistSnapshot {
         return value;
     }
 
+    void markReviewed(boolean completed) {
+        this.completed = completed;
+    }
+
     private static String normalize(String value) {
         return value == null || value.isBlank() ? null : value.trim();
     }

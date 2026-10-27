@@ -164,6 +164,7 @@ export interface ReviewSubmissionRequest {
   decision: ReviewDecision;
   expectedVersion: number;
   criteria: Array<{ criterionId: string; ratingLevel: RubricRatingLevel; feedback?: string }>;
+  checklist: Array<{ checklistItemId: string; completed: boolean }>;
   overallFeedback?: string;
 }
 
@@ -172,11 +173,4 @@ export interface SaveSubmissionDraftRequest {
   notes?: string;
   submissionUrl?: string;
   artifacts: Array<{ type: SubmissionArtifactType; name: string; url: string }>;
-  checklist: Array<{
-    sourceChecklistItemId?: string | null;
-    content: string;
-    mandatory: boolean;
-    completed: boolean;
-    evidenceNote?: string;
-  }>;
 }
