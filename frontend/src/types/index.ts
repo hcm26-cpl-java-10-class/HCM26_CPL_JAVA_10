@@ -19,6 +19,7 @@ export * from "./features/demo/section";
 export * from "./features/demo/student_score";
 export * from "./features/demo/topic_mark_gradebook";
 export * from "./features/demo/certificate";
+export * from "./features/notification";
 export * from "./features/menu/module";
 export * from "./features/menu/module_group";
 export * from "./features/rbac/permission";

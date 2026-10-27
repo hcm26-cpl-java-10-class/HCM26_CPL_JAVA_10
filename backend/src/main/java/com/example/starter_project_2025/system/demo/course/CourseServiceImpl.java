@@ -8,6 +8,7 @@ import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.system.notification.NotificationService;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +40,7 @@ public class CourseServiceImpl
     UserRepository userRepository;
     CategoryRepository categoryRepository;
     CurriculumValidator curriculumValidator;
+    NotificationService notificationService;
 
     @Override
     protected BaseCrudRepository<Course, Long> getRepository() {
@@ -103,12 +105,45 @@ public class CourseServiceImpl
         validatePublishTransition(course, request, ctx);
     }
 
+    @Override
+    protected void afterUpdate(Course course, CourseDTO request) {
+        if (request.getStatus() == CourseStatus.PUBLISHED && course.getInstructorUser() != null) {
+            notificationService.createOnce(
+                    course.getInstructorUser().getId(),
+                    "course-published:" + course.getId(),
+                    "Course published",
+                    course.getName() + " is now available to students.",
+                    "/courses/" + course.getId()
+            );
+        }
+    }
+
     /** Chuyển sang PUBLISHED phải qua Validate Publish (>=1 section, mỗi section >=1 lesson, URL hợp lệ). */
     private void validatePublishTransition(Course course, CourseDTO request, ValidationContext ctx) {
         if (request.getStatus() != CourseStatus.PUBLISHED
                 || course.getStatus() == CourseStatus.PUBLISHED) {
             return;
         }
+
+        if (course.getInstructorUser() == null) {
+            ctx.add("instructorId", "Assign an instructor before publishing");
+        }
+        if (course.getCategories() == null || course.getCategories().isEmpty()) {
+            ctx.add("categoryIds", "Select at least one category before publishing");
+        }
+
+        CourseLevel level = request.getLevel() != null ? request.getLevel() : course.getLevel();
+        if (level == null) {
+            ctx.add("level", "Select a course level before publishing");
+        }
+
+        String description = request.getDescription() != null
+                ? request.getDescription()
+                : course.getDescription();
+        if (description == null || description.isBlank()) {
+            ctx.add("description", "Add a course description before publishing");
+        }
+
         CurriculumValidationResult result = curriculumValidator.validatePublish(course.getId());
         result.errors().forEach(issue -> ctx.add("status", issue.message()));
     }

@@ -1,6 +1,5 @@
 import { certificateApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import type { CertificateVerificationDTO } from "@/types";
@@ -221,7 +220,6 @@ export default function CertificateDetailPage() {
               <Button
                 variant="outline"
                 className="gap-2"
-                
               >
                 <Download className="size-4" />
                 Download as PDF

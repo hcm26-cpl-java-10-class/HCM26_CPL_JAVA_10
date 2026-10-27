@@ -16,10 +16,7 @@ import {
   Award,
   Calendar,
   CheckCircle,
-  Download,
-  Hash,
   Search,
-  User,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -64,7 +61,7 @@ const certificateSchema: EntitySchema = {
       type: "date",
       sortable: true,
       editable: false,
-    },   
+    },
     // Form Select User khi tạo/sửa
     {
       name: "userId",

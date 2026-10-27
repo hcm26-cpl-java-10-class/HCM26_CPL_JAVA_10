@@ -1,4 +1,5 @@
 import { enrollmentApi } from "@/api";
+import { notificationQueryKey } from "@/api/features/notification.api";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
@@ -34,6 +35,7 @@ export function useCourseEnrollment() {
       queryClient.invalidateQueries({ queryKey: ["my-enrollments"] }),
       queryClient.invalidateQueries({ queryKey: ["course-catalog"] }),
       queryClient.invalidateQueries({ queryKey: ["course-detail"] }),
+      queryClient.invalidateQueries({ queryKey: notificationQueryKey }),
     ]);
 
   const enrollMutation = useMutation({

@@ -6,6 +6,10 @@ import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.system.demo.section.Section;
 import com.example.starter_project_2025.system.demo.section.SectionRepository;
+import com.example.starter_project_2025.system.demo.course.CourseStatus;
+import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollment;
+import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentRepository;
+import com.example.starter_project_2025.system.notification.NotificationService;
 import com.example.starter_project_2025.security.UserPrincipal;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +38,8 @@ public class LessonServiceImpl
     LessonMapper lessonMapper;
     SectionRepository sectionRepository;
     CourseContentAccessGuard contentAccessGuard;
+    CourseEnrollmentRepository enrollmentRepository;
+    NotificationService notificationService;
 
     @Override
     protected BaseCrudRepository<Lesson, Long> getRepository() {
@@ -121,6 +127,23 @@ public class LessonServiceImpl
                 ? request.getTextContent() : lesson.getTextContent();
 
         validateContent(type, url, text, ctx);
+    }
+
+    @Override
+    protected void afterCreate(Lesson lesson, LessonDTO request) {
+        if (lesson.getSection().getCourse().getStatus() != CourseStatus.PUBLISHED) {
+            return;
+        }
+        for (CourseEnrollment enrollment
+                : enrollmentRepository.findAllByCourse_Id(lesson.getSection().getCourse().getId())) {
+            notificationService.createOnce(
+                    enrollment.getUser().getId(),
+                    "lesson-created:" + lesson.getId() + ":" + enrollment.getUser().getId(),
+                    "New lesson available",
+                    lesson.getTitle() + " was added to " + lesson.getSection().getCourse().getName() + ".",
+                    "/enrollments/" + enrollment.getId() + "/learn"
+            );
+        }
     }
 
     private void normalizeTitle(LessonDTO request, ValidationContext ctx) {

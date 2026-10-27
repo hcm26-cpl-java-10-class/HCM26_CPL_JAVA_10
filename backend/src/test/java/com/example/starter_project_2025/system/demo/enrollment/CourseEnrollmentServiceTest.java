@@ -8,6 +8,7 @@ import com.example.starter_project_2025.system.demo.lesson.Lesson;
 import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
 import com.example.starter_project_2025.system.demo.progress.LessonProgress;
 import com.example.starter_project_2025.system.demo.progress.LessonProgressRepository;
+import com.example.starter_project_2025.system.notification.NotificationService;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +32,7 @@ class CourseEnrollmentServiceTest {
     @Mock DepartmentRepository departmentRepository;
     @Mock LessonRepository lessonRepository;
     @Mock LessonProgressRepository progressRepository;
+    @Mock NotificationService notificationService;
     @InjectMocks CourseEnrollmentService service;
 
     @Test
