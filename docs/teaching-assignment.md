@@ -121,4 +121,4 @@ Edit integration tests cover read-only preview, immutable identity, historical/c
 
 Lifecycle tests cover inclusive ending, open-ended assignments, extension/reversed-date rejection, stale contexts/revisions, all historical session statuses, separate update/delete permissions, profile outages and races between ending/deletion and session creation. Frontend tests cover date defaults/bounds, exact-preview confirmation and unused-only deletion guards.
 
-The remaining schedule integration and full cross-module flow are the final implementation stage.
+The assignment integration endpoints, source transition, verification and module ownership boundaries are documented in [teaching-assignment-integration.md](teaching-assignment-integration.md).

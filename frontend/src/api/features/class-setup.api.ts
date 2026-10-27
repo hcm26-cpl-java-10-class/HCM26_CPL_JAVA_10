@@ -87,6 +87,7 @@ export interface AssignmentLifecycleContext {
 export type AssignmentSessionStatus = "SCHEDULED" | "COMPLETED" | "CANCELLED";
 
 export interface AssignmentSession {
+  source: "DEMO_SESSION" | "STUDY_SESSION";
   id: number;
   title: string;
   startTime: string;
@@ -168,6 +169,7 @@ export interface AssignmentClassContext {
 }
 
 export const classSetupApi = {
+  getRooms: async () => (await axiosInstance.get<Array<{ id: number; name: string }>>("/external/rooms")).data,
   getAssignmentCreateOptions: async (signal?: AbortSignal) =>
     (await axiosInstance.get<AssignmentCreateOptions>("/teaching-assignments/create-options", { signal })).data,
   getAssignmentCreateContext: async (classId: number, signal?: AbortSignal) =>
@@ -184,8 +186,8 @@ export const classSetupApi = {
     (await axiosInstance.get<ClassProgramSubjects>(`/classes/${classId}/program-subjects`)).data,
   getAssignments: async (classId: number) =>
     (await axiosInstance.get<TeachingAssignment[]>(`/classes/${classId}/teaching-assignments`)).data,
-  getAvailableAssignments: async (classId: number, date: string) =>
-    (await axiosInstance.get<TeachingAssignment[]>(`/classes/${classId}/teaching-assignments/available`, { params: { date } })).data,
+  getAvailableAssignments: async (classId: number, query: string | { date?: string; programSubjectId?: number; from?: string; to?: string }, signal?: AbortSignal) =>
+    (await axiosInstance.get<TeachingAssignment[]>(`/classes/${classId}/teaching-assignments/available`, { params: typeof query === "string" ? { date: query } : query, signal })).data,
   getAssignmentOptions: async (signal?: AbortSignal) =>
     (await axiosInstance.get<AssignmentOptions>("/teaching-assignments/options", { signal })).data,
   searchAssignments: async (params: AssignmentSearchParams, signal?: AbortSignal) =>

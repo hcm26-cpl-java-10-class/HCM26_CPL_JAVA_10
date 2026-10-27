@@ -1,3 +1,4 @@
+import { assignmentSessionKey } from "../assignment-session-key";
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
@@ -101,7 +102,7 @@ export function AssignmentDetailDialog({ assignmentId, onClose }: { assignmentId
           : <Table><TableHeader><TableRow><TableHead>Session</TableHead><TableHead>Start</TableHead><TableHead>End</TableHead><TableHead>Location / meeting</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
             <TableBody>{data.content.map((session) => {
               const meetingUrl = safeMeetingUrl(session.meetingUrl);
-              return <TableRow key={session.id}>
+              return <TableRow key={assignmentSessionKey(session)}>
                 <TableCell className="max-w-64 whitespace-normal font-medium">{session.title}{!session.active && <Badge variant="outline" className="ml-2">Archived</Badge>}</TableCell>
                 <TableCell className="whitespace-nowrap">{formatScheduleDateTime(session.startTime)}</TableCell>
                 <TableCell className="whitespace-nowrap">{formatScheduleDateTime(session.endTime)}</TableCell>

@@ -1,5 +1,7 @@
 export interface TopicContextItem {
-  topicId: number;
+  topicId?: number | null;
+  programSubjectId: number;
+  subjectId: number;
   topicCode: string;
   topicName: string;
   sequenceOrder: number;
@@ -28,7 +30,8 @@ export interface SlotTimeDTO {
 }
 
 export interface TopicOverrideDTO {
-  topicId: number;
+  topicId?: number;
+  programSubjectId?: number;
   trainerId?: number;
   trainerName?: string;
   roomId?: number;
@@ -41,6 +44,7 @@ export interface BulkPreviewRequestDTO {
   slotTime: SlotTimeDTO;
   defaultRoomId?: number;
   defaultRoomName?: string;
+  meetingUrl?: string;
   skipHolidays: boolean;
   checkConflicts: boolean;
   topicOverrides?: TopicOverrideDTO[];
@@ -54,7 +58,9 @@ export interface ConflictDetailDTO {
 
 export interface PreviewSessionItemDTO {
   tempId: string;
-  topicId: number;
+  topicId?: number | null;
+  programSubjectId: number;
+  subjectId: number;
   topicName: string;
   sessionNumber: number;
   date: string; // YYYY-MM-DD
@@ -64,6 +70,7 @@ export interface PreviewSessionItemDTO {
   trainerName?: string;
   roomId?: number;
   roomName?: string;
+  meetingUrl?: string;
   teachingAssignmentId?: number;
   title: string;
   status: "VALID" | "CONFLICT";
@@ -88,6 +95,7 @@ export interface BulkSaveSessionsRequestDTO {
 }
 
 export interface BulkSaveSessionsResponseDTO {
+  createdSessions: Array<{ source: "STUDY_SESSION"; id: number }>;
   classId: number;
   createdCount: number;
   status: string;

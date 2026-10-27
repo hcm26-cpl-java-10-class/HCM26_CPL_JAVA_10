@@ -1,5 +1,7 @@
-import { useState, useEffect } from "react";
+import axios from "axios";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { AssignmentPicker } from "./AssignmentPicker";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -46,6 +48,11 @@ import type {
   PreviewSessionItemDTO,
 } from "@/types/features/schedule-generation";
 
+function requestError(error: unknown): string {
+  if (axios.isAxiosError(error)) return error.response?.data?.issues?.[0]?.message || error.response?.data?.message || "Unable to complete the scheduling request.";
+  return "Unable to complete the scheduling request.";
+}
+
 // Danh sách thứ trong tuần
 const WEEK_DAYS = [
   { key: "MONDAY", label: "T2", fullName: "Thứ Hai" },
@@ -65,13 +72,7 @@ const SLOT_PRESETS = [
   { id: "CUSTOM", label: "Tùy chỉnh giờ", start: "08:30:00", hours: 3.5 },
 ];
 
-const PRESET_ROOMS = [
-  { id: 101, name: "Phòng A101 (Tòa nhà A)" },
-  { id: 102, name: "Phòng A102 (Tòa nhà A)" },
-  { id: 201, name: "Phòng Lab 1 (Thực hành)" },
-  { id: 202, name: "Phòng Lab 2 (Chuyên sâu)" },
-  { id: 999, name: "Học trực tuyến (Google Meet / Zoom)" },
-];
+
 
 // Lấy thứ Hai kế tiếp làm ngày mặc định
 const getNextMonday = (): string => {
@@ -99,9 +100,14 @@ export default function BulkScheduleGenerationPage() {
   const [selectedSlotPreset, setSelectedSlotPreset] = useState<string>("MORNING");
   const [customStartTime, setCustomStartTime] = useState<string>("08:00:00");
   const [customHours, setCustomHours] = useState<number>(4);
-  const [selectedRoomId, setSelectedRoomId] = useState<number>(101);
+  const [selectedRoomId, setSelectedRoomId] = useState<number>(0);
+  const [rooms, setRooms] = useState<Array<{ id: number; name: string }>>([]);
+  const [meetingUrl, setMeetingUrl] = useState("");
+  const replay = useRef<{ payload: string; key: string } | null>(null);
+  const submitting = useRef(false);
+  useEffect(() => { classSetupApi.getRooms().then(setRooms).catch(() => toast.error("Unable to load rooms.")); }, []);
   const [skipHolidays, setSkipHolidays] = useState<boolean>(true);
-  const [checkConflicts, setCheckConflicts] = useState<boolean>(true);
+  const checkConflicts = true;
 
   // State Preview trên RAM
   const [isPreviewing, setIsPreviewing] = useState<boolean>(false);
@@ -125,32 +131,30 @@ export default function BulkScheduleGenerationPage() {
           }
         }
       })
-      .catch(() => {
-        // Fallback classes nếu external API chưa có dữ liệu
-        setClasses([
-          { id: 1, code: "CLASS-01", name: "Lớp CLASS-01 (Kỳ 1 Chuyên sâu SE)" },
-          { id: 2, code: "CLASS-02", name: "Lớp CLASS-02 (Java 10 OJT Web)" },
-          { id: 3, code: "SE-01", name: "Lớp SE-01 (Kỹ thuật phần mềm)" },
-        ]);
-      });
+      .catch(() => { setClasses([]); toast.error("Unable to load classes. Please reload."); });
   }, [queryClassId]);
 
   // Tải ngữ cảnh môn học của lớp đã chọn
   useEffect(() => {
     if (!selectedClassId) return;
+    const controller = new AbortController();
+    setContext(null); setPreviewResult(null); setEditableSessions([]);
     setIsLoadingContext(true);
     scheduleGenerationApi
-      .getContext(selectedClassId)
+      .getContext(selectedClassId, controller.signal)
       .then((data) => {
+        if (controller.signal.aborted) return;
         setContext(data);
         setPreviewResult(null);
         setEditableSessions([]);
       })
       .catch((err) => {
+        if (controller.signal.aborted) return;
         toast.error("Không thể tải kế hoạch môn học của lớp");
         console.error(err);
       })
-      .finally(() => setIsLoadingContext(false));
+      .finally(() => { if (!controller.signal.aborted) setIsLoadingContext(false); });
+    return () => controller.abort();
   }, [selectedClassId]);
 
   // Toggle thứ trong tuần
@@ -191,7 +195,7 @@ export default function BulkScheduleGenerationPage() {
     const startTime = selectedSlotPreset === "CUSTOM" ? customStartTime : (currentPreset?.start || "08:00:00");
     const hours = selectedSlotPreset === "CUSTOM" ? customHours : (currentPreset?.hours || 4);
 
-    const roomObj = PRESET_ROOMS.find((r) => r.id === selectedRoomId);
+    const roomObj = rooms.find((r) => r.id === selectedRoomId);
 
     const requestPayload: BulkPreviewRequestDTO = {
       startDate,
@@ -200,8 +204,9 @@ export default function BulkScheduleGenerationPage() {
         startTime,
         hoursPerSession: hours,
       },
-      defaultRoomId: selectedRoomId,
+      defaultRoomId: selectedRoomId || undefined,
       defaultRoomName: roomObj?.name,
+      meetingUrl: selectedRoomId ? undefined : meetingUrl,
       skipHolidays,
       checkConflicts,
     };
@@ -212,8 +217,8 @@ export default function BulkScheduleGenerationPage() {
       setPreviewResult(result);
       setEditableSessions(result.sessions || []);
       toast.success(`Đã sinh dự kiến ${result.totalSessions} buổi học trên RAM!`);
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Lỗi khi sinh lịch dự kiến");
+    } catch (err: unknown) {
+      toast.error(requestError(err));
       console.error(err);
     } finally {
       setIsPreviewing(false);
@@ -221,10 +226,17 @@ export default function BulkScheduleGenerationPage() {
   };
 
   // Chỉnh sửa từng dòng trên bảng preview
-  const handleUpdateSession = (index: number, field: keyof PreviewSessionItemDTO, value: any) => {
-    const updated = [...editableSessions];
-    updated[index] = { ...updated[index], [field]: value };
-    setEditableSessions(updated);
+  const handleUpdateSession = <K extends keyof PreviewSessionItemDTO,>(index: number, field: K, value: PreviewSessionItemDTO[K]) => {
+    setEditableSessions((previous) => {
+      const updated = [...previous];
+      updated[index] = { ...updated[index], [field]: value };
+      if (["date", "startTime", "endTime"].includes(field)) {
+        updated[index].teachingAssignmentId = undefined;
+        updated[index].trainerId = undefined;
+        updated[index].trainerName = undefined;
+      }
+      return updated;
+    });
   };
 
   // Xóa bớt dòng trong preview
@@ -241,9 +253,13 @@ export default function BulkScheduleGenerationPage() {
       return;
     }
 
+    if (submitting.current) return;
+    submitting.current = true;
     setIsSaving(true);
     // Sinh Idempotency Key chống gửi lặp / click đúp
-    const idempotencyKey = "key-" + Date.now() + "-" + Math.random().toString(36).substring(2, 9);
+    const payload = JSON.stringify({ sessions: editableSessions });
+    if (!replay.current || replay.current.payload !== payload) replay.current = { payload, key: crypto.randomUUID() };
+    const idempotencyKey = replay.current.key;
 
     try {
       const response = await scheduleGenerationApi.save(
@@ -254,16 +270,16 @@ export default function BulkScheduleGenerationPage() {
       setSavedCount(response.createdCount);
       setSaveSuccessModal(true);
       toast.success(response.message);
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Lỗi khi lưu lịch học vào hệ thống");
+    } catch (err: unknown) {
+      toast.error(requestError(err));
       console.error(err);
     } finally {
-      setIsSaving(false);
+      setIsSaving(false); submitting.current = false;
     }
   };
 
   return (
-    <MainLayout>
+    <MainLayout><fieldset disabled={isSaving} className="min-w-0">
       <div className="container mx-auto p-4 sm:p-6 space-y-6 max-w-7xl">
         {/* Header Title */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b pb-5">
@@ -282,11 +298,11 @@ export default function BulkScheduleGenerationPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => navigate(`/calendar/preview?classId=${selectedClassId}`)}
+              onClick={() => navigate("/study-sessions")}
               className="gap-1.5 text-slate-700"
             >
               <ExternalLink className="size-4" />
-              Xem Thời khóa biểu
+              View study sessions
             </Button>
           </div>
         </div>
@@ -351,7 +367,7 @@ export default function BulkScheduleGenerationPage() {
                   </TableHeader>
                   <TableBody>
                     {context.topics.map((t) => (
-                      <TableRow key={t.topicId}>
+                      <TableRow key={t.programSubjectId}>
                         <TableCell className="text-center font-bold text-slate-700">#{t.sequenceOrder}</TableCell>
                         <TableCell className="font-mono text-xs">{t.topicCode}</TableCell>
                         <TableCell className="font-medium text-slate-900">{t.topicName}</TableCell>
@@ -438,7 +454,8 @@ export default function BulkScheduleGenerationPage() {
                   onChange={(e) => setSelectedRoomId(Number(e.target.value))}
                   className="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none"
                 >
-                  {PRESET_ROOMS.map((r) => (
+                  <option value={0}>Online meeting</option>
+                  {rooms.map((r) => (
                     <option key={r.id} value={r.id}>
                       {r.name}
                     </option>
@@ -448,6 +465,7 @@ export default function BulkScheduleGenerationPage() {
             </div>
 
             {/* Chọn các thứ trong tuần */}
+            {!selectedRoomId && <div className="space-y-2"><Label htmlFor="bulk-meeting-url">Online meeting URL</Label><Input id="bulk-meeting-url" type="url" value={meetingUrl} onChange={(event) => setMeetingUrl(event.target.value)} placeholder="https://..." /></div>}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <Label className="text-xs font-semibold text-slate-700">Các thứ học trong tuần</Label>
@@ -522,17 +540,17 @@ export default function BulkScheduleGenerationPage() {
                 <input
                   type="checkbox"
                   checked={checkConflicts}
-                  onChange={(e) => setCheckConflicts(e.target.checked)}
+                  disabled
                   className="rounded text-indigo-600 focus:ring-indigo-500 size-4"
                 />
-                Tự động kiểm tra trùng giờ với giảng viên và phòng học
+                Assignment and conflict checks are always enabled.
               </label>
             </div>
           </CardContent>
           <CardFooter className="bg-slate-50 border-t py-3 flex justify-end items-center">
             <Button
               onClick={handleGeneratePreview}
-              disabled={isPreviewing}
+              disabled={isPreviewing || isSaving || !context}
               className="bg-indigo-600 hover:bg-indigo-700 gap-2 font-medium"
             >
               {isPreviewing ? <RefreshCw className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
@@ -656,18 +674,16 @@ export default function BulkScheduleGenerationPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Input
-                              value={session.trainerName || ""}
-                              onChange={(e) => handleUpdateSession(idx, "trainerName", e.target.value)}
-                              className="h-8 text-xs"
-                            />
+                            <AssignmentPicker classId={selectedClassId} row={session} disabled={isSaving} onSelect={(assignment) => {
+                              setEditableSessions((rows) => rows.map((row, i) => i === idx ? { ...row, teachingAssignmentId: assignment.id, trainerId: assignment.trainerId, trainerName: assignment.trainerName || undefined } : row));
+                            }} />
                           </TableCell>
                           <TableCell>
-                            <Input
-                              value={session.roomName || ""}
-                              onChange={(e) => handleUpdateSession(idx, "roomName", e.target.value)}
-                              className="h-8 text-xs"
-                            />
+                            <select aria-label={`Room for ${session.title}`} className="h-9 w-full rounded-md border bg-background px-2 text-xs" disabled={isSaving} value={session.roomId || 0} onChange={(event) => {
+                              const room = rooms.find((item) => item.id === Number(event.target.value));
+                              setEditableSessions((rows) => rows.map((row, i) => i === idx ? { ...row, roomId: room?.id, roomName: room?.name, meetingUrl: room ? undefined : meetingUrl } : row));
+                            }}><option value={0}>Online meeting</option>{rooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}</select>
+                            {!session.roomId && <Input aria-label={`Meeting URL for ${session.title}`} type="url" value={session.meetingUrl || ""} onChange={(event) => handleUpdateSession(idx, "meetingUrl", event.target.value)} disabled={isSaving} placeholder="https://..." />}
                           </TableCell>
                           <TableCell className="text-center">
                             {isConflict ? (
@@ -752,16 +768,16 @@ export default function BulkScheduleGenerationPage() {
                 className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 gap-1.5"
                 onClick={() => {
                   setSaveSuccessModal(false);
-                  navigate(`/calendar/preview?classId=${selectedClassId}`);
+                  navigate("/study-sessions");
                 }}
               >
-                Mở Thời khóa biểu ngay
+                View saved study sessions
                 <ArrowRight className="size-4" />
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
-    </MainLayout>
+    </fieldset></MainLayout>
   );
 }
