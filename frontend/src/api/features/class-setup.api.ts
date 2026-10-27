@@ -8,6 +8,8 @@ export interface SharedClass {
   name: string;
   programId?: number | null;
   status?: string;
+  startDate?: string | null;
+  endDate?: string | null;
 }
 
 export interface SharedTrainer {
@@ -91,7 +93,23 @@ export interface AssignmentOptions {
   sampleData: boolean;
 }
 
+export interface AssignmentCreateOptions {
+  classes: SharedClass[];
+  trainers: SharedTrainer[];
+  sampleData: boolean;
+}
+
+export interface AssignmentClassContext {
+  classProfile: SharedClass;
+  program: NonNullable<ClassProgramSubjects["program"]>;
+  subjects: Array<{ programSubjectId: number; subjectId: number; code: string; name: string; version: string }>;
+}
+
 export const classSetupApi = {
+  getAssignmentCreateOptions: async (signal?: AbortSignal) =>
+    (await axiosInstance.get<AssignmentCreateOptions>("/teaching-assignments/create-options", { signal })).data,
+  getAssignmentCreateContext: async (classId: number, signal?: AbortSignal) =>
+    (await axiosInstance.get<AssignmentClassContext>("/teaching-assignments/create-context", { params: { classId }, signal })).data,
   getDataSource: async () =>
     (await axiosInstance.get<{ sampleData: boolean }>("/external/data-source")).data,
   getActiveClasses: async () =>

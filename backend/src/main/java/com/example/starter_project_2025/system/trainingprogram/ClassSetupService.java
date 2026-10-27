@@ -21,6 +21,10 @@ public interface ClassSetupService {
 
     TeachingAssignmentOptions getAssignmentOptions();
 
+    TeachingAssignmentCreateOptions getAssignmentCreateOptions();
+
+    TeachingAssignmentCreateOptions.ClassContext getAssignmentCreateContext(Long classId);
+
     TeachingAssignmentResponse getAssignment(Long id);
 
     TeachingAssignmentResponse createAssignment(TeachingAssignmentRequest request);

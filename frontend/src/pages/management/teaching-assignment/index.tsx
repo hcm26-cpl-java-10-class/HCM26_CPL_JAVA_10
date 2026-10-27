@@ -1,8 +1,9 @@
-import { type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import axios from "axios";
-import { AlertCircle, ChevronLeft, ChevronRight, LoaderCircle, RefreshCw, Search, Users, X } from "lucide-react";
+import { AlertCircle, ChevronLeft, ChevronRight, LoaderCircle, Plus, RefreshCw, Search, Users, X } from "lucide-react";
+import { CreateAssignmentDialog } from "./components/CreateAssignmentDialog";
 import { classSetupApi, type AssignmentRole, type AssignmentSearchParams } from "@/api/features/class-setup.api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -50,6 +51,8 @@ function FilterSelect({ id, label, value, onChange, children, disabled = false }
 export default function TeachingAssignmentPage() {
   const { hasPermission } = usePermissions();
   const canRead = hasPermission("ASSIGNMENT_READ");
+  const canCreate = hasPermission("ASSIGNMENT_CREATE");
+  const [creating, setCreating] = useState(false);
   const [url, setUrl] = useSearchParams();
   const pageValue = Number(url.get("page") ?? 0);
   const page = Number.isInteger(pageValue) && pageValue >= 0 && pageValue <= 100000 ? pageValue : 0;
@@ -98,9 +101,12 @@ export default function TeachingAssignmentPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div><h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><Users className="size-6 text-primary" />Teaching Assignments</h1>
           <p className="mt-1 text-sm text-muted-foreground">Find teaching assignments by class, subject, trainer and effective date.</p></div>
+        <div className="flex flex-wrap gap-2">
         <Button variant="outline" disabled={assignments.isFetching || options.isFetching || !canRead} onClick={() => { void assignments.refetch(); void options.refetch(); }}>
           <RefreshCw className={assignments.isFetching || options.isFetching ? "size-4 animate-spin" : "size-4"} />Refresh
         </Button>
+        {canRead && canCreate && <Button onClick={() => setCreating(true)}><Plus className="size-4" />New assignment</Button>}
+        </div>
       </div>
       {!canRead ? <Alert variant="destructive"><AlertCircle /><AlertTitle>Access denied</AlertTitle><AlertDescription>You need permission to view teaching assignments.</AlertDescription></Alert> : <>
         {options.data?.sampleData && <Alert><AlertCircle /><AlertTitle>Sample data</AlertTitle><AlertDescription>Local mode is enabled. Classes and trainers use sample data.</AlertDescription></Alert>}
@@ -163,5 +169,7 @@ export default function TeachingAssignmentPage() {
         </CardContent></Card>
       </>}
     </div>
+    {creating && canCreate && <CreateAssignmentDialog initialClassId={params.classId}
+      onClose={() => setCreating(false)} onCreated={() => { setCreating(false); }} />}
   </MainLayout>;
 }

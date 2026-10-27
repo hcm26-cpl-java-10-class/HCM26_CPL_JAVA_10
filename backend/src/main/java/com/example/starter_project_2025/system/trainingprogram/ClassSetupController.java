@@ -17,15 +17,25 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import com.example.starter_project_2025.exception.error.ValidationErrorResponse;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
 public class ClassSetupController {
     private final ClassSetupService service;
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ValidationErrorResponse> invalidRequest(HttpMessageNotReadableException exception) {
+        return ResponseEntity.badRequest().body(new ValidationErrorResponse(
+                "Use valid IDs, a MAIN or ASSISTANT role and dates in YYYY-MM-DD format.", Map.of()));
+    }
 
     @PutMapping("/classes/{classId}/training-program")
     @PreAuthorize("hasAuthority('CLASS_UPDATE_PROGRAM')")
@@ -79,6 +89,18 @@ public class ClassSetupController {
     @PreAuthorize("hasAuthority('ASSIGNMENT_READ')")
     public ResponseEntity<TeachingAssignmentResponse> getAssignment(@PathVariable Long id) {
         return ResponseEntity.ok(service.getAssignment(id));
+    }
+
+    @GetMapping("/teaching-assignments/create-options")
+    @PreAuthorize("hasAuthority('ASSIGNMENT_CREATE')")
+    public ResponseEntity<TeachingAssignmentCreateOptions> getAssignmentCreateOptions() {
+        return ResponseEntity.ok(service.getAssignmentCreateOptions());
+    }
+
+    @GetMapping("/teaching-assignments/create-context")
+    @PreAuthorize("hasAuthority('ASSIGNMENT_CREATE')")
+    public ResponseEntity<TeachingAssignmentCreateOptions.ClassContext> getAssignmentCreateContext(@RequestParam Long classId) {
+        return ResponseEntity.ok(service.getAssignmentCreateContext(classId));
     }
 
     @PostMapping("/teaching-assignments")

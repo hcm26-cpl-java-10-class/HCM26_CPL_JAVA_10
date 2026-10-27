@@ -1,12 +1,14 @@
 package com.example.starter_project_2025.system.trainingprogram;
 
 import com.example.starter_project_2025.exception.ConflictException;
+import com.example.starter_project_2025.exception.BusinessValidationException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.external_api.ExternalApiService;
 import com.example.starter_project_2025.system.external_api.dto.ExternalClassDTO;
 import com.example.starter_project_2025.system.external_api.dto.ExternalTrainerDTO;
 import com.example.starter_project_2025.system.external_api.exception.ExternalApiException;
 import com.example.starter_project_2025.system.subject.Subject;
+import com.example.starter_project_2025.system.subject.SubjectStatus;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -19,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -169,6 +172,42 @@ public class ClassSetupServiceImpl implements ClassSetupService {
 
     @Override
     @Transactional(readOnly = true)
+    public TeachingAssignmentCreateOptions getAssignmentCreateOptions() {
+        Map<Long, Long> linkedPrograms = classTrainingProgramRepository.findAll().stream()
+                .collect(Collectors.toMap(ClassTrainingProgram::getClassId, link -> link.getProgram().getId()));
+        Set<Long> activePrograms = trainingProgramRepository.findAll().stream()
+                .filter(program -> program.getStatus() == ProgramStatus.ACTIVE)
+                .map(TrainingProgram::getId).collect(Collectors.toSet());
+        List<ExternalClassDTO> classes = externalApiService.fetchClasses("active").stream()
+                .filter(item -> isActive(item.getStatus()))
+                .filter(item -> activePrograms.contains(linkedPrograms.getOrDefault(item.getId(), item.getProgramId())))
+                .toList();
+        return new TeachingAssignmentCreateOptions(classes, externalApiService.fetchTrainers("active").stream()
+                .filter(item -> isActive(item.getStatus())).toList(), externalApiService.isSampleData());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public TeachingAssignmentCreateOptions.ClassContext getAssignmentCreateContext(Long classId) {
+        ExternalClassDTO externalClass = requireClass(classId);
+        requireActiveClass(externalClass);
+        validateClassDates(externalClass);
+        Long programId = resolveProgramId(classId, externalClass);
+        if (programId == null) throw fieldError("classId", "Assign an active training program to this class first.");
+        TrainingProgram program = requireProgram(programId);
+        if (program.getStatus() != ProgramStatus.ACTIVE) {
+            throw fieldError("classId", "The class training program is not active.");
+        }
+        return new TeachingAssignmentCreateOptions.ClassContext(externalClass,
+                new ClassProgramSubjectsResponse.ProgramSummary(program.getId(), program.getCode(), program.getName(), program.getVersion(), program.getStatus()),
+                program.getSubjects().stream().sorted(Comparator.comparing(ProgramSubject::getOrderIndex))
+                        .filter(item -> isActiveSubject(item.getSubject()))
+                        .map(item -> new TeachingAssignmentCreateOptions.SubjectOption(item.getId(), item.getSubject().getId(),
+                                item.getSubject().getCode(), item.getSubject().getName(), item.getSubject().getVersion())).toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public TeachingAssignmentResponse getAssignment(Long id) {
         TeachingAssignment assignment = findAssignment(id);
         return toResponse(assignment, findClassOrNull(assignment.getClassId()),
@@ -179,8 +218,9 @@ public class ClassSetupServiceImpl implements ClassSetupService {
     public TeachingAssignmentResponse createAssignment(TeachingAssignmentRequest request) {
         ExternalClassDTO externalClass = requireClass(request.classId());
         requireActiveClass(externalClass);
-        validateAssignment(request, null, externalClass);
+        request = boundEffectiveTo(request, externalClass);
         ExternalTrainerDTO trainer = requireActiveTrainer(request.trainerId());
+        validateAssignment(request, null, externalClass);
 
         TeachingAssignment assignment = new TeachingAssignment();
         apply(assignment, request);
@@ -193,8 +233,9 @@ public class ClassSetupServiceImpl implements ClassSetupService {
         TeachingAssignment assignment = findAssignment(id);
         ExternalClassDTO externalClass = requireClass(request.classId());
         requireActiveClass(externalClass);
-        validateAssignment(request, id, externalClass);
+        request = boundEffectiveTo(request, externalClass);
         ExternalTrainerDTO trainer = requireActiveTrainer(request.trainerId());
+        validateAssignment(request, id, externalClass);
 
         apply(assignment, request);
         TeachingAssignment saved = teachingAssignmentRepository.save(assignment);
@@ -237,22 +278,37 @@ public class ClassSetupServiceImpl implements ClassSetupService {
     }
 
     private void validateAssignment(TeachingAssignmentRequest request, Long ignoreId, ExternalClassDTO externalClass) {
+        validateClassDates(externalClass);
         if (request.effectiveTo() != null && request.effectiveTo().isBefore(request.effectiveFrom())) {
-            throw new IllegalArgumentException("effectiveTo must be on or after effectiveFrom.");
+            throw fieldError("effectiveTo", "The end date must be on or after the start date.");
+        }
+        LocalDate classStart = classDate(externalClass.getStartDate());
+        LocalDate classEnd = classDate(externalClass.getEndDate());
+        if (classStart != null && request.effectiveFrom().isBefore(classStart)) {
+            throw fieldError("effectiveFrom", "The start date must be within the class dates.");
+        }
+        if (classEnd != null && request.effectiveFrom().isAfter(classEnd)) {
+            throw fieldError("effectiveFrom", "The start date must be within the class dates.");
+        }
+        if (classEnd != null && request.effectiveTo() != null && request.effectiveTo().isAfter(classEnd)) {
+            throw fieldError("effectiveTo", "The end date must not be after the class end date.");
         }
         Long assignedProgramId = resolveProgramId(request.classId(), externalClass);
         if (assignedProgramId == null) {
-            throw new IllegalArgumentException("Assign an ACTIVE training program to the class before adding teaching assignments.");
+            throw fieldError("classId", "Assign an active training program to this class first.");
         }
 
-        ProgramSubject programSubject = programSubjectRepository.findById(request.programSubjectId())
+        ProgramSubject programSubject = programSubjectRepository.findForAssignmentById(request.programSubjectId())
                 .orElseThrow(() -> new ResourceNotFoundException("Program subject not found with ID: " + request.programSubjectId()));
         if (!Objects.equals(programSubject.getProgram().getId(), assignedProgramId)) {
-            throw new IllegalArgumentException("The selected subject does not belong to the program assigned to this class.");
+            throw fieldError("programSubjectId", "The subject does not belong to this class training program.");
+        }
+        if (programSubject.getProgram().getStatus() != ProgramStatus.ACTIVE) {
+            throw fieldError("classId", "The class training program is not active.");
         }
         Subject subject = programSubject.getSubject();
-        if (!Boolean.TRUE.equals(subject.getIsActive())) {
-            throw new IllegalArgumentException("Inactive subjects cannot be assigned to a trainer.");
+        if (!isActiveSubject(subject)) {
+            throw fieldError("programSubjectId", "Select an active subject.");
         }
         if (teachingAssignmentRepository.existsOverlappingTrainerAssignment(request.classId(), request.programSubjectId(),
                 request.trainerId(), request.effectiveFrom(), request.effectiveTo(), ignoreId)) {
@@ -312,17 +368,52 @@ public class ClassSetupServiceImpl implements ClassSetupService {
     }
 
     private void requireActiveClass(ExternalClassDTO externalClass) {
-        if (externalClass.getStatus() != null && !externalClass.getStatus().isBlank()
-                && !"active".equalsIgnoreCase(externalClass.getStatus())) {
-            throw new IllegalArgumentException("Only active classes can receive program or teaching assignments.");
+        if (!isActive(externalClass.getStatus())) {
+            throw fieldError("classId", "Select an active class.");
         }
     }
 
     private ExternalTrainerDTO requireActiveTrainer(Long trainerId) {
         return externalApiService.fetchTrainers("active").stream()
                 .filter(trainer -> Objects.equals(trainer.getId(), trainerId))
+                .filter(trainer -> isActive(trainer.getStatus()))
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Trainer not found or inactive: " + trainerId));
+                .orElseThrow(() -> fieldError("trainerId", "Select an active trainer from the trainer directory."));
+    }
+
+    private boolean isActive(String status) {
+        return "active".equalsIgnoreCase(status);
+    }
+
+    private boolean isActiveSubject(Subject subject) {
+        return Boolean.TRUE.equals(subject.getIsActive()) && subject.getStatus() == SubjectStatus.ACTIVE;
+    }
+
+    private BusinessValidationException fieldError(String field, String message) {
+        return new BusinessValidationException(Map.of(field, List.of(message)));
+    }
+
+    private LocalDate classDate(String date) {
+        try {
+            return date == null || date.isBlank() ? null : LocalDate.parse(date);
+        } catch (DateTimeParseException exception) {
+            throw new ExternalApiException("The shared class has an invalid date. Contact the class administrator.", 502, null);
+        }
+    }
+
+    private void validateClassDates(ExternalClassDTO externalClass) {
+        LocalDate start = classDate(externalClass.getStartDate());
+        LocalDate end = classDate(externalClass.getEndDate());
+        if (start != null && end != null && end.isBefore(start)) {
+            throw new ExternalApiException("The shared class date range is invalid. Contact the class administrator.", 502, null);
+        }
+    }
+
+    private TeachingAssignmentRequest boundEffectiveTo(TeachingAssignmentRequest request, ExternalClassDTO externalClass) {
+        // An omitted end date is bounded by the class end, when the shared class has one.
+        LocalDate end = request.effectiveTo() == null ? classDate(externalClass.getEndDate()) : request.effectiveTo();
+        return new TeachingAssignmentRequest(request.classId(), request.programSubjectId(), request.trainerId(),
+                request.role(), request.effectiveFrom(), end);
     }
 
     private Map<Long, ExternalTrainerDTO> fetchTrainerLookup() {
