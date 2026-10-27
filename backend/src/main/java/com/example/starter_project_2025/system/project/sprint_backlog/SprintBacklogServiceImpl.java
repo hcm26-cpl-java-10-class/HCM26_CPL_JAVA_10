@@ -6,10 +6,14 @@ import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
+import com.example.starter_project_2025.system.project.milestone.integration.port.MilestoneTenantProvider;
+import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
 import com.example.starter_project_2025.system.project.sprint.Sprint;
 import com.example.starter_project_2025.system.project.sprint.SprintRepository;
 import com.example.starter_project_2025.system.project.sprint_backlog.audit.SprintBacklogAuditLogDTO;
 import com.example.starter_project_2025.system.project.sprint_backlog.audit.SprintBacklogAuditService;
+import com.example.starter_project_2025.system.project.sprint_backlog.event.SprintBacklogOutboxService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -21,6 +25,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Sprint Backlog use case implementation.
@@ -29,6 +34,11 @@ import java.util.Map;
  * <ul>
  *     <li>the owning sprint is optional: without it the item is a product
  *     backlog item; when provided it must exist (422 otherwise)</li>
+ *     <li>the owning project is derived from the sprint / linked milestone, or
+ *     taken from the request (UFR-PRJ-003-02)</li>
+ *     <li>the linked milestone must exist and still be active (404 otherwise,
+ *     AC03); a milestone of another project than the sprint is rejected
+ *     (422)</li>
  *     <li>title mandatory, 1..200 characters (422)</li>
  *     <li>description optional, at most 2000 characters (422)</li>
  *     <li>start date &lt; end date when both are provided (422)</li>
@@ -37,7 +47,8 @@ import java.util.Map;
  *     default - the set is fixed, no new work type can be created</li>
  *     <li>priority one of {@link SprintBacklogPriority}, medium by default</li>
  *     <li>estimated hours, when provided, must be greater than or equal to 0 (422)</li>
- *     <li>optimistic locking (409) + audit trail (actor, timestamp, before/after, correlation id)</li>
+ *     <li>optimistic locking (409) + audit trail (actor, timestamp, before/after, correlation id)
+ *     + outbox event for the team notification (UFR-PRJ-003-02)</li>
  * </ul>
  * The assignee is a temporary raw identifier: the project member module is not
  * implemented yet, so it is neither validated nor resolved here.
@@ -54,6 +65,8 @@ public class SprintBacklogServiceImpl
     static final int MAX_DESCRIPTION_LENGTH = 2000;
 
     static final String SPRINT_ID_FIELD = "sprintId";
+    static final String PROJECT_ID_FIELD = "projectId";
+    static final String MILESTONE_ID_FIELD = "milestoneId";
     static final String ASSIGNEE_FIELD = "assigneeProjectMemberId";
     static final String TITLE_FIELD = "title";
     static final String DESCRIPTION_FIELD = "description";
@@ -66,10 +79,19 @@ public class SprintBacklogServiceImpl
     static final String ACTION_UPDATE = "UPDATE";
     static final String ACTION_DELETE = "DELETE";
 
+    static final String EVENT_CREATED = "SPRINT_BACKLOG_ITEM_CREATED";
+    static final String EVENT_UPDATED = "SPRINT_BACKLOG_ITEM_UPDATED";
+
+    static final String MILESTONE_NOT_FOUND_MESSAGE =
+            "Milestone không tồn tại hoặc đã bị thay đổi";
+
     SprintBacklogMapper sprintBacklogMapper;
     SprintBacklogRepository sprintBacklogRepository;
     SprintRepository sprintRepository;
+    MilestoneRepository milestoneRepository;
+    MilestoneTenantProvider milestoneTenantProvider;
     SprintBacklogAuditService sprintBacklogAuditService;
+    SprintBacklogOutboxService sprintBacklogOutboxService;
 
     @Override
     protected BaseCrudRepository<SprintBacklog, Long> getRepository() {
@@ -101,6 +123,12 @@ public class SprintBacklogServiceImpl
 
         Sprint sprint = resolveSprint(request.getSprintId(), errors);
 
+        // AC03: a milestone that no longer exists / was cancelled fails the
+        // whole request with 404 instead of an inline field error.
+        Milestone milestone = resolveMilestone(request.getMilestoneId());
+
+        Long projectId = resolveProjectId(request.getProjectId(), sprint, milestone, errors);
+
         validateTitle(backlog.getTitle(), errors);
         validateDescription(backlog.getDescription(), errors);
         validateDates(backlog.getStartDate(), backlog.getEndDate(), errors);
@@ -110,6 +138,8 @@ public class SprintBacklogServiceImpl
         throwIfInvalid(errors);
 
         backlog.setSprint(sprint);
+        backlog.setMilestone(milestone);
+        backlog.setProjectId(projectId);
 
         if (backlog.getStatus() == null) {
             backlog.setStatus(SprintBacklogStatus.TODO);
@@ -132,12 +162,21 @@ public class SprintBacklogServiceImpl
     @Override
     protected void afterCreate(SprintBacklog saved, SprintBacklogDTO request) {
 
+        Map<String, Object> after = snapshot(saved);
+
         sprintBacklogAuditService.record(
                 ACTION_CREATE,
                 saved.getId(),
                 sprintIdOf(saved),
                 null,
-                snapshot(saved)
+                after
+        );
+
+        sprintBacklogOutboxService.enqueue(
+                EVENT_CREATED,
+                saved.getId(),
+                saved.getProjectId(),
+                after
         );
     }
 
@@ -192,6 +231,30 @@ public class SprintBacklogServiceImpl
             sprint = resolveSprint(request.getSprintId(), errors);
         }
 
+        // `null` milestoneId means "keep the current link": removing the link
+        // is explicit through `clearMilestone` so a partial update cannot
+        // silently drop the milestone.
+        Milestone currentMilestone = backlog.getMilestone();
+        UUID requestedMilestoneId = request.getMilestoneId();
+
+        Milestone milestone;
+
+        if (Boolean.TRUE.equals(request.getClearMilestone())) {
+            milestone = null;
+        } else if (requestedMilestoneId != null
+                && (currentMilestone == null || !requestedMilestoneId.equals(currentMilestone.getId()))) {
+            milestone = resolveMilestone(requestedMilestoneId);
+        } else {
+            milestone = currentMilestone;
+        }
+
+        Long projectId = resolveProjectId(
+                request.getProjectId() != null ? request.getProjectId() : backlog.getProjectId(),
+                sprint,
+                milestone,
+                errors
+        );
+
         throwIfInvalid(errors);
 
         Map<String, Object> before = snapshot(backlog);
@@ -202,15 +265,26 @@ public class SprintBacklogServiceImpl
         sprintBacklogMapper.update(backlog, request);
 
         backlog.setSprint(sprint);
+        backlog.setMilestone(milestone);
+        backlog.setProjectId(projectId);
 
         SprintBacklog saved = sprintBacklogRepository.save(backlog);
+
+        Map<String, Object> after = snapshot(saved);
 
         sprintBacklogAuditService.record(
                 ACTION_UPDATE,
                 saved.getId(),
                 sprintIdOf(saved),
                 before,
-                snapshot(saved)
+                after
+        );
+
+        sprintBacklogOutboxService.enqueue(
+                EVENT_UPDATED,
+                saved.getId(),
+                saved.getProjectId(),
+                after
         );
 
         return sprintBacklogMapper.toResponse(saved);
@@ -271,6 +345,33 @@ public class SprintBacklogServiceImpl
         return sprintBacklogAuditService.getAuditLogs(sprintBacklogId);
     }
 
+    /**
+     * Active milestones the student can link a backlog item to
+     * (UFR-PRJ-003-02). Used by the milestone picker of the backlog form and of
+     * the work item detail panel.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<BacklogMilestoneOptionDTO> getMilestoneOptions() {
+
+        check("SPRINT_BACKLOG_READ");
+
+        Long tenantId = milestoneTenantProvider.requireCurrentTenantId();
+
+        return milestoneRepository.findByTenantIdAndActiveTrueOrderByDeadlineAscIdAsc(tenantId)
+                .stream()
+                .map(milestone -> new BacklogMilestoneOptionDTO(
+                        milestone.getId(),
+                        milestone.getProjectId(),
+                        milestone.getTitle(),
+                        milestoneLabel(milestone),
+                        milestone.getStatus() == null ? null : milestone.getStatus().name(),
+                        milestone.getDeadline(),
+                        milestone.isMandatory()
+                ))
+                .toList();
+    }
+
     // ---------------------------------------------------------------------
     // Validation helpers
     // ---------------------------------------------------------------------
@@ -295,10 +396,68 @@ public class SprintBacklogServiceImpl
         return sprint;
     }
 
+    /**
+     * Resolves the milestone to link (UFR-PRJ-003-02).
+     * <p>
+     * A milestone that does not exist, or that was cancelled / removed
+     * ({@code active = false}), rejects the request with 404 so the UI can tell
+     * the user to pick another milestone while keeping the form data (AC03).
+     */
+    private Milestone resolveMilestone(UUID milestoneId) {
+
+        if (milestoneId == null) {
+            return null;
+        }
+
+        return milestoneRepository.findById(milestoneId)
+                .filter(Milestone::isActive)
+                .orElseThrow(() -> new ResourceNotFoundException(MILESTONE_NOT_FOUND_MESSAGE));
+    }
+
+    /**
+     * Derives the owning project of the item: the milestone project wins, then
+     * the sprint project, then the explicit request value. A milestone that
+     * belongs to another project than the sprint (or than the requested
+     * project) is rejected with 422.
+     */
+    private Long resolveProjectId(Long requestedProjectId,
+                                  Sprint sprint,
+                                  Milestone milestone,
+                                  Map<String, List<String>> errors) {
+
+        Long sprintProjectId = sprint == null ? null : sprint.getProjectId();
+        Long milestoneProjectId = milestone == null ? null : milestone.getProjectId();
+
+        if (sprintProjectId != null
+                && milestoneProjectId != null
+                && !sprintProjectId.equals(milestoneProjectId)) {
+            addError(errors, MILESTONE_ID_FIELD,
+                    "Milestone không thuộc Project của Sprint đã chọn");
+        }
+
+        Long derivedProjectId = milestoneProjectId != null ? milestoneProjectId : sprintProjectId;
+
+        if (derivedProjectId != null
+                && requestedProjectId != null
+                && !derivedProjectId.equals(requestedProjectId)) {
+            addError(errors, PROJECT_ID_FIELD,
+                    "Project không khớp với Sprint / Milestone đã chọn");
+        }
+
+        return derivedProjectId != null ? derivedProjectId : requestedProjectId;
+    }
+
+    private String milestoneLabel(Milestone milestone) {
+
+        return milestone.getProjectId() == null
+                ? milestone.getTitle()
+                : "Project " + milestone.getProjectId() + " · " + milestone.getTitle();
+    }
+
     private void validateTitle(String title, Map<String, List<String>> errors) {
 
         if (title == null || title.isBlank()) {
-            addError(errors, TITLE_FIELD, "Vui lòng nhập tiêu đề Sprint Backlog");
+            addError(errors, TITLE_FIELD, "Vui lòng nhập tên Backlog item");
             return;
         }
 
@@ -312,7 +471,7 @@ public class SprintBacklogServiceImpl
 
         if (description != null && description.length() > MAX_DESCRIPTION_LENGTH) {
             addError(errors, DESCRIPTION_FIELD,
-                    "Mô tả Sprint Backlog không vượt quá " + MAX_DESCRIPTION_LENGTH + " ký tự");
+                    "Mô tả không được vượt quá " + MAX_DESCRIPTION_LENGTH + " ký tự");
         }
     }
 
@@ -404,11 +563,24 @@ public class SprintBacklogServiceImpl
         return backlog.getSprint() == null ? null : backlog.getSprint().getId();
     }
 
+    private UUID milestoneIdOf(SprintBacklog backlog) {
+
+        return backlog.getMilestone() == null ? null : backlog.getMilestone().getId();
+    }
+
+    private String milestoneNameOf(SprintBacklog backlog) {
+
+        return backlog.getMilestone() == null ? null : backlog.getMilestone().getTitle();
+    }
+
     private Map<String, Object> snapshot(SprintBacklog backlog) {
 
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("id", backlog.getId());
+        snapshot.put("projectId", backlog.getProjectId());
         snapshot.put("sprintId", sprintIdOf(backlog));
+        snapshot.put("milestoneId", milestoneIdOf(backlog));
+        snapshot.put("milestoneName", milestoneNameOf(backlog));
         snapshot.put("assigneeProjectMemberId", backlog.getAssigneeProjectMemberId());
         snapshot.put("title", backlog.getTitle());
         snapshot.put("description", backlog.getDescription());

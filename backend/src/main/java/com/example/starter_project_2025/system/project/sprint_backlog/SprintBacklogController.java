@@ -63,6 +63,18 @@ public class SprintBacklogController
         return ResponseEntity.ok(sprintBacklogService.getAuditLogs(id));
     }
 
+    /**
+     * Milestones the student can link to a backlog item (UFR-PRJ-003-02).
+     * <p>
+     * Only active milestones of the current tenant are returned, earliest
+     * deadline first, so the picker of the backlog form can render the label
+     * and the deadline without an extra request.
+     */
+    @GetMapping("/milestone-options")
+    public ResponseEntity<List<BacklogMilestoneOptionDTO>> getMilestoneOptions() {
+        return ResponseEntity.ok(sprintBacklogService.getMilestoneOptions());
+    }
+
     // ---------------------------------------------------------------------
     // Use-case specific error mapping (kept local to the sprint backlog
     // module so the global handler contract used by other modules is

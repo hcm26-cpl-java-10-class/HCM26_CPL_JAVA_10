@@ -15,6 +15,7 @@ import { TemplateMilestonesPanel } from "../components/TemplateMilestonesPanel";
 import { TemplateActivationDialog } from "../components/TemplateActivationDialog";
 import { TemplateArchiveDialog } from "../components/TemplateArchiveDialog";
 import { TemplateSampleContentPanel } from "../components/TemplateSampleContentPanel";
+import { TemplateVersionsPanel } from "../components/TemplateVersionsPanel";
 import { useProjectTemplateOptions } from "../hooks/useProjectTemplateOptions";
 import { templateLevelLabel } from "../project-template.utils";
 
@@ -25,7 +26,7 @@ export function ProjectTemplateDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const options = useProjectTemplateOptions();
   const requestedTab = searchParams.get("tab");
-  const tab = requestedTab === "team-constraints" || requestedTab === "milestones" || requestedTab === "sample-content" ? requestedTab : "overview";
+  const tab = requestedTab === "team-constraints" || requestedTab === "milestones" || requestedTab === "sample-content" || requestedTab === "versions" ? requestedTab : "overview";
   const detailQueryKey = ["project-templates", options.user.email, options.activeRole, "detail", id];
   const query = useQuery({
     queryKey: detailQueryKey,
@@ -92,11 +93,12 @@ export function ProjectTemplateDetailPage() {
               )}
               <Tabs value={tab} onValueChange={selectTab} className="min-w-0 gap-4">
                 <TabsList aria-label="Template configuration"
-                  className="grid w-full max-w-2xl grid-cols-2 group-data-[orientation=horizontal]/tabs:h-auto sm:grid-cols-4">
+                  className="grid w-full max-w-3xl grid-cols-2 group-data-[orientation=horizontal]/tabs:h-auto sm:grid-cols-5">
                   <TabsTrigger value="overview" className="h-full min-h-9 whitespace-normal">Overview</TabsTrigger>
                   <TabsTrigger value="team-constraints" className="h-full min-h-9 whitespace-normal">Team constraints</TabsTrigger>
                   <TabsTrigger value="milestones" className="h-full min-h-9 whitespace-normal">Milestones</TabsTrigger>
                   <TabsTrigger value="sample-content" className="h-full min-h-9 whitespace-normal">Backlog &amp; artifacts</TabsTrigger>
+                  <TabsTrigger value="versions" className="h-full min-h-9 whitespace-normal">Versions</TabsTrigger>
                 </TabsList>
                 <TabsContent value="overview">
                   <Card>
@@ -144,6 +146,9 @@ export function ProjectTemplateDetailPage() {
                 </TabsContent>
                 <TabsContent value="sample-content">
                   <TemplateSampleContentPanel templateId={template.id} editable={canEdit} />
+                </TabsContent>
+                <TabsContent value="versions">
+                  <TemplateVersionsPanel template={template} />
                 </TabsContent>
               </Tabs>
             </>

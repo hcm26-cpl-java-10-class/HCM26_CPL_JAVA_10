@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -17,6 +18,16 @@ public class SprintBacklogFilter extends BaseFilter {
      */
     @FilterField(entityField = "sprint.id", operator = FilterOperator.EQUAL)
     Long sprintId;
+
+    @FilterField(entityField = "projectId", operator = FilterOperator.EQUAL)
+    Long projectId;
+
+    /**
+     * Nested path: filters the items linked to one milestone
+     * (UFR-PRJ-003-02).
+     */
+    @FilterField(entityField = "milestone.id", operator = FilterOperator.EQUAL)
+    UUID milestoneId;
 
     @FilterField(entityField = "status", operator = FilterOperator.EQUAL)
     SprintBacklogStatus status;

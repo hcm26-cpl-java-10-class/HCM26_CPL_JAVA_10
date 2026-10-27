@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.project.template;
 
 import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
+import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshotService;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestone;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestonePlanRequest;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestonePlanResponse;
@@ -37,6 +38,8 @@ public class TemplateActivationService {
     private final ProjectTemplateAuditRepository audits;
     private final ObjectMapper objectMapper;
     private final TemplateMilestoneRubrics rubrics;
+    /** US-07: activating a template publishes its newest DRAFT version. */
+    private final ProjectTemplateSnapshotService snapshotService;
 
     public TemplateActivationChecklist getChecklist(Long id) {
         User user = access.requireUser("READ");
@@ -67,6 +70,8 @@ public class TemplateActivationService {
         template = templates.saveAndFlush(template);
         audits.save(new ProjectTemplateAudit(template.getTenantId(), template.getId(), user.getId(),
                 "PROJECT_TEMPLATE_ACTIVATED", before, state(template, plan), CorrelationIdFilter.currentId()));
+        // US-07: the version the workspaces will snapshot becomes PUBLISHED.
+        snapshotService.publishLatestVersion(template);
         return ProjectTemplateResponse.from(template, false, teamConstraintsMapper.read(template.getConstraintsJson()));
     }
 

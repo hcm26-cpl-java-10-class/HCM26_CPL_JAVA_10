@@ -34,8 +34,24 @@ public class ProjectTeam extends BaseEntity {
     @JoinColumn(name = "project_id")
     Project project;
 
+    /**
+     * US-10: official project brief selected for a DRAFT team. Only the team
+     * allocation flow writes this column.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "project_template_id")
+    ProjectTemplate projectTemplate;
+
     public Long getProjectId() {
         return project == null ? null : project.getId();
+    }
+
+    public Long getProjectTemplateId() {
+        return projectTemplate == null ? null : projectTemplate.getId();
+    }
+
+    public String getProjectTemplateName() {
+        return projectTemplate == null ? null : projectTemplate.getName();
     }
 
     public String getCode() {

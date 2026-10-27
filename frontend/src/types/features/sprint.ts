@@ -5,6 +5,8 @@ import type { SprintBacklogWorkType } from "./sprint_backlog";
 export type SprintStatus = "PLANNED" | "ACTIVE" | "COMPLETED" | "CANCELLED";
 
 export interface SprintDTO extends BaseDTO {
+  /** Owning project (used to scope the milestone picker). */
+  projectId?: number | null;
   name?: string;
   sprintGoal?: string;
   startDate?: string;
@@ -39,7 +41,8 @@ export interface SprintPlanningItem {
   /** Due date of the item (the backend `endDate`). */
   endDate?: string | null;
   projectId?: number | null;
-  milestoneId?: number | null;
+  /** Linked milestone UUID (UFR-PRJ-003-02). */
+  milestoneId?: string | null;
   milestoneName?: string | null;
   milestoneDueDate?: string | null;
   estimatedHours?: number | null;

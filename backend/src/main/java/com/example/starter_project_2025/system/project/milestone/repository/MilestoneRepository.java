@@ -27,6 +27,12 @@ public interface MilestoneRepository extends JpaRepository<Milestone, UUID>, Jpa
 
     java.util.List<Milestone> findByProjectIdAndTenantIdAndActiveTrueOrderByDeadlineAscIdAsc(Long projectId, Long tenantId);
 
+    /**
+     * Active milestones of the tenant, earliest deadline first. Used by the
+     * backlog item milestone picker (UFR-PRJ-003-02).
+     */
+    java.util.List<Milestone> findByTenantIdAndActiveTrueOrderByDeadlineAscIdAsc(Long tenantId);
+
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @org.springframework.data.jpa.repository.Query("select m from Milestone m where m.id = :id and m.projectId = :projectId and m.tenantId = :tenantId and m.active = true")
     Optional<Milestone> lockForRisk(UUID id, Long projectId, Long tenantId);

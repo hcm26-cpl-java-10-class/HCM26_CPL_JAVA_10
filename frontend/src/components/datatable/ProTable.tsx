@@ -62,10 +62,19 @@ interface ProTableProps<TData = any> {
     /** Optional: Complete override of row actions. If provided, you have full control */
     renderRowActions?: (row: TData) => React.ReactNode;
 
+    /**
+     * Optional: extra entity-specific row buttons appended after the default
+     * view / edit / delete actions (e.g. "Clone template").
+     */
+    renderExtraRowActions?: (row: TData) => React.ReactNode;
+
+    /** Optional: per-field cell override (Task table). */
     renderCell?: (row: TData, field: FieldSchema) => React.ReactNode;
 
+    /** Optional: denser toolbar layout (Task table). */
     compactToolbar?: boolean;
 
+    /** Optional: render cards instead of the table on small screens (Task table). */
     responsiveCards?: boolean;
 
     /** Optional: Custom card renderer for card view */
@@ -148,6 +157,7 @@ export function ProTable<TData = any>({
     extraHeaderActions,
     browseActions,
     renderRowActions,
+    renderExtraRowActions,
     renderCell,
     compactToolbar = false,
     responsiveCards = false,
@@ -297,7 +307,10 @@ export function ProTable<TData = any>({
     const hasRowActions = canViewRow || canEditRow || canDeleteRow;
 
     const showActionsColumn = !hideActions && hasRowActions;
-    const ACTION_COLUMN_WIDTH = 152;
+    // Entities that add their own row buttons (e.g. Project Template Versions
+    // with "Create new version" + "Clone") need a wider action column, otherwise
+    // the trailing icon button is clipped by the cell's overflow-hidden.
+    const ACTION_COLUMN_WIDTH = renderExtraRowActions ? 236 : 152;
 
     // Default row actions renderer (uses internal modal system or custom overrides)
     const defaultRenderRowActions = (row: TData) => (
@@ -309,6 +322,7 @@ export function ProTable<TData = any>({
             viewPermission={table.permission?.keys?.read}
             editPermission={table.permission?.keys?.update}
             deletePermission={table.permission?.keys?.delete}
+            extra={renderExtraRowActions?.(row)}
         />
     );
 

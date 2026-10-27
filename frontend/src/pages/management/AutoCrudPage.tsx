@@ -216,6 +216,7 @@ export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
                 hideActions={browseMode && !browseRowActions}
                 onEdit={browseMode ? undefined : onEdit}
                 onView={onView}
+                renderExtraRowActions={entity.extraRowActions}
                 renderCard={entity.cardRenderer}
                 cardLayout={entity.cardLayout}
             />

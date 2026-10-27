@@ -10,6 +10,7 @@ import type { BacklogStatus, SprintPlanningItem } from "@/types";
 import {
   ChevronDown,
   Loader2,
+  Milestone as MilestoneIcon,
   TriangleAlert,
   User,
 } from "lucide-react";
@@ -123,6 +124,21 @@ export function BacklogRow({
       <span className="min-w-0 flex-1 truncate text-sm text-foreground">
         {item.title ?? "Untitled work item"}
       </span>
+
+      {/* Milestone link (UFR-PRJ-003-02). */}
+      {item.milestoneName && (
+        <span
+          className="hidden max-w-40 shrink-0 items-center gap-1 truncate rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-700 lg:inline-flex dark:border-violet-800 dark:bg-violet-900/40 dark:text-violet-300"
+          title={
+            item.milestoneDueDate
+              ? `Milestone deadline: ${formatBacklogDate(item.milestoneDueDate)}`
+              : item.milestoneName
+          }
+        >
+          <MilestoneIcon className="h-3 w-3" />
+          <span className="truncate">{item.milestoneName}</span>
+        </span>
+      )}
 
       {/* Priority and status are separate pills: keep a real gap between them. */}
       <div className="flex shrink-0 items-center gap-4">

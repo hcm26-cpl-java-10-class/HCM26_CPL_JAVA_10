@@ -1,5 +1,6 @@
 import axiosInstance from "@/api/axios";
 import type { PageResponse, Pagination } from "@/types/common/pageable";
+import type { ProjectTemplateOption } from "@/types/features/team-allocation";
 import type {
   ProjectTemplateDTO,
   ProjectTemplateFilter,
@@ -35,6 +36,20 @@ export const projectTemplateApi = {
   async getOptions(signal?: AbortSignal) {
     const response = await axiosInstance.get<ProjectTemplateOptions>(`${path}/options`, { signal });
     return response.data;
+  },
+
+  /**
+   * US-10: project templates that can be assigned to a DRAFT team.
+   *
+   * The endpoint is intentionally mounted on `/v1/project-templates` (not the
+   * versioned `/project-template-versions` CRUD surface) because it only exposes
+   * the assignable catalogue with the `min_members` / `max_members` window.
+   */
+  async getAssignableOptions(): Promise<ProjectTemplateOption[]> {
+    const response = await axiosInstance.get<ProjectTemplateOption[]>(
+      "/v1/project-templates/options",
+    );
+    return response.data ?? [];
   },
 
   async getById(id: string, signal?: AbortSignal) {

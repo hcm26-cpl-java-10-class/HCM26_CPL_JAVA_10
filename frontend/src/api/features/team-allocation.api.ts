@@ -1,5 +1,6 @@
 import axiosInstance from "@/api/axios";
 import type {
+  AllocationReadiness,
   AllocationSession,
   ClassMember,
   ClassRosterMember,
@@ -8,6 +9,7 @@ import type {
   SaveDraftRequest,
   TeamListResponse,
   TeamMemberHistoryPage,
+  TeamProjectTemplate,
   TransferTeamMemberRequest,
   UpdateTeamRolesRequest,
   UpdateDraftTeamRequest,
@@ -219,5 +221,100 @@ export const teamAllocationApi = {
       { headers: { "X-Idempotency-Key": idempotencyKey } },
     );
     return response.data;
+  },
+
+  // ------------------------------------------------------------------
+  // US-12 — strict-mode class readiness before publishing the session
+  // ------------------------------------------------------------------
+
+  /** Read-only pre-check: returns free students (id + name) and team issues. */
+  async getReadiness(
+    classId: number,
+    sessionId: number,
+  ): Promise<AllocationReadiness> {
+    const response = await axiosInstance.get<AllocationReadiness>(
+      `${classPath(classId)}/allocation-sessions/${sessionId}/readiness`,
+    );
+    return response.data;
+  },
+
+  /**
+   * Strict publish of the whole session. Throws HTTP 422
+   * `ERR_UNASSIGNED_MEMBERS` / `ERR_TEAMS_NOT_READY` when not ready.
+   */
+  async publishSession(
+    classId: number,
+    sessionId: number,
+    idempotencyKey: string,
+  ): Promise<PublishTeamsResponse> {
+    const response = await axiosInstance.post<PublishTeamsResponse>(
+      `${classPath(classId)}/allocation-sessions/${sessionId}/publish-session`,
+      undefined,
+      { headers: { "X-Idempotency-Key": idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  // ------------------------------------------------------------------
+  // US-10 — assign a project template to a DRAFT team
+  // ------------------------------------------------------------------
+
+  /** Mentor / program-manager path. */
+  async assignProjectTemplate(
+    classId: number,
+    sessionId: number,
+    teamId: number,
+    projectTemplateId: number,
+  ): Promise<TeamProjectTemplate> {
+    const response = await axiosInstance.put<TeamProjectTemplate>(
+      `${classPath(classId)}/allocation-sessions/${sessionId}/teams/${teamId}/project-template`,
+      { projectTemplateId },
+    );
+    return response.data;
+  },
+
+  async getTeamProjectTemplate(
+    classId: number,
+    sessionId: number,
+    teamId: number,
+  ): Promise<TeamProjectTemplate> {
+    const response = await axiosInstance.get<TeamProjectTemplate>(
+      `${classPath(classId)}/allocation-sessions/${sessionId}/teams/${teamId}/project-template`,
+    );
+    return response.data;
+  },
+
+  /** Student team-leader path: the DRAFT teams the signed-in user leads. */
+  async getMyDraftTeams(): Promise<TeamProjectTemplate[]> {
+    const response = await axiosInstance.get<TeamProjectTemplate[]>(
+      "/v1/students/me/draft-teams",
+    );
+    return response.data;
+  },
+
+  async assignMyDraftTeamTemplate(
+    teamId: number,
+    projectTemplateId: number,
+  ): Promise<TeamProjectTemplate> {
+    const response = await axiosInstance.put<TeamProjectTemplate>(
+      `/v1/students/me/draft-teams/${teamId}/project-template`,
+      { projectTemplateId },
+    );
+    return response.data;
+  },
+
+  // ------------------------------------------------------------------
+  // US-11 — configure team member roles (mentor + student leader)
+  // ------------------------------------------------------------------
+
+  /** Student team-leader path: save the roles of a DRAFT team they lead. */
+  async updateMyDraftTeamRoles(
+    teamId: number,
+    payload: UpdateTeamRolesRequest,
+  ): Promise<void> {
+    await axiosInstance.put(
+      `/v1/students/me/draft-teams/${teamId}/roles`,
+      payload,
+    );
   },
 };

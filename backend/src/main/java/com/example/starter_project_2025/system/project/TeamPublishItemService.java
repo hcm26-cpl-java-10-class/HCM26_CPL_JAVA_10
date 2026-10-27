@@ -8,7 +8,9 @@ import com.example.starter_project_2025.system.project.trainingclass.ClassMember
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.MDC;
@@ -69,10 +71,11 @@ public class TeamPublishItemService {
             }
         });
         if (assignments.stream().anyMatch(assignment ->
-                !ProjectMemberRole.isValid(assignment.getRole()))) {
+                !ProjectMemberRole.isValidSpec(assignment.getRole()))) {
             throw new TeamPublishValidationException(
                     "Mỗi thành viên cần được gán một vai trò hợp lệ trước khi publish");
         }
+        validateTemplateRolePolicy(team, assignments);
 
         List<Long> memberIds = assignments.stream()
                 .map(assignment -> assignment.getClassMember().getId())
@@ -147,6 +150,45 @@ public class TeamPublishItemService {
                 .correlationId(correlationId)
                 .status("PENDING")
                 .build());
+    }
+
+    /** US-11: publishing also enforces the template role quota minimums. */
+    private void validateTemplateRolePolicy(
+            ProjectTeam team,
+            List<ProjectMember> assignments
+    ) {
+        ProjectTemplate template = team.getProjectTemplate();
+        if (template == null) {
+            return;
+        }
+        ProjectTemplateConstraints.RolePolicy policy;
+        try {
+            policy = ProjectTemplateConstraints.parseRolePolicy(objectMapper, template);
+        } catch (RuntimeException ignored) {
+            return;
+        }
+
+        Map<String, Integer> counts = new HashMap<>();
+        for (ProjectMember assignment : assignments) {
+            ProjectMemberRole.parseRoles(assignment.getRole())
+                    .forEach(role -> counts.merge(role, 1, Integer::sum));
+        }
+        if (!policy.allowMultiRole() && assignments.stream()
+                .anyMatch(assignment ->
+                        ProjectMemberRole.parseRoles(assignment.getRole()).size() > 1)) {
+            throw new TeamPublishValidationException(
+                    "Đề bài dự án không cho phép kiêm nhiệm vai trò. "
+                            + "Mỗi thành viên chỉ được đảm nhận đúng 1 vai trò.");
+        }
+        List<String> missing = policy.quotas().stream()
+                .filter(quota -> counts.getOrDefault(quota.role(), 0) < quota.min())
+                .map(quota -> quota.role() + " (cần tối thiểu " + quota.min() + ")")
+                .toList();
+        if (!missing.isEmpty()) {
+            throw new TeamPublishValidationException(
+                    "Cấu hình vai trò chưa đáp ứng định suất của đề bài. "
+                            + "Còn thiếu vai trò bắt buộc: " + String.join(", ", missing));
+        }
     }
 
     private TeamSnapshot snapshot(

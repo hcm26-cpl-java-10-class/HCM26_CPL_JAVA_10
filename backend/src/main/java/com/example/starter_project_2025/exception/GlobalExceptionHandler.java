@@ -8,8 +8,12 @@ import com.example.starter_project_2025.system.project.IdempotencyKeyConflictExc
 import com.example.starter_project_2025.system.project.IdempotencyRequestInProgressException;
 import com.example.starter_project_2025.system.project.TeamCapacityExceededException;
 import com.example.starter_project_2025.system.project.TeamErrorResponse;
+import com.example.starter_project_2025.system.project.TeamNotDraftException;
+import com.example.starter_project_2025.system.project.TeamTemplateCapacityExceededException;
+import com.example.starter_project_2025.system.project.TeamTemplateErrorResponse;
 import com.example.starter_project_2025.system.project.TeamRoleAssignmentErrorResponse;
 import com.example.starter_project_2025.system.project.TeamRoleAssignmentException;
+import com.example.starter_project_2025.system.project.TeamRolePolicyException;
 import com.example.starter_project_2025.system.project.TeamVersionConflictException;
 import com.example.starter_project_2025.system.project.InvalidMentorForClassException;
 import jakarta.validation.ConstraintViolation;
@@ -44,6 +48,27 @@ public class GlobalExceptionHandler {
                 "ERR_INVALID_TEAM_MEMBER_ROLES",
                 ex.getMessage(),
                 ex.getInvalidMemberIds(),
+                List.of(),
+                List.of(),
+                LocalDateTime.now());
+        return ResponseEntity.unprocessableEntity().body(response);
+    }
+
+    /**
+     * US-11: template policy violations (multi-role disabled, role quota not
+     * met, team leader must keep PM).
+     */
+    @ExceptionHandler(TeamRolePolicyException.class)
+    public ResponseEntity<TeamRoleAssignmentErrorResponse> handleTeamRolePolicy(
+            TeamRolePolicyException ex
+    ) {
+        TeamRoleAssignmentErrorResponse response = new TeamRoleAssignmentErrorResponse(
+                HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                ex.getErrorCode(),
+                ex.getMessage(),
+                ex.getInvalidMemberIds(),
+                ex.getViolations(),
+                ex.getMultiRoleMemberIds(),
                 LocalDateTime.now());
         return ResponseEntity.unprocessableEntity().body(response);
     }
@@ -134,6 +159,52 @@ public class GlobalExceptionHandler {
                 LocalDateTime.now()
         );
         return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    /**
+     * US-10 / AC02 + AC03: the DRAFT team size is outside the capacity window of
+     * the selected project template. The contract requires HTTP 400 with the
+     * {@code ERR_TEAM_CAPACITY_EXCEEDED} code for both directions.
+     */
+    @ExceptionHandler(TeamTemplateCapacityExceededException.class)
+    public ResponseEntity<TeamTemplateErrorResponse> handleTeamTemplateCapacityExceeded(
+            TeamTemplateCapacityExceededException ex
+    ) {
+        TeamTemplateErrorResponse response = new TeamTemplateErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "ERR_TEAM_CAPACITY_EXCEEDED",
+                ex.getReason().name(),
+                ex.getMessage(),
+                null,
+                ex.getProjectTemplateId(),
+                ex.getProjectTemplateName(),
+                ex.getMemberCount(),
+                ex.getMinMembers(),
+                ex.getMaxMembers(),
+                LocalDateTime.now()
+        );
+        return ResponseEntity.badRequest().body(response);
+    }
+
+    /** US-10: a project template can only be assigned to a DRAFT team. */
+    @ExceptionHandler(TeamNotDraftException.class)
+    public ResponseEntity<TeamTemplateErrorResponse> handleTeamNotDraft(
+            TeamNotDraftException ex
+    ) {
+        TeamTemplateErrorResponse response = new TeamTemplateErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "ERR_TEAM_NOT_DRAFT",
+                ex.getTeamStatus() == null ? null : ex.getTeamStatus().name(),
+                ex.getMessage(),
+                ex.getTeamId(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                LocalDateTime.now()
+        );
+        return ResponseEntity.badRequest().body(response);
     }
 
     @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)

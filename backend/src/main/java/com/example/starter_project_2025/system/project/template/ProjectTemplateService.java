@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.project.template;
 
 import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
+import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshotService;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneRepository;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneScheduleValidator;
 import com.example.starter_project_2025.system.project.milestone.outbox.OutboxEvent;
@@ -43,6 +44,8 @@ public class ProjectTemplateService {
     private final TemplateTeamConstraintsMapper teamConstraintsMapper;
     private final ObjectMapper objectMapper;
     private final OutboxEventRepository events;
+    /** US-07: every template owns a version chain, seeded with its v1.0 baseline. */
+    private final ProjectTemplateSnapshotService snapshotService;
 
     public ProjectTemplateOptions getOptions() {
         User user = access.requireUser("READ");
@@ -94,6 +97,8 @@ public class ProjectTemplateService {
         apply(template, request);
         template = templates.saveAndFlush(template);
         recordAudit(template, user, "PROJECT_TEMPLATE_CREATED", null);
+        // US-07 / AC01: the template is born with its v1.0 DRAFT version.
+        snapshotService.createInitialVersion(template);
         return response(template, access.can(user, "UPDATE"));
     }
 

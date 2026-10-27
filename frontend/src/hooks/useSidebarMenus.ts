@@ -1,7 +1,7 @@
 import { moduleApi, moduleGroupApi } from "@/api";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { ModuleDTO, ModuleGroupDTO, Pagination } from "@/types";
-import { canAccessByPermission } from "@/utils/rbac.utils";
+import { canAccessByPermission, normalizeRole, ADMIN_ROLE, STUDENT_ROLE } from "@/utils/rbac.utils";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
@@ -161,6 +161,87 @@ export function useActiveModuleGroups(enabled = true) {
                 }
             }
 
+            // US-09: the Project Template module is not seeded in the backend
+            // yet, so expose the mock Explore Projects catalogue under the
+            // "Project Management" tab for students.
+            if (normalizeRole(activeRole) === STUDENT_ROLE) {
+                const exploreUrl = "/student/projects/explore";
+                const alreadyRegistered = modules.some((module) => module.url === exploreUrl);
+
+                if (!alreadyRegistered) {
+                    const exploreGroup = groups.find(
+                        (group) => (group.name ?? "").toLowerCase() === "project management",
+                    );
+                    const exploreModule: SidebarModule = {
+                        id: 100005,
+                        moduleGroupId: String(exploreGroup?.id ?? 100000),
+                        title: "Explore Projects",
+                        name: "Explore Projects",
+                        url: exploreUrl,
+                        icon: "folder",
+                        description: "Browse active project templates for your class",
+                        displayOrder: 2,
+                        isActive: true,
+                    };
+
+                    if (exploreGroup) {
+                        const groupId = String(exploreGroup.id ?? "");
+                        if (!groupedModules[groupId]) groupedModules[groupId] = [];
+                        groupedModules[groupId].push(exploreModule);
+                    } else {
+                        const fallbackGroup: ModuleGroupDTO = {
+                            id: 100000,
+                            name: "Project Management",
+                            description: "Project and team allocation",
+                            displayOrder: 1,
+                            isActive: true,
+                        };
+                        groups.push(fallbackGroup);
+                        groupedModules[String(fallbackGroup.id)] = [exploreModule];
+                    }
+                }
+
+                // US-10: team leaders assign the official project template to
+                // their own DRAFT teams.
+                const draftTeamUrl = "/student/draft-team";
+                const draftTeamRegistered = modules.some(
+                    (module) => module.url === draftTeamUrl,
+                );
+
+                if (!draftTeamRegistered) {
+                    const draftTeamGroup = groups.find(
+                        (group) => (group.name ?? "").toLowerCase() === "project management",
+                    );
+                    const draftTeamModule: SidebarModule = {
+                        id: 100007,
+                        moduleGroupId: String(draftTeamGroup?.id ?? 100000),
+                        title: "Nhóm nháp của tôi",
+                        name: "Nhóm nháp của tôi",
+                        url: draftTeamUrl,
+                        icon: "users",
+                        description: "Assign the official project template to your draft team",
+                        displayOrder: 3,
+                        isActive: true,
+                    };
+
+                    if (draftTeamGroup) {
+                        const groupId = String(draftTeamGroup.id ?? "");
+                        if (!groupedModules[groupId]) groupedModules[groupId] = [];
+                        groupedModules[groupId].push(draftTeamModule);
+                    } else {
+                        const fallbackGroup: ModuleGroupDTO = {
+                            id: 100000,
+                            name: "Project Management",
+                            description: "Project and team allocation",
+                            displayOrder: 1,
+                            isActive: true,
+                        };
+                        groups.push(fallbackGroup);
+                        groupedModules[String(fallbackGroup.id)] = [draftTeamModule];
+                    }
+                }
+            }
+
             let projectGroup = groups.find(
                 (group) => (group.name ?? "").toLowerCase() === "project management",
             );
@@ -224,6 +305,35 @@ export function useActiveModuleGroups(enabled = true) {
                 if (!alreadyExists) {
                     groupedModules[projectGroupId].push(projectModule);
                 }
+            }
+
+            // US-07 / US-08: `/project-template-versions` is rendered as an entity
+            // route, which is module driven - the menu row is what makes the path
+            // reachable at all. The backend `@ResourceMenu` on the snapshot entity
+            // seeds that row, but databases created before the annotation existed
+            // never receive it, so the button is injected here to keep it visible
+            // for ADMIN and STUDENT.
+            const templateVersionUrl = "/project-template-versions";
+            const canBrowseTemplateVersions =
+                normalizeRole(activeRole) === ADMIN_ROLE ||
+                normalizeRole(activeRole) === STUDENT_ROLE ||
+                canAccessByPermission("PROJECT_TEMPLATE_VERSION_READ", hasPermission);
+            const hasTemplateVersionMenu =
+                modules.some((module) => module.url === templateVersionUrl) ||
+                groupedModules[projectGroupId].some((module) => module.url === templateVersionUrl);
+
+            if (canBrowseTemplateVersions && !hasTemplateVersionMenu) {
+                groupedModules[projectGroupId].push({
+                    id: 100006,
+                    moduleGroupId: projectGroupId,
+                    title: "Project Template Versions",
+                    name: "Project Template Versions",
+                    url: templateVersionUrl,
+                    icon: "layers",
+                    description: "Create, version and publish project templates",
+                    displayOrder: 4.5,
+                    isActive: true,
+                });
             }
 
             // Ensure Workspace Candidate menu is available for testing even when backend menu table is not yet updated

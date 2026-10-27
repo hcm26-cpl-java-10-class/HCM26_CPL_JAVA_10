@@ -17,4 +17,10 @@ public interface SprintBacklogService
      * Audit trail of a backlog item, newest first.
      */
     List<SprintBacklogAuditLogDTO> getAuditLogs(Long sprintBacklogId);
+
+    /**
+     * Active milestones that can be linked to a backlog item
+     * (UFR-PRJ-003-02).
+     */
+    List<BacklogMilestoneOptionDTO> getMilestoneOptions();
 }

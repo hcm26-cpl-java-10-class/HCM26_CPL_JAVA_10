@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type {
   BacklogPriority,
+  MilestoneOption,
   SprintBacklogDTO,
   SprintBacklogStatus,
   SprintBacklogWorkType,
@@ -52,6 +53,10 @@ import {
 } from "../backlog.constants";
 
 const NO_SPRINT = "none";
+const NO_MILESTONE = "none";
+
+/** Business rule of UFR-PRJ-003-02: description <= 2000 characters. */
+const MAX_DESCRIPTION_LENGTH = 2000;
 
 interface BacklogItemDetailSheetProps {
   open: boolean;
@@ -61,6 +66,8 @@ interface BacklogItemDetailSheetProps {
   sprintName?: string | null;
   /** Sprint options of the "Sprint" field. */
   sprints?: SprintDTO[];
+  /** Milestone options of the "Milestone" field (UFR-PRJ-003-02). */
+  milestones?: MilestoneOption[];
   /** SPRINT_BACKLOG_UPDATE (title, description, status, priority, dates, estimate). */
   canEdit: boolean;
   /** SPRINT_UPDATE (moving the item to another sprint / back to the backlog). */
@@ -78,6 +85,8 @@ interface Draft {
   /** Story / Bug / Task (fixed set). */
   workType: SprintBacklogWorkType;
   priority: BacklogPriority;
+  /** Linked milestone UUID, empty when the item has no milestone. */
+  milestoneId: string;
   /** Temporary assignee id: the project member module is not implemented yet. */
   assignee: string;
   /** `yyyy-MM-dd`, converted to ISO date-time when saved. */
@@ -95,6 +104,7 @@ const toDraft = (detail: SprintBacklogDTO): Draft => ({
   status: detail.status ?? "TODO",
   workType: (detail.workType as SprintBacklogWorkType | null | undefined) ?? "TASK",
   priority: (detail.priority as BacklogPriority | null | undefined) ?? "MEDIUM",
+  milestoneId: detail.milestoneId ?? "",
   assignee:
     detail.assigneeProjectMemberId != null
       ? String(detail.assigneeProjectMemberId)
@@ -155,6 +165,7 @@ export function BacklogItemDetailSheet({
   itemKey,
   sprintName,
   sprints = [],
+  milestones = [],
   canEdit,
   canMove,
   canDelete,
@@ -232,11 +243,48 @@ export function BacklogItemDetailSheet({
   const commitDescription = () => {
     const description = draft?.description ?? "";
 
+    if (description.trim().length > MAX_DESCRIPTION_LENGTH) {
+      toast.error("Mô tả không được vượt quá 2000 ký tự");
+      setDraft((previous) =>
+        previous
+          ? { ...previous, description: detail?.description ?? "" }
+          : previous,
+      );
+      return;
+    }
+
     if (description === (detail?.description ?? "")) {
       return;
     }
 
     void save({ description: description.trim() });
+  };
+
+  /**
+   * Links / unlinks the milestone of the item (UFR-PRJ-003-02). A 404 from the
+   * backend means the milestone disappeared meanwhile: the panel restores the
+   * persisted value and the toast explains it.
+   */
+  const commitMilestone = (value: string) => {
+    if (!canEdit || saving) return;
+
+    const current = detail?.milestoneId ?? null;
+    const next = value === NO_MILESTONE ? null : value;
+
+    if (next === current) {
+      return;
+    }
+
+    setDraft((previous) =>
+      previous ? { ...previous, milestoneId: next ?? "" } : previous,
+    );
+
+    if (next === null) {
+      void save({ clearMilestone: true } as Partial<SprintBacklogDTO>);
+      return;
+    }
+
+    void save({ milestoneId: next });
   };
 
   const commitDate = (key: "startDate" | "endDate", value: string) => {
@@ -613,6 +661,16 @@ export function BacklogItemDetailSheet({
                 }
                 onBlur={commitDescription}
               />
+              <p
+                className={cn(
+                  "mt-1 text-right text-[10px]",
+                  draft.description.length > MAX_DESCRIPTION_LENGTH
+                    ? "font-semibold text-destructive"
+                    : "text-muted-foreground",
+                )}
+              >
+                {draft.description.length}/{MAX_DESCRIPTION_LENGTH} ký tự
+              </p>
             </div>
 
             <div className="px-5 pb-8">
@@ -701,6 +759,28 @@ export function BacklogItemDetailSheet({
                             {sprint.name ?? `Sprint ${sprint.id}`}
                           </SelectItem>
                         ))}
+                    </SelectContent>
+                  </Select>
+                </DetailRow>
+
+                <DetailRow label="Milestone">
+                  <Select
+                    value={draft.milestoneId || NO_MILESTONE}
+                    disabled={!canEdit || saving}
+                    onValueChange={(value) => commitMilestone(value)}
+                  >
+                    <SelectTrigger size="sm" className={inlineFieldClass}>
+                      <SelectValue placeholder="Link a milestone" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_MILESTONE}>
+                        No milestone
+                      </SelectItem>
+                      {milestones.map((milestone) => (
+                        <SelectItem key={milestone.id} value={milestone.id}>
+                          {milestone.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </DetailRow>

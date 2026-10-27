@@ -2,9 +2,6 @@ package com.example.starter_project_2025.system.project;
 
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserPrincipal;
-import com.example.starter_project_2025.system.project.trainingclass.ClassMember;
-import com.example.starter_project_2025.system.project.trainingclass.ClassMemberRepository;
-import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
 import com.example.starter_project_2025.system.project.trainingclass.ScopeAuthorizationService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,7 +15,6 @@ import java.util.HexFormat;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
@@ -32,16 +28,17 @@ import org.springframework.transaction.annotation.Transactional;
 public class ProjectTeamPublishCoordinator {
 
     private static final String OPERATION = "PUBLISH_TEAMS";
+    private static final String SESSION_OPERATION = "PUBLISH_ALLOCATION_SESSION";
 
     private final TeamAllocationSessionRepository sessionRepository;
+    private final ProjectTeamRepository teamRepository;
     private final ScopeAuthorizationService scopeAuthorizationService;
     private final TeamPublishItemService publishItemService;
     private final TeamAllocationSessionStateService sessionStateService;
+    private final AllocationReadinessService readinessService;
     private final IdempotencyStore idempotencyStore;
     private final ObjectMapper objectMapper;
     private final Validator validator;
-    private final ClassMemberRepository classMemberRepository;
-    private final ProjectMemberRepository projectMemberRepository;
 
     @Transactional
     public ResponseEntity<String> publish(
@@ -82,24 +79,12 @@ public class ProjectTeamPublishCoordinator {
             return errorResponse(400, "ERR_INVALID_BATCH_DATA", "Allocation session is not open");
         }
 
-        List<Long> activeMemberIds = classMemberRepository
-                .findAllByTrainingClass_IdAndStatusOrderByIdAsc(
-                        classId, ClassMemberStatus.ACTIVE)
-                .stream()
-                .map(ClassMember::getId)
-                .toList();
-        Set<Long> assignedMemberIds = projectMemberRepository
-                .findAssignedMemberIdsBySessionAndTeamStatuses(
-                        sessionId, List.of(ProjectTeamStatus.DRAFT, ProjectTeamStatus.ACTIVE))
-                .stream()
-                .collect(Collectors.toSet());
-        List<Long> unassignedMemberIds = activeMemberIds.stream()
-                .filter(memberId -> !assignedMemberIds.contains(memberId))
-                .toList();
-        if (!unassignedMemberIds.isEmpty()) {
-            String message = "Không thể công bố. Còn " + unassignedMemberIds.size()
+        AllocationReadinessResponse readiness = readinessService.evaluateSession(sessionId);
+        if (!readiness.unassignedStudents().isEmpty()) {
+            String message = "Không thể công bố. Còn " + readiness.unassignedStudentCount()
                     + " học viên chưa được xếp nhóm. Vui lòng phân nhóm cho toàn bộ học viên trước khi công bố";
-            return unassignedMembersResponse(unassignedMemberIds, message);
+            return blockedResponse(
+                    readiness, AllocationReadinessService.ERR_UNASSIGNED_MEMBERS, message);
         }
 
         Long actorId = ((UserPrincipal) authentication.getPrincipal()).getUser().getId();
@@ -192,20 +177,128 @@ public class ProjectTeamPublishCoordinator {
                 .body(body);
     }
 
-    private ResponseEntity<String> unassignedMembersResponse(
-            List<Long> unassignedMemberIds,
+    /**
+     * US-12: returns the HTTP 422 body with the free students (ids + names) and
+     * every team readiness issue so the UI can highlight them.
+     */
+    private ResponseEntity<String> blockedResponse(
+            AllocationReadinessResponse readiness,
+            String errorCode,
             String message
     ) {
-        String body = writeJson(new PublishUnassignedMembersResponse(
-                422,
-                "ERR_UNASSIGNED_MEMBERS",
-                message,
-                unassignedMemberIds.size(),
-                unassignedMemberIds,
-                LocalDateTime.now()));
+        String body = writeJson(PublishReadinessErrorResponse.from(
+                readiness, errorCode, message));
         return ResponseEntity.unprocessableEntity()
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(body);
+    }
+
+    /**
+     * US-12: publishes the whole allocation session in one strict operation.
+     * <p>
+     * The request only contains the idempotency key — the team list is taken
+     * from the session. Strict mode blocks the operation with HTTP 422 when
+     * the class still has free students, any team has no valid template, or a
+     * team violates its template role quotas.
+     */
+    @Transactional
+    public ResponseEntity<String> publishSession(
+            Long classId,
+            Long sessionId,
+            String key,
+            Authentication authentication
+    ) {
+        TeamAllocationSession session = sessionRepository.findByIdForUpdate(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "TeamAllocationSession", "id", sessionId));
+        if (!session.getTrainingClass().getId().equals(classId)) {
+            throw new ResourceNotFoundException("TeamAllocationSession", "classId", classId);
+        }
+        scopeAuthorizationService.assertCanManageClass(
+                authentication, session.getTrainingClass());
+
+        if (key == null || key.isBlank() || key.length() > 128) {
+            return errorResponse(400, "ERR_INVALID_BATCH_DATA",
+                    "X-Idempotency-Key is required and must not exceed 128 characters");
+        }
+        if (session.getStatus() != TeamAllocationSessionStatus.OPEN) {
+            return errorResponse(400, "ERR_INVALID_BATCH_DATA", "Allocation session is not open");
+        }
+
+        AllocationReadinessResponse readiness = readinessService.evaluateSession(sessionId);
+        if (!readiness.readyToPublish()) {
+            String message = readiness.unassignedStudentCount() > 0
+                    ? "Không thể công bố. Còn " + readiness.unassignedStudentCount()
+                            + " học viên chưa được xếp nhóm. Vui lòng phân nhóm cho toàn bộ học viên trước khi công bố"
+                    : "Không thể công bố. Còn " + readiness.teamIssues().size()
+                            + " lỗi điều kiện nhóm (đề bài/vai trò). Vui lòng xử lý toàn bộ trước khi công bố";
+            String errorCode = readiness.unassignedStudentCount() > 0
+                    ? AllocationReadinessService.ERR_UNASSIGNED_MEMBERS
+                    : AllocationReadinessService.ERR_TEAMS_NOT_READY;
+            return blockedResponse(readiness, errorCode, message);
+        }
+
+        List<Long> teamIds = teamRepository
+                .findAllByAllocationSession_IdAndStatusOrderByIdAsc(
+                        sessionId, ProjectTeamStatus.DRAFT)
+                .stream()
+                .map(ProjectTeam::getId)
+                .toList();
+        if (teamIds.isEmpty()) {
+            return errorResponse(400, "ERR_INVALID_BATCH_DATA",
+                    "Allocation session has no DRAFT teams to publish");
+        }
+
+        Long actorId = ((UserPrincipal) authentication.getPrincipal()).getUser().getId();
+        String requestHash = hash(new PublishSessionPayload(sessionId, teamIds));
+        IdempotencyRecord record;
+        try {
+            record = idempotencyStore.claim(actorId, SESSION_OPERATION, key, requestHash);
+        } catch (DataIntegrityViolationException concurrentClaim) {
+            record = idempotencyStore.find(actorId, SESSION_OPERATION, key);
+            return replayOrConflict(record, requestHash);
+        }
+        if (record.getStatus() == IdempotencyStatus.COMPLETED) {
+            return replayOrConflict(record, requestHash);
+        }
+
+        try {
+            List<Long> succeeded = new ArrayList<>();
+            List<PublishTeamsResponse.FailedItem> failed = new ArrayList<>();
+            for (Long teamId : teamIds) {
+                try {
+                    publishItemService.publish(
+                            sessionId, teamId, actorId, authentication);
+                    succeeded.add(teamId);
+                } catch (StudentAlreadyAssignedException conflict) {
+                    failed.add(new PublishTeamsResponse.FailedItem(
+                            teamId,
+                            "ERR_STUDENT_ALREADY_ASSIGNED",
+                            conflict.getMessage(),
+                            conflict.getMemberId(),
+                            conflict.getConflictingTeamId()
+                    ));
+                } catch (ResourceNotFoundException missing) {
+                    failed.add(new PublishTeamsResponse.FailedItem(
+                            teamId, "ERR_TEAM_NOT_FOUND", missing.getMessage(), null, null));
+                } catch (TeamPublishValidationException invalid) {
+                    failed.add(new PublishTeamsResponse.FailedItem(
+                            teamId, "ERR_STALE_DATA_CONFLICT", invalid.getMessage(), null, null));
+                }
+            }
+            if (failed.isEmpty()) {
+                sessionStateService.closeAsPublishedWhenNoDrafts(sessionId);
+            }
+
+            PublishTeamsResponse response =
+                    new PublishTeamsResponse(sessionId, succeeded, failed);
+            String body = writeJson(response);
+            idempotencyStore.complete(record.getId(), 200, body);
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(body);
+        } catch (RuntimeException systemError) {
+            idempotencyStore.releaseForRetry(record.getId());
+            throw systemError;
+        }
     }
 
     private String hash(Object value) {
@@ -227,5 +320,8 @@ public class ProjectTeamPublishCoordinator {
     }
 
     private record PublishPayload(Long sessionId, PublishTeamsRequest request) {
+    }
+
+    private record PublishSessionPayload(Long sessionId, List<Long> teamIds) {
     }
 }

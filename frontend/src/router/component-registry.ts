@@ -15,6 +15,9 @@ import TeamAllocationPage from "@/pages/management/team-allocation";
 import TeamAllocationClassListPage from "@/pages/management/team-allocation/class-list";
 import StudentExamList from "@/pages/student/StudentExamList";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
+import ExploreProjectsPage from "@/pages/student/projects/explore";
+import StudentProjectDetailPage from "@/pages/student/projects/detail";
+import StudentDraftTeamPage from "@/pages/student/draft-team";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import { MilestoneCreatePage } from "@/pages/management/project/milestone/pages/MilestoneCreatePage";
 import { MilestoneDetailPage } from "@/pages/management/project/milestone/pages/MilestoneDetailPage";
@@ -101,6 +104,33 @@ export const routes: RouteConfig[] = [
   },
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
   { path: "/student/exams", component: StudentExamList,requiredPermission: "EXAM_READ", isModuleDriven: true },
+  {
+    // US-09: mock Project Template catalogue (Project Management tab).
+    // Module-driven: `useSidebarMenus` injects the matching student module
+    // entry, and `App` resolves it through the module-driven component map.
+    // Without `isModuleDriven`, the injected module route would shadow this
+    // route with a "missing component" redirect (page not found).
+    // No permission string because the Project Template module is not seeded
+    // yet; access is limited to authenticated users, and the data scope is
+    // mocked in `mocks/project-templates.mock.ts`.
+    path: "/student/projects/explore",
+    component: ExploreProjectsPage,
+    isModuleDriven: true,
+  },
+  {
+    // US-09 / AC02: full project brief on its own page (no modal).
+    // Reached from a catalogue card on `/student/projects/explore`.
+    path: "/student/projects/detail/:projectId",
+    component: StudentProjectDetailPage,
+  },
+  {
+    // US-10: the student (team leader) screen that assigns a project template
+    // to the DRAFT teams they lead. Authenticated users only; the backend
+    // enforces ownership (team role PM) and the capacity window.
+    path: "/student/draft-team",
+    component: StudentDraftTeamPage,
+    isModuleDriven: true,
+  },
   { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
   { path: "/project-board", component: ProjectBoardPage },
   { path: "/workspaces/candidates", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
