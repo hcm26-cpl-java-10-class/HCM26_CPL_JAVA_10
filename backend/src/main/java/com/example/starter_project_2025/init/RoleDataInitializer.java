@@ -96,6 +96,9 @@ public class RoleDataInitializer implements CommandLineRunner {
                 "MENTOR", "Mentor with team allocation access");
         ensureAllocationPermissionForRole(
                 "CLASS_ADMIN", "Class administrator with team allocation access");
+        grantWorkspaceLogAccess("MENTOR");
+        grantWorkspaceLogAccess("PROGRAM_MANAGER");
+        grantWorkspaceLogAccess("CLASS_ADMIN");
 
         log.info("Ensured roles and permission mappings: ADMIN, STUDENT, TEACHER.");
     }
@@ -145,5 +148,13 @@ public class RoleDataInitializer implements CommandLineRunner {
         role.getPermissions().add(allocationPermission);
         role.getPermissions().add(classReadPermission);
         roleRepository.save(role);
+    }
+
+    private void grantWorkspaceLogAccess(String roleName) {
+        roleRepository.findByName(roleName).ifPresent(role -> {
+            role.getPermissions().addAll(findPermissions("WORKSPACE_READ", "WORKSPACE_MEMBER_READ",
+                    "MILESTONE_READ", "SPRINT_READ", "WORKSPACE_ACTIVITY_READ"));
+            roleRepository.save(role);
+        });
     }
 }

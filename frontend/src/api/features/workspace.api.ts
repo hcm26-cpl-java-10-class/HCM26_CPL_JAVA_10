@@ -1,5 +1,5 @@
 import axiosInstance from "@/api/axios";
-import type { WorkspaceCandidateItem, WorkspaceCreateRequest, WorkspaceDetail, WorkspaceResponse, WorkspaceProjectOption, WorkspaceMember, WorkspaceNavigation, WorkspaceSectionKey, WorkspaceSectionContent, WorkspaceSectionItem, SectionCreate, SectionReview } from "@/types/features/workspace";
+import type { WorkspaceCandidateItem, WorkspaceCreateRequest, WorkspaceDetail, WorkspaceResponse, WorkspaceProjectOption, WorkspaceMember, WorkspaceNavigation, WorkspaceSectionKey, WorkspaceSectionContent, WorkspaceSectionItem, SectionCreate, SectionReview, ProjectLog, ProjectLogCreateRequest, ProjectLogFilters, ProjectLogPage, ProjectLogOptions, ProjectLogAudit } from "@/types/features/workspace";
 
 export const workspaceApi = {
   navigation: async (id: number, signal?: AbortSignal) =>
@@ -12,6 +12,18 @@ export const workspaceApi = {
     (await axiosInstance.put<WorkspaceSectionItem>("/workspaces/" + id + "/tasks/" + encodeURIComponent(taskId), input)).data,
   review: async (id: number, input: SectionReview) =>
     (await axiosInstance.post<WorkspaceSectionItem>("/workspaces/" + id + "/reviews", input)).data,
+  projectLogs: async (id: number, params: ProjectLogFilters, signal?: AbortSignal) =>
+    (await axiosInstance.get<ProjectLogPage>(`/workspaces/${id}/logs`, { params, signal })).data,
+  projectLogOptions: async (id: number, signal?: AbortSignal) =>
+    (await axiosInstance.get<ProjectLogOptions>(`/workspaces/${id}/logs/options`, { signal })).data,
+  createProjectLog: async (id: number, input: ProjectLogCreateRequest) =>
+    (await axiosInstance.post<ProjectLog>(`/workspaces/${id}/logs`, input, { headers: { "X-Correlation-ID": crypto.randomUUID() } })).data,
+  updateRiskLog: async (id: number, logId: number, input: { mitigationPlan: string; status: string }, version: number, idempotencyKey: string) =>
+    (await axiosInstance.patch<ProjectLog>(`/workspaces/${id}/logs/${logId}/risk`, input, {
+      headers: { "If-Match": version, "Idempotency-Key": idempotencyKey, "X-Correlation-ID": crypto.randomUUID() }
+    })).data,
+  projectLogHistory: async (id: number, logId: number, signal?: AbortSignal) =>
+    (await axiosInstance.get<ProjectLogAudit[]>(`/workspaces/${id}/logs/${logId}/history`, { signal })).data,
   getMembers: async (id: number, signal?: AbortSignal): Promise<WorkspaceMember[]> => {
     const response = await axiosInstance.get<WorkspaceMember[]>("/workspaces/" + id + "/members", { signal });
     return response.data;

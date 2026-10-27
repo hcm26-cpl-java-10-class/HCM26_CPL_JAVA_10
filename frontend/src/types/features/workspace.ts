@@ -115,3 +115,38 @@ export interface SectionCreate { title: string; description: string; published: 
 export interface SectionReview {
   kind: "ARTIFACT" | "MILESTONE" | "SPRINT"; targetId: string; comment: string; score?: number; published: boolean;
 }
+
+export type ProjectLogType = "DECISION" | "RISK_ISSUE" | "MEETING_NOTE";
+export type ProjectLogTargetType = "MILESTONE" | "TASK" | "BACKLOG_ITEM" | "SPRINT";
+export interface ProjectLog {
+  id: number; projectId: number; workspaceId: number; type: ProjectLogType; title: string; content: string;
+  rationale?: string; impactAnalysis?: string; category?: "RISK" | "ISSUE"; severity?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  mitigationPlan?: string; status: string; meetingDate?: string; attendees?: ProjectLogAttendee[]; actionItems?: string;
+  targetType?: ProjectLogTargetType; targetId?: string; createdBy?: number; authorName?: string; createdAt?: string; updatedBy?: number; updatedAt?: string; version: number;
+}
+export interface ProjectLogAttendee { userId: number; name: string }
+export interface ProjectLogCreateRequest {
+  type: ProjectLogType; title: string; content: string; rationale?: string; impactAnalysis?: string;
+  category?: "RISK" | "ISSUE"; severity?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  mitigationPlan?: string; meetingDate?: string; attendees?: number[]; actionItems?: string;
+  targetType?: ProjectLogTargetType; targetId?: string;
+}
+export interface ProjectLogOption { id: string; label: string; type: ProjectLogTargetType }
+export interface ProjectLogAuthorOption { id: number; label: string; role: "MEMBER" | "MENTOR" | "TRAINER" | "CLASS_ADMIN" }
+export interface ProjectLogAttendeeOption { id: number; label: string; role: "MEMBER" | "MENTOR" | "TRAINER" | "CLASS_ADMIN" }
+export interface ProjectLogOptions {
+  milestones: ProjectLogOption[]; tasks: ProjectLogOption[]; backlogItems: ProjectLogOption[];
+  sprints: ProjectLogOption[]; authors: ProjectLogAuthorOption[]; attendees: ProjectLogAttendeeOption[];
+}
+export interface ProjectLogFilters {
+  type?: ProjectLogType; search?: string; createdBy?: number; createdFrom?: string; createdTo?: string;
+  targetType?: ProjectLogTargetType; targetId?: string; linkType?: ProjectLogTargetType;
+  itemTargetType?: ProjectLogTargetType; itemTargetId?: string;
+  status?: string; category?: string; severity?: string; meetingFrom?: string; meetingTo?: string;
+  attendeeId?: number; hasActionItems?: boolean; page: number; size: number;
+}
+export interface ProjectLogPage { content: ProjectLog[]; totalElements: number; totalPages: number; number: number; size: number }
+export interface ProjectLogAudit {
+  id: number; logId: number; actorId: number; timestamp: string; correlationId: string; ip?: string;
+  action: string; beforeJson: string; afterJson: string;
+}

@@ -63,7 +63,6 @@ import java.time.LocalDateTime;
         indexes = {
                 @Index(name = "idx_sprint_backlog_sprint", columnList = "sprint_id"),
                 @Index(name = "idx_sprint_backlog_status", columnList = "status"),
-                @Index(name = "idx_sprint_backlog_work_type", columnList = "work_type"),
                 @Index(name = "idx_sprint_backlog_assignee", columnList = "assignee_project_member_id")
         }
 )
@@ -125,7 +124,7 @@ public class SprintBacklog extends BaseEntity {
      */
     @Builder.Default
     @Enumerated(EnumType.STRING)
-    @Column(name = "work_type", nullable = false, length = 20)
+    @Column(name = "work_type", length = 20)
     SprintBacklogWorkType workType = SprintBacklogWorkType.TASK;
 
     /**

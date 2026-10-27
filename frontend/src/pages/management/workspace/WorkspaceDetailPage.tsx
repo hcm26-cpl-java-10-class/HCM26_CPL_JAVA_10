@@ -18,6 +18,7 @@ import { WorkspaceOverviewSection } from "./WorkspaceOverviewSection";
 import { WorkspaceMembersPanel } from "./WorkspaceMembersPanel";
 import { sectionAccess } from "./workspace.section-access";
 import { WorkspaceTeamBoardPanel } from "./WorkspaceTeamBoardPanel";
+import { WorkspaceProjectLogsPanel } from "./WorkspaceProjectLogsPanel";
 
 export default function WorkspaceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -100,6 +101,7 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                 : tab === "milestones" ? <WorkspaceMilestonesPanel workspaceId={workspaceId} projectId={context.projectId}
                     teamId={context.teamId} access={current} />
                 : tab === "sprints" ? <WorkspaceTeamBoardPanel teamId={context.teamId} />
+                : tab === "activity" ? <WorkspaceProjectLogsPanel workspaceId={workspaceId} />
                 : <WorkspaceBusinessSectionPanel key={workspaceId + ":" + tab} workspaceId={workspaceId}
                     projectId={context.projectId} teamId={context.teamId} section={tab}
                     label={WORKSPACE_SECTIONS.find(section => section.id === tab)!.label}

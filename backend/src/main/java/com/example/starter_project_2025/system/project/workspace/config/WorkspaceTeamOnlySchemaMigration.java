@@ -19,8 +19,12 @@ public class WorkspaceTeamOnlySchemaMigration {
         jdbc.execute("ALTER TABLE workspace_audits ALTER COLUMN project_id BIGINT NULL");
         jdbc.execute("ALTER TABLE milestones ALTER COLUMN project_id BIGINT NULL");
         jdbc.execute("ALTER TABLE milestone_audit_logs ALTER COLUMN project_id BIGINT NULL");
+        jdbc.execute("ALTER TABLE project_logs ALTER COLUMN project_id BIGINT NULL");
+        jdbc.execute("ALTER TABLE project_log_audits ALTER COLUMN project_id BIGINT NULL");
         jdbc.execute("ALTER TABLE sprint ADD COLUMN IF NOT EXISTS team_id BIGINT");
         jdbc.execute("ALTER TABLE sprint_task ADD COLUMN IF NOT EXISTS team_id BIGINT");
         jdbc.execute("ALTER TABLE sprint_task ALTER COLUMN project_id BIGINT NULL");
+        jdbc.execute("ALTER TABLE sprint_backlog ADD COLUMN IF NOT EXISTS work_type VARCHAR(20) DEFAULT 'TASK'");
+        jdbc.execute("UPDATE sprint_backlog SET work_type = 'TASK' WHERE work_type IS NULL");
     }
 }
