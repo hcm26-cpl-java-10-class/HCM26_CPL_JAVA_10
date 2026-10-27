@@ -26,9 +26,12 @@ public class WorkspaceCandidateItem {
     private Long cohortId;
     private String cohortName;
 
+    private Long classId;
+    private String classCode;
+    private String className;
+
     private Long workspaceId;
     private WorkspaceStatus workspaceStatus;
     private Boolean eligibleForWorkspace;
     private String ineligibleReason;
 }
-

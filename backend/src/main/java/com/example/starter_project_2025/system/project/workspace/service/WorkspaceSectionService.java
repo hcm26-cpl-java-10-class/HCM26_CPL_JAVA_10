@@ -34,9 +34,10 @@ public class WorkspaceSectionService {
     }
     public Navigation navigation(Long id) {
         Context context = context(id);
+        var project = context.workspace().getProject();
         return new Navigation(id, context.scope().projectId(), context.scope().teamId(),
-                context.workspace().getProject().getCode(), context.workspace().getProject().getName(),
-                context.workspace().getTeam().getName(), context.workspace().getProject().getStatus(),
+                project == null ? null : project.getCode(), project == null ? null : project.getName(),
+                context.workspace().getTeam().getTeamName(), project == null ? null : project.getStatus(),
                 Arrays.stream(WorkspaceSection.values())
                 .map(section -> policy.describe(context.user(), section)).toList());
     }

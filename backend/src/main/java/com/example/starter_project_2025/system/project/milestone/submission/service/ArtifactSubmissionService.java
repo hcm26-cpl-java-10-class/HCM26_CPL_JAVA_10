@@ -11,7 +11,7 @@ import com.example.starter_project_2025.system.project.milestone.idempotency.Ide
 import com.example.starter_project_2025.system.project.milestone.idempotency.IdempotencyRepository;
 import com.example.starter_project_2025.system.project.milestone.integration.model.ProjectReadContext;
 import com.example.starter_project_2025.system.project.milestone.integration.port.CurrentActorProvider;
-import com.example.starter_project_2025.system.project.milestone.integration.port.CurrentTenantProvider;
+import com.example.starter_project_2025.system.project.milestone.integration.port.MilestoneTenantProvider;
 import com.example.starter_project_2025.system.project.milestone.integration.port.ProjectMilestonePort;
 import com.example.starter_project_2025.system.project.milestone.outbox.OutboxEventWriter;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
@@ -44,7 +44,7 @@ public class ArtifactSubmissionService {
     private static final String OPERATION = "ARTIFACT_SUBMISSION";
 
     private final CurrentActorProvider actorProvider;
-    private final CurrentTenantProvider tenantProvider;
+    private final MilestoneTenantProvider tenantProvider;
     private final ProjectMilestonePort projectPort;
     private final ArtifactSubmissionScopePort submissionScope;
     private final MilestoneAccessPolicy accessPolicy;
@@ -58,7 +58,7 @@ public class ArtifactSubmissionService {
     private final ObjectMapper objectMapper;
 
     @Transactional
-    public ArtifactSubmissionResponse submit(UUID projectId, UUID milestoneId, String idempotencyKey,
+    public ArtifactSubmissionResponse submit(Long projectId, UUID milestoneId, String idempotencyKey,
             ArtifactSubmissionRequest request) {
         Scope scope = requireScope(projectId);
         if (idempotencyKey == null || idempotencyKey.isBlank() || idempotencyKey.length() > 100) {
@@ -135,9 +135,9 @@ public class ArtifactSubmissionService {
         return response;
     }
 
-    private Scope requireScope(UUID projectId) {
+    private Scope requireScope(Long projectId) {
         UUID actorId = actorProvider.requireCurrentActorId();
-        UUID tenantId = tenantProvider.requireCurrentTenantId();
+        Long tenantId = tenantProvider.requireCurrentTenantId();
         ProjectReadContext project = projectPort.requireProjectForRead(projectId, actorId, tenantId);
         accessPolicy.requireReadAccess(project);
         submissionScope.requireStudentProjectAccess(projectId, actorId, tenantId);
@@ -145,7 +145,7 @@ public class ArtifactSubmissionService {
     }
 
     private List<ArtifactAttachment> validateAttachments(List<UUID> ids, UUID milestoneId,
-            UUID projectId, Scope scope) {
+            Long projectId, Scope scope) {
         if (ids == null || ids.isEmpty()) return List.of();
         if (ids.stream().anyMatch(Objects::isNull) || new HashSet<>(ids).size() != ids.size()) {
             throw validation("attachmentIds", "Attachment list contains an invalid or duplicate file");
@@ -204,7 +204,7 @@ public class ArtifactSubmissionService {
                 row.getContentType(), row.getSizeBytes());
     }
 
-    private Map<String, Object> draftSnapshot(UUID milestoneId, UUID projectId, UUID tenantId) {
+    private Map<String, Object> draftSnapshot(UUID milestoneId, Long projectId, Long tenantId) {
         return draftRepository.findByMilestoneIdAndProjectIdAndTenantId(milestoneId, projectId, tenantId)
                 .map(draft -> {
                     Map<String, Object> snapshot = new LinkedHashMap<>();
@@ -255,7 +255,7 @@ public class ArtifactSubmissionService {
         return changed;
     }
 
-    private String hash(UUID projectId, UUID milestoneId, UUID actorId, ArtifactSubmissionRequest request) {
+    private String hash(Long projectId, UUID milestoneId, UUID actorId, ArtifactSubmissionRequest request) {
         try {
             String canonical = "SUBMIT_ARTIFACT|" + projectId + "|" + milestoneId + "|" + actorId + "|"
                     + objectMapper.writeValueAsString(request);
@@ -277,5 +277,5 @@ public class ArtifactSubmissionService {
 
     private String normalize(String value) { return blank(value) ? null : value.trim(); }
     private boolean blank(String value) { return value == null || value.isBlank(); }
-    private record Scope(UUID actorId, UUID tenantId) { }
+    private record Scope(UUID actorId, Long tenantId) { }
 }

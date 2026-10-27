@@ -49,9 +49,20 @@ export function useActiveModuleGroups(enabled = true) {
             ]);
 
             const groups = groupPage.content ?? groupPage.items ?? [];
-            const modules = (modulePage.content ?? modulePage.items ?? []).filter((module) =>
-                !["/management/project-templates", "/project-templates", "/management/project-teams"].some(path => (module.url ?? "").startsWith(path)) && canAccessByPermission(module.requiredPermission, hasPermission),
-            );
+            const modules = (modulePage.content ?? modulePage.items ?? []).filter((module) => {
+                const url = module.url ?? "";
+                const isExcludedPath = [
+                    "/management/project-templates",
+                    "/project-templates",
+                    "/management/project-teams",
+                ].some((path) => url.startsWith(path));
+
+                return (
+                    !isExcludedPath &&
+                    url !== "/team-allocation" &&
+                    canAccessByPermission(module.requiredPermission, hasPermission)
+                );
+            });
 
             const groupedModules = modules.reduce<Record<string, SidebarModule[]>>((acc, module) => {
                 if (!module.moduleGroupId) return acc;
@@ -111,7 +122,10 @@ export function useActiveModuleGroups(enabled = true) {
                 });
             }
 
-            if (canAccessByPermission("PEO_TEAM_ALLOCATE", hasPermission)) {
+            if (
+                canAccessByPermission("PEO_TEAM_ALLOCATE", hasPermission) ||
+                canAccessByPermission("PRJ_WORKSPACE_MANAGE", hasPermission)
+            ) {
                 const moduleGroup = groups.find(
                     (group) => (group.name ?? "").toLowerCase() === "project management",
                 );
@@ -123,7 +137,12 @@ export function useActiveModuleGroups(enabled = true) {
                     url: "/team-allocation",
                     icon: "users",
                     displayOrder: 1,
-                    requiredPermission: "PEO_TEAM_ALLOCATE",
+                    requiredPermission: canAccessByPermission(
+                        "PEO_TEAM_ALLOCATE",
+                        hasPermission,
+                    )
+                        ? "PEO_TEAM_ALLOCATE"
+                        : "PRJ_WORKSPACE_MANAGE",
                     isActive: true,
                 };
                 if (moduleGroup) {
@@ -177,7 +196,7 @@ export function useActiveModuleGroups(enabled = true) {
             }
 
             const milestoneProjectId = import.meta.env.VITE_MILESTONE_MOCK_PROJECT_ID
-                || "11111111-1111-1111-1111-111111111111";
+                || "1";
             const projectWorkspaceModules: SidebarModule[] = [
                 {
                     id: 100002,

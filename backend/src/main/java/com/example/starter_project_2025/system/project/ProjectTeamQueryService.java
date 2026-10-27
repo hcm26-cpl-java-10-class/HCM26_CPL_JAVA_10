@@ -33,7 +33,7 @@ public class ProjectTeamQueryService {
         if (!session.getTrainingClass().getId().equals(classId)) {
             throw new ResourceNotFoundException("TeamAllocationSession", "classId", classId);
         }
-        scopeAuthorizationService.assertCanManageClass(
+        scopeAuthorizationService.assertCanManageTeamMentor(
                 authentication, session.getTrainingClass());
 
         List<ProjectTeam> teams =
@@ -56,7 +56,8 @@ public class ProjectTeamQueryService {
                             assignments.stream()
                                     .map(member -> new BatchSaveDraftResponse.MemberResponse(
                                             member.getClassMember().getId(),
-                                            member.getClassMember().getUser().getFullName()))
+                                            member.getClassMember().getUser().getFullName(),
+                                            member.getRole()))
                                     .toList();
                     return new BatchSaveDraftResponse.TeamResponse(
                         team.getId(),
@@ -64,6 +65,7 @@ public class ProjectTeamQueryService {
                         team.getStatus(),
                         team.getAssignedMentorId(),
                         teamMentorService.getMentorName(team.getAssignedMentorId()),
+                        team.getVersion(),
                         memberIds,
                         members
                     );

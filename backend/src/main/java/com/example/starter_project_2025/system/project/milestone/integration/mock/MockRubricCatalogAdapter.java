@@ -54,13 +54,13 @@ public class MockRubricCatalogAdapter implements RubricCatalogPort {
     );
 
     @Override
-    public List<RubricSnapshotData> findAllowedRubrics(UUID projectId, UUID actorId, UUID tenantId) {
+    public List<RubricSnapshotData> findAllowedRubrics(Long projectId, UUID actorId, Long tenantId) {
         return rubrics;
     }
 
     @Override
     public RubricSnapshotData requireAllowedSnapshot(
-            UUID rubricSnapshotId, UUID projectId, UUID actorId, UUID tenantId) {
+            UUID rubricSnapshotId, Long projectId, UUID actorId, Long tenantId) {
         return rubrics.stream()
                 .filter(rubric -> rubric.active() && rubric.id().equals(rubricSnapshotId))
                 .findFirst()
@@ -71,7 +71,7 @@ public class MockRubricCatalogAdapter implements RubricCatalogPort {
 
     @Override
     public RubricSnapshotData requireSnapshotForRead(
-            UUID rubricSnapshotId, UUID projectId, UUID tenantId) {
+            UUID rubricSnapshotId, Long projectId, Long tenantId) {
         if (!MockMilestoneData.TENANT_ID.equals(tenantId)) {
             throw new MilestoneDependencyException("Milestone rubric snapshot could not be loaded");
         }

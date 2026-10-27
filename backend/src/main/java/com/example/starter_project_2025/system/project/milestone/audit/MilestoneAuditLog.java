@@ -22,11 +22,11 @@ public class MilestoneAuditLog {
     @Column(name = "milestone_id", nullable = false, updatable = false)
     private UUID milestoneId;
 
-    @Column(name = "project_id", nullable = false, updatable = false)
-    private UUID projectId;
+    @Column(name = "project_id", updatable = false)
+    private Long projectId;
 
     @Column(name = "tenant_id", nullable = false, updatable = false)
-    private UUID tenantId;
+    private Long tenantId;
 
     @Column(name = "actor_id", nullable = false, updatable = false)
     private UUID actorId;
@@ -49,8 +49,8 @@ public class MilestoneAuditLog {
 
     public static MilestoneAuditLog created(
             UUID milestoneId,
-            UUID projectId,
-            UUID tenantId,
+            Long projectId,
+            Long tenantId,
             UUID actorId,
             String idempotencyKey,
             String detailsJson,
@@ -68,7 +68,7 @@ public class MilestoneAuditLog {
         return log;
     }
 
-    public static MilestoneAuditLog riskAlerted(UUID milestoneId, UUID projectId, UUID tenantId, UUID actorId,
+    public static MilestoneAuditLog riskAlerted(UUID milestoneId, Long projectId, Long tenantId, UUID actorId,
             String key, String correlationId, String details, Instant now) {
         MilestoneAuditLog log = created(milestoneId, projectId, tenantId, actorId, key, details, now);
         log.action = "MILESTONE_AT_RISK_ALERT_SENT";
@@ -76,7 +76,7 @@ public class MilestoneAuditLog {
         return log;
     }
 
-    public static MilestoneAuditLog artifactDraftSaved(UUID milestoneId, UUID projectId, UUID tenantId,
+    public static MilestoneAuditLog artifactDraftSaved(UUID milestoneId, Long projectId, Long tenantId,
             UUID actorId, String correlationId, String detailsJson, Instant now) {
         MilestoneAuditLog log = created(milestoneId, projectId, tenantId, actorId, null, detailsJson, now);
         log.action = "ARTIFACT_DRAFT_SAVED";
@@ -84,7 +84,7 @@ public class MilestoneAuditLog {
         return log;
     }
 
-    public static MilestoneAuditLog artifactEvent(UUID milestoneId, UUID projectId, UUID tenantId,
+    public static MilestoneAuditLog artifactEvent(UUID milestoneId, Long projectId, Long tenantId,
             UUID actorId, String action, String correlationId, String detailsJson, Instant now) {
         MilestoneAuditLog log = created(milestoneId, projectId, tenantId, actorId, null, detailsJson, now);
         log.action = action;

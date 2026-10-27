@@ -4,5 +4,5 @@ import java.util.UUID;
 
 /** Confirms that the authenticated student is assigned to the project in the active tenant. */
 public interface ArtifactSubmissionScopePort {
-    void requireStudentProjectAccess(UUID projectId, UUID actorId, UUID tenantId);
+    void requireStudentProjectAccess(Long projectId, UUID actorId, Long tenantId);
 }

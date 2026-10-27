@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.MDC;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,13 +28,19 @@ public class TeamPublishItemService {
     private final ProjectTeamOutboxRepository outboxRepository;
     private final ObjectMapper objectMapper;
     private final ProjectTeamMentorService teamMentorService;
+    private final ProjectTeamMemberHistoryService historyService;
 
     @Transactional(noRollbackFor = {
             StudentAlreadyAssignedException.class,
             ResourceNotFoundException.class,
             TeamPublishValidationException.class
     })
-    public void publish(Long sessionId, Long teamId, Long actorId) {
+    public void publish(
+            Long sessionId,
+            Long teamId,
+            Long actorId,
+            Authentication authentication
+    ) {
         TeamAllocationSession session = sessionRepository.findByIdForUpdate(sessionId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "TeamAllocationSession", "id", sessionId));
@@ -56,6 +63,16 @@ public class TeamPublishItemService {
             throw new TeamPublishValidationException(
                     "A team without members cannot be published");
         }
+        assignments.forEach(assignment -> {
+            if (assignment.getRole() == null || assignment.getRole().isBlank()) {
+                assignment.setRole(ProjectMemberRole.DEV.name());
+            }
+        });
+        if (assignments.stream().anyMatch(assignment ->
+                !ProjectMemberRole.isValid(assignment.getRole()))) {
+            throw new TeamPublishValidationException(
+                    "Mỗi thành viên cần được gán một vai trò hợp lệ trước khi publish");
+        }
 
         List<Long> memberIds = assignments.stream()
                 .map(assignment -> assignment.getClassMember().getId())
@@ -77,11 +94,18 @@ public class TeamPublishItemService {
                 memberRepository.findMembersBySessionAndTeamStatus(
                         memberIds, sessionId, ProjectTeamStatus.ACTIVE);
         if (!activeConflicts.isEmpty()) {
-            ProjectMember conflict = activeConflicts.get(0);
+            List<Long> conflictMemberIds = activeConflicts.stream()
+                    .map(conflict -> conflict.getClassMember().getId())
+                    .distinct()
+                    .toList();
+            List<String> conflictNames = activeConflicts.stream()
+                    .map(conflict -> conflict.getClassMember().getUser().getFullName())
+                    .distinct()
+                    .toList();
             throw new StudentAlreadyAssignedException(
-                    conflict.getClassMember().getId(),
-                    conflict.getTeam().getId(),
-                    conflict.getClassMember().getUser().getFullName());
+                    conflictMemberIds,
+                    activeConflicts.get(0).getTeam().getId(),
+                    conflictNames);
         }
 
         Long assignedMentorId = teamMentorService.resolveMentorForPublish(team);
@@ -89,6 +113,18 @@ public class TeamPublishItemService {
         team.setAssignedMentorId(assignedMentorId);
         team.setStatus(ProjectTeamStatus.ACTIVE);
         teamRepository.saveAndFlush(team);
+        for (ProjectMember assignment : assignments) {
+            historyService.record(
+                    session,
+                    assignment.getClassMember(),
+                    null,
+                    team,
+                    null,
+                    assignment.getRole(),
+                    "MEMBER_ADDED",
+                    null,
+                    authentication);
+        }
         String afterState = serialize(snapshot(team, assignments, ProjectTeamStatus.ACTIVE));
 
         String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);

@@ -18,10 +18,10 @@ import java.util.stream.Collectors;
 @Component
 @Profile("!milestone-real-integrations")
 public class MockArtifactSubmissionScopeAdapter implements ArtifactSubmissionScopePort {
-    private final Map<UUID, Set<UUID>> projectAssignments;
+    private final Map<UUID, Set<Long>> projectAssignments;
 
     public MockArtifactSubmissionScopeAdapter(
-            @Value("${milestone.mock.submission.assignments:student@example.com=11111111-1111-1111-1111-111111111111}") String assignments) {
+            @Value("${milestone.mock.submission.assignments:student@example.com=1}") String assignments) {
         this.projectAssignments = Arrays.stream(assignments.split(","))
                 .map(String::trim).filter(value -> !value.isEmpty())
                 .map(value -> value.split("=", 2))
@@ -29,17 +29,17 @@ public class MockArtifactSubmissionScopeAdapter implements ArtifactSubmissionSco
                 .collect(Collectors.toUnmodifiableMap(
                         pair -> UUID.nameUUIDFromBytes(pair[0].trim().getBytes(StandardCharsets.UTF_8)),
                         pair -> Arrays.stream(pair[1].split("\\+"))
-                                .map(String::trim).filter(id -> !id.isEmpty()).map(UUID::fromString)
+                                .map(String::trim).filter(id -> !id.isEmpty()).map(Long::valueOf)
                                 .collect(Collectors.toUnmodifiableSet()),
                         (left, right) -> {
-                            java.util.Set<UUID> combined = new java.util.HashSet<>(left);
+                            java.util.Set<Long> combined = new java.util.HashSet<>(left);
                             combined.addAll(right);
                             return Set.copyOf(combined);
                         }));
     }
 
     @Override
-    public void requireStudentProjectAccess(UUID projectId, UUID actorId, UUID tenantId) {
+    public void requireStudentProjectAccess(Long projectId, UUID actorId, Long tenantId) {
         if (!MockMilestoneData.TENANT_ID.equals(tenantId)
                 || !projectAssignments.getOrDefault(actorId, Set.of()).contains(projectId)) {
             throw new AccessDeniedException("Student is not assigned to this demo project");

@@ -6,7 +6,7 @@ import com.example.starter_project_2025.system.project.milestone.integration.mod
 import java.util.UUID;
 
 public interface ProjectMilestonePort {
-    ProjectCreationContext requireProjectForCreation(UUID projectId, UUID actorId, UUID tenantId);
+    ProjectCreationContext requireProjectForCreation(Long projectId, UUID actorId, Long tenantId);
 
-    ProjectReadContext requireProjectForRead(UUID projectId, UUID actorId, UUID tenantId);
+    ProjectReadContext requireProjectForRead(Long projectId, UUID actorId, Long tenantId);
 }

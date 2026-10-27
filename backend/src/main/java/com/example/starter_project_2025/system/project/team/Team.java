@@ -79,6 +79,4 @@ public class Team extends BaseEntity {
     @OneToMany(mappedBy = "team", fetch = FetchType.LAZY)
     private Set<TeamMember> members = new HashSet<>();
 
-    @OneToMany(mappedBy = "team", fetch = FetchType.LAZY)
-    private Set<Workspace> workspaces = new HashSet<>();
 }

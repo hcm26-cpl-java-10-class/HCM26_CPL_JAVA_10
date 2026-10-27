@@ -36,10 +36,12 @@ function uniqueAllowed<T extends string>(values: string[], allowed: Set<T>): T[]
 export function parseMilestoneListParams(searchParams: URLSearchParams): MilestoneListParams {
   const search = searchParams.get("search")?.slice(0, 120);
   const mandatoryValue = searchParams.get("mandatory");
+  const teamIdValue = Number(searchParams.get("teamId"));
 
   return {
     page: parsePage(searchParams.get("page")),
     size: parseSize(searchParams.get("size")),
+    teamId: Number.isSafeInteger(teamIdValue) && teamIdValue > 0 ? teamIdValue : undefined,
     search: search || undefined,
     status: uniqueAllowed(searchParams.getAll("status"), STATUSES),
     mandatory: mandatoryValue === "true" ? true : mandatoryValue === "false" ? false : undefined,
@@ -54,6 +56,7 @@ export function serializeMilestoneListParams(params: MilestoneListParams): URLSe
     page: String(params.page),
     size: String(params.size),
   });
+  if (params.teamId !== undefined) searchParams.set("teamId", String(params.teamId));
   if (params.search) searchParams.set("search", params.search);
   params.status?.forEach((status) => searchParams.append("status", status));
   if (params.mandatory !== undefined) searchParams.set("mandatory", String(params.mandatory));

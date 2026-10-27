@@ -33,8 +33,8 @@ public class OutboxEventWriter {
         }
     }
 
-    public void writeArtifactDraftSaved(java.util.UUID milestoneId, java.util.UUID projectId,
-            java.util.UUID tenantId, java.util.UUID actorId, long version, Instant now) {
+    public void writeArtifactDraftSaved(java.util.UUID milestoneId, Long projectId,
+            Long tenantId, java.util.UUID actorId, long version, Instant now) {
         try {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("milestoneId", milestoneId);
@@ -50,8 +50,8 @@ public class OutboxEventWriter {
         }
     }
 
-    public void writeArtifactFileUploaded(java.util.UUID milestoneId, java.util.UUID projectId,
-            java.util.UUID tenantId, java.util.UUID actorId, java.util.UUID attachmentId, Instant now) {
+    public void writeArtifactFileUploaded(java.util.UUID milestoneId, Long projectId,
+            Long tenantId, java.util.UUID actorId, java.util.UUID attachmentId, Instant now) {
         try {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("milestoneId", milestoneId);
@@ -68,7 +68,7 @@ public class OutboxEventWriter {
     }
 
     public void writeArtifactSubmitted(java.util.UUID submissionId, java.util.UUID milestoneId,
-            java.util.UUID projectId, java.util.UUID tenantId, java.util.UUID actorId,
+            Long projectId, Long tenantId, java.util.UUID actorId,
             long version, boolean submittedLate, Instant now) {
         try {
             Map<String, Object> payload = new LinkedHashMap<>();

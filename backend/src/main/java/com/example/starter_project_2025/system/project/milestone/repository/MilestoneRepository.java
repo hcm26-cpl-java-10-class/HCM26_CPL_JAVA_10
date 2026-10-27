@@ -11,24 +11,27 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface MilestoneRepository extends JpaRepository<Milestone, UUID>, JpaSpecificationExecutor<Milestone> {
-    java.util.List<Milestone> findByProjectIdAndTenantIdAndActiveTrueOrderByDeadlineAscIdAsc(UUID projectId, UUID tenantId);
+    java.util.List<Milestone> findByProjectIdAndTenantIdAndActiveTrueOrderByDeadlineAscIdAsc(Long projectId, Long tenantId);
 
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @org.springframework.data.jpa.repository.Query("select m from Milestone m where m.id = :id and m.projectId = :projectId and m.tenantId = :tenantId and m.active = true")
-    Optional<Milestone> lockForRisk(UUID id, UUID projectId, UUID tenantId);
+    Optional<Milestone> lockForRisk(UUID id, Long projectId, Long tenantId);
 
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @org.springframework.data.jpa.repository.Query("select m from Milestone m where m.id = :id and m.projectId = :projectId and m.tenantId = :tenantId and m.active = true")
-    Optional<Milestone> lockForSubmission(UUID id, UUID projectId, UUID tenantId);
+    Optional<Milestone> lockForSubmission(UUID id, Long projectId, Long tenantId);
 
-    boolean existsByTenantIdAndProjectIdAndTitle(UUID tenantId, UUID projectId, String title);
+    boolean existsByTenantIdAndProjectIdAndTitle(Long tenantId, Long projectId, String title);
 
     boolean existsByRubricSnapshotId(UUID rubricSnapshotId);
 
     long countByRubricSnapshotId(UUID rubricSnapshotId);
 
-    Page<Milestone> findAllByProjectIdAndTenantId(UUID projectId, UUID tenantId, Pageable pageable);
+    Page<Milestone> findAllByProjectIdAndTenantId(Long projectId, Long tenantId, Pageable pageable);
 
     @EntityGraph(attributePaths = "checklistItems")
-    Optional<Milestone> findByIdAndProjectIdAndTenantId(UUID id, UUID projectId, UUID tenantId);
+    Optional<Milestone> findByIdAndProjectIdAndTenantId(UUID id, Long projectId, Long tenantId);
+
+    @EntityGraph(attributePaths = "checklistItems")
+    Optional<Milestone> findByIdAndTeamIdAndTenantId(UUID id, Long teamId, Long tenantId);
 }

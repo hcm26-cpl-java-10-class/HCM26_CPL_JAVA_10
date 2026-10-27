@@ -13,5 +13,7 @@ public interface TrainingClassRepository
 
     Optional<TrainingClass> findByCodeAndTenantId(String code, Long tenantId);
 
+    Optional<TrainingClass> findByCode(String code);
+
     boolean existsByCodeAndTenantId(String code, Long tenantId);
 }

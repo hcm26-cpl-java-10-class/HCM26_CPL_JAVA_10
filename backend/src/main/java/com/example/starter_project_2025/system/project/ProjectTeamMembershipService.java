@@ -11,6 +11,8 @@ import com.example.starter_project_2025.system.project.trainingclass.ClassMember
 import com.example.starter_project_2025.system.project.trainingclass.ScopeAuthorizationService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -31,7 +33,9 @@ public class ProjectTeamMembershipService {
     private final ScopeAuthorizationService scopeAuthorizationService;
     private final ProjectTeamAuditRepository auditRepository;
     private final ProjectTeamOutboxRepository outboxRepository;
+    private final ProjectTeamMemberHistoryService historyService;
     private final ObjectMapper objectMapper;
+    private final EntityManager entityManager;
 
     @Transactional
     public void addMember(
@@ -62,12 +66,17 @@ public class ProjectTeamMembershipService {
         String beforeState = serialize(snapshot(
                 team,
                 projectMemberRepository.findAllByTeam_IdOrderByIdAsc(teamId)));
+        entityManager.lock(team, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
+        entityManager.flush();
         projectMemberRepository.saveAndFlush(
                 ProjectMember.builder()
                         .team(team)
                         .classMember(member)
                         .role(null)
                         .build());
+        historyService.record(
+                session, member, null, team, null, null,
+                "MEMBER_ADDED", null, authentication);
         List<ProjectMember> updatedMembers = new ArrayList<>(
                 projectMemberRepository.findAllByTeam_IdOrderByIdAsc(teamId));
         String afterState = serialize(snapshot(team, updatedMembers));
@@ -95,8 +104,20 @@ public class ProjectTeamMembershipService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "ProjectMember", "memberId", memberId));
         String beforeState = serialize(snapshot(team, oldMembers));
+        entityManager.lock(team, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
+        entityManager.flush();
         projectMemberRepository.delete(removed);
         projectMemberRepository.flush();
+        historyService.record(
+                session,
+                removed.getClassMember(),
+                team,
+                null,
+                removed.getRole(),
+                null,
+                "MEMBER_REMOVED",
+                request.reason().trim(),
+                authentication);
         List<ProjectMember> updatedMembers =
                 projectMemberRepository.findAllByTeam_IdOrderByIdAsc(teamId);
         String afterState = serialize(new MembershipSnapshot(
@@ -185,6 +206,11 @@ public class ProjectTeamMembershipService {
         String destinationBefore = destinationTeam == null
                 ? null
                 : serialize(snapshot(destinationTeam, destinationMembers));
+        entityManager.lock(sourceTeam, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
+        if (destinationTeam != null) {
+            entityManager.lock(destinationTeam, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
+        }
+        entityManager.flush();
         projectMemberRepository.delete(originalAssignment);
         if (replacementAssignment != null) {
             projectMemberRepository.delete(replacementAssignment);
@@ -206,6 +232,30 @@ public class ProjectTeamMembershipService {
         projectMemberRepository.flush();
 
         String reason = request.reason() == null ? null : request.reason().trim();
+        historyService.record(
+                session,
+                originalMember,
+                sourceTeam,
+                destinationTeam,
+                originalAssignment.getRole(),
+                replacementAssignment == null
+                        ? null
+                        : replacementAssignment.getRole(),
+                "MEMBER_SWAPPED",
+                reason,
+                authentication);
+        historyService.record(
+                session,
+                replacementMember,
+                destinationTeam,
+                sourceTeam,
+                replacementAssignment == null
+                        ? null
+                        : replacementAssignment.getRole(),
+                originalAssignment.getRole(),
+                "MEMBER_SWAPPED",
+                reason,
+                authentication);
         String sourceAfter = serialize(new MembershipSnapshot(
                 snapshot(sourceTeam,
                         projectMemberRepository.findAllByTeam_IdOrderByIdAsc(teamId)),
@@ -224,6 +274,92 @@ public class ProjectTeamMembershipService {
         }
     }
 
+    @Transactional
+    public void transferMember(
+            Long classId,
+            Long sessionId,
+            Long sourceTeamId,
+            Long memberId,
+            TransferActiveTeamMemberRequest request,
+            Authentication authentication
+    ) {
+        if (request == null || request.reason() == null || request.reason().isBlank()) {
+            throw new BadRequestException("Lý do chuyển nhóm là bắt buộc.");
+        }
+        TeamAllocationSession session = lockAndAuthorize(classId, sessionId, authentication);
+        ProjectTeam sourceTeam = requireActiveTeam(sessionId, sourceTeamId);
+        ProjectTeam destinationTeam = requireActiveTeam(
+                sessionId, request.destinationTeamId());
+        if (sourceTeam.getId().equals(destinationTeam.getId())) {
+            throw new BadRequestException("Nhóm nhận phải khác nhóm hiện tại.");
+        }
+        if (!request.sourceTeamVersion().equals(sourceTeam.getVersion())
+                || !request.destinationTeamVersion().equals(destinationTeam.getVersion())) {
+            throw new TeamVersionConflictException();
+        }
+        ClassMember member = lockActiveMember(classId, memberId);
+        List<ProjectMember> sourceAssignments =
+                projectMemberRepository.findAllByTeam_IdOrderByIdAsc(sourceTeamId);
+        ProjectMember assignment = sourceAssignments.stream()
+                .filter(item -> item.getClassMember().getId().equals(memberId))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "ProjectMember", "memberId", memberId));
+        if (projectMemberRepository.existsByTeam_IdAndClassMember_Id(
+                destinationTeam.getId(), memberId)) {
+            throw new BadRequestException("Học viên đã thuộc nhóm nhận.");
+        }
+        if (projectMemberRepository.countByTeam_Id(destinationTeam.getId())
+                >= destinationTeam.getMaxMembers()) {
+            throw new TeamCapacityExceededException(destinationTeam.getMaxMembers());
+        }
+
+        List<ProjectMember> destinationAssignments =
+                projectMemberRepository.findAllByTeam_IdOrderByIdAsc(
+                        destinationTeam.getId());
+        String sourceBefore = serialize(snapshot(sourceTeam, sourceAssignments));
+        String destinationBefore = serialize(snapshot(destinationTeam, destinationAssignments));
+        entityManager.lock(sourceTeam, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
+        entityManager.lock(destinationTeam, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
+        entityManager.flush();
+
+        projectMemberRepository.delete(assignment);
+        projectMemberRepository.flush();
+        projectMemberRepository.saveAndFlush(ProjectMember.builder()
+                .team(destinationTeam)
+                .classMember(member)
+                .role(assignment.getRole())
+                .build());
+
+        historyService.record(
+                session,
+                member,
+                sourceTeam,
+                destinationTeam,
+                assignment.getRole(),
+                assignment.getRole(),
+                "MEMBER_TRANSFERRED",
+                request.reason().trim(),
+                authentication);
+
+        String sourceAfter = serialize(new MembershipSnapshot(
+                snapshot(
+                        sourceTeam,
+                        projectMemberRepository.findAllByTeam_IdOrderByIdAsc(sourceTeamId)),
+                request.reason().trim()));
+        String destinationAfter = serialize(new MembershipSnapshot(
+                snapshot(
+                        destinationTeam,
+                        projectMemberRepository.findAllByTeam_IdOrderByIdAsc(
+                                destinationTeam.getId())),
+                request.reason().trim()));
+        recordChange(session, sourceTeam, authentication, "TRANSFER_ACTIVE_TEAM_MEMBER",
+                "PROJECT_TEAM_MEMBER_TRANSFERRED", sourceBefore, sourceAfter);
+        recordChange(session, destinationTeam, authentication,
+                "TRANSFER_ACTIVE_TEAM_MEMBER", "PROJECT_TEAM_MEMBER_TRANSFERRED",
+                destinationBefore, destinationAfter);
+    }
+
     private TeamAllocationSession lockAndAuthorize(
             Long classId,
             Long sessionId,
@@ -233,7 +369,7 @@ public class ProjectTeamMembershipService {
                 .filter(value -> value.getTrainingClass().getId().equals(classId))
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "TeamAllocationSession", "id", sessionId));
-        scopeAuthorizationService.assertCanManageClass(
+        scopeAuthorizationService.assertCanManageTeamMentor(
                 authentication, session.getTrainingClass());
         if (session.getStatus() != TeamAllocationSessionStatus.OPEN
                 && session.getStatus() != TeamAllocationSessionStatus.PUBLISHED) {

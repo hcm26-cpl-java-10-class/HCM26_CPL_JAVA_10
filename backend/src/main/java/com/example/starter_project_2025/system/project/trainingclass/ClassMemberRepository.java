@@ -16,6 +16,7 @@ public interface ClassMemberRepository
         extends BaseCrudRepository<ClassMember, Long> {
 
     Optional<ClassMember> findByIdAndTrainingClass_Id(Long id, Long classId);
+    Optional<ClassMember> findByTrainingClass_IdAndUser_Id(Long classId, Long userId);
 
     @EntityGraph(attributePaths = "user")
     List<ClassMember> findAllByTrainingClass_IdAndStatusOrderByIdAsc(

@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 public class MilestoneMapper {
     public MilestoneResponse toResponse(Milestone milestone) {
         return new MilestoneResponse(
-                milestone.getId(), milestone.getProjectId(), milestone.getTitle(), milestone.getDescription(),
+                milestone.getId(), milestone.getProjectId(), milestone.getTeamId(), milestone.getTitle(), milestone.getDescription(),
                 milestone.getDeadline(), milestone.isMandatory(), milestone.getStatus(),
                 milestone.getRubricSnapshotId(), milestone.getReviewerId(), milestone.getLatePolicyType(),
                 milestone.getLateUntil(), milestone.getLatePenaltyPercent(), milestone.getVersion(),
@@ -22,7 +22,7 @@ public class MilestoneMapper {
 
     public MilestoneListItemResponse toListItem(Milestone milestone) {
         return new MilestoneListItemResponse(
-                milestone.getId(), milestone.getTitle(), milestone.getDescription(), milestone.getDeadline(),
+                milestone.getId(), milestone.getTeamId(), milestone.getTitle(), milestone.getDescription(), milestone.getDeadline(),
                 milestone.getStatus(), milestone.isMandatory(), milestone.getRubricSnapshotId(),
                 milestone.getReviewerId(), milestone.getLatePolicyType(), milestone.getLateUntil(),
                 milestone.getLatePenaltyPercent(), milestone.getVersion(), milestone.getCreatedAt()
@@ -31,7 +31,7 @@ public class MilestoneMapper {
 
     public MilestonePageResponse toPageResponse(ProjectReadContext project, Page<Milestone> result) {
         return new MilestonePageResponse(
-                new ProjectMilestoneSummaryResponse(
+                project == null ? null : new ProjectMilestoneSummaryResponse(
                         project.projectId(), project.projectName(), project.status()),
                 result.getContent().stream().map(this::toListItem).toList(),
                 result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages(),

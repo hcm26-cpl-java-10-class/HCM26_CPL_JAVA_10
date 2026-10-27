@@ -23,10 +23,10 @@ public class MilestoneArtifactSubmission {
     private UUID id;
 
     @Column(name = "tenant_id", nullable = false, updatable = false)
-    private UUID tenantId;
+    private Long tenantId;
 
     @Column(name = "project_id", nullable = false, updatable = false)
-    private UUID projectId;
+    private Long projectId;
 
     @Column(name = "milestone_id", nullable = false, updatable = false)
     private UUID milestoneId;
@@ -65,7 +65,7 @@ public class MilestoneArtifactSubmission {
     @Column(name = "late_penalty_percent", precision = 5, scale = 2, updatable = false)
     private BigDecimal latePenaltyPercent;
 
-    public static MilestoneArtifactSubmission submit(UUID tenantId, UUID projectId, UUID milestoneId,
+    public static MilestoneArtifactSubmission submit(Long tenantId, Long projectId, UUID milestoneId,
             UUID submitterId, long version, String repositoryUrl, String deploymentUrl, String releaseNotes,
             String checklistJson, String attachmentsJson, Instant submittedAt, boolean submittedLate,
             BigDecimal latePenaltyPercent) {

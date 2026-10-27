@@ -17,7 +17,7 @@ public class WorkspaceAudit extends BaseEntity {
     @JoinColumn(name = "actor_id", insertable = false, updatable = false)
     private com.example.starter_project_2025.system.rbac.user.User actor;
     @Column(nullable = false) private Long workspaceId;
-    @Column(nullable = false) private Long projectId;
+    @Column private Long projectId;
     @Column(nullable = false) private Long teamId;
     @Column(nullable = false, length = 40) private String action;
     @Column(nullable = false, length = 64) private String correlationId;

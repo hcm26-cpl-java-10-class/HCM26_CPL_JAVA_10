@@ -15,6 +15,7 @@ export interface MilestoneLatePolicyRequest {
 }
 
 export interface CreateMilestoneRequest {
+  teamId?: number;
   title: string;
   description?: string;
   deadline: string;
@@ -43,7 +44,7 @@ export interface MilestoneReviewerOption {
 }
 
 export interface MilestoneCreateOptions {
-  project: MilestoneProjectOption;
+  project?: MilestoneProjectOption | null;
   rubrics: MilestoneRubricOption[];
 }
 
@@ -123,6 +124,7 @@ export interface MilestoneDetailResponse {
   version: number;
   createdAt: string;
   createdBy: string;
+  teamId?: number;
 }
 
 export interface ArtifactDraft {
@@ -215,6 +217,7 @@ export interface MilestoneDetailRouteState {
 
 export interface MilestoneListItem {
   id: string;
+  teamId?: number;
   title: string;
   description?: string | null;
   deadline: string;
@@ -230,7 +233,7 @@ export interface MilestoneListItem {
 }
 
 export interface MilestonePageResponse {
-  project: MilestoneProjectOption;
+  project?: MilestoneProjectOption | null;
   content: MilestoneListItem[];
   page: number;
   size: number;
@@ -243,6 +246,8 @@ export interface MilestonePageResponse {
 export interface MilestoneListParams {
   page: number;
   size: number;
+  /** Optional team scope used by the workspace integration. */
+  teamId?: number;
   sort?: string | string[];
   search?: string;
   status?: MilestoneStatus[];

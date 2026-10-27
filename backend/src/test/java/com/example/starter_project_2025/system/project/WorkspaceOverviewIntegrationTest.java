@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project;
 
+import com.example.starter_project_2025.system.project.team.ParticipationStatus;
+import com.example.starter_project_2025.system.project.team.ProjectRole;
 import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.domain.ProjectStatus;
 import com.example.starter_project_2025.system.project.domain.ProjectTopicSnapshot;

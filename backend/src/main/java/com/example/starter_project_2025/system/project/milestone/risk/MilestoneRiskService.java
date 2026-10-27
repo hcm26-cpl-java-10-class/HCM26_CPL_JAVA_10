@@ -45,23 +45,24 @@ public class MilestoneRiskService {
         this.alerts=alerts; this.outbox=outbox; this.audit=audit; this.evaluator=evaluator;
         this.validator=validator; this.json=json; this.em=em; this.clock=clock;
     }
-    public Page list(UUID projectId, boolean atRiskOnly) {
-        User actor = access.actor("MILESTONE_RISK_READ"); access.project(actor, projectId, false);
-        boolean canSend = access.permitted(actor, "MILESTONE_ALERT_SEND") && access.directory().isManager(projectId, actor.getId());
+    public Page list(Long projectId, boolean atRiskOnly) {
+        UUID legacyProjectId = legacyProjectId(projectId);
+        User actor = access.actor("MILESTONE_RISK_READ"); access.project(actor, legacyProjectId, false);
+        boolean canSend = access.permitted(actor, "MILESTONE_ALERT_SEND") && access.directory().isManager(legacyProjectId, actor.getId());
         Instant now = clock.instant();
         var content = milestones.findByProjectIdAndTenantIdAndActiveTrueOrderByDeadlineAscIdAsc(projectId, MilestoneRiskIdentity.tenant(actor.getTenant().getId()))
                 .stream().map(milestone -> {
                     Progress progress = evaluator.evaluate(milestone,
-                            tasks.countByProjectIdAndMilestoneIdAndIsActiveTrueAndStatus(projectId, milestone.getId(), TaskStatus.DONE),
-                            tasks.countByProjectIdAndMilestoneIdAndIsActiveTrue(projectId, milestone.getId()), now);
+                            tasks.countByProjectIdAndMilestoneIdAndIsActiveTrueAndStatus(legacyProjectId, milestone.getId(), TaskStatus.DONE),
+                            tasks.countByProjectIdAndMilestoneIdAndIsActiveTrue(legacyProjectId, milestone.getId()), now);
                     return new Item(milestone.getId(), milestone.getTitle(), milestone.getStatus(), milestone.getDeadline(),
                             milestone.getVersion(), milestone.isAtRisk(), progress, canSend && progress.eligible());
                 }).filter(item -> !atRiskOnly || item.progress().eligible()).toList();
-        return new Page(projectId, access.directory().project(projectId).getName(), actor.getId(), actor.getTenant().getId(),
+        return new Page(projectId, access.directory().project(legacyProjectId).getName(), actor.getId(), actor.getTenant().getId(),
                 canSend, 48, 80, content);
     }
-    public List<History> history(UUID projectId, UUID milestoneId) {
-        User actor = access.actor("MILESTONE_RISK_READ"); access.project(actor, projectId, false);
+    public List<History> history(Long projectId, UUID milestoneId) {
+        User actor = access.actor("MILESTONE_RISK_READ"); access.project(actor, legacyProjectId(projectId), false);
         requireMilestone(projectId, milestoneId, actor);
         return alerts.findByMilestoneIdOrderByCreatedAtDesc(milestoneId).stream()
                 .filter(alert -> projectId.equals(alert.getProjectId()) && actor.getTenant().getId().equals(alert.getTenantId()))
@@ -69,10 +70,11 @@ public class MilestoneRiskService {
                         status(alert), alert.getCreatedAt(), alert.getCorrelationId())).toList();
     }
     @Transactional
-    public Result send(UUID projectId, UUID milestoneId, UUID key, Send request) {
-        User actor = access.actor("MILESTONE_ALERT_SEND"); access.project(actor, projectId, true);
+    public Result send(Long projectId, UUID milestoneId, UUID key, Send request) {
+        UUID legacyProjectId = legacyProjectId(projectId);
+        User actor = access.actor("MILESTONE_ALERT_SEND"); access.project(actor, legacyProjectId, true);
         if (key == null) throw validation("idempotencyKey", "Idempotency-Key is required");
-        projectLinks.lock(projectId).orElseThrow(() -> new org.springframework.security.access.AccessDeniedException("Project is unavailable"));
+        projectLinks.lock(legacyProjectId).orElseThrow(() -> new org.springframework.security.access.AccessDeniedException("Project is unavailable"));
         Milestone milestone = milestones.lockForRisk(milestoneId, projectId, MilestoneRiskIdentity.tenant(actor.getTenant().getId()))
                 .orElseThrow(this::missing);
         em.refresh(milestone);
@@ -88,13 +90,13 @@ public class MilestoneRiskService {
             return result(previous.get());
         }
         if (milestone.getVersion() != request.version()) throw new MilestoneConflictException("Milestone data has changed. Reload the milestone list.");
-        var lockedTasks = tasks.lockProjectTasks(projectId);
+        var lockedTasks = tasks.lockProjectTasks(legacyProjectId);
         lockedTasks.forEach(em::refresh);
         var currentTasks = lockedTasks.stream().filter(task -> Boolean.TRUE.equals(task.getIsActive()) && milestoneId.equals(task.getMilestoneId())).toList();
         Instant now = clock.instant();
         Progress progress = evaluator.evaluate(milestone, currentTasks.stream().filter(task -> task.getStatus() == TaskStatus.DONE).count(), currentTasks.size(), now);
         if (!progress.eligible()) throw new MilestoneConflictException("This milestone no longer meets the risk conditions. Reload the milestone list.");
-        var recipients = access.directory().studentRecipients(projectId, actor.getId()).stream().map(User::getId).toList();
+        var recipients = access.directory().studentRecipients(legacyProjectId, actor.getId()).stream().map(User::getId).toList();
         if (recipients.isEmpty()) throw new MilestoneConflictException("The project team has no active student recipients.");
         String correlation = CorrelationIdFilter.currentId();
         if (correlation.length() > 100) throw validation("correlationId", "X-Correlation-ID cannot exceed 100 characters");
@@ -117,7 +119,7 @@ public class MilestoneRiskService {
                         "after", Map.of("isAtRisk", true), "progress", progress, "event_id", alert.getId())), now));
         return result(alert);
     }
-    private Milestone requireMilestone(UUID projectId, UUID milestoneId, User actor) {
+    private Milestone requireMilestone(Long projectId, UUID milestoneId, User actor) {
         return milestones.findByIdAndProjectIdAndTenantId(milestoneId, projectId, MilestoneRiskIdentity.tenant(actor.getTenant().getId()))
                 .filter(Milestone::isActive).orElseThrow(this::missing);
     }
@@ -127,10 +129,13 @@ public class MilestoneRiskService {
     private Result result(MilestoneRiskAlert alert) {
         return new Result(alert.getId(), alert.getId(), alert.getMilestoneId(), true, alert.getRecipientCount(), status(alert), alert.getCreatedAt(), alert.getCorrelationId());
     }
-    private String fingerprint(UUID projectId, UUID milestoneId, Send request) {
+    private String fingerprint(Long projectId, UUID milestoneId, Send request) {
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(
                 encode(List.of(projectId, milestoneId, request.version(), request.warningNote() == null ? "" : request.warningNote())).getBytes(StandardCharsets.UTF_8))); }
         catch (java.security.NoSuchAlgorithmException exception) { throw new IllegalStateException(exception); }
+    }
+    private UUID legacyProjectId(Long projectId) {
+        return UUID.nameUUIDFromBytes(("milestone:project:" + projectId).getBytes(StandardCharsets.UTF_8));
     }
     private String encode(Object value) {
         try { return json.writeValueAsString(value); }

@@ -26,7 +26,9 @@ import type {
   MentorOption,
   PublishTeamsResponse,
   SaveDraftRequest,
+  TeamMemberRole,
   TeamListResponse,
+  TransferTeamMemberRequest,
 } from "@/types/features/team-allocation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
@@ -34,6 +36,7 @@ import {
   AlertCircle,
   CircleAlert,
   ClipboardList,
+  ArrowRightLeft,
   LoaderCircle,
   Plus,
   Ban,
@@ -56,6 +59,7 @@ interface LocalDraftTeam {
   teamName: string;
   assignedMentorId: number | null;
   memberIds: number[];
+  memberRoles: Record<number, string | null>;
 }
 
 interface ApiFailure {
@@ -65,6 +69,7 @@ interface ApiFailure {
   memberId: number | null;
   unassignedCount?: number;
   unassignedMemberIds?: number[];
+  invalidMemberIds?: number[];
 }
 
 const SESSION_STORAGE_KEY = "team-allocation-session";
@@ -107,6 +112,7 @@ function getApiFailure(error: unknown): ApiFailure {
       memberId: data?.memberId ?? null,
       unassignedCount: data?.unassignedCount,
       unassignedMemberIds: data?.unassignedMemberIds,
+      invalidMemberIds: data?.invalidMemberIds,
     };
   }
 
@@ -117,11 +123,21 @@ function getApiFailure(error: unknown): ApiFailure {
       ? error.message
       : "Không thể hoàn tất yêu cầu. Vui lòng thử lại.",
     memberId: null,
+    invalidMemberIds: undefined,
   };
 }
 
 function makeIdempotencyKey() {
   return crypto.randomUUID();
+}
+
+function isTeamMemberRole(role: string | null | undefined): role is TeamMemberRole {
+  return role === "PM" || role === "BA" || role === "DEV" || role === "QA";
+}
+
+function hasCompleteTeamRoles(team: AllocationTeam) {
+  return team.members?.length === team.memberIds.length &&
+    team.members.every((member) => member.role == null || isTeamMemberRole(member.role));
 }
 
 function getStoredKey(
@@ -169,11 +185,22 @@ export default function TeamAllocationPage() {
   } | null>(null);
   const [activeMentorReason, setActiveMentorReason] = useState("");
   const [activeMentorSelection, setActiveMentorSelection] = useState("");
+  const [activeTab, setActiveTab] = useState<"teams" | "history">("teams");
+  const [transferTarget, setTransferTarget] = useState<{
+    teamId: number;
+    memberId: number;
+    memberName: string;
+  } | null>(null);
+  const [transferDestinationId, setTransferDestinationId] = useState("");
+  const [transferMode, setTransferMode] = useState<"move" | "swap">("move");
+  const [transferReplacementMemberId, setTransferReplacementMemberId] = useState("");
+  const [transferReason, setTransferReason] = useState("");
+  const [roleAssignmentFailures, setRoleAssignmentFailures] =
+    useState<Record<number, ApiFailure>>({});
   const [draftTeams, setDraftTeams] = useState<LocalDraftTeam[]>([]);
   const [memberSearch, setMemberSearch] = useState("");
   const [memberPickerTeamId, setMemberPickerTeamId] = useState<string | null>(null);
   const [editingSavedTeamId, setEditingSavedTeamId] = useState<number | null>(null);
-  const [rosterSearch, setRosterSearch] = useState("");
   const [saveFailure, setSaveFailure] = useState<ApiFailure | null>(null);
   const [publishFailure, setPublishFailure] = useState<ApiFailure | null>(null);
   const [publishSuccess, setPublishSuccess] = useState<string | null>(null);
@@ -193,7 +220,11 @@ export default function TeamAllocationPage() {
   const membersQuery = useQuery({
     queryKey: ["team-allocation", "unassigned-members", classId, sessionId],
     queryFn: () => teamAllocationApi.getUnassignedMembers(classId, sessionId!),
-    enabled: Number.isSafeInteger(classId) && classId > 0 && sessionId !== null,
+    enabled:
+      Number.isSafeInteger(classId) &&
+      classId > 0 &&
+      sessionId !== null &&
+      hasPermission("PEO_TEAM_ALLOCATE"),
   });
   const rosterQuery = useQuery({
     queryKey: ["team-allocation", "class-roster", classId, sessionId],
@@ -312,7 +343,10 @@ export default function TeamAllocationPage() {
           {
             teamName: team.teamName.trim(),
             assignedMentorId: team.assignedMentorId,
-            members: team.memberIds.map((memberId) => ({ memberId, role: null })),
+            members: team.memberIds.map((memberId) => ({
+              memberId,
+              role: team.memberRoles[memberId] ?? "DEV",
+            })),
           },
         );
       }
@@ -322,7 +356,10 @@ export default function TeamAllocationPage() {
         teams: newDrafts.map((team) => ({
           teamName: team.teamName.trim(),
           assignedMentorId: team.assignedMentorId,
-          members: team.memberIds.map((memberId) => ({ memberId, role: null })),
+          members: team.memberIds.map((memberId) => ({
+            memberId,
+            role: team.memberRoles[memberId] ?? "DEV",
+          })),
         })),
       };
       const fingerprint = JSON.stringify({ classId, sessionId, payload });
@@ -427,7 +464,7 @@ export default function TeamAllocationPage() {
       if (succeededItems.length > 0) {
         const successMessage = `Đã publish thành công ${succeededItems.length} nhóm.`;
         setPublishSuccess(successMessage);
-        toast.success(successMessage);
+        if (failedItems.length === 0) toast.success(successMessage);
       } else {
         setPublishSuccess(null);
       }
@@ -443,10 +480,15 @@ export default function TeamAllocationPage() {
       void queryClient.invalidateQueries({
         queryKey: ["team-allocation", "class-roster", classId, sessionId],
       });
+      void queryClient.invalidateQueries({
+        queryKey: ["workspace-candidates"],
+      });
       if (failedItems.length) {
         setPublishSuccess(null);
         toast.warning(
-          `Đã publish ${succeededItems.length} nhóm; ${failedItems.length} nhóm cần xử lý.`,
+          succeededItems.length > 0
+            ? `Đã publish ${succeededItems.length} nhóm; ${failedItems.length} nhóm chưa thể publish. Xem toàn bộ lý do bên dưới.`
+            : `Chưa thể publish ${failedItems.length} nhóm. Xem toàn bộ lý do bên dưới.`,
         );
       }
       if (
@@ -480,6 +522,9 @@ export default function TeamAllocationPage() {
       }),
       queryClient.invalidateQueries({
         queryKey: ["team-allocation", "class-roster", classId, sessionId],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["team-member-history"],
       }),
     ]);
   };
@@ -538,7 +583,108 @@ export default function TeamAllocationPage() {
     onError: (error) => toast.error(getApiFailure(error).message),
   });
 
-  const members = membersQuery.data ?? [];
+  const updateTeamRolesMutation = useMutation({
+    mutationFn: ({
+      teamId,
+      expectedVersion,
+      members,
+    }: {
+      teamId: number;
+      expectedVersion: number;
+      members: Array<{ memberId: number; role: TeamMemberRole }>;
+    }) => {
+      if (sessionId === null) throw new Error("Không có phiên phân nhóm.");
+      return teamAllocationApi.updateTeamRoles(
+        classId,
+        sessionId,
+        teamId,
+        { expectedVersion, members },
+      );
+    },
+    onSuccess: async (_, variables) => {
+      setRoleAssignmentFailures((current) => {
+        const next = { ...current };
+        delete next[variables.teamId];
+        return next;
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["team-allocation", "teams", classId, sessionId],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["team-member-history"],
+      });
+      toast.success("Đã lưu vai trò thành viên trong nhóm.");
+    },
+    onError: (error, variables) => {
+      const failure = getApiFailure(error);
+      const invalidMemberIds = failure.status === 422
+        ? failure.invalidMemberIds?.length
+          ? failure.invalidMemberIds
+          : variables.members.map((member) => member.memberId)
+        : [];
+      setRoleAssignmentFailures((current) => ({
+        ...current,
+        [variables.teamId]: { ...failure, invalidMemberIds },
+      }));
+      toast.error(
+        failure.status === 409
+          ? "Dữ liệu/Version nhóm đã bị thay đổi, vui lòng tải lại trang"
+          : failure.status === 422
+            ? "Vui lòng chọn vai trò hợp lệ cho từng thành viên."
+            : failure.message,
+      );
+    },
+  });
+
+  const transferMemberMutation = useMutation({
+    mutationFn: ({
+      teamId,
+      memberId,
+      destinationTeamId,
+      replacementMemberId,
+      mode,
+      payload,
+    }: {
+      teamId: number;
+      memberId: number;
+      destinationTeamId: number;
+      replacementMemberId?: number;
+      mode: "move" | "swap";
+      payload: TransferTeamMemberRequest;
+    }) => {
+      if (sessionId === null) throw new Error("Không có phiên phân nhóm.");
+      if (mode === "swap" && replacementMemberId !== undefined) {
+        return teamAllocationApi.swapActiveTeamMember(
+          classId,
+          sessionId,
+          teamId,
+          memberId,
+          {
+            replacementMemberId,
+            replacementTeamId: destinationTeamId,
+            reason: payload.reason,
+          },
+        );
+      }
+      return teamAllocationApi.transferActiveTeamMember(
+        classId, sessionId, teamId, memberId, payload,
+      );
+    },
+    onSuccess: async () => {
+      await invalidateMembershipQueries();
+      setTransferTarget(null);
+      setTransferDestinationId("");
+      setTransferReplacementMemberId("");
+      setTransferMode("move");
+      setTransferReason("");
+      toast.success("Đã chuyển học viên sang nhóm mới.");
+    },
+    onError: (error) => toast.error(getApiFailure(error).message),
+  });
+
+  const members = hasPermission("PEO_TEAM_ALLOCATE")
+    ? membersQuery.data ?? []
+    : [];
   const savedTeams = teamsQuery.data?.teams ?? [];
   const memberPickerTeam = draftTeams.find(
     (team) => team.localId === memberPickerTeamId,
@@ -554,11 +700,10 @@ export default function TeamAllocationPage() {
     member.fullName.toLowerCase().includes(memberSearch.trim().toLowerCase()) ||
     String(member.memberId).includes(memberSearch.trim()),
   );
-  const filteredRoster = (rosterQuery.data ?? []).filter((member) =>
-    member.fullName.toLowerCase().includes(rosterSearch.trim().toLowerCase()) ||
-    String(member.memberId).includes(rosterSearch.trim()),
-  );
   const publishableTeams = savedTeams.filter((team) => team.status === "DRAFT");
+  const teamsMissingRoles = publishableTeams.filter(
+    (team) => !hasCompleteTeamRoles(team),
+  );
   const canCancelSession =
     session?.status === "OPEN" &&
     !teamsQuery.isLoading &&
@@ -577,6 +722,7 @@ export default function TeamAllocationPage() {
         teamName: `Nhóm ${current.length + 1}`,
         assignedMentorId: null,
         memberIds: [],
+        memberRoles: {},
       },
     ]);
     setMemberPickerTeamId(localId);
@@ -592,6 +738,12 @@ export default function TeamAllocationPage() {
         memberIds: checked
           ? [...team.memberIds, memberId]
           : team.memberIds.filter((id) => id !== memberId),
+        memberRoles: checked
+          ? { ...team.memberRoles, [memberId]: "DEV" }
+          : Object.fromEntries(
+              Object.entries(team.memberRoles)
+                .filter(([id]) => Number(id) !== memberId),
+            ),
       };
     }));
     setSaveFailure(null);
@@ -626,6 +778,9 @@ export default function TeamAllocationPage() {
       teamName: team.teamName,
       assignedMentorId: team.assignedMentorId,
       memberIds: [...team.memberIds],
+      memberRoles: Object.fromEntries(
+        (team.members ?? []).map((member) => [member.memberId, member.role ?? "DEV"]),
+      ),
     }]);
     setEditingSavedTeamId(team.teamId);
     setMemberPickerTeamId(localId);
@@ -638,6 +793,22 @@ export default function TeamAllocationPage() {
     setEditingSavedTeamId(null);
     setMemberPickerTeamId(null);
     setSaveFailure(null);
+  };
+
+  const clearTeamRoleFailure = (teamId: number, memberId: number) => {
+    setRoleAssignmentFailures((current) => {
+      const next = { ...current };
+      const failure = next[teamId];
+      if (!failure || failure.status === 409) return current;
+      const remaining = (failure.invalidMemberIds ?? [])
+        .filter((id) => id !== memberId);
+      if (remaining.length) {
+        next[teamId] = { ...failure, invalidMemberIds: remaining };
+      } else {
+        delete next[teamId];
+      }
+      return next;
+    });
   };
 
   const togglePublishTeam = (team: AllocationTeam) => {
@@ -675,7 +846,45 @@ export default function TeamAllocationPage() {
           </div>
         </section>
 
-        {!hasPermission("PEO_TEAM_ALLOCATE") && (
+        <div role="tablist" aria-label="Quản lý nhóm" className="flex gap-2 border-b">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "teams"}
+            className={`border-b-2 px-4 py-2 text-sm font-medium ${
+              activeTab === "teams"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground"
+            }`}
+            onClick={() => setActiveTab("teams")}
+          >
+            Nhóm và thành viên
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "history"}
+            className={`border-b-2 px-4 py-2 text-sm font-medium ${
+              activeTab === "history"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground"
+            }`}
+            onClick={() => setActiveTab("history")}
+          >
+            Lịch sử thành viên / Vai trò
+          </button>
+        </div>
+
+        {activeTab === "history" && (
+          <TeamMemberHistoryPanel
+            classId={classId}
+            cohortId={selectedClass?.cohortId ?? null}
+            className={selectedClass?.name ?? `Lớp #${classId}`}
+          />
+        )}
+        <div className={activeTab === "teams" ? "contents" : "hidden"}>
+        {!hasPermission("PEO_TEAM_ALLOCATE") &&
+          !hasPermission("PRJ_WORKSPACE_MANAGE") && (
           <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
             Tài khoản hiện tại không có quyền phân nhóm dự án.
           </div>
@@ -891,76 +1100,6 @@ export default function TeamAllocationPage() {
                 <Button variant="outline" size="sm" onClick={() => void teamsQuery.refetch()}>
                   Thử lại
                 </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <CardTitle>Danh sách học viên trong lớp</CardTitle>
-                <CardDescription>
-                  {rosterQuery.data
-                    ? `${rosterQuery.data.length} học viên ACTIVE · trạng thái phân nhóm trong phiên đang chọn`
-                    : "Danh sách học viên ACTIVE của lớp và trạng thái nhóm trong phiên đang chọn."}
-                </CardDescription>
-              </div>
-              <div className="relative w-full sm:max-w-xs">
-                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  className="pl-9"
-                  placeholder="Tìm theo tên hoặc mã học viên"
-                  aria-label="Tìm trong danh sách học viên"
-                  value={rosterSearch}
-                  onChange={(event) => setRosterSearch(event.target.value)}
-                />
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {rosterQuery.isError ? (
-              <div role="alert" className="rounded-xl border border-destructive/30 p-5 text-sm">
-                <p className="text-destructive">Không tải được danh sách học viên.</p>
-                <Button
-                  className="mt-3"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void rosterQuery.refetch()}
-                >
-                  Thử tải lại
-                </Button>
-              </div>
-            ) : rosterQuery.isLoading ? (
-              <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
-                <LoaderCircle className="size-4 animate-spin" />
-                Đang tải danh sách học viên...
-              </div>
-            ) : filteredRoster.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                {(rosterQuery.data ?? []).length === 0
-                  ? "Lớp chưa có học viên ACTIVE."
-                  : "Không tìm thấy học viên phù hợp."}
-              </p>
-            ) : (
-              <div className="max-h-96 divide-y overflow-y-auto rounded-lg border">
-                {filteredRoster.map((member: ClassRosterMember) => (
-                  <div
-                    key={member.memberId}
-                    className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm"
-                  >
-                    <span className="font-medium">{member.fullName}</span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-muted-foreground">#{member.memberId}</span>
-                      <Badge variant={member.assignedToActiveTeam ? "secondary" : "outline"}>
-                        {member.assignedToActiveTeam
-                          ? "Đã vào nhóm ACTIVE trong phiên"
-                          : "Chưa vào nhóm ACTIVE trong phiên"}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
               </div>
             )}
           </CardContent>
@@ -1372,15 +1511,35 @@ export default function TeamAllocationPage() {
                           memberName={nameForMember}
                           mentors={mentorsQuery.data ?? []}
                           memberOptions={rosterQuery.data ?? []}
+                          allTeams={savedTeams}
                           maxMembers={session.maxMembers}
                           canManageMembers={
                             hasPermission("PEO_TEAM_ALLOCATE") &&
                             (session.status === "OPEN" || session.status === "PUBLISHED")
                           }
+                          canTransfer={
+                            (hasPermission("PEO_TEAM_ALLOCATE") ||
+                              hasPermission("PRJ_WORKSPACE_MANAGE")) &&
+                            (session.status === "OPEN" || session.status === "PUBLISHED")
+                          }
+                          transferPending={transferMemberMutation.isPending}
                           canManageMentor={
                             (hasPermission("PEO_TEAM_ALLOCATE") ||
                               hasPermission("PRJ_WORKSPACE_MANAGE")) &&
                             (session.status === "OPEN" || session.status === "PUBLISHED")
+                          }
+                          canManageRoles={
+                            (hasPermission("PEO_TEAM_ALLOCATE") ||
+                              hasPermission("PRJ_WORKSPACE_MANAGE")) &&
+                            (team.status === "DRAFT" || team.status === "ACTIVE") &&
+                            (session.status === "OPEN" || session.status === "PUBLISHED")
+                          }
+                          canPublish={hasPermission("PEO_TEAM_ALLOCATE")}
+                          roleSaveError={
+                            roleAssignmentFailures[team.teamId]
+                          }
+                          rolesPending={
+                            updateTeamRolesMutation.isPending
                           }
                           membershipPending={
                             addActiveMemberMutation.isPending ||
@@ -1408,6 +1567,17 @@ export default function TeamAllocationPage() {
                             });
                             setRemoveMemberReason("");
                           }}
+                          onTransfer={(memberId) => {
+                            setTransferTarget({
+                              teamId: team.teamId,
+                              memberId,
+                              memberName: nameForMember(memberId),
+                            });
+                            setTransferDestinationId("");
+                            setTransferReplacementMemberId("");
+                            setTransferMode("move");
+                            setTransferReason("");
+                          }}
                           onUpdateMentor={(mentorId) => {
                             setActiveMentorTarget({
                               teamId: team.teamId,
@@ -1420,35 +1590,55 @@ export default function TeamAllocationPage() {
                             );
                             setActiveMentorReason("");
                           }}
+                          onUpdateRoles={(teamId, expectedVersion, members) =>
+                            updateTeamRolesMutation.mutate({
+                              teamId,
+                              expectedVersion,
+                              members,
+                            })
+                          }
+                          onRoleChange={clearTeamRoleFailure}
                         />
                       ))}
                     </div>
                   )}
                   {publishableTeams.length > 1 && (
-                    <Button
-                      className="w-full"
-                      variant="outline"
-                      disabled={publishMutation.isPending || !hasPermission("PEO_TEAM_ALLOCATE")}
-                      onClick={() => {
-                        setPublishItemFailures([]);
-                        setPublishFailure(null);
-                        setPublishSuccess(null);
-                        publishMutation.mutate(
-                          publishableTeams.map((team) => team.teamId),
-                        );
-                      }}
-                    >
-                      {publishMutation.isPending
-                        ? <LoaderCircle className="size-4 animate-spin" />
-                        : <Send className="size-4" />}
-                      Publish tất cả nhóm DRAFT
-                    </Button>
+                    <>
+                      {teamsMissingRoles.length > 0 && (
+                        <p className="text-sm text-muted-foreground">
+                          Gán và lưu role cho mọi thành viên trước khi publish.
+                        </p>
+                      )}
+                      <Button
+                        className="w-full"
+                        variant="outline"
+                        disabled={
+                          publishMutation.isPending ||
+                          !hasPermission("PEO_TEAM_ALLOCATE") ||
+                          teamsMissingRoles.length > 0
+                        }
+                        onClick={() => {
+                          setPublishItemFailures([]);
+                          setPublishFailure(null);
+                          setPublishSuccess(null);
+                          publishMutation.mutate(
+                            publishableTeams.map((team) => team.teamId),
+                          );
+                        }}
+                      >
+                        {publishMutation.isPending
+                          ? <LoaderCircle className="size-4 animate-spin" />
+                          : <Send className="size-4" />}
+                        Publish tất cả nhóm DRAFT
+                      </Button>
+                    </>
                   )}
                 </CardContent>
               </Card>
             </div>
           </>
         )}
+        </div>
       </div>
       <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
         <DialogContent>
@@ -1551,6 +1741,159 @@ export default function TeamAllocationPage() {
               );
             })()
           )}
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={transferTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !transferMemberMutation.isPending) {
+            setTransferTarget(null);
+            setTransferDestinationId("");
+            setTransferReplacementMemberId("");
+            setTransferMode("move");
+            setTransferReason("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Chuyển học viên giữa các nhóm</DialogTitle>
+            <DialogDescription>
+              Chọn chuyển trực tiếp nếu nhóm nhận còn chỗ, hoặc đổi vị trí với một thành viên của nhóm nhận.
+              Lý do sẽ được ghi vào lịch sử.
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-sm font-medium">
+            Học viên: {transferTarget?.memberName}
+          </p>
+          <label className="space-y-2 text-sm font-medium">
+            Hình thức
+            <select
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={transferMode}
+              onChange={(event) => {
+                setTransferMode(event.target.value as "move" | "swap");
+                setTransferDestinationId("");
+                setTransferReplacementMemberId("");
+              }}
+              disabled={transferMemberMutation.isPending}
+            >
+              <option value="move">Chuyển trực tiếp</option>
+              <option value="swap">Đổi vị trí hai học viên</option>
+            </select>
+          </label>
+          <label className="space-y-2 text-sm font-medium">
+            Nhóm nhận
+            <select
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={transferDestinationId}
+              onChange={(event) => {
+                setTransferDestinationId(event.target.value);
+                setTransferReplacementMemberId("");
+              }}
+              disabled={transferMemberMutation.isPending}
+            >
+              <option value="">Chọn nhóm</option>
+              {savedTeams
+                .filter((candidate) =>
+                  candidate.teamId !== transferTarget?.teamId &&
+                  candidate.status === "ACTIVE" &&
+                  (transferMode === "swap" ||
+                    candidate.memberIds.length < (session?.maxMembers ?? 0)),
+                )
+                .map((candidate) => (
+                  <option key={candidate.teamId} value={candidate.teamId}>
+                    {candidate.teamName} ({candidate.memberIds.length} thành viên)
+                  </option>
+                ))}
+            </select>
+          </label>
+          {transferMode === "swap" && transferDestinationId && (
+            <label className="space-y-2 text-sm font-medium">
+              Học viên đổi vị trí
+              <select
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={transferReplacementMemberId}
+                onChange={(event) =>
+                  setTransferReplacementMemberId(event.target.value)
+                }
+                disabled={transferMemberMutation.isPending}
+              >
+                <option value="">Chọn thành viên nhóm nhận</option>
+                {savedTeams
+                  .find((candidate) =>
+                    candidate.teamId === Number(transferDestinationId),
+                  )
+                  ?.members?.map((member) => (
+                    <option key={member.memberId} value={member.memberId}>
+                      {member.fullName} · {member.role ?? "Chưa có role"}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          )}
+          <label className="space-y-2 text-sm font-medium">
+            Lý do chuyển nhóm (bắt buộc)
+            <Textarea
+              maxLength={500}
+              placeholder="Nhập lý do điều chuyển"
+              value={transferReason}
+              onChange={(event) => setTransferReason(event.target.value)}
+              disabled={transferMemberMutation.isPending}
+            />
+          </label>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={transferMemberMutation.isPending}
+              onClick={() => setTransferTarget(null)}
+            >
+              Hủy
+            </Button>
+            <Button
+              type="button"
+              disabled={
+                !transferTarget ||
+                !transferDestinationId ||
+                !transferReason.trim() ||
+                (transferMode === "swap" && !transferReplacementMemberId) ||
+                transferMemberMutation.isPending
+              }
+              onClick={() => {
+                if (!transferTarget || !transferDestinationId || !transferReason.trim()) {
+                  return;
+                }
+                const sourceTeam = savedTeams.find(
+                  (team) => team.teamId === transferTarget.teamId,
+                );
+                const destinationTeam = savedTeams.find(
+                  (team) => team.teamId === Number(transferDestinationId),
+                );
+                if (!sourceTeam || !destinationTeam) return;
+                transferMemberMutation.mutate({
+                  teamId: sourceTeam.teamId,
+                  memberId: transferTarget.memberId,
+                  destinationTeamId: destinationTeam.teamId,
+                  replacementMemberId: transferReplacementMemberId
+                    ? Number(transferReplacementMemberId)
+                    : undefined,
+                  mode: transferMode,
+                  payload: {
+                    destinationTeamId: destinationTeam.teamId,
+                    sourceTeamVersion: sourceTeam.version,
+                    destinationTeamVersion: destinationTeam.version,
+                    reason: transferReason.trim(),
+                  },
+                });
+              }}
+            >
+              {transferMemberMutation.isPending
+                ? <LoaderCircle className="size-4 animate-spin" />
+                : <ArrowRightLeft className="size-4" />}
+              Xác nhận chuyển nhóm
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       <Dialog
@@ -1756,6 +2099,229 @@ function MetricCard({
   );
 }
 
+function TeamMemberHistoryPanel({
+  classId,
+  cohortId,
+  className,
+}: {
+  classId: number;
+  cohortId: number | null;
+  className: string;
+}) {
+  const [scope, setScope] = useState<"class" | "cohort">("class");
+  const [memberFilter, setMemberFilter] = useState("");
+  const [teamFilter, setTeamFilter] = useState("");
+  const [page, setPage] = useState(0);
+  const memberId = Number(memberFilter);
+  const teamId = Number(teamFilter);
+  const filters = {
+    ...(scope === "cohort" && cohortId !== null
+      ? { cohortId }
+      : { classId }),
+    ...(Number.isSafeInteger(memberId) && memberId > 0 ? { memberId } : {}),
+    ...(Number.isSafeInteger(teamId) && teamId > 0 ? { teamId } : {}),
+    page,
+    size: 25,
+  };
+  const historyQuery = useQuery({
+    queryKey: ["team-member-history", filters],
+    queryFn: () => teamAllocationApi.getMemberHistory(filters),
+    enabled: scope !== "cohort" || cohortId !== null,
+    retry: false,
+  });
+
+  const clearFilters = () => {
+    setMemberFilter("");
+    setTeamFilter("");
+    setPage(0);
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Lịch sử thành viên / Vai trò</CardTitle>
+        <CardDescription>
+          Nhật ký chỉ được thêm mới, sắp xếp từ mới nhất đến cũ nhất.
+          Phạm vi hiện tại: {scope === "cohort" ? `Cohort #${cohortId}` : className}.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="space-y-1 text-sm font-medium">
+            Phạm vi
+            <select
+              className="block h-10 rounded-md border border-input bg-background px-3"
+              value={scope}
+              onChange={(event) => {
+                setScope(event.target.value as "class" | "cohort");
+                setPage(0);
+              }}
+              disabled={cohortId === null}
+            >
+              <option value="class">Lớp hiện tại</option>
+              <option value="cohort">Toàn cohort</option>
+            </select>
+          </label>
+          <label className="space-y-1 text-sm font-medium">
+            Lọc theo ID học viên
+            <Input
+              inputMode="numeric"
+              value={memberFilter}
+              onChange={(event) => {
+                setMemberFilter(event.target.value);
+                setPage(0);
+              }}
+              placeholder="ID học viên"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium">
+            Lọc theo ID nhóm
+            <Input
+              inputMode="numeric"
+              value={teamFilter}
+              onChange={(event) => {
+                setTeamFilter(event.target.value);
+                setPage(0);
+              }}
+              placeholder="ID nhóm cũ/mới"
+            />
+          </label>
+          <Button type="button" variant="outline" onClick={clearFilters}>
+            Xóa bộ lọc
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void historyQuery.refetch()}
+            disabled={historyQuery.isFetching}
+          >
+            {historyQuery.isFetching
+              ? <LoaderCircle className="size-4 animate-spin" />
+              : <Search className="size-4" />}
+            Làm mới
+          </Button>
+        </div>
+
+        {historyQuery.isLoading ? (
+          <LoadingState label="Đang tải lịch sử biến động..." />
+        ) : historyQuery.isError ? (
+          <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+            Không thể tải lịch sử. Kiểm tra quyền truy cập hoặc thử lại.
+          </div>
+        ) : historyQuery.data?.items.length === 0 ? (
+          <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+            Chưa có lịch sử biến động phù hợp bộ lọc.
+          </p>
+        ) : (
+          <>
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full min-w-[1050px] text-left text-sm">
+                <thead className="bg-muted/60 text-xs uppercase text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-3">Thời gian</th>
+                    {scope === "cohort" && <th className="px-3 py-3">Lớp</th>}
+                    <th className="px-3 py-3">Học viên</th>
+                    <th className="px-3 py-3">Nhóm cũ → mới</th>
+                    <th className="px-3 py-3">Role cũ → mới</th>
+                    <th className="px-3 py-3">Biến động</th>
+                    <th className="px-3 py-3">Lý do</th>
+                    <th className="px-3 py-3">Người thực hiện</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {historyQuery.data?.items.map((item) => (
+                    <tr key={item.id} className="align-top">
+                      <td className="whitespace-nowrap px-3 py-3">
+                        {new Date(item.occurredAt).toLocaleString()}
+                      </td>
+                      {scope === "cohort" && (
+                        <td className="px-3 py-3">#{item.classId}</td>
+                      )}
+                      <td className="px-3 py-3">
+                        <span className="font-medium">{item.memberName}</span>
+                        <span className="block text-xs text-muted-foreground">
+                          #{item.memberId}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3">
+                        {item.fromTeamName ?? "Chưa thuộc nhóm"}
+                        <span className="mx-2 text-muted-foreground">→</span>
+                        {item.toTeamName ?? "Không thuộc nhóm"}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3">
+                        {item.fromRole ?? "—"}
+                        <span className="mx-2 text-muted-foreground">→</span>
+                        {item.toRole ?? "—"}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3">
+                        {historyActionLabel(item.action)}
+                      </td>
+                      <td className="max-w-64 px-3 py-3">{item.reason ?? "—"}</td>
+                      <td className="px-3 py-3">
+                        {item.actorName}
+                        <span className="block text-xs text-muted-foreground">
+                          #{item.actorId}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">
+                {historyQuery.data?.totalElements ?? 0} biến động · Trang{" "}
+                {(historyQuery.data?.page ?? 0) + 1} /{" "}
+                {Math.max(historyQuery.data?.totalPages ?? 1, 1)}
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 0 || historyQuery.isFetching}
+                  onClick={() => setPage((current) => current - 1)}
+                >
+                  Trước
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={
+                    page + 1 >= (historyQuery.data?.totalPages ?? 0) ||
+                    historyQuery.isFetching
+                  }
+                  onClick={() => setPage((current) => current + 1)}
+                >
+                  Sau
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function historyActionLabel(action: string) {
+  switch (action) {
+    case "ROLE_CHANGED":
+      return "Đổi vai trò";
+    case "MEMBER_TRANSFERRED":
+      return "Chuyển nhóm";
+    case "MEMBER_SWAPPED":
+      return "Đổi vị trí";
+    case "MEMBER_ADDED":
+      return "Thêm thành viên";
+    case "MEMBER_REMOVED":
+      return "Gỡ thành viên";
+    default:
+      return action;
+  }
+}
+
 function MemberOption({
   member,
   checked,
@@ -1801,37 +2367,67 @@ function SavedTeamCard({
   memberName,
   mentors,
   memberOptions,
+  allTeams,
   maxMembers,
   canManageMembers,
   canManageMentor,
+  canManageRoles,
+  canTransfer,
+  canPublish,
+  roleSaveError,
+  rolesPending,
+  transferPending,
   membershipPending,
   pending,
   onEdit,
   onPublish,
   onAddMember,
   onRemoveMember,
+  onTransfer,
   onUpdateMentor,
+  onUpdateRoles,
+  onRoleChange,
 }: {
   team: AllocationTeam;
   memberName: (memberId: number) => string;
   mentors: MentorOption[];
   memberOptions: ClassRosterMember[];
+  allTeams: AllocationTeam[];
   maxMembers: number;
   canManageMembers: boolean;
   canManageMentor: boolean;
+  canManageRoles: boolean;
+  canTransfer: boolean;
+  canPublish: boolean;
+  roleSaveError?: ApiFailure;
+  rolesPending: boolean;
+  transferPending: boolean;
   membershipPending: boolean;
   pending: boolean;
   onEdit: () => void;
   onPublish: () => void;
   onAddMember: (memberId: number) => void;
   onRemoveMember: (memberId: number) => void;
+  onTransfer: (memberId: number) => void;
   onUpdateMentor: (mentorId: number | null) => void;
+  onUpdateRoles: (
+    teamId: number,
+    expectedVersion: number,
+    members: Array<{ memberId: number; role: TeamMemberRole }>,
+  ) => void;
+  onRoleChange: (teamId: number, memberId: number) => void;
 }) {
   const [selectedToAdd, setSelectedToAdd] = useState("");
   const [selectedMentor, setSelectedMentor] = useState(
     team.assignedMentorId === null ? "" : String(team.assignedMentorId),
   );
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [memberRoles, setMemberRoles] = useState<Record<number, string | null>>(
+    () => Object.fromEntries(
+      (team.members ?? []).map((member) => [member.memberId, member.role ?? "DEV"]),
+    ),
+  );
+  const [localRoleErrors, setLocalRoleErrors] = useState<number[]>([]);
   const isDraft = team.status === "DRAFT";
   const isActive = team.status === "ACTIVE";
   const members = team.members?.length
@@ -1839,12 +2435,30 @@ function SavedTeamCard({
     : team.memberIds.map((memberId) => ({
         memberId,
         fullName: memberName(memberId),
+        role: "DEV",
       }));
+  const savedRolesComplete = members.every((member) =>
+    member.role == null || isTeamMemberRole(member.role),
+  );
+  const transferTargets = allTeams.filter((candidate) =>
+    candidate.teamId !== team.teamId &&
+    candidate.status === "ACTIVE",
+  );
   useEffect(() => {
     setSelectedMentor(
       team.assignedMentorId === null ? "" : String(team.assignedMentorId),
     );
   }, [team.assignedMentorId]);
+  useEffect(() => {
+    setMemberRoles(Object.fromEntries(
+      (team.members ?? []).map((member) => [member.memberId, member.role]),
+    ));
+    setLocalRoleErrors([]);
+  }, [team.version, team.members]);
+  const invalidRoleMemberIds = new Set([
+    ...localRoleErrors,
+    ...(roleSaveError?.invalidMemberIds ?? []),
+  ]);
   const mentorName = team.assignedMentorName;
   const mentorInitials = mentorName
     ?.split(/\s+/)
@@ -1942,6 +2556,36 @@ function SavedTeamCard({
                     >
                       <span className="min-w-0 truncate">{member.fullName}</span>
                       <span className="flex shrink-0 items-center gap-2">
+                        {canManageRoles && (
+                          <select
+                            aria-label={`Vai trò của ${member.fullName}`}
+                            aria-invalid={invalidRoleMemberIds.has(member.memberId)}
+                            className={`h-8 rounded-md border bg-background px-2 text-xs ${
+                              invalidRoleMemberIds.has(member.memberId)
+                                ? "border-destructive"
+                                : ""
+                            }`}
+                            value={memberRoles[member.memberId] ?? ""}
+                            disabled={rolesPending}
+                            onChange={(event) => {
+                              const role = event.target.value || null;
+                              setMemberRoles((current) => ({
+                                ...current,
+                                [member.memberId]: role,
+                              }));
+                              setLocalRoleErrors((current) =>
+                                current.filter((id) => id !== member.memberId),
+                              );
+                              onRoleChange(team.teamId, member.memberId);
+                            }}
+                          >
+                            <option value="">Vui lòng chọn vai trò</option>
+                            <option value="PM">PM</option>
+                            <option value="BA">BA</option>
+                            <option value="DEV">Dev</option>
+                            <option value="QA">QA</option>
+                          </select>
+                        )}
                         <span className="text-xs text-muted-foreground">
                           #{member.memberId}
                         </span>
@@ -1958,12 +2602,72 @@ function SavedTeamCard({
                             <Trash2 className="size-4 text-destructive" />
                           </Button>
                         )}
+                        {isActive && canTransfer && (
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`Chuyển ${member.fullName} sang nhóm khác`}
+                            title={`Chuyển ${member.fullName} sang nhóm khác`}
+                            disabled={transferPending || transferTargets.length === 0}
+                            onClick={() => onTransfer(member.memberId)}
+                          >
+                            {transferPending
+                              ? <LoaderCircle className="size-4 animate-spin" />
+                              : <ArrowRightLeft className="size-4" />}
+                          </Button>
+                        )}
                       </span>
                     </li>
                   ))}
                 </ul>
               )}
             </div>
+            {canManageRoles && members.length > 0 && (
+              <div className="space-y-2">
+                {roleSaveError && (
+                  <div
+                    role="alert"
+                    className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+                  >
+                    {roleSaveError.status === 409
+                      ? "Dữ liệu/Version nhóm đã bị thay đổi, vui lòng tải lại trang"
+                      : roleSaveError.message}
+                  </div>
+                )}
+                {localRoleErrors.length > 0 && (
+                  <div
+                    role="alert"
+                    className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+                  >
+                    Vui lòng chọn vai trò hợp lệ cho từng thành viên.
+                  </div>
+                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={rolesPending}
+                  onClick={() => {
+                    const requestedRoles = members.flatMap((member) => {
+                      const role = memberRoles[member.memberId] ?? "DEV";
+                      return isTeamMemberRole(role)
+                        ? [{ memberId: member.memberId, role }]
+                        : [];
+                    });
+                    onUpdateRoles(
+                      team.teamId,
+                      team.version,
+                      requestedRoles,
+                    );
+                  }}
+                >
+                  {rolesPending
+                    ? <LoaderCircle className="size-4 animate-spin" />
+                    : <Save className="size-4" />}
+                  Lưu vai trò
+                </Button>
+              </div>
+            )}
             {isActive && canManageMembers && (
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground">
@@ -2027,7 +2731,12 @@ function SavedTeamCard({
                   Chỉnh sửa DRAFT
                 </Button>
                 <Button
-                  disabled={pending || members.length === 0}
+                  disabled={
+                    pending ||
+                    !canPublish ||
+                    members.length === 0 ||
+                    !savedRolesComplete
+                  }
                   onClick={() => {
                     setDetailsOpen(false);
                     onPublish();
@@ -2038,6 +2747,11 @@ function SavedTeamCard({
                     : <Send className="size-4" />}
                   Publish
                 </Button>
+                {!savedRolesComplete && (
+                  <p className="text-xs text-muted-foreground">
+                    Gán role cho mọi thành viên trước khi publish.
+                  </p>
+                )}
               </>
             )}
           </DialogFooter>

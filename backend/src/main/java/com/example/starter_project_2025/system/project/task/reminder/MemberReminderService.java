@@ -117,7 +117,7 @@ public class MemberReminderService {
         for(Long id:ids){Item item=new Item();item.setId(UUID.randomUUID());item.setBatch(batch);item.setRecipientUserId(id);items.save(item);}
         Event event=new Event(batch.getId(),EVENT_TYPE,projectId,batch.getTenantId(),actor.getId(),request.warningNote(),
                 ids,List.of("IN_APP","EMAIL"),now,context.correlationId());
-        outbox.saveAndFlush(OutboxEvent.inactiveMemberAlertBatch(batch.getId(),projectId,encode(event),now));
+        outbox.saveAndFlush(OutboxEvent.inactiveMemberAlertBatch(batch.getId(), projectId, encode(event),now));
         Audit entry=new Audit();entry.setId(UUID.randomUUID());entry.setBatchId(batch.getId());entry.setProjectId(projectId);
         entry.setAction(EVENT_TYPE);
         entry.setActorId(actor.getId());entry.setOccurredAt(now);entry.setCorrelationId(context.correlationId());

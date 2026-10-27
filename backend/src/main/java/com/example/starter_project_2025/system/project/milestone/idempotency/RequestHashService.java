@@ -18,7 +18,7 @@ public class RequestHashService {
 
     private final ObjectMapper objectMapper;
 
-    public String hash(UUID projectId, UUID tenantId, UUID actorId, CreateMilestoneRequest request) {
+    public String hash(Long projectId, Long tenantId, UUID actorId, CreateMilestoneRequest request) {
         try {
             String canonical = "CREATE_MILESTONE|" + projectId + "|" + tenantId + "|" + actorId
                     + "|" + objectMapper.writeValueAsString(request);

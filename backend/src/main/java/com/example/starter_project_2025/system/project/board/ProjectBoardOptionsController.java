@@ -35,4 +35,10 @@ public class ProjectBoardOptionsController {
     ) {
         return ResponseEntity.ok(projectBoardService.getProjectSprints(projectId));
     }
+
+    @GetMapping("/teams/{teamId}/board-sprints")
+    @Operation(summary = "List sprints available in a team workspace")
+    public ResponseEntity<List<ProjectBoardSprintOption>> getTeamSprints(@PathVariable Long teamId) {
+        return ResponseEntity.ok(projectBoardService.getTeamSprints(teamId));
+    }
 }

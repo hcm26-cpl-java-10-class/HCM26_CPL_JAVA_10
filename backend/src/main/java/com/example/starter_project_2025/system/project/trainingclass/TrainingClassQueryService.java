@@ -35,7 +35,11 @@ public class TrainingClassQueryService {
         List<TrainingClass> manageableClasses = trainingClassRepository.findAll().stream()
                 .filter(trainingClass -> Boolean.TRUE.equals(trainingClass.getIsActive()))
                 .filter(trainingClass ->
-                        scopeAuthorizationService.canManageClass(authentication, trainingClass))
+                        scopeAuthorizationService.canManageClass(
+                                authentication,
+                                trainingClass,
+                                "PEO_TEAM_ALLOCATE",
+                                "PRJ_WORKSPACE_MANAGE"))
                 .filter(trainingClass -> status == null || trainingClass.getStatus() == status)
                 .filter(trainingClass -> programId == null
                         || programId.equals(trainingClass.getProgramId()))

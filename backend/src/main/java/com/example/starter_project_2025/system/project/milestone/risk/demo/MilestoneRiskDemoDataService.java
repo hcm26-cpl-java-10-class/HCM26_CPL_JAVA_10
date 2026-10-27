@@ -28,10 +28,11 @@ public class MilestoneRiskDemoDataService {
         if (admin.getTenant() == null || datasets.existsById(admin.getTenant().getId())) return;
         var source = taskDatasets.findById(admin.getTenant().getId()).orElse(null);
         if (source == null) return;
-        UUID projectId = source.getTaskProjectId();
-        var assignee = memberLinks.findByProjectId(projectId).stream().findFirst().orElseThrow();
+        UUID legacyProjectId = source.getTaskProjectId();
+        var assignee = memberLinks.findByProjectId(legacyProjectId).stream().findFirst().orElseThrow();
         Instant now = milestoneClock.instant();
-        UUID tenant = MilestoneRiskIdentity.tenant(admin.getTenant().getId()), actor = MilestoneRiskIdentity.actor(admin.getId());
+        Long tenant = admin.getTenant().getId(); UUID actor = MilestoneRiskIdentity.actor(admin.getId());
+        Long projectId = 1L;
         sample(tenant, projectId, actor, admin.getId(), assignee.getId(), "MVP delivery at risk", now.plus(Duration.ofHours(24)), true, 1, 2, now);
         sample(tenant, projectId, actor, admin.getId(), assignee.getId(), "No tasks planned", now.plus(Duration.ofHours(12)), true, 0, 0, now);
         sample(tenant, projectId, actor, admin.getId(), assignee.getId(), "Completion target met", now.plus(Duration.ofHours(24)), true, 4, 5, now);
@@ -40,13 +41,14 @@ public class MilestoneRiskDemoDataService {
         sample(tenant, projectId, actor, admin.getId(), assignee.getId(), "Awaiting kickoff", now.plus(Duration.ofHours(24)), false, 0, 1, now);
         var marker = new MilestoneRiskDemoDataset(); marker.setTenantId(admin.getTenant().getId()); datasets.save(marker);
     }
-    private void sample(UUID tenant, UUID project, UUID actor, Long actorId, UUID assignee, String title,
+    private void sample(Long tenant, Long project, UUID actor, Long actorId, UUID assignee, String title,
             Instant deadline, boolean open, int done, int total, Instant now) {
-        Milestone milestone = Milestone.create(tenant, project, title, "Local milestone risk scenario: " + title,
+        Milestone milestone = Milestone.create(tenant, project, 1L, title, "Local milestone risk scenario: " + title,
                 deadline, true, MockMilestoneData.RUBRIC_ID, null, LatePolicyType.NO_LATE, null, null, actor, now);
         if (open) milestone.openForWork(actor, now);
         milestones.saveAndFlush(milestone);
-        for (int i=0; i<total; i++) tasks.save(Task.builder().projectId(project).milestoneId(milestone.getId())
+        UUID legacyProject = UUID.nameUUIDFromBytes(("milestone:project:" + project).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        for (int i=0; i<total; i++) tasks.save(Task.builder().projectId(legacyProject).milestoneId(milestone.getId())
                 .title(title + " - task " + (i+1)).assigneeProjectMemberId(assignee)
                 .status(i<done ? TaskStatus.DONE : TaskStatus.TODO).createdBy(actorId).updatedBy(actorId).build());
     }

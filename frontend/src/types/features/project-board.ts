@@ -46,7 +46,8 @@ export interface ProjectActivity {
 }
 
 export interface ProjectBoard {
-  projectId: number;
+  projectId: number | null;
+  teamId?: number | null;
   sprint: SprintSummary;
   columns: BoardColumn[];
   activityTrail: ProjectActivity[];

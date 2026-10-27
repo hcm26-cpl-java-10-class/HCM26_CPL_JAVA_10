@@ -8,5 +8,5 @@ import java.util.UUID;
 
 public interface MilestoneArtifactSubmissionRepository extends JpaRepository<MilestoneArtifactSubmission, UUID> {
     Optional<MilestoneArtifactSubmission> findTopByTenantIdAndProjectIdAndMilestoneIdAndSubmitterIdOrderByVersionDesc(
-            UUID tenantId, UUID projectId, UUID milestoneId, UUID submitterId);
+            Long tenantId, Long projectId, UUID milestoneId, UUID submitterId);
 }

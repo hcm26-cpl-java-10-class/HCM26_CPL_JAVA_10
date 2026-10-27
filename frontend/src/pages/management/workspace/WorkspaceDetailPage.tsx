@@ -13,9 +13,11 @@ import type { WorkspaceSectionKey } from "@/types/features/workspace";
 import { WORKSPACE_SECTIONS, WorkspaceStatusBadge } from "./workspace.shared";
 import { WorkspaceSectionState, sectionForbidden } from "./WorkspaceSectionState";
 import { WorkspaceBusinessSectionPanel } from "./WorkspaceBusinessSectionPanel";
+import { WorkspaceMilestonesPanel } from "./WorkspaceMilestonesPanel";
 import { WorkspaceOverviewSection } from "./WorkspaceOverviewSection";
 import { WorkspaceMembersPanel } from "./WorkspaceMembersPanel";
 import { sectionAccess } from "./workspace.section-access";
+import { WorkspaceTeamBoardPanel } from "./WorkspaceTeamBoardPanel";
 
 export default function WorkspaceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -45,18 +47,25 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
     }, { replace: true });
   }
   const context = navigation.data?.workspaceId === workspaceId ? navigation.data : undefined;
-  const sections = context?.sections.map(item => sectionAccess(item, hasPermission)) ?? [];
+  const sections = context?.sections.map(item => {
+    const resolved = sectionAccess(item, hasPermission);
+    // Team-only workspaces own their Board through the workspace Team, so the
+    // Board remains available even when legacy section permissions are absent.
+    return item.key === "sprints" && Number.isSafeInteger(context.teamId)
+      ? { ...resolved, canRead: hasPermission("WORKSPACE_READ") || hasPermission("VIEW_PROJECT_WORKSPACE") }
+      : resolved;
+  }) ?? [];
   const current = sections.find(item => item.key === tab);
   const members = sections.find(item => item.key === "members");
   const denied = blocked === tab || !current?.canRead;
-  const validContext = context && Number.isSafeInteger(context.projectId) && Number.isSafeInteger(context.teamId);
+  const validContext = context && Number.isSafeInteger(context.teamId);
   async function refresh() {
     await navigation.refetch();
     await Promise.all(["workspace-detail", "workspace-members", "workspace-section"].map(key =>
       queryClient.invalidateQueries({ queryKey: [key, workspaceId] })));
   }
   return <MainLayout pathName={{ management: "Management", workspaces: "Workspace",
-    [String(workspaceId)]: navigation.isError ? "Workspace details" : context?.projectName ?? "Workspace details" }}>
+    [String(workspaceId)]: navigation.isError ? "Workspace details" : context?.projectName ?? context?.teamName ?? "Workspace details" }}>
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <Button variant="outline" asChild><Link to="/management/workspaces/candidates"><ArrowLeft />Workspace list</Link></Button>
@@ -67,9 +76,9 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
             error={navigation.error} retry={() => void navigation.refetch()} />
         : <>
           <Card><CardHeader><div className="flex items-center justify-between gap-3">
-            <div className="space-y-2"><Badge variant="outline">{context.projectCode}</Badge>
-              <CardTitle>{context.projectName}</CardTitle><p className="text-sm text-muted-foreground">{context.teamName}</p></div>
-            <WorkspaceStatusBadge status={context.projectStatus} />
+            <div className="space-y-2"><Badge variant="outline">{context.projectCode ?? "TEAM-ONLY"}</Badge>
+              <CardTitle>{context.projectName ?? "Team workspace"}</CardTitle><p className="text-sm text-muted-foreground">{context.teamName}</p></div>
+            {context.projectStatus && <WorkspaceStatusBadge status={context.projectStatus} />}
           </div></CardHeader></Card>
           <Tabs value={tab} onValueChange={changeTab} className="gap-5">
             <div className="overflow-x-auto border-b pb-1"><TabsList variant="line" aria-label="Workspace sections"
@@ -88,6 +97,9 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                       charter canManageMembers={current.actions.manage} canViewMembers onViewMembers={() => changeTab("members")}
                       onAccessChanged={reloadAccess} />
                   </>
+                : tab === "milestones" ? <WorkspaceMilestonesPanel workspaceId={workspaceId} projectId={context.projectId}
+                    teamId={context.teamId} access={current} />
+                : tab === "sprints" ? <WorkspaceTeamBoardPanel teamId={context.teamId} />
                 : <WorkspaceBusinessSectionPanel key={workspaceId + ":" + tab} workspaceId={workspaceId}
                     projectId={context.projectId} teamId={context.teamId} section={tab}
                     label={WORKSPACE_SECTIONS.find(section => section.id === tab)!.label}

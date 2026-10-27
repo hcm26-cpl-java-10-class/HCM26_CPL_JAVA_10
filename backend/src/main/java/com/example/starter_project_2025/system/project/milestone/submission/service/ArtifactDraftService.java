@@ -7,7 +7,7 @@ import com.example.starter_project_2025.system.project.milestone.outbox.OutboxEv
 import com.example.starter_project_2025.system.project.milestone.exception.MilestoneConflictException;
 import com.example.starter_project_2025.system.project.milestone.integration.model.ProjectReadContext;
 import com.example.starter_project_2025.system.project.milestone.integration.port.CurrentActorProvider;
-import com.example.starter_project_2025.system.project.milestone.integration.port.CurrentTenantProvider;
+import com.example.starter_project_2025.system.project.milestone.integration.port.MilestoneTenantProvider;
 import com.example.starter_project_2025.system.project.milestone.integration.port.ProjectMilestonePort;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
 import com.example.starter_project_2025.system.project.milestone.service.MilestoneAccessPolicy;
@@ -37,7 +37,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ArtifactDraftService {
     private final CurrentActorProvider actorProvider;
-    private final CurrentTenantProvider tenantProvider;
+    private final MilestoneTenantProvider tenantProvider;
     private final ProjectMilestonePort projectPort;
     private final ArtifactSubmissionScopePort submissionScope;
     private final MilestoneAccessPolicy accessPolicy;
@@ -59,7 +59,7 @@ public class ArtifactDraftService {
     private String uploadAllowedMimeTypes;
 
     @Transactional(readOnly = true)
-    public ArtifactSubmissionWorkspaceResponse getWorkspace(UUID projectId, UUID milestoneId) {
+    public ArtifactSubmissionWorkspaceResponse getWorkspace(Long projectId, UUID milestoneId) {
         Scope scope = requireScope(projectId);
         var milestone = milestoneRepository.findByIdAndProjectIdAndTenantId(milestoneId, projectId, scope.tenantId())
                 .filter(com.example.starter_project_2025.system.project.milestone.domain.Milestone::isActive)
@@ -71,12 +71,12 @@ public class ArtifactDraftService {
                         scope.tenantId(), projectId, milestoneId, scope.actorId())
                 .map(submissionService::toResponse).orElse(null);
         return new ArtifactSubmissionWorkspaceResponse(
-                milestoneQueryService.getDetail(projectId, milestoneId), draft,
+                milestoneQueryService.getDetail(projectId, milestoneId, scope.tenantId()), draft,
                 uploadPolicy(), latestSubmission);
     }
 
     @Transactional
-    public ArtifactDraftResponse save(UUID projectId, UUID milestoneId, ArtifactDraftRequest request) {
+    public ArtifactDraftResponse save(Long projectId, UUID milestoneId, ArtifactDraftRequest request) {
         Scope scope = requireScope(projectId);
         var milestone = milestoneRepository.findByIdAndProjectIdAndTenantId(milestoneId, projectId, scope.tenantId())
                 .filter(com.example.starter_project_2025.system.project.milestone.domain.Milestone::isActive)
@@ -116,9 +116,9 @@ public class ArtifactDraftService {
         return toResponse(draft);
     }
 
-    private Scope requireScope(UUID projectId) {
+    private Scope requireScope(Long projectId) {
         UUID actorId = actorProvider.requireCurrentActorId();
-        UUID tenantId = tenantProvider.requireCurrentTenantId();
+        Long tenantId = tenantProvider.requireCurrentTenantId();
         ProjectReadContext project = projectPort.requireProjectForRead(projectId, actorId, tenantId);
         accessPolicy.requireReadAccess(project);
         submissionScope.requireStudentProjectAccess(projectId, actorId, tenantId);
@@ -203,5 +203,5 @@ public class ArtifactDraftService {
                     Map.of(field, java.util.List.of("Must be an absolute HTTP or HTTPS URL")));
         }
     }
-    private record Scope(UUID actorId, UUID tenantId) { }
+    private record Scope(UUID actorId, Long tenantId) { }
 }

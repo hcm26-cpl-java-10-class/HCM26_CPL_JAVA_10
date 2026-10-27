@@ -19,6 +19,8 @@ import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import { MilestoneCreatePage } from "@/pages/management/project/milestone/pages/MilestoneCreatePage";
 import { MilestoneDetailPage } from "@/pages/management/project/milestone/pages/MilestoneDetailPage";
 import { MilestoneListPage } from "@/pages/management/project/milestone/pages/MilestoneListPage";
+import { TeamMilestoneListPage } from "@/pages/management/project/milestone/pages/TeamMilestoneListPage";
+import { TeamMilestoneDetailPage } from "@/pages/management/project/milestone/pages/TeamMilestoneDetailPage";
 import { RubricListPage } from "@/pages/management/project/rubric/pages/RubricListPage";
 import { RubricCreatePage } from "@/pages/management/project/rubric/pages/RubricCreatePage";
 import { RubricDetailPage } from "@/pages/management/project/rubric/pages/RubricDetailPage";
@@ -39,6 +41,7 @@ export interface RouteConfig {
   path: string;
   component: ComponentType<any>;
   requiredPermission?: string;
+  requiredPermissions?: string[];
   isPublic?: boolean;
   isModuleDriven?: boolean;
 }
@@ -81,13 +84,14 @@ export const routes: RouteConfig[] = [
   {
     path: "/team-allocation/classes/:classId",
     component: TeamAllocationPage,
-    requiredPermission: "PEO_TEAM_ALLOCATE",
+    requiredPermissions: ["PEO_TEAM_ALLOCATE", "PRJ_WORKSPACE_MANAGE"],
   },
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
   { path: "/student/exams", component: StudentExamList,requiredPermission: "EXAM_READ", isModuleDriven: true },
   { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
   { path: "/project-board", component: ProjectBoardPage },
   { path: "/workspaces/candidates", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
+  { path: "/management/workspaces", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
   { path: "/management/workspaces/candidates", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
   { path: "/management/workspaces/:id", component: WorkspaceDetailPage, requiredPermission: "WORKSPACE_READ" },
   { path: "/management/project-teams", component: () => createElement(Navigate, { to: "/management/workspaces/candidates", replace: true }), requiredPermission: "WORKSPACE_READ" },
@@ -95,6 +99,8 @@ export const routes: RouteConfig[] = [
     path: "/projects/:projectId/milestones",
     component: MilestoneListPage,
   },
+  { path: "/teams/:teamId/milestones", component: TeamMilestoneListPage, requiredPermission: "MILESTONE_READ" },
+  { path: "/teams/:teamId/milestones/:milestoneId", component: TeamMilestoneDetailPage, requiredPermission: "MILESTONE_READ" },
   {
     path: "/projects/:projectId/milestones/new",
     component: MilestoneCreatePage,
@@ -123,4 +129,3 @@ export const routes: RouteConfig[] = [
   { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true,},
   { path: "/unauthorized", component: Unauthorized, isPublic: true },
 ];
-

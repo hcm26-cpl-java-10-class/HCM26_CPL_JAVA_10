@@ -23,7 +23,7 @@ public class MilestoneDetailMapper {
     ) {
         return new MilestoneDetailResponse(
                 milestone.getId(),
-                new MilestoneDetailProjectResponse(project.projectId(), project.projectName(), project.status()),
+                project == null ? null : new MilestoneDetailProjectResponse(project.projectId(), project.projectName(), project.status()),
                 milestone.getTitle(),
                 milestone.getDescription(),
                 milestone.getDeadline(),

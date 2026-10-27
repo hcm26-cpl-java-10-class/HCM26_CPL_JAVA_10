@@ -35,7 +35,9 @@ public class WorkspaceJournalService {
         catch (JsonProcessingException exception) { throw new IllegalStateException("Cannot serialize workspace audit", exception); }
         WorkspaceAudit audit = new WorkspaceAudit();
         audit.setEventId(eventId); audit.setTenantId(workspace.getTenant().getId()); audit.setActorId(user.getId());
-        audit.setWorkspaceId(workspace.getId()); audit.setProjectId(workspace.getProject().getId()); audit.setTeamId(workspace.getTeam().getId());
+        audit.setWorkspaceId(workspace.getId());
+        audit.setProjectId(workspace.getProject() == null ? null : workspace.getProject().getId());
+        audit.setTeamId(workspace.getTeam().getId());
         audit.setAction("WORKSPACE_CREATED"); audit.setCorrelationId(correlationId); audit.setBeforeJson("null"); audit.setAfterJson(snapshot);
         audits.saveAndFlush(audit);
         WorkspaceOutboxEvent event = new WorkspaceOutboxEvent();

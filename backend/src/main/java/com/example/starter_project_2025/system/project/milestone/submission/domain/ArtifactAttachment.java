@@ -27,10 +27,10 @@ public class ArtifactAttachment {
     private UUID milestoneId;
 
     @Column(name = "project_id", nullable = false, updatable = false)
-    private UUID projectId;
+    private Long projectId;
 
     @Column(name = "tenant_id", nullable = false, updatable = false)
-    private UUID tenantId;
+    private Long tenantId;
 
     @Column(name = "storage_key", nullable = false, unique = true, updatable = false, length = 36)
     private String storageKey;
@@ -53,7 +53,7 @@ public class ArtifactAttachment {
     @Column(name = "uploaded_at", nullable = false, updatable = false)
     private Instant uploadedAt;
 
-    public static ArtifactAttachment clean(UUID milestoneId, UUID projectId, UUID tenantId,
+    public static ArtifactAttachment clean(UUID milestoneId, Long projectId, Long tenantId,
             String storageKey, String originalName, String contentType, long sizeBytes,
             UUID actorId, Instant now) {
         ArtifactAttachment attachment = new ArtifactAttachment();

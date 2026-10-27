@@ -9,7 +9,7 @@ import { WorkspaceSectionState, sectionForbidden } from "./WorkspaceSectionState
 
 export function WorkspaceOverviewSection({ workspaceId, projectId, teamId, canViewMembers, onViewMembers,
   onAccessChanged, charter = false, canManageMembers = false }: {
-  workspaceId: number; projectId: number; teamId: number; canViewMembers: boolean; onViewMembers: () => void;
+  workspaceId: number; projectId?: number | null; teamId: number; canViewMembers: boolean; onViewMembers: () => void;
   onAccessChanged: () => void; charter?: boolean; canManageMembers?: boolean;
 }) {
   const { user, activeRole } = usePermissions();

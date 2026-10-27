@@ -471,11 +471,16 @@ export default function ProjectBoardPage() {
   const searchKey = searchParams.toString();
   const requestIds = useMemo(() => {
     const query = new URLSearchParams(searchKey);
+    const parsedTeamId = Number(query.get("teamId"));
     const parsedProjectId = Number(query.get("projectId"));
     const parsedSprintId = Number(query.get("sprintId"));
+    if (Number.isSafeInteger(parsedTeamId) && parsedTeamId > 0
+      && Number.isSafeInteger(parsedSprintId) && parsedSprintId > 0) {
+      return { teamId: parsedTeamId, projectId: null, sprintId: parsedSprintId };
+    }
     return Number.isSafeInteger(parsedProjectId) && parsedProjectId > 0
       && Number.isSafeInteger(parsedSprintId) && parsedSprintId > 0
-      ? { projectId: parsedProjectId, sprintId: parsedSprintId }
+      ? { teamId: null, projectId: parsedProjectId, sprintId: parsedSprintId }
       : null;
   }, [searchKey]);
 
@@ -499,6 +504,29 @@ export default function ProjectBoardPage() {
   }, []);
 
   useEffect(() => {
+    const teamIdFromUrl = Number(searchParams.get("teamId"));
+    if (Number.isSafeInteger(teamIdFromUrl) && teamIdFromUrl > 0) {
+      let cancelled = false;
+      setProjectOptionsLoading(true);
+      projectBoardApi.getTeamSprints(teamIdFromUrl)
+        .then((sprints) => {
+          if (!cancelled) {
+            setSprintOptions(sprints);
+            if (!searchParams.get("sprintId") && sprints[0]) {
+              setSearchParams({ teamId: String(teamIdFromUrl), sprintId: String(sprints[0].id) }, { replace: true });
+            }
+            setSprintOptionsLoading(false);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setSprintOptions([]);
+            setOptionsError("Không tải được Sprint của Team này.");
+            setSprintOptionsLoading(false);
+          }
+        });
+      return () => { cancelled = true; };
+    }
     const parsedProjectId = Number(projectId);
     if (!Number.isSafeInteger(parsedProjectId) || parsedProjectId <= 0) {
       setSprintOptions([]);
@@ -526,7 +554,7 @@ export default function ProjectBoardPage() {
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [projectId, searchParams, setSearchParams]);
 
   useEffect(() => {
     setProjectId(searchParams.get("projectId") ?? "");
@@ -540,7 +568,10 @@ export default function ProjectBoardPage() {
     setLoading(true);
     setLoadError(null);
     setBoard(null);
-    projectBoardApi.getBoard(requestIds.projectId, requestIds.sprintId)
+    const boardRequest = requestIds.teamId
+      ? projectBoardApi.getTeamBoard(requestIds.teamId, requestIds.sprintId)
+      : projectBoardApi.getBoard(requestIds.projectId!, requestIds.sprintId);
+    boardRequest
       .then((data) => {
         if (!cancelled) setBoard(data);
       })
@@ -561,7 +592,7 @@ export default function ProjectBoardPage() {
     let cancelled = false;
     setAssigneesLoading(true);
     setAssigneesError("");
-    projectBoardApi.getTaskAssignees(board.projectId)
+    projectBoardApi.getTaskAssignees(board.projectId!)
       .then((data) => {
         if (!cancelled) setAssignees(data);
       })
@@ -646,7 +677,7 @@ export default function ProjectBoardPage() {
         return;
       }
       try {
-        await projectBoardApi.moveTaskToSprint(board!.projectId, task.id, { sprintId: null, expectedVersion: task.version }, createCorrelationId());
+        await projectBoardApi.moveTaskToSprint(board!.projectId!, task.id, { sprintId: null, expectedVersion: task.version }, createCorrelationId());
         toast.success(`${task.code}: đã chuyển về Backlog`);
         setRequestVersion((v) => v + 1);
       } catch (error) {
@@ -685,7 +716,7 @@ export default function ProjectBoardPage() {
       }
 
       try {
-        await projectBoardApi.updateTaskStatus(board!.projectId, task.id, targetStatus, task.version, createCorrelationId());
+        await projectBoardApi.updateTaskStatus(board!.projectId!, task.id, targetStatus, task.version, createCorrelationId());
         toast.success(`${task.code}: đã chuyển sang ${targetStatus.replaceAll("_", " ")}`);
         setRequestVersion((v) => v + 1);
       } catch (error) {
@@ -740,7 +771,7 @@ export default function ProjectBoardPage() {
     };
     setEditBusy(true);
     try {
-      await projectBoardApi.updateTask(board!.projectId, editingTask.id, payload);
+      await projectBoardApi.updateTask(board!.projectId!, editingTask.id, payload);
       toast.success("Đã cập nhật công việc");
       setEditingTask(null);
       setRequestVersion((v) => v + 1);
@@ -760,7 +791,7 @@ export default function ProjectBoardPage() {
   const handleDeleteTask = async () => {
     if (!deleteConfirmTask || !board) return;
     try {
-      await projectBoardApi.deleteTask(board.projectId, deleteConfirmTask.id);
+      await projectBoardApi.deleteTask(board.projectId!, deleteConfirmTask.id);
       toast.success("Đã xóa công việc");
       setDeleteConfirmTask(null);
       setRequestVersion((v) => v + 1);
@@ -810,7 +841,7 @@ export default function ProjectBoardPage() {
     setCreateTaskBusy(true);
     try {
       const task = await projectBoardApi.createTask(
-        board.projectId,
+        board.projectId!,
         board.sprint.id,
         payload,
         createCorrelationId(),
@@ -902,7 +933,11 @@ export default function ProjectBoardPage() {
               )}
             </div>
 
-            <form onSubmit={handleSubmit} className="grid w-full gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 sm:grid-cols-[1fr_1fr_auto] xl:max-w-[760px]">
+            {searchParams.get("teamId") ? (
+              <div className="flex items-center rounded-2xl border border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-600">
+                Board Team-only · Team #{searchParams.get("teamId")}
+              </div>
+            ) : <form onSubmit={handleSubmit} className="grid w-full gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 sm:grid-cols-[1fr_1fr_auto] xl:max-w-[760px]">
               <label className="min-w-0">
                 <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                   Project
@@ -966,7 +1001,7 @@ export default function ProjectBoardPage() {
                   Mở Board
                 </Button>
               </div>
-            </form>
+            </form>}
           </div>
           {formError && (
             <p role="alert" className="relative mt-2 text-sm font-medium text-rose-600">{formError}</p>
@@ -1052,7 +1087,7 @@ export default function ProjectBoardPage() {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs font-bold uppercase tracking-[0.12em] text-blue-800">
-                        FAMS · Project #{board.projectId}
+                        {board.teamId ? `FAMS · Team #${board.teamId}` : `FAMS · Project #${board.projectId!}`}
                       </span>
                       <Badge className="border-0 bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
                         Sprint Board
@@ -1072,7 +1107,7 @@ export default function ProjectBoardPage() {
                       {formatDate(board.sprint.startDate)} – {formatDate(board.sprint.endDate)}
                     </span>
                   </div>
-                  <Button onClick={() => setShowCreateNotice(true)} className="bg-blue-800 text-white hover:bg-blue-700">
+                  <Button disabled={Boolean(board.teamId)} onClick={() => setShowCreateNotice(true)} className="bg-blue-800 text-white hover:bg-blue-700">
                     <Plus className="size-4" />
                     New Task
                   </Button>
@@ -1184,13 +1219,13 @@ export default function ProjectBoardPage() {
                     </div>
                   </div>
                 ) : (
-                  <ProjectTaskListView
+                  board.projectId ? <ProjectTaskListView
                     canUpdateTask
                     memberFilter={memberFilter}
                     onTaskChanged={() => setRequestVersion((version) => version + 1)}
-                    projectId={board.projectId}
+                    projectId={board.projectId!}
                     sprintId={board.sprint.id}
-                  />
+                  /> : <p className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">List View cho Team-only đang sử dụng Board View.</p>
                 )}
               </div>
 
@@ -1366,7 +1401,7 @@ export default function ProjectBoardPage() {
                   <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-700"><Save className="size-5" /></span>
                   <div>
                     <h2 id="edit-task-title" className="text-lg font-bold text-slate-900">Chỉnh sửa công việc</h2>
-                    <p className="mt-1 text-sm text-slate-500">Project #{board.projectId} · {board.sprint.name}</p>
+                    <p className="mt-1 text-sm text-slate-500">Project #{board.projectId!} · {board.sprint.name}</p>
                   </div>
                 </div>
 

@@ -19,6 +19,13 @@ import type {
 const backlogMilestoneOptionsPath = "/backlog-items/milestone-options";
 
 export const milestoneApi = {
+  async getTeamList(teamId: number, params: MilestoneListParams): Promise<MilestonePageResponse> {
+    const response = await axiosInstance.get<MilestonePageResponse>(
+      `/teams/${teamId}/milestones`,
+      { params: { page: params.page, size: params.size, status: params.status } },
+    );
+    return response.data;
+  },
   async getList(
     projectId: string,
     params: MilestoneListParams,
@@ -27,6 +34,7 @@ export const milestoneApi = {
       page: String(params.page),
       size: String(params.size),
     });
+    if (params.teamId !== undefined) query.set("teamId", String(params.teamId));
     const sort = Array.isArray(params.sort) ? params.sort : params.sort ? [params.sort] : [];
     sort.forEach((item) => query.append("sort", item.replace(",", ":")));
     if (params.search) query.set("search", params.search);
@@ -50,6 +58,13 @@ export const milestoneApi = {
     return response.data;
   },
 
+  async getTeamCreateOptions(teamId: number): Promise<MilestoneCreateOptions> {
+    const response = await axiosInstance.get<MilestoneCreateOptions>(
+      `/teams/${teamId}/milestones/create-options`,
+    );
+    return response.data;
+  },
+
   async create(
     projectId: string,
     payload: CreateMilestoneRequest,
@@ -67,9 +82,30 @@ export const milestoneApi = {
     return response.data;
   },
 
-  async getDetail(projectId: string, milestoneId: string): Promise<MilestoneDetailResponse> {
+  async createForTeam(
+    teamId: number,
+    payload: CreateMilestoneRequest,
+    idempotencyKey: string,
+  ): Promise<MilestoneResponse> {
+    const response = await axiosInstance.post<MilestoneResponse>(
+      `/teams/${teamId}/milestones`,
+      payload,
+      { headers: { "Idempotency-Key": idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  async getDetail(projectId: string, milestoneId: string, teamId?: number): Promise<MilestoneDetailResponse> {
     const response = await axiosInstance.get<MilestoneDetailResponse>(
       `/projects/${projectId}/milestones/${milestoneId}`,
+      { params: teamId === undefined ? undefined : { teamId } },
+    );
+    return response.data;
+  },
+
+  async getTeamDetail(teamId: number, milestoneId: string): Promise<MilestoneDetailResponse> {
+    const response = await axiosInstance.get<MilestoneDetailResponse>(
+      `/teams/${teamId}/milestones/${milestoneId}`,
     );
     return response.data;
   },

@@ -27,7 +27,7 @@ public class IdempotencyRecord {
     private UUID id;
 
     @Column(name = "tenant_id", nullable = false, updatable = false)
-    private UUID tenantId;
+    private Long tenantId;
 
     @Column(name = "actor_id", nullable = false, updatable = false)
     private UUID actorId;
@@ -58,7 +58,7 @@ public class IdempotencyRecord {
     private Instant completedAt;
 
     public static IdempotencyRecord completed(
-            UUID tenantId,
+            Long tenantId,
             UUID actorId,
             String operation,
             String key,

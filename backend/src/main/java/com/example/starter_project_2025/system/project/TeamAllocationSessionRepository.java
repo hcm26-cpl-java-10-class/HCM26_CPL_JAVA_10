@@ -25,6 +25,8 @@ public interface TeamAllocationSessionRepository
             Long classId
     );
 
+    Optional<TeamAllocationSession> findFirstByTrainingClass_IdOrderByIdAsc(Long classId);
+
     boolean existsByTrainingClass_IdAndStatus(
             Long classId,
             TeamAllocationSessionStatus status

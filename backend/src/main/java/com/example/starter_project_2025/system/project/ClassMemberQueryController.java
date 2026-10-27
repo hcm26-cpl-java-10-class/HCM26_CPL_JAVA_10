@@ -31,7 +31,7 @@ public class ClassMemberQueryController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('PEO_TEAM_ALLOCATE')")
+    @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
     public List<ClassMemberRosterResponse> getClassRoster(
             @PathVariable Long classId,
             @RequestParam(required = false) Long sessionId,

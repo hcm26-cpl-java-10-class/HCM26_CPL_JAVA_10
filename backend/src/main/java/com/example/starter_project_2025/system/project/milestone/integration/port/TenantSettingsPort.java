@@ -4,5 +4,5 @@ import java.time.ZoneId;
 import java.util.UUID;
 
 public interface TenantSettingsPort {
-    ZoneId requireTimeZone(UUID tenantId);
+    ZoneId requireTimeZone(Long tenantId);
 }

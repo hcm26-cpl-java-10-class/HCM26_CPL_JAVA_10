@@ -6,6 +6,12 @@ import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.BoardProjectMember;
 import com.example.starter_project_2025.system.project.BoardProjectMemberRepository;
 import com.example.starter_project_2025.system.project.ProjectRepository;
+import com.example.starter_project_2025.system.project.ProjectMember;
+import com.example.starter_project_2025.system.project.ProjectMemberRepository;
+import com.example.starter_project_2025.system.project.ProjectTeam;
+import com.example.starter_project_2025.system.project.ProjectTeamRepository;
+import com.example.starter_project_2025.system.project.ProjectTeamStatus;
+import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
 import com.example.starter_project_2025.system.project.team.ProjectRole;
 import com.example.starter_project_2025.system.project.activity.ProjectActivityLog;
 import com.example.starter_project_2025.system.project.activity.ProjectActivityRepository;
@@ -60,7 +66,9 @@ public class ProjectBoardServiceImpl implements ProjectBoardService {
     );
 
     ProjectRepository projectRepository;
-    BoardProjectMemberRepository projectMemberRepository;
+    ProjectTeamRepository projectTeamRepository;
+    ProjectMemberRepository projectMemberRepository;
+    BoardProjectMemberRepository boardProjectMemberRepository;
     SprintRepository sprintRepository;
     TaskRepository taskRepository;
     TenantRepository tenantRepository;
@@ -76,7 +84,7 @@ public class ProjectBoardServiceImpl implements ProjectBoardService {
             throw new AccessDeniedException("Tenant is inactive or unavailable");
         }
 
-        List<Long> projectIds = projectMemberRepository
+        List<Long> projectIds = boardProjectMemberRepository
                 .findAllByUserIdAndProjectRoleInAndIsActiveTrueOrderByProjectIdAsc(actor.getId(), BOARD_ROLES)
                 .stream()
                 .map(BoardProjectMember::getProjectId)
@@ -150,6 +158,7 @@ public class ProjectBoardServiceImpl implements ProjectBoardService {
 
         return new ProjectBoardResponse(
                 projectId,
+                null,
                 new SprintSummaryResponse(
                         sprint.getId(),
                         sprint.getName(),
@@ -160,6 +169,118 @@ public class ProjectBoardServiceImpl implements ProjectBoardService {
                 columns,
                 activity
         );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProjectBoardSprintOption> getTeamSprints(Long teamId) {
+        User actor = requireAuthenticatedActor();
+        verifyTeamScope(actor, teamId);
+        return sprintRepository.findAllByTeamIdAndIsActiveTrueOrderByStartDateDescIdDesc(teamId)
+                .stream()
+                .map(sprint -> new ProjectBoardSprintOption(
+                        sprint.getId(), sprint.getName(), sprint.getStatus(),
+                        sprint.getStartDate(), sprint.getEndDate()))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProjectBoardResponse getTeamBoard(Long teamId, Long sprintId) {
+        User actor = requireAuthenticatedActor();
+        verifyTeamScope(actor, teamId);
+
+        Sprint sprint = sprintRepository.findById(sprintId)
+                .filter(candidate -> Boolean.TRUE.equals(candidate.getIsActive()))
+                .filter(candidate -> teamId.equals(candidate.getTeamId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Sprint", "id", sprintId));
+
+        List<Task> backlog = taskRepository
+                .findByTeamIdAndSprintIdIsNullAndIsActiveTrueOrderByOrderIndexAscIdAsc(teamId);
+        List<Task> sprintTasks = taskRepository
+                .findByTeamIdAndSprintIdAndIsActiveTrueOrderByOrderIndexAscIdAsc(teamId, sprintId);
+        List<Task> visibleTasks = new ArrayList<>(backlog.size() + sprintTasks.size());
+        visibleTasks.addAll(backlog);
+        visibleTasks.addAll(sprintTasks);
+
+        Map<Long, TaskCardResponse.AssigneeResponse> assignees = resolveTeamAssignees(teamId, visibleTasks);
+        return new ProjectBoardResponse(
+                null,
+                teamId,
+                new SprintSummaryResponse(
+                        sprint.getId(), sprint.getName(), sprint.getStartDate(),
+                        sprint.getEndDate(), sprint.getSprintGoal()),
+                buildColumns(backlog, sprintTasks, assignees),
+                List.of()
+        );
+    }
+
+    @Override
+    @Transactional
+    public ProjectBoardSprintOption createTeamSprint(Long teamId, TeamSprintCreateRequest request) {
+        User actor = requireAuthenticatedActor();
+        verifyTeamScope(actor, teamId);
+        Sprint sprint = Sprint.builder()
+                .teamId(teamId)
+                .name(request.name().trim())
+                .sprintGoal(request.sprintGoal())
+                .startDate(request.startDate())
+                .endDate(request.endDate())
+                .status(request.status())
+                .isActive(true)
+                .version(0L)
+                .build();
+        sprint = sprintRepository.saveAndFlush(sprint);
+        return new ProjectBoardSprintOption(sprint.getId(), sprint.getName(), sprint.getStatus(),
+                sprint.getStartDate(), sprint.getEndDate());
+    }
+
+    private void verifyTeamScope(User actor, Long teamId) {
+        ProjectTeam team = projectTeamRepository.findById(teamId)
+                .orElseThrow(() -> new ResourceNotFoundException("Team", "id", teamId));
+        Long tenantId = actor.getTenantId();
+        if (tenantId == null || !tenantId.equals(team.getTrainingClass().getTenantId())
+                || !tenantRepository.existsByIdAndIsActiveTrue(tenantId)) {
+            throw new AccessDeniedException("Team is outside the user's tenant scope");
+        }
+        boolean administrator = SecurityContextHolder.getContext().getAuthentication()
+                .getAuthorities().stream()
+                .anyMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN")
+                        || authority.getAuthority().equals("ROLE_ADMINISTRATOR"));
+        if (team.getStatus() != ProjectTeamStatus.ACTIVE
+                || (!administrator && !projectMemberRepository.existsByTeam_IdAndClassMember_User_IdAndClassMember_Status(
+                teamId, actor.getId(), ClassMemberStatus.ACTIVE))) {
+            throw new AccessDeniedException("User is not an active member of this team");
+        }
+    }
+
+    private Map<Long, TaskCardResponse.AssigneeResponse> resolveTeamAssignees(
+            Long teamId, Collection<Task> tasks) {
+        Set<Long> memberIds = tasks.stream()
+                .map(Task::getAssigneeProjectMemberId)
+                .filter(id -> id != null)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (memberIds.isEmpty()) return Map.of();
+
+        Map<Long, User> usersById = projectMemberRepository.findAllByIdIn(memberIds).stream()
+                .filter(member -> member.getTeam().getId().equals(teamId))
+                .map(ProjectMember::getClassMember)
+                .map(member -> member.getUser())
+                .filter(user -> Boolean.TRUE.equals(user.getIsActive()))
+                .collect(Collectors.toMap(User::getId, user -> user, (left, right) -> left));
+        Map<Long, TaskCardResponse.AssigneeResponse> result = new HashMap<>();
+        projectMemberRepository.findAllByIdIn(memberIds).stream()
+                .filter(member -> member.getTeam().getId().equals(teamId))
+                .forEach(member -> {
+                    User user = usersById.values().stream()
+                            .filter(candidate -> candidate.getId().equals(member.getClassMember().getUser().getId()))
+                            .findFirst().orElse(null);
+                    if (user != null) {
+                        result.put(member.getId(),
+                                new TaskCardResponse.AssigneeResponse(member.getId(), user.getFullName()));
+                    }
+                });
+        return result;
     }
 
     private User requireAuthenticatedActor() {
@@ -193,7 +314,7 @@ public class ProjectBoardServiceImpl implements ProjectBoardService {
             throw new AccessDeniedException("Project is inactive");
         }
 
-        if (!projectMemberRepository.existsByProjectIdAndUserIdAndProjectRoleInAndIsActiveTrue(
+        if (!boardProjectMemberRepository.existsByProjectIdAndUserIdAndProjectRoleInAndIsActiveTrue(
                 project.getId(),
                 actor.getId(),
                 BOARD_ROLES
@@ -215,7 +336,7 @@ public class ProjectBoardServiceImpl implements ProjectBoardService {
             return Map.of();
         }
 
-        List<BoardProjectMember> members = projectMemberRepository
+        List<BoardProjectMember> members = boardProjectMemberRepository
                 .findAllByIdInAndProjectIdAndIsActiveTrue(memberIds, projectId);
         Set<Long> userIds = members.stream()
                 .map(BoardProjectMember::getUserId)

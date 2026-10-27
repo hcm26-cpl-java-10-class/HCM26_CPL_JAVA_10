@@ -253,7 +253,7 @@ export function MilestoneForm({
             <CardDescription>Review the milestone before creating it.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 text-sm">
-            <div><p className="text-muted-foreground">Project</p><p className="mt-1 font-medium">{options.project.name}</p></div>
+            <div><p className="text-muted-foreground">Scope</p><p className="mt-1 font-medium">{options.project?.name ?? "Team workspace"}</p></div>
             <div><p className="text-muted-foreground">Milestone</p><p className="mt-1 font-medium">{values.title?.trim() || "Not entered"}</p></div>
             <div><p className="text-muted-foreground">Deadline</p><p className="mt-1 flex items-center gap-2 font-medium"><CalendarClock className="size-4" />{values.deadline ? new Date(values.deadline).toLocaleString("en-GB") : "Not selected"}</p></div>
             <div><p className="text-muted-foreground">Checklist</p><p className="mt-1 font-medium">{values.checklist?.length ?? 0} item(s)</p></div>

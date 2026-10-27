@@ -6,7 +6,7 @@ import com.example.starter_project_2025.system.project.milestone.audit.Milestone
 import com.example.starter_project_2025.system.project.milestone.exception.MilestoneValidationException;
 import com.example.starter_project_2025.system.project.milestone.integration.model.ProjectReadContext;
 import com.example.starter_project_2025.system.project.milestone.integration.port.CurrentActorProvider;
-import com.example.starter_project_2025.system.project.milestone.integration.port.CurrentTenantProvider;
+import com.example.starter_project_2025.system.project.milestone.integration.port.MilestoneTenantProvider;
 import com.example.starter_project_2025.system.project.milestone.integration.port.ProjectMilestonePort;
 import com.example.starter_project_2025.system.project.milestone.outbox.OutboxEventWriter;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
@@ -43,7 +43,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ArtifactUploadService {
     private final CurrentActorProvider actorProvider;
-    private final CurrentTenantProvider tenantProvider;
+    private final MilestoneTenantProvider tenantProvider;
     private final ProjectMilestonePort projectPort;
     private final ArtifactSubmissionScopePort submissionScope;
     private final MilestoneAccessPolicy accessPolicy;
@@ -61,9 +61,9 @@ public class ArtifactUploadService {
     @Value("${app.artifact.upload.storage-path:./data/artifact-uploads}") private String storagePath;
 
     @Transactional
-    public ArtifactAttachmentResponse upload(UUID projectId, UUID milestoneId, MultipartFile file) {
+    public ArtifactAttachmentResponse upload(Long projectId, UUID milestoneId, MultipartFile file) {
         UUID actorId = actorProvider.requireCurrentActorId();
-        UUID tenantId = tenantProvider.requireCurrentTenantId();
+        Long tenantId = tenantProvider.requireCurrentTenantId();
         ProjectReadContext project = projectPort.requireProjectForRead(projectId, actorId, tenantId);
         accessPolicy.requireReadAccess(project);
         submissionScope.requireStudentProjectAccess(projectId, actorId, tenantId);
