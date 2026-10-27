@@ -31,6 +31,8 @@ public class ScheduleSourceRegistry {
         }
     }
 
+    public boolean contains(ScheduleEntryKey.Source source) { return sources.containsKey(source); }
+
     public ScheduleSessionSource.LookupResult lookup(ScheduleEntryKey key) {
         var provider = sources.get(key.source());
         if (provider == null) return failedLookup(key, ScheduleSessionSource.LookupStatus.MISSING_SOURCE);

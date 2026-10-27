@@ -19,11 +19,13 @@ import java.util.function.Consumer;
 public class StudySessionImportService {
     private final ParserFactory fallbackParsers;
     private final GenericImportMapper mapper;
+    private StudySessionImportWriter writer;
 
     @Autowired
     public StudySessionImportService(ParserFactory fallbackParsers, RelationLookupEngine relations,
-                                     RelationGraphBuilder graph) {
+                                     RelationGraphBuilder graph, StudySessionImportWriter writer) {
         this(fallbackParsers, new GenericImportMapper(relations, graph, new StudySessionValueConverter()));
+        this.writer=writer;
     }
 
     public StudySessionImportService(ParserFactory fallbackParsers, GenericImportMapper mapper) {
@@ -47,8 +49,11 @@ public class StudySessionImportService {
             for (var row : parser.parse(input)) {
                 try {
                     StudySession session = mapper.map(row, StudySession.class);
-                    beforeSave.accept(session);
-                    repository.save(session);
+                    if(writer!=null) writer.save(session,beforeSave);
+                    else {
+                        // Standalone parser tests use the constructor without Spring infrastructure.
+                        beforeSave.accept(session); repository.save(session);
+                    }
                     result.setSuccessCount(result.getSuccessCount() + 1);
                 } catch (AccessDeniedException error) {
                     throw error;

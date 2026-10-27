@@ -2,4 +2,6 @@ package com.example.starter_project_2025.system.schedule;
 
 public interface ScheduleReferenceProvider {
     ScheduleReferences load();
+    /** Resources without the legacy external assignment catalogue. */
+    default ScheduleReferences loadResources() { return load(); }
 }

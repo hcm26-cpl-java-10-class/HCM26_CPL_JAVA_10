@@ -48,6 +48,8 @@ class StudySessionBackendIntegrationTest {
         LocalValidatorFactoryBean validator() { return new LocalValidatorFactoryBean(); }
     }
 
+    @MockBean StudySessionScheduling scheduling;
+    @MockBean StudySessionImportWriter importWriter;
     @MockBean ExportService exports;
     @MockBean ParserFactory fallbackParsers;
     @MockBean RelationLookupEngine relations;
@@ -62,6 +64,13 @@ class StudySessionBackendIntegrationTest {
 
     @AfterEach
     void clearSecurity() { SecurityContextHolder.clearContext(); }
+
+    @org.junit.jupiter.api.BeforeEach
+    void configureWriter() { org.mockito.Mockito.doAnswer(call -> {
+        StudySession row=call.getArgument(0);
+        java.util.function.Consumer<StudySession> callback=call.getArgument(1);
+        callback.accept(row); sessions.saveAndFlush(row); return null;
+    }).when(importWriter).save(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()); }
 
     @Test
     void sharedSubjectMappingCrudAndLifecycleWorkWithRealSpringBeans() {

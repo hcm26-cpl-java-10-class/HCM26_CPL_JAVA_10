@@ -40,6 +40,12 @@ public class ExternalScheduleReferenceProvider implements ScheduleReferenceProvi
                 read(holidaysPath, new ParameterizedTypeReference<List<ScheduleReferences.Holiday>>() {}));
     }
 
+    @Override
+    public ScheduleReferences loadResources() {
+        return new ScheduleReferences(resources.fetchClasses(null), resources.fetchTrainers(null), resources.fetchRooms(),
+                List.of(), read(holidaysPath, new ParameterizedTypeReference<List<ScheduleReferences.Holiday>>() {}));
+    }
+
     private <T> List<T> read(String path, ParameterizedTypeReference<List<T>> type) {
         try {
             HttpHeaders headers = new HttpHeaders();
