@@ -54,16 +54,13 @@ public class ProjectTeamMemberHistoryService {
                 && fromTeam.getStatus() == ProjectTeamStatus.ACTIVE)
                 || (toTeam != null
                 && toTeam.getStatus() == ProjectTeamStatus.ACTIVE);
-        if (!activeEvent) {
-            return;
-        }
         User actor = ((UserPrincipal) authentication.getPrincipal()).getUser();
         TrainingClass trainingClass = session.getTrainingClass();
         historyRepository.save(ProjectTeamMemberHistory.builder()
                 .classId(trainingClass.getId())
                 .cohortId(trainingClass.getCohortId())
                 .allocationSessionId(session.getId())
-                .activeAtEvent(true)
+                .activeAtEvent(activeEvent)
                 .memberId(member.getId())
                 .memberName(member.getUser().getFullName())
                 .fromTeamId(fromTeam == null ? null : fromTeam.getId())

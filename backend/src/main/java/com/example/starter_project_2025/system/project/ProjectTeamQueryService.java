@@ -59,10 +59,13 @@ public class ProjectTeamQueryService {
                                     .map(member -> new BatchSaveDraftResponse.MemberResponse(
                                             member.getClassMember().getId(),
                                             member.getClassMember().getUser().getFullName(),
-                                            member.getRole()))
+                                            member.getRole(),
+                                            ProjectMemberRole.parseRoles(member.getRole())))
                                     .toList();
                     ProjectTemplateConstraints.Capacity capacity =
                             readTemplateCapacity(team);
+                    ProjectTemplateConstraints.RolePolicy policy =
+                            readTemplatePolicy(team);
                     return new BatchSaveDraftResponse.TeamResponse(
                         team.getId(),
                         team.getTeamName(),
@@ -76,7 +79,9 @@ public class ProjectTeamQueryService {
                         team.getProjectTemplateName(),
                         capacity == null ? null : capacity.minMembers(),
                         capacity == null ? null : capacity.maxMembers(),
-                        memberIds.size()
+                        memberIds.size(),
+                        policy.allowMultiRole(),
+                        policy.quotas()
                     );
                 })
                 .toList();
@@ -95,6 +100,18 @@ public class ProjectTeamQueryService {
             // Broken constraints must not break the team list; the assign
             // action surfaces them with a 400.
             return null;
+        }
+    }
+
+    private ProjectTemplateConstraints.RolePolicy readTemplatePolicy(ProjectTeam team) {
+        ProjectTemplate template = team.getProjectTemplate();
+        if (template == null) {
+            return ProjectTemplateConstraints.RolePolicy.singleRoleDefault();
+        }
+        try {
+            return ProjectTemplateConstraints.parseRolePolicy(objectMapper, template);
+        } catch (RuntimeException ignored) {
+            return ProjectTemplateConstraints.RolePolicy.singleRoleDefault();
         }
     }
 }

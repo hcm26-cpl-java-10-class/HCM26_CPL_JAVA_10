@@ -22,11 +22,19 @@ public record BatchSaveDraftResponse(
             String projectTemplateName,
             Integer minMembers,
             Integer maxMembers,
-            Integer memberCount
+            Integer memberCount,
+            /** US-11: template role policy. */
+            boolean allowMultiRole,
+            List<ProjectTemplateConstraints.RoleQuota> roleQuotas
     ) {
     }
 
-    public record MemberResponse(Long memberId, String fullName, String role) {
+    public record MemberResponse(
+            Long memberId,
+            String fullName,
+            String role,
+            List<String> roles
+    ) {
     }
 
     public record DraftWarning(

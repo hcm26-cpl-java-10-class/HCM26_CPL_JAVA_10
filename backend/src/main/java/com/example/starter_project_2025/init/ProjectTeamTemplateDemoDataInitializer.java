@@ -34,24 +34,49 @@ import org.springframework.transaction.annotation.Transactional;
 )
 public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner {
 
-    /** code, name, min_members, max_members */
+    /** code, name, constraints JSON (US-10 capacity window + US-11 role quotas) */
     private static final List<TemplateSeed> TEMPLATES = List.of(
             new TemplateSeed(
                     "US10-TPL-WEB-4-6",
                     "Ứng dụng Web Java (4-6 thành viên)",
-                    4, 6),
+                    constraints(4, 6, false,
+                            "\"PM\":{\"min\":1,\"max\":1},"
+                                    + "\"BA\":{\"min\":1,\"max\":1},"
+                                    + "\"DEV\":{\"min\":1,\"max\":4},"
+                                    + "\"QA\":{\"min\":1,\"max\":1}")),
             new TemplateSeed(
                     "US10-TPL-DATA-2-5",
                     "Phân tích dữ liệu (2-5 thành viên)",
-                    2, 5),
+                    constraints(2, 5, true,
+                            "\"PM\":{\"min\":1,\"max\":2},"
+                                    + "\"BA\":{\"min\":0,\"max\":1},"
+                                    + "\"DEV\":{\"min\":1,\"max\":4},"
+                                    + "\"QA\":{\"min\":0,\"max\":1}")),
             new TemplateSeed(
                     "US10-TPL-CAPSTONE-5-7",
                     "Đồ án Capstone (5-7 thành viên)",
-                    5, 7),
+                    constraints(5, 7, false,
+                            "\"PM\":{\"min\":1,\"max\":1},"
+                                    + "\"BA\":{\"min\":1,\"max\":1},"
+                                    + "\"DEV\":{\"min\":2,\"max\":4},"
+                                    + "\"QA\":{\"min\":1,\"max\":1}")),
             new TemplateSeed(
                     "US10-TPL-MOBILE-3-4",
                     "Ứng dụng Mobile (3-4 thành viên)",
-                    3, 4)
+                    constraints(3, 4, true,
+                            "\"PM\":{\"min\":1,\"max\":1},"
+                                    + "\"BA\":{\"min\":1,\"max\":1},"
+                                    + "\"DEV\":{\"min\":1,\"max\":2},"
+                                    + "\"QA\":{\"min\":0,\"max\":1}")),
+            // US-11 test fixture: 4-8 members and multi-role enabled.
+            new TemplateSeed(
+                    "US11-TPL-MULTIROLE-4-8",
+                    "Đề bài kiêm nhiệm (4-8 thành viên)",
+                    constraints(4, 8, true,
+                            "\"PM\":{\"min\":1,\"max\":2},"
+                                    + "\"BA\":{\"min\":1,\"max\":2},"
+                                    + "\"DEV\":{\"min\":1,\"max\":8},"
+                                    + "\"QA\":{\"min\":0,\"max\":2}"))
     );
 
     private final ProjectTemplateRepository projectTemplateRepository;
@@ -76,9 +101,7 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
                 created++;
             }
             template.setName(seed.name());
-            template.setConstraintsJson(
-                    "{\"min_members\":" + seed.minMembers()
-                            + ",\"max_members\":" + seed.maxMembers() + "}");
+            template.setConstraintsJson(seed.constraintsJson());
             template.setIsActive(true);
             projectTemplateRepository.save(template);
         }
@@ -104,11 +127,22 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
                 });
     }
 
+    private static String constraints(
+            int minMembers,
+            int maxMembers,
+            boolean allowMultiRole,
+            String roleQuotas
+    ) {
+        return "{\"min_members\":" + minMembers
+                + ",\"max_members\":" + maxMembers
+                + ",\"allow_multi_role\":" + allowMultiRole
+                + ",\"role_quotas\":{" + roleQuotas + "}}";
+    }
+
     private record TemplateSeed(
             String code,
             String name,
-            int minMembers,
-            int maxMembers
+            String constraintsJson
     ) {
     }
 }

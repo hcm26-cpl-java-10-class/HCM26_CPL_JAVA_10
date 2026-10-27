@@ -356,6 +356,18 @@ public class ProjectTeamDraftService {
         return role == null || role.isBlank() ? ProjectMemberRole.DEV.name() : role;
     }
 
+    private ProjectTemplateConstraints.RolePolicy readTemplatePolicy(ProjectTeam team) {
+        ProjectTemplate template = team.getProjectTemplate();
+        if (template == null) {
+            return ProjectTemplateConstraints.RolePolicy.singleRoleDefault();
+        }
+        try {
+            return ProjectTemplateConstraints.parseRolePolicy(objectMapper, template);
+        } catch (RuntimeException ignored) {
+            return ProjectTemplateConstraints.RolePolicy.singleRoleDefault();
+        }
+    }
+
     private BatchSaveDraftResponse buildResponse(
             TeamAllocationSession session,
             List<ProjectTeam> teams,
@@ -377,12 +389,15 @@ public class ProjectTeamDraftService {
             ).add(new BatchSaveDraftResponse.MemberResponse(
                     member.getClassMember().getId(),
                     member.getClassMember().getUser().getFullName(),
-                    member.getRole()
+                    member.getRole(),
+                    ProjectMemberRole.parseRoles(member.getRole())
             ));
         }
 
         List<BatchSaveDraftResponse.TeamResponse> teamResponses = teams.stream()
-                .map(team -> new BatchSaveDraftResponse.TeamResponse(
+                .map(team -> {
+                    ProjectTemplateConstraints.RolePolicy policy = readTemplatePolicy(team);
+                    return new BatchSaveDraftResponse.TeamResponse(
                         team.getId(),
                         team.getTeamName(),
                         team.getStatus(),
@@ -395,8 +410,11 @@ public class ProjectTeamDraftService {
                         team.getProjectTemplateName(),
                         null,
                         null,
-                        memberIdsByTeam.getOrDefault(team.getId(), List.of()).size()
-                ))
+                        memberIdsByTeam.getOrDefault(team.getId(), List.of()).size(),
+                        policy.allowMultiRole(),
+                        policy.quotas()
+                    );
+                })
                 .toList();
 
         return new BatchSaveDraftResponse(

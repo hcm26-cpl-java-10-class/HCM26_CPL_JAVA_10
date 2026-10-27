@@ -158,7 +158,7 @@ public class ProjectTeamTemplateService {
 
         boolean isLeader = projectMemberRepository
                 .findByTeam_IdAndClassMember_User_Id(teamId, userId)
-                .map(member -> TEAM_LEADER_ROLE.equals(member.getRole()))
+                .map(member -> ProjectMemberRole.hasRole(member.getRole(), TEAM_LEADER_ROLE))
                 .orElse(false);
         if (!isLeader) {
             throw new AccessDeniedException(
@@ -262,12 +262,16 @@ public class ProjectTeamTemplateService {
         try {
             ProjectTemplateConstraints.Capacity capacity =
                     ProjectTemplateConstraints.parse(objectMapper, template, null);
+            ProjectTemplateConstraints.RolePolicy policy =
+                    ProjectTemplateConstraints.parseRolePolicy(objectMapper, template);
             return Optional.of(new ProjectTemplateOptionResponse(
                     template.getId(),
                     template.getCode(),
                     template.getName(),
                     capacity.minMembers(),
-                    capacity.maxMembers()));
+                    capacity.maxMembers(),
+                    policy.allowMultiRole(),
+                    policy.quotas()));
         } catch (RuntimeException skipped) {
             return Optional.empty();
         }
@@ -279,30 +283,47 @@ public class ProjectTeamTemplateService {
 
         Integer minMembers = null;
         Integer maxMembers = null;
+        ProjectTemplateConstraints.RolePolicy policy =
+                ProjectTemplateConstraints.RolePolicy.singleRoleDefault();
         if (template != null) {
             try {
                 ProjectTemplateConstraints.Capacity capacity =
                         ProjectTemplateConstraints.parse(objectMapper, template, null);
                 minMembers = capacity.minMembers();
                 maxMembers = capacity.maxMembers();
+                policy = ProjectTemplateConstraints.parseRolePolicy(objectMapper, template);
             } catch (RuntimeException ignored) {
                 // A template with broken constraints must not break reads; the
                 // assign action reports the problem with a 400.
+                policy = ProjectTemplateConstraints.RolePolicy.singleRoleDefault();
             }
         }
+
+        List<ProjectMember> assignments =
+                projectMemberRepository.findAllByTeam_IdOrderByIdAsc(team.getId());
+        List<TeamProjectTemplateResponse.Member> members = assignments.stream()
+                .map(assignment -> new TeamProjectTemplateResponse.Member(
+                        assignment.getClassMember().getId(),
+                        assignment.getClassMember().getUser().getFullName(),
+                        ProjectMemberRole.parseRoles(assignment.getRole())))
+                .toList();
 
         var trainingClass = team.getTrainingClass();
         return new TeamProjectTemplateResponse(
                 team.getId(),
                 team.getTeamName(),
                 team.getStatus(),
+                team.getVersion(),
                 trainingClass == null ? null : trainingClass.getId(),
                 trainingClass == null ? null : trainingClass.getName(),
                 team.getProjectTemplateId(),
                 team.getProjectTemplateName(),
                 minMembers,
                 maxMembers,
-                memberCount);
+                memberCount,
+                policy.allowMultiRole(),
+                policy.quotas(),
+                members);
     }
 
     private Long currentUserId(Authentication authentication) {

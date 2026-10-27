@@ -3,16 +3,56 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import type {
   ProjectTemplateOption,
+  TeamMemberRole,
   TeamProjectTemplate,
+  TeamRoleQuotaViolation,
   TeamTemplateApiError,
 } from "@/types/features/team-allocation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { AlertCircle, ClipboardList, LoaderCircle, Save, UsersRound } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
+
+interface RoleFailure {
+  status: number;
+  errorCode: string;
+  message: string;
+  violations: TeamRoleQuotaViolation[];
+  multiRoleMemberIds: number[];
+}
+
+const TEAM_ROLE_OPTIONS: TeamMemberRole[] = ["PM", "BA", "DEV", "QA"];
+const UNBOUNDED_ROLE_QUOTA = 2_147_483_647;
+const TEAM_ROLE_LABEL: Record<TeamMemberRole, string> = {
+  PM: "PM (Leader)",
+  BA: "BA",
+  DEV: "Dev",
+  QA: "QA",
+};
+
+function roleFailure(error: unknown): RoleFailure {
+  if (axios.isAxiosError<RoleFailure>(error)) {
+    const data = error.response?.data;
+    return {
+      status: error.response?.status ?? 0,
+      errorCode: data?.errorCode ?? "ERR_REQUEST_FAILED",
+      message: data?.message ?? error.message ?? "Không thể lưu vai trò.",
+      violations: data?.violations ?? [],
+      multiRoleMemberIds: data?.multiRoleMemberIds ?? [],
+    };
+  }
+  return {
+    status: 0,
+    errorCode: "ERR_REQUEST_FAILED",
+    message: error instanceof Error ? error.message : "Không thể lưu vai trò.",
+    violations: [],
+    multiRoleMemberIds: [],
+  };
+}
 
 /**
  * US-10 — Student (Team Leader) view.
@@ -53,6 +93,7 @@ export default function StudentDraftTeamPage() {
   const queryClient = useQueryClient();
   const [selection, setSelection] = useState<Record<number, string>>({});
   const [failures, setFailures] = useState<Record<number, TeamTemplateApiError>>({});
+  const [roleFailures, setRoleFailures] = useState<Record<number, RoleFailure>>({});
 
   const teamsQuery = useQuery({
     queryKey: ["student", "draft-teams"],
@@ -91,6 +132,41 @@ export default function StudentDraftTeamPage() {
       const failure = getTemplateFailure(error);
       setFailures((current) => ({ ...current, [variables.teamId]: failure }));
       toast.error(failure.message ?? "Không thể gán đề bài.");
+    },
+  });
+
+  // US-11: save roles for a DRAFT team the signed-in student leads.
+  const updateRolesMutation = useMutation({
+    mutationFn: ({
+      teamId,
+      expectedVersion,
+      members,
+    }: {
+      teamId: number;
+      expectedVersion: number;
+      members: Array<{ memberId: number; roles: TeamMemberRole[] }>;
+    }) => teamAllocationApi.updateMyDraftTeamRoles(teamId, {
+      expectedVersion,
+      members: members.map((member) => ({
+        memberId: member.memberId,
+        roles: member.roles,
+        role: member.roles[0] ?? null,
+      })),
+    }),
+    onSuccess: async (_, variables) => {
+      setRoleFailures((current) => {
+        const next = { ...current };
+        delete next[variables.teamId];
+        return next;
+      });
+      await queryClient.invalidateQueries({ queryKey: ["student", "draft-teams"] });
+      await queryClient.invalidateQueries({ queryKey: ["team-member-history"] });
+      toast.success("Đã lưu vai trò thành viên trong nhóm.");
+    },
+    onError: (error, variables) => {
+      const failure = roleFailure(error);
+      setRoleFailures((current) => ({ ...current, [variables.teamId]: failure }));
+      toast.error(failure.message);
     },
   });
 
@@ -173,6 +249,18 @@ export default function StudentDraftTeamPage() {
                 onAssign={(projectTemplateId) =>
                   assignMutation.mutate({ teamId: team.teamId, projectTemplateId })
                 }
+                roleFailure={roleFailures[team.teamId]}
+                rolesPending={
+                  updateRolesMutation.isPending &&
+                  updateRolesMutation.variables?.teamId === team.teamId
+                }
+                onUpdateRoles={(members) =>
+                  updateRolesMutation.mutate({
+                    teamId: team.teamId,
+                    expectedVersion: team.version,
+                    members,
+                  })
+                }
               />
             ))}
           </div>
@@ -191,6 +279,9 @@ function DraftTeamTemplateCard({
   failure,
   pending,
   onAssign,
+  roleFailure,
+  rolesPending,
+  onUpdateRoles,
 }: {
   team: TeamProjectTemplate;
   templates: ProjectTemplateOption[];
@@ -200,6 +291,11 @@ function DraftTeamTemplateCard({
   failure?: TeamTemplateApiError;
   pending: boolean;
   onAssign: (projectTemplateId: number) => void;
+  roleFailure?: RoleFailure;
+  rolesPending: boolean;
+  onUpdateRoles: (
+    members: Array<{ memberId: number; roles: TeamMemberRole[] }>,
+  ) => void;
 }) {
   const currentTemplateId =
     team.projectTemplateId == null ? "" : String(team.projectTemplateId);
@@ -284,7 +380,223 @@ function DraftTeamTemplateCard({
             Gán đề bài
           </Button>
         </div>
+
+        <TeamRoleEditor
+          team={team}
+          failure={roleFailure}
+          pending={rolesPending}
+          onSave={onUpdateRoles}
+        />
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * US-11 — role editor for the student team leader.
+ * <p>
+ * Every member needs at least one role. When the template says
+ * {@code allow_multi_role = false} the UI only allows one role per member;
+ * otherwise the roles are toggles. Quota violations are rendered from the
+ * backend 422 payload ({@code ERR_TEAM_ROLE_QUOTA_NOT_MET}).
+ */
+function TeamRoleEditor({
+  team,
+  failure,
+  pending,
+  onSave,
+}: {
+  team: TeamProjectTemplate;
+  failure?: RoleFailure;
+  pending: boolean;
+  onSave: (members: Array<{ memberId: number; roles: TeamMemberRole[] }>) => void;
+}) {
+  const [rolesByMember, setRolesByMember] = useState<
+    Record<number, TeamMemberRole[]>
+  >(() => Object.fromEntries(
+    team.members.map((member) => [member.memberId, member.roles]),
+  ));
+  const [localErrors, setLocalErrors] = useState<number[]>([]);
+
+  useEffect(() => {
+    setRolesByMember(Object.fromEntries(
+      team.members.map((member) => [member.memberId, member.roles]),
+    ));
+    setLocalErrors([]);
+  }, [team.version, team.members]);
+
+  if (team.teamStatus !== "DRAFT") {
+    return null;
+  }
+
+  const allowMultiRole = team.allowMultiRole;
+  const invalidMemberIds = new Set([
+    ...localErrors,
+    ...(failure?.multiRoleMemberIds ?? []),
+  ]);
+
+  const updateRoles = (memberId: number, roles: TeamMemberRole[]) => {
+    setRolesByMember((current) => ({
+      ...current,
+      [memberId]: TEAM_ROLE_OPTIONS.filter((role) => roles.includes(role)),
+    }));
+    setLocalErrors((current) => current.filter((id) => id !== memberId));
+  };
+
+  return (
+    <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-medium">Vai trò thành viên</p>
+        <Badge variant={allowMultiRole ? "secondary" : "outline"}>
+          {allowMultiRole ? "Cho phép kiêm nhiệm" : "Không kiêm nhiệm"}
+        </Badge>
+      </div>
+
+      {team.roleQuotas.length > 0 && (
+        <ul className="flex flex-wrap gap-1.5">
+          {team.roleQuotas.map((quota) => (
+            <li key={quota.role}>
+              <Badge variant="outline" className="font-normal">
+                {quota.role}:{" "}
+                {quota.max >= UNBOUNDED_ROLE_QUOTA
+                  ? `${quota.min}+`
+                  : `${quota.min}-${quota.max}`}
+              </Badge>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {team.projectTemplateId == null && (
+        <p className="text-xs text-muted-foreground">
+          Nhóm chưa gán đề bài: mặc định mỗi thành viên chỉ chọn 1 vai trò.
+          Gán đề bài để áp dụng định suất và quy tắc kiêm nhiệm của đề bài.
+        </p>
+      )}
+
+      {failure && (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/30 bg-destructive/5 p-2.5 text-xs text-destructive"
+        >
+          {failure.status === 409
+            ? "Dữ liệu nhóm đã thay đổi, vui lòng tải lại trang."
+            : failure.message}
+          {failure.violations.length > 0 && (
+            <ul className="mt-1 space-y-0.5">
+              {failure.violations.map((violation) => (
+                <li key={`${violation.role}-${violation.reason}`}>
+                  {violation.role}:{" "}
+                  {violation.reason === "MISSING_REQUIRED_ROLE"
+                    ? `cần tối thiểu ${violation.required}, hiện có ${violation.actual}`
+                    : `tối đa ${violation.required}, hiện có ${violation.actual}`}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {localErrors.length > 0 && (
+        <p className="text-xs text-destructive">
+          Mỗi thành viên cần ít nhất một vai trò.
+        </p>
+      )}
+
+      <ul className="space-y-1.5">
+        {team.members.map((member) => {
+          const selected = rolesByMember[member.memberId] ?? member.roles;
+          const invalid = invalidMemberIds.has(member.memberId);
+          return (
+            <li
+              key={member.memberId}
+              className={`flex flex-wrap items-center justify-between gap-2 rounded-md border bg-background px-2.5 py-2 text-sm ${
+                invalid ? "border-destructive" : ""
+              }`}
+            >
+              <span className="min-w-0 truncate">{member.fullName}</span>
+              {allowMultiRole ? (
+                <span
+                  role="group"
+                  aria-label={`Vai trò của ${member.fullName}`}
+                  className="flex flex-wrap gap-1"
+                >
+                  {TEAM_ROLE_OPTIONS.map((role) => (
+                    <label
+                      key={role}
+                      className={`flex cursor-pointer items-center gap-1 rounded-md border px-1.5 py-1 text-xs ${
+                        selected.includes(role)
+                          ? "border-primary/50 bg-primary/10 font-medium text-primary"
+                          : "text-muted-foreground"
+                      } ${pending ? "cursor-not-allowed opacity-60" : ""}`}
+                    >
+                      <Checkbox
+                        checked={selected.includes(role)}
+                        disabled={pending}
+                        onCheckedChange={() => updateRoles(
+                          member.memberId,
+                          selected.includes(role)
+                            ? selected.filter((value) => value !== role)
+                            : [...selected, role],
+                        )}
+                        aria-label={`${TEAM_ROLE_LABEL[role]} của ${member.fullName}`}
+                      />
+                      {TEAM_ROLE_LABEL[role]}
+                    </label>
+                  ))}
+                </span>
+              ) : (
+                <select
+                  aria-label={`Vai trò của ${member.fullName}`}
+                  className={`h-8 rounded-md border bg-background px-2 text-xs ${
+                    invalid ? "border-destructive" : ""
+                  }`}
+                  value={selected[0] ?? ""}
+                  disabled={pending}
+                  onChange={(event) => updateRoles(
+                    member.memberId,
+                    event.target.value
+                      ? [event.target.value as TeamMemberRole]
+                      : [],
+                  )}
+                >
+                  <option value="">Chọn vai trò</option>
+                  {TEAM_ROLE_OPTIONS.map((role) => (
+                    <option key={role} value={role}>
+                      {TEAM_ROLE_LABEL[role]}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      <Button
+        size="sm"
+        disabled={pending}
+        onClick={() => {
+          const missing = team.members
+            .filter((member) =>
+              (rolesByMember[member.memberId] ?? member.roles).length === 0)
+            .map((member) => member.memberId);
+          if (missing.length > 0) {
+            setLocalErrors(missing);
+            toast.error("Mỗi thành viên cần ít nhất một vai trò.");
+            return;
+          }
+          onSave(team.members.map((member) => ({
+            memberId: member.memberId,
+            roles: rolesByMember[member.memberId] ?? member.roles,
+          })));
+        }}
+      >
+        {pending
+          ? <LoaderCircle className="size-4 animate-spin" />
+          : <Save className="size-4" />}
+        Lưu vai trò
+      </Button>
+    </div>
   );
 }

@@ -269,4 +269,19 @@ export const teamAllocationApi = {
     );
     return response.data;
   },
+
+  // ------------------------------------------------------------------
+  // US-11 — configure team member roles (mentor + student leader)
+  // ------------------------------------------------------------------
+
+  /** Student team-leader path: save the roles of a DRAFT team they lead. */
+  async updateMyDraftTeamRoles(
+    teamId: number,
+    payload: UpdateTeamRolesRequest,
+  ): Promise<void> {
+    await axiosInstance.put(
+      `/v1/students/me/draft-teams/${teamId}/roles`,
+      payload,
+    );
+  },
 };

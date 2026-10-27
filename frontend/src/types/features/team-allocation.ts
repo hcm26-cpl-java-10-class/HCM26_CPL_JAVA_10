@@ -55,6 +55,8 @@ export interface AllocationTeam {
     memberId: number;
     fullName: string;
     role: string | null;
+    /** US-11: canonical role list (multi-role templates). */
+    roles?: TeamMemberRole[];
   }>;
   /** US-10: project template currently assigned to this team. */
   projectTemplateId?: number | null;
@@ -62,6 +64,24 @@ export interface AllocationTeam {
   minMembers?: number | null;
   maxMembers?: number | null;
   memberCount?: number | null;
+  /** US-11: role policy of the assigned template. */
+  allowMultiRole?: boolean;
+  roleQuotas?: TeamRoleQuota[];
+}
+
+/** US-11: seat quota of one team role. */
+export interface TeamRoleQuota {
+  role: TeamMemberRole;
+  min: number;
+  max: number;
+}
+
+/** US-11: one quota problem returned in the 422 body. */
+export interface TeamRoleQuotaViolation {
+  role: TeamMemberRole | string;
+  reason: "MISSING_REQUIRED_ROLE" | "ROLE_QUOTA_EXCEEDED" | string;
+  required: number;
+  actual: number;
 }
 
 /** US-10: pickable project template with its capacity window. */
@@ -71,13 +91,18 @@ export interface ProjectTemplateOption {
   name: string;
   minMembers: number;
   maxMembers: number;
+  /** US-11 role policy. */
+  allowMultiRole: boolean;
+  roleQuotas: TeamRoleQuota[];
 }
 
-/** US-10: project template state of a team (mentor + student leader views). */
+/** US-10/US-11: project template state of a team (mentor + student leader views). */
 export interface TeamProjectTemplate {
   teamId: number;
   teamName: string;
   teamStatus: ProjectTeamStatus;
+  /** US-11: optimistic-lock version used when saving roles. */
+  version: number;
   classId: number | null;
   className: string | null;
   projectTemplateId: number | null;
@@ -85,6 +110,13 @@ export interface TeamProjectTemplate {
   minMembers: number | null;
   maxMembers: number | null;
   memberCount: number;
+  allowMultiRole: boolean;
+  roleQuotas: TeamRoleQuota[];
+  members: Array<{
+    memberId: number;
+    fullName: string;
+    roles: TeamMemberRole[];
+  }>;
 }
 
 /** US-10: error body of `ERR_TEAM_CAPACITY_EXCEEDED` / `ERR_TEAM_NOT_DRAFT`. */
@@ -107,7 +139,10 @@ export interface UpdateTeamRolesRequest {
   expectedVersion: number;
   members: Array<{
     memberId: number;
-    role: TeamMemberRole;
+    /** Preferred US-11 field: supports multi-role templates. */
+    roles: TeamMemberRole[];
+    /** Backward compatible single-role field. */
+    role?: TeamMemberRole | null;
   }>;
 }
 
@@ -188,4 +223,8 @@ export interface AllocationApiError {
   unassignedCount?: number;
   unassignedMemberIds?: number[];
   invalidMemberIds?: number[];
+  /** US-11: per-role quota violations. */
+  violations?: TeamRoleQuotaViolation[];
+  /** US-11: members holding more than one role on a single-role template. */
+  multiRoleMemberIds?: number[];
 }

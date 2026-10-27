@@ -13,6 +13,7 @@ import com.example.starter_project_2025.system.project.TeamTemplateCapacityExcee
 import com.example.starter_project_2025.system.project.TeamTemplateErrorResponse;
 import com.example.starter_project_2025.system.project.TeamRoleAssignmentErrorResponse;
 import com.example.starter_project_2025.system.project.TeamRoleAssignmentException;
+import com.example.starter_project_2025.system.project.TeamRolePolicyException;
 import com.example.starter_project_2025.system.project.TeamVersionConflictException;
 import com.example.starter_project_2025.system.project.InvalidMentorForClassException;
 import jakarta.validation.ConstraintViolation;
@@ -47,6 +48,27 @@ public class GlobalExceptionHandler {
                 "ERR_INVALID_TEAM_MEMBER_ROLES",
                 ex.getMessage(),
                 ex.getInvalidMemberIds(),
+                List.of(),
+                List.of(),
+                LocalDateTime.now());
+        return ResponseEntity.unprocessableEntity().body(response);
+    }
+
+    /**
+     * US-11: template policy violations (multi-role disabled, role quota not
+     * met, team leader must keep PM).
+     */
+    @ExceptionHandler(TeamRolePolicyException.class)
+    public ResponseEntity<TeamRoleAssignmentErrorResponse> handleTeamRolePolicy(
+            TeamRolePolicyException ex
+    ) {
+        TeamRoleAssignmentErrorResponse response = new TeamRoleAssignmentErrorResponse(
+                HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                ex.getErrorCode(),
+                ex.getMessage(),
+                ex.getInvalidMemberIds(),
+                ex.getViolations(),
+                ex.getMultiRoleMemberIds(),
                 LocalDateTime.now());
         return ResponseEntity.unprocessableEntity().body(response);
     }
