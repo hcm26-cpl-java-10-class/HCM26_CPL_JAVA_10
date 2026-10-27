@@ -105,6 +105,23 @@ Lifecycle endpoints are:
 
 Update permission does not grant delete permission, and delete permission does not grant permission to end an assignment.
 
+## Import and export
+
+The Teaching Assignments header offers **Import** to users with `ASSIGNMENT_CREATE` and **Export** to users with `ASSIGNMENT_READ`, using the same dialogs as Courses.
+
+- **Download Template** supplies an Excel workbook with an empty Import sheet, Instructions, eligible Classes, Curriculum and active Trainers. Copy Class ID and Program Subject ID from the same Curriculum row; a Subject ID cannot substitute for Program Subject ID. Reference sheets are a snapshot; import rechecks current data.
+- Import accepts `.xlsx`, `.xls` and UTF-8 `.csv`, up to 50 MB and 1,000 data rows. Required headers are `Class ID`, `Program Subject ID`, `Trainer ID`, `Role`, `Effective From`, `Effective To`. The final column may be blank. Role is `MAIN` or `ASSISTANT`; dates are ISO `YYYY-MM-DD` or Excel date cells.
+- Import creates new assignments only, using the existing create service, schedule lock, active/curriculum/date and overlap rules. Each row has its own transaction: valid rows remain saved when later rows fail. The result shows success/failure counts and spreadsheet row numbers. Reimporting the same assignment reports an overlap; it never overwrites a record or changes session history. Repair and retry failed rows only.
+- Export supports Excel, CSV and PDF. It applies the current search, class/subject/trainer/role/effective-date filters and sort across all pages, ignoring current page/row count. Exports above 10,000 matching assignments are rejected with a request to narrow the filters. Excel/CSV include import headers and display columns; PDF is for viewing.
+
+Endpoints:
+
+- `GET /api/teaching-assignments/import-template` requires `ASSIGNMENT_CREATE`.
+- `POST /api/teaching-assignments/import` requires `ASSIGNMENT_CREATE`; multipart field `file`; response `{successCount, failureCount, errors: [{rowNumber, message}]}`. Malformed files/headers return 400 before writes; row-level validation failures are included in the result.
+- `GET /api/teaching-assignments/export?format=EXCEL|CSV|PDF` requires `ASSIGNMENT_READ`; uses the list filter/sort parameters.
+
+The shared Courses import flow remains unchanged; the optional template callback is used only by Teaching Assignments.
+
 ## Validation commands
 
 ```powershell

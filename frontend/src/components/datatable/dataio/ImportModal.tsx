@@ -22,6 +22,7 @@ interface ImportModalProps {
   description?: string;
   onImportSuccess?: (result: ImportResult) => void;
   canImport?: boolean;
+  onDownloadTemplate?: () => Promise<void>;
 }
 
 export function ImportModal({
@@ -32,6 +33,7 @@ export function ImportModal({
   description,
   onImportSuccess,
   canImport = true,
+  onDownloadTemplate,
 }: ImportModalProps) {
   const { schema } = table;
   const entityName = schema?.entityName || "data";
@@ -85,6 +87,7 @@ export function ImportModal({
             loading={importLoading}
             onImport={handleImport}
             entityName={entityName}
+            onDownloadTemplate={onDownloadTemplate}
           />
         </Tabs>
 

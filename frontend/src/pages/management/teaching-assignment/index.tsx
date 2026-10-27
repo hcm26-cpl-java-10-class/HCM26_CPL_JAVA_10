@@ -7,6 +7,7 @@ import { AssignmentLifecycleDialog, type LifecycleMode } from "./components/Assi
 import { EditAssignmentDialog } from "./components/EditAssignmentDialog";
 import { CreateAssignmentDialog } from "./components/CreateAssignmentDialog";
 import { AssignmentDetailDialog } from "./components/AssignmentDetailDialog";
+import { AssignmentDataIO } from "./components/AssignmentDataIO";
 import { classSetupApi, type AssignmentRole, type AssignmentSearchParams, type TeachingAssignment } from "@/api/features/class-setup.api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -132,6 +133,7 @@ export default function TeachingAssignmentPage() {
         <Button variant="outline" disabled={assignments.isFetching || options.isFetching || !canRead} onClick={() => { void assignments.refetch(); void options.refetch(); }}>
           <RefreshCw className={assignments.isFetching || options.isFetching ? "size-4 animate-spin" : "size-4"} />Refresh
         </Button>
+        {canRead && <AssignmentDataIO filters={params} canImport={canCreate} />}
         {canRead && canCreate && <Button onClick={() => setCreating(true)}><Plus className="size-4" />New assignment</Button>}
         </div>
       </div>

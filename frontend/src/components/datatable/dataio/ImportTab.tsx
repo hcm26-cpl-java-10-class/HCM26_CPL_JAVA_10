@@ -12,9 +12,10 @@ interface ImportTabProps {
   loading: boolean;
   onImport: (file: File) => Promise<void>;
   entityName?: string;
+  onDownloadTemplate?: () => Promise<void>;
 }
 
-export function ImportTab({ loading, onImport, entityName }: ImportTabProps) {
+export function ImportTab({ loading, onImport, entityName, onDownloadTemplate }: ImportTabProps) {
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -64,7 +65,8 @@ export function ImportTab({ loading, onImport, entityName }: ImportTabProps) {
 
     try {
       setDownloadingTemplate(true);
-      await downloadTemplate(entityName);
+      if (onDownloadTemplate) await onDownloadTemplate();
+      else await downloadTemplate(entityName);
       toast.success("Template downloaded successfully");
     } catch (error) {
       console.error("Error downloading template:", error);

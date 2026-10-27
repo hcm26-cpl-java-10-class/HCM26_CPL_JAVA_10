@@ -1,4 +1,6 @@
 import axiosInstance from "../axios";
+import type { FileFormat, ImportResult } from "@/types";
+import { downloadBlob, getFilenameFromHeader } from "@/components/datatable/util/dataio.utils";
 
 export type AssignmentRole = "MAIN" | "ASSISTANT";
 
@@ -169,6 +171,21 @@ export interface AssignmentClassContext {
 }
 
 export const classSetupApi = {
+  downloadAssignmentTemplate: async () => {
+    const response = await axiosInstance.get<Blob>("/teaching-assignments/import-template", { responseType: "blob" });
+    downloadBlob(response.data, "teaching-assignments-template.xlsx");
+  },
+  importAssignments: async (file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return (await axiosInstance.post<ImportResult>("/teaching-assignments/import", body)).data;
+  },
+  exportAssignments: async (format: FileFormat, filters: AssignmentSearchParams) => {
+    const response = await axiosInstance.get<Blob>("/teaching-assignments/export", {
+      params: { ...filters, page: undefined, size: undefined, format }, responseType: "blob",
+    });
+    downloadBlob(response.data, getFilenameFromHeader(response.headers["content-disposition"]) ?? `teaching-assignments.${format === "EXCEL" ? "xlsx" : format.toLowerCase()}`);
+  },
   getRooms: async () => (await axiosInstance.get<Array<{ id: number; name: string }>>("/external/rooms")).data,
   getAssignmentCreateOptions: async (signal?: AbortSignal) =>
     (await axiosInstance.get<AssignmentCreateOptions>("/teaching-assignments/create-options", { signal })).data,
