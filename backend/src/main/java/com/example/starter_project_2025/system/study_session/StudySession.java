@@ -43,6 +43,25 @@ import java.time.LocalTime;
 )
 public class StudySession extends BaseEntity {
 
+    // Scalar references only; business relationships are not resolved in phase 3.1A.
+    @Column(name = "class_id")
+    Long classId;
+
+    @Column(name = "teaching_assignment_id")
+    Long teachingAssignmentId;
+
+    @Column(name = "program_subject_id")
+    Long programSubjectId;
+
+    @Column(name = "trainer_id")
+    Long trainerId;
+
+    @Column(name = "room_id")
+    Long roomId;
+
+    @Column(name = "meeting_url", length = 2048)
+    String meetingUrl;
+
     @Column(name = "subject_id", nullable = false)
     @ImportField(name = "Subject ID", required = true)
     @ExportField(name = "Subject ID")

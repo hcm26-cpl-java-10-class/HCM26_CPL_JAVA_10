@@ -37,6 +37,12 @@ public class StudySessionValidator {
     // PUT currently ignores omitted/null fields. Validate the resulting values without mutating the entity.
     private StudySessionDTO effectiveRequest(StudySession existing, StudySessionDTO changes) {
         StudySessionDTO request = StudySessionDTO.builder()
+                .classId(changes.getClassId() != null ? changes.getClassId() : existing.getClassId())
+                .teachingAssignmentId(changes.getTeachingAssignmentId() != null ? changes.getTeachingAssignmentId() : existing.getTeachingAssignmentId())
+                .programSubjectId(changes.getProgramSubjectId() != null ? changes.getProgramSubjectId() : existing.getProgramSubjectId())
+                .trainerId(changes.getTrainerId() != null ? changes.getTrainerId() : existing.getTrainerId())
+                .roomId(changes.getRoomId() != null ? changes.getRoomId() : existing.getRoomId())
+                .meetingUrl(changes.getMeetingUrl() != null ? changes.getMeetingUrl() : existing.getMeetingUrl())
                 .subjectId(changes.getSubjectId() != null ? changes.getSubjectId() : existing.getSubjectId())
                 .title(changes.getTitle() != null ? changes.getTitle() : existing.getTitle())
                 .sessionDate(changes.getSessionDate() != null ? changes.getSessionDate() : existing.getSessionDate())

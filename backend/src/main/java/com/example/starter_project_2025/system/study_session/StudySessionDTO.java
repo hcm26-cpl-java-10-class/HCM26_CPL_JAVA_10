@@ -4,9 +4,11 @@ import com.example.starter_project_2025.base.crud.dto.BaseDTO;
 import com.example.starter_project_2025.base.crud.dto.OnCreate;
 import com.example.starter_project_2025.base.crud.dto.OnUpdate;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -27,6 +29,30 @@ import java.time.LocalTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @com.example.starter_project_2025.base.dataio.exporter.annotation.ExportEntity(fileName = "study-sessions", sheetName = "Study Sessions")
 public class StudySessionDTO extends BaseDTO {
+
+    // Positive scalar IDs do not imply verified business relationships.
+    @Positive(groups = {OnCreate.class, OnUpdate.class}, message = "classId must be positive")
+    @JsonDeserialize(using = StudySessionIdDeserializer.class)
+    Long classId;
+
+    @Positive(groups = {OnCreate.class, OnUpdate.class}, message = "teachingAssignmentId must be positive")
+    @JsonDeserialize(using = StudySessionIdDeserializer.class)
+    Long teachingAssignmentId;
+
+    @Positive(groups = {OnCreate.class, OnUpdate.class}, message = "programSubjectId must be positive")
+    @JsonDeserialize(using = StudySessionIdDeserializer.class)
+    Long programSubjectId;
+
+    @Positive(groups = {OnCreate.class, OnUpdate.class}, message = "trainerId must be positive")
+    @JsonDeserialize(using = StudySessionIdDeserializer.class)
+    Long trainerId;
+
+    @Positive(groups = {OnCreate.class, OnUpdate.class}, message = "roomId must be positive")
+    @JsonDeserialize(using = StudySessionIdDeserializer.class)
+    Long roomId;
+
+    @Size(max = 2048, groups = {OnCreate.class, OnUpdate.class}, message = "Meeting URL must not exceed 2048 characters")
+    String meetingUrl;
 
     @NotNull(groups = OnCreate.class, message = "Subject ID is required")
     @com.example.starter_project_2025.base.dataio.exporter.annotation.ExportField(name = "Subject ID")

@@ -55,6 +55,7 @@ class StudySessionBackendIntegrationTest {
     @Autowired StudySessionController controller;
     @Autowired StudySessionRepository sessions;
     @Autowired SubjectRepository subjects;
+    @Autowired jakarta.persistence.EntityManager entityManager;
 
     @AfterEach
     void clearSecurity() { SecurityContextHolder.clearContext(); }
@@ -122,6 +123,50 @@ class StudySessionBackendIntegrationTest {
         assertEquals(subjectId, saved.getSubjectId());
         assertEquals(LocalTime.of(8, 0), saved.getStartTime());
         assertEquals(SessionStatus.SCHEDULED, saved.getStatus());
+        assertNull(saved.getClassId());
+        assertNull(saved.getTeachingAssignmentId());
+        assertNull(saved.getProgramSubjectId());
+        assertNull(saved.getTrainerId());
+        assertNull(saved.getRoomId());
+        assertNull(saved.getMeetingUrl());
+    }
+
+    @Test
+    void scalarLinksPersistAndSurvivePartialServiceUpdates() {
+        authenticate("STUDY_SESSION_CREATE", "STUDY_SESSION_READ", "STUDY_SESSION_UPDATE");
+        var dto = request(subject().getId());
+        // Arbitrary positive scalar values exercise storage only, not assignment resolution.
+        dto.setClassId(11L);
+        dto.setTeachingAssignmentId(12L);
+        dto.setProgramSubjectId(13L);
+        dto.setTrainerId(14L);
+        dto.setRoomId(15L);
+        dto.setMeetingUrl("https://example.com/lesson");
+        var created = service.create(dto);
+        sessions.flush();
+        entityManager.clear();
+        var changes = new StudySessionDTO();
+        changes.setTitle("Updated scalar links lesson");
+        var updated = service.update(created.getId(), changes);
+        assertEquals(11L, updated.getClassId());
+        assertEquals(12L, updated.getTeachingAssignmentId());
+        assertEquals(13L, updated.getProgramSubjectId());
+        assertEquals(14L, updated.getTrainerId());
+        assertEquals(15L, updated.getRoomId());
+        assertEquals(dto.getMeetingUrl(), updated.getMeetingUrl());
+        changes.setRoomId(16L);
+        changes.setMeetingUrl("https://example.com/new-lesson");
+        service.update(created.getId(), changes);
+        sessions.flush();
+        entityManager.clear();
+        var saved = service.getById(created.getId());
+        assertEquals(16L, saved.getRoomId());
+        assertEquals(changes.getMeetingUrl(), saved.getMeetingUrl());
+        assertEquals(dto.getSubjectId(), saved.getSubjectId());
+        assertEquals("Java integration", saved.getSubjectName());
+        changes.setTrainerId(0L);
+        assertThrows(com.example.starter_project_2025.exception.BusinessValidationException.class,
+                () -> service.update(created.getId(), changes));
     }
 
     private Subject subject() {

@@ -12,6 +12,8 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring", config = BaseMapperConfig.class)
 public interface StudySessionMapper extends BaseCrudMapper<StudySession, StudySessionDTO> {
 
+    // Scalar link fields map by name in both directions. Null updates preserve existing values.
+
     @Override
     @IgnoreAuditFields
     @Mapping(target = "subject", ignore = true)
