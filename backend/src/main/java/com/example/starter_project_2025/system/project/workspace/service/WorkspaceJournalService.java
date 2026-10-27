@@ -1,4 +1,13 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.service;
+
+import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceActivity;
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceAudit;
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceOutboxEvent;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceResponse;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceActivityRepository;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceAuditRepository;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceOutboxRepository;
 
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -26,7 +35,9 @@ public class WorkspaceJournalService {
         catch (JsonProcessingException exception) { throw new IllegalStateException("Cannot serialize workspace audit", exception); }
         WorkspaceAudit audit = new WorkspaceAudit();
         audit.setEventId(eventId); audit.setTenantId(workspace.getTenant().getId()); audit.setActorId(user.getId());
-        audit.setWorkspaceId(workspace.getId()); audit.setProjectId(workspace.getProject().getId()); audit.setTeamId(workspace.getTeam().getId());
+        audit.setWorkspaceId(workspace.getId());
+        audit.setProjectId(workspace.getProject() == null ? null : workspace.getProject().getId());
+        audit.setTeamId(workspace.getTeam().getId());
         audit.setAction("WORKSPACE_CREATED"); audit.setCorrelationId(correlationId); audit.setBeforeJson("null"); audit.setAfterJson(snapshot);
         audits.saveAndFlush(audit);
         WorkspaceOutboxEvent event = new WorkspaceOutboxEvent();

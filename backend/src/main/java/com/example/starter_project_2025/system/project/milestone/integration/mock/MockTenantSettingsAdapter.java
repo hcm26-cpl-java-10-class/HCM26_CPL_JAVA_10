@@ -22,7 +22,7 @@ public class MockTenantSettingsAdapter implements TenantSettingsPort {
     }
 
     @Override
-    public ZoneId requireTimeZone(UUID tenantId) {
+    public ZoneId requireTimeZone(Long tenantId) {
         if (!MockMilestoneData.TENANT_ID.equals(tenantId)) {
             throw new MilestoneDependencyException("Milestone tenant settings could not be loaded");
         }

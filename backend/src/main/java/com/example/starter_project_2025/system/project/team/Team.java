@@ -1,4 +1,8 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.team;
+
+import com.example.starter_project_2025.system.project.domain.Project;
+import com.example.starter_project_2025.system.project.tenant.Tenant;
+import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
@@ -75,6 +79,4 @@ public class Team extends BaseEntity {
     @OneToMany(mappedBy = "team", fetch = FetchType.LAZY)
     private Set<TeamMember> members = new HashSet<>();
 
-    @OneToMany(mappedBy = "team", fetch = FetchType.LAZY)
-    private Set<Workspace> workspaces = new HashSet<>();
 }

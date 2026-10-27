@@ -10,3 +10,4 @@ public record RubricOptionResponse(
         List<RubricCriterionOptionResponse> criteria
 ) {
 }
+

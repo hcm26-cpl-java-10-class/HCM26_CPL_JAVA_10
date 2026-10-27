@@ -1,4 +1,4 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.demo;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 

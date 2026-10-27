@@ -11,3 +11,4 @@ public record MilestoneLatePolicyResponse(
         BigDecimal penaltyPercent
 ) {
 }
+

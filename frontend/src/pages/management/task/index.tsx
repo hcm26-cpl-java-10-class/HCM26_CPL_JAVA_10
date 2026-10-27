@@ -4,19 +4,26 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { usePermissions } from "@/hooks/usePermissions";
 import { ChevronDown, FolderOpen } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { TaskProjectPicker } from "./components/TaskProjectPicker";
 import { TaskTable } from "./components/TaskTable";
+import { OverdueTaskPanel } from "./components/OverdueTaskPanel";
+import { InactiveMemberPanel } from "./components/InactiveMemberPanel";
 import { isProjectId } from "./task-form.utils";
+import { useTaskProjects } from "./hooks/useTaskProjects";
 
 export default function TaskManagementPage() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user, activeRole } = usePermissions();
+  const { user, activeRole, hasPermission } = usePermissions();
+  const projects = useTaskProjects();
   const [projectOpen, setProjectOpen] = useState(false);
   const projectStorageKey = `task-project:${user.email}`;
   const projectId =
     searchParams.get("projectId") ?? sessionStorage.getItem(projectStorageKey) ?? "";
   const projectSelected = isProjectId(projectId);
+  const overdue = searchParams.get("overdue") === "true";
+  const inactive = searchParams.get("view") === "inactive";
 
   useEffect(() => {
     if (projectSelected) sessionStorage.setItem(projectStorageKey, projectId);
@@ -24,7 +31,7 @@ export default function TaskManagementPage() {
 
   const selectProject = (id: string) => {
     sessionStorage.setItem(projectStorageKey, id);
-    setSearchParams({ projectId: id });
+    setSearchParams({ projectId: id, ...(inactive ? { view: "inactive" } : overdue ? { overdue: "true" } : {}) });
     setProjectOpen(false);
   };
 
@@ -32,14 +39,13 @@ export default function TaskManagementPage() {
     <MainLayout pathName={{ tasks: "Tasks" }}>
       <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-xl font-semibold">Task Management</h1>
+          <h1 className="text-xl font-semibold">Tasks</h1>
           {projectSelected && (
             <Popover open={projectOpen} onOpenChange={setProjectOpen}>
               <PopoverTrigger asChild>
                 <Button variant="outline" className="gap-2" title={projectId}>
                   <FolderOpen className="size-4 text-muted-foreground" />
-                  Project{" "}
-                  <span className="font-mono text-xs">{projectId.slice(0, 8).toUpperCase()}</span>
+                  <span className="max-w-64 truncate">{projects.isError ? "Change project" : projects.data?.find(project => project.id === projectId)?.name ?? "Change project"}</span>
                   <ChevronDown className="size-4 text-muted-foreground" />
                 </Button>
               </PopoverTrigger>
@@ -50,14 +56,25 @@ export default function TaskManagementPage() {
           )}
         </header>
         {projectSelected ? (
-          <TaskTable key={`${user.email}:${activeRole}:${projectId}`} projectId={projectId} />
+          <div className="grid min-h-0 gap-4">
+            <div className="flex flex-wrap gap-2" aria-label="Task views">
+              <Button variant={overdue || inactive ? "outline" : "default"} onClick={() => setSearchParams({ projectId })}>All tasks</Button>
+              <Button variant={overdue ? "default" : "outline"} onClick={() => setSearchParams({ projectId, overdue: "true" })}>Overdue tasks</Button>
+              <Button variant="outline" onClick={() => navigate(`/projects/${projectId}/milestones?view=risk`)}>Milestone risks</Button>
+              {hasPermission("INACTIVE_MEMBER_READ") && projects.data?.find(project => project.id===projectId)?.canManage &&
+                <Button variant={inactive ? "default" : "outline"} onClick={() => setSearchParams({ projectId, view: "inactive" })}>Inactive members</Button>}
+            </div>
+            {inactive ? <InactiveMemberPanel key={`${user.email}:${activeRole}:${projectId}`} projectId={projectId} /> : overdue
+              ? <OverdueTaskPanel key={`${user.email}:${activeRole}:${projectId}`} projectId={projectId} />
+              : <TaskTable key={`${user.email}:${activeRole}:${projectId}`} projectId={projectId} />}
+          </div>
         ) : (
           <div className="mx-auto grid w-full max-w-xl gap-5 py-12">
             <div className="text-center">
               <FolderOpen className="mx-auto mb-3 size-10 text-muted-foreground" />
               <h2 className="font-semibold">Select a project to get started</h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                Enter your shared project ID to manage tasks.
+                Choose a project you can access to manage tasks.
               </p>
             </div>
             <TaskProjectPicker key={projectId} projectId={projectId} onSelect={selectProject} />

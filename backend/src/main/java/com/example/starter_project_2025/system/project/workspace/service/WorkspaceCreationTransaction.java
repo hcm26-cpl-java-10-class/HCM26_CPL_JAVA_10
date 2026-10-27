@@ -1,4 +1,14 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.service;
+
+import com.example.starter_project_2025.system.project.domain.Project;
+import com.example.starter_project_2025.system.project.ProjectTeam;
+import com.example.starter_project_2025.system.project.team.Team;
+import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceSection;
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceStatus;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceCreateRequest;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceResponse;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceRepository;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -28,7 +38,7 @@ public class WorkspaceCreationTransaction {
         }
         var previous = idempotency.find(tenant.getId(), user.getId(), key);
         if (previous != null) idempotency.checkPayload(previous, request);
-        Team team = access.requireTeam(user, request.getTeamId(), true);
+        ProjectTeam team = access.requireTeam(user, request.getTeamId(), true);
         // Re-read after acquiring the team lock: another request may have committed while this one waited.
         previous = idempotency.find(tenant.getId(), user.getId(), key);
         if (previous != null) {
@@ -36,19 +46,16 @@ public class WorkspaceCreationTransaction {
             return idempotency.response(previous);
         }
         var chosen = selection.resolve(user, request, true);
-        Project project = chosen.project();
-        team.setProject(project);
-        project.setStatus(ProjectStatus.ACTIVE);
         Workspace workspace = new Workspace();
-        workspace.setTenant(tenant); workspace.setProject(project); workspace.setTeam(team);
-        workspace.setCode("WS-" + project.getId() + "-" + request.getTeamId());
-        workspace.setName(project.getName() + " / " + team.getName());
+        workspace.setTenant(tenant); workspace.setProject(null); workspace.setTeam(team);
+        workspace.setCode("WS-TEAM-" + request.getTeamId());
+        workspace.setName("Workspace / " + team.getTeamName());
         workspace.setStatus(WorkspaceStatus.ACTIVE);
         workspace.setCreatedBy(user.getId());
         workspace.setSections(new ArrayList<>(Arrays.asList(WorkspaceSection.values())));
         workspaces.saveAndFlush(workspace);
         WorkspaceResponse response = WorkspaceResponse.builder()
-                .id(workspace.getId()).tenantId(tenant.getId()).projectId(project.getId()).teamId(request.getTeamId())
+                .id(workspace.getId()).tenantId(tenant.getId()).projectId(null).teamId(request.getTeamId())
                 .code(workspace.getCode()).name(workspace.getName()).status(workspace.getStatus())
                 .createdBy(workspace.getCreatedBy()).createdAt(workspace.getCreatedAt())
                 .sections(workspace.getSections().stream().map(WorkspaceSection::getKey).toList()).build();

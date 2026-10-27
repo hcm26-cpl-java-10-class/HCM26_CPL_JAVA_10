@@ -1,4 +1,8 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.demo;
+
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceSectionDtos;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceRepository;
+import com.example.starter_project_2025.system.project.workspace.service.MockWorkspaceSectionDataSource;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;

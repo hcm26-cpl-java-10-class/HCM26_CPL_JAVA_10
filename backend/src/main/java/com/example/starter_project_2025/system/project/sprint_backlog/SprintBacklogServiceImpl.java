@@ -33,6 +33,8 @@ import java.util.Map;
  *     <li>description optional, at most 2000 characters (422)</li>
  *     <li>start date &lt; end date when both are provided (422)</li>
  *     <li>status one of {@link SprintBacklogStatus} (To do / In progress / Review / Done)</li>
+ *     <li>work type one of {@link SprintBacklogWorkType} (Story / Bug / Task), task by
+ *     default - the set is fixed, no new work type can be created</li>
  *     <li>priority one of {@link SprintBacklogPriority}, medium by default</li>
  *     <li>estimated hours, when provided, must be greater than or equal to 0 (422)</li>
  *     <li>optimistic locking (409) + audit trail (actor, timestamp, before/after, correlation id)</li>
@@ -115,6 +117,11 @@ public class SprintBacklogServiceImpl
 
         if (backlog.getPriority() == null) {
             backlog.setPriority(SprintBacklogPriority.MEDIUM);
+        }
+
+        // Fixed set (Story / Bug / Task): no new work type can be created.
+        if (backlog.getWorkType() == null) {
+            backlog.setWorkType(SprintBacklogWorkType.DEFAULT);
         }
 
         if (backlog.getIsActive() == null) {
@@ -408,6 +415,7 @@ public class SprintBacklogServiceImpl
         snapshot.put("startDate", backlog.getStartDate());
         snapshot.put("endDate", backlog.getEndDate());
         snapshot.put("status", backlog.getStatus());
+        snapshot.put("workType", backlog.getWorkType());
         snapshot.put("priority", backlog.getPriority());
         snapshot.put("estimatedHours", backlog.getEstimatedHours());
         snapshot.put("isActive", backlog.getIsActive());

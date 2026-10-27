@@ -1,7 +1,9 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.team;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.system.rbac.user.User;
+import com.example.starter_project_2025.system.project.team.ProjectRole;
+import com.example.starter_project_2025.system.project.team.ParticipationStatus;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Column;
 import jakarta.persistence.EnumType;
@@ -55,9 +57,16 @@ public class TeamMember extends BaseEntity {
             columnDefinition = "varchar(32) default 'ACTIVE'")
     private ParticipationStatus participationStatus = ParticipationStatus.ACTIVE;
 
+    @Column(name = "joined_at")
+    private java.time.Instant joinedAt;
+
+    @jakarta.persistence.PrePersist
+    void initializeJoinedAt() {
+        if (joinedAt == null) joinedAt = java.time.Instant.now();
+    }
+
     public boolean isCurrentParticipant() {
         return Boolean.TRUE.equals(getIsActive())
                 && participationStatus == ParticipationStatus.ACTIVE;
     }
 }
-

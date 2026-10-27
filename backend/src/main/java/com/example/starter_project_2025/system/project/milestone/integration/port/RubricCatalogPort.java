@@ -6,11 +6,11 @@ import java.util.List;
 import java.util.UUID;
 
 public interface RubricCatalogPort {
-    List<RubricSnapshotData> findAllowedRubrics(UUID projectId, UUID actorId, UUID tenantId);
+    List<RubricSnapshotData> findAllowedRubrics(Long projectId, UUID actorId, Long tenantId);
 
     RubricSnapshotData requireAllowedSnapshot(
-            UUID rubricSnapshotId, UUID projectId, UUID actorId, UUID tenantId);
+            UUID rubricSnapshotId, Long projectId, UUID actorId, Long tenantId);
 
     RubricSnapshotData requireSnapshotForRead(
-            UUID rubricSnapshotId, UUID projectId, UUID tenantId);
+            UUID rubricSnapshotId, Long projectId, Long tenantId);
 }

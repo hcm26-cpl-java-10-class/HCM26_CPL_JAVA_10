@@ -30,7 +30,7 @@ class MilestoneValidatorTest {
     void rejectsDeadlineEqualToServerTime() {
         CreateMilestoneRequest base = validRequest();
         CreateMilestoneRequest request = new CreateMilestoneRequest(
-                base.title(), base.description(), now, base.mandatory(), base.checklist(),
+                1L, base.title(), base.description(), now, base.mandatory(), base.checklist(),
                 base.rubricSnapshotId(), base.reviewerId(), base.latePolicy());
 
         MilestoneValidationException ex = assertThrows(
@@ -55,7 +55,7 @@ class MilestoneValidatorTest {
     void rejectsContradictoryNoLateConfiguration() {
         CreateMilestoneRequest base = validRequest();
         CreateMilestoneRequest request = new CreateMilestoneRequest(
-                base.title(), base.description(), base.deadline(), base.mandatory(), base.checklist(),
+                1L, base.title(), base.description(), base.deadline(), base.mandatory(), base.checklist(),
                 base.rubricSnapshotId(), base.reviewerId(),
                 new LatePolicyRequest(LatePolicyType.NO_LATE, base.deadline().plusSeconds(3600), BigDecimal.TEN));
 
@@ -70,7 +70,7 @@ class MilestoneValidatorTest {
     void rejectsBlankChecklistAndDuplicateOrder() {
         CreateMilestoneRequest base = validRequest();
         CreateMilestoneRequest request = new CreateMilestoneRequest(
-                base.title(), base.description(), base.deadline(), base.mandatory(),
+                1L, base.title(), base.description(), base.deadline(), base.mandatory(),
                 List.of(
                         new ChecklistItemRequest("   ", true, 0),
                         new ChecklistItemRequest("Demo", true, 0)
@@ -87,7 +87,7 @@ class MilestoneValidatorTest {
     private CreateMilestoneRequest validRequest() {
         Instant deadline = now.plusSeconds(86400);
         return new CreateMilestoneRequest(
-                "Sprint delivery", "Description", deadline, true,
+                1L, "Sprint delivery", "Description", deadline, true,
                 List.of(new ChecklistItemRequest("Source code", true, 0)),
                 UUID.randomUUID(), UUID.randomUUID(),
                 new LatePolicyRequest(LatePolicyType.ALLOW_LATE, deadline.plusSeconds(3600), new BigDecimal("10.00"))

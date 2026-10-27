@@ -1,6 +1,13 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.dto;
+
+import com.example.starter_project_2025.system.project.team.ParticipationStatus;
+import com.example.starter_project_2025.system.project.team.ProjectRole;
+import com.example.starter_project_2025.system.project.team.Team;
+import com.example.starter_project_2025.system.project.ProjectTeam;
 
 import jakarta.validation.constraints.*;
+import com.example.starter_project_2025.system.project.team.ProjectRole;
+import com.example.starter_project_2025.system.project.team.ParticipationStatus;
 import java.util.List;
 
 public final class ProjectHubDtos {
@@ -17,6 +24,11 @@ public final class ProjectHubDtos {
                           @Size(max = 255) String primaryChannel, @Size(max = 255) String coreHours,
                           @Size(max = 2000) String conflictResolution) {
         public static Charter from(Team team) {
+            return new Charter(team.getMission(), team.getDefinitionOfDone(), team.getPrimaryChannel(),
+                    team.getCoreHours(), team.getConflictResolution());
+        }
+
+        public static Charter from(ProjectTeam team) {
             return new Charter(team.getMission(), team.getDefinitionOfDone(), team.getPrimaryChannel(),
                     team.getCoreHours(), team.getConflictResolution());
         }

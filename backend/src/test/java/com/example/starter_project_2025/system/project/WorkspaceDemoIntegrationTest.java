@@ -1,5 +1,24 @@
 package com.example.starter_project_2025.system.project;
 
+import com.example.starter_project_2025.system.project.domain.Project;
+import com.example.starter_project_2025.system.project.domain.ProjectStatus;
+import com.example.starter_project_2025.system.project.team.ParticipationStatus;
+import com.example.starter_project_2025.system.project.team.ProjectRole;
+import com.example.starter_project_2025.system.project.team.Team;
+import com.example.starter_project_2025.system.project.team.TeamMember;
+import com.example.starter_project_2025.system.project.team.TeamMemberRepository;
+import com.example.starter_project_2025.system.project.team.TeamRepository;
+import com.example.starter_project_2025.system.project.workspace.demo.WorkspaceDemoDataService;
+import com.example.starter_project_2025.system.project.workspace.demo.WorkspaceDemoDatasetRepository;
+import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
+import com.example.starter_project_2025.system.project.workspace.repository.ProjectTopicSnapshotRepository;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceActivityRepository;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceAuditRepository;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceCreationRequestRepository;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceRepository;
+
+import com.example.starter_project_2025.system.project.team.ParticipationStatus;
+import com.example.starter_project_2025.system.project.team.ProjectRole;
 import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenService;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -24,6 +43,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.datasource.url=jdbc:h2:mem:workspace_demo_acceptance;DB_CLOSE_DELAY=-1",
         "spring.datasource.driver-class-name=org.h2.Driver", "spring.jpa.hibernate.ddl-auto=create-drop",
         "app.workspace.demo.enabled=true", "app.workspace.outbox.enabled=false",
+        "app.task-alert.demo.enabled=false", "app.member-reminder.demo.enabled=false",
+        "app.seed.board.enabled=false", "app.seed.team-allocation.enabled=false",
         "GOOGLE_CLIENT_ID=test", "GOOGLE_CLIENT_SECRET=test"
 })
 @AutoConfigureMockMvc
@@ -88,6 +109,21 @@ class WorkspaceDemoIntegrationTest {
     private Map<String, Long> counts() {
         return Map.of("projects", projects.count(), "teams", teams.count(), "members", members.count(), "workspaces", workspaces.count(),
                 "audits", audits.count(), "activities", activities.count(), "requests", requests.count(), "users", users.count());
+    }
+
+    @Test @org.junit.jupiter.api.Order(0)
+    void workspaceDemoUsesProjectTeamsAndReturnsClassDetails() throws Exception {
+        var rows = candidates("admin@example.com");
+        assertThat(rows).hasSize(5);
+        assertThat(rows).allSatisfy(row -> {
+            assertThat(row.get("classCode").asText()).isEqualTo("WS-DEMO-CLASS");
+            assertThat(row.get("className").asText()).isEqualTo("Workspace Demo Class");
+            assertThat(row.get("teamId").asLong()).isPositive();
+        });
+        assertThat(rows).extracting(row -> row.get("teamName").asText())
+                .contains("Team Atlas", "Team Nova", "Team Pixel", "Team Completed", "Team Horizon");
+        assertThat(rows.stream().filter(row -> row.get("teamName").asText().equals("Team Pixel"))
+                .findFirst().orElseThrow().get("workspaceId").asLong()).isPositive();
     }
 
     @Test @org.junit.jupiter.api.Order(1) void startupSeedsCreatedUncreatedIneligibleAndEmptyTeamsForAc04() throws Exception {

@@ -1,4 +1,7 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.dto;
+
+import com.example.starter_project_2025.system.project.domain.ProjectStatus;
+import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.*;
@@ -10,7 +13,7 @@ public final class WorkspaceSectionDtos {
     public record Scope(Long tenantId, Long workspaceId, Long projectId, Long teamId) {
         public static Scope from(Workspace workspace) {
             return new Scope(workspace.getTenant().getId(), workspace.getId(),
-                    workspace.getProject().getId(), workspace.getTeam().getId());
+                    workspace.getProject() == null ? null : workspace.getProject().getId(), workspace.getTeam().getId());
         }
     }
     public record Access(String key, boolean canRead, Map<String, Boolean> actions) { }

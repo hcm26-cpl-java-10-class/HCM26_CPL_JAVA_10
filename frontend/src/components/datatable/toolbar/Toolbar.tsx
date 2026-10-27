@@ -104,6 +104,13 @@ export function Toolbar({
         )}
       </div>
 
+      {showActions && (
+        <ToolbarActions
+          table={table}
+          headerActions={headerActions}
+          hideCreate={hideCreate}
+        />
+      )}
       {rightSlot}
     </div>
   );

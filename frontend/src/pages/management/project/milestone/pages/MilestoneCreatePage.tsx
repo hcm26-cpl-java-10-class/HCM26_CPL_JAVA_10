@@ -17,7 +17,7 @@ import type { CreateMilestoneRequest, MilestoneApiError, MilestoneDetailRouteSta
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, ArrowLeft, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { MilestoneForm } from "../components/MilestoneForm";
 import { milestoneDefaultValues, type MilestoneFormValues } from "../milestone-form.schema";
@@ -53,7 +53,17 @@ function CreatePageSkeleton() {
 export function MilestoneCreatePage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
-  const listUrl = projectId ? `/projects/${projectId}/milestones` : "/teacher";
+  const [searchParams] = useSearchParams();
+  const teamId = Number(searchParams.get("teamId"));
+  const scopedTeamId = Number.isSafeInteger(teamId) && teamId > 0 ? teamId : undefined;
+  const teamScoped = searchParams.get("scope") === "team" && scopedTeamId !== undefined;
+  const workspaceId = Number(searchParams.get("workspaceId"));
+  const scopedWorkspaceId = Number.isSafeInteger(workspaceId) && workspaceId > 0 ? workspaceId : undefined;
+  const listUrl = teamScoped && scopedWorkspaceId
+    ? `/management/workspaces/${scopedWorkspaceId}?tab=milestones`
+    : projectId
+    ? `/projects/${projectId}/milestones${scopedTeamId ? `?teamId=${scopedTeamId}` : ""}`
+    : "/teacher";
   const queryClient = useQueryClient();
   const [isDirty, setDirty] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -63,9 +73,13 @@ export function MilestoneCreatePage() {
   const completedRef = useRef(false);
 
   const optionsQuery = useQuery({
-    queryKey: ["projects", projectId, "milestones", "create-options"],
-    queryFn: () => milestoneApi.getCreateOptions(projectId as string),
-    enabled: !!projectId,
+    queryKey: teamScoped
+      ? ["teams", scopedTeamId, "milestones", "create-options"]
+      : ["projects", projectId, "milestones", "create-options"],
+    queryFn: () => teamScoped
+      ? milestoneApi.getTeamCreateOptions(scopedTeamId!)
+      : milestoneApi.getCreateOptions(projectId as string),
+    enabled: teamScoped || !!projectId,
     retry: false,
   });
 
@@ -79,21 +93,26 @@ export function MilestoneCreatePage() {
 
   const createMutation = useMutation({
     mutationFn: (attempt: SubmissionAttempt) =>
-      milestoneApi.create(projectId as string, attempt.payload, attempt.key),
+      teamScoped
+        ? milestoneApi.createForTeam(scopedTeamId!, attempt.payload, attempt.key)
+        : milestoneApi.create(projectId as string, attempt.payload, attempt.key),
     onSuccess: async (milestone) => {
       completedRef.current = true;
       attemptRef.current = null;
       setApiError(null);
       await queryClient.invalidateQueries({ queryKey: ["projects", projectId, "milestones"] });
+      await queryClient.invalidateQueries({ queryKey: ["milestone", projectId] });
+      await queryClient.invalidateQueries({ queryKey: ["workspace-milestones", projectId, scopedTeamId] });
+      await queryClient.invalidateQueries({ queryKey: ["team-milestones", scopedTeamId] });
       const rubric = optionsQuery.data?.rubrics.find((item) => item.id === milestone.rubricSnapshotId);
       const routeState: MilestoneDetailRouteState = {
-        projectName: optionsQuery.data?.project.name,
+        projectName: optionsQuery.data?.project?.name,
         rubricName: rubric?.name,
         rubricVersion: rubric?.version,
         returnTo: listUrl,
       };
       toast.success("Milestone created successfully.");
-      navigate(`/projects/${projectId}/milestones/${milestone.id}`, { replace: true, state: routeState });
+      navigate(teamScoped && scopedWorkspaceId ? listUrl : teamScoped ? `/teams/${scopedTeamId}/milestones` : `/projects/${projectId}/milestones/${milestone.id}`, { replace: true, state: routeState });
     },
     onError: async (error: unknown) => {
       const uncertain = isNetworkOrTimeoutError(error);
@@ -122,7 +141,7 @@ export function MilestoneCreatePage() {
   const handleDirtyChange = useCallback((dirty: boolean) => setDirty(dirty), []);
 
   const handleSubmit = (values: MilestoneFormValues) => {
-    const payload = buildMilestonePayload(values);
+    const payload = { ...buildMilestonePayload(values), teamId };
     const serializedPayload = stablePayload(payload);
     const existing = attemptRef.current;
     const attempt = existing?.serializedPayload === serializedPayload
@@ -173,16 +192,16 @@ export function MilestoneCreatePage() {
   }
 
   return (
-    <MainLayout pathName={{ projects: "Projects", milestones: "Milestones", new: "Create", [projectId]: optionsQuery.data.project.name }}>
+    <MainLayout pathName={{ projects: "Projects", milestones: "Milestones", new: "Create", [projectId]: optionsQuery.data.project?.name ?? "Team workspace" }}>
       <div className="mx-auto grid w-full max-w-7xl gap-6">
         <Card className="border-primary/20 bg-gradient-to-r from-primary/5 via-background to-background">
           <CardHeader className="gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary">{optionsQuery.data.project.status}</Badge>
-              <span className="text-sm text-muted-foreground">Fixed project context</span>
+              <Badge variant="secondary">{optionsQuery.data.project?.status ?? "TEAM_ONLY"}</Badge>
+              <span className="text-sm text-muted-foreground">{teamScoped ? "Team workspace context" : "Fixed project context"}</span>
             </div>
             <div>
-              <CardTitle className="text-2xl">Create a milestone for {optionsQuery.data.project.name}</CardTitle>
+              <CardTitle className="text-2xl">Create a milestone for {optionsQuery.data.project?.name ?? "this team workspace"}</CardTitle>
               <CardDescription className="mt-2">Define the delivery deadline, acceptance conditions, and evaluation rubric. Reviewers are assigned when submissions are evaluated.</CardDescription>
             </div>
           </CardHeader>

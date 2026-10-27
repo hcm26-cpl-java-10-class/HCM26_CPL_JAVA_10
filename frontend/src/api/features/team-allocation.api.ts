@@ -7,6 +7,9 @@ import type {
   PublishTeamsResponse,
   SaveDraftRequest,
   TeamListResponse,
+  TeamMemberHistoryPage,
+  TransferTeamMemberRequest,
+  UpdateTeamRolesRequest,
   UpdateDraftTeamRequest,
 } from "@/types/features/team-allocation";
 
@@ -120,6 +123,63 @@ export const teamAllocationApi = {
       `${classPath(classId)}/allocation-sessions/${sessionId}/teams/${teamId}/mentor`,
       { assignedMentorId, reason },
     );
+  },
+
+  async updateTeamRoles(
+    classId: number,
+    sessionId: number,
+    teamId: number,
+    payload: UpdateTeamRolesRequest,
+  ): Promise<void> {
+    await axiosInstance.put(
+      `${classPath(classId)}/allocation-sessions/${sessionId}/teams/${teamId}/roles`,
+      payload,
+    );
+  },
+
+  async transferActiveTeamMember(
+    classId: number,
+    sessionId: number,
+    sourceTeamId: number,
+    memberId: number,
+    payload: TransferTeamMemberRequest,
+  ): Promise<void> {
+    await axiosInstance.post(
+      `${classPath(classId)}/allocation-sessions/${sessionId}/teams/${sourceTeamId}/members/${memberId}/transfer`,
+      payload,
+    );
+  },
+
+  async swapActiveTeamMember(
+    classId: number,
+    sessionId: number,
+    sourceTeamId: number,
+    memberId: number,
+    payload: {
+      replacementMemberId: number;
+      replacementTeamId: number;
+      reason: string;
+    },
+  ): Promise<void> {
+    await axiosInstance.post(
+      `${classPath(classId)}/allocation-sessions/${sessionId}/teams/${sourceTeamId}/members/${memberId}/swap`,
+      payload,
+    );
+  },
+
+  async getMemberHistory(filters: {
+    classId?: number;
+    cohortId?: number;
+    memberId?: number;
+    teamId?: number;
+    page?: number;
+    size?: number;
+  }): Promise<TeamMemberHistoryPage> {
+    const response = await axiosInstance.get<TeamMemberHistoryPage>(
+      "/v1/team-member-history",
+      { params: filters },
+    );
+    return response.data;
   },
 
   async addActiveTeamMember(

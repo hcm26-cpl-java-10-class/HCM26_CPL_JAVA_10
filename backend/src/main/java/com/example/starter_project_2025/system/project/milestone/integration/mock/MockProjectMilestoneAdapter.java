@@ -1,6 +1,8 @@
 package com.example.starter_project_2025.system.project.milestone.integration.mock;
 
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import com.example.starter_project_2025.system.project.ProjectRepository;
+import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.milestone.integration.model.ProjectCreationContext;
 import com.example.starter_project_2025.system.project.milestone.integration.model.ProjectReadContext;
 import com.example.starter_project_2025.system.project.milestone.integration.model.ProjectStatus;
@@ -19,19 +21,22 @@ public class MockProjectMilestoneAdapter implements ProjectMilestonePort {
     private final ProjectStatus projectStatus;
     private final boolean tenantActive;
     private final boolean mentorAssigned;
+    private final ProjectRepository projects;
 
     public MockProjectMilestoneAdapter(
             @Value("${milestone.mock.project-status:ACTIVE}") ProjectStatus projectStatus,
             @Value("${milestone.mock.tenant-active:true}") boolean tenantActive,
-            @Value("${milestone.mock.mentor-assigned:true}") boolean mentorAssigned
+            @Value("${milestone.mock.mentor-assigned:true}") boolean mentorAssigned,
+            ProjectRepository projects
     ) {
         this.projectStatus = projectStatus;
         this.tenantActive = tenantActive;
         this.mentorAssigned = mentorAssigned;
+        this.projects = projects;
     }
 
     @Override
-    public ProjectCreationContext requireProjectForCreation(UUID projectId, UUID actorId, UUID tenantId) {
+    public ProjectCreationContext requireProjectForCreation(Long projectId, UUID actorId, Long tenantId) {
         requireMockProject(projectId, tenantId);
 
         return new ProjectCreationContext(
@@ -46,7 +51,7 @@ public class MockProjectMilestoneAdapter implements ProjectMilestonePort {
     }
 
     @Override
-    public ProjectReadContext requireProjectForRead(UUID projectId, UUID actorId, UUID tenantId) {
+    public ProjectReadContext requireProjectForRead(Long projectId, UUID actorId, Long tenantId) {
         requireMockProject(projectId, tenantId);
         return new ProjectReadContext(
                 projectId,
@@ -58,20 +63,20 @@ public class MockProjectMilestoneAdapter implements ProjectMilestonePort {
         );
     }
 
-    private void requireMockProject(UUID projectId, UUID tenantId) {
+    private void requireMockProject(Long projectId, Long tenantId) {
         if (MockMilestoneData.OUT_OF_SCOPE_PROJECT_ID.equals(projectId)) {
             throw new AccessDeniedException("Project is outside the current scope");
         }
-        if ((!MockMilestoneData.PROJECT_ID.equals(projectId)
-                && !MockMilestoneData.SECOND_PROJECT_ID.equals(projectId))
-                || !MockMilestoneData.TENANT_ID.equals(tenantId)) {
+        if (!projects.findById(projectId)
+                .filter(project -> project.getTenant() != null
+                        && tenantId.equals(project.getTenant().getId())
+                        && Boolean.TRUE.equals(project.getIsActive()))
+                .isPresent()) {
             throw new ResourceNotFoundException("Project not found");
         }
     }
 
-    private String projectName(UUID projectId) {
-        return MockMilestoneData.SECOND_PROJECT_ID.equals(projectId)
-                ? "Secondary OJT Project"
-                : "OJT Management System";
+    private String projectName(Long projectId) {
+        return projects.findById(projectId).map(Project::getName).orElse("Workspace project");
     }
 }

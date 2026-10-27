@@ -1,6 +1,17 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.service;
+
+import com.example.starter_project_2025.system.project.*;
+
+import com.example.starter_project_2025.system.project.domain.Project;
+import com.example.starter_project_2025.system.project.domain.ProjectStatus;
+import com.example.starter_project_2025.system.project.team.Team;
+import com.example.starter_project_2025.system.project.team.TeamMember;
+import com.example.starter_project_2025.system.project.team.TeamRepository;
+import com.example.starter_project_2025.system.project.tenant.Tenant;
+import com.example.starter_project_2025.system.project.tenant.TenantRepository;
 
 import com.example.starter_project_2025.security.UserPrincipal;
+import com.example.starter_project_2025.system.project.trainingclass.ScopeAuthorizationService;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -16,8 +27,10 @@ import java.util.Set;
 public class WorkspaceAccessService {
     private final UserRepository users;
     private final TenantRepository tenants;
-    private final TeamRepository teams;
+    private final ProjectTeamRepository teams;
+    private final ProjectMemberRepository members;
     private final ProjectRepository projects;
+    private final ScopeAuthorizationService classScope;
     private static final Set<String> READ = Set.of("WORKSPACE_READ", "VIEW_PROJECT_WORKSPACE");
     private static final Set<String> CREATE = Set.of("WORKSPACE_CREATE", "CREATE_PROJECT_WORKSPACE");
 
@@ -71,9 +84,9 @@ public class WorkspaceAccessService {
         return tenant;
     }
 
-    public Team requirePair(User user, Long projectId, Long teamId, boolean lock) {
+    public ProjectTeam requirePair(User user, Long projectId, Long teamId, boolean lock) {
         Project project = requireProject(user, projectId, lock);
-        Team team = requireTeam(user, teamId, lock);
+        ProjectTeam team = requireTeam(user, teamId, lock);
         if (team.getProject() == null || !team.getProject().getId().equals(projectId)) {
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Project/team không có quan hệ hợp lệ");
         }
@@ -88,35 +101,44 @@ public class WorkspaceAccessService {
         return project;
     }
 
-    public Team requireTeam(User user, Long teamId, boolean lock) {
-        Team team = (lock ? teams.findForWorkspaceCreation(teamId) : teams.findById(teamId))
+    public ProjectTeam requireTeam(User user, Long teamId, boolean lock) {
+        ProjectTeam team = (lock ? teams.findForWorkspaceCreation(teamId) : teams.findById(teamId))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy team"));
-        if (!Boolean.TRUE.equals(team.getIsActive())) {
+        if (!Boolean.TRUE.equals(team.getIsActive()) || team.getStatus() != ProjectTeamStatus.ACTIVE) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Project/team không còn tồn tại");
         }
         Long tenantId = user.getTenant().getId();
-        if (!team.getTenant().getId().equals(tenantId) || !inScope(user, team)) {
+        if (!team.getTrainingClass().getTenantId().equals(tenantId) || !inScope(user, team)) {
             throw new AccessDeniedException("Project/team is outside the current scope");
         }
         return team;
     }
 
-    private boolean inScope(User user, Team team) {
+    private boolean inScope(User user, ProjectTeam team) {
         boolean admin = user.getRoles().stream().anyMatch(role -> Boolean.TRUE.equals(role.getIsActive())
-                && ("ADMIN".equals(role.getName()) || "PO".equals(role.getName())));
-        return admin || (team.getMentor() != null && team.getMentor().getId().equals(user.getId()))
-                || team.getMembers().stream().anyMatch(member -> member.isCurrentParticipant()
-                && member.getUser().getId().equals(user.getId()));
+                && ("SUPER_ADMIN".equals(role.getName())
+                || "ADMIN".equals(role.getName())
+                || "PO".equals(role.getName())));
+        return admin || (team.getAssignedMentorId() != null && team.getAssignedMentorId().equals(user.getId()))
+                || members.existsByTeam_IdAndClassMember_User_IdAndClassMember_Status(
+                        team.getId(), user.getId(),
+                        com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus.ACTIVE)
+                || classScope.canManageClass(SecurityContextHolder.getContext().getAuthentication(),
+                        team.getTrainingClass(), "WORKSPACE_READ", "WORKSPACE_CREATE", "PRJ_WORKSPACE_MANAGE");
     }
 
     public boolean canSelectProject(User user, Project project) {
         boolean administrator = user.getRoles().stream().anyMatch(role -> Boolean.TRUE.equals(role.getIsActive())
-                && ("ADMIN".equals(role.getName()) || "PO".equals(role.getName())));
-        return administrator || teams.findFirstByProjectIdOrderByIdAsc(project.getId()).map(team -> inScope(user, team)).orElse(true);
+                && ("SUPER_ADMIN".equals(role.getName())
+                || "ADMIN".equals(role.getName())
+                || "PO".equals(role.getName())));
+        return administrator || teams.findAllByProject_IdInOrderByIdDesc(java.util.List.of(project.getId()))
+                .stream().findFirst().map(team -> inScope(user, team)).orElse(true);
     }
 
-    public boolean hasMembers(Team team) {
-        return team.getMembers().stream().anyMatch(TeamMember::isCurrentParticipant);
+    public boolean hasMembers(ProjectTeam team) {
+        return !members.findAllByTeam_IdAndClassMember_StatusOrderByIdAsc(
+                team.getId(), com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus.ACTIVE).isEmpty();
     }
 
     public boolean projectCanStart(Project project) {

@@ -1,4 +1,15 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.controller;
+
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceCandidateFilter;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceCandidateItem;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceCreateRequest;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceDetailResponse;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceMemberResponse;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceResponse;
+import com.example.starter_project_2025.system.project.workspace.service.WorkspaceConflictException;
+import com.example.starter_project_2025.system.project.workspace.service.WorkspaceProjectSelection;
+import com.example.starter_project_2025.system.project.workspace.service.WorkspaceRelationshipException;
+import com.example.starter_project_2025.system.project.workspace.service.WorkspaceService;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

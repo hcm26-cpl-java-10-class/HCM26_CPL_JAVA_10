@@ -24,20 +24,24 @@ export default function WorkspaceCandidatePage() {
   const canCreate = hasPermission("WORKSPACE_CREATE");
   const search = params.get("search") ?? "";
   const cohort = params.get("cohort") ?? "all";
+  const classId = params.get("classId") ?? "all";
   const workspaceState = params.get("workspace") ?? "all";
   const size = [10, 20, 50, 100].includes(Number(params.get("size"))) ? Number(params.get("size")) : 10;
   const query = useQuery({ queryKey: ["workspace-candidates"], queryFn: workspaceApi.getCandidates });
   const candidates = query.data ?? [];
   const cohorts = useMemo(() => [...new Map(candidates.filter(row => row.cohortId != null).map(row => [String(row.cohortId), row.cohortName ?? `Cohort #${row.cohortId}`])).entries()], [candidates]);
+  const classes = useMemo(() => [...new Map(candidates.filter(row => row.classId != null).map(row => [String(row.classId), `${row.classCode ? `${row.classCode} - ` : ""}${row.className ?? `Class #${row.classId}`}`])).entries()], [candidates]);
+  const hasUnassignedClass = candidates.some(row => row.classId == null);
   const filtered = useMemo(() => candidates.filter(row => {
     const matchesSearch = `${row.projectName} ${row.projectCode} ${row.teamName} ${row.teamCode}`.toLocaleLowerCase("en").includes(search.trim().toLocaleLowerCase("en"));
     return matchesSearch && (cohort === "all" || String(row.cohortId) === cohort)
+      && (classId === "all" || (classId === "unassigned" ? row.classId == null : String(row.classId) === classId))
       && (workspaceState === "all" || (workspaceState === "created" ? !!row.workspaceId : !row.workspaceId));
-  }), [candidates, search, cohort, workspaceState]);
+  }), [candidates, search, cohort, classId, workspaceState]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / size));
   const page = Math.min(Math.max(1, Number(params.get("page")) || 1), pageCount);
   const rows = filtered.slice((page - 1) * size, page * size);
-  const hasFilters = !!search || cohort !== "all" || workspaceState !== "all";
+  const hasFilters = !!search || cohort !== "all" || classId !== "all" || workspaceState !== "all";
 
   function updateParam(key: string, value: string) {
     setParams(previous => {
@@ -71,19 +75,21 @@ export default function WorkspaceCandidatePage() {
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative min-w-56 flex-1"><Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" /><Input aria-label="Search projects or teams" placeholder="Search team name..." value={search} onChange={event => updateParam("search", event.target.value)} className="pl-9" /></div>
             <Select value={cohort} onValueChange={value => updateParam("cohort", value)}><SelectTrigger className="w-full sm:w-48" aria-label="Cohort"><SelectValue placeholder="Cohort" /></SelectTrigger><SelectContent><SelectItem value="all">All cohorts</SelectItem>{cohorts.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}</SelectContent></Select>
+            <Select value={classId} onValueChange={value => updateParam("classId", value)}><SelectTrigger className="w-full sm:w-52" aria-label="Class"><SelectValue placeholder="Class" /></SelectTrigger><SelectContent><SelectItem value="all">All classes</SelectItem>{classes.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}{hasUnassignedClass && <SelectItem value="unassigned">Not assigned</SelectItem>}</SelectContent></Select>
             <Select value={workspaceState} onValueChange={value => updateParam("workspace", value)}><SelectTrigger className="w-full sm:w-44" aria-label="Workspace status"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All workspaces</SelectItem><SelectItem value="uncreated">Not created</SelectItem><SelectItem value="created">Created</SelectItem></SelectContent></Select>
             {hasFilters && <Button variant="ghost" onClick={() => setParams({})}><X />Clear filters</Button>}
           </div>
           <div className="rounded-md border">
             <Table>
-              <TableHeader><TableRow><TableHead className="pl-4">Project</TableHead><TableHead>Team</TableHead><TableHead>Cohort</TableHead><TableHead>Members</TableHead><TableHead>Project status</TableHead><TableHead>Workspace</TableHead><TableHead className="pr-4 text-right">Actions</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead className="pl-4">Project</TableHead><TableHead>Team</TableHead><TableHead>Class</TableHead><TableHead>Cohort</TableHead><TableHead>Members</TableHead><TableHead>Project status</TableHead><TableHead>Workspace</TableHead><TableHead className="pr-4 text-right">Actions</TableHead></TableRow></TableHeader>
               <TableBody>
-                {query.isLoading ? <TableRow><TableCell colSpan={7} className="h-40 text-center"><Loader2 className="mr-2 inline size-4 animate-spin" />Loading projects and teams...</TableCell></TableRow>
-                  : query.isError ? <TableRow><TableCell colSpan={7}><WorkspaceEmptyState icon={AlertCircle} title="Unable to load projects and teams" description={getWorkspaceError(query.error)} action={<Button variant="outline" onClick={() => void query.refetch()}>Try again</Button>} /></TableCell></TableRow>
-                  : rows.length === 0 ? <TableRow><TableCell colSpan={7}><WorkspaceEmptyState icon={FolderOpen} title="No matching projects or teams" description={hasFilters ? "Change or clear the filters to find other projects and teams." : "Projects and teams appear here when you are assigned as a mentor or team member."} action={hasFilters ? <Button variant="outline" onClick={() => setParams({})}>Clear filters</Button> : undefined} /></TableCell></TableRow>
+                {query.isLoading ? <TableRow><TableCell colSpan={8} className="h-40 text-center"><Loader2 className="mr-2 inline size-4 animate-spin" />Loading projects and teams...</TableCell></TableRow>
+                  : query.isError ? <TableRow><TableCell colSpan={8}><WorkspaceEmptyState icon={AlertCircle} title="Unable to load projects and teams" description={getWorkspaceError(query.error)} action={<Button variant="outline" onClick={() => void query.refetch()}>Try again</Button>} /></TableCell></TableRow>
+                  : rows.length === 0 ? <TableRow><TableCell colSpan={8}><WorkspaceEmptyState icon={FolderOpen} title="No matching projects or teams" description={hasFilters ? "Change or clear the filters to find other projects and teams." : "Projects and teams appear here when you are assigned as a mentor or team member."} action={hasFilters ? <Button variant="outline" onClick={() => setParams({})}>Clear filters</Button> : undefined} /></TableCell></TableRow>
                   : rows.map(row => <TableRow key={`${row.projectId}-${row.teamId}`}>
                     <TableCell className="pl-4"><p className="font-medium">{row.projectName ?? "No project"}</p><p className="text-xs text-muted-foreground">{row.projectCode}</p></TableCell>
                     <TableCell><p className="font-medium">{row.teamName}</p><p className="text-xs text-muted-foreground">{row.teamCode}</p></TableCell>
+                    <TableCell>{row.className ? <><p className="font-medium">{row.className}</p><p className="text-xs text-muted-foreground">{row.classCode}</p></> : "Not assigned"}</TableCell>
                     <TableCell>{row.cohortName ?? "Not assigned"}</TableCell><TableCell><span className="inline-flex items-center gap-1.5"><Users className="size-4 text-muted-foreground" />{row.memberCount ?? 0}</span></TableCell>
                     <TableCell><WorkspaceStatusBadge status={row.projectStatus} /></TableCell><TableCell><Badge variant={row.workspaceId ? "secondary" : "outline"}>{row.workspaceId ? "Created" : "Not created"}</Badge></TableCell>
                     <TableCell className="pr-4 text-right">{row.workspaceId ? <Button variant="outline" size="sm" onClick={() => openWorkspace(row.workspaceId!)}>Open workspace<ArrowRight /></Button> : <Button size="sm" disabled={!canCreate || !row.eligibleForWorkspace} title={!canCreate ? "You do not have permission to create a workspace." : workspaceIneligibleReason(row)} onClick={() => setCreateFor(row)}><Plus />Create workspace</Button>}</TableCell>

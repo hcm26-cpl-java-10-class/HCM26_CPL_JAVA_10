@@ -1,4 +1,7 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.dto;
+
+import com.example.starter_project_2025.system.project.domain.ProjectStatus;
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceStatus;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -23,9 +26,12 @@ public class WorkspaceCandidateItem {
     private Long cohortId;
     private String cohortName;
 
+    private Long classId;
+    private String classCode;
+    private String className;
+
     private Long workspaceId;
     private WorkspaceStatus workspaceStatus;
     private Boolean eligibleForWorkspace;
     private String ineligibleReason;
 }
-

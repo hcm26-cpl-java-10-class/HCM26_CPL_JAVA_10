@@ -14,6 +14,10 @@ export interface WorkspaceCandidateItem {
   cohortId?: number;
   cohortName?: string;
 
+  classId?: number;
+  classCode?: string;
+  className?: string;
+
   workspaceId?: number;
   workspaceStatus?: string;
   eligibleForWorkspace: boolean;
@@ -21,7 +25,7 @@ export interface WorkspaceCandidateItem {
 }
 
 export interface WorkspaceCreateRequest {
-  projectId: number;
+  projectId?: number | null;
   teamId: number;
 }
 
@@ -35,7 +39,7 @@ export interface WorkspaceProjectOption {
 
 export interface WorkspaceResponse {
   id?: number;
-  projectId: number;
+  projectId?: number | null;
   teamId: number;
   tenantId?: number;
   code?: string;
@@ -98,17 +102,16 @@ export interface WorkspaceDetail extends WorkspaceResponse {
 export type WorkspaceSectionKey = "overview" | "members" | "milestones" | "sprints" | "backlog" | "artifacts" | "feedback" | "activity";
 export interface WorkspaceSectionAccess { key: WorkspaceSectionKey; canRead: boolean; actions: Record<string, boolean> }
 export interface WorkspaceNavigation {
-  workspaceId: number; projectId: number; teamId: number; projectCode: string; projectName: string;
-  teamName: string; projectStatus: string; sections: WorkspaceSectionAccess[];
+  workspaceId: number; projectId?: number | null; teamId: number; projectCode?: string | null; projectName?: string | null;
+  teamName: string; projectStatus?: string | null; sections: WorkspaceSectionAccess[];
 }
 export interface WorkspaceSectionItem {
   id: string; title: string; description: string | null; status: string; published: boolean; score?: number; occurredAt?: string;
 }
 export interface WorkspaceSectionContent {
-  workspaceId: number; projectId: number; teamId: number; section: WorkspaceSectionKey; items: WorkspaceSectionItem[];
+  workspaceId: number; projectId?: number | null; teamId: number; section: WorkspaceSectionKey; items: WorkspaceSectionItem[];
 }
 export interface SectionCreate { title: string; description: string; published: boolean }
 export interface SectionReview {
   kind: "ARTIFACT" | "MILESTONE" | "SPRINT"; targetId: string; comment: string; score?: number; published: boolean;
 }
-

@@ -1,7 +1,8 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.team;
 
 import com.example.starter_project_2025.system.rbac.user.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import com.example.starter_project_2025.system.project.team.ParticipationStatus;
 import org.springframework.stereotype.Repository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -33,4 +34,3 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
     @Query("select m from TeamMember m join fetch m.user u where m.team.id = :teamId and m.isActive = true order by u.id")
     List<TeamMember> findManagedRoster(@Param("teamId") Long teamId);
 }
-

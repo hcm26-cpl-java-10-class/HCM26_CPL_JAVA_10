@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.project.milestone.service;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.project.milestone.dto.response.MilestonePageResponse;
 import com.example.starter_project_2025.system.project.milestone.dto.response.MilestoneDetailResponse;
+import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
 import com.example.starter_project_2025.system.project.milestone.dto.request.MilestoneListQuery;
 import com.example.starter_project_2025.system.project.milestone.exception.MilestoneValidationException;
 import com.example.starter_project_2025.system.project.milestone.integration.model.ProjectReadContext;
@@ -21,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import com.example.starter_project_2025.system.project.ProjectTeamRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -39,7 +41,7 @@ public class MilestoneQueryService {
     );
 
     private final CurrentActorProvider actorProvider;
-    private final CurrentTenantProvider tenantProvider;
+    private final MilestoneTenantProvider tenantProvider;
     private final ProjectMilestonePort projectPort;
     private final MilestoneAccessPolicy accessPolicy;
     private final MilestoneRepository repository;
@@ -48,13 +50,14 @@ public class MilestoneQueryService {
     private final RubricCatalogPort rubricPort;
     private final ReviewerDirectoryPort reviewerPort;
     private final TenantSettingsPort tenantSettingsPort;
+    private final ProjectTeamRepository projectTeamRepository;
 
     @Transactional(readOnly = true)
-    public MilestonePageResponse getList(UUID projectId, MilestoneListQuery query) {
+    public MilestonePageResponse getList(Long projectId, MilestoneListQuery query) {
         String search = normalizeSearch(query.search());
         validateListQuery(query, search);
         UUID actorId = actorProvider.requireCurrentActorId();
-        UUID tenantId = tenantProvider.requireCurrentTenantId();
+        Long tenantId = tenantProvider.requireCurrentTenantId();
         ProjectReadContext project = projectPort.requireProjectForRead(projectId, actorId, tenantId);
         accessPolicy.requireReadAccess(project);
 
@@ -65,6 +68,7 @@ public class MilestoneQueryService {
             if (query.deadlineFrom() != null) {
                 deadlineFrom = query.deadlineFrom().atStartOfDay(tenantTimeZone).toInstant();
             }
+
             if (query.deadlineTo() != null) {
                 deadlineToExclusive = query.deadlineTo().plusDays(1).atStartOfDay(tenantTimeZone).toInstant();
             }
@@ -81,6 +85,7 @@ public class MilestoneQueryService {
                         MilestoneSpecifications.matching(
                                 tenantId,
                                 projectId,
+                                query.teamId(),
                                 search,
                                 query.status(),
                                 query.mandatory(),
@@ -94,12 +99,29 @@ public class MilestoneQueryService {
     }
 
     @Transactional(readOnly = true)
-    public MilestoneDetailResponse getDetail(UUID projectId, UUID milestoneId) {
+    public MilestonePageResponse getTeamList(Long teamId, MilestoneListQuery query) {
+        String search = normalizeSearch(query.search());
+        validateListQuery(query, search);
+        Long tenantId = tenantProvider.requireCurrentTenantId();
+        projectTeamRepository.findById(teamId)
+                .filter(team -> team.getTrainingClass() != null
+                        && tenantId.equals(team.getTrainingClass().getTenantId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Team not found"));
+        return mapper.toPageResponse(null, repository.findAll(
+                MilestoneSpecifications.matching(tenantId, null, teamId, search, query.status(),
+                        query.mandatory(), query.latePolicyType(), null, null),
+                PageRequest.of(query.page(), query.size(), buildSort(query.sort()))));
+    }
+
+    @Transactional(readOnly = true)
+    public MilestoneDetailResponse getDetail(Long projectId, UUID milestoneId, Long teamId) {
         UUID actorId = actorProvider.requireCurrentActorId();
-        UUID tenantId = tenantProvider.requireCurrentTenantId();
+        Long tenantId = tenantProvider.requireCurrentTenantId();
         ProjectReadContext project = projectPort.requireProjectForRead(projectId, actorId, tenantId);
         accessPolicy.requireReadAccess(project);
         var milestone = repository.findByIdAndProjectIdAndTenantId(milestoneId, projectId, tenantId)
+                .filter(m -> teamId == null || teamId.equals(m.getTeamId()))
+                .filter(com.example.starter_project_2025.system.project.milestone.domain.Milestone::isActive)
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
         var rubric = rubricPort.requireSnapshotForRead(milestone.getRubricSnapshotId(), projectId, tenantId);
         var reviewer = milestone.getReviewerId() == null
@@ -107,6 +129,19 @@ public class MilestoneQueryService {
                 : reviewerPort.requireReviewerForRead(milestone.getReviewerId(), projectId, tenantId);
         var tenantTimeZone = tenantSettingsPort.requireTimeZone(tenantId);
         return detailMapper.toResponse(milestone, project, rubric, reviewer, tenantTimeZone);
+    }
+
+    @Transactional(readOnly = true)
+    public MilestoneDetailResponse getTeamDetail(Long teamId, UUID milestoneId) {
+        Long tenantId = tenantProvider.requireCurrentTenantId();
+        var milestone = repository.findByIdAndTeamIdAndTenantId(milestoneId, teamId, tenantId)
+                .filter(Milestone::isActive)
+                .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
+        var rubric = rubricPort.requireSnapshotForRead(milestone.getRubricSnapshotId(), null, tenantId);
+        var reviewer = milestone.getReviewerId() == null ? null
+                : reviewerPort.requireReviewerForRead(milestone.getReviewerId(), null, tenantId);
+        return detailMapper.toResponse(milestone, null, rubric, reviewer,
+                tenantSettingsPort.requireTimeZone(tenantId));
     }
 
     private void validateListQuery(MilestoneListQuery query, String search) {

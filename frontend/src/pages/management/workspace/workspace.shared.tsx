@@ -8,7 +8,7 @@ export const WORKSPACE_SECTIONS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard, description: "Project information and goals" },
   { id: "members", label: "Members", icon: Users, description: "Team members and working rules" },
   { id: "milestones", label: "Milestone", icon: CalendarDays, description: "Delivery milestones and assessment criteria" },
-  { id: "sprints", label: "Sprint", icon: PanelsTopLeft, description: "Sprint plans and task board" },
+  { id: "sprints", label: "Kanban Board", icon: PanelsTopLeft, description: "Sprint plans and team task board" },
   { id: "backlog", label: "Backlog", icon: ListTodo, description: "The team's work items" },
   { id: "artifacts", label: "Artifact", icon: FolderOpen, description: "Documents and deliverables" },
   { id: "feedback", label: "Feedback", icon: MessageSquare, description: "Project reviews and feedback" },

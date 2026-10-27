@@ -1,4 +1,6 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.repository;
+
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceOutboxEvent;
 
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;

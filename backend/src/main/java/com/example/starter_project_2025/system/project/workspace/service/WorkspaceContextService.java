@@ -1,4 +1,7 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.service;
+
+import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceRepository;
 
 import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +24,11 @@ public class WorkspaceContextService {
             throw new AccessDeniedException("Workspace is outside the current tenant");
         if (!Boolean.TRUE.equals(workspace.getIsActive()))
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Workspace was not found");
-        access.requirePair(user, workspace.getProject().getId(), workspace.getTeam().getId(), false);
+        if (workspace.getProject() != null) {
+            access.requirePair(user, workspace.getProject().getId(), workspace.getTeam().getId(), false);
+        } else {
+            access.requireTeam(user, workspace.getTeam().getId(), false);
+        }
         return workspace;
     }
 }

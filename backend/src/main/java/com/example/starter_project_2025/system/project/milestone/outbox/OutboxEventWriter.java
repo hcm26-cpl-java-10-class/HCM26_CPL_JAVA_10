@@ -32,4 +32,70 @@ public class OutboxEventWriter {
             throw new IllegalStateException("Unable to serialize milestone outbox event", ex);
         }
     }
+
+    public void writeMilestoneOpened(Milestone milestone, Instant now) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("milestoneId", milestone.getId()); payload.put("projectId", milestone.getProjectId());
+            payload.put("teamId", milestone.getTeamId()); payload.put("tenantId", milestone.getTenantId());
+            payload.put("actorId", milestone.getUpdatedBy()); payload.put("status", milestone.getStatus());
+            payload.put("occurredAt", now);
+            repository.save(OutboxEvent.milestoneOpened(milestone.getId(), objectMapper.writeValueAsString(payload), now));
+        } catch (JsonProcessingException ex) { throw new IllegalStateException("Unable to serialize milestone open event", ex); }
+    }
+
+    public void writeArtifactDraftSaved(java.util.UUID milestoneId, Long projectId,
+            Long tenantId, java.util.UUID actorId, long version, Instant now) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("milestoneId", milestoneId);
+            payload.put("projectId", projectId);
+            payload.put("tenantId", tenantId);
+            payload.put("actorId", actorId);
+            payload.put("version", version);
+            payload.put("occurredAt", now);
+            repository.save(OutboxEvent.artifactDraftSaved(milestoneId,
+                    objectMapper.writeValueAsString(payload), now));
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Unable to serialize artifact draft event", ex);
+        }
+    }
+
+    public void writeArtifactFileUploaded(java.util.UUID milestoneId, Long projectId,
+            Long tenantId, java.util.UUID actorId, java.util.UUID attachmentId, Instant now) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("milestoneId", milestoneId);
+            payload.put("projectId", projectId);
+            payload.put("tenantId", tenantId);
+            payload.put("actorId", actorId);
+            payload.put("attachmentId", attachmentId);
+            payload.put("occurredAt", now);
+            repository.save(OutboxEvent.artifactFileUploaded(milestoneId,
+                    objectMapper.writeValueAsString(payload), now));
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Unable to serialize artifact upload event", ex);
+        }
+    }
+
+    public void writeArtifactSubmitted(java.util.UUID submissionId, java.util.UUID milestoneId,
+            Long projectId, Long tenantId, java.util.UUID actorId,
+            long version, boolean submittedLate, Instant now) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("submissionId", submissionId);
+            payload.put("milestoneId", milestoneId);
+            payload.put("projectId", projectId);
+            payload.put("tenantId", tenantId);
+            payload.put("actorId", actorId);
+            payload.put("version", version);
+            payload.put("status", "SUBMITTED");
+            payload.put("submittedLate", submittedLate);
+            payload.put("occurredAt", now);
+            repository.save(OutboxEvent.artifactSubmitted(submissionId,
+                    objectMapper.writeValueAsString(payload), now));
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Unable to serialize artifact submission event", ex);
+        }
+    }
 }

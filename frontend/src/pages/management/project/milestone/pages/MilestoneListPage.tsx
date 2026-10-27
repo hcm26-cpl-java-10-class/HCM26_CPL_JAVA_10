@@ -24,6 +24,8 @@ import {
   serializeMilestoneListParams,
 } from "../milestone-list-query.utils";
 import { getMilestoneApiError } from "../milestone.utils";
+import { MilestoneRiskPage } from "./MilestoneRiskPage";
+import { Button } from "@/components/ui/button";
 
 interface MilestoneTableFilters {
   status?: MilestoneStatus[];
@@ -33,6 +35,11 @@ interface MilestoneTableFilters {
 }
 
 export function MilestoneListPage() {
+  const [params] = useSearchParams();
+  return params.get("view") === "risk" ? <MilestoneRiskPage /> : <MilestoneStandardListPage />;
+}
+
+function MilestoneStandardListPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -42,6 +49,7 @@ export function MilestoneListPage() {
     () => parseMilestoneListParams(new URLSearchParams(serializedSearchParams)),
     [serializedSearchParams],
   );
+  const teamId = listParams.teamId;
 
   const filters = useMemo<MilestoneTableFilters>(() => ({
     status: listParams.status,
@@ -81,6 +89,7 @@ export function MilestoneListPage() {
       return milestoneApi.getList(projectId as string, {
         page: pagination.page ?? 0,
         size: pagination.size ?? 20,
+        teamId: listParams.teamId,
         sort: pagination.sort,
         search: normalizedSearch,
         status: nextFilters?.status,
@@ -90,11 +99,11 @@ export function MilestoneListPage() {
         deadlineTo,
       });
     },
-  }), [projectId]);
+  }), [projectId, listParams.teamId]);
 
   const table = useProTable(tableApi, milestoneListSchema, {
     enabled: Boolean(projectId),
-    queryKeyParts: [projectId],
+    queryKeyParts: [projectId, listParams.teamId],
     searchDebounceMs: 300,
     retry: false,
     staleTime: 30_000,
@@ -130,12 +139,12 @@ export function MilestoneListPage() {
   });
 
   const response = table.pageData as MilestonePageResponse | undefined;
-  const projectActive = response?.project.status === "ACTIVE";
-  const createUrl = `/projects/${projectId}/milestones/new`;
+  const projectActive = response?.project?.status === "ACTIVE";
+  const createUrl = `/projects/${projectId}/milestones/new${teamId ? `?teamId=${teamId}` : ""}`;
   const returnTo = `${location.pathname}${location.search}`;
   const filtered = hasMilestoneQuery(listParams);
   const breadcrumbs = response
-    ? { projects: "Projects", [projectId ?? "project"]: response.project.name, milestones: "Milestones" }
+    ? { projects: "Projects", [projectId ?? "project"]: response.project?.name ?? "Project", milestones: "Milestones" }
     : { projects: "Projects", milestones: "Milestones" };
 
   useEffect(() => {
@@ -163,10 +172,10 @@ export function MilestoneListPage() {
 
   const openDetail = (row: MilestoneListItem) => {
     const routeState: MilestoneDetailRouteState = {
-      projectName: response?.project.name,
+      projectName: response?.project?.name,
       returnTo,
     };
-    navigate(`/projects/${projectId}/milestones/${row.id}`, { state: routeState });
+    navigate(`/projects/${projectId}/milestones/${row.id}${teamId ? `?teamId=${teamId}` : ""}`, { state: routeState });
   };
 
   const clearSearchAndFilters = () => {
@@ -186,7 +195,7 @@ export function MilestoneListPage() {
       onClick={() => navigate(createUrl)}
       tooltip={projectActive
         ? "Create milestone"
-        : `Milestones cannot be created while the project is ${response?.project.status.toLowerCase() ?? "unavailable"}.`}
+        : `Milestones cannot be created while the project is ${response?.project?.status?.toLowerCase() ?? "unavailable"}.`}
       title="Create"
       variant="default"
       icon={<Plus size={16} />}
@@ -197,6 +206,7 @@ export function MilestoneListPage() {
 
   return (
     <MainLayout pathName={breadcrumbs}>
+      <div className="mb-3 flex justify-end"><Button variant="outline" onClick={() => navigate(`/projects/${projectId}/milestones?view=risk`)}>Risk monitoring</Button></div>
       <ProTable<MilestoneListItem>
         table={table}
         headerActions={createAction}

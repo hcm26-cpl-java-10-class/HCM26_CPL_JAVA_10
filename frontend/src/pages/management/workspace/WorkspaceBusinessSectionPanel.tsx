@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { WorkspaceSectionState, sectionForbidden } from "./WorkspaceSectionState";
 
 export function WorkspaceBusinessSectionPanel({ workspaceId, projectId, teamId, section, label, access, onAccessChanged }: {
-  workspaceId: number; projectId: number; teamId: number; section: WorkspaceSectionKey; label: string;
+  workspaceId: number; projectId?: number | null; teamId: number; section: WorkspaceSectionKey; label: string;
   access: WorkspaceSectionAccess; onAccessChanged: () => void;
 }) {
   const { user, activeRole } = usePermissions();

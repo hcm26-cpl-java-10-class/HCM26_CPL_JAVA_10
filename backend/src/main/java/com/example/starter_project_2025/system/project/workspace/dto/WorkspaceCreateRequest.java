@@ -1,4 +1,4 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.dto;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -13,8 +13,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class WorkspaceCreateRequest {
 
-    @NotNull(message = "Project ID is required")
-    @Positive(message = "Project ID must be positive")
     private Long projectId;
 
     @NotNull(message = "Team ID is required")
@@ -22,4 +20,3 @@ public class WorkspaceCreateRequest {
     private Long teamId;
 
 }
-

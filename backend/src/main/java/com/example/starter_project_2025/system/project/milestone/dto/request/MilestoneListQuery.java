@@ -7,6 +7,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 public record MilestoneListQuery(
+        Long teamId,
         int page,
         int size,
         List<String> sort,

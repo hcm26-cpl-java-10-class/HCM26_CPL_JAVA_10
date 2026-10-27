@@ -11,11 +11,13 @@ import java.util.Optional;
 import java.util.List;
 import java.util.UUID;
 
-@Repository
+@Repository("taskRepository")
 public interface TaskRepository extends BaseCrudRepository<Task, UUID> {
+    long countByProjectIdAndMilestoneIdAndIsActiveTrue(UUID projectId, UUID milestoneId);
+    long countByProjectIdAndMilestoneIdAndIsActiveTrueAndStatus(UUID projectId, UUID milestoneId, TaskStatus status);
     Optional<Task> findByIdAndIsActiveTrue(UUID id);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select task from Task task where task.projectId = :projectId order by task.id")
+    @Query("select task from ProjectTask task where task.projectId = :projectId order by task.id")
     List<Task> lockProjectTasks(@Param("projectId") UUID projectId);
 }

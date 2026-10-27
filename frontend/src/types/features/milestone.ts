@@ -20,6 +20,7 @@ export interface MilestoneResubmissionPolicyRequest {
 }
 
 export interface CreateMilestoneRequest {
+  teamId?: number;
   title: string;
   description?: string;
   deadline: string;
@@ -49,7 +50,7 @@ export interface MilestoneReviewerOption {
 }
 
 export interface MilestoneCreateOptions {
-  project: MilestoneProjectOption;
+  project?: MilestoneProjectOption | null;
   rubrics: MilestoneRubricOption[];
 }
 
@@ -135,6 +136,78 @@ export interface MilestoneDetailResponse {
   version: number;
   createdAt: string;
   createdBy: string;
+  teamId?: number;
+}
+
+export interface ArtifactDraft {
+  milestoneId: string;
+  status: "DRAFT";
+  repositoryUrl?: string | null;
+  deploymentUrl?: string | null;
+  releaseNotes?: string | null;
+  checklist: Record<string, boolean>;
+  attachments: ArtifactAttachment[];
+  version: number;
+  createdBy: string;
+  createdAt: string;
+  updatedBy: string;
+  updatedAt: string;
+}
+
+export interface ArtifactAttachment {
+  id: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  scanStatus: "CLEAN";
+  uploadedBy: string;
+  uploadedAt: string;
+  draftVersion: number;
+}
+
+export interface ArtifactDraftRequest {
+  repositoryUrl?: string;
+  deploymentUrl?: string;
+  releaseNotes?: string;
+  checklist: Record<string, boolean>;
+  expectedVersion?: number;
+}
+
+export interface ArtifactSubmissionRequest {
+  repositoryUrl?: string;
+  deploymentUrl?: string;
+  releaseNotes?: string;
+  checklist: Record<string, boolean>;
+  attachmentIds: string[];
+}
+
+export interface ArtifactSubmissionAttachment {
+  id: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+}
+
+export interface ArtifactSubmission {
+  id: string;
+  milestoneId: string;
+  version: number;
+  status: "SUBMITTED";
+  repositoryUrl?: string | null;
+  deploymentUrl?: string | null;
+  releaseNotes?: string | null;
+  checklist: Record<string, boolean>;
+  attachments: ArtifactSubmissionAttachment[];
+  submittedAt: string;
+  submittedLate: boolean;
+  latePenaltyPercent?: number | null;
+}
+
+export interface ArtifactSubmissionWorkspace {
+  milestone: MilestoneDetailResponse;
+  draft: ArtifactDraft | null;
+  uploadPolicy: { enabled: boolean; maxBytes: number; allowedMimeTypes: string[] };
+  latestSubmission: ArtifactSubmission | null;
 }
 
 export interface MilestoneApiError {
@@ -156,6 +229,7 @@ export interface MilestoneDetailRouteState {
 
 export interface MilestoneListItem {
   id: string;
+  teamId?: number;
   title: string;
   description?: string | null;
   deadline: string;
@@ -171,7 +245,7 @@ export interface MilestoneListItem {
 }
 
 export interface MilestonePageResponse {
-  project: MilestoneProjectOption;
+  project?: MilestoneProjectOption | null;
   content: MilestoneListItem[];
   page: number;
   size: number;
@@ -184,6 +258,8 @@ export interface MilestonePageResponse {
 export interface MilestoneListParams {
   page: number;
   size: number;
+  /** Optional team scope used by the workspace integration. */
+  teamId?: number;
   sort?: string | string[];
   search?: string;
   status?: MilestoneStatus[];

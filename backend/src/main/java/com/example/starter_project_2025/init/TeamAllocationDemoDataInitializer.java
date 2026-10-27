@@ -13,11 +13,13 @@ import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
+import com.example.starter_project_2025.system.project.tenant.Tenant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
@@ -39,7 +41,6 @@ import org.springframework.transaction.annotation.Transactional;
 )
 public class TeamAllocationDemoDataInitializer implements CommandLineRunner {
 
-    private static final long DEMO_TENANT_ID = 91001L;
     private static final int MEMBERS_PER_CLASS = 35;
     private static final String EMAIL_DOMAIN = "team-allocation.example.test";
 
@@ -102,9 +103,13 @@ public class TeamAllocationDemoDataInitializer implements CommandLineRunner {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
 
+    @Value("${app.seed.admin.email:admin@example.com}")
+    private String adminEmail;
+
     @Override
     @Transactional
     public void run(String... args) {
+        long demoTenantId = resolveDemoTenantId();
         Role studentRole = roleRepository.findByName("STUDENT")
                 .orElseThrow(() -> new IllegalStateException(
                         "Role STUDENT not found. Ensure role seed runs first."));
@@ -119,8 +124,9 @@ public class TeamAllocationDemoDataInitializer implements CommandLineRunner {
         for (int classIndex = 0; classIndex < CLASSES.size(); classIndex++) {
             ClassSeed classSeed = CLASSES.get(classIndex);
             TrainingClass trainingClass = trainingClassRepository
-                    .findByCodeAndTenantId(classSeed.code(), DEMO_TENANT_ID)
-                    .orElseGet(() -> createClass(classSeed));
+                    .findByCode(classSeed.code())
+                    .map(existing -> migrateToTenant(existing, demoTenantId))
+                    .orElseGet(() -> createClass(classSeed, demoTenantId));
 
             if (trainingClass.getId() == null) {
                 trainingClass = trainingClassRepository.saveAndFlush(trainingClass);
@@ -230,11 +236,28 @@ public class TeamAllocationDemoDataInitializer implements CommandLineRunner {
         classStaffAssignmentRepository.save(assignment);
     }
 
-    private TrainingClass createClass(ClassSeed seed) {
+    private long resolveDemoTenantId() {
+        return userRepository.findByEmail(adminEmail)
+                .map(User::getTenant)
+                .map(Tenant::getId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Admin tenant not found. Ensure user seed runs first."));
+    }
+
+    private TrainingClass migrateToTenant(TrainingClass trainingClass, long tenantId) {
+        if (!Long.valueOf(tenantId).equals(trainingClass.getTenantId())) {
+            trainingClass.setTenantId(tenantId);
+            trainingClass = trainingClassRepository.saveAndFlush(trainingClass);
+            log.info("Migrated demo class {} to tenant {}", trainingClass.getCode(), tenantId);
+        }
+        return trainingClass;
+    }
+
+    private TrainingClass createClass(ClassSeed seed, long tenantId) {
         return TrainingClass.builder()
                 .code(seed.code())
                 .name(seed.name())
-                .tenantId(DEMO_TENANT_ID)
+                .tenantId(tenantId)
                 .programId(seed.programId())
                 .programName(seed.programName())
                 .cohortId(seed.cohortId())

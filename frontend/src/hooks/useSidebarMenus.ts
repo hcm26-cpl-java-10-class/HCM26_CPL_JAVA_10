@@ -49,9 +49,20 @@ export function useActiveModuleGroups(enabled = true) {
             ]);
 
             const groups = groupPage.content ?? groupPage.items ?? [];
-            const modules = (modulePage.content ?? modulePage.items ?? []).filter((module) =>
-                !["/management/project-templates", "/project-templates", "/management/project-teams"].some(path => (module.url ?? "").startsWith(path)) && canAccessByPermission(module.requiredPermission, hasPermission),
-            );
+            const modules = (modulePage.content ?? modulePage.items ?? []).filter((module) => {
+                const url = module.url ?? "";
+                const isExcludedPath = [
+                    "/management/project-templates",
+                    "/project-templates",
+                    "/management/project-teams",
+                ].some((path) => url.startsWith(path));
+
+                return (
+                    !isExcludedPath &&
+                    url !== "/team-allocation" &&
+                    canAccessByPermission(module.requiredPermission, hasPermission)
+                );
+            });
 
             const groupedModules = modules.reduce<Record<string, SidebarModule[]>>((acc, module) => {
                 if (!module.moduleGroupId) return acc;
@@ -60,10 +71,16 @@ export function useActiveModuleGroups(enabled = true) {
                     acc[module.moduleGroupId] = [];
                 }
 
+                const menuTitle = module.url === "/tasks"
+                    ? "Tasks"
+                    : ["/management/workspaces/candidates", "/workspaces/candidates"].includes(module.url ?? "")
+                        ? "Workspace"
+                        : module.title;
+
                 acc[module.moduleGroupId].push({
                     ...module,
-                    title: ["/management/workspaces/candidates", "/workspaces/candidates"].includes(module.url ?? "") ? "Workspace" : module.title,
-                    name: ["/management/workspaces/candidates", "/workspaces/candidates"].includes(module.url ?? "") ? "Workspace" : module.title,
+                    title: menuTitle,
+                    name: menuTitle,
                 });
                 return acc;
             }, {});
@@ -105,7 +122,10 @@ export function useActiveModuleGroups(enabled = true) {
                 });
             }
 
-            if (canAccessByPermission("PEO_TEAM_ALLOCATE", hasPermission)) {
+            if (
+                canAccessByPermission("PEO_TEAM_ALLOCATE", hasPermission) ||
+                canAccessByPermission("PRJ_WORKSPACE_MANAGE", hasPermission)
+            ) {
                 const moduleGroup = groups.find(
                     (group) => (group.name ?? "").toLowerCase() === "project management",
                 );
@@ -117,7 +137,12 @@ export function useActiveModuleGroups(enabled = true) {
                     url: "/team-allocation",
                     icon: "users",
                     displayOrder: 1,
-                    requiredPermission: "PEO_TEAM_ALLOCATE",
+                    requiredPermission: canAccessByPermission(
+                        "PEO_TEAM_ALLOCATE",
+                        hasPermission,
+                    )
+                        ? "PEO_TEAM_ALLOCATE"
+                        : "PRJ_WORKSPACE_MANAGE",
                     isActive: true,
                 };
                 if (moduleGroup) {
@@ -157,8 +182,21 @@ export function useActiveModuleGroups(enabled = true) {
                 groupedModules[projectGroupId] = [];
             }
 
+            if (!modules.some((module) => module.url === "/project-board")) {
+                groupedModules[projectGroupId].push({
+                    id: 100004,
+                    moduleGroupId: projectGroupId,
+                    title: "Kanban Board",
+                    name: "Kanban Board",
+                    url: "/project-board",
+                    icon: "layers",
+                    displayOrder: 2.5,
+                    isActive: true,
+                });
+            }
+
             const milestoneProjectId = import.meta.env.VITE_MILESTONE_MOCK_PROJECT_ID
-                || "11111111-1111-1111-1111-111111111111";
+                || "1";
             const projectWorkspaceModules: SidebarModule[] = [
                 {
                     id: 100002,
@@ -215,6 +253,14 @@ export function useActiveModuleGroups(enabled = true) {
                     const groupMods = (groupedModules[groupId] ?? []).sort(
                         (a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0),
                     );
+                    if ((group.name ?? "").toLowerCase() === "project management") {
+                        const boardIndex = groupMods.findIndex((module) => module.url === "/project-board");
+                        const backlogIndex = groupMods.findIndex((module) => module.url === "/sprint-backlogs");
+                        if (boardIndex >= 0 && backlogIndex >= 0 && boardIndex !== backlogIndex + 1) {
+                            const [boardModule] = groupMods.splice(boardIndex, 1);
+                            groupMods.splice(backlogIndex + (boardIndex < backlogIndex ? 0 : 1), 0, boardModule);
+                        }
+                    }
                     return {
                         ...group,
                         modules: groupMods,

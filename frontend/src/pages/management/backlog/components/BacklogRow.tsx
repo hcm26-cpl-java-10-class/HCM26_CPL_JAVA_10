@@ -9,7 +9,6 @@ import { cn } from "@/lib/utils";
 import type { BacklogStatus, SprintPlanningItem } from "@/types";
 import {
   ChevronDown,
-  ClipboardList,
   Loader2,
   TriangleAlert,
   User,
@@ -19,6 +18,7 @@ import {
   TASK_STATUS_ORDER,
   backlogPriorityMeta,
   backlogStatusMeta,
+  backlogWorkTypeMeta,
   canMoveToStatus,
   formatBacklogDate,
   isOverdue,
@@ -59,10 +59,16 @@ export function BacklogRow({
 }: BacklogRowProps) {
   const status = backlogStatusMeta(item.status);
   const priority = backlogPriorityMeta(item.priority);
-  const overdue = item.status !== "DONE" && isOverdue(dueDate);
-  const date = formatBacklogDate(dueDate);
+  const workType = backlogWorkTypeMeta(item.workType);
+  const WorkTypeIcon = workType.icon;
+  // The due date of the item wins; boxes without a per-item date keep the
+  // sprint end date as a fallback, like the project mock-up.
+  const dueDateValue = item.endDate ?? dueDate;
+  const overdue = item.status !== "DONE" && isOverdue(dueDateValue);
+  const date = formatBacklogDate(dueDateValue);
   const estimate =
     typeof item.estimatedHours === "number" ? `${item.estimatedHours}h` : "-";
+  const assignee = item.assigneeProjectMemberId ?? null;
 
   const handleDragStart = (event: DragEvent<HTMLDivElement>) => {
     if (!draggable) {
@@ -103,9 +109,14 @@ export function BacklogRow({
         />
       </span>
 
-      <ClipboardList className="h-4 w-4 shrink-0 text-emerald-600" />
+      <span
+        className={cn("shrink-0", workType.iconClass)}
+        title={`Work type: ${workType.label}`}
+      >
+        <WorkTypeIcon className="h-4 w-4" />
+      </span>
 
-      <span className="w-16 shrink-0 truncate font-mono text-[11px] font-semibold text-muted-foreground">
+      <span className="w-24 shrink-0 truncate font-mono text-[11px] font-semibold text-muted-foreground">
         {itemKey}
       </span>
 
@@ -113,52 +124,55 @@ export function BacklogRow({
         {item.title ?? "Untitled work item"}
       </span>
 
-      <span
-        className={cn(
-          "hidden shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium sm:inline-flex",
-          priority.pill,
-        )}
-        title={`Priority: ${priority.label}`}
-      >
-        <span className={cn("h-1.5 w-1.5 rounded-full", priority.dot)} />
-        {priority.label}
-      </span>
+      {/* Priority and status are separate pills: keep a real gap between them. */}
+      <div className="flex shrink-0 items-center gap-4">
+        <span
+          className={cn(
+            "hidden shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium sm:inline-flex",
+            priority.pill,
+          )}
+          title={`Priority: ${priority.label}`}
+        >
+          <span className={cn("h-1.5 w-1.5 rounded-full", priority.dot)} />
+          {priority.label}
+        </span>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild disabled={!canEditTask || busy}>
-          <button
-            type="button"
-            onClick={(event) => event.stopPropagation()}
-            className={cn(
-              "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium",
-              status.pill,
-              (!canEditTask || busy) && "cursor-default",
-            )}
-          >
-            {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : status.label}
-            {canEditTask && !busy && (
-              <ChevronDown className="h-3 w-3 opacity-70" />
-            )}
-          </button>
-        </DropdownMenuTrigger>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild disabled={!canEditTask || busy}>
+            <button
+              type="button"
+              onClick={(event) => event.stopPropagation()}
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                status.pill,
+                (!canEditTask || busy) && "cursor-default",
+              )}
+            >
+              {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : status.label}
+              {canEditTask && !busy && (
+                <ChevronDown className="h-3 w-3 opacity-70" />
+              )}
+            </button>
+          </DropdownMenuTrigger>
 
-        <DropdownMenuContent align="end" className="w-44">
-          {TASK_STATUS_ORDER.map((value) => {
-            const option = backlogStatusMeta(value);
+          <DropdownMenuContent align="end" className="w-44">
+            {TASK_STATUS_ORDER.map((value) => {
+              const option = backlogStatusMeta(value);
 
-            return (
-              <DropdownMenuItem
-                key={value}
-                disabled={!canMoveToStatus(item.status, value)}
-                onClick={() => onStatusChange(item, value)}
-              >
-                <span className={cn("h-2 w-2 rounded-full", option.dot)} />
-                {option.label}
-              </DropdownMenuItem>
-            );
-          })}
-        </DropdownMenuContent>
-      </DropdownMenu>
+              return (
+                <DropdownMenuItem
+                  key={value}
+                  disabled={!canMoveToStatus(item.status, value)}
+                  onClick={() => onStatusChange(item, value)}
+                >
+                  <span className={cn("h-2 w-2 rounded-full", option.dot)} />
+                  {option.label}
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
       <span
         className={cn(
@@ -175,10 +189,15 @@ export function BacklogRow({
       </span>
 
       <span
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border bg-muted text-muted-foreground"
-        title="Unassigned"
+        className={cn(
+          "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold",
+          assignee != null
+            ? "border-sky-200 bg-sky-100 text-sky-700 dark:border-sky-800 dark:bg-sky-900/40 dark:text-sky-300"
+            : "bg-muted text-muted-foreground",
+        )}
+        title={assignee != null ? `Assignee #${assignee}` : "Unassigned"}
       >
-        <User className="h-3 w-3" />
+        {assignee != null ? assignee : <User className="h-3 w-3" />}
       </span>
     </div>
   );

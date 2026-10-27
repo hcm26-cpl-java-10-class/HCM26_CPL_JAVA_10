@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project;
 
+import com.example.starter_project_2025.web.CorrelationIdFilter;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.starter_project_2025.exception.BadRequestException;
@@ -95,7 +97,7 @@ public class TeamAllocationSessionService {
         TrainingClass trainingClass = trainingClassRepository.findById(classId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "TrainingClass", "id", classId));
-        scopeAuthorizationService.assertCanManageClass(authentication, trainingClass);
+        scopeAuthorizationService.assertCanManageTeamMentor(authentication, trainingClass);
         return sessionRepository.findAllByTrainingClass_IdOrderByCreatedAtDesc(classId)
                 .stream()
                 .map(AllocationSessionResponse::from)

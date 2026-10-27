@@ -1,4 +1,6 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.repository;
+
+import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;

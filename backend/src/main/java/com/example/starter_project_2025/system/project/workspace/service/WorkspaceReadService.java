@@ -1,4 +1,17 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.service;
+
+import com.example.starter_project_2025.system.project.cohort.Cohort;
+import com.example.starter_project_2025.system.project.domain.Project;
+import com.example.starter_project_2025.system.project.ProjectTeam;
+import com.example.starter_project_2025.system.project.domain.ProjectTopicSnapshot;
+import com.example.starter_project_2025.system.project.dto.ProjectHubDtos;
+import com.example.starter_project_2025.system.project.team.Team;
+import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceSection;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceDetailResponse;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceMemberResponse;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceTopicSnapshotResponse;
+import com.example.starter_project_2025.system.project.workspace.repository.ProjectTopicSnapshotRepository;
 
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
@@ -29,21 +42,24 @@ public class WorkspaceReadService {
         User user = access.requireUser(false);
         Workspace workspace = contexts.require(user, id);
         Project project = workspace.getProject();
-        Team team = workspace.getTeam();
-        Cohort cohort = project.getCohort();
-        var snapshot = snapshots.findByProjectId(project.getId()).map(this::snapshotResponse).orElse(null);
+        ProjectTeam team = workspace.getTeam();
+        var trainingClass = team.getTrainingClass();
+        var snapshot = project == null ? null : snapshots.findByProjectId(project.getId()).map(this::snapshotResponse).orElse(null);
         // A blank snapshot description stays blank; do not substitute newer project content.
-        String description = snapshot != null ? snapshot.description() : project.getDescription();
+        String description = snapshot != null ? snapshot.description() : project == null ? null : project.getDescription();
         return WorkspaceDetailResponse.builder()
                 .id(workspace.getId()).code(workspace.getCode()).name(workspace.getName())
                 .status(workspace.getStatus())
-                .projectId(project.getId()).projectCode(project.getCode()).projectName(project.getName())
-                .projectDescription(description).projectStatus(project.getStatus())
-                .teamId(team.getId()).teamCode(team.getCode()).teamName(team.getName())
-                .mentorName(team.getMentor() != null ? team.getMentor().getFullName() : null)
+                .projectId(project == null ? null : project.getId())
+                .projectCode(project == null ? null : project.getCode())
+                .projectName(project == null ? null : project.getName())
+                .projectDescription(description).projectStatus(project == null ? null : project.getStatus())
+                .teamId(team.getId()).teamCode(team.getCode()).teamName(team.getTeamName())
+                .mentorName(team.getAssignedMentorId() == null ? null :
+                        users.findById(team.getAssignedMentorId()).map(User::getFullName).orElse(null))
                 .charter(ProjectHubDtos.Charter.from(team))
-                .cohortId(cohort != null ? cohort.getId() : null)
-                .cohortName(cohort != null ? cohort.getName() : null)
+                .cohortId(trainingClass.getCohortId())
+                .cohortName(trainingClass.getCohortName())
                 .createdAt(workspace.getCreatedAt())
                 .createdByName(workspace.getCreatedBy() == null ? null :
                         users.findById(workspace.getCreatedBy()).map(User::getFullName).orElse("Former member"))

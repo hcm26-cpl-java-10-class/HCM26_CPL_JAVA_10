@@ -56,4 +56,55 @@ public class OutboxEvent {
         event.createdAt = now;
         return event;
     }
+
+    public static OutboxEvent milestoneOpened(UUID milestoneId, String payloadJson, Instant now) {
+        OutboxEvent event = milestoneCreated(milestoneId, payloadJson, now);
+        event.eventType = "MILESTONE_OPENED";
+        return event;
+    }
+
+    public static OutboxEvent milestoneAtRiskAlert(UUID eventId, UUID milestoneId, String payloadJson, Instant now) {
+        OutboxEvent event = milestoneCreated(milestoneId, payloadJson, now);
+        event.eventId = eventId;
+        event.eventType = "MILESTONE_AT_RISK_ALERT_SENT";
+        return event;
+    }
+
+    public static OutboxEvent inactiveMemberAlertBatch(UUID eventId, Long projectId, String payloadJson, Instant now) {
+        OutboxEvent event = milestoneCreated(UUID.nameUUIDFromBytes(("project:" + projectId)
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8)), payloadJson, now);
+        event.eventId = eventId;
+        event.aggregateType = "PROJECT";
+        event.eventType = "INACTIVE_MEMBER_ALERT_BATCH_SENT";
+        return event;
+    }
+
+    public static OutboxEvent inactiveMemberAlertBatch(UUID eventId, UUID projectId, String payloadJson, Instant now) {
+        OutboxEvent event = milestoneCreated(projectId, payloadJson, now);
+        event.eventId = eventId;
+        event.aggregateType = "PROJECT";
+        event.eventType = "INACTIVE_MEMBER_ALERT_BATCH_SENT";
+        return event;
+    }
+
+    public static OutboxEvent artifactDraftSaved(UUID milestoneId, String payloadJson, Instant now) {
+        OutboxEvent event = milestoneCreated(milestoneId, payloadJson, now);
+        event.aggregateType = "MILESTONE_ARTIFACT_DRAFT";
+        event.eventType = "ARTIFACT_DRAFT_SAVED";
+        return event;
+    }
+
+    public static OutboxEvent artifactFileUploaded(UUID milestoneId, String payloadJson, Instant now) {
+        OutboxEvent event = milestoneCreated(milestoneId, payloadJson, now);
+        event.aggregateType = "MILESTONE_ARTIFACT_DRAFT";
+        event.eventType = "ARTIFACT_FILE_UPLOADED";
+        return event;
+    }
+
+    public static OutboxEvent artifactSubmitted(UUID submissionId, String payloadJson, Instant now) {
+        OutboxEvent event = milestoneCreated(submissionId, payloadJson, now);
+        event.aggregateType = "MILESTONE_ARTIFACT_SUBMISSION";
+        event.eventType = "ARTIFACT_SUBMITTED";
+        return event;
+    }
 }

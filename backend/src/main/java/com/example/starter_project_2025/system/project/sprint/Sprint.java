@@ -71,6 +71,9 @@ public class Sprint extends BaseEntity {
     @Column(name = "project_id")
     Long projectId;
 
+    @Column(name = "team_id")
+    Long teamId;
+
     @Column(length = 255)
     @ImportField(name = "Name")
     @ExportField(name = "Name")

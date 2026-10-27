@@ -1,4 +1,9 @@
-package com.example.starter_project_2025.system.project;
+package com.example.starter_project_2025.system.project.workspace.domain;
+
+import com.example.starter_project_2025.system.project.domain.Project;
+import com.example.starter_project_2025.system.project.ProjectTeam;
+import com.example.starter_project_2025.system.project.team.Team;
+import com.example.starter_project_2025.system.project.tenant.Tenant;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
@@ -35,7 +40,7 @@ import java.util.List;
 @Table(
         name = "workspaces",
         uniqueConstraints = {
-                @UniqueConstraint(name = "uk_workspace_tenant_project_team", columnNames = {"tenant_id", "project_id", "team_id"})
+                @UniqueConstraint(name = "uk_workspace_tenant_team", columnNames = {"tenant_id", "team_id"})
         }
 )
 @FieldDefaults(level = AccessLevel.PRIVATE)
@@ -50,12 +55,12 @@ public class Workspace extends BaseEntity {
     private String name;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "project_id", nullable = false)
+    @JoinColumn(name = "project_id")
     private Project project;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "team_id", nullable = false)
-    private Team team;
+    private ProjectTeam team;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tenant_id", nullable = false)
@@ -74,4 +79,3 @@ public class Workspace extends BaseEntity {
     @Column(name = "section", nullable = false, length = 32)
     private List<WorkspaceSection> sections = new ArrayList<>();
 }
-

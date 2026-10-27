@@ -2,6 +2,8 @@ package com.example.starter_project_2025.system.project.milestone.service;
 
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.project.milestone.audit.MilestoneAuditWriter;
+import com.example.starter_project_2025.system.project.milestone.audit.MilestoneAuditLog;
+import com.example.starter_project_2025.system.project.milestone.audit.MilestoneAuditRepository;
 import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
 import com.example.starter_project_2025.system.project.milestone.dto.request.CreateMilestoneRequest;
 import com.example.starter_project_2025.system.project.milestone.dto.response.MilestoneResponse;
@@ -13,6 +15,11 @@ import com.example.starter_project_2025.system.project.milestone.integration.mod
 import com.example.starter_project_2025.system.project.milestone.integration.port.*;
 import com.example.starter_project_2025.system.project.milestone.outbox.OutboxEventWriter;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
+import com.example.starter_project_2025.system.project.ProjectTeamRepository;
+import com.example.starter_project_2025.system.project.milestone.integration.mock.MockMilestoneData;
+import com.example.starter_project_2025.system.project.workspace.service.WorkspaceAccessService;
+import com.example.starter_project_2025.security.UserPrincipal;
+import com.example.starter_project_2025.web.CorrelationIdFilter;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -34,25 +41,65 @@ public class MilestoneCommandService {
     private static final Object[] IDEMPOTENCY_LOCKS = createLocks();
 
     private final CurrentActorProvider actorProvider;
-    private final CurrentTenantProvider tenantProvider;
+    private final MilestoneTenantProvider tenantProvider;
     private final ProjectMilestonePort projectPort;
     private final RubricCatalogPort rubricPort;
     private final MilestoneAccessPolicy accessPolicy;
     private final MilestoneValidator validator;
     private final MilestoneRepository milestoneRepository;
+    private final ProjectTeamRepository projectTeamRepository;
+    private final WorkspaceAccessService workspaceAccessService;
     private final EntityManager entityManager;
     private final IdempotencyRepository idempotencyRepository;
     private final RequestHashService requestHashService;
     private final MilestoneAuditWriter auditWriter;
+    private final MilestoneAuditRepository auditRepository;
     private final OutboxEventWriter outboxWriter;
     private final MilestoneMapper mapper;
     private final TransactionTemplate transactionTemplate;
     private final Clock milestoneClock;
 
-    public MilestoneResponse create(UUID projectId, String idempotencyKey, CreateMilestoneRequest request) {
+    @org.springframework.transaction.annotation.Transactional
+    public MilestoneResponse openForSubmissions(Long projectId, Long teamId, UUID milestoneId) {
+        if ((projectId == null) == (teamId == null)) throw new IllegalArgumentException("Exactly one milestone scope is required");
+        UUID actorId = actorProvider.requireCurrentActorId(); Long tenantId = tenantProvider.requireCurrentTenantId();
+        if (projectId != null) {
+            var project = projectPort.requireProjectForRead(projectId, actorId, tenantId);
+            accessPolicy.requireReadAccess(project); accessPolicy.requireSubmittableState(project);
+        } else {
+            requireActiveTeamWorkspace(teamId, tenantId);
+        }
+        Milestone milestone = projectId != null
+                ? milestoneRepository.lockForProjectOpen(milestoneId, projectId, tenantId).orElseThrow(() -> new ResourceNotFoundException("Milestone not found"))
+                : milestoneRepository.lockForTeamOpen(milestoneId, teamId, tenantId).orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
+        if (milestone.getStatus() == com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN) return mapper.toResponse(milestone);
+        if (milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.PLANNED)
+            throw new MilestoneConflictException("Only a planned milestone can be opened for submissions");
+        Instant now = milestoneClock.instant(); milestone.openForWork(actorId, now); milestoneRepository.saveAndFlush(milestone);
+        auditRepository.save(MilestoneAuditLog.statusEvent(milestoneId, projectId, tenantId, actorId,
+                "MILESTONE_OPENED", CorrelationIdFilter.currentId(), "{\"before\":\"PLANNED\",\"after\":\"OPEN\"}", now));
+        outboxWriter.writeMilestoneOpened(milestone, now);
+        return mapper.toResponse(milestone);
+    }
+
+    private void requireActiveTeamWorkspace(Long teamId, Long tenantId) {
+        if (MockMilestoneData.TEAM_ID.equals(teamId) && MockMilestoneData.TENANT_ID.equals(tenantId)) return;
+        var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof UserPrincipal principal)) {
+            throw new org.springframework.security.access.AccessDeniedException("Authenticated team scope is required");
+        }
+        var team = workspaceAccessService.requireTeam(principal.getUser(), teamId, false);
+        if (!tenantId.equals(principal.getTenantId())) throw new org.springframework.security.access.AccessDeniedException("Team workspace is outside the current tenant");
+        if (team.getStatus() != com.example.starter_project_2025.system.project.ProjectTeamStatus.ACTIVE
+                || team.getProject() == null
+                || team.getProject().getStatus() != com.example.starter_project_2025.system.project.domain.ProjectStatus.ACTIVE)
+            throw new MilestoneConflictException("Team workspace or its project is not active");
+    }
+
+    public MilestoneResponse create(Long projectId, String idempotencyKey, CreateMilestoneRequest request) {
         validateIdempotencyKey(idempotencyKey);
         UUID actorId = actorProvider.requireCurrentActorId();
-        UUID tenantId = tenantProvider.requireCurrentTenantId();
+        Long tenantId = tenantProvider.requireCurrentTenantId();
         String normalizedKey = idempotencyKey.trim();
         String requestHash = requestHashService.hash(projectId, tenantId, actorId, request);
         Object lock = IDEMPOTENCY_LOCKS[Math.floorMod(
@@ -70,15 +117,18 @@ public class MilestoneCommandService {
     }
 
     private MilestoneResponse createInTransaction(
-            UUID projectId,
-            UUID tenantId,
+            Long projectId,
+            Long tenantId,
             UUID actorId,
             String idempotencyKey,
             String requestHash,
             CreateMilestoneRequest request
     ) {
-        ProjectCreationContext project = projectPort.requireProjectForCreation(projectId, actorId, tenantId);
-        accessPolicy.requireAccess(project);
+        ProjectCreationContext project = projectId == null ? null : projectPort.requireProjectForCreation(projectId, actorId, tenantId);
+        if (project != null) {
+            accessPolicy.requireAccess(project);
+        }
+        requireTeam(projectId, request.teamId());
 
         var existing = idempotencyRepository
                 .findByTenantIdAndActorIdAndOperationAndIdempotencyKey(
@@ -94,7 +144,9 @@ public class MilestoneCommandService {
             return mapper.toResponse(milestone);
         }
 
-        accessPolicy.requireCreatableState(project);
+        if (project != null) {
+            accessPolicy.requireCreatableState(project);
+        }
         RubricSnapshotData rubric = rubricPort.requireAllowedSnapshot(
                 request.rubricSnapshotId(), projectId, actorId, tenantId);
         Instant now = milestoneClock.instant();
@@ -103,6 +155,7 @@ public class MilestoneCommandService {
         Milestone milestone = Milestone.create(
                 tenantId,
                 projectId,
+                request.teamId(),
                 request.title().trim(),
                 request.description() == null ? null : request.description().trim(),
                 request.deadline(),
@@ -135,6 +188,15 @@ public class MilestoneCommandService {
         ));
 
         return mapper.toResponse(milestone);
+    }
+
+    private void requireTeam(Long projectId, Long teamId) {
+        if (teamId == null || (teamId != MockMilestoneData.TEAM_ID && projectTeamRepository.findById(teamId)
+                .filter(team -> projectId == null || (team.getProject() != null && projectId.equals(team.getProject().getId())))
+                .isEmpty())) {
+            throw new MilestoneValidationException(Map.of("teamId", List.of(projectId == null
+                    ? "Team must exist and be active" : "Team must belong to the project")));
+        }
     }
 
     private void validateIdempotencyKey(String key) {

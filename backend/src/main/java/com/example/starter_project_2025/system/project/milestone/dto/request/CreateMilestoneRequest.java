@@ -11,6 +11,9 @@ import java.util.List;
 import java.util.UUID;
 
 public record CreateMilestoneRequest(
+        @NotNull(message = "Team is required")
+        Long teamId,
+
         @NotBlank(message = "Milestone title is required")
         @Size(max = 120, message = "Milestone title must not exceed 120 characters")
         String title,

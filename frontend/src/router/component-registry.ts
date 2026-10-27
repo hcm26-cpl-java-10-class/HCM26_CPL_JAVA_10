@@ -5,6 +5,7 @@ import { Login } from "@/pages/auth/Login";
 import RegisterPage from "@/pages/auth/RegisterPage";
 import NotFoundPage from "@/pages/error/NotFoundPage";
 import { Unauthorized } from "@/pages/error/Unauthorized";
+import ProjectBoardPage from "@/pages/project/ProjectBoardPage";
 import BacklogPage from "@/pages/management/backlog";
 import { Dashboard } from "@/pages/management/dashboard";
 import ExamManagementPage from "@/pages/management/exam";
@@ -18,6 +19,10 @@ import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import { MilestoneCreatePage } from "@/pages/management/project/milestone/pages/MilestoneCreatePage";
 import { MilestoneDetailPage } from "@/pages/management/project/milestone/pages/MilestoneDetailPage";
 import { MilestoneListPage } from "@/pages/management/project/milestone/pages/MilestoneListPage";
+import { TeamMilestoneListPage } from "@/pages/management/project/milestone/pages/TeamMilestoneListPage";
+import { TeamMilestoneDetailPage } from "@/pages/management/project/milestone/pages/TeamMilestoneDetailPage";
+import TeamArtifactSubmissionPage from "@/pages/student/TeamArtifactSubmissionPage";
+import TeamMilestoneSubmissionsPage from "@/pages/management/project/milestone/pages/TeamMilestoneSubmissionsPage";
 import { RubricListPage } from "@/pages/management/project/rubric/pages/RubricListPage";
 import { RubricCreatePage } from "@/pages/management/project/rubric/pages/RubricCreatePage";
 import { RubricDetailPage } from "@/pages/management/project/rubric/pages/RubricDetailPage";
@@ -32,6 +37,7 @@ import { Navigate } from "react-router-dom";
 import TaskManagementPage from "@/pages/management/task";
 import { TaskFormPage } from "@/pages/management/task/pages/TaskFormPage";
 import { TaskDetailPage } from "@/pages/management/task/pages/TaskDetailPage";
+import ArtifactDraftPage from "@/pages/student/ArtifactDraftPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 
@@ -40,6 +46,7 @@ export interface RouteConfig {
   path: string;
   component: ComponentType<any>;
   requiredPermission?: string;
+  requiredPermissions?: string[];
   isPublic?: boolean;
   isModuleDriven?: boolean;
 }
@@ -82,12 +89,14 @@ export const routes: RouteConfig[] = [
   {
     path: "/team-allocation/classes/:classId",
     component: TeamAllocationPage,
-    requiredPermission: "PEO_TEAM_ALLOCATE",
+    requiredPermissions: ["PEO_TEAM_ALLOCATE", "PRJ_WORKSPACE_MANAGE"],
   },
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
   { path: "/student/exams", component: StudentExamList,requiredPermission: "EXAM_READ", isModuleDriven: true },
   { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
+  { path: "/project-board", component: ProjectBoardPage },
   { path: "/workspaces/candidates", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
+  { path: "/management/workspaces", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
   { path: "/management/workspaces/candidates", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
   { path: "/management/workspaces/:id", component: WorkspaceDetailPage, requiredPermission: "WORKSPACE_READ" },
   { path: "/management/project-teams", component: () => createElement(Navigate, { to: "/management/workspaces/candidates", replace: true }), requiredPermission: "WORKSPACE_READ" },
@@ -95,6 +104,10 @@ export const routes: RouteConfig[] = [
     path: "/projects/:projectId/milestones",
     component: MilestoneListPage,
   },
+  { path: "/teams/:teamId/milestones", component: TeamMilestoneListPage, requiredPermission: "MILESTONE_READ" },
+  { path: "/teams/:teamId/milestones/:milestoneId", component: TeamMilestoneDetailPage, requiredPermission: "MILESTONE_READ" },
+  { path: "/teams/:teamId/milestones/:milestoneId/submit", component: TeamArtifactSubmissionPage, requiredPermission: "ARTIFACT_READ" },
+  { path: "/teams/:teamId/milestones/:milestoneId/submissions", component: TeamMilestoneSubmissionsPage, requiredPermission: "ARTIFACT_REVIEW" },
   {
     path: "/projects/:projectId/milestones/new",
     component: MilestoneCreatePage,
@@ -102,6 +115,11 @@ export const routes: RouteConfig[] = [
   {
     path: "/projects/:projectId/milestones/:milestoneId",
     component: MilestoneDetailPage,
+  },
+  {
+    path: "/projects/:projectId/milestones/:milestoneId/submit",
+    component: ArtifactDraftPage,
+    requiredPermission: "ARTIFACT_READ",
   },
   { path: "/rubrics", component: RubricListPage },
   { path: "/rubrics/new", component: RubricCreatePage },
