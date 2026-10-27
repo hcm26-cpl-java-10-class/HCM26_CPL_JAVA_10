@@ -2,7 +2,6 @@ package com.example.starter_project_2025.system.project;
 
 import com.example.starter_project_2025.web.CorrelationIdFilter;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
@@ -238,31 +237,19 @@ public class TeamAllocationSessionService {
         }
 
         session.setMaxMembers(requestedCapacity);
-        draftTeams.forEach(team -> team.setMaxMembers(requestedCapacity));
+        // US-10: teams that already carry a project template keep the capacity
+        // window of that template; only untemplated drafts follow the session.
+        draftTeams.stream()
+                .filter(team -> team.getProjectTemplateId() == null)
+                .forEach(team -> team.setMaxMembers(requestedCapacity));
         teamRepository.saveAllAndFlush(draftTeams);
         TeamAllocationSession saved = sessionRepository.saveAndFlush(session);
         return AllocationSessionResponse.from(saved);
     }
 
     private int readMaxMembers(ProjectTemplate template) {
-        try {
-            JsonNode constraints = objectMapper.readTree(template.getConstraintsJson());
-            JsonNode maxMembersNode = constraints.get("max_members");
-
-            if (maxMembersNode == null || !maxMembersNode.canConvertToInt()) {
-                throw new BadRequestException(
-                        "Project template constraints must contain integer max_members");
-            }
-
-            int maxMembers = maxMembersNode.asInt();
-            if (maxMembers <= 0) {
-                throw new BadRequestException(
-                        "Project template max_members must be greater than zero");
-            }
-
-            return maxMembers;
-        } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
-            throw new BadRequestException("Project template constraints contain invalid JSON");
-        }
+        // US-10: the capacity window is owned by ProjectTemplateConstraints so
+        // the session and the team assignment share one parser.
+        return ProjectTemplateConstraints.parse(objectMapper, template, null).maxMembers();
     }
 }

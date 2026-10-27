@@ -74,4 +74,27 @@ public interface ProjectMemberRepository
             @Param("sessionId") Long sessionId,
             @Param("statuses") Collection<ProjectTeamStatus> statuses
     );
+
+    /**
+     * US-10: DRAFT teams in which the given user holds the leadership role
+     * (team roles use {@code PM} for the team leader).
+     */
+    @Query("""
+        select pm
+        from ProjectMember pm
+        join fetch pm.team team
+        join fetch team.trainingClass trainingClass
+        left join fetch team.projectTemplate template
+        where pm.classMember.user.id = :userId
+          and pm.classMember.status = :memberStatus
+          and team.status = :teamStatus
+          and pm.role = :role
+        order by team.id
+        """)
+    List<ProjectMember> findLeaderTeams(
+            @Param("userId") Long userId,
+            @Param("memberStatus") ClassMemberStatus memberStatus,
+            @Param("teamStatus") ProjectTeamStatus teamStatus,
+            @Param("role") String role
+    );
 }

@@ -56,6 +56,49 @@ export interface AllocationTeam {
     fullName: string;
     role: string | null;
   }>;
+  /** US-10: project template currently assigned to this team. */
+  projectTemplateId?: number | null;
+  projectTemplateName?: string | null;
+  minMembers?: number | null;
+  maxMembers?: number | null;
+  memberCount?: number | null;
+}
+
+/** US-10: pickable project template with its capacity window. */
+export interface ProjectTemplateOption {
+  id: number;
+  code: string | null;
+  name: string;
+  minMembers: number;
+  maxMembers: number;
+}
+
+/** US-10: project template state of a team (mentor + student leader views). */
+export interface TeamProjectTemplate {
+  teamId: number;
+  teamName: string;
+  teamStatus: ProjectTeamStatus;
+  classId: number | null;
+  className: string | null;
+  projectTemplateId: number | null;
+  projectTemplateName: string | null;
+  minMembers: number | null;
+  maxMembers: number | null;
+  memberCount: number;
+}
+
+/** US-10: error body of `ERR_TEAM_CAPACITY_EXCEEDED` / `ERR_TEAM_NOT_DRAFT`. */
+export interface TeamTemplateApiError {
+  status?: number;
+  errorCode?: string;
+  reason?: "MIN_MEMBERS_NOT_MET" | "MAX_MEMBERS_EXCEEDED" | string | null;
+  message?: string;
+  teamId?: number | null;
+  projectTemplateId?: number | null;
+  projectTemplateName?: string | null;
+  memberCount?: number | null;
+  minMembers?: number | null;
+  maxMembers?: number | null;
 }
 
 export type TeamMemberRole = "PM" | "BA" | "DEV" | "QA";

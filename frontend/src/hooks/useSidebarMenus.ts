@@ -201,6 +201,46 @@ export function useActiveModuleGroups(enabled = true) {
                         groupedModules[String(fallbackGroup.id)] = [exploreModule];
                     }
                 }
+
+                // US-10: team leaders assign the official project template to
+                // their own DRAFT teams.
+                const draftTeamUrl = "/student/draft-team";
+                const draftTeamRegistered = modules.some(
+                    (module) => module.url === draftTeamUrl,
+                );
+
+                if (!draftTeamRegistered) {
+                    const draftTeamGroup = groups.find(
+                        (group) => (group.name ?? "").toLowerCase() === "project management",
+                    );
+                    const draftTeamModule: SidebarModule = {
+                        id: 100007,
+                        moduleGroupId: String(draftTeamGroup?.id ?? 100000),
+                        title: "Nhóm nháp của tôi",
+                        name: "Nhóm nháp của tôi",
+                        url: draftTeamUrl,
+                        icon: "users",
+                        description: "Assign the official project template to your draft team",
+                        displayOrder: 3,
+                        isActive: true,
+                    };
+
+                    if (draftTeamGroup) {
+                        const groupId = String(draftTeamGroup.id ?? "");
+                        if (!groupedModules[groupId]) groupedModules[groupId] = [];
+                        groupedModules[groupId].push(draftTeamModule);
+                    } else {
+                        const fallbackGroup: ModuleGroupDTO = {
+                            id: 100000,
+                            name: "Project Management",
+                            description: "Project and team allocation",
+                            displayOrder: 1,
+                            isActive: true,
+                        };
+                        groups.push(fallbackGroup);
+                        groupedModules[String(fallbackGroup.id)] = [draftTeamModule];
+                    }
+                }
             }
 
             let projectGroup = groups.find(

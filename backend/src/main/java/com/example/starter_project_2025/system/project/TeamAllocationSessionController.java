@@ -31,6 +31,7 @@ public class TeamAllocationSessionController {
     private final ProjectTeamMembershipService membershipService;
     private final ProjectTeamMentorService mentorService;
     private final ProjectTeamRoleService roleService;
+    private final ProjectTeamTemplateService teamTemplateService;
 
     @GetMapping("/mentors")
     @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
@@ -132,6 +133,40 @@ public class TeamAllocationSessionController {
     ) {
         mentorService.updateTeamMentor(
                 classId, sessionId, teamId, request, authentication);
+    }
+
+    /** US-10: read the project template currently attached to a team. */
+    @GetMapping("/{sessionId}/teams/{teamId}/project-template")
+    @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
+    public TeamProjectTemplateResponse getTeamProjectTemplate(
+            @PathVariable Long classId,
+            @PathVariable Long sessionId,
+            @PathVariable Long teamId,
+            Authentication authentication
+    ) {
+        return teamTemplateService.getTeamTemplate(
+                classId, sessionId, teamId, authentication);
+    }
+
+    /**
+     * US-10: assign a project template to a DRAFT team.
+     * <p>
+     * Responses: 200 with the updated team on success, 400
+     * {@code ERR_TEAM_CAPACITY_EXCEEDED} when the team size is outside the
+     * template capacity window, 400 {@code ERR_TEAM_NOT_DRAFT} when the team is
+     * no longer a draft.
+     */
+    @PutMapping("/{sessionId}/teams/{teamId}/project-template")
+    @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
+    public TeamProjectTemplateResponse assignTeamProjectTemplate(
+            @PathVariable Long classId,
+            @PathVariable Long sessionId,
+            @PathVariable Long teamId,
+            @Valid @RequestBody AssignProjectTemplateRequest request,
+            Authentication authentication
+    ) {
+        return teamTemplateService.assignTemplate(
+                classId, sessionId, teamId, request.projectTemplateId(), authentication);
     }
 
     @PutMapping("/{sessionId}/teams/{teamId}/roles")

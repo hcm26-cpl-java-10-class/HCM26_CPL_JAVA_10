@@ -8,6 +8,7 @@ import type {
   SaveDraftRequest,
   TeamListResponse,
   TeamMemberHistoryPage,
+  TeamProjectTemplate,
   TransferTeamMemberRequest,
   UpdateTeamRolesRequest,
   UpdateDraftTeamRequest,
@@ -217,6 +218,54 @@ export const teamAllocationApi = {
       `${classPath(classId)}/allocation-sessions/${sessionId}/teams/publish`,
       { teamIds },
       { headers: { "X-Idempotency-Key": idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  // ------------------------------------------------------------------
+  // US-10 — assign a project template to a DRAFT team
+  // ------------------------------------------------------------------
+
+  /** Mentor / program-manager path. */
+  async assignProjectTemplate(
+    classId: number,
+    sessionId: number,
+    teamId: number,
+    projectTemplateId: number,
+  ): Promise<TeamProjectTemplate> {
+    const response = await axiosInstance.put<TeamProjectTemplate>(
+      `${classPath(classId)}/allocation-sessions/${sessionId}/teams/${teamId}/project-template`,
+      { projectTemplateId },
+    );
+    return response.data;
+  },
+
+  async getTeamProjectTemplate(
+    classId: number,
+    sessionId: number,
+    teamId: number,
+  ): Promise<TeamProjectTemplate> {
+    const response = await axiosInstance.get<TeamProjectTemplate>(
+      `${classPath(classId)}/allocation-sessions/${sessionId}/teams/${teamId}/project-template`,
+    );
+    return response.data;
+  },
+
+  /** Student team-leader path: the DRAFT teams the signed-in user leads. */
+  async getMyDraftTeams(): Promise<TeamProjectTemplate[]> {
+    const response = await axiosInstance.get<TeamProjectTemplate[]>(
+      "/v1/students/me/draft-teams",
+    );
+    return response.data;
+  },
+
+  async assignMyDraftTeamTemplate(
+    teamId: number,
+    projectTemplateId: number,
+  ): Promise<TeamProjectTemplate> {
+    const response = await axiosInstance.put<TeamProjectTemplate>(
+      `/v1/students/me/draft-teams/${teamId}/project-template`,
+      { projectTemplateId },
     );
     return response.data;
   },

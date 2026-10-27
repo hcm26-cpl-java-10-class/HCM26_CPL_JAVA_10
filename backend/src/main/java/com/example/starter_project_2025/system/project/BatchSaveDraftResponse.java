@@ -16,7 +16,13 @@ public record BatchSaveDraftResponse(
             String assignedMentorName,
             Long version,
             List<Long> memberIds,
-            List<MemberResponse> members
+            List<MemberResponse> members,
+            /** US-10: template assigned to this DRAFT team (null when unset). */
+            Long projectTemplateId,
+            String projectTemplateName,
+            Integer minMembers,
+            Integer maxMembers,
+            Integer memberCount
     ) {
     }
 

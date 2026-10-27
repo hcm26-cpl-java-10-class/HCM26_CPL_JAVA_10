@@ -1,4 +1,4 @@
-import { teamAllocationApi } from "@/api";
+import { projectTemplateApi, teamAllocationApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,10 +24,12 @@ import type {
   ClassRosterMember,
   DraftWarning,
   MentorOption,
+  ProjectTemplateOption,
   PublishTeamsResponse,
   SaveDraftRequest,
   TeamMemberRole,
   TeamListResponse,
+  TeamTemplateApiError,
   TransferTeamMemberRequest,
 } from "@/types/features/team-allocation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -131,6 +133,36 @@ function makeIdempotencyKey() {
   return crypto.randomUUID();
 }
 
+/** US-10: maps `ERR_TEAM_CAPACITY_EXCEEDED` / `ERR_TEAM_NOT_DRAFT` bodies. */
+function getTemplateFailure(error: unknown): TeamTemplateApiError {
+  if (axios.isAxiosError<TeamTemplateApiError>(error)) {
+    const data = error.response?.data;
+    return {
+      status: error.response?.status ?? 0,
+      errorCode: data?.errorCode ?? "ERR_REQUEST_FAILED",
+      reason: data?.reason ?? null,
+      message:
+        data?.message ??
+        error.message ??
+        "Không thể gán đề bài. Vui lòng thử lại.",
+      teamId: data?.teamId ?? null,
+      projectTemplateId: data?.projectTemplateId ?? null,
+      projectTemplateName: data?.projectTemplateName ?? null,
+      memberCount: data?.memberCount ?? null,
+      minMembers: data?.minMembers ?? null,
+      maxMembers: data?.maxMembers ?? null,
+    };
+  }
+
+  return {
+    status: 0,
+    errorCode: "ERR_REQUEST_FAILED",
+    message: error instanceof Error
+      ? error.message
+      : "Không thể gán đề bài. Vui lòng thử lại.",
+  };
+}
+
 function isTeamMemberRole(role: string | null | undefined): role is TeamMemberRole {
   return role === "PM" || role === "BA" || role === "DEV" || role === "QA";
 }
@@ -208,6 +240,9 @@ export default function TeamAllocationPage() {
     PublishTeamsResponse["failedItems"]
   >([]);
   const [lastWarnings, setLastWarnings] = useState<DraftWarning[]>([]);
+  const [templateAssignErrors, setTemplateAssignErrors] = useState<
+    Record<number, TeamTemplateApiError>
+  >({});
   const saveKeyRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const publishKeyRef = useRef<{ fingerprint: string; key: string } | null>(null);
 
@@ -242,6 +277,11 @@ export default function TeamAllocationPage() {
     queryKey: ["team-allocation", "mentors", classId],
     queryFn: () => teamAllocationApi.getClassMentors(classId),
     enabled: Number.isSafeInteger(classId) && classId > 0,
+  });
+  // US-10: assignable project templates (min/max capacity window).
+  const templatesQuery = useQuery({
+    queryKey: ["project-templates", "options"],
+    queryFn: () => projectTemplateApi.getOptions(),
   });
 
   useEffect(() => {
@@ -278,6 +318,16 @@ export default function TeamAllocationPage() {
       return teamAllocationApi.openSession(classId, { maxMembers });
     },
     onSuccess: (openedSession) => {
+      // Put the new session at the top of the cached list before it is
+      // re-fetched: the session-sync effect below falls back to
+      // `sessions[0]` when the selected id is not in the list yet, which used
+      // to bounce the page back to a previous (e.g. PUBLISHED) session.
+      queryClient.setQueryData<AllocationSession[]>(
+        ["team-allocation", "sessions", classId],
+        (current) => current
+          ? [openedSession, ...current.filter((item) => item.id !== openedSession.id)]
+          : [openedSession],
+      );
       setSession(openedSession);
       setCapacityInput(String(openedSession.maxMembers));
       setDraftTeams([]);
@@ -635,6 +685,56 @@ export default function TeamAllocationPage() {
       );
     },
   });
+
+  // US-10: assign the selected project template to a DRAFT team.
+  const assignTemplateMutation = useMutation({
+    mutationFn: ({
+      teamId,
+      projectTemplateId,
+    }: {
+      teamId: number;
+      projectTemplateId: number;
+    }) => {
+      if (classId === null || sessionId === null) {
+        throw new Error("Không có phiên phân nhóm.");
+      }
+      return teamAllocationApi.assignProjectTemplate(
+        classId,
+        sessionId,
+        teamId,
+        projectTemplateId,
+      );
+    },
+    onSuccess: async (updated) => {
+      setTemplateAssignErrors((current) => {
+        const next = { ...current };
+        delete next[updated.teamId];
+        return next;
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["team-allocation", "teams", classId, sessionId],
+      });
+      toast.success(
+        `Đã gán đề bài “${updated.projectTemplateName ?? "đề bài"}” cho nhóm ${updated.teamName}.`,
+      );
+    },
+    onError: (error, variables) => {
+      const failure = getTemplateFailure(error);
+      setTemplateAssignErrors((current) => ({
+        ...current,
+        [variables.teamId]: failure,
+      }));
+      toast.error(failure.message ?? "Không thể gán đề bài.");
+    },
+  });
+
+  const clearTemplateAssignError = (teamId: number) => {
+    setTemplateAssignErrors((current) => {
+      const next = { ...current };
+      delete next[teamId];
+      return next;
+    });
+  };
 
   const transferMemberMutation = useMutation({
     mutationFn: ({
@@ -1080,7 +1180,9 @@ export default function TeamAllocationPage() {
                   )}
                   {session.status !== "OPEN" && (
                     <p className="w-full text-xs text-muted-foreground">
-                      Phiên đã publish hoặc đóng nên không thể thay đổi sức chứa.
+                      Phiên đã publish hoặc đóng nên không thể thay đổi sức chứa và
+                      không thể gán đề bài cho các nhóm đã chuyển sang ACTIVE. Hãy tạo
+                      phiên phân nhóm mới để gán đề bài cho nhóm DRAFT.
                     </p>
                   )}
                   {session.status === "OPEN" && !teamsQuery.isLoading && !teamsQuery.isError &&
@@ -1512,7 +1614,7 @@ export default function TeamAllocationPage() {
                           mentors={mentorsQuery.data ?? []}
                           memberOptions={rosterQuery.data ?? []}
                           allTeams={savedTeams}
-                          maxMembers={session.maxMembers}
+                          maxMembers={team.maxMembers ?? session.maxMembers}
                           canManageMembers={
                             hasPermission("PEO_TEAM_ALLOCATE") &&
                             (session.status === "OPEN" || session.status === "PUBLISHED")
@@ -1598,6 +1700,33 @@ export default function TeamAllocationPage() {
                             })
                           }
                           onRoleChange={clearTeamRoleFailure}
+                          templates={templatesQuery.data ?? []}
+                          templatesLoading={templatesQuery.isLoading}
+                          templatesError={
+                            templatesQuery.isError
+                              ? "Không tải được danh sách đề bài."
+                              : null
+                          }
+                          canAssignTemplate={
+                            hasPermission("PEO_TEAM_ALLOCATE") ||
+                            hasPermission("PRJ_WORKSPACE_MANAGE")
+                          }
+                          assignTemplatePending={assignTemplateMutation.isPending}
+                          assignTemplateError={templateAssignErrors[team.teamId]}
+                          onAssignTemplate={(projectTemplateId) =>
+                            assignTemplateMutation.mutate({
+                              teamId: team.teamId,
+                              projectTemplateId,
+                            })
+                          }
+                          onClearAssignTemplateError={() =>
+                            clearTemplateAssignError(team.teamId)
+                          }
+                          canCreateNewSession={hasPermission("PEO_TEAM_ALLOCATE")}
+                          onCreateNewSession={() => {
+                            setNewSessionCapacity(String(session.maxMembers));
+                            setCreateAnotherSession(true);
+                          }}
                         />
                       ))}
                     </div>
@@ -2387,6 +2516,16 @@ function SavedTeamCard({
   onUpdateMentor,
   onUpdateRoles,
   onRoleChange,
+  templates,
+  templatesLoading,
+  templatesError,
+  canAssignTemplate,
+  assignTemplatePending,
+  assignTemplateError,
+  onAssignTemplate,
+  onClearAssignTemplateError,
+  canCreateNewSession,
+  onCreateNewSession,
 }: {
   team: AllocationTeam;
   memberName: (memberId: number) => string;
@@ -2416,10 +2555,23 @@ function SavedTeamCard({
     members: Array<{ memberId: number; role: TeamMemberRole }>,
   ) => void;
   onRoleChange: (teamId: number, memberId: number) => void;
+  templates: ProjectTemplateOption[];
+  templatesLoading: boolean;
+  templatesError: string | null;
+  canAssignTemplate: boolean;
+  assignTemplatePending: boolean;
+  assignTemplateError?: TeamTemplateApiError;
+  onAssignTemplate: (projectTemplateId: number) => void;
+  onClearAssignTemplateError: () => void;
+  canCreateNewSession: boolean;
+  onCreateNewSession: () => void;
 }) {
   const [selectedToAdd, setSelectedToAdd] = useState("");
   const [selectedMentor, setSelectedMentor] = useState(
     team.assignedMentorId === null ? "" : String(team.assignedMentorId),
+  );
+  const [selectedTemplate, setSelectedTemplate] = useState(
+    team.projectTemplateId == null ? "" : String(team.projectTemplateId),
   );
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [memberRoles, setMemberRoles] = useState<Record<number, string | null>>(
@@ -2450,6 +2602,11 @@ function SavedTeamCard({
     );
   }, [team.assignedMentorId]);
   useEffect(() => {
+    setSelectedTemplate(
+      team.projectTemplateId == null ? "" : String(team.projectTemplateId),
+    );
+  }, [team.projectTemplateId]);
+  useEffect(() => {
     setMemberRoles(Object.fromEntries(
       (team.members ?? []).map((member) => [member.memberId, member.role]),
     ));
@@ -2478,6 +2635,17 @@ function SavedTeamCard({
           <span className="block truncate font-semibold">{team.teamName}</span>
           <span className="mt-1 block text-xs text-muted-foreground">
             {team.memberIds.length} thành viên
+          </span>
+          <span
+            className={`mt-1 block truncate text-xs ${
+              team.projectTemplateId ? "text-primary" : "text-muted-foreground"
+            }`}
+          >
+            {team.projectTemplateId
+              ? `Đề bài: ${team.projectTemplateName ?? `#${team.projectTemplateId}`}`
+              : team.status === "DRAFT"
+                ? "Chưa gán đề bài · nhấn để gán"
+                : "Chưa gán đề bài"}
           </span>
           <span className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
             <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary">
@@ -2541,6 +2709,124 @@ function SavedTeamCard({
                 </Button>
               </div>
             )}
+            <div className="space-y-2 rounded-lg border bg-background p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium">Đề bài dự án</p>
+                <Badge variant={team.projectTemplateId ? "default" : "secondary"}>
+                  {team.projectTemplateId ? "Đã gán" : "Chưa gán"}
+                </Badge>
+              </div>
+              <p className="text-sm font-medium">
+                {team.projectTemplateName ?? "Chưa gán đề bài"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Sĩ số hiện tại: {team.memberCount ?? team.memberIds.length} thành viên
+                {team.minMembers != null && team.maxMembers != null
+                  ? ` · Đề bài yêu cầu ${team.minMembers}–${team.maxMembers} thành viên`
+                  : ""}
+              </p>
+              {assignTemplateError && (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+                >
+                  <p className="font-medium">
+                    {assignTemplateError.errorCode === "ERR_TEAM_NOT_DRAFT"
+                      ? "Nhóm không còn ở trạng thái DRAFT"
+                      : assignTemplateError.reason === "MIN_MEMBERS_NOT_MET"
+                        ? "Nhóm chưa đủ sĩ số tối thiểu"
+                        : "Sĩ số nhóm vượt quá sức chứa của đề bài"}
+                  </p>
+                  <p className="mt-1 text-muted-foreground">
+                    {assignTemplateError.message}
+                  </p>
+                  {assignTemplateError.minMembers != null &&
+                    assignTemplateError.maxMembers != null && (
+                    <p className="mt-1 text-muted-foreground">
+                      Yêu cầu {assignTemplateError.minMembers}–
+                      {assignTemplateError.maxMembers} thành viên · hiện có{" "}
+                      {assignTemplateError.memberCount ?? 0}.
+                    </p>
+                  )}
+                </div>
+              )}
+              {isDraft && (
+                <div className="flex flex-wrap gap-2">
+                  <select
+                    aria-label={`Chọn đề bài cho ${team.teamName}`}
+                    className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
+                    value={selectedTemplate}
+                    disabled={!canAssignTemplate || assignTemplatePending || templatesLoading}
+                    onChange={(event) => {
+                      setSelectedTemplate(event.target.value);
+                      onClearAssignTemplateError();
+                    }}
+                  >
+                    <option value="">
+                      {templatesLoading ? "Đang tải đề bài..." : "Chọn đề bài"}
+                    </option>
+                    {templates.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.name} ({option.minMembers}–{option.maxMembers} thành viên)
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    size="sm"
+                    disabled={
+                      !canAssignTemplate ||
+                      assignTemplatePending ||
+                      !selectedTemplate ||
+                      selectedTemplate ===
+                        (team.projectTemplateId == null
+                          ? ""
+                          : String(team.projectTemplateId))
+                    }
+                    onClick={() => onAssignTemplate(Number(selectedTemplate))}
+                  >
+                    {assignTemplatePending
+                      ? <LoaderCircle className="size-4 animate-spin" />
+                      : <Save className="size-4" />}
+                    Gán đề bài
+                  </Button>
+                </div>
+              )}
+              {templatesError && (
+                <p className="text-xs text-destructive">{templatesError}</p>
+              )}
+              {!isDraft && (
+                <div className="space-y-1.5 rounded-lg bg-muted/50 p-2.5">
+                  <p className="text-xs text-muted-foreground">
+                    Nhóm đang ở trạng thái <strong>{team.status}</strong> nên không thể đổi
+                    đề bài. Đề bài chỉ được gán khi nhóm còn ở trạng thái DRAFT (trước khi
+                    publish phiên).
+                  </p>
+                  {canCreateNewSession ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setDetailsOpen(false);
+                        onCreateNewSession();
+                      }}
+                    >
+                      <Plus className="size-4" />
+                      Tạo phiên phân nhóm mới để gán đề bài
+                    </Button>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Liên hệ Mentor/Program Manager để tạo phiên phân nhóm mới.
+                    </p>
+                  )}
+                </div>
+              )}
+              {!canAssignTemplate && isDraft && (
+                <p className="text-xs text-muted-foreground">
+                  Bạn không có quyền gán đề bài cho nhóm này.
+                </p>
+              )}
+            </div>
             <div>
               <p className="mb-2 text-sm font-medium">Danh sách thành viên</p>
               {members.length === 0 ? (

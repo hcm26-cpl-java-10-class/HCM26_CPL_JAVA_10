@@ -17,6 +17,7 @@ import StudentExamList from "@/pages/student/StudentExamList";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import ExploreProjectsPage from "@/pages/student/projects/explore";
 import ProjectTemplateDetailPage from "@/pages/student/projects/detail";
+import StudentDraftTeamPage from "@/pages/student/draft-team";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import { MilestoneCreatePage } from "@/pages/management/project/milestone/pages/MilestoneCreatePage";
 import { MilestoneDetailPage } from "@/pages/management/project/milestone/pages/MilestoneDetailPage";
@@ -107,6 +108,14 @@ export const routes: RouteConfig[] = [
     // Reached from a catalogue card on `/student/projects/explore`.
     path: "/student/projects/detail/:projectId",
     component: ProjectTemplateDetailPage,
+  },
+  {
+    // US-10: the student (team leader) screen that assigns a project template
+    // to the DRAFT teams they lead. Authenticated users only; the backend
+    // enforces ownership (team role PM) and the capacity window.
+    path: "/student/draft-team",
+    component: StudentDraftTeamPage,
+    isModuleDriven: true,
   },
   { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
   { path: "/project-board", component: ProjectBoardPage },

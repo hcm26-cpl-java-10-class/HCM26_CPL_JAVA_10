@@ -390,7 +390,12 @@ public class ProjectTeamDraftService {
                         teamMentorService.getMentorName(team.getAssignedMentorId()),
                         team.getVersion(),
                         memberIdsByTeam.getOrDefault(team.getId(), List.of()),
-                        membersByTeam.getOrDefault(team.getId(), List.of())
+                        membersByTeam.getOrDefault(team.getId(), List.of()),
+                        team.getProjectTemplateId(),
+                        team.getProjectTemplateName(),
+                        null,
+                        null,
+                        memberIdsByTeam.getOrDefault(team.getId(), List.of()).size()
                 ))
                 .toList();
 
