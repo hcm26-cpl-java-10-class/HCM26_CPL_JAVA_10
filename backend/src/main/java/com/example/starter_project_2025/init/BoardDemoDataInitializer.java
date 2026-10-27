@@ -54,6 +54,7 @@ public class BoardDemoDataInitializer implements CommandLineRunner {
     TaskRepository taskRepository;
     ProjectActivityRepository projectActivityRepository;
     UserRepository userRepository;
+    com.example.starter_project_2025.system.project.workspace.config.LegacyH2ProjectSchemaMigration legacyMigration;
 
     @Value("${app.seed.admin.email:" + DEFAULT_ADMIN_EMAIL + "}")
     @NonFinal
@@ -62,6 +63,10 @@ public class BoardDemoDataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
+        if (legacyMigration.isMigratedDatabase()) {
+            log.info("Board demo seed skipped to preserve imported project data.");
+            return;
+        }
         User student = requireUser(STUDENT_EMAIL);
         User teacher = requireUser(TEACHER_EMAIL);
         User admin = requireUser(adminEmail);

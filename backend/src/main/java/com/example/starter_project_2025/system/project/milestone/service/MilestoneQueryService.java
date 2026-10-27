@@ -51,6 +51,7 @@ public class MilestoneQueryService {
     private final ReviewerDirectoryPort reviewerPort;
     private final TenantSettingsPort tenantSettingsPort;
     private final ProjectTeamRepository projectTeamRepository;
+    private final TeamMilestoneReadPort teamRead;
 
     @Transactional(readOnly = true)
     public MilestonePageResponse getList(Long projectId, MilestoneListQuery query) {
@@ -102,7 +103,7 @@ public class MilestoneQueryService {
     public MilestonePageResponse getTeamList(Long teamId, MilestoneListQuery query) {
         String search = normalizeSearch(query.search());
         validateListQuery(query, search);
-        Long tenantId = tenantProvider.requireCurrentTenantId();
+        Long tenantId = teamRead.requireTenant(teamId);
         projectTeamRepository.findById(teamId)
                 .filter(team -> team.getTrainingClass() != null
                         && tenantId.equals(team.getTrainingClass().getTenantId()))
@@ -133,7 +134,7 @@ public class MilestoneQueryService {
 
     @Transactional(readOnly = true)
     public MilestoneDetailResponse getTeamDetail(Long teamId, UUID milestoneId) {
-        Long tenantId = tenantProvider.requireCurrentTenantId();
+        Long tenantId = teamRead.requireTenant(teamId);
         var milestone = repository.findByIdAndTeamIdAndTenantId(milestoneId, teamId, tenantId)
                 .filter(Milestone::isActive)
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));

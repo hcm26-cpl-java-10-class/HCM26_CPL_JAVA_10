@@ -50,6 +50,7 @@ public class ArtifactDraftService {
     private final MilestoneAuditRepository auditRepository;
     private final OutboxEventWriter outboxWriter;
     private final ObjectMapper objectMapper;
+    private final ArtifactContributionLock contributionLock;
     private final ClamAvScanner clamAvScanner;
     @org.springframework.beans.factory.annotation.Value("${app.artifact.upload.enabled:false}")
     private boolean uploadEnabled;
@@ -78,6 +79,7 @@ public class ArtifactDraftService {
     @Transactional
     public ArtifactDraftResponse save(Long projectId, UUID milestoneId, ArtifactDraftRequest request) {
         Scope scope = requireScope(projectId);
+        contributionLock.lockCurrentActor();
         var milestone = milestoneRepository.findByIdAndProjectIdAndTenantId(milestoneId, projectId, scope.tenantId())
                 .filter(com.example.starter_project_2025.system.project.milestone.domain.Milestone::isActive)
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));

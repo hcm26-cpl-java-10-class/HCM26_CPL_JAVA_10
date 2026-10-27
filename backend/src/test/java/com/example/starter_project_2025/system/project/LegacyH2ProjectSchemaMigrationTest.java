@@ -1,0 +1,90 @@
+package com.example.starter_project_2025.system.project;
+
+import com.example.starter_project_2025.system.project.workspace.config.LegacyH2ProjectSchemaMigration;
+import org.junit.jupiter.api.*;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
+import java.util.UUID;
+import static org.assertj.core.api.Assertions.*;
+
+class LegacyH2ProjectSchemaMigrationTest {
+    JdbcTemplate jdbc;
+    LegacyH2ProjectSchemaMigration migration;
+
+    @BeforeEach void setup() {
+        var source=new DriverManagerDataSource("jdbc:h2:mem:legacy-"+UUID.randomUUID()+";DB_CLOSE_DELAY=-1","sa","");
+        jdbc=new JdbcTemplate(source);migration=new LegacyH2ProjectSchemaMigration(jdbc);
+    }
+    @AfterEach void close() {jdbc.execute("SHUTDOWN");}
+    void oldDatabase() {new ResourceDatabasePopulator(new ClassPathResource("legacy-project-schema.sql")).execute(jdbc.getDataSource());}
+    long total(String name) {return jdbc.queryForObject("SELECT COUNT(*) FROM "+name,Long.class);}
+
+    @Test void emptyDatabaseIsLeftForHibernateToInitialize() throws Exception {
+        migration.migrate();
+        assertThat(migration.isMigratedDatabase()).isFalse();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='PUBLIC'",Long.class)).isZero();
+    }
+    @Test void preservesWorkspaceIdsCharterMembershipsAndOriginalAudit() throws Exception {
+        oldDatabase();migration.migrate();
+        assertThat(total("workspaces")).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT code FROM workspaces WHERE id=6",String.class)).isEqualTo("WS-13-15");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM workspaces w JOIN legacy_team_mappings m ON m.project_team_id=w.team_id WHERE w.id=6 AND m.legacy_team_id=15 AND w.tenant_id=m.tenant_id",Long.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT mission FROM project_teams WHERE project_id=13",String.class)).isEqualTo("Keep original charter");
+        assertThat(total("project_members")).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM project_members WHERE is_active=true AND member_role='PM'",Long.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM project_members WHERE is_active=false",Long.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT before_json FROM workspace_audits WHERE id=1",String.class)).isEqualTo("{\"teamId\":15}");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM training_classes WHERE program_id IS NULL AND legacy_imported=true",Long.class)).isEqualTo(2);
+        assertThat(total("teams")).isEqualTo(2);assertThat(total("team_members")).isEqualTo(2);
+    }
+    @Test void onlyExplicitUuidAliasesAreConvertedAndOrphansKeepTheirChecklist() throws Exception {
+        oldDatabase();migration.migrate();
+        assertThat(total("milestones")).isEqualTo(1);assertThat(total("legacy_v1_milestones")).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT project_id FROM milestones",Long.class)).isEqualTo(17);
+        assertThat(jdbc.queryForObject("SELECT tenant_id FROM milestones",Long.class)).isEqualTo(1);
+        assertThat(total("legacy_project_pending")).isEqualTo(1);
+        assertThat(total("milestone_checklist_items")).isEqualTo(1);
+        assertThat(total("legacy_v1_milestone_checklist_items")).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT details_json FROM milestone_audit_logs",String.class)).isEqualTo("Original immutable history");
+        assertThat(jdbc.queryForObject("SELECT project_id FROM milestone_risk_alerts",Long.class)).isEqualTo(17);
+    }
+    @Test void rerunningDoesNotDuplicateOrRemapWorkspaceIdsAgain() throws Exception {
+        oldDatabase();migration.migrate();
+        Long team=jdbc.queryForObject("SELECT team_id FROM workspaces WHERE id=6",Long.class);
+        new LegacyH2ProjectSchemaMigration(jdbc).migrate();
+        assertThat(total("project_teams")).isEqualTo(2);assertThat(total("class_members")).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT team_id FROM workspaces WHERE id=6",Long.class)).isEqualTo(team);
+        assertThat(total("legacy_v1_milestones")).isEqualTo(2);
+    }
+    @Test void interruptedTeamMappingResumesWithoutCloningAnExistingImportedTeam() throws Exception {
+        oldDatabase();migration.migrate();
+        jdbc.update("DELETE FROM legacy_team_mappings WHERE legacy_team_id=15");
+        jdbc.update("UPDATE legacy_project_migrations SET completed=false");
+        new LegacyH2ProjectSchemaMigration(jdbc).migrate();
+        assertThat(total("project_teams")).isEqualTo(2);assertThat(total("project_members")).isEqualTo(2);
+        assertThat(total("legacy_team_mappings")).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM workspaces w JOIN legacy_team_mappings m ON m.project_team_id=w.team_id WHERE m.legacy_team_id=15",Long.class)).isEqualTo(1);
+    }
+    @Test void migratedSchemaAcceptsNewTemplatesAndDoesNotMisassignOldDummyBacklogIds() throws Exception {
+        oldDatabase();migration.migrate();
+        jdbc.update("INSERT INTO project_templates(id,code,name,constraints_json) VALUES(2,'NEW','New template','{}')");
+        assertThat(jdbc.queryForObject("SELECT content_json FROM project_templates WHERE id=1",String.class)).contains("Keep old brief");
+        assertThat(jdbc.queryForObject("SELECT work_type FROM sprint_backlog WHERE sprint_backlog_id=8",String.class)).isEqualTo("TASK");
+        assertThat(jdbc.queryForObject("SELECT assignee_project_member_id FROM sprint_backlog WHERE sprint_backlog_id=8",Long.class)).isNull();
+        assertThat(jdbc.queryForObject("SELECT legacy_assignee_project_member_id FROM sprint_backlog WHERE sprint_backlog_id=8",Long.class)).isEqualTo(1);
+    }
+    @Test void mismatchedTenantHistoryIsQuarantinedInsteadOfReassigned() throws Exception {
+        oldDatabase();jdbc.execute("UPDATE milestone_audit_logs SET tenant_id=UUID 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'");
+        migration.migrate();
+        assertThat(total("milestone_audit_logs")).isZero();assertThat(total("legacy_v1_milestone_audit_logs")).isEqualTo(1);
+        assertThat(total("legacy_project_pending")).isEqualTo(2);
+    }
+    @Test void invalidWorkspaceTenantFailsWithoutDeletingAnyWorkspace() {
+        oldDatabase();jdbc.update("UPDATE workspaces SET tenant_id=2 WHERE id=6");
+        assertThatThrownBy(()->migration.migrate()).isInstanceOf(IllegalStateException.class).hasMessageContaining("same-tenant team mapping");
+        assertThat(total("workspaces")).isEqualTo(1);assertThat(total("legacy_v1_workspaces")).isEqualTo(1);
+        assertThat(migration.isMigratedDatabase()).isFalse();
+    }
+}

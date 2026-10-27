@@ -15,12 +15,12 @@ public class WorkspaceTeamOnlySchemaMigration {
 
     @jakarta.annotation.PostConstruct
     public void migrate() {
-        jdbc.execute("ALTER TABLE workspaces ALTER COLUMN project_id BIGINT NULL");
-        jdbc.execute("ALTER TABLE workspace_audits ALTER COLUMN project_id BIGINT NULL");
-        jdbc.execute("ALTER TABLE milestones ALTER COLUMN project_id BIGINT NULL");
-        jdbc.execute("ALTER TABLE milestone_audit_logs ALTER COLUMN project_id BIGINT NULL");
+        jdbc.execute("ALTER TABLE workspaces ALTER COLUMN project_id DROP NOT NULL");
+        jdbc.execute("ALTER TABLE workspace_audits ALTER COLUMN project_id DROP NOT NULL");
+        jdbc.execute("ALTER TABLE milestones ALTER COLUMN project_id DROP NOT NULL");
+        jdbc.execute("ALTER TABLE milestone_audit_logs ALTER COLUMN project_id DROP NOT NULL");
         jdbc.execute("ALTER TABLE sprint ADD COLUMN IF NOT EXISTS team_id BIGINT");
         jdbc.execute("ALTER TABLE sprint_task ADD COLUMN IF NOT EXISTS team_id BIGINT");
-        jdbc.execute("ALTER TABLE sprint_task ALTER COLUMN project_id BIGINT NULL");
+        jdbc.execute("ALTER TABLE sprint_task ALTER COLUMN project_id DROP NOT NULL");
     }
 }

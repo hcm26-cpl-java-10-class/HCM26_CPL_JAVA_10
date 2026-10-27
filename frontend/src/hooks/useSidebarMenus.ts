@@ -79,6 +79,7 @@ export function useActiveModuleGroups(enabled = true) {
 
                 acc[module.moduleGroupId].push({
                     ...module,
+                    url: /^\/projects\/[^/]+\/milestones$/.test(module.url??"") ? "/milestones" : module.url,
                     title: menuTitle,
                     name: menuTitle,
                 });
@@ -182,6 +183,14 @@ export function useActiveModuleGroups(enabled = true) {
                 groupedModules[projectGroupId] = [];
             }
 
+            if (!modules.some((module) => module.url === "/management/alerts") && hasPermission("PROJECT_ALERT_READ")) {
+                groupedModules[projectGroupId].push({
+                    id: 100005, moduleGroupId: projectGroupId, title: "Alerts", name: "Alerts",
+                    url: "/management/alerts", icon: "bell", displayOrder: 6,
+                    requiredPermission: "PROJECT_ALERT_READ", isActive: true,
+                });
+            }
+
             if (!modules.some((module) => module.url === "/project-board")) {
                 groupedModules[projectGroupId].push({
                     id: 100004,
@@ -195,15 +204,14 @@ export function useActiveModuleGroups(enabled = true) {
                 });
             }
 
-            const milestoneProjectId = import.meta.env.VITE_MILESTONE_MOCK_PROJECT_ID
-                || "1";
             const projectWorkspaceModules: SidebarModule[] = [
                 {
                     id: 100002,
                     moduleGroupId: projectGroupId,
                     title: "Milestones",
                     name: "Milestones",
-                    url: `/projects/${milestoneProjectId}/milestones`,
+                    url: "/milestones",
+                    requiredPermission: "MILESTONE_READ",
                     icon: "bookmark",
                     displayOrder: 3,
                     isActive: true,
@@ -221,6 +229,7 @@ export function useActiveModuleGroups(enabled = true) {
             ];
 
             for (const projectModule of projectWorkspaceModules) {
+                if (!canAccessByPermission(projectModule.requiredPermission,hasPermission)) continue;
                 const alreadyExists = modules.some((module) => module.url === projectModule.url)
                     || groupedModules[projectGroupId].some((module) => module.url === projectModule.url);
 

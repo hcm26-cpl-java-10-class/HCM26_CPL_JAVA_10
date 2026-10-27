@@ -14,7 +14,7 @@ import type {
 } from "@/types";
 import { AlertCircle, Eye, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo } from "react";
-import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { MilestoneEmptyState, MilestoneListError } from "../components/MilestoneListStates";
 import { MilestoneTableCard } from "../components/MilestoneTableCard";
 import { milestoneListSchema } from "../milestone-list.schema";
@@ -24,7 +24,6 @@ import {
   serializeMilestoneListParams,
 } from "../milestone-list-query.utils";
 import { getMilestoneApiError } from "../milestone.utils";
-import { MilestoneRiskPage } from "./MilestoneRiskPage";
 import { Button } from "@/components/ui/button";
 
 interface MilestoneTableFilters {
@@ -36,7 +35,7 @@ interface MilestoneTableFilters {
 
 export function MilestoneListPage() {
   const [params] = useSearchParams();
-  return params.get("view") === "risk" ? <MilestoneRiskPage /> : <MilestoneStandardListPage />;
+  return params.get("view") === "risk" ? <Navigate replace to="/management/alerts?view=MILESTONE"/> : <MilestoneStandardListPage />;
 }
 
 function MilestoneStandardListPage() {

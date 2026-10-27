@@ -11,7 +11,9 @@ import javax.sql.DataSource;
 public class MilestoneRiskDemoInitializer implements CommandLineRunner {
     private final MilestoneRiskDemoDataService demo;
     private final DataSource dataSource;
+    private final com.example.starter_project_2025.system.project.workspace.config.LegacyH2ProjectSchemaMigration legacyMigration;
     @Override public void run(String... args) throws Exception {
+        if (legacyMigration.isMigratedDatabase()) return;
         try (var connection = dataSource.getConnection()) {
             if (!connection.getMetaData().getURL().startsWith("jdbc:h2:")) return;
         }

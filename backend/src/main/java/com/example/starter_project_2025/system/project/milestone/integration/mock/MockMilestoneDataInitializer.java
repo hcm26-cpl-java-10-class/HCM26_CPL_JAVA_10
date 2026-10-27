@@ -32,6 +32,7 @@ public class MockMilestoneDataInitializer implements CommandLineRunner {
 
     private final MilestoneRepository milestoneRepository;
     private final Clock milestoneClock;
+    private final com.example.starter_project_2025.system.project.workspace.config.LegacyH2ProjectSchemaMigration legacyMigration;
 
     @Value("${milestone.mock.seed-enabled:true}")
     private boolean seedEnabled;
@@ -39,7 +40,7 @@ public class MockMilestoneDataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        if (!seedEnabled) {
+        if (!seedEnabled || legacyMigration.isMigratedDatabase()) {
             log.info("Milestone mock data seed is disabled.");
             return;
         }

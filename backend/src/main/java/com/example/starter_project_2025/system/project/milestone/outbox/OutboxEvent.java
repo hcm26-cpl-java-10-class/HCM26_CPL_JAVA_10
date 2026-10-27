@@ -70,6 +70,14 @@ public class OutboxEvent {
         return event;
     }
 
+    public static OutboxEvent projectAlertBatch(UUID batchId, String eventType, String payloadJson, Instant now) {
+        OutboxEvent event = milestoneCreated(batchId, payloadJson, now);
+        event.eventId = batchId;
+        event.aggregateType = "PROJECT_ALERT_BATCH";
+        event.eventType = eventType;
+        return event;
+    }
+
     public static OutboxEvent inactiveMemberAlertBatch(UUID eventId, Long projectId, String payloadJson, Instant now) {
         OutboxEvent event = milestoneCreated(UUID.nameUUIDFromBytes(("project:" + projectId)
                 .getBytes(java.nio.charset.StandardCharsets.UTF_8)), payloadJson, now);

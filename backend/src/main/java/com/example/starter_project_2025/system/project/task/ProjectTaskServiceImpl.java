@@ -146,7 +146,7 @@ public class ProjectTaskServiceImpl implements ProjectTaskService {
                 "title", task.getTitle(),
                 "status", task.getStatus().name()
         );
-        projectActivityRepository.save(ProjectActivityLog.builder()
+        recordActivity(ProjectActivityLog.builder()
                 .projectId(projectId)
                 .actorId(actor.getId())
                 .actorDisplayName(actor.getFullName())
@@ -362,7 +362,7 @@ try {
                 "status", request.status().name(),
                 "version", newVersion
         );
-        projectActivityRepository.save(ProjectActivityLog.builder()
+        recordActivity(ProjectActivityLog.builder()
                 .projectId(projectId)
                 .actorId(actor.getId())
                 .actorDisplayName(actor.getFullName())
@@ -430,7 +430,7 @@ try {
                 "priority", task.getPriority() != null ? task.getPriority().name() : null,
                 "assigneeProjectMemberId", task.getAssigneeProjectMemberId()
         );
-        projectActivityRepository.save(ProjectActivityLog.builder()
+        recordActivity(ProjectActivityLog.builder()
                 .projectId(projectId)
                 .actorId(actor.getId())
                 .actorDisplayName(actor.getFullName())
@@ -487,7 +487,7 @@ try {
         taskRepository.saveAndFlush(task);
 
         String correlationId = SprintCorrelationIds.current();
-        projectActivityRepository.save(ProjectActivityLog.builder()
+        recordActivity(ProjectActivityLog.builder()
                 .projectId(projectId)
                 .actorId(actor.getId())
                 .actorDisplayName(actor.getFullName())
@@ -530,7 +530,7 @@ try {
         String correlationId = SprintCorrelationIds.current();
         Map<String, Object> beforeState = Map.of("sprintId", previousSprintId, "version", request.expectedVersion());
         Map<String, Object> afterState = Map.of("sprintId", newSprintId, "version", task.getVersion());
-        projectActivityRepository.save(ProjectActivityLog.builder()
+        recordActivity(ProjectActivityLog.builder()
                 .projectId(projectId)
                 .actorId(actor.getId())
                 .actorDisplayName(actor.getFullName())
@@ -582,7 +582,7 @@ try {
         String correlationId = SprintCorrelationIds.current();
         Map<String, Object> beforeState = Map.of("assigneeProjectMemberId", previousAssigneeId, "version", request.expectedVersion());
         Map<String, Object> afterState = Map.of("assigneeProjectMemberId", task.getAssigneeProjectMemberId(), "version", task.getVersion());
-        projectActivityRepository.save(ProjectActivityLog.builder()
+        recordActivity(ProjectActivityLog.builder()
                 .projectId(projectId)
                 .actorId(actor.getId())
                 .actorDisplayName(actor.getFullName())
@@ -628,7 +628,7 @@ try {
         String correlationId = SprintCorrelationIds.current();
         Map<String, Object> beforeState = Map.of("orderIndex", task.getOrderIndex() - 1, "version", request.expectedVersion());
         Map<String, Object> afterState = Map.of("orderIndex", task.getOrderIndex(), "version", task.getVersion());
-        projectActivityRepository.save(ProjectActivityLog.builder()
+        recordActivity(ProjectActivityLog.builder()
                 .projectId(projectId)
                 .actorId(actor.getId())
                 .actorDisplayName(actor.getFullName())
@@ -784,6 +784,13 @@ try {
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Unable to serialize Task activity", exception);
         }
+    }
+
+    private ProjectActivityLog recordActivity(ProjectActivityLog activity) {
+        if (activity.getActorId() != null && Set.of("TASK_CREATED", "TASK_UPDATED", "TASK_STATUS_CHANGED").contains(activity.getActionType())) {
+            userRepository.lockForContribution(List.of(activity.getActorId()));
+        }
+        return projectActivityRepository.save(activity);
     }
 
     private record StatusAuditState(String status, Long version) {

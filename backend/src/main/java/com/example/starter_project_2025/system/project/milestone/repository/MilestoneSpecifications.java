@@ -34,7 +34,7 @@ public final class MilestoneSpecifications {
             predicates.add(criteriaBuilder.equal(root.get("tenantId"), tenantId));
             if (projectId != null) {
                 predicates.add(criteriaBuilder.equal(root.get("projectId"), projectId));
-            } else {
+            } else if (teamId == null) {
                 predicates.add(criteriaBuilder.isNull(root.get("projectId")));
             }
             predicates.add(criteriaBuilder.isTrue(root.get("active")));

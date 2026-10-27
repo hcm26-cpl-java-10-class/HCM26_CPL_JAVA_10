@@ -60,4 +60,11 @@ public class MockArtifactSubmissionScopeAdapter implements ArtifactSubmissionSco
             throw new AccessDeniedException("Student is not assigned to this demo team");
         }
     }
+
+    @Override
+    public void requireReviewerTeamAccess(Long teamId,UUID actorId,Long tenantId) {
+        if(!MockMilestoneData.TENANT_ID.equals(tenantId)
+                ||teamAssignments.values().stream().noneMatch(ids->ids.contains(teamId)))
+            throw new AccessDeniedException("Reviewer is outside this demo team");
+    }
 }

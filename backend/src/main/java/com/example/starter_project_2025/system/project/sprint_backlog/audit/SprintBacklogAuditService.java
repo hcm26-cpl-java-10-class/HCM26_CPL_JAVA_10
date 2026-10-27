@@ -28,6 +28,7 @@ public class SprintBacklogAuditService {
 
     SprintBacklogAuditRepository auditRepository;
     ObjectMapper objectMapper;
+    com.example.starter_project_2025.system.rbac.user.UserRepository userRepository;
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void record(String action,
@@ -37,6 +38,7 @@ public class SprintBacklogAuditService {
                        Object afterState) {
 
         Actor actor = resolveActor();
+        if (actor.id() != null) userRepository.lockForContribution(List.of(actor.id()));
 
         SprintBacklogAuditLog auditLog = SprintBacklogAuditLog.builder()
                 .sprintBacklogId(sprintBacklogId)
