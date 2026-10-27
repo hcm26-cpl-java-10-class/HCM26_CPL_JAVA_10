@@ -1,11 +1,11 @@
 import { permissionApi, roleApi } from "@/api";
 import {
-  auditableFieldsSchema,
   type EntityConfig,
   type EntitySchema,
-  type FieldSchema,
 } from "@/types";
 
+// Role page fields are intentionally limited to the columns shown in the UI:
+// Name, Description, Permissions, Status, and Created At.
 const roleSchema: EntitySchema = {
   entityName: "role",
   idField: "id",
@@ -15,6 +15,8 @@ const roleSchema: EntitySchema = {
       label: "Name",
       type: "text",
       sortable: true,
+      filterable: true,
+      filterType: "text",
       bold: true,
     },
     {
@@ -22,21 +24,8 @@ const roleSchema: EntitySchema = {
       label: "Description",
       type: "textarea",
       sortable: true,
-    },
-    {
-      name: "isSystem",
-      label: "System Role",
-      type: "boolean",
-      sortable: true,
-      editable: false,
-      booleanLabels: { true: "System", false: "Custom" },
-    },
-    {
-      name: "userCount",
-      label: "Users",
-      type: "number",
-      sortable: true,
-      editable: false,
+      filterable: true,
+      filterType: "text",
     },
     {
       name: "permissionIds",
@@ -52,7 +41,26 @@ const roleSchema: EntitySchema = {
       filterable: true,
       filterType: "select",
     },
-    ...(auditableFieldsSchema as FieldSchema[]),
+    {
+      name: "isActive",
+      label: "Status",
+      type: "boolean",
+      booleanLabels: {
+        true: "Active",
+        false: "Inactive",
+        trueColor: "bg-blue-500 text-white",
+        falseColor: "bg-red-500 text-white",
+      },
+      filterable: true,
+      filterType: "boolean",
+    },
+    {
+      name: "createdAt",
+      label: "Created At",
+      type: "date",
+      sortable: true,
+      editable: false,
+    },
   ],
 };
 
