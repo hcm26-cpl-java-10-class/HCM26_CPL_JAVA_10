@@ -43,11 +43,38 @@ public record CreateMilestoneRequest(
         @NotNull(message = "Late policy is required")
         @Valid LatePolicyRequest latePolicy,
 
+        @Valid ResubmissionPolicyRequest resubmissionPolicy,
+
         @DecimalMin("0") @DecimalMax("100") @Digits(integer = 3, fraction = 2)
         BigDecimal weight
 ) {
-    public CreateMilestoneRequest(Long teamId, String title, String description, Instant deadline, boolean mandatory,
-            List<ChecklistItemRequest> checklist, UUID rubricSnapshotId, UUID reviewerId, LatePolicyRequest latePolicy) {
-        this(teamId, title, description, deadline, mandatory, checklist, rubricSnapshotId, reviewerId, latePolicy, null);
+    public CreateMilestoneRequest(Long teamId, String title, String description, Instant deadline,
+                                  boolean mandatory, List<ChecklistItemRequest> checklist,
+                                  UUID rubricSnapshotId, UUID reviewerId, LatePolicyRequest latePolicy,
+                                  BigDecimal weight) {
+        this(teamId, title, description, deadline, mandatory, checklist, rubricSnapshotId,
+                reviewerId, latePolicy, null, weight);
+    }
+
+    public CreateMilestoneRequest(Long teamId, String title, String description, Instant deadline,
+                                  boolean mandatory, List<ChecklistItemRequest> checklist,
+                                  UUID rubricSnapshotId, UUID reviewerId, LatePolicyRequest latePolicy,
+                                  ResubmissionPolicyRequest resubmissionPolicy) {
+        this(teamId, title, description, deadline, mandatory, checklist, rubricSnapshotId,
+                reviewerId, latePolicy, resubmissionPolicy, null);
+    }
+
+    public CreateMilestoneRequest(Long teamId, String title, String description, Instant deadline,
+                                  boolean mandatory, List<ChecklistItemRequest> checklist,
+                                  UUID rubricSnapshotId, UUID reviewerId, LatePolicyRequest latePolicy) {
+        this(teamId, title, description, deadline, mandatory, checklist, rubricSnapshotId,
+                reviewerId, latePolicy, null, null);
+    }
+
+    public CreateMilestoneRequest(String title, String description, Instant deadline, boolean mandatory,
+                                  List<ChecklistItemRequest> checklist, UUID rubricSnapshotId,
+                                  UUID reviewerId, LatePolicyRequest latePolicy) {
+        this(null, title, description, deadline, mandatory, checklist, rubricSnapshotId, reviewerId,
+                latePolicy, null, null);
     }
 }

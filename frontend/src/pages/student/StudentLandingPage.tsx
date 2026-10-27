@@ -1,11 +1,14 @@
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { milestoneSubmissionApi } from "@/api";
 import { usePermissions } from "@/hooks/usePermissions";
 import { formatRoleLabel } from "@/utils/rbac.utils";
 import { motion } from "motion/react";
-import { ArrowRight, BookOpen, Calendar, CheckCircle2, Kanban } from "lucide-react";
+import { ArrowRight, BookOpen, Calendar, CheckCircle2, FileCheck2, Kanban, RotateCcw } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 
 const checklistItems = [
   {
@@ -23,9 +26,18 @@ export default function StudentLandingPage() {
 
   const displayName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email;
   const canReadBooks = hasPermission("BOOK_READ");
+  const canReadSubmissions = hasPermission("ARTIFACT_READ");
+  const revisionQuery = useQuery({
+    queryKey: ["my-milestone-submissions", "revision-summary"],
+    queryFn: () => milestoneSubmissionApi.getMyPage({ page: 0, size: 1, status: "CHANGES_REQUESTED" }),
+    enabled: canReadSubmissions,
+    retry: false,
+    refetchOnWindowFocus: true,
+  });
 
   return (
       <MainLayout>
+        {revisionQuery.data && revisionQuery.data.totalElements > 0 ? <Alert className="mb-5 border-amber-400 bg-amber-50 text-amber-950 dark:bg-amber-950/20 dark:text-amber-100"><RotateCcw /><AlertTitle>Bạn có {revisionQuery.data.totalElements} bài nộp cần chỉnh sửa</AlertTitle><AlertDescription>Reviewer đã gửi feedback và đang chờ Version mới.<Button asChild size="sm" className="mt-2"><Link to="/student/milestone-submissions">Xem yêu cầu chỉnh sửa</Link></Button></AlertDescription></Alert> : null}
         <section className="relative overflow-hidden rounded-3xl border border-sky-100 bg-gradient-to-br from-sky-50 via-cyan-50 to-emerald-50 p-6 sm:p-8">
           <div className="pointer-events-none absolute -top-16 -right-10 h-40 w-40 rounded-full bg-cyan-200/50 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-16 -left-8 h-44 w-44 rounded-full bg-emerald-200/50 blur-3xl" />
@@ -80,6 +92,9 @@ export default function StudentLandingPage() {
                   <Kanban className="mr-2 size-4" />
                   Mở bảng công việc
                 </Link>
+              </Button>
+              <Button asChild variant="outline" className="border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100">
+                <Link to="/student/milestone-submissions"><FileCheck2 className="mr-2 size-4" /> Bài nộp của tôi</Link>
               </Button>
             </div>
           </motion.div>

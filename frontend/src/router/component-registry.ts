@@ -28,6 +28,10 @@ import { RubricListPage } from "@/pages/management/project/rubric/pages/RubricLi
 import { RubricCreatePage } from "@/pages/management/project/rubric/pages/RubricCreatePage";
 import { RubricDetailPage } from "@/pages/management/project/rubric/pages/RubricDetailPage";
 import { RubricEditPage } from "@/pages/management/project/rubric/pages/RubricEditPage";
+import { SubmissionListPage } from "@/pages/management/project/milestone-submission/pages/SubmissionListPage";
+import { SubmissionReviewPage } from "@/pages/management/project/milestone-submission/pages/SubmissionReviewPage";
+import { StudentSubmissionPage } from "@/pages/student/milestone-submission/StudentSubmissionPage";
+import { StudentSubmissionListPage } from "@/pages/student/milestone-submission/StudentSubmissionListPage";
 import WorkspaceCandidatePage from "@/pages/management/workspace/WorkspaceCandidatePage";
 import WorkspaceDetailPage from "@/pages/management/workspace/WorkspaceDetailPage";
 import { createElement} from "react";
@@ -107,15 +111,13 @@ export const routes: RouteConfig[] = [
   { path: "/management/workspaces/candidates", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
   { path: "/management/workspaces/:id", component: WorkspaceDetailPage, requiredPermission: "WORKSPACE_READ" },
   { path: "/management/project-teams", component: () => createElement(Navigate, { to: "/management/workspaces/candidates", replace: true }), requiredPermission: "WORKSPACE_READ" },
-  {
-    path: "/projects/:projectId/milestones",
-    component: MilestoneListPage,
-  },
   { path: "/milestones", component: MilestoneEntryPage, requiredPermission: "MILESTONE_READ" },
+  { path: "/projects/:projectId/milestones", component: MilestoneListPage, requiredPermission: "MILESTONE_READ" },
   { path: "/teams/:teamId/milestones", component: TeamMilestoneListPage, requiredPermission: "MILESTONE_READ" },
+  { path: "/teams/:teamId/milestones/new", component: MilestoneCreatePage, requiredPermission: "MILESTONE_WRITE" },
   { path: "/teams/:teamId/milestones/:milestoneId", component: TeamMilestoneDetailPage, requiredPermission: "MILESTONE_READ" },
   { path: "/teams/:teamId/milestones/:milestoneId/submit", component: TeamArtifactSubmissionPage, requiredPermission: "ARTIFACT_READ" },
-  { path: "/teams/:teamId/milestones/:milestoneId/submissions", component: TeamMilestoneSubmissionsPage, requiredPermission: "ARTIFACT_REVIEW" },
+  { path: "/teams/:teamId/milestones/:milestoneId/submissions", component: TeamMilestoneSubmissionsPage },
   {
     path: "/projects/:projectId/milestones/new",
     component: MilestoneCreatePage,
@@ -133,6 +135,12 @@ export const routes: RouteConfig[] = [
   { path: "/rubrics/new", component: RubricCreatePage },
   { path: "/rubrics/:rubricId", component: RubricDetailPage },
   { path: "/rubrics/:rubricId/versions/:versionId/edit", component: RubricEditPage },
+  { path: "/milestone-submissions", component: SubmissionListPage },
+  { path: "/milestone-submissions/:submissionId/review", component: SubmissionReviewPage },
+  { path: "/milestone-submissions/:submissionId", component: SubmissionReviewPage },
+  { path: "/student/milestone-submissions", component: StudentSubmissionListPage },
+  { path: "/student/milestone-submissions/:submissionId", component: StudentSubmissionPage },
+  { path: "/student/milestone-submissions/:submissionId/edit", component: StudentSubmissionPage },
   ...buildEntityRoutes(),
 
   { path: "/not-found-page", component: NotFoundPage, isPublic: true },
@@ -141,6 +149,5 @@ export const routes: RouteConfig[] = [
   { path: "/register", component: RegisterPage, isPublic: true },
   { path: "/forgot-password", component: ForgotPasswordPage, isPublic: true },
   { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true },
-  { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true,},
   { path: "/unauthorized", component: Unauthorized, isPublic: true },
 ];

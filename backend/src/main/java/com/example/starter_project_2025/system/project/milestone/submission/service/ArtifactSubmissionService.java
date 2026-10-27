@@ -58,6 +58,7 @@ public class ArtifactSubmissionService {
     private final OutboxEventWriter outboxWriter;
     private final ObjectMapper objectMapper;
     private final ArtifactContributionLock contributionLock;
+    private final ArtifactReviewSubmissionSyncService reviewSyncService;
 
     @Transactional
     public ArtifactSubmissionResponse submit(Long projectId, UUID milestoneId, String idempotencyKey,
@@ -115,10 +116,11 @@ public class ArtifactSubmissionService {
                 .map(this::attachmentResponse).toList();
         String attachmentsJson = writeJson(attachmentSnapshots);
         MilestoneArtifactSubmission submission = submissionRepository.saveAndFlush(MilestoneArtifactSubmission.submit(
-                scope.tenantId(), projectId, milestoneId, scope.actorId(), version,
+                scope.tenantId(), projectId, milestone.getTeamId(), milestoneId, scope.actorId(), version,
                 normalize(request.repositoryUrl()), normalize(request.deploymentUrl()),
                 normalize(request.releaseNotes()), checklistJson, attachmentsJson, now, late,
                 milestone.latePenaltyAt(now)));
+        reviewSyncService.synchronize(milestone, submission);
         ArtifactSubmissionResponse response = toResponse(submission);
 
         try {
@@ -177,8 +179,7 @@ public class ArtifactSubmissionService {
         if (requested != null && !allowed.containsAll(requested.keySet())) {
             throw validation("checklist", "Checklist contains an item outside this milestone");
         }
-        milestone.getChecklistItems().forEach(item -> result.put(item.getId(),
-                requested != null && Boolean.TRUE.equals(requested.get(item.getId()))));
+        milestone.getChecklistItems().forEach(item -> result.put(item.getId(), false));
         return result;
     }
 

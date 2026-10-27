@@ -21,13 +21,26 @@ public class RubricCatalogService {
     private final RubricVersionRepository versions;
 
     public List<RubricVersion> findPublished(Long tenantId) {
-        return versions.findAllByRubricTenantIdAndStatusOrderByNameSnapshotAscVersionNumberDesc(
+        List<RubricVersion> primary = versions.findAllByRubricTenantIdAndStatusOrderByNameSnapshotAscVersionNumberDesc(
                 RubricTenantIdentity.from(tenantId), RubricVersionStatus.PUBLISHED);
+        List<RubricVersion> legacy = versions.findAllByRubricTenantIdAndStatusOrderByNameSnapshotAscVersionNumberDesc(
+                legacyTenantId(tenantId), RubricVersionStatus.PUBLISHED);
+        if (legacy.isEmpty()) return primary;
+        java.util.Map<UUID, RubricVersion> merged = new java.util.LinkedHashMap<>();
+        primary.forEach(v -> merged.put(v.getId(), v));
+        legacy.forEach(v -> merged.putIfAbsent(v.getId(), v));
+        return java.util.List.copyOf(merged.values());
     }
 
     public Optional<RubricVersion> findPublished(UUID versionId, Long tenantId) {
         return versions.findByIdAndRubricTenantId(versionId, RubricTenantIdentity.from(tenantId))
+                .or(() -> versions.findByIdAndRubricTenantId(versionId, legacyTenantId(tenantId)))
                 .filter(version -> version.getStatus() == RubricVersionStatus.PUBLISHED);
+    }
+
+    private static UUID legacyTenantId(Long tenantId) {
+        return UUID.nameUUIDFromBytes(("tenant:" + tenantId)
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     public static RubricSnapshotData snapshot(RubricVersion version) {

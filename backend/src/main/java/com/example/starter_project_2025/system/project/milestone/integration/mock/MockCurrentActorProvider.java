@@ -12,7 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 @Component
-@Profile("!milestone-real-integrations")
+@Profile("!milestone-mock")
 public class MockCurrentActorProvider implements CurrentActorProvider {
     @Override
     public UUID requireCurrentActorId() {

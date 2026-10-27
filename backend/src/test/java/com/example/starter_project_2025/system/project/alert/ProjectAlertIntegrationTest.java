@@ -39,7 +39,9 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest(properties={"app.seed.board.enabled=false","app.seed.team-allocation.enabled=false","milestone.mock.seed-enabled=false"})
+@SpringBootTest(properties={"app.seed.board.enabled=false","app.seed.team-allocation.enabled=false",
+        "app.task-alert.demo.enabled=false","app.member-reminder.demo.enabled=false",
+        "milestone.mock.seed-enabled=false","milestone.submission.mock.seed-enabled=false"})
 @AutoConfigureMockMvc @ActiveProfiles({"test","artifact-real-scope"})
 class ProjectAlertIntegrationTest {
     @Autowired MockMvc mvc; @Autowired ObjectMapper json; @Autowired TransactionTemplate tx; @Autowired JdbcTemplate jdbc;

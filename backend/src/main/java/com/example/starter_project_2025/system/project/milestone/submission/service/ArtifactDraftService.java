@@ -12,6 +12,7 @@ import com.example.starter_project_2025.system.project.milestone.integration.por
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
 import com.example.starter_project_2025.system.project.milestone.service.MilestoneAccessPolicy;
 import com.example.starter_project_2025.system.project.milestone.service.MilestoneQueryService;
+import com.example.starter_project_2025.system.project.milestone.service.WorkspaceMilestoneScopeService;
 import com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneArtifactDraft;
 import com.example.starter_project_2025.system.project.milestone.submission.repository.ArtifactAttachmentRepository;
 import com.example.starter_project_2025.system.project.milestone.submission.dto.ArtifactDraftRequest;
@@ -52,6 +53,7 @@ public class ArtifactDraftService {
     private final ObjectMapper objectMapper;
     private final ArtifactContributionLock contributionLock;
     private final ClamAvScanner clamAvScanner;
+    private final WorkspaceMilestoneScopeService scopeService;
     @org.springframework.beans.factory.annotation.Value("${app.artifact.upload.enabled:false}")
     private boolean uploadEnabled;
     @org.springframework.beans.factory.annotation.Value("${app.artifact.upload.max-bytes:0}")
@@ -59,12 +61,10 @@ public class ArtifactDraftService {
     @org.springframework.beans.factory.annotation.Value("${app.artifact.upload.allowed-mime-types:}")
     private String uploadAllowedMimeTypes;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public ArtifactSubmissionWorkspaceResponse getWorkspace(Long projectId, UUID milestoneId) {
         Scope scope = requireScope(projectId);
-        var milestone = milestoneRepository.findByIdAndProjectIdAndTenantId(milestoneId, projectId, scope.tenantId())
-                .filter(com.example.starter_project_2025.system.project.milestone.domain.Milestone::isActive)
-                .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
+        var milestone = resolveMilestone(projectId, milestoneId, scope.tenantId());
         var draft = draftRepository.findByMilestoneIdAndProjectIdAndTenantId(milestoneId, projectId, scope.tenantId())
                 .map(this::toResponse).orElse(null);
         var latestSubmission = submissionRepository
@@ -72,7 +72,7 @@ public class ArtifactDraftService {
                         scope.tenantId(), projectId, milestoneId, scope.actorId())
                 .map(submissionService::toResponse).orElse(null);
         return new ArtifactSubmissionWorkspaceResponse(
-                milestoneQueryService.getDetail(projectId, milestoneId, scope.tenantId()), draft,
+                milestoneQueryService.getDetail(projectId, milestoneId, null), draft,
                 uploadPolicy(), latestSubmission);
     }
 
@@ -80,9 +80,7 @@ public class ArtifactDraftService {
     public ArtifactDraftResponse save(Long projectId, UUID milestoneId, ArtifactDraftRequest request) {
         Scope scope = requireScope(projectId);
         contributionLock.lockCurrentActor();
-        var milestone = milestoneRepository.findByIdAndProjectIdAndTenantId(milestoneId, projectId, scope.tenantId())
-                .filter(com.example.starter_project_2025.system.project.milestone.domain.Milestone::isActive)
-                .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
+        var milestone = resolveMilestone(projectId, milestoneId, scope.tenantId());
         validateUrl("repositoryUrl", request.repositoryUrl());
         validateUrl("deploymentUrl", request.deploymentUrl());
         Map<UUID, Boolean> checklist = validateChecklist(milestone, request.checklist());
@@ -127,18 +125,40 @@ public class ArtifactDraftService {
         return new Scope(actorId, tenantId);
     }
 
+    /**
+     * Legacy milestones were historically stored with only team scope. Resolve that
+     * scope through the active team and persist the canonical project scope before
+     * the artifact workflow reads or writes any project-scoped row.
+     */
+    private com.example.starter_project_2025.system.project.milestone.domain.Milestone resolveMilestone(
+            Long projectId, UUID milestoneId, Long tenantId) {
+        var strict = milestoneRepository.findByIdAndProjectIdAndTenantId(milestoneId, projectId, tenantId)
+                .filter(com.example.starter_project_2025.system.project.milestone.domain.Milestone::isActive);
+        if (strict.isPresent()) return strict.get();
+
+        var legacy = milestoneRepository.findByIdAndTenantId(milestoneId, tenantId)
+                .filter(com.example.starter_project_2025.system.project.milestone.domain.Milestone::isActive)
+                .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
+        if (legacy.getProjectId() != null) throw new ResourceNotFoundException("Milestone not found");
+        var scope = scopeService.requireTeamScope(projectId, legacy.getTeamId(), tenantId);
+        if (!projectId.equals(scope.projectId())) throw new ResourceNotFoundException("Milestone not found");
+        milestoneRepository.attachProjectScope(milestoneId, tenantId, legacy.getTeamId(), projectId);
+        return milestoneRepository.findByIdAndProjectIdAndTenantId(milestoneId, projectId, tenantId)
+                .filter(com.example.starter_project_2025.system.project.milestone.domain.Milestone::isActive)
+                .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
+    }
+
     private Map<UUID, Boolean> validateChecklist(
             com.example.starter_project_2025.system.project.milestone.domain.Milestone milestone,
             Map<UUID, Boolean> requested) {
         Map<UUID, Boolean> result = new LinkedHashMap<>();
         var items = milestone.getChecklistItems();
-        if (requested == null) return result;
         var allowed = items.stream().map(item -> item.getId()).collect(java.util.stream.Collectors.toSet());
-        if (!allowed.containsAll(requested.keySet())) {
+        if (requested != null && !allowed.containsAll(requested.keySet())) {
             throw new com.example.starter_project_2025.system.project.milestone.exception.MilestoneValidationException(
                     Map.of("checklist", java.util.List.of("Checklist contains an item outside this milestone")));
         }
-        items.forEach(item -> result.put(item.getId(), Boolean.TRUE.equals(requested.get(item.getId()))));
+        items.forEach(item -> result.put(item.getId(), false));
         return result;
     }
 

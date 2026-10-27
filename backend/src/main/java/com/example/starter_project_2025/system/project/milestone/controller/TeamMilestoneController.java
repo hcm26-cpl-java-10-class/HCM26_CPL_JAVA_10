@@ -8,7 +8,6 @@ import com.example.starter_project_2025.system.project.milestone.dto.response.Mi
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
@@ -21,13 +20,11 @@ public class TeamMilestoneController {
     private final MilestoneCreateOptionsService optionsService;
 
     @GetMapping("/create-options")
-    @PreAuthorize("hasAuthority('MILESTONE_WRITE')")
     public MilestoneCreateOptionsResponse createOptions(@PathVariable Long teamId) {
         return optionsService.getTeamOptions(teamId);
     }
 
     @PostMapping
-    @PreAuthorize("hasAuthority('MILESTONE_WRITE')")
     public ResponseEntity<MilestoneResponse> create(
             @PathVariable Long teamId,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
@@ -40,7 +37,6 @@ public class TeamMilestoneController {
     }
 
     @PostMapping("/{milestoneId}/open")
-    @PreAuthorize("hasAuthority('MILESTONE_WRITE')")
     public ResponseEntity<MilestoneResponse> openForSubmissions(@PathVariable Long teamId, @PathVariable java.util.UUID milestoneId) {
         return ResponseEntity.ok(commandService.openForSubmissions(null, teamId, milestoneId));
     }

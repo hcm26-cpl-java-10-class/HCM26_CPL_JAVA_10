@@ -20,6 +20,9 @@ export function buildMilestonePayload(values: MilestoneFormValues): CreateMilest
     })),
     rubricSnapshotId: values.rubricSnapshotId,
     latePolicy: { type: values.latePolicy.type },
+    resubmissionPolicy: values.resubmissionPolicy.allowed
+      ? { allowed: true, maxAttempts: values.resubmissionPolicy.maxAttempts }
+      : { allowed: false },
   };
 
   if (values.latePolicy.type === "ALLOW_LATE") {

@@ -33,6 +33,10 @@ export const milestoneFormSchema = z
       lateUntil: z.string().optional(),
       penaltyPercent: z.number().min(0, "Penalty must be at least 0%").max(100, "Penalty must not exceed 100%").optional(),
     }),
+    resubmissionPolicy: z.object({
+      allowed: z.boolean(),
+      maxAttempts: z.number().int("Attempts must be a whole number").min(2, "At least 2 attempts are required").max(99, "Attempts must not exceed 99").optional(),
+    }),
   })
   .superRefine((value, context) => {
     const deadline = value.deadline ? new Date(value.deadline) : null;
@@ -43,22 +47,23 @@ export const milestoneFormSchema = z
       context.addIssue({ code: "custom", path: ["deadline"], message: "Deadline must be in the future" });
     }
 
-    if (value.latePolicy.type !== "ALLOW_LATE") return;
+    if (value.latePolicy.type === "ALLOW_LATE") {
+      if (!value.latePolicy.lateUntil) {
+        context.addIssue({ code: "custom", path: ["latePolicy", "lateUntil"], message: "Late submission deadline is required" });
+      } else {
+        const lateUntil = new Date(value.latePolicy.lateUntil);
+        if (Number.isNaN(lateUntil.getTime())) {
+          context.addIssue({ code: "custom", path: ["latePolicy", "lateUntil"], message: "Late submission deadline is invalid" });
+        } else if (deadline && !Number.isNaN(deadline.getTime()) && lateUntil.getTime() <= deadline.getTime()) {
+          context.addIssue({ code: "custom", path: ["latePolicy", "lateUntil"], message: "Late submission deadline must be after the milestone deadline" });
+        }
+      }
 
-    if (!value.latePolicy.lateUntil) {
-      context.addIssue({ code: "custom", path: ["latePolicy", "lateUntil"], message: "Late submission deadline is required" });
-    } else {
-      const lateUntil = new Date(value.latePolicy.lateUntil);
-      if (Number.isNaN(lateUntil.getTime())) {
-        context.addIssue({ code: "custom", path: ["latePolicy", "lateUntil"], message: "Late submission deadline is invalid" });
-      } else if (deadline && !Number.isNaN(deadline.getTime()) && lateUntil.getTime() <= deadline.getTime()) {
-        context.addIssue({ code: "custom", path: ["latePolicy", "lateUntil"], message: "Late submission deadline must be after the milestone deadline" });
+      if (value.latePolicy.penaltyPercent === undefined) {
+        context.addIssue({ code: "custom", path: ["latePolicy", "penaltyPercent"], message: "Late penalty is required" });
       }
     }
 
-    if (value.latePolicy.penaltyPercent === undefined) {
-      context.addIssue({ code: "custom", path: ["latePolicy", "penaltyPercent"], message: "Late penalty is required" });
-    }
   });
 
 export interface MilestoneFormValues {
@@ -73,6 +78,10 @@ export interface MilestoneFormValues {
     lateUntil?: string;
     penaltyPercent?: number;
   };
+  resubmissionPolicy: {
+    allowed: boolean;
+    maxAttempts?: number;
+  };
 }
 
 export const milestoneDefaultValues: MilestoneFormValues = {
@@ -83,4 +92,5 @@ export const milestoneDefaultValues: MilestoneFormValues = {
   checklist: [{ content: "", mandatory: true }],
   rubricSnapshotId: "",
   latePolicy: { type: "NO_LATE" },
+  resubmissionPolicy: { allowed: true, maxAttempts: 3 },
 };
