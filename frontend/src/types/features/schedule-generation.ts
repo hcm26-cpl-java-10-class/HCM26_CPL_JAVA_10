@@ -1,5 +1,6 @@
 export interface TopicContextItem {
   topicId: number;
+  programSubjectId?: number;
   topicCode: string;
   topicName: string;
   sequenceOrder: number;
@@ -64,9 +65,10 @@ export interface PreviewSessionItemDTO {
   trainerName?: string;
   roomId?: number;
   roomName?: string;
+  meetingUrl?: string;
   teachingAssignmentId?: number;
   title: string;
-  status: "VALID" | "CONFLICT";
+  status: "VALID" | "CONFLICT" | "PENDING";
   conflictDetails?: ConflictDetailDTO;
 }
 

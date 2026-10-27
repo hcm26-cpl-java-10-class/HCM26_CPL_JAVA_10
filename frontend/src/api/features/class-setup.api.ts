@@ -168,6 +168,8 @@ export interface AssignmentClassContext {
 }
 
 export const classSetupApi = {
+  getRooms: async () =>
+    (await axiosInstance.get<Array<{ id: number; name: string }>>("/external/rooms")).data,
   getAssignmentCreateOptions: async (signal?: AbortSignal) =>
     (await axiosInstance.get<AssignmentCreateOptions>("/teaching-assignments/create-options", { signal })).data,
   getAssignmentCreateContext: async (classId: number, signal?: AbortSignal) =>

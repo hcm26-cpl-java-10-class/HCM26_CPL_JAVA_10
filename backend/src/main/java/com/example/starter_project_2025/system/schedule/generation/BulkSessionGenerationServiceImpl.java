@@ -1,289 +1,172 @@
 package com.example.starter_project_2025.system.schedule.generation;
 
-import com.example.starter_project_2025.system.demo.session.Session;
-import com.example.starter_project_2025.system.demo.session.SessionRepository;
+import com.example.starter_project_2025.exception.BadRequestException;
+import com.example.starter_project_2025.exception.ConflictException;
+import com.example.starter_project_2025.system.demo.session.SessionDTO;
+import com.example.starter_project_2025.system.demo.session.SessionService;
+import com.example.starter_project_2025.system.schedule.ScheduleCandidate;
+import com.example.starter_project_2025.system.schedule.ScheduleValidationEngine;
 import com.example.starter_project_2025.system.schedule.generation.dto.*;
 import com.example.starter_project_2025.system.schedule.generation.engine.ScheduleGeneratorEngine;
-import com.example.starter_project_2025.system.subject.Subject;
 import com.example.starter_project_2025.system.trainingprogram.*;
-import lombok.AccessLevel;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
-import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-@Slf4j
+/** Phat owns generation; SessionService remains the single writer for Session records. */
 @Service
 @RequiredArgsConstructor
-@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationService {
+    private final ScheduleGeneratorEngine scheduleGeneratorEngine;
+    private final ClassSetupService classSetupService;
+    private final SessionService sessionService;
+    private final ScheduleValidationEngine validationEngine;
+    private final ObjectMapper objectMapper;
 
-    ScheduleGeneratorEngine scheduleGeneratorEngine;
-    ClassSetupService classSetupService;
-    ClassTrainingProgramRepository classTrainingProgramRepository;
-    TeachingAssignmentRepository teachingAssignmentRepository;
-    SessionRepository sessionRepository;
-    TeachingAssignmentSessionGuard assignmentGuard;
-
-    Map<String, BulkSaveSessionsResponseDTO> idempotencyStore = new ConcurrentHashMap<>();
+    private record RequestKey(String user, Long classId, String key) {}
+    private record SavedRequest(String payload, BulkSaveSessionsResponseDTO response, Instant expiresAt) {}
+    // Retry support for one application instance; a database-backed store is a separate follow-up.
+    private final Map<RequestKey, SavedRequest> idempotencyStore = new ConcurrentHashMap<>();
 
     @Override
     @Transactional(readOnly = true)
+    @PreAuthorize("hasAuthority('SESSION_READ')")
     public ScheduleGenerationContextResponse getGenerationContext(Long classId) {
-        try {
-            Optional<ClassTrainingProgram> linkOpt = classTrainingProgramRepository.findByClassId(classId);
-            if (linkOpt.isPresent() && linkOpt.get().getProgram() != null) {
-                TrainingProgram program = linkOpt.get().getProgram();
-                if (program.getSubjects() != null && !program.getSubjects().isEmpty()) {
-                    List<TeachingAssignment> assignments = teachingAssignmentRepository.findByClassIdOrderByEffectiveFromAscIdAsc(classId);
-                    Map<Long, TeachingAssignment> assignmentByProgSubId = new HashMap<>();
-                    for (TeachingAssignment asg : assignments) {
-                        if (asg.getProgramSubject() != null) {
-                            assignmentByProgSubId.putIfAbsent(asg.getProgramSubject().getId(), asg);
-                        }
-                    }
+        return context(classId, LocalDate.now());
+    }
 
-                    List<ScheduleGenerationContextResponse.TopicContextItem> topics = new ArrayList<>();
-                    double totalHours = 0.0;
+    private ScheduleGenerationContextResponse context(Long classId, LocalDate onDate) {
+        if (classId == null || classId <= 0) throw new BadRequestException("Select a valid class.");
+        var plan = classSetupService.getClassProgramSubjects(classId);
+        if (plan.program() == null || plan.program().status() != ProgramStatus.ACTIVE)
+            throw new BadRequestException("Assign an ACTIVE training program to this class before generating its schedule.");
+        if (plan.subjects() == null || plan.subjects().isEmpty())
+            throw new BadRequestException("The class program does not contain any subjects.");
 
-                    for (ProgramSubject ps : program.getSubjects()) {
-                        Subject s = ps.getSubject();
-                        if (s == null) continue;
-                        double hours = (s.getDurationHours() != null && s.getDurationHours() > 0)
-                                ? s.getDurationHours().doubleValue()
-                                : 20.0;
-                        totalHours += hours;
-
-                        TeachingAssignment asg = assignmentByProgSubId.get(ps.getId());
-                        Long trainerId = (asg != null && asg.getTrainerId() != null) ? asg.getTrainerId() : 1L;
-                        String trainerName = (asg != null) ? ("Giảng viên (" + asg.getRole() + " - ID: " + trainerId + ")") : "Nguyễn Văn A (Lead Trainer)";
-                        Long asgId = asg != null ? asg.getId() : null;
-
-                        topics.add(ScheduleGenerationContextResponse.TopicContextItem.builder()
-                                .topicId(ps.getId())
-                                .topicCode(s.getCode())
-                                .topicName(s.getName())
-                                .sequenceOrder(ps.getOrderIndex() != null ? ps.getOrderIndex() : 1)
-                                .totalHours(hours)
-                                .assignedTrainerId(trainerId)
-                                .assignedTrainerName(trainerName)
-                                .teachingAssignmentId(asgId)
-                                .defaultRoom("Phòng A101")
-                                .build());
-                    }
-
-                    if (!topics.isEmpty()) {
-                        return ScheduleGenerationContextResponse.builder()
-                                .classId(classId)
-                                .classCode("CLASS-" + classId)
-                                .className("Lớp CLASS-" + classId)
-                                .programId(program.getId())
-                                .programName(program.getName())
-                                .programVersion(program.getVersion())
-                                .totalHours(totalHours)
-                                .topics(topics)
-                                .build();
-                    }
-                }
-            }
-        } catch (Exception ex) {
-            log.warn("Could not load curriculum from DB for classId {}: {}. Providing fallback context.",
-                    classId, ex.getMessage());
-        }
-
-        // Fallback context nếu lớp chưa gán môn hoặc đang thử nghiệm
-        List<ScheduleGenerationContextResponse.TopicContextItem> fallbackTopics = List.of(
-                ScheduleGenerationContextResponse.TopicContextItem.builder()
-                        .topicId(1L)
-                        .topicCode("JAVA_CORE")
-                        .topicName("Lập trình Java Căn bản & Hướng đối tượng")
-                        .sequenceOrder(1)
-                        .totalHours(16.0)
-                        .assignedTrainerId(1L)
-                        .assignedTrainerName("Nguyễn Văn A (Lead Trainer)")
-                        .defaultRoom("Phòng A101")
-                        .build(),
-                ScheduleGenerationContextResponse.TopicContextItem.builder()
-                        .topicId(2L)
-                        .topicCode("SPRING_BOOT")
-                        .topicName("Spring Boot Framework & RESTful API")
-                        .sequenceOrder(2)
-                        .totalHours(20.0)
-                        .assignedTrainerId(1L)
-                        .assignedTrainerName("Nguyễn Văn A (Lead Trainer)")
-                        .defaultRoom("Phòng A101")
-                        .build(),
-                ScheduleGenerationContextResponse.TopicContextItem.builder()
-                        .topicId(3L)
-                        .topicCode("MICROSERVICES")
-                        .topicName("Microservices Architecture & Deployment")
-                        .sequenceOrder(3)
-                        .totalHours(16.0)
-                        .assignedTrainerId(2L)
-                        .assignedTrainerName("Trần Thị B (Trainer)")
-                        .defaultRoom("Phòng Lab 2")
-                        .build()
-        );
-
-        return ScheduleGenerationContextResponse.builder()
-                .classId(classId)
-                .classCode("CLASS-" + classId)
-                .className("Lớp học mẫu #" + classId)
-                .programId(100L)
-                .programName("Chương trình đào tạo Chuyên sâu Backend")
-                .programVersion("1.0")
-                .totalHours(52.0)
-                .topics(fallbackTopics)
+        var topics = plan.subjects().stream()
+                .sorted(Comparator.comparing(ClassProgramSubjectsResponse.ProgramSubjectItem::orderIndex,
+                        Comparator.nullsLast(Comparator.naturalOrder())))
+                .map(subject -> {
+                    if (subject.durationHours() == null || subject.durationHours() <= 0)
+                        throw new BadRequestException("Set a positive duration for subject " + subject.subjectCode() + ".");
+                    var assignment = subject.assignments().stream()
+                            .filter(a -> a.role() == AssignmentRole.MAIN && a.effectiveFrom() != null
+                                    && !onDate.isBefore(a.effectiveFrom())
+                                    && (a.effectiveTo() == null || !onDate.isAfter(a.effectiveTo())))
+                            .findFirst().orElse(null);
+                    return ScheduleGenerationContextResponse.TopicContextItem.builder()
+                            // Session topicId is the Subject ID; preserve ProgramSubject as a separate link.
+                            .topicId(subject.subjectId()).programSubjectId(subject.programSubjectId())
+                            .topicCode(subject.subjectCode()).topicName(subject.subjectName())
+                            .sequenceOrder(subject.orderIndex()).totalHours(subject.durationHours().doubleValue())
+                            .assignedTrainerId(assignment == null ? null : assignment.trainerId())
+                            .assignedTrainerName(assignment == null ? null : assignment.trainerName())
+                            .teachingAssignmentId(assignment == null ? null : assignment.id()).build();
+                }).toList();
+        return ScheduleGenerationContextResponse.builder().classId(classId).classCode(plan.classCode())
+                .className(plan.className()).programId(plan.program().id()).programName(plan.program().name())
+                .programVersion(plan.program().version()).topics(topics)
+                .totalHours(topics.stream().mapToDouble(ScheduleGenerationContextResponse.TopicContextItem::getTotalHours).sum())
                 .build();
     }
 
     @Override
     @Transactional(readOnly = true)
+    @PreAuthorize("hasAuthority('SESSION_READ')")
     public BulkPreviewResponseDTO generatePreview(Long classId, BulkPreviewRequestDTO request) {
-        ScheduleGenerationContextResponse context = getGenerationContext(classId);
-        List<PreviewSessionItemDTO> previewSessions = scheduleGeneratorEngine.generate(
-                context.getTopics(), request, Collections.emptySet()
-        );
-
-        double totalHours = previewSessions.stream()
-                .mapToDouble(s -> {
-                    long minutes = Duration.between(s.getStartTime(), s.getEndTime()).toMinutes();
-                    return minutes / 60.0;
-                })
-                .sum();
-
-        boolean hasConflicts = false;
-        int conflictCount = 0;
-
-        if (Boolean.TRUE.equals(request.getCheckConflicts())) {
-            for (PreviewSessionItemDTO item : previewSessions) {
-                // Kiểm tra xung đột với các buổi học đã lưu trong DB
-                List<Session> overlaps = sessionRepository.findOverlappingSessions(
-                        classId,
-                        item.getTrainerId(),
-                        item.getRoomName(),
-                        item.getStartTime(),
-                        item.getEndTime(),
-                        null,
-                        Session.SessionStatus.CANCELLED
-                );
-
-                if (overlaps != null && !overlaps.isEmpty()) {
-                    Session first = overlaps.get(0);
-                    hasConflicts = true;
-                    conflictCount++;
+        if (request == null || request.getStartDate() == null)
+            throw new BadRequestException("A schedule start date is required.");
+        var sessions = scheduleGeneratorEngine.generate(context(classId, request.getStartDate()).getTopics(),
+                request, Collections.emptySet());
+        if (Boolean.TRUE.equals(request.getCheckConflicts()) && !sessions.isEmpty()) {
+            var result = validationEngine.validate(sessions.stream().map(item -> candidate(toSession(classId, item))).toList());
+            for (var issue : result.issues()) {
+                int index = issue.candidateIndex();
+                if (index >= 0 && index < sessions.size()) {
+                    var item = sessions.get(index);
                     item.setStatus("CONFLICT");
-
-                    String conflictType = Objects.equals(first.getClassId(), classId)
-                            ? "CLASS_OVERLAP"
-                            : (Objects.equals(first.getTrainerId(), item.getTrainerId())
-                            ? "TRAINER_OVERLAP"
-                            : "ROOM_OVERLAP");
-
-                    String message = String.format("Trùng lịch với buổi '%s' từ %s đến %s",
-                            first.getTitle(),
-                            first.getStartTime().toString(),
-                            first.getEndTime().toString());
-
-                    item.setConflictDetails(new PreviewSessionItemDTO.ConflictDetailDTO(
-                            conflictType,
-                            "Lớp " + first.getClassId(),
-                            message
-                    ));
+                    item.setConflictDetails(new PreviewSessionItemDTO.ConflictDetailDTO(issue.code(), null, issue.message()));
                 }
             }
         }
-
-        LocalDate startDate = previewSessions.isEmpty() ? request.getStartDate() : previewSessions.get(0).getDate();
-        LocalDate estimatedEndDate = previewSessions.isEmpty() ? request.getStartDate() : previewSessions.get(previewSessions.size() - 1).getDate();
-
-        return BulkPreviewResponseDTO.builder()
-                .classId(classId)
-                .totalSessions(previewSessions.size())
-                .totalHoursCalculated(totalHours)
-                .hasConflicts(hasConflicts)
-                .conflictCount(conflictCount)
-                .startDate(startDate)
-                .estimatedEndDate(estimatedEndDate)
-                .skippedHolidaysCount(0)
-                .sessions(previewSessions)
-                .correlationId(UUID.randomUUID().toString())
-                .build();
+        if (!Boolean.TRUE.equals(request.getCheckConflicts())) sessions.forEach(item -> item.setStatus("PENDING"));
+        int conflicts = (int) sessions.stream().filter(s -> "CONFLICT".equals(s.getStatus())).count();
+        return BulkPreviewResponseDTO.builder().classId(classId).totalSessions(sessions.size())
+                .totalHoursCalculated(sessions.stream().mapToDouble(s -> Duration.between(s.getStartTime(), s.getEndTime()).toMinutes() / 60.0).sum())
+                .hasConflicts(conflicts > 0).conflictCount(conflicts).startDate(request.getStartDate())
+                .estimatedEndDate(sessions.isEmpty() ? request.getStartDate() : sessions.getLast().getDate())
+                .skippedHolidaysCount(0).sessions(sessions).correlationId(UUID.randomUUID().toString()).build();
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public BulkSaveSessionsResponseDTO saveBulkSessions(Long classId, BulkSaveSessionsRequestDTO request, String idempotencyKey) {
-        assignmentGuard.lockForWrite();
-        // 1. Chống gửi lặp bằng Idempotency Key
-        if (idempotencyKey != null && !idempotencyKey.trim().isEmpty()) {
-            BulkSaveSessionsResponseDTO cached = idempotencyStore.get(idempotencyKey.trim());
-            if (cached != null) {
-                log.info("Idempotency hit for key: {}. Returning cached result.", idempotencyKey);
-                return cached;
-            }
+    @PreAuthorize("hasAuthority('SESSION_READ') and hasAuthority('SESSION_CREATE')")
+    public BulkSaveSessionsResponseDTO saveBulkSessions(Long classId, BulkSaveSessionsRequestDTO request, String key) {
+        if (classId == null || classId <= 0 || request == null || request.getSessions() == null || request.getSessions().isEmpty())
+            throw new BadRequestException("Select a class and provide at least one session.");
+        if (key != null && key.length() > 128) throw new BadRequestException("Idempotency-Key must not exceed 128 characters.");
+        // The same lock is acquired by SessionService before validation/writes. Also serialize cache retries.
+        validationEngine.lockForWrite();
+        idempotencyStore.entrySet().removeIf(entry -> entry.getValue().expiresAt().isBefore(Instant.now()));
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        var requestKey = key == null || key.isBlank() ? null
+                : new RequestKey(auth == null ? "anonymous" : auth.getName(), classId, key.trim());
+        String payload = payload(request);
+        var previous = requestKey == null ? null : idempotencyStore.get(requestKey);
+        if (previous != null) {
+            if (!previous.payload().equals(payload)) throw new ConflictException("This request key was already used for different session data.");
+            return previous.response();
         }
-
-        if (request == null || request.getSessions() == null || request.getSessions().isEmpty()) {
-            throw new IllegalArgumentException("Danh sách buổi học lưu không được để rỗng.");
-        }
-
-        // 2. Chuyển đổi danh sách PreviewSessionItemDTO thành entity Session
-        List<Session> sessionsToSave = new ArrayList<>();
-        for (PreviewSessionItemDTO item : request.getSessions()) {
-            if (item.getStartTime() == null || item.getEndTime() == null || !item.getEndTime().isAfter(item.getStartTime())) {
-                throw new IllegalArgumentException(String.format("Buổi %s có khoảng thời gian không hợp lệ (giờ kết thúc phải sau giờ bắt đầu).", item.getTempId()));
-            }
-
-            Session session = Session.builder()
-                    .classId(classId)
-                    .topicId(item.getTopicId() != null ? item.getTopicId() : 1L)
-                    .trainerId(item.getTrainerId() != null ? item.getTrainerId() : 1L)
-                    .teachingAssignmentId(item.getTeachingAssignmentId())
-                    .roomId(item.getRoomId())
-                    .title((item.getTitle() != null && !item.getTitle().isBlank())
-                            ? item.getTitle()
-                            : item.getTopicName() + " - Buổi " + item.getSessionNumber())
-                    .startTime(item.getStartTime())
-                    .endTime(item.getEndTime())
-                    .location((item.getRoomName() != null && !item.getRoomName().isBlank())
-                            ? item.getRoomName()
-                            : (item.getRoomId() != null ? "Phòng " + item.getRoomId() : "Trực tuyến"))
-                    .status(Session.SessionStatus.SCHEDULED)
-                    .build();
-            session.setIsActive(true);
-
-            sessionsToSave.add(session);
-        }
-
-        // 3. Batch Insert nguyên tử (All-or-Nothing qua @Transactional)
-        for (Session session : sessionsToSave) {
-            assignmentGuard.requireCompatible(new com.example.starter_project_2025.system.schedule.ScheduleCandidate(
-                    null, session.getClassId(), session.getTopicId(), session.getTrainerId(), session.getTeachingAssignmentId(),
-                    session.getRoomId(), session.getLocation(), session.getMeetingUrl(), session.getTitle(), session.getStartTime(), session.getEndTime()));
-        }
-        List<Session> saved = sessionRepository.saveAll(sessionsToSave);
-
-        BulkSaveSessionsResponseDTO response = BulkSaveSessionsResponseDTO.builder()
-                .classId(classId)
-                .createdCount(saved.size())
-                .status("SUCCESS")
+        var requests = request.getSessions().stream().map(item -> toSession(classId, item)).toList();
+        // Recheck the complete, possibly edited preview against the DB and itself, in the write transaction.
+        var saved = sessionService.createValidatedBatch(requests);
+        var response = BulkSaveSessionsResponseDTO.builder().classId(classId).createdCount(saved.size()).status("SUCCESS")
                 .message(String.format("Đã lưu thành công %d buổi học cho lớp vào hệ thống.", saved.size()))
-                .createdAt(LocalDateTime.now())
-                .correlationId(UUID.randomUUID().toString())
-                .build();
-
-        if (idempotencyKey != null && !idempotencyKey.trim().isEmpty()) {
-            idempotencyStore.put(idempotencyKey.trim(), response);
+                .createdAt(LocalDateTime.now()).correlationId(UUID.randomUUID().toString()).build();
+        if (requestKey != null) {
+            var cached = new SavedRequest(payload, response, Instant.now().plus(Duration.ofMinutes(30)));
+            // Never return a cached success for a transaction that failed at commit.
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override public void afterCommit() { idempotencyStore.put(requestKey, cached); }
+                });
+            }
         }
-
         return response;
+    }
+
+    private String payload(BulkSaveSessionsRequestDTO request) {
+        try { return objectMapper.writeValueAsString(request); }
+        catch (JsonProcessingException ex) { throw new BadRequestException("Session data could not be read."); }
+    }
+
+    private SessionDTO toSession(Long classId, PreviewSessionItemDTO item) {
+        if (item == null || item.getTopicId() == null || item.getTrainerId() == null || item.getTeachingAssignmentId() == null)
+            throw new BadRequestException("Every session must reference a subject, trainer and teaching assignment.");
+        var dto = SessionDTO.builder().classId(classId).topicId(item.getTopicId()).trainerId(item.getTrainerId())
+                .teachingAssignmentId(item.getTeachingAssignmentId()).roomId(item.getRoomId()).location(item.getRoomName())
+                .meetingUrl(item.getMeetingUrl()).title(item.getTitle() == null || item.getTitle().isBlank()
+                        ? item.getTopicName() + " - Buổi " + item.getSessionNumber() : item.getTitle())
+                .startTime(item.getStartTime()).endTime(item.getEndTime()).build();
+        dto.setIsActive(true);
+        return dto;
+    }
+
+    private ScheduleCandidate candidate(SessionDTO dto) {
+        return new ScheduleCandidate(null, dto.getClassId(), dto.getTopicId(), dto.getTrainerId(), dto.getTeachingAssignmentId(),
+                dto.getRoomId(), dto.getLocation(), dto.getMeetingUrl(), dto.getTitle(), dto.getStartTime(), dto.getEndTime());
     }
 }

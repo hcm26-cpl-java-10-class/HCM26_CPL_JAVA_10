@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { getBulkSubmission, type BulkSubmission } from "./submission-key";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
@@ -65,14 +66,6 @@ const SLOT_PRESETS = [
   { id: "CUSTOM", label: "Tùy chỉnh giờ", start: "08:30:00", hours: 3.5 },
 ];
 
-const PRESET_ROOMS = [
-  { id: 101, name: "Phòng A101 (Tòa nhà A)" },
-  { id: 102, name: "Phòng A102 (Tòa nhà A)" },
-  { id: 201, name: "Phòng Lab 1 (Thực hành)" },
-  { id: 202, name: "Phòng Lab 2 (Chuyên sâu)" },
-  { id: 999, name: "Học trực tuyến (Google Meet / Zoom)" },
-];
-
 // Lấy thứ Hai kế tiếp làm ngày mặc định
 const getNextMonday = (): string => {
   const d = new Date();
@@ -89,7 +82,7 @@ export default function BulkScheduleGenerationPage() {
 
   // State Lớp học
   const [classes, setClasses] = useState<SharedClass[]>([]);
-  const [selectedClassId, setSelectedClassId] = useState<number>(queryClassId ? Number(queryClassId) : 1);
+  const [selectedClassId, setSelectedClassId] = useState<number>(queryClassId ? Number(queryClassId) : 0);
   const [context, setContext] = useState<ScheduleGenerationContextResponse | null>(null);
   const [isLoadingContext, setIsLoadingContext] = useState<boolean>(false);
 
@@ -99,7 +92,9 @@ export default function BulkScheduleGenerationPage() {
   const [selectedSlotPreset, setSelectedSlotPreset] = useState<string>("MORNING");
   const [customStartTime, setCustomStartTime] = useState<string>("08:00:00");
   const [customHours, setCustomHours] = useState<number>(4);
-  const [selectedRoomId, setSelectedRoomId] = useState<number>(101);
+  const [rooms, setRooms] = useState<Array<{ id: number; name: string }>>([]);
+  const [selectedRoomId, setSelectedRoomId] = useState<number>(0);
+  const submission = useRef<BulkSubmission | null>(null);
   const [skipHolidays, setSkipHolidays] = useState<boolean>(true);
   const [checkConflicts, setCheckConflicts] = useState<boolean>(true);
 
@@ -126,31 +121,43 @@ export default function BulkScheduleGenerationPage() {
         }
       })
       .catch(() => {
-        // Fallback classes nếu external API chưa có dữ liệu
-        setClasses([
-          { id: 1, code: "CLASS-01", name: "Lớp CLASS-01 (Kỳ 1 Chuyên sâu SE)" },
-          { id: 2, code: "CLASS-02", name: "Lớp CLASS-02 (Java 10 OJT Web)" },
-          { id: 3, code: "SE-01", name: "Lớp SE-01 (Kỹ thuật phần mềm)" },
-        ]);
+        setClasses([]);
+        setSelectedClassId(0);
+        toast.error("Không tải được danh sách lớp. Kiểm tra kết nối rồi tải lại trang.");
       });
+    classSetupApi.getRooms().then((data) => {
+      setRooms(data);
+      setSelectedRoomId((current) => data.some((room) => room.id === current) ? current : data[0]?.id ?? 0);
+    }).catch(() => {
+      setRooms([]);
+      setSelectedRoomId(0);
+      toast.error("Không tải được danh sách phòng. Chưa thể cấu hình lịch học.");
+    });
   }, [queryClassId]);
 
   // Tải ngữ cảnh môn học của lớp đã chọn
   useEffect(() => {
     if (!selectedClassId) return;
+    let active = true;
+    setContext(null);
+    setPreviewResult(null);
+    setEditableSessions([]);
     setIsLoadingContext(true);
     scheduleGenerationApi
       .getContext(selectedClassId)
       .then((data) => {
+        if (!active) return;
         setContext(data);
         setPreviewResult(null);
         setEditableSessions([]);
       })
       .catch((err) => {
-        toast.error("Không thể tải kế hoạch môn học của lớp");
+        if (!active) return;
+        toast.error(err?.response?.data?.message || "Không thể tải kế hoạch môn học của lớp");
         console.error(err);
       })
-      .finally(() => setIsLoadingContext(false));
+      .finally(() => { if (active) setIsLoadingContext(false); });
+    return () => { active = false; };
   }, [selectedClassId]);
 
   // Toggle thứ trong tuần
@@ -191,7 +198,11 @@ export default function BulkScheduleGenerationPage() {
     const startTime = selectedSlotPreset === "CUSTOM" ? customStartTime : (currentPreset?.start || "08:00:00");
     const hours = selectedSlotPreset === "CUSTOM" ? customHours : (currentPreset?.hours || 4);
 
-    const roomObj = PRESET_ROOMS.find((r) => r.id === selectedRoomId);
+    const roomObj = rooms.find((r) => r.id === selectedRoomId);
+    if (!roomObj) {
+      toast.error("Vui lòng chọn phòng từ danh sách phòng của hệ thống.");
+      return;
+    }
 
     const requestPayload: BulkPreviewRequestDTO = {
       startDate,
@@ -222,9 +233,9 @@ export default function BulkScheduleGenerationPage() {
 
   // Chỉnh sửa từng dòng trên bảng preview
   const handleUpdateSession = (index: number, field: keyof PreviewSessionItemDTO, value: any) => {
-    const updated = [...editableSessions];
-    updated[index] = { ...updated[index], [field]: value };
-    setEditableSessions(updated);
+    setEditableSessions((current) => current.map((session, row) => row === index
+      ? { ...session, [field]: value, status: "PENDING", conflictDetails: undefined }
+      : session));
   };
 
   // Xóa bớt dòng trong preview
@@ -243,7 +254,8 @@ export default function BulkScheduleGenerationPage() {
 
     setIsSaving(true);
     // Sinh Idempotency Key chống gửi lặp / click đúp
-    const idempotencyKey = "key-" + Date.now() + "-" + Math.random().toString(36).substring(2, 9);
+    submission.current = getBulkSubmission(submission.current, selectedClassId, editableSessions);
+    const idempotencyKey = submission.current.key;
 
     try {
       const response = await scheduleGenerationApi.save(
@@ -300,7 +312,7 @@ export default function BulkScheduleGenerationPage() {
                 <CardTitle className="text-base font-semibold">1. Lớp học & Kế hoạch môn học của lớp</CardTitle>
               </div>
               <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
-                Lịch lớp: ACTIVE
+                Tạo lịch theo lớp
               </Badge>
             </div>
           </CardHeader>
@@ -438,7 +450,7 @@ export default function BulkScheduleGenerationPage() {
                   onChange={(e) => setSelectedRoomId(Number(e.target.value))}
                   className="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none"
                 >
-                  {PRESET_ROOMS.map((r) => (
+                  {rooms.map((r) => (
                     <option key={r.id} value={r.id}>
                       {r.name}
                     </option>
@@ -658,22 +670,34 @@ export default function BulkScheduleGenerationPage() {
                           <TableCell>
                             <Input
                               value={session.trainerName || ""}
-                              onChange={(e) => handleUpdateSession(idx, "trainerName", e.target.value)}
+                              readOnly
+                              title="Giảng viên lấy từ phân công giảng dạy của lớp."
                               className="h-8 text-xs"
                             />
                           </TableCell>
                           <TableCell>
-                            <Input
-                              value={session.roomName || ""}
-                              onChange={(e) => handleUpdateSession(idx, "roomName", e.target.value)}
-                              className="h-8 text-xs"
-                            />
+                            <select
+                              value={session.roomId ?? ""}
+                              onChange={(e) => {
+                                const room = rooms.find((item) => item.id === Number(e.target.value));
+                                setEditableSessions((current) => current.map((item, row) => row === idx
+                                  ? { ...item, roomId: room?.id, roomName: room?.name, status: "PENDING", conflictDetails: undefined }
+                                  : item));
+                              }}
+                              className="h-8 w-full rounded-md border bg-background px-2 text-xs"
+                              aria-label={`Phòng học buổi ${idx + 1}`}
+                            >
+                              <option value="">Chọn phòng</option>
+                              {rooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
+                            </select>
                           </TableCell>
                           <TableCell className="text-center">
                             {isConflict ? (
                               <Badge variant="destructive" className="text-[10px] whitespace-nowrap">
                                 Trùng lịch
                               </Badge>
+                            ) : session.status === "PENDING" ? (
+                              <Badge variant="outline" className="text-[10px] whitespace-nowrap">Kiểm tra khi lưu</Badge>
                             ) : (
                               <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
                                 Hợp lệ

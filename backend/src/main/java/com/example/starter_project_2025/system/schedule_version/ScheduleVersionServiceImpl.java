@@ -297,6 +297,12 @@ public class ScheduleVersionServiceImpl
     @Override
     @Transactional
     public ScheduleVersionDTO updateStatus(String classId, ScheduleVersionStatus status) {
+        if (status != ScheduleVersionStatus.ACTIVE && status != ScheduleVersionStatus.INACTIVE) {
+            throw new BadRequestException("Class schedule status must be ACTIVE or INACTIVE.");
+        }
+        if (classId == null || classId.isBlank()) {
+            throw new BadRequestException("Class ID is required.");
+        }
         ScheduleVersion version = scheduleVersionRepository.findByClassIdAndStatus(classId, ScheduleVersionStatus.ACTIVE)
                 .or(() -> scheduleVersionRepository.findByClassIdAndStatus(classId, ScheduleVersionStatus.INACTIVE))
                 .orElseGet(() -> ScheduleVersion.builder()

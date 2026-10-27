@@ -35,6 +35,10 @@ public class ScheduleGeneratorEngine {
             BulkPreviewRequestDTO request,
             Set<LocalDate> customHolidays
     ) {
+        if (request == null || request.getStartDate() == null || request.getDaysOfWeek() == null
+                || request.getDaysOfWeek().isEmpty() || request.getDaysOfWeek().stream().anyMatch(Objects::isNull)) {
+            throw new com.example.starter_project_2025.exception.BadRequestException("Select a start date and at least one teaching day.");
+        }
         if (topics == null || topics.isEmpty()) {
             return Collections.emptyList();
         }
@@ -43,6 +47,11 @@ public class ScheduleGeneratorEngine {
         LocalDate currentDate = request.getStartDate();
         Set<DayOfWeek> daysOfWeek = request.getDaysOfWeek();
         BulkPreviewRequestDTO.SlotTimeDTO slot = request.getSlotTime();
+        if (slot != null && slot.getHoursPerSession() != null
+                && (!Double.isFinite(slot.getHoursPerSession()) || slot.getHoursPerSession() < 1.0 / 60.0
+                    || slot.getHoursPerSession() > 24)) {
+            throw new com.example.starter_project_2025.exception.BadRequestException("A session must last between one minute and 24 hours.");
+        }
         double hoursPerSession = (slot != null && slot.getHoursPerSession() != null && slot.getHoursPerSession() > 0)
                 ? slot.getHoursPerSession()
                 : 4.0;
@@ -101,6 +110,9 @@ public class ScheduleGeneratorEngine {
             }
 
             while (remainingHours > 0) {
+                if (result.size() >= 200) {
+                    throw new com.example.starter_project_2025.exception.BadRequestException("Generate at most 200 sessions at a time. Reduce the schedule range.");
+                }
                 // Tìm ngày học hợp lệ kế tiếp: thuộc daysOfWeek và không phải ngày nghỉ
                 while (!isValidTeachingDay(currentDate, daysOfWeek, request.getSkipHolidays(), customHolidays)) {
                     currentDate = currentDate.plusDays(1);
