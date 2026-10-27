@@ -18,8 +18,6 @@ import SyllabusDetailPage from "@/pages/management/demo/syllabus/detail";
 import StudentSyllabusPage from "@/pages/student/StudentSyllabusPage";
 import CourseReportPage from "@/pages/management/demo/report";
 
-import CertificateDetailPage from "@/pages/management/demo/certificate/pages/CertificateDetailPage";
-import VerifyCertificatePage from "@/pages/student/VerifyCertificatePage";
 
 export interface RouteConfig {
   path: string;
@@ -58,17 +56,6 @@ export const routes: RouteConfig[] = [
     path: "/syllabuses/:id/preview",
     component: StudentSyllabusPage,
     requiredPermission: "SYLLABUS_READ",
-    isModuleDriven: false,
-  },
-  {
-    path: "/my-certificates/:verificationToken",
-    component: CertificateDetailPage,
-    isModuleDriven: false,
-  },
-  {
-    path: "/verify-certificate/:verificationToken",
-    component: VerifyCertificatePage,
-    isPublic: true,
     isModuleDriven: false,
   },
 

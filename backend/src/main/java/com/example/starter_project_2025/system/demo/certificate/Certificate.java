@@ -14,8 +14,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
 
-import java.time.LocalDate;
-import java.util.UUID;
+import java.time.LocalDateTime;
 
 @Entity
 @Getter
@@ -23,15 +22,7 @@ import java.util.UUID;
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(
-        name = "certificates",
-        uniqueConstraints = {
-                @UniqueConstraint(
-                        name = "uk_certificate_user_course",
-                        columnNames = {"user_id", "course_id"}
-                )
-        }
-)
+@Table(name = "certificates")
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ImportEntity("certificate")
 @ExportEntity(fileName = "certificates", sheetName = "Certificates")
@@ -45,6 +36,11 @@ import java.util.UUID;
         permission = "CERTIFICATE_READ"
 )
 public class Certificate extends BaseEntity {
+    @Column(nullable = false, unique = true, updatable = false)
+    @ImportField(name = "Certificate Number", required = true)
+    @ExportField(name = "Certificate Number")
+    String certificateNumber;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     @ImportField(name = "Student", required = true, lookupEntity = User.class)
@@ -56,22 +52,5 @@ public class Certificate extends BaseEntity {
     @ImportField(name = "Course", required = true, lookupEntity = Course.class, lookupField = "name")
     @ExportField(name = "Course")
     Course course;
-
-    @Column(nullable = false, unique = true, updatable = false)
-    private UUID verificationToken;
-
-    @Column(nullable = false, updatable = false)
-    private LocalDate issuedAt;
-
-    @PrePersist
-    private void prepareCertificate() {
-        if (verificationToken == null) {
-            verificationToken = UUID.randomUUID();
-        }
-
-        if (issuedAt == null) {
-            issuedAt = LocalDate.now();
-        }
-    }
 
 }

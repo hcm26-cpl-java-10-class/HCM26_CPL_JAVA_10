@@ -4,17 +4,10 @@ export interface CertificateDTO extends BaseDTO {
     courseId?: number;
     courseName?: string;
     userId?: number;
-    userFullName?: string;
-    verificationToken?: string;
+    userFirstName?: string;
+    userLastName?: string;
+    certificateNumber?: string;
     issuedAt?: string;
-}
-
-export interface CertificateVerificationDTO {
-    verificationToken?: string;
-    courseName?: string;
-    studentName?: string;
-    issuedAt?: string;
-    valid?: boolean;
 }
 
 export interface CertificateFilter extends BaseFilter {

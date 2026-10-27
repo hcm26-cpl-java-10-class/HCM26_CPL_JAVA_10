@@ -17,9 +17,7 @@ public interface CertificateMapper extends BaseCrudMapper<Certificate, Certifica
     @Mapping(source = "course.id", target = "courseId")
     @Mapping(source = "course.name", target = "courseName")
     @Mapping(source = "user.id", target = "userId")
-    @Mapping(
-            target = "userFullName",
-            expression = "java(entity.getUser().getFullName())"
-    )
+    @Mapping(source = "user.firstName", target = "userFirstName")
+    @Mapping(source = "user.lastName", target = "userLastName")
     CertificateDTO toResponse(Certificate entity);
 }

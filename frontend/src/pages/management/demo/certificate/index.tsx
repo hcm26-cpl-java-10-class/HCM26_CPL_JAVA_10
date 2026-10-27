@@ -52,19 +52,34 @@ const certificateSchema: EntitySchema = {
   idField: "id",
   fields: [
     {
-      name: "userFullName",
-      label: "Student",
+      name: "certificateNumber",
+      label: "Certificate Number",
+      hint: "Unique number, cannot be changed after creation, e.g. CERT-2026-0001",
+      type: "text",
+      sortable: true,
+      bold: true,
+      validation: {
+        // CertificateDTO: @NotNull(OnCreate) — DB unique, không đổi được sau khi tạo
+        required: true,
+        requiredMessage: "Certificate Number is required",
+        maxLength: 255,
+      },
+    },
+    // Hiển thị tên học viên trên bảng list AutoCrudPage
+    {
+      name: "userLastName",
+      label: "Student Last Name",
       type: "text",
       sortable: true,
       editable: false,
     },
     {
-      name: "issuedAt",
-      label: "Issue Date",
-      type: "date",
+      name: "userFirstName",
+      label: "Student First Name",
+      type: "text",
       sortable: true,
       editable: false,
-    },   
+    },
     // Form Select User khi tạo/sửa
     {
       name: "userId",
@@ -222,95 +237,55 @@ function StudentCertificateList() {
               {certificates.map((item: any) => (
                 <article
                   key={item.id}
-                  className="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-300 hover:shadow-xl dark:border-slate-800 dark:bg-card"
+                  className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-border/80 bg-card p-6 shadow-sm transition-all hover:border-amber-500/50 hover:shadow-md"
                 >
-                  {/* Certificate Preview */}
-                  <div className="relative overflow-hidden bg-gradient-to-br from-slate-50 via-white to-blue-50 p-5 dark:from-slate-900 dark:via-slate-900 dark:to-blue-950/40">
-                    {/* Decorative elements */}
-                    <div className="pointer-events-none absolute -right-12 -top-12 size-40 rounded-full border border-blue-200/70 dark:border-blue-800/50" />
-                    <div className="pointer-events-none absolute -right-6 -top-6 size-28 rounded-full border border-blue-200/70 dark:border-blue-800/50" />
+                  <div className="space-y-4">
+                    {/* Header badge & Code */}
+                    <div className="flex items-center justify-between gap-2 border-b pb-3">
+                      <span className="flex items-center gap-1 font-mono text-xs font-semibold text-muted-foreground">
+                        <Hash className="size-3.5 text-amber-500" />
+                        {item.certificateNumber}
+                      </span>
+                      <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                        VERIFIED
+                      </Badge>
+                    </div>
 
-                    <div className="relative rounded-xl border border-blue-200/80 bg-white/90 p-5 shadow-sm dark:border-blue-900 dark:bg-slate-950/80">
-                      {/* Brand and badge */}
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-indigo-700 text-sm font-bold text-white">
-                            RB
-                          </div>
+                    {/* Course Title */}
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                        Course Certification
+                      </p>
+                      <h3 className="line-clamp-2 text-lg font-bold group-hover:text-amber-600 transition-colors">
+                        {item.courseName || `Course #${item.courseId}`}
+                      </h3>
+                    </div>
 
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-bold tracking-tight text-slate-900 dark:text-white">
-                              RBAC System
-                            </p>
-                            <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                              Online Learning Platform
-                            </p>
-                          </div>
-                        </div>
-
-                        <Badge
-                          variant="outline"
-                          className="shrink-0 gap-1 border-emerald-200 bg-emerald-50 text-[10px] font-semibold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-400"
-                        >
-                          <CheckCircle className="size-3" />
-                          Completed
-                        </Badge>
-                      </div>
-
-                      {/* Certificate title */}
-                      <div className="mt-7 space-y-2">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-blue-700 dark:text-blue-400">
-                          Certificate of Completion
-                        </p>
-
-                        <h3 className="line-clamp-2 min-h-14 text-xl font-bold leading-7 tracking-tight text-slate-900 transition-colors group-hover:text-blue-700 dark:text-white dark:group-hover:text-blue-400">
-                          {item.courseName || `Course #${item.courseId}`}
-                        </h3>
-
-                        <div className="h-1 w-12 rounded-full bg-blue-600" />
-                      </div>
-
-                      {/* Recipient */}
-                      <div className="mt-5">
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          Awarded to
-                        </p>
-                        <p className="mt-1 line-clamp-2 break-words text-sm font-semibold text-slate-800 dark:text-slate-100">
-                          {item.userFullName || getUserFullName(item)}
-                        </p>
-                      </div>
-
-                      {/* Issue date */}
-                      <div className="mt-5 flex items-center gap-2 border-t border-slate-200 pt-4 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
-                        <Calendar className="size-4 shrink-0 text-blue-600 dark:text-blue-400" />
+                    {/* Recipient and Issue Date */}
+                    <div className="space-y-2 rounded-xl bg-muted/50 p-3 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <User className="size-3.5 text-slate-500" />
                         <span>
-                          Issued on: {formatDate(item.issuedAt || item.createdAt)}
+                          Issued to: <strong className="text-foreground">{getUserFullName(item)}</strong>
                         </span>
                       </div>
-
-                      {/* Bottom decoration */}
-                      <div className="mt-4 flex items-center justify-between">
-                        <span className="text-[10px] font-medium uppercase tracking-widest text-slate-400">
-                          Academic Achievement
-                        </span>
-                        <Award className="size-6 text-blue-200 dark:text-blue-800" />
+                      <div className="flex items-center gap-2">
+                        <Calendar className="size-3.5 text-slate-500" />
+                        <span>Issued on: {formatDate(item.createdAt)}</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Card footer */}
-                  <div className="p-5 pt-3">
+                  {/* Actions */}
+                  <div className="pt-6">
                     <Button
-                      className="mt-5 w-full gap-2 bg-blue-700 text-white transition-colors hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-500"
+                      variant="outline"
+                      className="w-full gap-2 border-amber-500/30 hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-400"
                       onClick={() => {
-                        if (item.verificationToken) {
-                          window.location.href =
-                            `/my-certificates/${encodeURIComponent(item.verificationToken)}`;
-                        }
+                        window.open(`/api/v1/certificates/${item.id}/download`, "_blank");
                       }}
                     >
-                      <Award className="size-4" />
-                      View Certificate
+                      <Download className="size-4" /> Download Certificate
                     </Button>
                   </div>
                 </article>
