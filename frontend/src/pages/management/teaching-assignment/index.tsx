@@ -2,8 +2,9 @@ import { useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import axios from "axios";
-import { AlertCircle, ChevronLeft, ChevronRight, LoaderCircle, Plus, RefreshCw, Search, Users, X } from "lucide-react";
+import { AlertCircle, ChevronLeft, ChevronRight, Eye, LoaderCircle, Plus, RefreshCw, Search, Users, X } from "lucide-react";
 import { CreateAssignmentDialog } from "./components/CreateAssignmentDialog";
+import { AssignmentDetailDialog } from "./components/AssignmentDetailDialog";
 import { classSetupApi, type AssignmentRole, type AssignmentSearchParams } from "@/api/features/class-setup.api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -54,6 +55,7 @@ export default function TeachingAssignmentPage() {
   const canCreate = hasPermission("ASSIGNMENT_CREATE");
   const [creating, setCreating] = useState(false);
   const [url, setUrl] = useSearchParams();
+  const detailId = positiveId(url.get("assignmentId"));
   const pageValue = Number(url.get("page") ?? 0);
   const page = Number.isInteger(pageValue) && pageValue >= 0 && pageValue <= 100000 ? pageValue : 0;
   const sizeValue = Number(url.get("size") ?? 20);
@@ -90,6 +92,13 @@ export default function TeachingAssignmentPage() {
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     change("search", String(new FormData(event.currentTarget).get("search") ?? "").trim());
+  }
+  function showDetails(id?: number) {
+    setUrl((current) => {
+      const next = new URLSearchParams(current);
+      if (id) next.set("assignmentId", String(id)); else next.delete("assignmentId");
+      return next;
+    });
   }
   const data = assignments.data;
   const total = data?.totalElements ?? 0;
@@ -150,13 +159,14 @@ export default function TeachingAssignmentPage() {
               <p className="font-medium">{total > 0 ? "This page has no records" : filtered ? "No matching assignments" : "No teaching assignments yet"}</p>
               <p className="text-sm text-muted-foreground">{total > 0 ? "Return to the first page to view the current list." : "Try changing the filters or refreshing the list."}</p>
               {total > 0 && <Button variant="outline" onClick={() => change("page", "0")}>Go to first page</Button>}
-            </div> : <Table><TableHeader><TableRow><TableHead>Class</TableHead><TableHead>Subject</TableHead><TableHead>Trainer</TableHead><TableHead>Role</TableHead><TableHead>Effective from</TableHead><TableHead>Effective to</TableHead></TableRow></TableHeader>
+            </div> : <Table><TableHeader><TableRow><TableHead>Class</TableHead><TableHead>Subject</TableHead><TableHead>Trainer</TableHead><TableHead>Role</TableHead><TableHead>Effective from</TableHead><TableHead>Effective to</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
               <TableBody>{data.content.map((a) => <TableRow key={a.id}>
                 <TableCell><div className="font-medium">{a.classCode || `Class #${a.classId}`}</div><div className="text-xs text-muted-foreground">{options.data?.classes.find((c) => c.id === a.classId)?.name}</div></TableCell>
                 <TableCell><div className="font-medium">{a.subjectName}</div><div className="text-xs text-muted-foreground">{a.subjectCode}</div></TableCell>
                 <TableCell>{a.trainerName || `Trainer #${a.trainerId}`}</TableCell>
                 <TableCell><Badge variant={a.role === "MAIN" ? "default" : "outline"}>{a.role === "MAIN" ? "Main" : "Assistant"}</Badge></TableCell>
                 <TableCell className="whitespace-nowrap">{displayDate(a.effectiveFrom)}</TableCell><TableCell className="whitespace-nowrap">{a.effectiveTo ? displayDate(a.effectiveTo) : "No end date"}</TableCell>
+                <TableCell><Button variant="ghost" size="sm" aria-label={`View assignment details for ${a.subjectCode} in ${a.classCode || a.classId}`} onClick={() => showDetails(a.id)}><Eye className="size-4" />Details</Button></TableCell>
               </TableRow>)}</TableBody></Table>}
           {!assignments.isPending && !assignments.isError && data && <div className="flex flex-wrap items-center justify-between gap-4 border-t pt-4">
             <p className="text-sm text-muted-foreground" role="status">{data.content.length ? `${page * size + 1}–${page * size + data.content.length}` : "0"} / {total} assignments</p>
@@ -171,5 +181,6 @@ export default function TeachingAssignmentPage() {
     </div>
     {creating && canCreate && <CreateAssignmentDialog initialClassId={params.classId}
       onClose={() => setCreating(false)} onCreated={() => { setCreating(false); }} />}
+    {detailId && canRead && <AssignmentDetailDialog key={detailId} assignmentId={detailId} onClose={() => showDetails()} />}
   </MainLayout>;
 }

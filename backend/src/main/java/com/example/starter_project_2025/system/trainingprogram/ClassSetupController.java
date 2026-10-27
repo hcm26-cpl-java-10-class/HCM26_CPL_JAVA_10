@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import com.example.starter_project_2025.exception.error.ValidationErrorResponse;
+import com.example.starter_project_2025.system.demo.session.Session;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -89,6 +90,16 @@ public class ClassSetupController {
     @PreAuthorize("hasAuthority('ASSIGNMENT_READ')")
     public ResponseEntity<TeachingAssignmentResponse> getAssignment(@PathVariable Long id) {
         return ResponseEntity.ok(service.getAssignment(id));
+    }
+
+    @GetMapping("/teaching-assignments/{id}/sessions")
+    @PreAuthorize("hasAuthority('ASSIGNMENT_READ')")
+    public ResponseEntity<Page<TeachingAssignmentSessionResponse>> getAssignmentSessions(
+            @PathVariable Long id,
+            @RequestParam(required = false) String status,
+            @PageableDefault(size = 20, sort = "startTime") Pageable pageable) {
+        return ResponseEntity.ok(service.getAssignmentSessions(id,
+                status == null ? null : Session.SessionStatus.valueOf(status), pageable));
     }
 
     @GetMapping("/teaching-assignments/create-options")

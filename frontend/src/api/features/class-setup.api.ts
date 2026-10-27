@@ -41,6 +41,34 @@ export interface TeachingAssignment {
   role: AssignmentRole;
   effectiveFrom: string;
   effectiveTo: string | null;
+  className?: string | null;
+  subjectVersion?: string;
+  trainerEmail?: string | null;
+  programId?: number;
+  programCode?: string;
+  programName?: string;
+  programVersion?: string;
+}
+
+export type AssignmentSessionStatus = "SCHEDULED" | "COMPLETED" | "CANCELLED";
+
+export interface AssignmentSession {
+  id: number;
+  title: string;
+  startTime: string;
+  endTime: string;
+  location: string | null;
+  roomId: number | null;
+  meetingUrl: string | null;
+  status: AssignmentSessionStatus;
+  active: boolean;
+}
+
+export interface AssignmentSessionParams {
+  page?: number;
+  size?: number;
+  sort?: string;
+  status?: AssignmentSessionStatus;
 }
 
 export interface ClassProgramSubjects {
@@ -128,8 +156,10 @@ export const classSetupApi = {
     (await axiosInstance.get<AssignmentOptions>("/teaching-assignments/options", { signal })).data,
   searchAssignments: async (params: AssignmentSearchParams, signal?: AbortSignal) =>
     (await axiosInstance.get<AssignmentPage<TeachingAssignment>>("/teaching-assignments", { params, signal })).data,
-  getAssignment: async (id: number) =>
-    (await axiosInstance.get<TeachingAssignment>(`/teaching-assignments/${id}`)).data,
+  getAssignment: async (id: number, signal?: AbortSignal) =>
+    (await axiosInstance.get<TeachingAssignment>(`/teaching-assignments/${id}`, { signal })).data,
+  getAssignmentSessions: async (id: number, params: AssignmentSessionParams, signal?: AbortSignal) =>
+    (await axiosInstance.get<AssignmentPage<AssignmentSession>>(`/teaching-assignments/${id}/sessions`, { params, signal })).data,
   createAssignment: async (request: TeachingAssignmentRequest) =>
     (await axiosInstance.post<TeachingAssignment>("/teaching-assignments", request)).data,
   updateAssignment: async (id: number, request: TeachingAssignmentRequest) =>

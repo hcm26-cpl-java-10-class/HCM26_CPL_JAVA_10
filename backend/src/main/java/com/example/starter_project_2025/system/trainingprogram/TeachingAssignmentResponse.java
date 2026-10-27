@@ -14,5 +14,12 @@ public record TeachingAssignmentResponse(
         String trainerName,
         AssignmentRole role,
         LocalDate effectiveFrom,
-        LocalDate effectiveTo
+        LocalDate effectiveTo,
+        String className,
+        String subjectVersion,
+        String trainerEmail,
+        Long programId,
+        String programCode,
+        String programName,
+        String programVersion
 ) {}

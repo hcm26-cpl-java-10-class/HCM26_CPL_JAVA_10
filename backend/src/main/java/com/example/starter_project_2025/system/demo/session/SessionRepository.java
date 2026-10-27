@@ -5,12 +5,17 @@ import com.example.starter_project_2025.system.demo.session.Session.SessionStatu
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
 public interface SessionRepository extends BaseCrudRepository<Session, Long> {
+    @Query("select s from Session s where s.teachingAssignmentId = :assignmentId and (:status is null or s.status = :status)")
+    Page<Session> findAssignmentSessions(@Param("assignmentId") Long assignmentId,
+            @Param("status") SessionStatus status, Pageable pageable);
 
     List<Session> findByClassId(Long classId);
 

@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "test:teaching-assignment": "node --test tests/teaching-assignment-create.test.mjs",
+    "test:teaching-assignment": "node --test tests/teaching-assignment-*.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -9,6 +9,8 @@ import com.example.starter_project_2025.system.external_api.dto.ExternalTrainerD
 import com.example.starter_project_2025.system.external_api.exception.ExternalApiException;
 import com.example.starter_project_2025.system.subject.Subject;
 import com.example.starter_project_2025.system.subject.SubjectStatus;
+import com.example.starter_project_2025.system.demo.session.Session;
+import com.example.starter_project_2025.system.demo.session.SessionRepository;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -41,6 +43,7 @@ public class ClassSetupServiceImpl implements ClassSetupService {
     private final TrainingProgramRepository trainingProgramRepository;
     private final ProgramSubjectRepository programSubjectRepository;
     private final ExternalApiService externalApiService;
+    private final SessionRepository sessionRepository;
 
     @Override
     public ClassProgramSubjectsResponse assignProgram(Long classId, Long programId) {
@@ -212,6 +215,25 @@ public class ClassSetupServiceImpl implements ClassSetupService {
         TeachingAssignment assignment = findAssignment(id);
         return toResponse(assignment, findClassOrNull(assignment.getClassId()),
                 fetchTrainerLookup().get(assignment.getTrainerId()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<TeachingAssignmentSessionResponse> getAssignmentSessions(Long id, Session.SessionStatus status, Pageable pageable) {
+        // This endpoint works even when the external profile service is unavailable.
+        findAssignment(id);
+        if (pageable.getPageSize() > 100 || pageable.getPageNumber() > 100000) {
+            throw new IllegalArgumentException("Page size must be at most 100 and page at most 100000.");
+        }
+        Set<String> sortable = Set.of("id", "startTime", "endTime", "status");
+        for (Sort.Order order : pageable.getSort()) {
+            if (!sortable.contains(order.getProperty())) throw new IllegalArgumentException("Unsupported session sort field.");
+        }
+        Sort sort = pageable.getSort().getOrderFor("id") == null
+                ? pageable.getSort().and(Sort.by("id")) : pageable.getSort();
+        return sessionRepository.findAssignmentSessions(id, status,
+                PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort))
+                .map(TeachingAssignmentSessionResponse::from);
     }
 
     @Override
@@ -431,7 +453,11 @@ public class ClassSetupServiceImpl implements ClassSetupService {
                 assignment.getId(), assignment.getClassId(), externalClass == null ? null : externalClass.getCode(),
                 assignment.getProgramSubject().getId(), subject.getId(), subject.getCode(), subject.getName(),
                 assignment.getTrainerId(), trainer == null ? null : trainer.getName(), assignment.getRole(),
-                assignment.getEffectiveFrom(), assignment.getEffectiveTo());
+                assignment.getEffectiveFrom(), assignment.getEffectiveTo(),
+                externalClass == null ? null : externalClass.getName(), subject.getVersion(),
+                trainer == null ? null : trainer.getEmail(), assignment.getProgramSubject().getProgram().getId(),
+                assignment.getProgramSubject().getProgram().getCode(), assignment.getProgramSubject().getProgram().getName(),
+                assignment.getProgramSubject().getProgram().getVersion());
     }
 
     private boolean isEffectiveOn(TeachingAssignment assignment, LocalDate date) {

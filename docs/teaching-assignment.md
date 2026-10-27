@@ -45,6 +45,16 @@ If the page is already filtered by class, that class is preselected when eligibl
 
 The backend revalidates on submission. Field errors return HTTP 400, overlaps return 409 and missing create permission returns 403. Loading/retry states, pending-submit guards and query cancellation protect the form from duplicate submissions and stale class-subject responses.
 
+## View assignment details and session history
+
+Click **Details** in an assignment row. The dialog shows the class, subject/version, training program/version, trainer/email, role and effective period. Opening details stores `assignmentId` in the URL, so a copied URL can reopen the same assignment; closing the dialog preserves the list filters and page.
+
+The session table has its own server pagination, status filter and time ordering. It includes completed, cancelled and archived sessions, with archived rows identified explicitly. Only sessions whose `teachingAssignmentId` matches the selected assignment are included. Legacy rows without a reference are not inferred from a shared class, subject or trainer.
+
+Local end-to-end session scheduling can use the existing `local,schedule-demo` profile combination. The schedule-demo profile supplies static class dates and assignment references for scheduling; those sample IDs must match the assignment being exercised. The normal scheduling profile continues to require its configured external reference service.
+
+Assignment profiles and session history load independently, with separate loading/error/retry states. Deleted shared profiles fall back to local identifiers, and an upstream profile outage does not block the local session-history endpoint. Schedule timestamps are displayed without shifting their local date or time. Meeting links accept only absolute HTTP/HTTPS URLs without embedded credentials.
+
 ## API additions
 
 Both lookup endpoints require `ASSIGNMENT_CREATE`, without requiring class/program management permissions:
@@ -53,6 +63,8 @@ Both lookup endpoints require `ASSIGNMENT_CREATE`, without requiring class/progr
 - `GET /api/teaching-assignments/create-context?classId=...`: selected class dates, program/version and eligible program subjects.
 
 The existing `POST /api/teaching-assignments` contract is preserved.
+
+Assignment readers use the existing `GET /api/teaching-assignments/{id}` endpoint, now with additive class/subject/program/trainer display fields. `GET /api/teaching-assignments/{id}/sessions` returns a page of linked session summaries and requires `ASSIGNMENT_READ`. Parameters are `page`, `size` (at most 100), `sort` (`id`, `startTime`, `endTime`, `status`) and optional `status` (`SCHEDULED`, `COMPLETED`, `CANCELLED`). A unique ID tie breaker keeps pages stable for sessions with equal times. Session summaries exclude session notes and cancellation details.
 
 ## Validation commands
 
@@ -66,6 +78,6 @@ npm run test:teaching-assignment
 npm exec -- eslint src/pages/management/teaching-assignment src/api/features/class-setup.api.ts
 ```
 
-The create integration tests cover permissions, creation lookups, date boundaries, invalid input, inactive/foreign data, overlap policies, service failures and simultaneous Main assignment requests. Existing list and class-setup tests remain regression coverage.
+The integration tests cover permissions, creation lookups, date boundaries, invalid input, inactive/foreign data, overlap policies, service failures and simultaneous Main assignment requests. Detail tests also cover exact session linkage, historical statuses, pagination, missing profiles and upstream outages. Frontend tests cover form validation, schedule-time formatting and safe meeting links. Existing list and class-setup tests remain regression coverage.
 
 Session impact previews, safe trainer changes on used assignments, ending assignments and deletion rules are subsequent implementation stages.
