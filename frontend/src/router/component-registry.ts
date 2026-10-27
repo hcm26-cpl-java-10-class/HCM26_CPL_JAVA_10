@@ -15,6 +15,7 @@ import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import { ModuleGroupsPage } from "@/pages/management/fams/ModuleGroupsPage";
 import { ModulesPage } from "@/pages/management/fams/ModulesPage";
 import { PersonalProfilePage } from "@/pages/management/profile";
+import { MyLearningPage } from "@/pages/management/learning";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 
@@ -32,6 +33,11 @@ export const routes: RouteConfig[] = [
   { path: "/fams/ho-so-ca-nhan-doi-mat-khau", component: PersonalProfilePage, isPublic: true },
   { path: "/fams/profile", component: PersonalProfilePage, isPublic: true },
   { path: "/profile", component: PersonalProfilePage, isPublic: true },
+  // My Learning routes
+  { path: "/my-learning", component: MyLearningPage, isPublic: true },
+  { path: "/fams/my-learning", component: MyLearningPage, isPublic: true },
+  { path: "/learning", component: MyLearningPage, isPublic: true },
+  { path: "/enrollments", component: MyLearningPage, isModuleDriven: true },
 
   // Compatibility routes for old combined page
   { path: "/menu-groups", component: ModuleGroupsPage, isPublic: true },

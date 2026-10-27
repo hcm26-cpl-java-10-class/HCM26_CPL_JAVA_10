@@ -129,6 +129,14 @@ export default function HeaderRight() {
           <span>My Profile</span>
         </DropdownMenuItem>
 
+        <DropdownMenuItem
+          onClick={() => navigate("/my-learning")}
+          className="cursor-pointer gap-2.5 py-2"
+        >
+          <GraduationCap className="size-4 text-blue-600 dark:text-blue-400" />
+          <span>My Learning</span>
+        </DropdownMenuItem>
+
         <DropdownMenuSeparator />
 
         <DropdownMenuItem
