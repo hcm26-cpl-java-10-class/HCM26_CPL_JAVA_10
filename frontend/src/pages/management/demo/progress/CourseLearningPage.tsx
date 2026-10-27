@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { LessonPreview } from "../lesson/components/LessonPreview";
+import { LessonQnA } from "../lesson/components/LessonQnA";
 import { LessonProgressSidebar } from "./LessonProgressSidebar";
 
 export function CourseLearningPage() {
@@ -30,7 +31,6 @@ export function CourseLearningPage() {
     mutationFn: (lessonId: number) => progressApi.recordAccess(enrollmentId, lessonId),
     onSuccess: (updated: EnrollmentProgress) => {
       queryClient.setQueryData(["lesson-progress", enrollmentId], updated);
-      void queryClient.invalidateQueries({ queryKey: notificationQueryKey });
     },
     onError: (error: any) => {
       toast.error(error?.response?.data?.message || "Could not record lesson access.");
@@ -54,6 +54,7 @@ export function CourseLearningPage() {
       progressApi.setCompleted(enrollmentId, lessonId, completed),
     onSuccess: (updated: EnrollmentProgress) => {
       queryClient.setQueryData(["lesson-progress", enrollmentId], updated);
+      void queryClient.invalidateQueries({ queryKey: notificationQueryKey });
       toast.success("Progress updated.");
     },
     onError: (error: any) => {
@@ -199,6 +200,11 @@ export function CourseLearningPage() {
                       </Button>
                     </div>
                   </div>
+                  <LessonQnA
+                    key={currentLesson.lessonId}
+                    lessonId={currentLesson.lessonId}
+                    className="mt-8 border-t pt-6"
+                  />
                 </div>
               )}
             </main>

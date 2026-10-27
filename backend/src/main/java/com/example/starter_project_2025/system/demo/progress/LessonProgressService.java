@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.demo.progress;
 
+import com.example.starter_project_2025.system.demo.certificate.CertificateService;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollment;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentRepository;
 import com.example.starter_project_2025.system.demo.lesson.Lesson;
@@ -26,21 +27,12 @@ public class LessonProgressService {
     private final CourseEnrollmentRepository enrollmentRepository;
     private final LessonRepository lessonRepository;
     private final NotificationService notificationService;
+    private final CertificateService certificateService;
 
     @Transactional(readOnly = true)
     public LessonProgressDTO getProgress(Long userId, Long enrollmentId) {
         CourseEnrollment enrollment = getOwnedEnrollment(userId, enrollmentId);
-        LessonProgressDTO result = buildProgress(enrollment);
-        if (result.progressPercentage() == 100) {
-            notificationService.createOnce(
-                    userId,
-                    "course-completed:" + enrollmentId,
-                    "Course completed",
-                    "You completed " + enrollment.getCourse().getName() + ".",
-                    "/courses/" + enrollment.getCourse().getId()
-            );
-        }
-        return result;
+        return buildProgress(enrollment);
     }
 
     @Transactional
@@ -69,7 +61,21 @@ public class LessonProgressService {
         progressRepository.save(progress);
         updateLastAccess(enrollment, lessonId, now);
 
-        return buildProgress(enrollment);
+        if (completed) {
+            certificateService.issueIfCourseCompleted(enrollment);
+        }
+
+        LessonProgressDTO result = buildProgress(enrollment);
+        if (result.progressPercentage() == 100) {
+            notificationService.createOnce(
+                    userId,
+                    "course-completed:" + enrollmentId,
+                    "Course completed",
+                    "You completed " + enrollment.getCourse().getName() + ".",
+                    "/courses/" + enrollment.getCourse().getId()
+            );
+        }
+        return result;
     }
 
     @Transactional

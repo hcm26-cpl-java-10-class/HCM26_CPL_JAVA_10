@@ -9,7 +9,9 @@ import jakarta.validation.constraints.Size;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -26,11 +28,10 @@ public class CertificateDTO extends BaseDTO {
     @NotNull(groups = OnCreate.class, message = "User is required")
     Long userId;
 
-    String userFirstName;
+    String userFullName;
 
-    String userLastName;
+    UUID verificationToken;
 
-    @NotNull(groups = OnCreate.class, message = "Certificate Number is required")
-    String certificateNumber;
+    LocalDate issuedAt;
 
 }

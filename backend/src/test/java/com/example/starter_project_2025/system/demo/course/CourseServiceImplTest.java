@@ -43,8 +43,9 @@ class CourseServiceImplTest {
     void clearCategoryEmptiesManagedCollectionWithoutReplacingIt() {
         Set<Category> categories = new HashSet<>(Set.of(Category.builder().id(1L).name("Java").build()));
         Course course = Course.builder().categories(categories).build();
+        CourseDTO request = CourseDTO.builder().clearCategory(true).build();
 
-        service.beforeUpdate(course, CourseDTO.builder().clearCategory(true).build(), new ValidationContext());
+        service.beforeUpdate(course, request, new ValidationContext());
 
         assertSame(categories, course.getCategories());
         assertTrue(course.getCategories().isEmpty());
@@ -62,9 +63,20 @@ class CourseServiceImplTest {
     }
 
     @Test
+    void rejectsDuplicateCourseNameOnCreate() {
+        when(courseRepository.existsByName("Java")).thenReturn(true);
+        ValidationContext context = new ValidationContext();
+
+        service.beforeCreate(Course.builder().build(), CourseDTO.builder().name("Java").build(), context);
+
+        assertEquals("Course name already exists", context.getErrors().get("name").getFirst());
+    }
+
+    @Test
     void rejectsUserWithoutTeacherRole() {
         User user = User.builder()
                 .id(22L)
+                .firstName("Sam")
                 .roles(new HashSet<>(Set.of(Role.builder().name("STUDENT").build())))
                 .build();
         when(userRepository.findById(22L)).thenReturn(Optional.of(user));
@@ -88,12 +100,36 @@ class CourseServiceImplTest {
     }
 
     @Test
+    void updateCanAssignExistingTeacher() {
+        User instructor = teacher(23L);
+        Course course = Course.builder().build();
+        when(userRepository.findById(23L)).thenReturn(Optional.of(instructor));
+
+        service.beforeUpdate(course, CourseDTO.builder().instructorId(23L).build(), new ValidationContext());
+
+        assertSame(instructor, course.getInstructorUser());
+        assertEquals("Teacher", course.getInstructor());
+    }
+
+    @Test
     void updateCanClearInstructorAssignmentExplicitly() {
         Course course = Course.builder().instructorUser(teacher(22L)).build();
 
         service.beforeUpdate(course, CourseDTO.builder().clearInstructor(true).build(), new ValidationContext());
 
         assertNull(course.getInstructorUser());
+    }
+
+    @Test
+    void updateRejectsConflictingInstructorAssignmentAndClear() {
+        Course course = Course.builder().instructorUser(teacher(22L)).build();
+        ValidationContext context = new ValidationContext();
+
+        service.beforeUpdate(course,
+                CourseDTO.builder().instructorId(23L).clearInstructor(true).build(), context);
+
+        assertEquals("Cannot assign and clear the instructor in the same request",
+                context.getErrors().get("instructorId").getFirst());
     }
 
     @Test
@@ -109,8 +145,8 @@ class CourseServiceImplTest {
 
     @Test
     void rejectsUnknownCategoryId() {
-        when(categoryRepository.findById(99L)).thenReturn(Optional.empty());
         ValidationContext context = new ValidationContext();
+        when(categoryRepository.findById(99L)).thenReturn(Optional.empty());
 
         service.beforeCreate(Course.builder().build(),
                 CourseDTO.builder().name("Java").categoryIds(List.of(99L)).build(), context);
@@ -119,12 +155,40 @@ class CourseServiceImplTest {
     }
 
     @Test
-    void rejectsPublishingWhenRequiredCourseDetailsAreMissing() {
-        Course course = Course.builder().id(10L).status(CourseStatus.DRAFT).build();
+    void rejectsInactiveCategory() {
+        ValidationContext context = new ValidationContext();
+        Category category = Category.builder().id(99L).name("Inactive").isActive(false).build();
+        when(categoryRepository.findById(99L)).thenReturn(Optional.of(category));
+
+        service.beforeCreate(Course.builder().build(),
+                CourseDTO.builder().name("Java").categoryIds(List.of(99L)).build(), context);
+
+        assertEquals("Category is inactive: Inactive", context.getErrors().get("categoryIds").getFirst());
+    }
+
+    @Test
+    void acceptsValidThumbnailUrl() {
         ValidationContext context = new ValidationContext();
 
-        service.beforeUpdate(course,
-                CourseDTO.builder().status(CourseStatus.PUBLISHED).description(" ").build(), context);
+        service.beforeCreate(Course.builder().build(),
+                CourseDTO.builder().name("Java").thumbnailUrl("https://example.com/image.png").build(), context);
+
+        assertTrue(context.getErrors().isEmpty());
+    }
+
+    @Test
+    void rejectsPublishingWhenRequiredCourseDetailsAreMissing() {
+        Course course = Course.builder()
+                .id(10L)
+                .status(CourseStatus.DRAFT)
+                .build();
+        CourseDTO request = CourseDTO.builder()
+                .status(CourseStatus.PUBLISHED)
+                .description(" ")
+                .build();
+        ValidationContext context = new ValidationContext();
+
+        service.beforeUpdate(course, request, context);
 
         assertEquals("Assign an instructor before publishing",
                 context.getErrors().get("instructorId").getFirst());
@@ -134,6 +198,25 @@ class CourseServiceImplTest {
                 context.getErrors().get("level").getFirst());
         assertEquals("Add a course description before publishing",
                 context.getErrors().get("description").getFirst());
+    }
+
+    @Test
+    void acceptsExistingRequiredCourseDetailsDuringPublishValidation() {
+        Course course = Course.builder()
+                .id(10L)
+                .status(CourseStatus.DRAFT)
+                .instructorUser(teacher(22L))
+                .categories(new HashSet<>(Set.of(Category.builder().id(1L).name("Java").build())))
+                .level(CourseLevel.BEGINNER)
+                .description("Learn Java fundamentals")
+                .build();
+        ValidationContext context = new ValidationContext();
+
+        service.beforeUpdate(course,
+                CourseDTO.builder().status(CourseStatus.PUBLISHED).build(), context);
+
+        assertTrue(context.getErrors().keySet().stream()
+                .noneMatch(Set.of("instructorId", "categoryIds", "level", "description")::contains));
     }
 
     private static User teacher(Long id) {

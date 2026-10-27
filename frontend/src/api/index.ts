@@ -18,3 +18,4 @@ export * from "./features/demo/category.api";
 export * from "./features/demo/progress.api";
 export * from "./features/demo/certificate.api";
 export * from "./features/notification.api";
+export * from "./features/demo/qna.api";

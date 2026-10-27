@@ -26,3 +26,4 @@ export * from "./features/rbac/permission";
 export * from "./features/rbac/role";
 export * from "./features/rbac/user";
 export * from "./features/demo/course-report";
+export * from "./features/demo/qna";

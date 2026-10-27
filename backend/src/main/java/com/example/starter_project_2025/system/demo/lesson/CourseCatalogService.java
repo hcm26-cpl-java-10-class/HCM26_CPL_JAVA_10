@@ -160,11 +160,18 @@ public class CourseCatalogService {
                 .collect(Collectors.toSet());
     }
 
-    public CourseDetailDTO getDetail(Long courseId, Long userId, boolean administrator) {
+    public CourseDetailDTO getDetail(
+            Long courseId,
+            Long userId,
+            boolean canManageCourses,
+            boolean administrator
+    ) {
         Course course = courseRepository.findById(courseId)
-                .filter(c -> administrator || contentAccessGuard.isOwner(c, userId)
-                        || (c.getStatus() == CourseStatus.PUBLISHED && Boolean.TRUE.equals(c.getIsActive())))
-                .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
+                    .filter(c -> administrator
+                            || canManageCourses
+                            || (c.getStatus() != CourseStatus.ARCHIVED && contentAccessGuard.isOwner(c, userId))
+                            || (c.getStatus() == CourseStatus.PUBLISHED && Boolean.TRUE.equals(c.getIsActive())))
+                    .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
 
         boolean enrolled = userId != null && enrollmentRepository.existsByUser_IdAndCourse_Id(userId, courseId);
         boolean unlocked = contentAccessGuard.canAccess(course, userId, administrator, enrolled);
