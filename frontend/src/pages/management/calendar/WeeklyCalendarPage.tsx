@@ -1,4 +1,4 @@
-import { getCalendarSessions } from "@/api/features/calendar.api";
+import { getCalendarSessions, getMyCalendarSessions } from "@/api/features/calendar.api";
 import type {
   CalendarSessionResponse,
   CalendarSessionsPage,
@@ -31,6 +31,8 @@ import {
   Clock,
   MapPin,
   User,
+  UserCheck,
+  Users,
   GraduationCap,
   Eye,
 } from "lucide-react";
@@ -236,6 +238,9 @@ export default function WeeklyCalendarPage() {
   // Chế độ xem: "week" | "month" | "list"
   const viewMode = (searchParams.get("view") as "week" | "month" | "list") || "week";
 
+  // Phạm vi xem: "all" (Tất cả lịch) | "mine" (Lịch cá nhân)
+  const scope = (searchParams.get("scope") as "all" | "mine") || "all";
+
   const selectedDate = getCalendarDate(searchParams.get("date"));
   const daysSinceMonday = (selectedDate.day() + 6) % 7;
   const weekStart = selectedDate.subtract(daysSinceMonday, "day");
@@ -291,16 +296,19 @@ export default function WeeklyCalendarPage() {
       setError(null);
 
       try {
-        const data = await getCalendarSessions(
-          {
-            from,
-            to,
-            status: statusFilter === "ALL" ? undefined : statusFilter,
-            page,
-            size: PAGE_SIZE,
-          },
-          controller.signal,
-        );
+        const queryParams = {
+          from,
+          to,
+          status: statusFilter === "ALL" ? undefined : statusFilter,
+          classId: classFilter !== "ALL" ? Number(classFilter) : undefined,
+          page,
+          size: PAGE_SIZE,
+        };
+
+        const data =
+          scope === "mine"
+            ? await getMyCalendarSessions(queryParams, controller.signal)
+            : await getCalendarSessions(queryParams, controller.signal);
 
         if (!controller.signal.aborted) {
           setResult(data);
@@ -310,12 +318,16 @@ export default function WeeklyCalendarPage() {
 
         const forbidden =
           isAxiosError(requestError) && requestError.response?.status === 403;
+        const unauthorized =
+          isAxiosError(requestError) && requestError.response?.status === 401;
 
-        setError(
-          forbidden
-            ? "Bạn không có quyền xem lịch. Cần quyền SESSION_READ."
-            : "Không tải được lịch. Kiểm tra kết nối backend rồi thử lại.",
-        );
+        if (unauthorized) {
+          setError("Vui lòng đăng nhập để xem lịch cá nhân của bạn.");
+        } else if (forbidden) {
+          setError("Bạn không có quyền xem lịch. Cần quyền SESSION_READ.");
+        } else {
+          setError("Không tải được lịch. Kiểm tra kết nối backend rồi thử lại.");
+        }
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false);
@@ -325,7 +337,7 @@ export default function WeeklyCalendarPage() {
 
     void loadSessions();
     return () => controller.abort();
-  }, [from, to, statusFilter, page, reloadKey]);
+  }, [from, to, statusFilter, classFilter, scope, page, reloadKey]);
 
   function updateCalendarUrl(values: Record<string, string>) {
     const nextParams = new URLSearchParams(searchParams);
@@ -550,6 +562,11 @@ export default function WeeklyCalendarPage() {
               <Badge variant="outline" className="text-xs font-semibold text-primary">
                 FAMS Timetable
               </Badge>
+              {scope === "mine" && (
+                <Badge className="bg-primary/15 text-primary border-primary/30 text-xs font-semibold">
+                  <UserCheck className="mr-1 h-3 w-3" /> Lịch cá nhân
+                </Badge>
+              )}
             </div>
             <p className="mt-1 text-sm text-muted-foreground flex items-center gap-1.5">
               <CalendarIcon className="h-4 w-4 text-primary" />
@@ -572,46 +589,76 @@ export default function WeeklyCalendarPage() {
           </div>
         </div>
 
-        {/* Thanh điều khiển thứ 2: Chuyển View Mode & Điều hướng ngày */}
+        {/* Thanh điều khiển thứ 2: Phạm vi (Tất cả / Của tôi), Chuyển View Mode & Điều hướng ngày */}
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3 shadow-sm">
-          {/* Tab chuyển chế độ xem: Tuần | Tháng | Danh sách */}
-          <div className="inline-flex rounded-lg border bg-muted/40 p-1">
-            <button
-              type="button"
-              onClick={() => updateCalendarUrl({ view: "week" })}
-              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
-                viewMode === "week"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <CalendarDays className="h-4 w-4" />
-              Xem Tuần
-            </button>
-            <button
-              type="button"
-              onClick={() => updateCalendarUrl({ view: "month" })}
-              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
-                viewMode === "month"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <CalendarIcon className="h-4 w-4" />
-              Xem Tháng
-            </button>
-            <button
-              type="button"
-              onClick={() => updateCalendarUrl({ view: "list" })}
-              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
-                viewMode === "list"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <ListIcon className="h-4 w-4" />
-              Danh sách buổi
-            </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Tab chuyển phạm vi: Tất cả lịch | Lịch của tôi */}
+            <div className="inline-flex rounded-lg border bg-muted/40 p-1">
+              <button
+                type="button"
+                onClick={() => updateCalendarUrl({ scope: "all", page: "0" })}
+                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
+                  scope === "all"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Users className="h-3.5 w-3.5" />
+                Tất cả lịch
+              </button>
+              <button
+                type="button"
+                onClick={() => updateCalendarUrl({ scope: "mine", page: "0" })}
+                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
+                  scope === "mine"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <UserCheck className="h-3.5 w-3.5 text-primary" />
+                Lịch của tôi
+              </button>
+            </div>
+
+            {/* Tab chuyển chế độ xem: Tuần | Tháng | Danh sách */}
+            <div className="inline-flex rounded-lg border bg-muted/40 p-1">
+              <button
+                type="button"
+                onClick={() => updateCalendarUrl({ view: "week" })}
+                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
+                  viewMode === "week"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <CalendarDays className="h-4 w-4" />
+                Xem Tuần
+              </button>
+              <button
+                type="button"
+                onClick={() => updateCalendarUrl({ view: "month" })}
+                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
+                  viewMode === "month"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <CalendarIcon className="h-4 w-4" />
+                Xem Tháng
+              </button>
+              <button
+                type="button"
+                onClick={() => updateCalendarUrl({ view: "list" })}
+                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
+                  viewMode === "list"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <ListIcon className="h-4 w-4" />
+                Danh sách buổi
+              </button>
+            </div>
           </div>
 
           {/* Cụm điều hướng: Trước, Hôm nay, Sau, Chọn ngày */}
