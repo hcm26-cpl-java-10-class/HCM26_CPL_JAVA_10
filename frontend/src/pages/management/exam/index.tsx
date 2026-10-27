@@ -32,7 +32,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { ExamDTO, ExamType, LatePolicy, QuestionDTO, QuestionDifficulty, QuestionFilter, QuestionType, ResultVisibility } from "@/types";
+import { EXAM_CATEGORY_LABEL, EXAM_CATEGORY_SHOW_ANSWERS_DEFAULT, type ExamCategory, type ExamDTO, type ExamType, type LatePolicy, type QuestionDTO, type QuestionDifficulty, type QuestionFilter, type QuestionType, type ResultVisibility } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, CheckCheck, CheckSquare, ClipboardCheck, Dices, Layers, Mail, MoreVertical, Pencil, Plus, Search, Sparkles, Tags, Trash2, X } from "lucide-react";
 import { useState, useMemo } from "react";
@@ -49,6 +49,7 @@ interface ExamConfigForm {
   shuffleQuestions: boolean;
   shuffleOptions: boolean;
   showAnswersAfterExam: boolean;
+  category: ExamCategory;
   passScore: string;
   maxScore: string; // NEW: score scale (blank = 10)
   latePolicy: LatePolicy;
@@ -65,7 +66,8 @@ const DEFAULT_CONFIG: ExamConfigForm = {
   maxAttempts: "1",
   shuffleQuestions: false,
   shuffleOptions: false,
-  showAnswersAfterExam: false,
+  showAnswersAfterExam: true,
+  category: "ASSESSMENT",
   passScore: "",
   maxScore: "", // NEW
   latePolicy: "NOT_ALLOWED",
@@ -88,6 +90,8 @@ const EXAM_TYPE_LABEL: Record<ExamType, string> = {
   MIXED: "Multiple Choice & Essay",
 };
 
+const EXAM_CATEGORY_OPTIONS = Object.keys(EXAM_CATEGORY_LABEL) as ExamCategory[];
+
 const RESULT_VISIBILITY_LABEL: Record<ResultVisibility, string> = {
   IMMEDIATE: "View immediately after grading",
   AFTER_EXAM_CLOSED: "View after exam closes",
@@ -103,6 +107,7 @@ const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   shuffleQuestions: exam.shuffleQuestions ?? false,
   shuffleOptions: exam.shuffleOptions ?? false,
   showAnswersAfterExam: exam.showAnswersAfterExam ?? false,
+  category: exam.category ?? "ASSESSMENT",
   passScore: exam.passScore != null ? String(exam.passScore) : "",
   maxScore: exam.maxScore != null ? String(exam.maxScore) : "", // NEW
   latePolicy: exam.latePolicy ?? "NOT_ALLOWED",
@@ -169,6 +174,7 @@ export default function ExamManagementPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [examSearch, setExamSearch] = useState("");
+  const [examCategoryFilter, setExamCategoryFilter] = useState<ExamCategory | "ALL">("ALL");
   const [examPage, setExamPage] = useState(0);
   const [activeExam, setActiveExam] = useState<ExamDTO | null>(null);
   const [editingExam, setEditingExam] = useState<ExamDTO | null>(null);
@@ -193,8 +199,12 @@ export default function ExamManagementPage() {
   const [randomQuestionType, setRandomQuestionType] = useState<string>("ALL");
 
   const examsQuery = useQuery({
-    queryKey: ["exam-management", examPage, examSearch],
-    queryFn: () => examApi.getPage({ page: examPage, size: PAGE_SIZE, sort: "createdAt,desc" }, examSearch),
+    queryKey: ["exam-management", examPage, examSearch, examCategoryFilter],
+    queryFn: () => examApi.getPage(
+        { page: examPage, size: PAGE_SIZE, sort: "createdAt,desc" },
+        examSearch,
+        examCategoryFilter === "ALL" ? undefined : { category: examCategoryFilter },
+    ),
   });
 
   const lockedQuestionType: QuestionType | null =
@@ -251,6 +261,7 @@ export default function ExamManagementPage() {
         shuffleQuestions: cfg.shuffleQuestions,
         shuffleOptions: cfg.shuffleOptions,
         showAnswersAfterExam: cfg.showAnswersAfterExam,
+        category: cfg.category,
         passScore: cfg.passScore !== "" ? Number(cfg.passScore) : undefined,
         maxScore: cfg.maxScore !== "" ? Number(cfg.maxScore) : undefined, // NEW: blank = backend default 10
         latePolicy: cfg.latePolicy,
@@ -567,6 +578,20 @@ export default function ExamManagementPage() {
                   }}
               />
             </div>
+            <Select value={examCategoryFilter} onValueChange={(value) => {
+              setExamCategoryFilter(value as ExamCategory | "ALL");
+              setExamPage(0);
+            }}>
+              <SelectTrigger aria-label="Filter by exam category" className="w-full max-w-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All categories</SelectItem>
+                {EXAM_CATEGORY_OPTIONS.map((category) => (
+                    <SelectItem key={category} value={category}>{EXAM_CATEGORY_LABEL[category]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <span className="text-sm text-muted-foreground">
             {examsQuery.data?.totalElements ?? 0} exam(s)
           </span>
@@ -608,7 +633,8 @@ export default function ExamManagementPage() {
                               ? `${exam.startTime ? exam.startTime.replace("T", " ").slice(0, 16) : "…"} → ${exam.endTime ? exam.endTime.replace("T", " ").slice(0, 16) : "…"}`
                               : "No open/close time limits"}
                           {" · "}Max {exam.maxAttempts ?? 1} attempt(s)
-                          {" · "}{EXAM_TYPE_LABEL[exam.examType ?? "MIXED"]}
+                          {" · "}{EXAM_CATEGORY_LABEL[exam.category ?? "ASSESSMENT"]}
+                          {" · Question Format: "}{EXAM_TYPE_LABEL[exam.examType ?? "MIXED"]}
                         </p>
                       </TableCell>
                       <TableCell>{exam.durationMinutes} mins</TableCell>
@@ -729,7 +755,7 @@ export default function ExamManagementPage() {
                   <Input required type="number" min={1} value={newDuration} onChange={(event) => setNewDuration(event.target.value)} />
                 </label>
                 <label className="grid gap-2 text-sm font-medium">
-                  Exam Type
+                  Question Format
                   <Select value={cfg.examType} onValueChange={(value) => setCfg((c) => ({ ...c, examType: value as ExamType }))}>
                     <SelectTrigger aria-label="Exam type"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -740,6 +766,27 @@ export default function ExamManagementPage() {
                   </Select>
                   <span className="text-xs font-normal text-muted-foreground">
                     Only matching question types can be selected. Changing type with existing invalid questions will be rejected.
+                  </span>
+                </label>
+                <label className="grid gap-2 text-sm font-medium">
+                  Exam Category
+                  <Select value={cfg.category} onValueChange={(value) => {
+                    const category = value as ExamCategory;
+                    setCfg((current) => ({
+                      ...current,
+                      category,
+                      showAnswersAfterExam: EXAM_CATEGORY_SHOW_ANSWERS_DEFAULT[category],
+                    }));
+                  }}>
+                    <SelectTrigger aria-label="Exam category"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {EXAM_CATEGORY_OPTIONS.map((category) => (
+                          <SelectItem key={category} value={category}>{EXAM_CATEGORY_LABEL[category]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <span className="text-xs font-normal text-muted-foreground">
+                    The category sets the default for showing answers; you can change that setting below.
                   </span>
                 </label>
                 <label className="grid gap-2 text-sm font-medium">

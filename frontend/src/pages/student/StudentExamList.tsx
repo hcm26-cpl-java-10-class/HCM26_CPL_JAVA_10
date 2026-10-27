@@ -4,6 +4,7 @@ import {
     type Exam,
     type ExamAttemptSummary,
 } from '@/api/exam.api';
+import { EXAM_CATEGORY_LABEL } from '@/types';
 import { formatScore } from '@/utils/examScore'; // NEW
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Badge } from '@/components/ui/badge';
@@ -116,6 +117,9 @@ function ExamCard({
                     </Badge>
                     {open && <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">Open</Badge>}
                     {status && <Badge variant={status.variant}>{status.label}</Badge>}
+                    {exam.category && (
+                        <Badge variant="outline">{EXAM_CATEGORY_LABEL[exam.category]}</Badge>
+                    )}
                 </div>
                 <CardTitle className="pt-2 text-lg text-slate-900">{exam.title}</CardTitle>
                 <CardDescription>

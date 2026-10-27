@@ -32,7 +32,20 @@ export interface QuestionFilter {
 export type LatePolicy = "NOT_ALLOWED" | "ALLOWED_WITH_PENALTY" | "ALLOWED";
 // NEW: kiểu bài thi quyết định đề chứa loại câu hỏi nào
 export type ExamType = "MULTIPLE_CHOICE" | "ESSAY" | "MIXED";
+export type ExamCategory = "ASSESSMENT" | "PROGRESS_TEST" | "FINAL_TEST";
 export type ResultVisibility = "IMMEDIATE" | "AFTER_EXAM_CLOSED" | "MANUAL_RELEASE";
+
+export const EXAM_CATEGORY_LABEL: Record<ExamCategory, string> = {
+  ASSESSMENT: "Assessment",
+  PROGRESS_TEST: "Progress Test",
+  FINAL_TEST: "Final Test",
+};
+
+export const EXAM_CATEGORY_SHOW_ANSWERS_DEFAULT: Record<ExamCategory, boolean> = {
+  ASSESSMENT: true,
+  PROGRESS_TEST: true,
+  FINAL_TEST: false,
+};
 
 export interface ExamDTO {
   id?: number;
@@ -52,6 +65,7 @@ export interface ExamDTO {
   latePenaltyPercent?: number | null;
   lateGraceMinutes?: number;
   resultVisibility?: ResultVisibility;
+  category?: ExamCategory;
   examType?: ExamType; // NEW
   questionIds?: number[];
   questions?: QuestionDTO[];
@@ -63,6 +77,7 @@ export interface ExamDTO {
 export interface ExamFilter {
   title?: string;
   isActive?: boolean;
+  category?: ExamCategory;
 }
 
 // ===== NEW: giáo viên xem bài tự luận cần chấm =====
@@ -131,4 +146,3 @@ export interface AiQuestionProposal {
 export interface AiGradingResponse {
   proposals: AiQuestionProposal[];
 }
-

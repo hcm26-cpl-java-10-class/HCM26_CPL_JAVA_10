@@ -1,9 +1,11 @@
 import api from './axios';
+import type { ExamCategory } from '@/types';
 
 export interface Exam {
     id: number;
     title: string;
     durationMinutes: number;
+    category?: ExamCategory;
     totalPoints?: number;
     maxScore?: number; // NEW: exam score scale
     isActive?: boolean;
