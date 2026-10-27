@@ -6,6 +6,17 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface StudySessionRepository extends BaseCrudRepository<StudySession, Long> {
 
+    // Conservative date window only: no overlap algorithm or unconfirmed blocking policy.
+    // Keep legacy rows and every status/isActive value visible to the future policy layer.
+    @org.springframework.data.jpa.repository.Query("""
+            select s from StudySession s
+            where s.sessionDate >= :dateFrom and s.sessionDate <= :dateTo
+            order by s.sessionDate, s.startTime, s.id
+            """)
+    java.util.List<StudySession> findPotentialScheduleEntries(
+            @org.springframework.data.repository.query.Param("dateFrom") java.time.LocalDate dateFrom,
+            @org.springframework.data.repository.query.Param("dateTo") java.time.LocalDate dateTo);
+
 	boolean existsBySubjectId(Long subjectId);
     interface StatusCount {
         SessionStatus getStatus();
