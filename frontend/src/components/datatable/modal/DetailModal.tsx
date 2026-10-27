@@ -109,19 +109,30 @@ export function DetailModal({
         return matched ? matched[rel.labelField] : String(value);
       }
 
+      case "select": {
+        const option = field.options?.find(
+          (item) => String(item.value) === String(value)
+        );
+        return option?.label ?? String(value);
+      }
+
       case "date": {
-        try {
-          const date = new Date(value);
-          return date.toLocaleDateString("vi-VN", {
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-        } catch {
-          return String(value);
+        // LocalDate from Spring is a date-only value (yyyy-MM-dd), not a timestamp.
+        // Parse its components locally to avoid timezone conversion adding a time.
+        const raw = String(value);
+        const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+        if (dateOnly) {
+          const [, year, month, day] = dateOnly;
+          return `${day}/${month}/${year}`;
         }
+        const date = new Date(raw);
+        return Number.isNaN(date.getTime())
+          ? raw
+          : date.toLocaleDateString("vi-VN", {
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+            });
       }
 
       default: {

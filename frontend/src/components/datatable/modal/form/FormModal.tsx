@@ -106,6 +106,7 @@ export function FormModal({
   fieldErrors = {},
 }: FormModalProps) {
   const [form, setForm] = useState<Record<string, any>>({});
+  const [clientErrors, setClientErrors] = useState<Record<string, string[]>>({});
 
   const editableFields: FieldSchema[] = schema.fields.filter(
     (f: FieldSchema) =>
@@ -119,6 +120,7 @@ export function FormModal({
   );
 
   useEffect(() => {
+    setClientErrors({});
     if (initial) {
       const next: Record<string, any> = {};
 
@@ -151,14 +153,47 @@ export function FormModal({
 
   const updateField = (name: string, value: any) => {
     setForm((prev) => ({ ...prev, [name]: value }));
+    if (name === "email") setClientErrors((prev) => ({ ...prev, email: [] }));
   };
 
   const handleSubmit = () => {
+    if (schema.entityName === "student") {
+      const errors: Record<string, string[]> = {};
+      schema.fields.filter((field) => field.required).forEach((field) => {
+        const value = form[field.name];
+        if (value === undefined || value === null || String(value).trim() === "") {
+          errors[field.name] = [`${field.label} là bắt buộc.`];
+        }
+      });
+
+      const email = String(form.email ?? "").trim();
+      if (email && !/^[A-Za-z0-9._%+-]+@gmail\.com$/i.test(email)) {
+        errors.email = ["Email phải có định dạng @gmail.com."];
+      }
+
+      const address = String(form.address ?? "");
+      if (address.length > 1000) {
+        errors.address = ["Địa chỉ không được vượt quá 1000 ký tự."];
+      }
+
+      if (Object.keys(errors).length > 0) {
+        setClientErrors(errors);
+        return;
+      }
+      setClientErrors({});
+      onSubmit({ ...form, email });
+      return;
+    }
+
+    setClientErrors({});
     onSubmit(form);
   };
 
+  const getFieldErrors = (fieldName: string) =>
+    clientErrors[fieldName]?.length ? clientErrors[fieldName] : fieldErrors[fieldName];
+
   const hasError = (fieldName: string) =>
-    fieldErrors[fieldName] && fieldErrors[fieldName].length > 0;
+    (clientErrors[fieldName]?.length ?? 0) > 0 || (fieldErrors[fieldName]?.length ?? 0) > 0;
 
   const renderField = (field: FieldSchema) => (
     <FormFieldRenderer
@@ -170,7 +205,7 @@ export function FormModal({
           ? "border-destructive focus-visible:ring-destructive"
           : ""
       }
-      fieldErrors={fieldErrors[field.name]}
+      fieldErrors={getFieldErrors(field.name)}
       relationOptions={relationOptions}
       onChange={updateField}
     />

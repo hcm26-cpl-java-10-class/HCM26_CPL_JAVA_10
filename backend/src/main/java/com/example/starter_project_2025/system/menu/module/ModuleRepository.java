@@ -9,8 +9,6 @@ import java.util.Optional;
 @Repository
 public interface ModuleRepository extends BaseCrudRepository<Module, Long> {
 
-    boolean existsByModuleGroupId(Long moduleGroupId);
-
     boolean existsByModuleGroupIdAndTitle(Long moduleGroupId, String title);
 
     boolean existsByUrl(String url);

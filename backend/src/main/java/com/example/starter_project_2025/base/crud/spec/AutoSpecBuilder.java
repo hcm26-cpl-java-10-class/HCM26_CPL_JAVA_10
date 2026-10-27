@@ -47,11 +47,6 @@ public class AutoSpecBuilder {
             if (predicates.isEmpty())
                 return null;
 
-            // Filter qua quan hệ N-N (vd roles.id IN ...) có thể nhân đôi dòng.
-            if (!joinCache.isEmpty() && query != null) {
-                query.distinct(true);
-            }
-
             return cb.and(predicates.toArray(new Predicate[0]));
         };
     }
