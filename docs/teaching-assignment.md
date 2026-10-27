@@ -57,13 +57,23 @@ Assignment profiles and session history load independently, with separate loadin
 
 ## Edit an assignment and preview its impact
 
-Accounts with `ASSIGNMENT_UPDATE` can click **Edit** in an assignment row. The form loads a fresh edit context and preserves input until the user saves, closes or explicitly reloads it. Class and subject are fixed. Trainer changes are allowed only while there are no linked sessions, including cancelled or archived history.
+Accounts with `ASSIGNMENT_UPDATE` can click **Edit** in an assignment row. The form loads a fresh edit context and preserves input until the user saves, closes or explicitly reloads it. Class and subject are fixed. Trainer changes are allowed only while the assignment has never been used and has no linked sessions, including cancelled or archived history.
 
 Use **Preview impact** after changing the role or effective dates. The preview lists affected sessions and reasons with server pagination. Non-cancelled sessions, including completed and archived sessions, must remain within the proposed inclusive date range and retain their class/trainer context. Cancelled sessions do not block date changes, but still prevent changing the trainer on a used assignment. Replacement assignments and session reassignment are separate, explicit operations; this form never rewrites session history.
 
 **Save changes** becomes available only for the exact form values and revision that passed preview. Any further edit invalidates that preview. The backend always repeats validation at save time, even if the caller skips preview. Both preview and update require the current `revision` from the assignment response; stale or missing revisions return HTTP 409 and require an explicit reload.
 
 Updates share the existing schedule write lock with single-session writes and the bulk session writer. After taking the lock, the backend reloads the assignment, checks its revision and validates linked sessions before committing. Single-session and bulk writes also recheck the local assignment class, trainer and effective period, so stale external assignment references cannot bypass an update. Existing bulk conflict/idempotency behavior remains the responsibility of schedule integration.
+
+## End an assignment or delete an unused assignment
+
+Click **End** to choose an inclusive effective end date. The date must be on or after the assignment start and must not extend an existing end date. Preview is required in the dialog; changing the date invalidates that preview. Non-cancelled sessions, including completed and archived records, block an end date that would leave them outside the period. Cancelled sessions remain in history and do not block date shortening.
+
+Ending preserves the assignment, its trainer/start date and all session rows. It does not cancel, move or reassign any session. The assignment remains available through the selected end date and is no longer available on later dates. The end operation can also close an open-ended assignment.
+
+Click **Delete** to load a fresh deletion context and explicitly confirm removal. Any session reference, including completed, cancelled or archived history, blocks deletion. A persistent usage marker also blocks deletion and trainer changes after the last linked session is moved or removed. Successful session/bulk writes record first use in the same transaction; rejected writes roll it back. Single-session reassignment/deletion also records legacy usage before removing a reference. The dialog offers **End assignment instead** when the user has update permission. Deleting the last row on a later list page returns to the preceding page while preserving filters.
+
+Lifecycle context, end preview and end/delete writes use local assignment/session data, so shared profile outages or retired trainer/class profiles do not prevent safe cleanup. Ending only shortens the existing interval; it is not a path to extend an assignment while bypassing normal edit validation. Writes check the current revision and use the same schedule lock as session writers, so a session added after a dialog/preview was loaded is checked again before committing.
 
 ## API additions
 
@@ -84,6 +94,15 @@ Editing uses `ASSIGNMENT_UPDATE` for all three endpoints:
 
 The existing class-setup editing path also supplies the revision and receives the same backend protections.
 
+Lifecycle endpoints are:
+
+- `GET /api/teaching-assignments/{id}/lifecycle-context`: requires `ASSIGNMENT_UPDATE` or `ASSIGNMENT_DELETE`; returns the local assignment/revision, linked session count, `previouslyUsed` and `canDelete`.
+- `POST /api/teaching-assignments/{id}/end-preview`: requires `ASSIGNMENT_UPDATE`; body `{ effectiveTo, revision }`, with `page`/`size` for the impact report.
+- `PATCH /api/teaching-assignments/{id}/end`: requires `ASSIGNMENT_UPDATE`; the same body, with validation repeated under the write lock.
+- `DELETE /api/teaching-assignments/{id}?revision=...`: requires `ASSIGNMENT_DELETE`; returns 204 only for an unused assignment. Missing/stale revisions or session references return 409. The class-setup deletion path also supplies the revision.
+
+Update permission does not grant delete permission, and delete permission does not grant permission to end an assignment.
+
 ## Validation commands
 
 ```powershell
@@ -100,4 +119,6 @@ The integration tests cover permissions, creation lookups, date boundaries, inva
 
 Edit integration tests cover read-only preview, immutable identity, historical/cancelled sessions, stale revisions, changed sessions after preview, local single/bulk write guards and simultaneous session/assignment edits. Frontend tests verify that only an exact, successful preview can enable save.
 
-Ending assignments, deletion rules and the remaining schedule integration are subsequent implementation stages.
+Lifecycle tests cover inclusive ending, open-ended assignments, extension/reversed-date rejection, stale contexts/revisions, all historical session statuses, separate update/delete permissions, profile outages and races between ending/deletion and session creation. Frontend tests cover date defaults/bounds, exact-preview confirmation and unused-only deletion guards.
+
+The remaining schedule integration and full cross-module flow are the final implementation stage.

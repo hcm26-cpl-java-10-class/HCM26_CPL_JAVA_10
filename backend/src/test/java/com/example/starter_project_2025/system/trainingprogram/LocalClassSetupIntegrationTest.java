@@ -64,7 +64,7 @@ class LocalClassSetupIntegrationTest {
         mvc.perform(put("/api/teaching-assignments/{id}", assignmentId).header("Authorization", bearer)
                         .contentType(MediaType.APPLICATION_JSON).content(request.replace("\"trainerId\":1", "\"revision\":0,\"trainerId\":2")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.trainerName").value("Giảng viên mẫu Bình"));
-        mvc.perform(delete("/api/teaching-assignments/{id}", assignmentId).header("Authorization", bearer))
+        mvc.perform(delete("/api/teaching-assignments/{id}", assignmentId).param("revision", "1").header("Authorization", bearer))
                 .andExpect(status().isNoContent());
         mvc.perform(get("/api/classes/2/teaching-assignments").header("Authorization", bearer))
                 .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(0)));

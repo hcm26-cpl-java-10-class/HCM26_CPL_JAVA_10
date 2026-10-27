@@ -37,6 +37,10 @@ public class TeachingAssignment extends BaseEntity {
     @Version
     Long revision;
 
+    /** Sticky usage marker, retained even after linked sessions are moved or removed. */
+    @Column(nullable = false)
+    Boolean everUsed = false;
+
     /** ID of the class in the shared system; class profile data stays there. */
     @Column(name = "class_id", nullable = false)
     Long classId;

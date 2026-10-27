@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import com.example.starter_project_2025.exception.error.ValidationErrorResponse;
 import com.example.starter_project_2025.system.demo.session.Session;
@@ -32,10 +34,10 @@ import java.util.Map;
 public class ClassSetupController {
     private final ClassSetupService service;
 
-    @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<ValidationErrorResponse> invalidRequest(HttpMessageNotReadableException exception) {
+    @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<ValidationErrorResponse> invalidRequest(Exception exception) {
         return ResponseEntity.badRequest().body(new ValidationErrorResponse(
-                "Use valid IDs, a MAIN or ASSISTANT role and dates in YYYY-MM-DD format.", Map.of()));
+                "Use valid IDs, a non-negative revision, a MAIN or ASSISTANT role and dates in YYYY-MM-DD format.", Map.of()));
     }
 
     @PutMapping("/classes/{classId}/training-program")
@@ -142,8 +144,28 @@ public class ClassSetupController {
 
     @DeleteMapping("/teaching-assignments/{id}")
     @PreAuthorize("hasAuthority('ASSIGNMENT_DELETE')")
-    public ResponseEntity<Void> deleteAssignment(@PathVariable Long id) {
-        service.deleteAssignment(id);
+    public ResponseEntity<Void> deleteAssignment(@PathVariable Long id, @RequestParam(required = false) Long revision) {
+        service.deleteAssignment(id, revision);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/teaching-assignments/{id}/lifecycle-context")
+    @PreAuthorize("hasAnyAuthority('ASSIGNMENT_UPDATE', 'ASSIGNMENT_DELETE')")
+    public ResponseEntity<TeachingAssignmentLifecycleContext> getAssignmentLifecycleContext(@PathVariable Long id) {
+        return ResponseEntity.ok(service.getAssignmentLifecycleContext(id));
+    }
+
+    @PostMapping("/teaching-assignments/{id}/end-preview")
+    @PreAuthorize("hasAuthority('ASSIGNMENT_UPDATE')")
+    public ResponseEntity<TeachingAssignmentImpactResponse> previewAssignmentEnd(@PathVariable Long id,
+            @Valid @RequestBody TeachingAssignmentEndRequest request, @PageableDefault(size = 10) Pageable pageable) {
+        return ResponseEntity.ok(service.previewAssignmentEnd(id, request, pageable));
+    }
+
+    @PatchMapping("/teaching-assignments/{id}/end")
+    @PreAuthorize("hasAuthority('ASSIGNMENT_UPDATE')")
+    public ResponseEntity<TeachingAssignmentResponse> endAssignment(@PathVariable Long id,
+            @Valid @RequestBody TeachingAssignmentEndRequest request) {
+        return ResponseEntity.ok(service.endAssignment(id, request));
     }
 }

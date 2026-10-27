@@ -277,9 +277,10 @@ public class ClassSetupServiceImpl implements ClassSetupService {
     public TeachingAssignmentEditContext getAssignmentEditContext(Long id) {
         var assignment = findAssignment(id);
         var clazz = requireClass(assignment.getClassId());
+        long linkedCount = sessionRepository.countByTeachingAssignmentId(id);
         return new TeachingAssignmentEditContext(toResponse(assignment, clazz, fetchTrainerLookup().get(assignment.getTrainerId())),
                 clazz, externalApiService.fetchTrainers("active").stream().filter(t -> isActive(t.getStatus())).toList(),
-                sessionRepository.countByTeachingAssignmentId(id));
+                linkedCount, Boolean.TRUE.equals(assignment.getEverUsed()) || linkedCount > 0);
     }
 
     @Override
@@ -299,11 +300,18 @@ public class ClassSetupServiceImpl implements ClassSetupService {
     }
 
     private void requireEditIdentity(TeachingAssignment assignment, TeachingAssignmentRequest request) {
-        if (request.revision() == null || !Objects.equals(assignment.getRevision(), request.revision())) {
-            throw new ConflictException("The assignment has changed or its revision is missing. Reload the current assignment before editing.");
-        }
+        requireRevision(assignment, request.revision());
         if (!Objects.equals(assignment.getClassId(), request.classId())) throw fieldError("classId", "The class cannot be changed. Create a new assignment.");
         if (!Objects.equals(assignment.getProgramSubject().getId(), request.programSubjectId())) throw fieldError("programSubjectId", "The subject cannot be changed. Create a new assignment.");
+        if (Boolean.TRUE.equals(assignment.getEverUsed()) && !Objects.equals(assignment.getTrainerId(), request.trainerId())) {
+            throw new ConflictException("This assignment has been used before. Keep its trainer and create a replacement assignment instead.");
+        }
+    }
+
+    private void requireRevision(TeachingAssignment assignment, Long revision) {
+        if (revision == null || !Objects.equals(assignment.getRevision(), revision)) {
+            throw new ConflictException("The assignment has changed or its revision is missing. Reload the current assignment before retrying.");
+        }
     }
 
     private TeachingAssignmentImpactResponse impact(TeachingAssignment assignment, TeachingAssignmentRequest request, Pageable pageable) {
@@ -333,8 +341,66 @@ public class ClassSetupServiceImpl implements ClassSetupService {
     }
 
     @Override
-    public void deleteAssignment(Long id) {
-        TeachingAssignment assignment = findAssignment(id);
+    @Transactional(readOnly = true)
+    public TeachingAssignmentLifecycleContext getAssignmentLifecycleContext(Long id) {
+        var assignment = findAssignment(id);
+        long count = sessionRepository.countByTeachingAssignmentId(id);
+        boolean used = Boolean.TRUE.equals(assignment.getEverUsed()) || count > 0;
+        return new TeachingAssignmentLifecycleContext(toResponse(assignment, null, null), count, !used, used);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public TeachingAssignmentImpactResponse previewAssignmentEnd(Long id, TeachingAssignmentEndRequest request, Pageable pageable) {
+        var assignment = findAssignment(id);
+        var proposal = endProposal(assignment, request);
+        if (pageable.getPageSize() > 100 || pageable.getPageNumber() > 100000) {
+            throw new IllegalArgumentException("Page size must be at most 100 and page at most 100000.");
+        }
+        return impact(assignment, proposal, pageable);
+    }
+
+    @Override
+    public TeachingAssignmentResponse endAssignment(Long id, TeachingAssignmentEndRequest request) {
+        assignmentSessionGuard.lockForWrite();
+        var assignment = findAssignmentForLifecycleWrite(id);
+        var proposal = endProposal(assignment, request);
+        if (impact(assignment, proposal, PageRequest.of(0, 1)).affectedSessionCount() > 0) {
+            throw new ConflictException("Linked sessions fall outside the proposed end date. Preview the impact and resolve those sessions first.");
+        }
+        assignment.setEffectiveTo(request.effectiveTo());
+        teachingAssignmentRepository.saveAndFlush(assignment);
+        return toResponse(assignment, null, null);
+    }
+
+    private TeachingAssignmentRequest endProposal(TeachingAssignment assignment, TeachingAssignmentEndRequest request) {
+        requireRevision(assignment, request.revision());
+        if (request.effectiveTo().isBefore(assignment.getEffectiveFrom())) {
+            throw fieldError("effectiveTo", "The end date must be on or after the assignment start date.");
+        }
+        if (assignment.getEffectiveTo() != null && request.effectiveTo().isAfter(assignment.getEffectiveTo())) {
+            throw fieldError("effectiveTo", "Ending an assignment cannot extend its current effective period.");
+        }
+        return new TeachingAssignmentRequest(assignment.getClassId(), assignment.getProgramSubject().getId(),
+                assignment.getTrainerId(), assignment.getRole(), assignment.getEffectiveFrom(), request.effectiveTo(), request.revision());
+    }
+
+    private TeachingAssignment findAssignmentForLifecycleWrite(Long id) {
+        return teachingAssignmentRepository.findForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Teaching assignment not found with ID: " + id));
+    }
+
+    @Override
+    public void deleteAssignment(Long id, Long revision) {
+        assignmentSessionGuard.lockForWrite();
+        var assignment = findAssignmentForLifecycleWrite(id);
+        requireRevision(assignment, revision);
+        long references = sessionRepository.countByTeachingAssignmentId(id);
+        if (references > 0 || Boolean.TRUE.equals(assignment.getEverUsed())) {
+            throw new ConflictException(references > 0 ? "This assignment is referenced by " + references
+                    + " session(s), including historical records, and cannot be deleted. End its effective period instead."
+                    : "This assignment has been used previously and cannot be deleted. End its effective period instead.");
+        }
         try {
             teachingAssignmentRepository.delete(assignment);
             teachingAssignmentRepository.flush();

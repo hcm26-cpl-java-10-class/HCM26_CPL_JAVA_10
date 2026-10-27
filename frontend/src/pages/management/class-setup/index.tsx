@@ -277,7 +277,7 @@ export default function ClassSetupPage() {
     setNotice("");
     setSaving(true);
     try {
-      await classSetupApi.deleteAssignment(pendingDelete.id);
+      await classSetupApi.deleteAssignment(pendingDelete.id, pendingDelete.revision);
       setPendingDelete(null);
       if (selectedClassId) await loadClass(Number(selectedClassId));
       setNotice("Đã xóa phân công.");

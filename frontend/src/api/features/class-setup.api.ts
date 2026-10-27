@@ -59,6 +59,7 @@ export interface AssignmentEditContext {
   classProfile: SharedClass;
   trainers: SharedTrainer[];
   linkedSessionCount: number;
+  trainerLocked: boolean;
 }
 
 export interface AssignmentImpact {
@@ -69,6 +70,18 @@ export interface AssignmentImpact {
   effectiveFrom: string;
   effectiveTo: string | null;
   affectedSessions: AssignmentPage<{ session: AssignmentSession; reasons: string[] }>;
+}
+
+export interface AssignmentEndRequest {
+  effectiveTo: string;
+  revision: number;
+}
+
+export interface AssignmentLifecycleContext {
+  assignment: TeachingAssignment;
+  linkedSessionCount: number;
+  canDelete: boolean;
+  previouslyUsed: boolean;
 }
 
 export type AssignmentSessionStatus = "SCHEDULED" | "COMPLETED" | "CANCELLED";
@@ -189,6 +202,12 @@ export const classSetupApi = {
     (await axiosInstance.post<AssignmentImpact>(`/teaching-assignments/${id}/impact-preview`, request, { params: { page, size: 10 }, signal })).data,
   updateAssignment: async (id: number, request: TeachingAssignmentUpdateRequest) =>
     (await axiosInstance.put<TeachingAssignment>(`/teaching-assignments/${id}`, request)).data,
-  deleteAssignment: async (id: number) =>
-    axiosInstance.delete(`/teaching-assignments/${id}`),
+  getAssignmentLifecycleContext: async (id: number, signal?: AbortSignal) =>
+    (await axiosInstance.get<AssignmentLifecycleContext>(`/teaching-assignments/${id}/lifecycle-context`, { signal })).data,
+  previewAssignmentEnd: async (id: number, request: AssignmentEndRequest, page: number, signal?: AbortSignal) =>
+    (await axiosInstance.post<AssignmentImpact>(`/teaching-assignments/${id}/end-preview`, request, { params: { page, size: 10 }, signal })).data,
+  endAssignment: async (id: number, request: AssignmentEndRequest) =>
+    (await axiosInstance.patch<TeachingAssignment>(`/teaching-assignments/${id}/end`, request)).data,
+  deleteAssignment: async (id: number, revision: number) =>
+    axiosInstance.delete(`/teaching-assignments/${id}`, { params: { revision } }),
 };

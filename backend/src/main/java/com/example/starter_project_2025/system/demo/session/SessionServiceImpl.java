@@ -56,6 +56,14 @@ public class SessionServiceImpl
         return requests.stream().map(this::create).toList();
     }
 
+    @Override
+    public void delete(Long id) {
+        checkPermission(CrudAction.DELETE);
+        conflicts.lockForWrite();
+        sessionRepository.findById(id).ifPresent(session -> assignmentGuard.rememberUse(session.getTeachingAssignmentId()));
+        super.delete(id);
+    }
+
     private ScheduleCandidate candidate(Session current, SessionDTO r) {
         return new ScheduleCandidate(current == null ? null : current.getId(),
                 r.getClassId() != null ? r.getClassId() : current == null ? null : current.getClassId(),
@@ -115,6 +123,7 @@ public class SessionServiceImpl
         LocalDateTime newEnd = request.getEndTime() != null ? request.getEndTime() : session.getEndTime();
 
         validateSessionTime(newStart, newEnd, ctx);
+        assignmentGuard.rememberUse(session.getTeachingAssignmentId());
         assignmentGuard.requireCompatible(candidate(session, request));
         conflicts.requireValid(List.of(candidate(session, request)));
         // An explicit empty location clears a previously selected physical room.

@@ -2,11 +2,12 @@ import { useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import axios from "axios";
-import { AlertCircle, ChevronLeft, ChevronRight, Eye, LoaderCircle, Pencil, Plus, RefreshCw, Search, Users, X } from "lucide-react";
+import { AlertCircle, CalendarOff, ChevronLeft, ChevronRight, Eye, LoaderCircle, Pencil, Plus, RefreshCw, Search, Trash2, Users, X } from "lucide-react";
+import { AssignmentLifecycleDialog, type LifecycleMode } from "./components/AssignmentLifecycleDialog";
 import { EditAssignmentDialog } from "./components/EditAssignmentDialog";
 import { CreateAssignmentDialog } from "./components/CreateAssignmentDialog";
 import { AssignmentDetailDialog } from "./components/AssignmentDetailDialog";
-import { classSetupApi, type AssignmentRole, type AssignmentSearchParams } from "@/api/features/class-setup.api";
+import { classSetupApi, type AssignmentRole, type AssignmentSearchParams, type TeachingAssignment } from "@/api/features/class-setup.api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -55,6 +56,8 @@ export default function TeachingAssignmentPage() {
   const canRead = hasPermission("ASSIGNMENT_READ");
   const canCreate = hasPermission("ASSIGNMENT_CREATE");
   const canUpdate = hasPermission("ASSIGNMENT_UPDATE");
+  const canDelete = hasPermission("ASSIGNMENT_DELETE");
+  const [lifecycle, setLifecycle] = useState<{ mode: LifecycleMode; assignment: TeachingAssignment } | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
   const [url, setUrl] = useSearchParams();
@@ -170,7 +173,9 @@ export default function TeachingAssignmentPage() {
                 <TableCell><Badge variant={a.role === "MAIN" ? "default" : "outline"}>{a.role === "MAIN" ? "Main" : "Assistant"}</Badge></TableCell>
                 <TableCell className="whitespace-nowrap">{displayDate(a.effectiveFrom)}</TableCell><TableCell className="whitespace-nowrap">{a.effectiveTo ? displayDate(a.effectiveTo) : "No end date"}</TableCell>
                 <TableCell><div className="flex gap-1"><Button variant="ghost" size="sm" aria-label={`View assignment details for ${a.subjectCode} in ${a.classCode || a.classId}`} onClick={() => showDetails(a.id)}><Eye className="size-4" />Details</Button>
-                {canUpdate && <Button variant="ghost" size="sm" aria-label={`Edit assignment for ${a.subjectCode} in ${a.classCode || a.classId}`} onClick={() => setEditing(a.id)}><Pencil className="size-4" />Edit</Button>}</div></TableCell>
+                {canUpdate && <Button variant="ghost" size="sm" aria-label={`Edit assignment for ${a.subjectCode} in ${a.classCode || a.classId}`} onClick={() => setEditing(a.id)}><Pencil className="size-4" />Edit</Button>}
+                {canUpdate && <Button variant="ghost" size="sm" aria-label={`End assignment for ${a.subjectCode} in ${a.classCode || a.classId}`} onClick={() => setLifecycle({ mode: "end", assignment: a })}><CalendarOff className="size-4" />End</Button>}
+                {canDelete && <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" aria-label={`Delete assignment for ${a.subjectCode} in ${a.classCode || a.classId}`} onClick={() => setLifecycle({ mode: "delete", assignment: a })}><Trash2 className="size-4" />Delete</Button>}</div></TableCell>
               </TableRow>)}</TableBody></Table>}
           {!assignments.isPending && !assignments.isError && data && <div className="flex flex-wrap items-center justify-between gap-4 border-t pt-4">
             <p className="text-sm text-muted-foreground" role="status">{data.content.length ? `${page * size + 1}–${page * size + data.content.length}` : "0"} / {total} assignments</p>
@@ -187,5 +192,8 @@ export default function TeachingAssignmentPage() {
       onClose={() => setCreating(false)} onCreated={() => { setCreating(false); }} />}
     {detailId && canRead && <AssignmentDetailDialog key={detailId} assignmentId={detailId} onClose={() => showDetails()} />}
     {editing && canUpdate && <EditAssignmentDialog key={editing} assignmentId={editing} onClose={() => setEditing(null)} />}
+    {lifecycle && (lifecycle.mode === "end" ? canUpdate : canDelete) && <AssignmentLifecycleDialog key={`${lifecycle.mode}:${lifecycle.assignment.id}`} mode={lifecycle.mode} assignment={lifecycle.assignment}
+      onClose={() => setLifecycle(null)} onDeleted={() => { setLifecycle(null); if (page > 0 && data?.content.length === 1) change("page", String(page - 1)); }}
+      onEndInstead={canUpdate ? () => setLifecycle({ ...lifecycle, mode: "end" }) : undefined} />}
   </MainLayout>;
 }

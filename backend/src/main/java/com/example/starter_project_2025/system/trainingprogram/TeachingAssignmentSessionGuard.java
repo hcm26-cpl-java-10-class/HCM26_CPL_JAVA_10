@@ -37,6 +37,11 @@ public class TeachingAssignmentSessionGuard {
                     || (assignment.getEffectiveTo() != null && candidate.endTime().toLocalDate().isAfter(assignment.getEffectiveTo())))) {
             throw invalid("The session must fall within the current teaching assignment effective period.");
         }
+        assignment.setEverUsed(true);
+    }
+
+    public void rememberUse(Long assignmentId) {
+        if (assignmentId != null) assignments.findById(assignmentId).ifPresent(assignment -> assignment.setEverUsed(true));
     }
 
     private BusinessValidationException invalid(String message) {

@@ -5,4 +5,4 @@ import com.example.starter_project_2025.system.external_api.dto.ExternalTrainerD
 import java.util.List;
 
 public record TeachingAssignmentEditContext(TeachingAssignmentResponse assignment, ExternalClassDTO classProfile,
-        List<ExternalTrainerDTO> trainers, long linkedSessionCount) {}
+        List<ExternalTrainerDTO> trainers, long linkedSessionCount, boolean trainerLocked) {}
