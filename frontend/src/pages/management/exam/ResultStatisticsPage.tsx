@@ -1,9 +1,14 @@
 import axiosInstance from "@/api/axios";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useState } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { ChevronLeft, FileSpreadsheet, FileText, Download } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { downloadBlob, getFilenameFromHeader } from "@/components/datatable/util/dataio.utils";
+
 
 type ScoreBand = {
     range: string;
@@ -302,13 +307,57 @@ function getErrorMessage(error: unknown): string {
 
 export default function ResultStatisticsPage() {
     const { examId: examIdParam } = useParams();
+    const navigate = useNavigate();
     const examId = Number(examIdParam);
     const queryClient = useQueryClient();
     const [releasePolicy, setReleasePolicy] =
         useState<ReleasePolicy>("MY_SCORES_ONLY");
 
+    const [exportingFormat, setExportingFormat] =
+        useState<"xlsx" | "csv" | "pdf" | null>(null);
+
     const validExamId =
         Number.isInteger(examId) && examId > 0;
+
+
+    const handleExport = async (format: "xlsx" | "csv" | "pdf") => {
+        if (!validExamId || exportingFormat !== null) return;
+
+        setExportingFormat(format);
+
+        try {
+            const response = await axiosInstance.get(
+                `/exams/${examId}/result-statistics/export`,
+                {
+                    params: { format },
+                    responseType: "blob",
+                },
+            );
+
+            const filename =
+                getFilenameFromHeader(
+                    response.headers["content-disposition"],
+                ) || `exam-${examId}-results.${format}`;
+
+            const contentType =
+                format === "xlsx"
+                    ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    : format === "pdf"
+                        ? "application/pdf"
+                        : "text/csv;charset=utf-8";
+
+            const blob = new Blob([response.data], {
+                type: contentType,
+            });
+
+            downloadBlob(blob, filename);
+            toast.success(`Export ${format.toUpperCase()} successfully.`);
+        } catch (error) {
+            toast.error(getErrorMessage(error));
+        } finally {
+            setExportingFormat(null);
+        }
+    };
 
     const statisticsQuery = useQuery({
         queryKey: ["exam-result-statistics", examId],
@@ -376,12 +425,24 @@ export default function ResultStatisticsPage() {
         <MainLayout>
             <div className="space-y-6 p-4 md:p-6">
                 <div>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="-ml-2 mb-2"
+                        onClick={() => navigate("/exams")}
+                    >
+                        <ChevronLeft className="size-4" />
+                        Back to Exam Management
+                    </Button>
+
                     <p className="text-sm text-muted-foreground">
                         Exam Management / Result Statistics
                     </p>
+
                     <h1 className="mt-1 text-2xl font-bold text-foreground">
                         Exam Result Statistics
                     </h1>
+
                     <p className="mt-1 text-sm text-muted-foreground">
                         Exam ID: {validExamId ? examId : "Invalid"}
                     </p>
@@ -409,67 +470,108 @@ export default function ResultStatisticsPage() {
 
                 {statistics && (
                     <>
-                        <div>
-                            <h2 className="mb-3 text-lg font-semibold">
+                    <div>
+                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                            <h2 className="text-lg font-semibold">
                                 {statistics.examTitle}
                             </h2>
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                                <StatCard
-                                    label="Total Attempts"
-                                    value={statistics.totalAttempts}
-                                />
-                                <StatCard
-                                    label="Participating Students"
-                                    value={statistics.uniqueStudents}
-                                />
-                                <StatCard
-                                    label="Average Score"
-                                    value={formatScore(statistics.averageFinalScore)}
-                                />
-                                <StatCard
-                                    label="Pending Grading"
-                                    value={statistics.pendingGradingAttempts}
-                                    detail={`${statistics.fullyGradedAttempts} fully graded attempts`}
-                                />
-                                <StatCard
-                                    label="Highest Score"
-                                    value={formatScore(statistics.highestFinalScore)}
-                                />
-                                <StatCard
-                                    label="Lowest Score"
-                                    value={formatScore(statistics.lowestFinalScore)}
+
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        disabled={!validExamId || exportingFormat !== null}
+                                    >
+                                        <Download className="mr-2 size-4" />
+                                        {exportingFormat ? "Exporting..." : "Export"}
+                                    </Button>
+                                </DropdownMenuTrigger>
+
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                        disabled={exportingFormat !== null}
+                                        onSelect={() => void handleExport("xlsx")}
+                                    >
+                                        <FileSpreadsheet className="mr-2 size-4" />
+                                        Export Excel (.xlsx)
+                                    </DropdownMenuItem>
+
+                                    <DropdownMenuItem
+                                        disabled={exportingFormat !== null}
+                                        onSelect={() => void handleExport("csv")}
+                                    >
+                                        <FileText className="mr-2 size-4" />
+                                        Export CSV (.csv)
+                                    </DropdownMenuItem>
+
+                                    <DropdownMenuItem
+                                        disabled={exportingFormat !== null}
+                                        onSelect={() => void handleExport("pdf")}
+                                    >
+                                        <FileText className="mr-2 size-4" />
+                                        Export PDF (.pdf)
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                            <StatCard
+                                label="Total Attempts"
+                                value={statistics.totalAttempts}
+                            />
+                            <StatCard
+                                label="Participating Students"
+                                value={statistics.uniqueStudents}
+                            />
+                            <StatCard
+                                label="Average Score"
+                                value={formatScore(statistics.averageFinalScore)}
+                            />
+                            <StatCard
+                                label="Pending Grading"
+                                value={statistics.pendingGradingAttempts}
+                                detail={`${statistics.fullyGradedAttempts} fully graded attempts`}
+                            />
+                            <StatCard
+                                label="Highest Score"
+                                value={formatScore(statistics.highestFinalScore)}
+                            />
+                            <StatCard
+                                label="Lowest Score"
+                                value={formatScore(statistics.lowestFinalScore)}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                        <section className="min-w-0 rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
+                            <h2 className="text-lg font-semibold">
+                                Score Distribution
+                            </h2>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                Number of attempts in each score range.
+                            </p>
+                            <div className="mt-4">
+                                <ScoreDistributionChart
+                                    bands={statistics.scoreDistribution ?? []}
                                 />
                             </div>
-                        </div>
+                        </section>
 
-                        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                            <section className="min-w-0 rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
-                                <h2 className="text-lg font-semibold">
-                                    Score Distribution
-                                </h2>
-                                <p className="mt-1 text-sm text-muted-foreground">
-                                    Number of attempts in each score range.
-                                </p>
-                                <div className="mt-4">
-                                    <ScoreDistributionChart
-                                        bands={statistics.scoreDistribution ?? []}
-                                    />
-                                </div>
-                            </section>
-
-                            <section className="min-w-0 rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
-                                <h2 className="text-lg font-semibold">
-                                    Grading Status
-                                </h2>
-                                <p className="mt-1 text-sm text-muted-foreground">
-                                    Grading completion status for all attempts.
-                                </p>
-                                <AttemptStatusChart
-                                    completed={statistics.fullyGradedAttempts}
-                                    pending={statistics.pendingGradingAttempts}
-                                />
-                            </section>
-                        </div>
+                        <section className="min-w-0 rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
+                            <h2 className="text-lg font-semibold">
+                                Grading Status
+                            </h2>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                Grading completion status for all attempts.
+                            </p>
+                            <AttemptStatusChart
+                                completed={statistics.fullyGradedAttempts}
+                                pending={statistics.pendingGradingAttempts}
+                            />
+                        </section>
+                    </div>
                     </>
                 )}
 
