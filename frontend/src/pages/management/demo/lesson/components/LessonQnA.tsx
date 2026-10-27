@@ -52,12 +52,13 @@ function Composer({
 }: ComposerProps) {
   const trimmed = value.trim();
   return (
-    <div className="space-y-2">
+    <div className="min-w-0 space-y-2">
       <Textarea
         id={id}
         aria-label={placeholder}
         value={value}
         rows={rows}
+        className="max-h-40 resize-none overflow-y-auto"
         maxLength={MAX_LENGTH}
         placeholder={placeholder}
         disabled={pending}
@@ -215,7 +216,10 @@ export function LessonQnA({ lessonId, className }: LessonQnAProps) {
     editing?.type === "answer" && editing.answerId === answer.id;
 
   return (
-    <section aria-labelledby={`qna-title-${lessonId}`} className={className}>
+    <section
+      aria-labelledby={`qna-title-${lessonId}`}
+      className={`min-w-0 ${className ?? ""}`}
+    >
       <div className="flex items-center gap-2">
         <MessageSquare className="size-5 text-muted-foreground" />
         <h2 id={`qna-title-${lessonId}`} className="text-lg font-semibold">
@@ -241,7 +245,7 @@ export function LessonQnA({ lessonId, className }: LessonQnAProps) {
         </div>
       )}
 
-      <div className="mt-5 space-y-4">
+      <div className="mt-4 min-w-0 max-h-[32rem] space-y-4 overflow-y-auto overflow-x-hidden pr-1">
         {questionsQuery.isLoading ? (
           <p role="status" className="text-sm text-muted-foreground">
             Loading questions...
@@ -261,7 +265,7 @@ export function LessonQnA({ lessonId, className }: LessonQnAProps) {
           </p>
         ) : (
           questions.map((question) => (
-            <article key={question.id} className="space-y-3 rounded-xl border p-4">
+            <article key={question.id} className="min-w-0 space-y-3 rounded-xl border p-4">
               <header className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-medium">{question.authorName}</span>
@@ -319,13 +323,13 @@ export function LessonQnA({ lessonId, className }: LessonQnAProps) {
                   }
                 />
               ) : (
-                <p className="whitespace-pre-wrap break-words text-sm">{question.content}</p>
+                <p className="whitespace-pre-wrap text-sm [overflow-wrap:anywhere]">{question.content}</p>
               )}
 
               {question.answers.length > 0 && (
-                <div className="space-y-3 border-l-2 pl-4">
+                <div className="min-w-0 space-y-3 border-l-2 pl-4">
                   {question.answers.map((answer) => (
-                    <div key={answer.id} className="space-y-1.5">
+                    <div key={answer.id} className="min-w-0 space-y-1.5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-sm font-medium">{answer.authorName}</span>
@@ -388,7 +392,7 @@ export function LessonQnA({ lessonId, className }: LessonQnAProps) {
                           }
                         />
                       ) : (
-                        <p className="whitespace-pre-wrap break-words text-sm">{answer.content}</p>
+                        <p className="whitespace-pre-wrap text-sm [overflow-wrap:anywhere]">{answer.content}</p>
                       )}
                     </div>
                   ))}
