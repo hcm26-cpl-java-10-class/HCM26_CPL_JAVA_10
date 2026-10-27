@@ -22,7 +22,7 @@ public class ProjectTemplateAccessInitializer implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
         var templatePermissions = new ArrayList<Permission>();
-        for (String action : List.of("READ", "CREATE", "UPDATE", "ACTIVATE")) {
+        for (String action : List.of("READ", "CREATE", "UPDATE", "ACTIVATE", "ARCHIVE")) {
             templatePermissions.add(permission(action));
         }
         for (String name : List.of("ADMIN", "PROGRAM_MANAGER")) {

@@ -6,6 +6,7 @@ import com.example.starter_project_2025.system.project.sprint_backlog.SprintBack
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogPriority;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogRepository;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogStatus;
+import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogWorkType;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -67,6 +68,7 @@ public class SprintBacklogDataInitializer implements CommandLineRunner {
                 LocalDateTime.of(2026, 10, 22, 17, 0),
                 SprintBacklogStatus.DONE,
                 SprintBacklogPriority.HIGH,
+                SprintBacklogWorkType.STORY,
                 12.0);
 
         upsertBacklog(discovery, MEMBER_2,
@@ -76,6 +78,7 @@ public class SprintBacklogDataInitializer implements CommandLineRunner {
                 LocalDateTime.of(2026, 10, 28, 17, 0),
                 SprintBacklogStatus.IN_PROGRESS,
                 SprintBacklogPriority.URGENT,
+                SprintBacklogWorkType.STORY,
                 16.0);
 
         // Sprint 2 - Design System (planned): tokens under review, library pending.
@@ -86,6 +89,7 @@ public class SprintBacklogDataInitializer implements CommandLineRunner {
                 LocalDateTime.of(2026, 11, 6, 17, 0),
                 SprintBacklogStatus.REVIEW,
                 SprintBacklogPriority.MEDIUM,
+                SprintBacklogWorkType.TASK,
                 8.0);
 
         upsertBacklog(design, MEMBER_3,
@@ -95,6 +99,7 @@ public class SprintBacklogDataInitializer implements CommandLineRunner {
                 LocalDateTime.of(2026, 11, 12, 17, 0),
                 SprintBacklogStatus.TODO,
                 SprintBacklogPriority.HIGH,
+                SprintBacklogWorkType.TASK,
                 24.0);
 
         // Sprint 3 - Build (planned): implementation tasks not started yet.
@@ -105,6 +110,7 @@ public class SprintBacklogDataInitializer implements CommandLineRunner {
                 LocalDateTime.of(2026, 11, 20, 17, 0),
                 SprintBacklogStatus.TODO,
                 SprintBacklogPriority.MEDIUM,
+                SprintBacklogWorkType.STORY,
                 20.0);
 
         upsertBacklog(build, MEMBER_1,
@@ -114,6 +120,7 @@ public class SprintBacklogDataInitializer implements CommandLineRunner {
                 LocalDateTime.of(2026, 11, 27, 17, 0),
                 SprintBacklogStatus.TODO,
                 SprintBacklogPriority.LOW,
+                SprintBacklogWorkType.TASK,
                 6.0);
 
         // Product backlog: items without a sprint, so the backlog page only
@@ -123,6 +130,7 @@ public class SprintBacklogDataInitializer implements CommandLineRunner {
                 "Collect the acceptance criteria of the next release from QA and the product owner",
                 SprintBacklogStatus.TODO,
                 SprintBacklogPriority.HIGH,
+                SprintBacklogWorkType.TASK,
                 4.0);
 
         upsertProductBacklog(MEMBER_1,
@@ -130,6 +138,7 @@ public class SprintBacklogDataInitializer implements CommandLineRunner {
                 "Check the checkout screens against WCAG AA before planning the next sprint",
                 SprintBacklogStatus.TODO,
                 SprintBacklogPriority.URGENT,
+                SprintBacklogWorkType.BUG,
                 8.0);
 
         log.info("Ensured sample sprint backlog data.");
@@ -144,6 +153,7 @@ public class SprintBacklogDataInitializer implements CommandLineRunner {
             LocalDateTime endDate,
             SprintBacklogStatus status,
             SprintBacklogPriority priority,
+            SprintBacklogWorkType workType,
             Double estimatedHours
     ) {
 
@@ -164,6 +174,7 @@ public class SprintBacklogDataInitializer implements CommandLineRunner {
         backlog.setEndDate(endDate);
         backlog.setStatus(status);
         backlog.setPriority(priority);
+        backlog.setWorkType(workType);
         backlog.setEstimatedHours(estimatedHours);
         backlog.setIsActive(true);
 
@@ -184,6 +195,7 @@ public class SprintBacklogDataInitializer implements CommandLineRunner {
             String description,
             SprintBacklogStatus status,
             SprintBacklogPriority priority,
+            SprintBacklogWorkType workType,
             Double estimatedHours
     ) {
 
@@ -199,6 +211,7 @@ public class SprintBacklogDataInitializer implements CommandLineRunner {
         backlog.setEndDate(null);
         backlog.setStatus(status);
         backlog.setPriority(priority);
+        backlog.setWorkType(workType);
         backlog.setEstimatedHours(estimatedHours);
         backlog.setIsActive(true);
 

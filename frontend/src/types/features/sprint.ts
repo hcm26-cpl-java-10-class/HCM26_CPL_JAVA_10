@@ -1,5 +1,6 @@
 import type { BaseDTO, BaseFilter } from "@/types/common/base";
 import type { BacklogPriority, BacklogStatus } from "./backlog-item";
+import type { SprintBacklogWorkType } from "./sprint_backlog";
 
 export type SprintStatus = "PLANNED" | "ACTIVE" | "COMPLETED" | "CANCELLED";
 
@@ -29,6 +30,14 @@ export interface SprintPlanningItem {
   description?: string | null;
   priority?: BacklogPriority | null;
   status?: BacklogStatus | null;
+  /** Story / Bug / Task of the work item. */
+  workType?: SprintBacklogWorkType | null;
+  /** Owning sprint (`null` = product backlog). */
+  sprintId?: number | null;
+  assigneeProjectMemberId?: number | null;
+  startDate?: string | null;
+  /** Due date of the item (the backend `endDate`). */
+  endDate?: string | null;
   projectId?: number | null;
   milestoneId?: number | null;
   milestoneName?: string | null;

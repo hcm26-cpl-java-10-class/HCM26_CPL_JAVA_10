@@ -38,4 +38,10 @@ public class TeamMilestoneController {
         MilestoneResponse response = commandService.create(null, idempotencyKey, request);
         return ResponseEntity.created(URI.create("/api/teams/" + teamId + "/milestones/" + response.id())).body(response);
     }
+
+    @PostMapping("/{milestoneId}/open")
+    @PreAuthorize("hasAuthority('MILESTONE_WRITE')")
+    public ResponseEntity<MilestoneResponse> openForSubmissions(@PathVariable Long teamId, @PathVariable java.util.UUID milestoneId) {
+        return ResponseEntity.ok(commandService.openForSubmissions(null, teamId, milestoneId));
+    }
 }

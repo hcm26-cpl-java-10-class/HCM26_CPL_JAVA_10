@@ -2,6 +2,9 @@ package com.example.starter_project_2025.system.project.template.milestone;
 
 import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
+import com.example.starter_project_2025.system.project.milestone.dto.response.RubricOptionResponse;
+import com.example.starter_project_2025.system.project.rubric.service.RubricCatalogService;
+import com.example.starter_project_2025.system.project.template.artifact.TemplateArtifactRequirementRepository;
 import com.example.starter_project_2025.system.project.template.ProjectTemplateAccessService;
 import com.example.starter_project_2025.system.project.template.ProjectTemplateAudit;
 import com.example.starter_project_2025.system.project.template.ProjectTemplateAuditRepository;
@@ -12,6 +15,7 @@ import com.example.starter_project_2025.web.CorrelationIdFilter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -36,6 +40,34 @@ public class TemplateMilestoneService {
     private final TemplateMilestoneValidator validator;
     private final TemplateMilestoneScheduleValidator scheduleValidator;
     private final ObjectMapper objectMapper;
+    private final RubricCatalogService rubricCatalog;
+    private final TemplateMilestoneRubrics rubrics;
+    private final TemplateMilestoneMapper mapper;
+    private final TemplateArtifactRequirementRepository artifactRequirements;
+
+    public List<TemplateMilestoneCreation> prepareForProject(Long templateId, Long teamId, Instant startsAt) {
+        User user = access.requireUser("READ");
+        ProjectTemplate template = findTemplate(templateId, user);
+        if (template.getStatus() != ProjectTemplateStatus.ACTIVE) {
+            throw ProjectTemplateException.conflict("Only active templates can be used to create a project");
+        }
+        if (teamId == null || teamId <= 0 || startsAt == null) {
+            throw new ProjectTemplateException(422, "Provide a team and project start date", Map.of());
+        }
+        List<TemplateMilestone> plan = loadMilestones(templateId);
+        var request = TemplateMilestonePlanRequest.from(template.getLockVersion(), plan);
+        validator.validate(request);
+        scheduleValidator.validate(request, template.getEstimatedDurationWeeks());
+        rubrics.requirePublished(request, template.getTenantId());
+        return plan.stream().map(item -> mapper.forProject(item, teamId, startsAt)).toList();
+    }
+
+    public TemplateMilestoneOptions getOptions(Long templateId) {
+        User user = access.requireUser("READ");
+        findTemplate(templateId, user);
+        return new TemplateMilestoneOptions(rubricCatalog.findPublished(user.getTenantId()).stream()
+                .map(RubricCatalogService::snapshot).map(RubricOptionResponse::from).toList());
+    }
 
     public TemplateMilestonePlanResponse getPlan(Long templateId) {
         User user = access.requireUser("READ");
@@ -60,8 +92,16 @@ public class TemplateMilestoneService {
         Map<Long, TemplateMilestone> byId = existing.stream()
                 .collect(Collectors.toMap(TemplateMilestone::getId, Function.identity()));
         checkReferences(request, byId);
+        Set<Long> retainedMilestones = request.milestones().stream().map(TemplateMilestonePlanRequest.Milestone::savedId)
+                .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        var removedIds = existing.stream().map(TemplateMilestone::getId).filter(id -> !retainedMilestones.contains(id)).toList();
+        if (!removedIds.isEmpty() && artifactRequirements.existsByMilestone_IdIn(removedIds)) {
+            throw new ProjectTemplateException(422,
+                    "Remove artifact requirements from Backlog & artifacts before deleting their milestone",
+                    Map.of("milestones", List.of("A milestone being removed still has artifact requirements")));
+        }
         scheduleValidator.validate(request, template.getEstimatedDurationWeeks());
-        validator.validateStoredConfiguration(request, byId);
+        var rubricVersions = rubrics.requirePublished(request, template.getTenantId());
         String before = state(template, existing);
 
         template.setUpdatedAt(LocalDateTime.now());
@@ -76,9 +116,10 @@ public class TemplateMilestoneService {
             milestone.setDueAfter(input.dueAfter().intValueExact());
             milestone.setDueUnit(input.dueUnit());
             milestone.setWeight(input.weight());
+            milestone.setMandatory(input.mandatory());
+            milestone.setRubricVersion(rubricVersions.get(input.rubricVersionId()));
             milestone.setOrderIndex(index);
             updateChecklist(milestone, input.checklistItems());
-            if (input.rubricCriteria() != null) updateRubric(milestone, input.rubricCriteria());
             if (input.latePolicy() != null) updateLatePolicy(milestone, input.latePolicy());
             updated.add(milestone);
         }
@@ -108,32 +149,7 @@ public class TemplateMilestoneService {
             if (input.checklistItems().stream().anyMatch(item -> item.id() != null && !checklistIds.contains(item.savedId()))) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "A selected checklist item was not found in this milestone");
             }
-            Set<Long> rubricIds = milestone == null ? Set.of() : milestone.getRubricCriteria().stream()
-                    .map(TemplateRubricCriterion::getId).collect(Collectors.toSet());
-            if (input.rubricCriteria() != null && input.rubricCriteria().stream()
-                    .anyMatch(item -> item.id() != null && !rubricIds.contains(item.savedId()))) {
-                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "A selected rubric criterion was not found in this milestone");
-            }
         }
-    }
-
-    private void updateRubric(TemplateMilestone milestone, List<TemplateMilestonePlanRequest.RubricCriterion> inputs) {
-        Map<Long, TemplateRubricCriterion> byId = milestone.getRubricCriteria().stream()
-                .collect(Collectors.toMap(TemplateRubricCriterion::getId, Function.identity()));
-        Set<Long> retainedIds = inputs.stream().map(TemplateMilestonePlanRequest.RubricCriterion::savedId)
-                .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
-        milestone.getRubricCriteria().removeIf(criterion -> !retainedIds.contains(criterion.getId()));
-        for (int index = 0; index < inputs.size(); index++) {
-            var input = inputs.get(index);
-            TemplateRubricCriterion criterion = input.id() == null ? new TemplateRubricCriterion() : byId.get(input.savedId());
-            if (input.id() == null) milestone.getRubricCriteria().add(criterion);
-            criterion.setMilestone(milestone);
-            criterion.setName(input.name().strip());
-            criterion.setDescription(input.description() == null ? null : input.description().strip());
-            criterion.setMaxScore(input.maxScore());
-            criterion.setOrderIndex(index);
-        }
-        milestone.getRubricCriteria().sort(Comparator.comparing(TemplateRubricCriterion::getOrderIndex));
     }
 
     private List<TemplateMilestone> loadMilestones(Long templateId) {

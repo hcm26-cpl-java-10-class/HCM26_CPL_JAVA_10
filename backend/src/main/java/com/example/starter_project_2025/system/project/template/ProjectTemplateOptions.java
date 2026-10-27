@@ -8,6 +8,7 @@ public record ProjectTemplateOptions(
         List<String> categories,
         boolean canCreate,
         boolean canUpdate,
-        boolean canActivate
+        boolean canActivate,
+        boolean canArchive
 ) {
 }

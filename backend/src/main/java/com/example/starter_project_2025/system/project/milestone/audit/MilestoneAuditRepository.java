@@ -6,4 +6,7 @@ import java.util.UUID;
 
 public interface MilestoneAuditRepository extends JpaRepository<MilestoneAuditLog, UUID> {
     long countByMilestoneId(UUID milestoneId);
+    long countByMilestoneIdAndAction(UUID milestoneId, String action);
+    java.util.List<MilestoneAuditLog> findAllByMilestoneIdAndActionOrderByCreatedAtAsc(
+            UUID milestoneId, String action);
 }

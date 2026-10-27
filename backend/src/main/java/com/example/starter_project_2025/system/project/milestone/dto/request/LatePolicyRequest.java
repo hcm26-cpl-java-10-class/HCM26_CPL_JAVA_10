@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.project.milestone.dto.request;
 
 import com.example.starter_project_2025.system.project.milestone.domain.LatePolicyType;
+import com.example.starter_project_2025.system.project.milestone.domain.LatePenaltyBasis;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
@@ -16,6 +17,14 @@ public record LatePolicyRequest(
 
         @DecimalMin(value = "0.00", message = "Late penalty must be at least 0 percent")
         @DecimalMax(value = "100.00", message = "Late penalty must not exceed 100 percent")
-        BigDecimal penaltyPercent
+        BigDecimal penaltyPercent,
+        LatePenaltyBasis penaltyBasis
 ) {
+    public LatePolicyRequest {
+        penaltyBasis = penaltyBasis == null ? LatePenaltyBasis.FIXED : penaltyBasis;
+    }
+
+    public LatePolicyRequest(LatePolicyType type, Instant lateUntil, BigDecimal penaltyPercent) {
+        this(type, lateUntil, penaltyPercent, LatePenaltyBasis.FIXED);
+    }
 }

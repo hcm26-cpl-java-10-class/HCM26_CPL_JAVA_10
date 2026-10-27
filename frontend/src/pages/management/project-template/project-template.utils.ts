@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { ProjectTemplateDTO, ProjectTemplateLevel } from "@/types/features/project-template";
+import type { ProjectTemplateDTO, ProjectTemplateLevel, TemplateMilestone } from "@/types/features/project-template";
 
 export const templateLevelOptions = [
   { value: "BEGINNER", label: "Beginner" },
@@ -35,7 +35,13 @@ export function toTemplateFormValues(template?: ProjectTemplateDTO): TemplateFor
   };
 }
 
-export function validateTemplateForm(values: TemplateFormValues): TemplateFieldErrors {
+export function minimumTemplateDurationWeeks(milestones: TemplateMilestone[]): number {
+  const latestDay = milestones.reduce((latest, milestone) => Math.max(latest,
+    milestone.dueAfter * (milestone.dueUnit === "WEEKS" ? 7 : 1)), 0);
+  return Math.ceil(latestDay / 7);
+}
+
+export function validateTemplateForm(values: TemplateFormValues, minimumDurationWeeks = 0): TemplateFieldErrors {
   const errors: TemplateFieldErrors = {};
   for (const [field, label, maximum] of [
     ["code", "Code", 100],
@@ -54,6 +60,8 @@ export function validateTemplateForm(values: TemplateFormValues): TemplateFieldE
   const duration = values.estimatedDurationWeeks.trim();
   if (!/^\d+$/.test(duration) || Number(duration) <= 0 || Number(duration) > 2147483647) {
     errors.estimatedDurationWeeks = ["Estimated duration must be a positive whole number of weeks"];
+  } else if (Number(duration) < minimumDurationWeeks) {
+    errors.estimatedDurationWeeks = [`Estimated duration must be at least ${minimumDurationWeeks} weeks to include all saved milestones. Update the milestone schedule first or increase the duration.`];
   }
   return errors;
 }

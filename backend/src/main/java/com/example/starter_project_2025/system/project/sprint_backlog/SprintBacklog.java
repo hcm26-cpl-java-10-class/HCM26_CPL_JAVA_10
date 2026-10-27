@@ -63,6 +63,7 @@ import java.time.LocalDateTime;
         indexes = {
                 @Index(name = "idx_sprint_backlog_sprint", columnList = "sprint_id"),
                 @Index(name = "idx_sprint_backlog_status", columnList = "status"),
+                @Index(name = "idx_sprint_backlog_work_type", columnList = "work_type"),
                 @Index(name = "idx_sprint_backlog_assignee", columnList = "assignee_project_member_id")
         }
 )
@@ -116,6 +117,16 @@ public class SprintBacklog extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     SprintBacklogStatus status = SprintBacklogStatus.TODO;
+
+    /**
+     * Work type of the item: Story / Bug / Task. The set is FIXED (see
+     * {@link SprintBacklogWorkType}): there is no endpoint to create new work
+     * types, users only choose one of those values.
+     */
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "work_type", nullable = false, length = 20)
+    SprintBacklogWorkType workType = SprintBacklogWorkType.TASK;
 
     /**
      * Priority of the item, used by the backlog / planning board ordering and

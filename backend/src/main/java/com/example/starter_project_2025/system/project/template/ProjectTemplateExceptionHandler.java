@@ -73,6 +73,12 @@ public class ProjectTemplateExceptionHandler {
             case "allowMultiRole" -> "Choose whether members can hold multiple roles";
             case "dueAfter" -> "Due after must be a positive whole number";
             case "dueUnit" -> "Select days or weeks";
+            case "rubricVersionId" -> "Select a valid published rubric version";
+            case "mandatory" -> "Choose whether this item is required";
+            case "suggestedRole" -> "Select PM, BA, DEV or QA";
+            case "type" -> "Select File or URL";
+            case "milestoneId" -> "Select a valid saved milestone from this template";
+            case "allowedMimeTypes" -> "Select supported file formats";
             case "weight" -> "Weight must be between 0 and 100 with up to 2 decimal places";
             case "maxScore" -> "Maximum score must be between 0.01 and 99999999.99 (up to 2 decimal places)";
             case "allowLateSubmission" -> "Choose whether late submissions are allowed";
@@ -88,6 +94,13 @@ public class ProjectTemplateExceptionHandler {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ErrorResponse> invalidParameter(MethodArgumentTypeMismatchException exception) {
         return error(422, "Invalid " + exception.getName());
+    }
+
+    @ExceptionHandler({org.springframework.web.multipart.support.MissingServletRequestPartException.class,
+            org.springframework.web.multipart.MaxUploadSizeExceededException.class})
+    public ResponseEntity<ValidationErrorResponse> invalidUpload(Exception exception) {
+        String message = "Choose a file within the upload size limit";
+        return business(new ProjectTemplateException(422, message, Map.of("file", List.of(message))));
     }
 
     @ExceptionHandler(ResponseStatusException.class)

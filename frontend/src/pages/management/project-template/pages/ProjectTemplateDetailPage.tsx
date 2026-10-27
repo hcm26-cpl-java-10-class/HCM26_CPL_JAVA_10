@@ -11,6 +11,10 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ProjectTemplateError, ProjectTemplateLoading } from "../components/ProjectTemplateState";
 import { ProjectTemplateStatusBadge } from "../components/ProjectTemplateStatusBadge";
 import { TemplateTeamConstraintsForm } from "../components/TemplateTeamConstraintsForm";
+import { TemplateMilestonesPanel } from "../components/TemplateMilestonesPanel";
+import { TemplateActivationDialog } from "../components/TemplateActivationDialog";
+import { TemplateArchiveDialog } from "../components/TemplateArchiveDialog";
+import { TemplateSampleContentPanel } from "../components/TemplateSampleContentPanel";
 import { useProjectTemplateOptions } from "../hooks/useProjectTemplateOptions";
 import { templateLevelLabel } from "../project-template.utils";
 
@@ -20,7 +24,8 @@ export function ProjectTemplateDetailPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const options = useProjectTemplateOptions();
-  const tab = searchParams.get("tab") === "team-constraints" ? "team-constraints" : "overview";
+  const requestedTab = searchParams.get("tab");
+  const tab = requestedTab === "team-constraints" || requestedTab === "milestones" || requestedTab === "sample-content" ? requestedTab : "overview";
   const detailQueryKey = ["project-templates", options.user.email, options.activeRole, "detail", id];
   const query = useQuery({
     queryKey: detailQueryKey,
@@ -33,6 +38,11 @@ export function ProjectTemplateDetailPage() {
   const template = query.data;
   const canEdit = options.isSuccess && options.data?.canUpdate === true && !query.isError && !!template?.editable
     && options.hasPermission("PROJECT_TEMPLATE_UPDATE");
+  const canActivate = options.isSuccess && options.data?.canActivate === true && !query.isError
+    && template?.status === "DRAFT" && (options.activeRole === "ADMIN" || options.activeRole === "PROGRAM_MANAGER")
+    && options.hasPermission("PROJECT_TEMPLATE_ACTIVATE");
+  const canArchive = options.isSuccess && options.data?.canArchive === true && !query.isError
+    && template?.status === "ACTIVE" && options.hasPermission("PROJECT_TEMPLATE_ARCHIVE");
   const formatDate = (value: string) => new Date(value).toLocaleString("en-GB");
   const selectTab = (value: string) => setSearchParams((current) => {
     const next = new URLSearchParams(current);
@@ -57,6 +67,16 @@ export function ProjectTemplateDetailPage() {
             {tab === "overview" && canEdit && (
               <Button onClick={() => navigate(`/project-templates/${id}/edit`)}><Pen /> Edit draft</Button>
             )}
+            {canActivate && template && <TemplateActivationDialog template={template}
+              onOpenSection={selectTab}
+              onActivated={(saved) => {
+                queryClient.setQueryData(detailQueryKey, saved);
+                void queryClient.invalidateQueries({ queryKey: ["project-templates"] });
+              }} />}
+            {canArchive && template && <TemplateArchiveDialog template={template} onArchived={(saved) => {
+              queryClient.setQueryData(detailQueryKey, saved);
+              void queryClient.invalidateQueries({ queryKey: ["project-templates"] });
+            }} />}
           </div>
         </header>
         {!options.canRead ? <ProjectTemplateError denied />
@@ -66,12 +86,17 @@ export function ProjectTemplateDetailPage() {
           : template && (
             <>
               {template.status !== "DRAFT" && (
-                <Alert><LockKeyhole /><AlertDescription>This template is read-only. Only draft templates can be edited.</AlertDescription></Alert>
+                <Alert><LockKeyhole /><AlertDescription>{template.status === "ARCHIVED"
+                  ? "This template is archived and cannot be selected for new classes or cohorts. Its saved configuration remains available below."
+                  : "This template is read-only. Only draft templates can be edited."}</AlertDescription></Alert>
               )}
               <Tabs value={tab} onValueChange={selectTab} className="min-w-0 gap-4">
-                <TabsList aria-label="Template configuration">
-                  <TabsTrigger value="overview">Overview</TabsTrigger>
-                  <TabsTrigger value="team-constraints">Team constraints</TabsTrigger>
+                <TabsList aria-label="Template configuration"
+                  className="grid w-full max-w-2xl grid-cols-2 group-data-[orientation=horizontal]/tabs:h-auto sm:grid-cols-4">
+                  <TabsTrigger value="overview" className="h-full min-h-9 whitespace-normal">Overview</TabsTrigger>
+                  <TabsTrigger value="team-constraints" className="h-full min-h-9 whitespace-normal">Team constraints</TabsTrigger>
+                  <TabsTrigger value="milestones" className="h-full min-h-9 whitespace-normal">Milestones</TabsTrigger>
+                  <TabsTrigger value="sample-content" className="h-full min-h-9 whitespace-normal">Backlog &amp; artifacts</TabsTrigger>
                 </TabsList>
                 <TabsContent value="overview">
                   <Card>
@@ -113,6 +138,12 @@ export function ProjectTemplateDetailPage() {
                       void queryClient.invalidateQueries({ queryKey: ["project-templates"] });
                     }}
                   />
+                </TabsContent>
+                <TabsContent value="milestones">
+                  <TemplateMilestonesPanel templateId={template.id} editable={canEdit} />
+                </TabsContent>
+                <TabsContent value="sample-content">
+                  <TemplateSampleContentPanel templateId={template.id} editable={canEdit} />
                 </TabsContent>
               </Tabs>
             </>

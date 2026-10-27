@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.project.template.milestone;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.system.project.ProjectTemplate;
+import com.example.starter_project_2025.system.project.rubric.domain.RubricVersion;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -45,6 +46,13 @@ public class TemplateMilestone extends BaseEntity {
 
     @Column(nullable = false, precision = 5, scale = 2)
     private BigDecimal weight;
+
+    @Column(name = "is_mandatory", nullable = false, columnDefinition = "boolean default true")
+    private boolean mandatory = true;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "rubric_version_id")
+    private RubricVersion rubricVersion;
 
     @Column(name = "order_index", nullable = false)
     private Integer orderIndex;

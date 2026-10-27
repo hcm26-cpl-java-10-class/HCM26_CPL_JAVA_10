@@ -8,6 +8,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ProjectTemplateForm } from "../components/ProjectTemplateForm";
 import { ProjectTemplateError, ProjectTemplateLoading } from "../components/ProjectTemplateState";
 import { useProjectTemplateOptions } from "../hooks/useProjectTemplateOptions";
+import { minimumTemplateDurationWeeks } from "../project-template.utils";
 
 export function ProjectTemplateFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -22,6 +23,16 @@ export function ProjectTemplateFormPage() {
     refetchOnReconnect: false,
     retry: false,
   });
+  const milestonePlan = useQuery({
+    queryKey: ["project-templates", options.user.email, options.activeRole, "milestones", id, location.key],
+    queryFn: ({ signal }) => projectTemplateApi.getMilestones(Number(id), signal),
+    enabled: !!id && options.isSuccess && template.data?.editable === true,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: false,
+  });
+  const minimumDuration = milestonePlan.data?.lockVersion === template.data?.lockVersion && milestonePlan.data
+    ? minimumTemplateDurationWeeks(milestonePlan.data.milestones) : 0;
   const allowed = options.canRead && options.hasPermission(`PROJECT_TEMPLATE_${id ? "UPDATE" : "CREATE"}`);
   const permitted = id ? options.data?.canUpdate : options.data?.canCreate;
   const goBack = () => navigate(id ? `/project-templates/${id}/detail` : "/project-templates");
@@ -35,9 +46,9 @@ export function ProjectTemplateFormPage() {
           <p className="mt-1 text-sm text-muted-foreground">{id ? "Update the general information for this draft." : "Save the project brief as a draft before configuring its team and milestones."}</p>
         </header>
         {!allowed ? <ProjectTemplateError denied />
-          : options.isLoading || (!!id && options.isSuccess && template.isLoading) ? <ProjectTemplateLoading />
-          : options.isError || template.isError ? <ProjectTemplateError error={options.error ?? template.error}
-            onRetry={() => { void options.refetch(); if (id) void template.refetch(); }} />
+          : options.isLoading || (!!id && options.isSuccess && template.isLoading) || milestonePlan.isLoading ? <ProjectTemplateLoading />
+          : options.isError || template.isError || milestonePlan.isError ? <ProjectTemplateError error={options.error ?? template.error ?? milestonePlan.error}
+            onRetry={() => { void options.refetch(); if (id) { void template.refetch(); void milestonePlan.refetch(); } }} />
           : !permitted ? <ProjectTemplateError denied />
           : id && template.data && !template.data.editable ? (
             <Alert>
@@ -50,6 +61,7 @@ export function ProjectTemplateFormPage() {
             </Alert>
           ) : options.data && (!id || template.data) ? (
             <ProjectTemplateForm key={id ?? "create"} template={template.data} options={options.data}
+              minimumDurationWeeks={minimumDuration}
               onCancel={goBack} onSaved={(saved) => navigate(`/project-templates/${saved.id}/detail`)} />
           ) : null}
       </section>

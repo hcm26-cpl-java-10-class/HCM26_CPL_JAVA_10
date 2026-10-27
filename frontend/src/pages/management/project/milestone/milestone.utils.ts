@@ -122,9 +122,9 @@ export function isPastDeadline(milestone: MilestoneListItem): boolean {
     new Date(milestone.deadline).getTime() < Date.now();
 }
 
-export function formatPenalty(value?: number | null): string {
+export function formatPenalty(value?: number | null, basis?: "FIXED" | "PER_DAY"): string {
   if (value == null) return "—";
-  return `${new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 }).format(value)}%`;
+  return `${new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 }).format(value)}%${basis === "PER_DAY" ? " per day" : ""}`;
 }
 
 export function formatMilestoneStatus(status: MilestoneStatus): string {

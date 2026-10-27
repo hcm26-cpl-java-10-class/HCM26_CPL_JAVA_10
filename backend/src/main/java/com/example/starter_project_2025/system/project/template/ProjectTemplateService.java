@@ -4,6 +4,8 @@ import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneRepository;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneScheduleValidator;
+import com.example.starter_project_2025.system.project.milestone.outbox.OutboxEvent;
+import com.example.starter_project_2025.system.project.milestone.outbox.OutboxEventRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.web.CorrelationIdFilter;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -12,6 +14,9 @@ import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Set;
+import java.util.Map;
+import java.util.List;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -37,12 +42,13 @@ public class ProjectTemplateService {
     private final TemplateMilestoneScheduleValidator scheduleValidator;
     private final TemplateTeamConstraintsMapper teamConstraintsMapper;
     private final ObjectMapper objectMapper;
+    private final OutboxEventRepository events;
 
     public ProjectTemplateOptions getOptions() {
         User user = access.requireUser("READ");
         return new ProjectTemplateOptions(user.getTenantId(), user.getTenant().getName(),
                 templates.findCategories(user.getTenantId()), access.can(user, "CREATE"), access.can(user, "UPDATE"),
-                access.can(user, "ACTIVATE"));
+                access.can(user, "ACTIVATE"), access.can(user, "ARCHIVE"));
     }
 
     public Page<ProjectTemplateResponse> getPage(String search, ProjectTemplateStatus status,
@@ -133,6 +139,49 @@ public class ProjectTemplateService {
         template = templates.saveAndFlush(template);
         recordAudit(template, user, "PROJECT_TEMPLATE_TEAM_RULES_UPDATED", beforeState);
         return response(template, true);
+    }
+
+    @Transactional
+    public ProjectTemplateResponse archive(Long id, TemplateArchiveRequest request) {
+        User user = access.requireUser("ARCHIVE");
+        ProjectTemplate template = findTemplate(id, user);
+        if (template.getStatus() != ProjectTemplateStatus.ACTIVE) {
+            throw ProjectTemplateException.conflict("Only active templates can be archived");
+        }
+        requireArchiveRevision(request);
+        if (!template.getLockVersion().equals(request.lockVersion().longValueExact())) {
+            throw ProjectTemplateException.conflict("This template has changed. Reload it before archiving");
+        }
+        String before = state(template);
+        template.setStatus(ProjectTemplateStatus.ARCHIVED);
+        templates.saveAndFlush(template);
+        recordAudit(template, user, "PROJECT_TEMPLATE_ARCHIVED", before);
+        try {
+            String payload = objectMapper.writeValueAsString(Map.of(
+                    "templateId", id, "tenantId", template.getTenantId(), "actorId", user.getId(),
+                    "correlationId", CorrelationIdFilter.currentId(), "template", objectMapper.readTree(state(template))));
+            events.save(OutboxEvent.templateArchived(template.getTenantId(), id, payload, Instant.now()));
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Unable to record template archive event", exception);
+        }
+        return response(template, false);
+    }
+
+    public void rejectDelete(Long id) {
+        User user = access.requireUser("ARCHIVE");
+        findTemplate(id, user);
+        throw new ProjectTemplateException(422,
+                "Project templates cannot be permanently deleted. Archive an active template instead to preserve linked data",
+                Map.of());
+    }
+
+    private void requireArchiveRevision(TemplateArchiveRequest request) {
+        try {
+            if (request != null && request.lockVersion() != null && request.lockVersion().longValueExact() >= 0) return;
+        } catch (ArithmeticException ignored) {
+        }
+        String message = "A valid template revision is required. Please reload the template";
+        throw new ProjectTemplateException(422, message, Map.of("lockVersion", List.of(message)));
     }
 
     private ProjectTemplateResponse response(ProjectTemplate template, boolean canUpdate) {

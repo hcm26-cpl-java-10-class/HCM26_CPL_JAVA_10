@@ -31,14 +31,17 @@ function TemplateField({ name, label, errors, children }: {
   );
 }
 
-export function ProjectTemplateForm({ template, options, onCancel, onSaved }: {
+export function ProjectTemplateForm({ template, options, minimumDurationWeeks = 0, onCancel, onSaved }: {
   template?: ProjectTemplateDTO;
   options: ProjectTemplateOptions;
+  minimumDurationWeeks?: number;
   onCancel: () => void;
   onSaved: (template: ProjectTemplateDTO) => void;
 }) {
   const queryClient = useQueryClient();
   const [values, setValues] = useState(() => toTemplateFormValues(template));
+  const [lockVersion] = useState(template?.lockVersion);
+  const [minimumDuration] = useState(minimumDurationWeeks);
   const [errors, setErrors] = useState<TemplateFieldErrors>({});
   const [submitError, setSubmitError] = useState<ReturnType<typeof getTemplateError> | null>(null);
   const submitting = useRef(false);
@@ -65,7 +68,7 @@ export function ProjectTemplateForm({ template, options, onCancel, onSaved }: {
     event.preventDefault();
     if (submitting.current) return;
     setSubmitError(null);
-    const nextErrors = validateTemplateForm(values);
+    const nextErrors = validateTemplateForm(values, minimumDuration);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) {
       requestAnimationFrame(() => document.getElementById(`template-${Object.keys(nextErrors)[0]}`)?.focus());
@@ -79,7 +82,7 @@ export function ProjectTemplateForm({ template, options, onCancel, onSaved }: {
       category: values.category.trim(),
       level: values.level as ProjectTemplateLevel,
       estimatedDurationWeeks: Number(values.estimatedDurationWeeks),
-      ...(template ? { lockVersion: template.lockVersion } : {}),
+      ...(template ? { lockVersion } : {}),
     });
   };
   const inputProps = (field: keyof TemplateFormValues) => ({
@@ -136,6 +139,9 @@ export function ProjectTemplateForm({ template, options, onCancel, onSaved }: {
               <TemplateField name="estimatedDurationWeeks" label="Estimated duration (weeks)" errors={errors.estimatedDurationWeeks}>
                 <Input {...inputProps("estimatedDurationWeeks")} inputMode="numeric" value={values.estimatedDurationWeeks}
                   onChange={(event) => change("estimatedDurationWeeks", event.target.value)} placeholder="E.g. 8" />
+                {minimumDuration > 0 && <p className="text-xs text-muted-foreground">
+                  Saved milestones require at least {minimumDuration} weeks. To use a shorter duration, update the milestone schedule first.
+                </p>}
               </TemplateField>
             </div>
           </CardContent>

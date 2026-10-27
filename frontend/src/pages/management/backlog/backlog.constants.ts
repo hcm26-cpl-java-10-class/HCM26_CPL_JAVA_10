@@ -1,4 +1,10 @@
-import type { BacklogPriority, BacklogStatus, SprintPlanningItem } from "@/types";
+import type {
+  BacklogPriority,
+  BacklogStatus,
+  SprintBacklogWorkType,
+  SprintPlanningItem,
+} from "@/types";
+import { Bookmark, Bug, SquareCheck, type LucideIcon } from "lucide-react";
 
 /** Workflow order of a backlog item (UFR-PRJ-003-02). */
 export const TASK_STATUS_ORDER: BacklogStatus[] = [
@@ -81,6 +87,26 @@ export const NO_PRIORITY_META = {
   dot: "bg-muted-foreground",
 };
 
+/**
+ * Work type of a work item: Story / Bug / Task (fixed set, no custom types).
+ * The icon + colour match the Jira work item type picker.
+ */
+export const BACKLOG_WORK_TYPE_META: Record<
+  SprintBacklogWorkType,
+  { label: string; icon: LucideIcon; iconClass: string }
+> = {
+  STORY: { label: "Story", icon: Bookmark, iconClass: "text-lime-600" },
+  BUG: { label: "Bug", icon: Bug, iconClass: "text-rose-500" },
+  TASK: { label: "Task", icon: SquareCheck, iconClass: "text-sky-500" },
+};
+
+/** Falls back to `Task`, the backend default, when no type is stored. */
+export const backlogWorkTypeMeta = (
+  workType?: SprintBacklogWorkType | null,
+) =>
+  (workType && BACKLOG_WORK_TYPE_META[workType]) ||
+  BACKLOG_WORK_TYPE_META.TASK;
+
 export const backlogPriorityMeta = (priority?: BacklogPriority | null) =>
   (priority && BACKLOG_PRIORITY_META[priority]) || NO_PRIORITY_META;
 
@@ -105,14 +131,45 @@ export const canMoveToStatus = (
 };
 
 /**
- * Short key prefix of the section (`FSA Sprint 1` -> `FSA`), used by the row
- * keys (`FSA-21`) exactly like the project backlog mock-up.
+ * Words that name the container, not the work it holds: taking them as key
+ * prefix turned every row into `SPRINT-1`, `SPRINT-2`, ... which reads like a
+ * <em>sprint</em> code instead of a work item code.
  */
-export const projectKeyOf = (sprintName?: string | null) => {
-  const first = (sprintName ?? "").trim().split(/\s+/)[0] ?? "";
-  const token = first.replace(/[^A-Za-z0-9]/g, "");
+const GENERIC_KEY_TOKENS = new Set([
+  "sprint",
+  "sprints",
+  "backlog",
+  "backlogs",
+  "product",
+  "iteration",
+  "phase",
+]);
 
-  return (token.length >= 2 && token.length <= 6 ? token : "PRJ").toUpperCase();
+/**
+ * Short key prefix of a backlog box, used by the row keys (`DISCOVERY-21`)
+ * exactly like the Jira project key.
+ * <p>
+ * `Sprint 1 - Discovery` -> `DISCOVERY`, `Sprint 2 - Design System` ->
+ * `DESIGN`. The generic words above and the sprint numbers are skipped so a
+ * work item key can never be confused with a sprint code; when nothing is left
+ * the `SB` (sprint backlog) fallback is used.
+ */
+export const projectKeyOf = (
+  sprintName?: string | null,
+  fallback = "SB",
+) => {
+  const meaningful = (sprintName ?? "")
+    .split(/[^A-Za-z0-9]+/)
+    .filter(
+      (token) =>
+        token !== "" &&
+        !/^\d+$/.test(token) &&
+        !GENERIC_KEY_TOKENS.has(token.toLowerCase()),
+    );
+
+  const token = (meaningful[0] ?? "").replace(/[^A-Za-z0-9]/g, "");
+
+  return (token.length >= 2 && token.length <= 10 ? token : fallback).toUpperCase();
 };
 
 export const backlogItemKey = (

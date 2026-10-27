@@ -48,11 +48,12 @@ public class TemplateMilestoneValidator {
                     total = total.add(milestone.weight());
                 }
                 checklist(errors, path, milestone.checklistItems());
-                if (milestone.rubricCriteria() != null) {
-                    rubric(errors, path, milestone.rubricCriteria());
-                }
+                if (milestone.mandatory() == null) error(errors, path + ".mandatory", "Choose whether the milestone is required");
+                if (milestone.rubricVersionId() == null) error(errors, path + ".rubricVersionId", "Select a published rubric version");
                 if (milestone.latePolicy() != null) {
                     latePolicy(errors, path, milestone.latePolicy());
+                } else {
+                    error(errors, path + ".latePolicy", "Configure a late submission policy for this milestone");
                 }
             }
             if (validWeights && total.compareTo(new BigDecimal("100")) != 0) {
@@ -61,35 +62,6 @@ public class TemplateMilestoneValidator {
         }
         if (!errors.isEmpty()) {
             throw new ProjectTemplateException(422, "Please correct the highlighted fields", errors);
-        }
-    }
-
-    public void validateStoredConfiguration(
-            TemplateMilestonePlanRequest request, Map<Long, TemplateMilestone> existing) {
-        Map<String, List<String>> errors = new LinkedHashMap<>();
-        for (int index = 0; index < request.milestones().size(); index++) {
-            var input = request.milestones().get(index);
-            TemplateMilestone saved = input.id() == null ? null : existing.get(input.savedId());
-            String path = "milestones[" + index + "]";
-            if (input.rubricCriteria() == null) {
-                List<TemplateMilestonePlanRequest.RubricCriterion> criteria = saved == null ? List.of()
-                        : saved.getRubricCriteria().stream().map(criterion -> new TemplateMilestonePlanRequest.RubricCriterion(
-                                BigDecimal.valueOf(criterion.getId()), criterion.getName(), criterion.getDescription(),
-                                criterion.getMaxScore())).toList();
-                rubric(errors, path, criteria);
-            }
-            if (input.latePolicy() == null) {
-                if (saved == null || saved.getAllowLateSubmission() == null) {
-                    error(errors, path + ".latePolicy", "Configure a late submission policy for this milestone");
-                } else {
-                    latePolicy(errors, path, new TemplateMilestonePlanRequest.LatePolicy(
-                            saved.getAllowLateSubmission(), saved.getMaxLateDays() == null ? null
-                            : BigDecimal.valueOf(saved.getMaxLateDays()), saved.getPenaltyPerDayPercent()));
-                }
-            }
-        }
-        if (!errors.isEmpty()) {
-            throw new ProjectTemplateException(422, "Complete the milestone configuration before saving", errors);
         }
     }
 
@@ -108,38 +80,10 @@ public class TemplateMilestoneValidator {
         }
     }
 
-    private void rubric(Map<String, List<String>> errors, String path,
-            List<TemplateMilestonePlanRequest.RubricCriterion> criteria) {
-        if (criteria.isEmpty()) {
-            error(errors, path + ".rubricCriteria", "Add at least one rubric criterion for this milestone");
-            return;
-        }
-        Set<Long> ids = new HashSet<>();
-        for (int index = 0; index < criteria.size(); index++) {
-            var criterion = criteria.get(index);
-            String criterionPath = path + ".rubricCriteria[" + index + "]";
-            if (criterion == null) {
-                error(errors, criterionPath, "Enter the rubric criterion information");
-                continue;
-            }
-            id(errors, criterionPath + ".id", criterion.id(), ids);
-            text(errors, criterionPath + ".name", criterion.name(), 100, "Criterion name");
-            if (criterion.description() != null && criterion.description().strip().length() > 500) {
-                error(errors, criterionPath + ".description", "Criterion description must not exceed 500 characters");
-            }
-            BigDecimal score = criterion.maxScore();
-            if (score == null || score.signum() <= 0 || score.compareTo(new BigDecimal("99999999.99")) > 0
-                    || score.stripTrailingZeros().scale() > 2) {
-                error(errors, criterionPath + ".maxScore",
-                        "Maximum score must be between 0.01 and 99999999.99 (up to 2 decimal places)");
-            }
-        }
-    }
-
     private void checklist(Map<String, List<String>> errors, String path,
             List<TemplateMilestonePlanRequest.ChecklistItem> items) {
-        if (items == null) {
-            error(errors, path + ".checklistItems", "Provide a checklist or an empty list");
+        if (items == null || items.isEmpty() || items.size() > 100) {
+            error(errors, path + ".checklistItems", "Provide between 1 and 100 checklist items");
             return;
         }
         Set<Long> ids = new HashSet<>();

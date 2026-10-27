@@ -8,6 +8,7 @@ import com.example.starter_project_2025.system.project.template.milestone.Templa
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneRepository;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneScheduleValidator;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneValidator;
+import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneRubrics;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.web.CorrelationIdFilter;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -16,8 +17,6 @@ import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -37,6 +36,7 @@ public class TemplateActivationService {
     private final TemplateTeamConstraintsMapper teamConstraintsMapper;
     private final ProjectTemplateAuditRepository audits;
     private final ObjectMapper objectMapper;
+    private final TemplateMilestoneRubrics rubrics;
 
     public TemplateActivationChecklist getChecklist(Long id) {
         User user = access.requireUser("READ");
@@ -78,8 +78,9 @@ public class TemplateActivationService {
         var input = TemplateMilestonePlanRequest.from(template.getLockVersion(), plan);
         var milestoneErrors = errors(() -> milestoneValidator.validate(input));
         milestoneErrors.putAll(errors(() -> scheduleValidator.validate(input, template.getEstimatedDurationWeeks())));
-        Map<Long, TemplateMilestone> byId = plan.stream().collect(Collectors.toMap(TemplateMilestone::getId, Function.identity()));
-        milestoneErrors.putAll(errors(() -> milestoneValidator.validateStoredConfiguration(input, byId)));
+        if (milestoneErrors.isEmpty()) {
+            milestoneErrors.putAll(errors(() -> rubrics.requirePublished(input, template.getTenantId())));
+        }
         List<TemplateActivationChecklist.Item> items = List.of(
                 item("overview", "General information", overview),
                 item("team-constraints", "Team constraints and role quotas", team),

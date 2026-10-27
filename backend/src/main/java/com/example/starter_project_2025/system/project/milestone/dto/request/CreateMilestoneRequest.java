@@ -5,7 +5,11 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.Digits;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -37,6 +41,13 @@ public record CreateMilestoneRequest(
         UUID reviewerId,
 
         @NotNull(message = "Late policy is required")
-        @Valid LatePolicyRequest latePolicy
+        @Valid LatePolicyRequest latePolicy,
+
+        @DecimalMin("0") @DecimalMax("100") @Digits(integer = 3, fraction = 2)
+        BigDecimal weight
 ) {
+    public CreateMilestoneRequest(Long teamId, String title, String description, Instant deadline, boolean mandatory,
+            List<ChecklistItemRequest> checklist, UUID rubricSnapshotId, UUID reviewerId, LatePolicyRequest latePolicy) {
+        this(teamId, title, description, deadline, mandatory, checklist, rubricSnapshotId, reviewerId, latePolicy, null);
+    }
 }

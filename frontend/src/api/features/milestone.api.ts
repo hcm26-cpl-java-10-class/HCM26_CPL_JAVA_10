@@ -1,6 +1,12 @@
 import axiosInstance from "@/api/axios";
 import type {
   CreateMilestoneRequest,
+  ArtifactDraft,
+  ArtifactDraftRequest,
+  ArtifactSubmission,
+  ArtifactSubmissionRequest,
+  ArtifactAttachment,
+  ArtifactSubmissionWorkspace,
   MilestoneCreateOptions,
   MilestoneDetailResponse,
   MilestoneListParams,
@@ -59,6 +65,15 @@ export const milestoneApi = {
     return response.data;
   },
 
+  async openForSubmissions(projectId: string, milestoneId: string): Promise<MilestoneResponse> {
+    const response = await axiosInstance.post<MilestoneResponse>(`/projects/${projectId}/milestones/${milestoneId}/open`);
+    return response.data;
+  },
+  async openTeamMilestoneForSubmissions(teamId: number, milestoneId: string): Promise<MilestoneResponse> {
+    const response = await axiosInstance.post<MilestoneResponse>(`/teams/${teamId}/milestones/${milestoneId}/open`);
+    return response.data;
+  },
+
   async create(
     projectId: string,
     payload: CreateMilestoneRequest,
@@ -100,6 +115,55 @@ export const milestoneApi = {
   async getTeamDetail(teamId: number, milestoneId: string): Promise<MilestoneDetailResponse> {
     const response = await axiosInstance.get<MilestoneDetailResponse>(
       `/teams/${teamId}/milestones/${milestoneId}`,
+    );
+    return response.data;
+  },
+
+  async getTeamArtifactWorkspace(teamId: number, milestoneId: string): Promise<ArtifactSubmissionWorkspace> {
+    const response = await axiosInstance.get<ArtifactSubmissionWorkspace>(`/teams/${teamId}/milestones/${milestoneId}/artifact-draft`);
+    return response.data;
+  },
+  async saveTeamArtifactDraft(teamId: number, milestoneId: string, payload: ArtifactDraftRequest): Promise<ArtifactDraft> {
+    const response = await axiosInstance.put<ArtifactDraft>(`/teams/${teamId}/milestones/${milestoneId}/artifact-draft`, payload);
+    return response.data;
+  },
+  async submitTeamArtifact(teamId: number, milestoneId: string, payload: ArtifactSubmissionRequest, key: string): Promise<ArtifactSubmission> {
+    const response = await axiosInstance.post<ArtifactSubmission>(`/teams/${teamId}/milestones/${milestoneId}/artifact-draft/submissions`, payload, { headers: { "Idempotency-Key": key } });
+    return response.data;
+  },
+  async getTeamArtifactSubmissions(teamId: number, milestoneId?: string): Promise<Array<{ submission: ArtifactSubmission; submitterId: string; submitterName?: string | null; submitterEmail?: string | null }>> {
+    const response = await axiosInstance.get<Array<{ submission: ArtifactSubmission; submitterId: string; submitterName?: string | null; submitterEmail?: string | null }>>(`/teams/${teamId}/milestones/submissions`, { params: milestoneId ? { milestoneId } : undefined });
+    return response.data;
+  },
+
+  async getArtifactWorkspace(projectId: string, milestoneId: string): Promise<ArtifactSubmissionWorkspace> {
+    const response = await axiosInstance.get<ArtifactSubmissionWorkspace>(
+      `/projects/${projectId}/milestones/${milestoneId}/artifact-draft`,
+    );
+    return response.data;
+  },
+
+  async saveArtifactDraft(projectId: string, milestoneId: string, payload: ArtifactDraftRequest): Promise<ArtifactDraft> {
+    const response = await axiosInstance.put<ArtifactDraft>(
+      `/projects/${projectId}/milestones/${milestoneId}/artifact-draft`, payload,
+    );
+    return response.data;
+  },
+
+  async uploadArtifact(projectId: string, milestoneId: string, file: File): Promise<ArtifactAttachment> {
+    const payload = new FormData();
+    payload.append("file", file);
+    const response = await axiosInstance.post<ArtifactAttachment>(
+      `/projects/${projectId}/milestones/${milestoneId}/artifact-draft/attachments`, payload,
+    );
+    return response.data;
+  },
+
+  async submitArtifact(projectId: string, milestoneId: string, payload: ArtifactSubmissionRequest,
+    idempotencyKey: string): Promise<ArtifactSubmission> {
+    const response = await axiosInstance.post<ArtifactSubmission>(
+      `/projects/${projectId}/milestones/${milestoneId}/artifact-draft/submissions`, payload,
+      { headers: { "Idempotency-Key": idempotencyKey } },
     );
     return response.data;
   },

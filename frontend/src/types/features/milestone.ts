@@ -1,4 +1,5 @@
 export type LatePolicyType = "NO_LATE" | "ALLOW_LATE";
+export type LatePenaltyBasis = "FIXED" | "PER_DAY";
 export type MilestoneStatus = "PLANNED" | "OPEN" | "CLOSED" | "CANCELLED";
 export type MilestoneProjectStatus = "ACTIVE" | "COMPLETED" | "CANCELLED";
 
@@ -12,9 +13,11 @@ export interface MilestoneLatePolicyRequest {
   type: LatePolicyType;
   lateUntil?: string;
   penaltyPercent?: number;
+  penaltyBasis?: LatePenaltyBasis;
 }
 
 export interface CreateMilestoneRequest {
+  weight?: number;
   teamId?: number;
   title: string;
   description?: string;
@@ -57,6 +60,8 @@ export interface MilestoneChecklistItemResponse {
 }
 
 export interface MilestoneResponse {
+  weight?: number | null;
+  latePenaltyBasis?: LatePenaltyBasis;
   id: string;
   projectId: string;
   title: string;
@@ -103,12 +108,14 @@ export interface MilestoneReviewerDetail {
 }
 
 export interface MilestoneLatePolicyDetail {
+  penaltyBasis?: LatePenaltyBasis;
   type: LatePolicyType;
   lateUntil?: string | null;
   penaltyPercent?: number | null;
 }
 
 export interface MilestoneDetailResponse {
+  weight?: number | null;
   id: string;
   project: MilestoneProjectOption;
   title: string;
@@ -125,6 +132,77 @@ export interface MilestoneDetailResponse {
   createdAt: string;
   createdBy: string;
   teamId?: number;
+}
+
+export interface ArtifactDraft {
+  milestoneId: string;
+  status: "DRAFT";
+  repositoryUrl?: string | null;
+  deploymentUrl?: string | null;
+  releaseNotes?: string | null;
+  checklist: Record<string, boolean>;
+  attachments: ArtifactAttachment[];
+  version: number;
+  createdBy: string;
+  createdAt: string;
+  updatedBy: string;
+  updatedAt: string;
+}
+
+export interface ArtifactAttachment {
+  id: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  scanStatus: "CLEAN";
+  uploadedBy: string;
+  uploadedAt: string;
+  draftVersion: number;
+}
+
+export interface ArtifactDraftRequest {
+  repositoryUrl?: string;
+  deploymentUrl?: string;
+  releaseNotes?: string;
+  checklist: Record<string, boolean>;
+  expectedVersion?: number;
+}
+
+export interface ArtifactSubmissionRequest {
+  repositoryUrl?: string;
+  deploymentUrl?: string;
+  releaseNotes?: string;
+  checklist: Record<string, boolean>;
+  attachmentIds: string[];
+}
+
+export interface ArtifactSubmissionAttachment {
+  id: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+}
+
+export interface ArtifactSubmission {
+  id: string;
+  milestoneId: string;
+  version: number;
+  status: "SUBMITTED";
+  repositoryUrl?: string | null;
+  deploymentUrl?: string | null;
+  releaseNotes?: string | null;
+  checklist: Record<string, boolean>;
+  attachments: ArtifactSubmissionAttachment[];
+  submittedAt: string;
+  submittedLate: boolean;
+  latePenaltyPercent?: number | null;
+}
+
+export interface ArtifactSubmissionWorkspace {
+  milestone: MilestoneDetailResponse;
+  draft: ArtifactDraft | null;
+  uploadPolicy: { enabled: boolean; maxBytes: number; allowedMimeTypes: string[] };
+  latestSubmission: ArtifactSubmission | null;
 }
 
 export interface MilestoneApiError {
@@ -145,6 +223,8 @@ export interface MilestoneDetailRouteState {
 }
 
 export interface MilestoneListItem {
+  weight?: number | null;
+  latePenaltyBasis?: LatePenaltyBasis;
   id: string;
   teamId?: number;
   title: string;

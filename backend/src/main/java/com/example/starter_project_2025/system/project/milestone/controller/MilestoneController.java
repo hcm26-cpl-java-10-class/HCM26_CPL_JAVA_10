@@ -81,4 +81,10 @@ public class MilestoneController {
     ) {
         return ResponseEntity.ok(queryService.getDetail(projectId, milestoneId, teamId));
     }
+
+    @PostMapping("/{milestoneId}/open")
+    @PreAuthorize("hasAuthority('MILESTONE_WRITE')")
+    public ResponseEntity<MilestoneResponse> openForSubmissions(@PathVariable Long projectId, @PathVariable UUID milestoneId) {
+        return ResponseEntity.ok(commandService.openForSubmissions(projectId, null, milestoneId));
+    }
 }
