@@ -177,6 +177,16 @@ export default function StudentLandingPage() {
 
       <section className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
         {checklistItems.map((item, index) => {
+          const content = (
+            <>
+              <div className="inline-flex rounded-xl bg-slate-100 p-2 text-slate-700">
+                <CheckCircle2 className="size-5" />
+              </div>
+              <h3 className="mt-4 text-lg font-semibold text-slate-900">{item.title}</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600">{item.text}</p>
+            </>
+          );
+
           return (
             <motion.article
               key={item.title}
@@ -186,11 +196,17 @@ export default function StudentLandingPage() {
               className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
               style={{ fontFamily: '"DM Sans", "Segoe UI", sans-serif' }}
             >
-              <div className="inline-flex rounded-xl bg-slate-100 p-2 text-slate-700">
-                <CheckCircle2 className="size-5" />
-              </div>
-              <h3 className="mt-4 text-lg font-semibold text-slate-900">{item.title}</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-600">{item.text}</p>
+              {index === 0 ? (
+                <Link
+                  to="/enrollments"
+                  aria-label="View enrolled courses"
+                  className="block h-full rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  {content}
+                </Link>
+              ) : (
+                content
+              )}
             </motion.article>
           );
         })}

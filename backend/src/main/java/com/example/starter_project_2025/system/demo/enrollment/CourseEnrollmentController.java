@@ -1,7 +1,14 @@
 package com.example.starter_project_2025.system.demo.enrollment;
 
 import com.example.starter_project_2025.security.UserPrincipal;
+import com.example.starter_project_2025.system.demo.department.DepartmentMemberDTO;
+import com.example.starter_project_2025.system.rbac.user.UserRepository;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -17,10 +24,13 @@ import java.util.List;
 public class CourseEnrollmentController {
 
     private final CourseEnrollmentService enrollmentService;
+    private final UserRepository userRepository;
 
     public CourseEnrollmentController(
-            CourseEnrollmentService enrollmentService) {
+            CourseEnrollmentService enrollmentService,
+            UserRepository userRepository) {
         this.enrollmentService = enrollmentService;
+        this.userRepository = userRepository;
     }
 
     @PostMapping
@@ -28,7 +38,7 @@ public class CourseEnrollmentController {
     @ResponseStatus(HttpStatus.CREATED)
     public CourseEnrollmentDTO enroll(
             @AuthenticationPrincipal UserPrincipal principal,
-            @RequestBody EnrollRequest request) {
+            @Valid @RequestBody EnrollRequest request) {
 
         Long userId = getUserId(principal);
 
@@ -63,22 +73,55 @@ public class CourseEnrollmentController {
     }
 
     @PostMapping("/departments/preview")
-    @PreAuthorize("hasAuthority('ENROLLMENT_CREATE')")
+    @PreAuthorize("hasAuthority('DEPARTMENT_UPDATE')")
     public DepartmentEnrollmentPreviewDTO previewDepartmentEnrollment(
-            @RequestBody DepartmentEnrollRequest request
+            @Valid @RequestBody DepartmentEnrollRequest request
     ) {
         return enrollmentService.previewDepartmentEnrollment(
                 request.getDepartmentId(), request.getCourseId());
     }
 
     @PostMapping("/departments")
-    @PreAuthorize("hasAuthority('ENROLLMENT_CREATE')")
+    @PreAuthorize("hasAuthority('DEPARTMENT_UPDATE')")
     @ResponseStatus(HttpStatus.CREATED)
     public DepartmentEnrollmentResultDTO enrollDepartment(
-            @RequestBody DepartmentEnrollRequest request
+            @Valid @RequestBody DepartmentEnrollRequest request
     ) {
         return enrollmentService.enrollDepartment(
                 request.getDepartmentId(), request.getCourseId());
+    }
+
+    @GetMapping("/students")
+    @PreAuthorize("hasAuthority('DEPARTMENT_READ')")
+    public Page<DepartmentMemberDTO> searchStudents(
+            @RequestParam(required = false) String search,
+            @PageableDefault(size = 20, sort = "firstName") Pageable pageable
+    ) {
+        String normalizedSearch = search == null || search.isBlank()
+                ? null
+                : search.trim();
+        return userRepository.searchActiveStudents(normalizedSearch, pageable);
+    }
+
+    @GetMapping("/students/{studentId}/courses")
+    @PreAuthorize("hasAuthority('DEPARTMENT_READ')")
+    public List<CourseEnrollmentDTO> getStudentCourses(
+            @PathVariable Long studentId
+    ) {
+        return enrollmentService.getStudentCourses(studentId)
+                .stream()
+                .map(this::toDTO)
+                .toList();
+    }
+
+    @PostMapping("/students")
+    @PreAuthorize("hasAuthority('DEPARTMENT_UPDATE')")
+    @ResponseStatus(HttpStatus.CREATED)
+    public CourseEnrollmentDTO enrollStudent(
+            @Valid @RequestBody StudentEnrollRequest request
+    ) {
+        return toDTO(enrollmentService.enrollStudent(
+                request.getStudentId(), request.getCourseId()));
     }
 
     private Long getUserId(UserPrincipal principal) {
@@ -104,12 +147,23 @@ public class CourseEnrollmentController {
 
     @Getter
     public static class EnrollRequest {
+        @NotNull(message = "Course ID is required")
         private Long courseId;
     }
 
     @Getter
     public static class DepartmentEnrollRequest {
+        @NotNull(message = "Department ID is required")
         private Long departmentId;
+        @NotNull(message = "Course ID is required")
+        private Long courseId;
+    }
+
+    @Getter
+    public static class StudentEnrollRequest {
+        @NotNull(message = "Student ID is required")
+        private Long studentId;
+        @NotNull(message = "Course ID is required")
         private Long courseId;
     }
 }

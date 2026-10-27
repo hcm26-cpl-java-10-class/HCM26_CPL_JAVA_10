@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ConfirmDialog } from "@/components/ui/confirmdialog";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -278,7 +279,7 @@ function CourseActionCard({ course }: { course: CourseDetail }) {
 
       {action}
 
-      <PermissionGate permissions={["ENROLLMENT_CREATE", "DEPARTMENT_READ"]} requireAll>
+      <PermissionGate permissions={["DEPARTMENT_READ", "DEPARTMENT_UPDATE"]} requireAll>
         <DepartmentEnrollmentControl courseId={course.id} />
       </PermissionGate>
 
@@ -325,11 +326,16 @@ function CourseActionCard({ course }: { course: CourseDetail }) {
 }
 
 function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
+  const [targetType, setTargetType] = useState<"department" | "student">("department");
   const [departmentId, setDepartmentId] = useState("");
+  const [studentId, setStudentId] = useState("");
+  const [studentSearch, setStudentSearch] = useState("");
+  const [studentPage, setStudentPage] = useState(0);
   const queryClient = useQueryClient();
 
   const departmentsQuery = useQuery({
     queryKey: ["course-enrollment-departments"],
+    enabled: targetType === "department",
     queryFn: async () => {
       const firstPage = await departmentApi.getPage(
         { page: 0, size: 100, sort: "name,asc" },
@@ -345,9 +351,16 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
     },
   });
 
+  const studentsQuery = useQuery({
+    queryKey: ["course-enrollment-students", studentPage, studentSearch],
+    enabled: targetType === "student",
+    queryFn: () =>
+      enrollmentApi.searchStudents(studentPage, studentSearch.trim()),
+  });
+
   const previewQuery = useQuery({
     queryKey: ["course-department-enrollment-preview", courseId, departmentId],
-    enabled: Boolean(departmentId),
+    enabled: targetType === "department" && Boolean(departmentId),
     queryFn: () =>
       enrollmentApi.previewDepartment({
         departmentId: Number(departmentId),
@@ -355,7 +368,7 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
       }),
   });
 
-  const enrollMutation = useMutation({
+  const departmentEnrollMutation = useMutation({
     mutationFn: () =>
       enrollmentApi.enrollDepartment({
         departmentId: Number(departmentId),
@@ -367,14 +380,34 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
       );
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["department-overview"] }),
-        queryClient.invalidateQueries({ queryKey: ["my-enrollments"] }),
         queryClient.invalidateQueries({ queryKey: ["course-catalog"] }),
         queryClient.invalidateQueries({ queryKey: ["course-detail"] }),
       ]);
       setDepartmentId("");
+      setStudentId("");
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : "Department enrollment failed.");
+    },
+  });
+
+  const studentEnrollMutation = useMutation({
+    mutationFn: () =>
+      enrollmentApi.enrollStudent({
+        studentId: Number(studentId),
+        courseId,
+      }),
+    onSuccess: async () => {
+      toast.success("Student enrolled in this course.");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["department-overview"] }),
+        queryClient.invalidateQueries({ queryKey: ["course-catalog"] }),
+        queryClient.invalidateQueries({ queryKey: ["course-detail"] }),
+      ]);
+      setStudentId("");
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Student enrollment failed.");
     },
   });
 
@@ -382,33 +415,61 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
     (department) => department.id === Number(departmentId),
   );
   const preview = previewQuery.data;
+  const selectedStudent = studentsQuery.data?.content.find(
+    (student) => student.id === Number(studentId),
+  );
+  const enrollmentPending =
+    departmentEnrollMutation.isPending || studentEnrollMutation.isPending;
 
   return (
     <div className="space-y-2 border-t pt-4">
-      <label htmlFor="course-enrollment-department" className="text-sm font-medium">
-        Enroll a department
+      <label htmlFor="course-enrollment-target" className="text-sm font-medium">
+        Enroll a department or student
       </label>
-      {departmentsQuery.isLoading ? (
-        <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-          <LoaderCircle className="size-4 animate-spin" /> Loading departments...
-        </p>
-      ) : departmentsQuery.isError ? (
-        <div role="alert" className="space-y-2">
-          <p className="text-sm text-destructive">
-            {departmentsQuery.error instanceof Error
-              ? departmentsQuery.error.message
-              : "Could not load departments."}
+      <Select
+        value={targetType}
+        onValueChange={(value) => {
+          if (value !== "department" && value !== "student") return;
+          setTargetType(value);
+          setDepartmentId("");
+          setStudentId("");
+          setStudentSearch("");
+          setStudentPage(0);
+        }}
+        disabled={enrollmentPending}
+      >
+        <SelectTrigger id="course-enrollment-target" className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="department">Department</SelectItem>
+          <SelectItem value="student">Student</SelectItem>
+        </SelectContent>
+      </Select>
+      {targetType === "department" ? (
+        departmentsQuery.isLoading ? (
+          <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+            <LoaderCircle className="size-4 animate-spin" /> Loading departments...
           </p>
-          <Button variant="outline" size="sm" onClick={() => void departmentsQuery.refetch()}>
-            Try again
-          </Button>
-        </div>
-      ) : departmentsQuery.data?.length ? (
-        <>
+        ) : departmentsQuery.isError ? (
+          <div role="alert" className="space-y-2">
+            <p className="text-sm text-destructive">
+              {departmentsQuery.error instanceof Error
+                ? departmentsQuery.error.message
+                : "Could not load departments."}
+            </p>
+            <Button variant="outline" size="sm" onClick={() => void departmentsQuery.refetch()}>
+              Try again
+            </Button>
+          </div>
+        ) : departmentsQuery.data?.length ? (
+          <>
           <Select
             value={departmentId}
-            onValueChange={setDepartmentId}
-            disabled={enrollMutation.isPending}
+            onValueChange={(value) => {
+              setDepartmentId(value);
+            }}
+            disabled={enrollmentPending}
           >
             <SelectTrigger id="course-enrollment-department" className="w-full">
               <SelectValue placeholder="Choose a department" />
@@ -442,17 +503,118 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
               <Button
                 size="sm"
                 className="w-full"
-                disabled={preview.newEnrollments === 0 || enrollMutation.isPending}
-                onClick={() => enrollMutation.mutate()}
+                disabled={preview.newEnrollments === 0 || enrollmentPending}
+                onClick={() => departmentEnrollMutation.mutate()}
               >
-                {enrollMutation.isPending && <LoaderCircle className="size-4 animate-spin" />}
+                {departmentEnrollMutation.isPending && (
+                  <LoaderCircle className="size-4 animate-spin" />
+                )}
                 Enroll department
               </Button>
             </>
           )}
-        </>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">No active departments available.</p>
+        )
       ) : (
-        <p className="text-sm text-muted-foreground">No active departments available.</p>
+        <>
+          <Input
+            aria-label="Search students"
+            placeholder="Search students"
+            value={studentSearch}
+            onChange={(event) => {
+              setStudentSearch(event.target.value);
+              setStudentPage(0);
+              setStudentId("");
+            }}
+          />
+          {studentsQuery.isLoading ? (
+            <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
+              <LoaderCircle className="size-4 animate-spin" /> Loading students...
+            </p>
+          ) : studentsQuery.isError ? (
+            <div role="alert" className="space-y-2">
+              <p className="text-xs text-destructive">
+                {studentsQuery.error instanceof Error
+                  ? studentsQuery.error.message
+                  : "Could not load students."}
+              </p>
+              <Button variant="outline" size="sm" onClick={() => void studentsQuery.refetch()}>
+                Try again
+              </Button>
+            </div>
+          ) : studentsQuery.data?.content.length ? (
+            <>
+              <Select
+                value={studentId}
+                onValueChange={setStudentId}
+                disabled={enrollmentPending}
+              >
+                <SelectTrigger id="course-enrollment-student" className="w-full">
+                  <SelectValue placeholder="Choose a student" />
+                </SelectTrigger>
+                <SelectContent>
+                  {studentsQuery.data.content.map((student) => (
+                    <SelectItem key={student.id} value={String(student.id)}>
+                      {student.firstName} {student.lastName || ""} ({student.email})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {studentsQuery.data.totalPages > 1 && (
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>
+                    Page {studentPage + 1} of {studentsQuery.data.totalPages}
+                  </span>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={studentPage === 0}
+                      onClick={() => {
+                        setStudentId("");
+                        setStudentPage((page) => page - 1);
+                      }}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={studentPage >= studentsQuery.data.totalPages - 1}
+                      onClick={() => {
+                        setStudentId("");
+                        setStudentPage((page) => page + 1);
+                      }}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {studentId && (
+                <Button
+                  size="sm"
+                  className="w-full"
+                  disabled={enrollmentPending}
+                  onClick={() => studentEnrollMutation.mutate()}
+                >
+                  {studentEnrollMutation.isPending && (
+                    <LoaderCircle className="size-4 animate-spin" />
+                  )}
+                  Enroll {selectedStudent?.firstName || "student"}
+                </Button>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {studentSearch.trim()
+                ? "No students match this search."
+                : "No active students available."}
+            </p>
+          )}
+        </>
       )}
     </div>
   );

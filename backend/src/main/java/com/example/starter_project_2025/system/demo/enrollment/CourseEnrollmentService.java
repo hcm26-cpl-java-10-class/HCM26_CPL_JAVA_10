@@ -37,20 +37,37 @@ public class CourseEnrollmentService {
     public CourseEnrollment enroll(Long userId, Long courseId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new RuntimeException("User not found"));
+                        new ResourceNotFoundException("User not found"));
 
-        Course course = courseRepository.findById(courseId)
+        Course course = getAvailableCourse(courseId);
+
+        return createEnrollment(user, course);
+    }
+
+    @Transactional
+    public CourseEnrollment enrollStudent(
+            Long studentId,
+            Long courseId
+    ) {
+        User student = userRepository.findById(studentId)
                 .orElseThrow(() ->
-                        new RuntimeException("Course not found"));
-
-        if (course.getStatus() != CourseStatus.PUBLISHED || !Boolean.TRUE.equals(course.getIsActive())) {
-            throw new BadRequestException("This course is not available for enrollment");
+                        new ResourceNotFoundException("Student not found"));
+        if (!Boolean.TRUE.equals(student.getIsActive())
+                || student.getRoles().stream()
+                .noneMatch(role -> "STUDENT".equalsIgnoreCase(role.getName()))) {
+            throw new BadRequestException(
+                    "Only active students can be enrolled in a course");
         }
 
+        Course course = getAvailableCourse(courseId);
+        return createEnrollment(student, course);
+    }
+
+    private CourseEnrollment createEnrollment(User user, Course course) {
         if (enrollmentRepository.existsByUser_IdAndCourse_Id(
-                userId, courseId)) {
-            throw new RuntimeException(
-                    "You are already enrolled in this course");
+                user.getId(), course.getId())) {
+            throw new BadRequestException(
+                    "Student is already enrolled in this course");
         }
 
         CourseEnrollment enrollment = CourseEnrollment.builder()
@@ -60,10 +77,10 @@ public class CourseEnrollmentService {
 
         CourseEnrollment saved = enrollmentRepository.save(enrollment);
         notificationService.createOnce(
-                userId,
+                user.getId(),
                 "enrollment:" + saved.getId(),
                 "Enrollment confirmed",
-                "You enrolled in " + course.getName() + ".",
+                "You were enrolled in " + course.getName() + ".",
                 "/courses/" + course.getId()
         );
         return saved;
@@ -75,13 +92,26 @@ public class CourseEnrollmentService {
                 .findAllByUser_IdOrderByCreatedAtDesc(userId);
     }
 
+    @Transactional(readOnly = true)
+    public List<CourseEnrollment> getStudentCourses(Long studentId) {
+        User student = userRepository.findById(studentId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Student not found"));
+        if (!Boolean.TRUE.equals(student.getIsActive())
+                || student.getRoles().stream()
+                .noneMatch(role -> "STUDENT".equalsIgnoreCase(role.getName()))) {
+            throw new BadRequestException("User is not an active student");
+        }
+
+        return getMyCourses(studentId);
+    }
+
     @Transactional
     public void cancelEnrollment(Long userId, Long enrollmentId) {
         CourseEnrollment enrollment = enrollmentRepository
                 .findByIdAndUser_Id(enrollmentId, userId)
                 .orElseThrow(() ->
-                        new RuntimeException(
-                                "Enrollment not found"));
+                        new ResourceNotFoundException("Enrollment not found"));
 
         long totalLessons = lessonRepository
                 .findByCourseIdOrdered(enrollment.getCourse().getId())

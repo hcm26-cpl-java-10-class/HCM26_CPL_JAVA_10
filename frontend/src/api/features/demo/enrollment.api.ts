@@ -1,8 +1,14 @@
 import axiosInstance from "@/api/axios";
 import type { DepartmentEnrollmentPreview, DepartmentEnrollmentResult, Enrollment } from "@/types";
+import type { DepartmentMemberPage } from "@/types";
 
 interface DepartmentEnrollmentRequest {
     departmentId: number;
+    courseId: number;
+}
+
+interface StudentEnrollmentRequest {
+    studentId: number;
     courseId: number;
 }
 
@@ -32,6 +38,24 @@ export const enrollmentApi = {
         return response.data;
     },
 
+    searchStudents: async (
+        page: number,
+        search: string,
+    ): Promise<DepartmentMemberPage> => {
+        const response = await axiosInstance.get<DepartmentMemberPage>(
+            "/enrollments/students",
+            { params: { page, size: 20, sort: "firstName,asc", search: search || undefined } },
+        );
+        return response.data;
+    },
+
+    getStudentCourses: async (studentId: number): Promise<Enrollment[]> => {
+        const response = await axiosInstance.get<Enrollment[]>(
+            `/enrollments/students/${studentId}/courses`,
+        );
+        return response.data;
+    },
+
     cancel: async (enrollmentId: number): Promise<void> => {
         await axiosInstance.delete(`/enrollments/${enrollmentId}`);
     },
@@ -51,6 +75,16 @@ export const enrollmentApi = {
     ): Promise<DepartmentEnrollmentResult> => {
         const response = await axiosInstance.post<DepartmentEnrollmentResult>(
             "/enrollments/departments",
+            request,
+        );
+        return response.data;
+    },
+
+    enrollStudent: async (
+        request: StudentEnrollmentRequest,
+    ): Promise<Enrollment> => {
+        const response = await axiosInstance.post<Enrollment>(
+            "/enrollments/students",
             request,
         );
         return response.data;

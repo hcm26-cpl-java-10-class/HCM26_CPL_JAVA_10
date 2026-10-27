@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import type { CatalogCourse } from "@/types";
 import { CheckCircle2, Clock, GraduationCap, PlayCircle, BookOpen } from "lucide-react";
 import { Link } from "react-router-dom";
+import { CourseEnrollmentAssignmentDialog } from "./CourseEnrollmentAssignmentDialog";
 import { LEVEL_BADGE_CLASS, LEVEL_LABEL, formatTotalDuration } from "../utils/course.utils.ts";
 
 interface CourseCardProps {
@@ -11,10 +12,18 @@ interface CourseCardProps {
   enrollmentId?: number;
   canEnroll: boolean;
   isEnrolling: boolean;
+  canAssign: boolean;
   onEnroll: (courseId: number) => void;
 }
 
-export function CourseCard({ course, enrollmentId, canEnroll, isEnrolling, onEnroll }: CourseCardProps) {
+export function CourseCard({
+  course,
+  enrollmentId,
+  canEnroll,
+  isEnrolling,
+  canAssign,
+  onEnroll,
+}: CourseCardProps) {
   const detailPath = `/courses/${course.id}`;
 
   return (
@@ -92,6 +101,9 @@ export function CourseCard({ course, enrollmentId, canEnroll, isEnrolling, onEnr
             </>
           )}
         </div>
+        {canAssign && (
+          <CourseEnrollmentAssignmentDialog course={course} />
+        )}
       </div>
     </article>
   );

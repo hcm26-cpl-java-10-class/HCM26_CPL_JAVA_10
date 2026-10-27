@@ -321,7 +321,7 @@ export default function DepartmentManagementPage() {
                                                 <Users className="size-4" /> Manage Members
                                             </Button>
                                         </PermissionGate>
-                                        <PermissionGate permission="ENROLLMENT_CREATE">
+                                        <PermissionGate permission="DEPARTMENT_UPDATE">
                                             <Button
                                                 className="w-full"
                                                 disabled={department.stats.members === 0 || department.isActive === false}
