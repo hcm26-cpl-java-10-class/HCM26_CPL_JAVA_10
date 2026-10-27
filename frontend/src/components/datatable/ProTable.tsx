@@ -307,7 +307,10 @@ export function ProTable<TData = any>({
     const hasRowActions = canViewRow || canEditRow || canDeleteRow;
 
     const showActionsColumn = !hideActions && hasRowActions;
-    const ACTION_COLUMN_WIDTH = renderExtraRowActions ? 196 : 152;
+    // Entities that add their own row buttons (e.g. Project Template Versions
+    // with "Create new version" + "Clone") need a wider action column, otherwise
+    // the trailing icon button is clipped by the cell's overflow-hidden.
+    const ACTION_COLUMN_WIDTH = renderExtraRowActions ? 236 : 152;
 
     // Default row actions renderer (uses internal modal system or custom overrides)
     const defaultRenderRowActions = (row: TData) => (

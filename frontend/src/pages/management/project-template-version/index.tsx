@@ -7,6 +7,7 @@ import { ProjectTemplateVersionCard } from "./components/ProjectTemplateVersionC
 import { projectTemplateVersionAdminEntityConfig } from "./project-template-version.admin.config";
 import { projectTemplateVersionSchema } from "./project-template-version.schema";
 import { CloneTemplateButton } from "./workspace/CloneTemplateButton";
+import { CreateNewVersionButton } from "./workspace/CreateNewVersionButton";
 import ProjectTemplateVersionWorkspacePage from "./workspace/ProjectTemplateVersionWorkspacePage";
 
 /**
@@ -24,14 +25,17 @@ import ProjectTemplateVersionWorkspacePage from "./workspace/ProjectTemplateVers
  * Project Template Version entity.
  */
 /**
- * Admin table flavour: the generic CRUD table plus a per-row "Clone template"
- * action (US-08), which duplicates the template behind a version into a brand
- * new, independent template.
+ * Admin table flavour: the generic CRUD table plus the two template lifecycle
+ * actions — "Create new version" (US-07) and "Clone template" (US-08) — so the
+ * Program Manager can version a template straight from the table.
  */
 const adminEntityConfig: EntityConfig = {
   ...projectTemplateVersionAdminEntityConfig,
   extraRowActions: (row) => (
-    <CloneTemplateButton version={row as ProjectTemplateVersionDTO} />
+    <>
+      <CreateNewVersionButton version={row as ProjectTemplateVersionDTO} />
+      <CloneTemplateButton version={row as ProjectTemplateVersionDTO} />
+    </>
   ),
 };
 

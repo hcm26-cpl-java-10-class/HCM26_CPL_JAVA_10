@@ -27,7 +27,7 @@ import {
   Trash2,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { activeMeta, formatDate, statusMeta } from "./version.constants";
+import { activeMeta, formatDate, parentVersionLabel, statusMeta } from "./version.constants";
 
 interface ProjectTemplateVersionWorkspaceHeaderProps {
   version: ProjectTemplateVersionDTO | null;
@@ -115,9 +115,13 @@ export function ProjectTemplateVersionWorkspaceHeader({
             {version?.parentTemplateId != null && (
               <>
                 <span className="text-border">•</span>
-                <span className="inline-flex items-center gap-1">
+                <span
+                  className="inline-flex items-center gap-1"
+                  title={`parent_template_id = ${version.parentTemplateId}`}
+                >
                   <GitBranch className="h-3 w-3" />
-                  Derived from #{version.parentTemplateId}
+                  Derived from{" "}
+                  {parentVersionLabel(versions, version.parentTemplateId)}
                 </span>
               </>
             )}

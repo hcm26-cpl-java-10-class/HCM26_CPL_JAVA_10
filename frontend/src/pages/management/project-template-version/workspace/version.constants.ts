@@ -62,6 +62,22 @@ export const versionLabel = (version?: ProjectTemplateVersionDTO | null) => {
   return `${version.version ?? `#${version.id}`} · TPL-${version.templateId ?? "—"}`;
 };
 
+/**
+ * US-07: resolves `parentTemplateId` (the `snapshot_id` of the version a row
+ * was derived from) into its business version label, so the UI can show
+ * `Derived from v1.0` instead of an opaque identifier.
+ */
+export const parentVersionLabel = (
+  versions: ProjectTemplateVersionDTO[],
+  parentTemplateId?: number | null,
+) => {
+  if (parentTemplateId == null) return null;
+
+  const parent = versions.find((item) => item.id === parentTemplateId);
+
+  return parent?.version?.trim() || `#${parentTemplateId}`;
+};
+
 export const activeMeta = (isActive?: boolean) =>
   isActive
     ? {

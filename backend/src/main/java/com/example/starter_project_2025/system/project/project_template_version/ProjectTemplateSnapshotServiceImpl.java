@@ -80,6 +80,7 @@ public class ProjectTemplateSnapshotServiceImpl
             Pattern.compile("^[vV]?(\\d+)(?:\\.(\\d+))?$");
 
     static final String TEMPLATE_ID_FIELD = "templateId";
+    static final String PARENT_TEMPLATE_ID_FIELD = "parentTemplateId";
     static final String VERSION_FIELD = "version";
     static final String CONTENT_JSON_FIELD = "contentJson";
     static final String NAME_FIELD = "name";
@@ -94,6 +95,12 @@ public class ProjectTemplateSnapshotServiceImpl
     static final String DEFAULT_CONSTRAINTS_JSON = "{}";
 
     static final String PERMISSION_READ = "PROJECT_TEMPLATE_VERSION_READ";
+
+    /** US-07: audit action that distinguishes a derived version from a plain create. */
+    static final String ACTION_NEW_VERSION = "CREATE_NEW_VERSION";
+
+    /** US-08: audit action of a template duplication. */
+    static final String ACTION_DUPLICATE = "DUPLICATE";
 
     static final String EVENT_CREATED = "PROJECT_TEMPLATE_VERSION_CREATED";
     static final String EVENT_UPDATED = "PROJECT_TEMPLATE_VERSION_UPDATED";
@@ -197,10 +204,18 @@ public class ProjectTemplateSnapshotServiceImpl
 
         ProjectTemplateSnapshot saved = snapshotRepository.save(created);
 
+        // AC01: the audit trail records that this row was derived from another
+        // version (not just "created"), so the lineage can be reviewed later.
+        // AC02: the source row is only read here - it is never saved, therefore
+        // its content (the snapshot already used by workspaces/projects) stays
+        // byte-for-byte identical.
         Map<String, Object> after = snapshot(saved);
+        after.put("sourceVersionId", source.getId());
+        after.put("sourceVersion", source.getVersion());
+        after.put("sourceStatus", source.getStatus() == null ? null : source.getStatus().name());
 
         snapshotAuditService.record(
-                "CREATE", saved.getId(), saved.getTemplateId(), saved.getProjectId(), null, after);
+                ACTION_NEW_VERSION, saved.getId(), saved.getTemplateId(), saved.getProjectId(), null, after);
 
         snapshotOutboxService.enqueue(
                 EVENT_CREATED,
@@ -285,7 +300,7 @@ public class ProjectTemplateSnapshotServiceImpl
         after.put("duplicateName", duplicatedTemplate.getName());
 
         snapshotAuditService.record(
-                "DUPLICATE", saved.getId(), saved.getTemplateId(), saved.getProjectId(), before, after);
+                ACTION_DUPLICATE, saved.getId(), saved.getTemplateId(), saved.getProjectId(), before, after);
 
         snapshotOutboxService.enqueue(
                 EVENT_CREATED,
@@ -378,6 +393,22 @@ public class ProjectTemplateSnapshotServiceImpl
                 : snapshot.getContentJson();
 
         Map<String, List<String>> errors = new LinkedHashMap<>();
+
+        // US-07 / AC02: a version belongs to the template it was snapshotted
+        // from. Moving it to another template would break the per-template
+        // version lineage (parentTemplateId) and the snapshot isolation the
+        // workspaces already rely on, so the owner is immutable.
+        if (request.getTemplateId() != null
+                && !request.getTemplateId().equals(snapshot.getTemplateId())) {
+            errors.put(TEMPLATE_ID_FIELD,
+                    List.of("Không thể thay đổi Project Template của phiên bản đã tạo"));
+        }
+
+        // Traceability only: a version can never be its own parent.
+        if (parentTemplateId != null && parentTemplateId.equals(snapshot.getId())) {
+            errors.put(PARENT_TEMPLATE_ID_FIELD,
+                    List.of("Phiên bản không thể là cha của chính nó"));
+        }
 
         validateTemplateId(templateId, errors);
         validateVersion(version, errors);

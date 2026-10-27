@@ -1,9 +1,15 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { ProjectTemplateVersionDTO } from "@/types";
-import { Layers } from "lucide-react";
+import { GitBranch, Layers } from "lucide-react";
 import type { ReactNode } from "react";
-import { activeMeta, formatDate, parseContent, statusMeta } from "./version.constants";
+import {
+  activeMeta,
+  formatDate,
+  parentVersionLabel,
+  parseContent,
+  statusMeta,
+} from "./version.constants";
 
 interface VersionListPanelProps {
   title: string;
@@ -71,6 +77,10 @@ export function VersionListPanel({
           versions.map((version, index) => {
             const meta = activeMeta(version.isActive);
             const status = statusMeta(version.status);
+            const derivedFrom = parentVersionLabel(
+              versions,
+              version.parentTemplateId,
+            );
 
             return (
               <button
@@ -88,6 +98,15 @@ export function VersionListPanel({
                 <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
                   {version.version || `Version #${version.id}`}
                 </span>
+                {derivedFrom && (
+                  <span
+                    className="inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                    title={`parent_template_id = ${version.parentTemplateId}`}
+                  >
+                    <GitBranch className="h-3 w-3" />
+                    from {derivedFrom}
+                  </span>
+                )}
                 <span className="hidden min-w-0 flex-1 truncate text-xs text-muted-foreground md:block">
                   {summaryOf(version)}
                 </span>
