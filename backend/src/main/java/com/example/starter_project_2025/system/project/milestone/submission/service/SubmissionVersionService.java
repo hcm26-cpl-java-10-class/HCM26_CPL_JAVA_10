@@ -27,7 +27,18 @@ public class SubmissionVersionService {
 
     @Transactional
     public SubmissionDtos.Detail createNextVersion(UUID id, SubmissionDtos.CreateVersionRequest request) {
-        MilestoneSubmission submission = queryService.require(id);
+        return createNextVersion(queryService.require(id), request, false);
+    }
+
+    @Transactional
+    public SubmissionDtos.Detail createMyNextVersion(UUID id, SubmissionDtos.CreateVersionRequest request) {
+        return createNextVersion(queryService.requireMine(id), request, true);
+    }
+
+    private SubmissionDtos.Detail createNextVersion(MilestoneSubmission submission,
+                                                     SubmissionDtos.CreateVersionRequest request,
+                                                     boolean mine) {
+        UUID id = submission.getId();
         if (submission.getStatus() != SubmissionStatus.CHANGES_REQUESTED) {
             throw new MilestoneConflictException("A new version can only be created after changes are requested");
         }
@@ -42,12 +53,22 @@ public class SubmissionVersionService {
         snapshotMilestoneChecklist(version, submission);
         versions.save(version);
         submissions.saveAndFlush(submission);
-        return queryService.getDetail(id);
+        return mine ? queryService.getMyDetail(id) : queryService.getDetail(id);
     }
 
     @Transactional
     public SubmissionDtos.Detail updateDraft(UUID id, UUID versionId, SubmissionDtos.UpdateDraftRequest request) {
-        MilestoneSubmission submission = queryService.require(id);
+        return updateDraft(queryService.require(id), versionId, request, false);
+    }
+
+    @Transactional
+    public SubmissionDtos.Detail updateMyDraft(UUID id, UUID versionId, SubmissionDtos.UpdateDraftRequest request) {
+        return updateDraft(queryService.requireMine(id), versionId, request, true);
+    }
+
+    private SubmissionDtos.Detail updateDraft(MilestoneSubmission submission, UUID versionId,
+                                               SubmissionDtos.UpdateDraftRequest request, boolean mine) {
+        UUID id = submission.getId();
         if (submission.getStatus() != SubmissionStatus.DRAFT) {
             throw new MilestoneConflictException("Only a draft submission can be edited");
         }
@@ -63,19 +84,28 @@ public class SubmissionVersionService {
         versions.saveAndFlush(version);
         applyDraftContent(version, request.artifacts());
         versions.saveAndFlush(version);
-        return queryService.getDetail(id);
+        return mine ? queryService.getMyDetail(id) : queryService.getDetail(id);
     }
 
     @Transactional
     public SubmissionDtos.Detail submit(UUID id, String idempotencyKey) {
-        MilestoneSubmission submission = queryService.require(id);
+        return submit(queryService.require(id), idempotencyKey, false);
+    }
+
+    @Transactional
+    public SubmissionDtos.Detail submitMine(UUID id, String idempotencyKey) {
+        return submit(queryService.requireMine(id), idempotencyKey, true);
+    }
+
+    private SubmissionDtos.Detail submit(MilestoneSubmission submission, String idempotencyKey, boolean mine) {
+        UUID id = submission.getId();
         UUID actorId = actorProvider.requireCurrentActorId();
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             throw validation("idempotencyKey", "Idempotency-Key is required");
         }
         if (audits.findBySubmissionIdAndActionAndActorIdAndIdempotencyKey(
                 id, "SUBMISSION_SUBMITTED", actorId, idempotencyKey.trim()).isPresent()) {
-            return queryService.getDetail(id);
+            return mine ? queryService.getMyDetail(id) : queryService.getDetail(id);
         }
         if (submission.getStatus() != SubmissionStatus.DRAFT) {
             throw new MilestoneConflictException("Only a draft submission can be submitted");
@@ -103,7 +133,7 @@ public class SubmissionVersionService {
         outbox.save(SubmissionOutboxEvent.create(id, "MILESTONE_SUBMISSION_SUBMITTED",
                 submission.getAssignedReviewerId(), submission.getMilestone().getId(), now));
         submissions.flush();
-        return queryService.getDetail(id);
+        return mine ? queryService.getMyDetail(id) : queryService.getDetail(id);
     }
 
     private MilestoneValidationException validation(String field, String message) {

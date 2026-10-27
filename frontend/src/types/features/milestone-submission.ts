@@ -7,11 +7,11 @@ export type SubmissionArtifactType = "REPOSITORY" | "DOCUMENTATION" | "DEMO" | "
 
 export interface SubmissionListItem {
   id: string;
-  projectId: string;
+  projectId: number | null;
   milestoneId: string;
   milestoneTitle: string;
   mandatory: boolean;
-  teamId: string;
+  teamId: number;
   teamName: string;
   studentName: string;
   reviewerName: string;
@@ -39,7 +39,7 @@ export interface SubmissionPage {
 }
 
 export interface SubmissionListParams {
-  projectId?: string;
+  projectId?: string | number;
   page: number;
   size: number;
   search?: string;
@@ -131,12 +131,12 @@ export interface SubmissionReviewHistory {
 
 export interface SubmissionDetail {
   id: string;
-  projectId: string;
+  projectId: number | null;
   milestoneId: string;
   milestoneTitle: string;
   milestoneDescription?: string | null;
   mandatory: boolean;
-  teamId: string;
+  teamId: number;
   teamName: string;
   studentId: string;
   studentName: string;
@@ -153,11 +153,23 @@ export interface SubmissionDetail {
   lateUntil?: string | null;
   latePenaltyPercent?: number | null;
   lockVersion: number;
+  product?: SubmissionProductInfo | null;
   currentVersion: SubmissionVersionDetail;
   versions: SubmissionVersionDetail[];
   rubric: { versionId: string; name: string; version: string; totalMaxScore: number; criteria: SubmissionRubricCriterion[] };
   reviews: SubmissionReviewHistory[];
   availableActions: Record<"accept" | "reject" | "requestChanges" | "createNextVersion" | "submit", boolean>;
+}
+
+export interface SubmissionProductInfo {
+  version: number;
+  repositoryUrl?: string | null;
+  deploymentUrl?: string | null;
+  releaseNotes?: string | null;
+  attachments: Array<{ id: string; fileName: string; contentType: string; sizeBytes: number }>;
+  submittedAt: string;
+  submittedLate: boolean;
+  latePenaltyPercent?: number | null;
 }
 
 export interface ReviewSubmissionRequest {

@@ -1,12 +1,16 @@
 package com.example.starter_project_2025.system.project.milestone.submission.service;
 
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
-import com.example.starter_project_2025.system.project.milestone.integration.port.CurrentTenantProvider;
+import com.example.starter_project_2025.system.project.milestone.integration.port.MilestoneTenantProvider;
+import com.example.starter_project_2025.system.project.milestone.integration.port.CurrentActorProvider;
 import com.example.starter_project_2025.system.project.milestone.submission.domain.*;
 import com.example.starter_project_2025.system.project.milestone.submission.dto.SubmissionDtos;
 import com.example.starter_project_2025.system.project.milestone.submission.repository.*;
 import com.example.starter_project_2025.system.project.rubric.domain.RubricVersion;
 import com.example.starter_project_2025.system.project.rubric.repository.RubricVersionRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -27,12 +31,15 @@ public class SubmissionQueryService {
     private final MilestoneSubmissionRepository submissions;
     private final SubmissionVersionRepository versions;
     private final MilestoneReviewRepository reviews;
+    private final MilestoneArtifactSubmissionRepository artifactSubmissions;
     private final RubricVersionRepository rubrics;
-    private final CurrentTenantProvider tenantProvider;
+    private final MilestoneTenantProvider tenantProvider;
+    private final CurrentActorProvider actorProvider;
     private final Clock milestoneClock;
+    private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
-    public SubmissionDtos.PageResponse getPage(UUID projectId, int page, int size, String search,
+    public SubmissionDtos.PageResponse getPage(Long projectId, int page, int size, String search,
                                                SubmissionStatus status,
                                                MilestoneExecutionStatus executionStatus,
                                                Boolean mandatory, Boolean late, String bucket, String sort) {
@@ -40,7 +47,7 @@ public class SubmissionQueryService {
         int safeSize = Math.min(100, Math.max(1, size));
         var result = submissions.findAll(MilestoneSubmissionSpecifications.matching(
                         tenantProvider.requireCurrentTenantId(), projectId, normalize(search), status,
-                        executionStatus, mandatory, late, null, normalizeBucket(bucket)),
+                        executionStatus, mandatory, late, null, null, normalizeBucket(bucket)),
                 PageRequest.of(safePage, safeSize, parseSort(sort)));
         return new SubmissionDtos.PageResponse(result.getContent().stream().map(this::toListItem).toList(),
                 result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages(),
@@ -48,14 +55,38 @@ public class SubmissionQueryService {
     }
 
     @Transactional(readOnly = true)
+    public SubmissionDtos.PageResponse getMyPage(Long projectId, int page, int size, String search,
+                                                 SubmissionStatus status, String sort) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(100, Math.max(1, size));
+        var result = submissions.findAll(MilestoneSubmissionSpecifications.matching(
+                        tenantProvider.requireCurrentTenantId(), projectId, normalize(search), status,
+                        null, null, null, null, actorProvider.requireCurrentActorId(), "ALL"),
+                PageRequest.of(safePage, safeSize, parseSort(sort)));
+        return new SubmissionDtos.PageResponse(result.getContent().stream().map(this::toListItem).toList(),
+                result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages(),
+                result.hasNext(), result.hasPrevious());
+    }
+
+    @Transactional(readOnly = true)
+    public SubmissionDtos.Detail getMyDetail(UUID submissionId) {
+        MilestoneSubmission submission = requireMine(submissionId);
+        return detail(submission);
+    }
+
+    @Transactional(readOnly = true)
     public SubmissionDtos.Detail getDetail(UUID submissionId) {
-        MilestoneSubmission submission = require(submissionId);
+        return detail(require(submissionId));
+    }
+
+    private SubmissionDtos.Detail detail(MilestoneSubmission submission) {
+        UUID submissionId = submission.getId();
         List<SubmissionVersion> versionList = versions.findAllBySubmissionIdOrderByVersionNumberDesc(submissionId);
         SubmissionVersion current = versionList.stream()
                 .filter(item -> item.getVersionNumber() == submission.getCurrentVersionNumber())
                 .findFirst().orElseThrow(() -> new ResourceNotFoundException("Submission version not found"));
         RubricVersion rubric = rubrics.findByIdAndRubricTenantId(
-                        submission.getMilestone().getRubricSnapshotId(), submission.getTenantId())
+                        submission.getMilestone().getRubricSnapshotId(), tenantAlias(submission.getTenantId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Submission rubric not found"));
         List<MilestoneReview> reviewList = reviews
                 .findAllBySubmissionVersionSubmissionIdOrderByReviewedAtDesc(submissionId);
@@ -65,6 +96,19 @@ public class SubmissionQueryService {
     MilestoneSubmission require(UUID id) {
         return submissions.findByIdAndTenantId(id, tenantProvider.requireCurrentTenantId())
                 .orElseThrow(() -> new ResourceNotFoundException("Submission or milestone does not exist or has changed"));
+    }
+
+    MilestoneSubmission requireMine(UUID id) {
+        MilestoneSubmission submission = require(id);
+        if (!submission.getStudentId().equals(actorProvider.requireCurrentActorId())) {
+            throw new ResourceNotFoundException("Submission does not exist");
+        }
+        return submission;
+    }
+
+    private UUID tenantAlias(Long tenantId) {
+        return UUID.nameUUIDFromBytes(("tenant:" + tenantId)
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     private SubmissionDtos.ListItem toListItem(MilestoneSubmission value) {
@@ -103,9 +147,36 @@ public class SubmissionQueryService {
                 value.getSubmissionAttempts(), value.getMilestone().isAllowResubmission(),
                 value.getMilestone().getMaxSubmissionAttempts(), value.getMilestone().getDeadline(),
                 value.getMilestone().getLatePolicyType().name(), value.getMilestone().getLateUntil(),
-                value.getMilestone().getLatePenaltyPercent(), value.getLockVersion(), map(current),
+                value.getMilestone().getLatePenaltyPercent(), value.getLockVersion(), product(value, current), map(current),
                 versionList.stream().map(this::map).toList(), map(rubric),
                 reviewList.stream().map(this::map).toList(), actions);
+    }
+
+    private SubmissionDtos.ProductInfo product(MilestoneSubmission submission, SubmissionVersion current) {
+        Optional<MilestoneArtifactSubmission> linked = current.getArtifactSubmissionId() == null
+                ? Optional.empty() : artifactSubmissions.findById(current.getArtifactSubmissionId());
+        Optional<MilestoneArtifactSubmission> byProject = submission.getProjectId() == null
+                ? Optional.empty()
+                : artifactSubmissions.findTopByTenantIdAndProjectIdAndMilestoneIdOrderBySubmittedAtDesc(
+                        submission.getTenantId(), submission.getProjectId(), submission.getMilestone().getId());
+        Optional<MilestoneArtifactSubmission> byTeam = submission.getTeamId() == null
+                ? Optional.empty()
+                : artifactSubmissions.findTopByTenantIdAndTeamIdAndMilestoneIdOrderBySubmittedAtDesc(
+                        submission.getTenantId(), submission.getTeamId(), submission.getMilestone().getId());
+        MilestoneArtifactSubmission product = linked.orElseGet(() -> java.util.stream.Stream.of(byProject, byTeam)
+                .flatMap(Optional::stream)
+                .max(Comparator.comparing(MilestoneArtifactSubmission::getSubmittedAt))
+                .orElse(null));
+        if (product == null) return null;
+        try {
+            List<SubmissionDtos.ProductAttachment> attachments = objectMapper.readValue(
+                    product.getAttachmentsJson(), new TypeReference<>() { });
+            return new SubmissionDtos.ProductInfo(product.getVersion(), product.getRepositoryUrl(),
+                    product.getDeploymentUrl(), product.getReleaseNotes(), attachments,
+                    product.getSubmittedAt(), product.isSubmittedLate(), product.getLatePenaltyPercent());
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Stored artifact product snapshot is invalid", ex);
+        }
     }
 
     boolean canRequestChanges(MilestoneSubmission value) {

@@ -16,14 +16,14 @@ public class ProjectCompletionController {
 
     @PostMapping("/final-grade/lock")
     public SubmissionDtos.ProjectCompletionResult lockFinalGrade(
-            @PathVariable UUID projectId, @PathVariable UUID teamId,
+            @PathVariable Long projectId, @PathVariable Long teamId,
             @Valid @RequestBody SubmissionDtos.LockFinalGradeRequest request) {
         return commands.lockFinalGrade(projectId, teamId, request);
     }
 
     @PostMapping("/milestones/{milestoneId}/waive")
     public SubmissionDtos.ProjectCompletionResult waiveMilestone(
-            @PathVariable UUID projectId, @PathVariable UUID teamId, @PathVariable UUID milestoneId,
+            @PathVariable Long projectId, @PathVariable Long teamId, @PathVariable UUID milestoneId,
             @Valid @RequestBody SubmissionDtos.WaiveMilestoneRequest request) {
         return commands.waive(projectId, teamId, milestoneId, request);
     }

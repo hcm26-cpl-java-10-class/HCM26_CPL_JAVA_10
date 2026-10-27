@@ -14,6 +14,7 @@ import { MilestoneRubricCard } from "../components/MilestoneRubricCard";
 import { MilestoneStatusBadge } from "../components/MilestoneStatusBadge";
 import { formatPenalty, formatTenantDateTime, getMilestoneApiError } from "../milestone.utils";
 import { usePermissions } from "@/hooks/usePermissions";
+import { ADMIN_ROLE, normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
 
 function DetailPageSkeleton() {
   return (
@@ -34,7 +35,8 @@ export function MilestoneDetailPage() {
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { hasPermission, activeRole } = usePermissions();
-  const isStudent = String(activeRole).toUpperCase().includes("STUDENT");
+  const normalizedRole = normalizeRole(activeRole);
+  const canPrepareArtifact = normalizedRole === STUDENT_ROLE || normalizedRole === ADMIN_ROLE;
   const teamIdParam = searchParams.get("teamId");
   const teamId = teamIdParam ? Number(teamIdParam) : undefined;
   const routeState = location.state as MilestoneDetailRouteState | null;
@@ -172,7 +174,7 @@ export function MilestoneDetailPage() {
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4"><Button variant="outline" onClick={() => navigate(returnUrl)}><ArrowLeft className="size-4" /> Back to milestones</Button>
-          <div className="flex flex-wrap items-center gap-2">{milestone.status === "PLANNED" && hasPermission("MILESTONE_WRITE") && <Button onClick={() => openMilestone.mutate()} disabled={openMilestone.isPending}>{openMilestone.isPending ? "Opening…" : "Open milestone"}</Button>}{milestone.status === "PLANNED" && <span className="text-xs text-muted-foreground">Open it before students can submit.</span>}{openMilestone.isError && <span className="text-xs text-destructive">Could not open milestone. Check that the project is active.</span>}{isStudent && hasPermission("ARTIFACT_READ") && <Button onClick={() => navigate(`/projects/${projectId}/milestones/${milestone.id}/submit`)}>Prepare artifact</Button>}</div></div>
+          <div className="flex flex-wrap items-center gap-2">{milestone.status === "PLANNED" && hasPermission("MILESTONE_WRITE") && <Button onClick={() => openMilestone.mutate()} disabled={openMilestone.isPending}>{openMilestone.isPending ? "Opening…" : "Open milestone"}</Button>}{milestone.status === "PLANNED" && <span className="text-xs text-muted-foreground">Open it before students can submit.</span>}{openMilestone.isError && <span className="text-xs text-destructive">Could not open milestone. Check that the project is active.</span>}{canPrepareArtifact && hasPermission("ARTIFACT_READ") && <Button onClick={() => navigate(`/projects/${projectId}/milestones/${milestone.id}/submit`)}>Prepare artifact</Button>}</div></div>
       </div>
     </MainLayout>
   );

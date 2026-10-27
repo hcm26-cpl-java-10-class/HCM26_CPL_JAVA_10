@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 import java.util.*;
 
 @Component
-@Profile("milestone-real-integrations")
+@Profile("!milestone-mock & !milestone-rubric-mock")
 @RequiredArgsConstructor
 public class JpaRubricCatalogAdapter implements RubricCatalogPort {
     private final RubricVersionRepository repository;
@@ -41,10 +41,8 @@ public class JpaRubricCatalogAdapter implements RubricCatalogPort {
     }
 
     private UUID tenantAlias(Long tenantId) {
-        if (Long.valueOf(1L).equals(tenantId)) {
-            return UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
-        }
-        return UUID.nameUUIDFromBytes(("milestone:tenant:" + tenantId).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return UUID.nameUUIDFromBytes(("tenant:" + tenantId)
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     private RubricSnapshotData map(RubricVersion version) {

@@ -49,8 +49,12 @@ public class SubmissionReviewService {
         if (submission.getStatus() != SubmissionStatus.SUBMITTED) {
             throw new MilestoneConflictException("Only a submitted milestone can be reviewed");
         }
+        if (request.decision() == ReviewDecision.REQUEST_CHANGES
+                && (request.overallFeedback() == null || request.overallFeedback().trim().isEmpty())) {
+            throw validation("overallFeedback", "Revision instructions are required and must not exceed 500 characters");
+        }
         if (request.decision() == ReviewDecision.REQUEST_CHANGES && !queryService.canRequestChanges(submission)) {
-            throw validation("decision", "Cannot request resubmission because the milestone is outside its late policy or attempt limit");
+            throw validation("decision", "Không thể yêu cầu nộp lại do Milestone đã hết hạn theo Late Policy");
         }
 
         SubmissionVersion version = versions.findBySubmissionIdAndVersionNumber(
@@ -62,7 +66,7 @@ public class SubmissionReviewService {
         }
         Map<UUID, Boolean> checklist = validateChecklist(request, version);
         RubricVersion rubric = rubrics.findByIdAndRubricTenantId(
-                        submission.getMilestone().getRubricSnapshotId(), submission.getTenantId())
+                        submission.getMilestone().getRubricSnapshotId(), tenantAlias(submission.getTenantId()))
                 .orElseThrow(() -> new MilestoneDependencyException("Submission rubric could not be loaded"));
 
         Map<UUID, SubmissionDtos.CriterionEvaluationRequest> inputs = validateEvaluations(request, rubric);
@@ -170,6 +174,11 @@ public class SubmissionReviewService {
         if (key == null || key.isBlank() || key.trim().length() > 100) {
             throw validation("idempotencyKey", "Idempotency-Key is required and must not exceed 100 characters");
         }
+    }
+
+    private UUID tenantAlias(Long tenantId) {
+        return UUID.nameUUIDFromBytes(("tenant:" + tenantId)
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     private MilestoneValidationException validation(String field, String message) {

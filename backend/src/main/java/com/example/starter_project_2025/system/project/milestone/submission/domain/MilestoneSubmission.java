@@ -25,17 +25,17 @@ public class MilestoneSubmission {
     private UUID id;
 
     @Column(name = "tenant_id", nullable = false, updatable = false)
-    private UUID tenantId;
+    private Long tenantId;
 
     @Column(name = "project_id", nullable = false, updatable = false)
-    private UUID projectId;
+    private Long projectId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "milestone_id", nullable = false, updatable = false)
     private Milestone milestone;
 
     @Column(name = "team_id", nullable = false, updatable = false)
-    private UUID teamId;
+    private Long teamId;
 
     @Column(name = "team_name", nullable = false, length = 120)
     private String teamName;
@@ -82,7 +82,7 @@ public class MilestoneSubmission {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    public static MilestoneSubmission create(Milestone milestone, UUID teamId, String teamName,
+    public static MilestoneSubmission create(Milestone milestone, Long teamId, String teamName,
                                              UUID studentId, String studentName, UUID reviewerId,
                                              String reviewerName, Instant now) {
         MilestoneSubmission value = new MilestoneSubmission();

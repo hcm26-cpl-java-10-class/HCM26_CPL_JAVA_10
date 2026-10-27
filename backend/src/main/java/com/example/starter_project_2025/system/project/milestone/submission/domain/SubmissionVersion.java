@@ -49,6 +49,9 @@ public class SubmissionVersion {
     @Column(name = "submitted_by", nullable = false, updatable = false)
     private UUID submittedBy;
 
+    @Column(name = "artifact_submission_id", unique = true)
+    private UUID artifactSubmissionId;
+
     @Column(name = "is_late", nullable = false)
     private boolean late;
 
@@ -125,6 +128,13 @@ public class SubmissionVersion {
         for (SubmissionChecklistSnapshot item : checklist) {
             item.markReviewed(Boolean.TRUE.equals(decisions.get(item.getId())));
         }
+    }
+
+    public void linkArtifactSubmission(UUID artifactSubmissionId) {
+        if (this.artifactSubmissionId != null && !this.artifactSubmissionId.equals(artifactSubmissionId)) {
+            throw new IllegalStateException("Submission version is already linked to another artifact submission");
+        }
+        this.artifactSubmissionId = artifactSubmissionId;
     }
 
     public record ArtifactValue(SubmissionArtifactType type, String name, String url) { }

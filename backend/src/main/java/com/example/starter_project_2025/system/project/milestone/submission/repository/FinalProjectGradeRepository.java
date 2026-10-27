@@ -5,5 +5,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.*;
 
 public interface FinalProjectGradeRepository extends JpaRepository<FinalProjectGrade, UUID> {
-    Optional<FinalProjectGrade> findByTenantIdAndProjectIdAndTeamId(UUID tenantId, UUID projectId, UUID teamId);
+    Optional<FinalProjectGrade> findByTenantIdAndProjectIdAndTeamId(Long tenantId, Long projectId, Long teamId);
 }

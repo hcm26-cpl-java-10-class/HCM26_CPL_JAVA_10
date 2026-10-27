@@ -21,11 +21,11 @@ public class FinalProjectGrade {
     @Column(name = "final_grade_id", nullable = false, updatable = false)
     private UUID id;
     @Column(name = "tenant_id", nullable = false, updatable = false)
-    private UUID tenantId;
+    private Long tenantId;
     @Column(name = "project_id", nullable = false, updatable = false)
-    private UUID projectId;
+    private Long projectId;
     @Column(name = "team_id", nullable = false, updatable = false)
-    private UUID teamId;
+    private Long teamId;
     @Column(name = "final_score", precision = 10, scale = 2)
     private BigDecimal finalScore;
     @Column(name = "locked_at")
@@ -33,7 +33,7 @@ public class FinalProjectGrade {
     @Column(name = "locked_by")
     private UUID lockedBy;
 
-    public static FinalProjectGrade locked(UUID tenantId, UUID projectId, UUID teamId,
+    public static FinalProjectGrade locked(Long tenantId, Long projectId, Long teamId,
                                            BigDecimal score, UUID actorId, Instant now) {
         FinalProjectGrade value = new FinalProjectGrade();
         value.tenantId = tenantId;

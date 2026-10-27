@@ -17,24 +17,32 @@ public final class SubmissionDtos {
     public record PageResponse(List<ListItem> content, int page, int size, long totalElements,
                                int totalPages, boolean hasNext, boolean hasPrevious) { }
 
-    public record ListItem(UUID id, UUID projectId, UUID milestoneId, String milestoneTitle,
-                           boolean mandatory, UUID teamId, String teamName, String studentName,
+    public record ListItem(UUID id, Long projectId, UUID milestoneId, String milestoneTitle,
+                           boolean mandatory, Long teamId, String teamName, String studentName,
                            String reviewerName, SubmissionStatus status,
                            MilestoneExecutionStatus executionStatus, int currentVersionNumber,
                            int submissionAttempts, Instant deadline, Instant submittedAt,
                            boolean late, BigDecimal penaltyPercent, long lockVersion,
                            int checklistCompleted, int checklistTotal) { }
 
-    public record Detail(UUID id, UUID projectId, UUID milestoneId, String milestoneTitle,
-                         String milestoneDescription, boolean mandatory, UUID teamId, String teamName,
+    public record Detail(UUID id, Long projectId, UUID milestoneId, String milestoneTitle,
+                         String milestoneDescription, boolean mandatory, Long teamId, String teamName,
                          UUID studentId, String studentName, UUID assignedReviewerId,
                          String assignedReviewerName, SubmissionStatus status,
                          MilestoneExecutionStatus executionStatus, int currentVersionNumber,
                          int submissionAttempts, boolean allowResubmission,
                          Integer maxSubmissionAttempts, Instant deadline, String latePolicyType,
                          Instant lateUntil, BigDecimal latePenaltyPercent, long lockVersion,
-                         Version currentVersion, List<Version> versions, Rubric rubric,
+                         ProductInfo product, Version currentVersion, List<Version> versions, Rubric rubric,
                          List<Review> reviews, Map<String, Boolean> availableActions) { }
+
+    /** Immutable product snapshot created by the artifact-submission workflow. */
+    public record ProductInfo(long version, String repositoryUrl, String deploymentUrl,
+                              String releaseNotes, List<ProductAttachment> attachments,
+                              Instant submittedAt, boolean submittedLate,
+                              BigDecimal latePenaltyPercent) { }
+
+    public record ProductAttachment(UUID id, String fileName, String contentType, long sizeBytes) { }
 
     public record Version(UUID id, int versionNumber, String title, String notes,
                           String submissionUrl, SubmissionStatus status, Instant submittedAt,
@@ -83,7 +91,7 @@ public final class SubmissionDtos {
             @NotEmpty(message = "Rubric evaluation is required")
             List<@Valid CriterionEvaluationRequest> criteria,
             List<@Valid ChecklistEvaluationRequest> checklist,
-            @Size(max = 1000, message = "Overall feedback must not exceed 1000 characters")
+            @Size(max = 500, message = "Overall feedback must not exceed 500 characters")
             String overallFeedback) { }
 
     public record CreateVersionRequest(
@@ -114,6 +122,6 @@ public final class SubmissionDtos {
     public record WaiveMilestoneRequest(
             @NotBlank @Size(max = 500) String reason) { }
 
-    public record ProjectCompletionResult(UUID projectId, UUID teamId, boolean completed,
+    public record ProjectCompletionResult(Long projectId, Long teamId, boolean completed,
                                           boolean gradeLocked, String trigger) { }
 }

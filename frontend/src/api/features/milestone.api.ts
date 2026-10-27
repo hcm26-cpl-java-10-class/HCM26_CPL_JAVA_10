@@ -131,8 +131,8 @@ export const milestoneApi = {
     const response = await axiosInstance.post<ArtifactSubmission>(`/teams/${teamId}/milestones/${milestoneId}/artifact-draft/submissions`, payload, { headers: { "Idempotency-Key": key } });
     return response.data;
   },
-  async getTeamArtifactSubmissions(teamId: number, milestoneId?: string): Promise<Array<{ submission: ArtifactSubmission; submitterId: string; submitterName?: string | null; submitterEmail?: string | null }>> {
-    const response = await axiosInstance.get<Array<{ submission: ArtifactSubmission; submitterId: string; submitterName?: string | null; submitterEmail?: string | null }>>(`/teams/${teamId}/milestones/submissions`, { params: milestoneId ? { milestoneId } : undefined });
+  async getTeamArtifactSubmissions(teamId: number, milestoneId?: string): Promise<Array<{ submission: ArtifactSubmission; reviewSubmissionId?: string | null; submitterId: string; submitterName?: string | null; submitterEmail?: string | null }>> {
+    const response = await axiosInstance.get<Array<{ submission: ArtifactSubmission; reviewSubmissionId?: string | null; submitterId: string; submitterName?: string | null; submitterEmail?: string | null }>>(`/teams/${teamId}/milestones/submissions`, { params: milestoneId ? { milestoneId } : undefined });
     return response.data;
   },
 

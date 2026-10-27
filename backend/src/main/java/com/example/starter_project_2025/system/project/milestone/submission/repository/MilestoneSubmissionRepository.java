@@ -12,12 +12,12 @@ import java.util.UUID;
 public interface MilestoneSubmissionRepository extends JpaRepository<MilestoneSubmission, UUID>,
         JpaSpecificationExecutor<MilestoneSubmission> {
     @EntityGraph(attributePaths = {"milestone", "milestone.checklistItems"})
-    Optional<MilestoneSubmission> findByIdAndTenantId(UUID id, UUID tenantId);
+    Optional<MilestoneSubmission> findByIdAndTenantId(UUID id, Long tenantId);
 
-    Optional<MilestoneSubmission> findByMilestoneIdAndTeamId(UUID milestoneId, UUID teamId);
+    Optional<MilestoneSubmission> findByMilestoneIdAndTeamId(UUID milestoneId, Long teamId);
 
-    List<MilestoneSubmission> findAllByProjectIdAndMilestoneMandatoryTrue(UUID projectId);
+    List<MilestoneSubmission> findAllByProjectIdAndMilestoneMandatoryTrue(Long projectId);
 
-    boolean existsByMilestoneIdAndTeamIdAndStatus(UUID milestoneId, UUID teamId,
+    boolean existsByMilestoneIdAndTeamIdAndStatus(UUID milestoneId, Long teamId,
                                                   com.example.starter_project_2025.system.project.milestone.submission.domain.SubmissionStatus status);
 }

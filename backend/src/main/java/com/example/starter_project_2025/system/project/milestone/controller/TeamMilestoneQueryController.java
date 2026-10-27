@@ -7,7 +7,6 @@ import com.example.starter_project_2025.system.project.milestone.dto.response.Mi
 import com.example.starter_project_2025.system.project.milestone.service.MilestoneQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -21,7 +20,6 @@ public class TeamMilestoneQueryController {
     private final MilestoneQueryService queryService;
 
     @GetMapping
-    @PreAuthorize("hasAuthority('MILESTONE_READ')")
     public MilestonePageResponse getList(
             @PathVariable Long teamId,
             @RequestParam(defaultValue = "0") int page,
@@ -38,7 +36,6 @@ public class TeamMilestoneQueryController {
     }
 
     @GetMapping("/{milestoneId}")
-    @PreAuthorize("hasAuthority('MILESTONE_READ')")
     public com.example.starter_project_2025.system.project.milestone.dto.response.MilestoneDetailResponse getDetail(
             @PathVariable Long teamId, @PathVariable UUID milestoneId) {
         return queryService.getTeamDetail(teamId, milestoneId);

@@ -13,7 +13,10 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "milestones")
+@Table(name = "milestones", indexes = {
+        @Index(name = "idx_milestone_tenant_team", columnList = "tenant_id,team_id,is_active,deadline"),
+        @Index(name = "idx_milestone_tenant_project", columnList = "tenant_id,project_id,is_active,deadline")
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Milestone {

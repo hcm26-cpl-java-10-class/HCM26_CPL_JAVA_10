@@ -22,7 +22,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import com.example.starter_project_2025.system.project.ProjectTeamRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -50,7 +49,7 @@ public class MilestoneQueryService {
     private final RubricCatalogPort rubricPort;
     private final ReviewerDirectoryPort reviewerPort;
     private final TenantSettingsPort tenantSettingsPort;
-    private final ProjectTeamRepository projectTeamRepository;
+    private final WorkspaceMilestoneScopeService scopeService;
 
     @Transactional(readOnly = true)
     public MilestonePageResponse getList(Long projectId, MilestoneListQuery query) {
@@ -103,10 +102,7 @@ public class MilestoneQueryService {
         String search = normalizeSearch(query.search());
         validateListQuery(query, search);
         Long tenantId = tenantProvider.requireCurrentTenantId();
-        projectTeamRepository.findById(teamId)
-                .filter(team -> team.getTrainingClass() != null
-                        && tenantId.equals(team.getTrainingClass().getTenantId()))
-                .orElseThrow(() -> new ResourceNotFoundException("Team not found"));
+        scopeService.requireTeamScope(null, teamId, tenantId);
         return mapper.toPageResponse(null, repository.findAll(
                 MilestoneSpecifications.matching(tenantId, null, teamId, search, query.status(),
                         query.mandatory(), query.latePolicyType(), null, null),
@@ -134,12 +130,13 @@ public class MilestoneQueryService {
     @Transactional(readOnly = true)
     public MilestoneDetailResponse getTeamDetail(Long teamId, UUID milestoneId) {
         Long tenantId = tenantProvider.requireCurrentTenantId();
+        var scope = scopeService.requireTeamScope(null, teamId, tenantId);
         var milestone = repository.findByIdAndTeamIdAndTenantId(milestoneId, teamId, tenantId)
                 .filter(Milestone::isActive)
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
-        var rubric = rubricPort.requireSnapshotForRead(milestone.getRubricSnapshotId(), null, tenantId);
+        var rubric = rubricPort.requireSnapshotForRead(milestone.getRubricSnapshotId(), scope.projectId(), tenantId);
         var reviewer = milestone.getReviewerId() == null ? null
-                : reviewerPort.requireReviewerForRead(milestone.getReviewerId(), null, tenantId);
+                : reviewerPort.requireReviewerForRead(milestone.getReviewerId(), scope.projectId(), tenantId);
         return detailMapper.toResponse(milestone, null, rubric, reviewer,
                 tenantSettingsPort.requireTimeZone(tenantId));
     }

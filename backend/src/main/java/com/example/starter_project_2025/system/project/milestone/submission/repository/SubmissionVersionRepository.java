@@ -10,4 +10,5 @@ import java.util.UUID;
 public interface SubmissionVersionRepository extends JpaRepository<SubmissionVersion, UUID> {
     Optional<SubmissionVersion> findBySubmissionIdAndVersionNumber(UUID submissionId, int versionNumber);
     List<SubmissionVersion> findAllBySubmissionIdOrderByVersionNumberDesc(UUID submissionId);
+    Optional<SubmissionVersion> findByArtifactSubmissionId(UUID artifactSubmissionId);
 }

@@ -8,6 +8,7 @@ import com.example.starter_project_2025.system.project.milestone.domain.Mileston
 import com.example.starter_project_2025.system.project.milestone.integration.mock.MockMilestoneData;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
 import com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneSubmission;
+import com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneArtifactSubmission;
 import com.example.starter_project_2025.system.project.milestone.submission.domain.SubmissionVersion;
 import com.example.starter_project_2025.system.project.milestone.submission.repository.MilestoneSubmissionRepository;
 import com.example.starter_project_2025.system.project.milestone.submission.repository.SubmissionVersionRepository;
@@ -45,6 +46,34 @@ class MilestoneSubmissionIntegrationTest {
     @Autowired MilestoneRepository milestones;
     @Autowired MilestoneSubmissionRepository submissions;
     @Autowired SubmissionVersionRepository versions;
+    @Autowired com.example.starter_project_2025.system.project.milestone.submission.repository.MilestoneArtifactSubmissionRepository artifactSubmissions;
+
+    @Test
+    void reviewDetailUsesLatestArtifactSubmissionAsProductInformation() throws Exception {
+        JsonNode detail = submittedDetail();
+        UUID milestoneId = UUID.fromString(detail.get("milestoneId").asText());
+        long projectId = detail.get("projectId").asLong();
+        UUID submitterId = UUID.fromString(detail.get("studentId").asText());
+        Instant submittedAt = Instant.now();
+        artifactSubmissions.saveAndFlush(MilestoneArtifactSubmission.submit(
+                MockMilestoneData.TENANT_ID, projectId, milestoneId, submitterId, 2,
+                "https://github.com/example/actual-product",
+                "https://actual-product.example.com",
+                "Actual release notes from the artifact form",
+                "{}",
+                "[{\"id\":\"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\",\"fileName\":\"release.pdf\",\"contentType\":\"application/pdf\",\"sizeBytes\":2048}]",
+                submittedAt, false, null));
+
+        mockMvc.perform(get("/api/milestone-submissions/{id}", detail.get("id").asText())
+                        .header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.product.version").value(2))
+                .andExpect(jsonPath("$.product.repositoryUrl").value("https://github.com/example/actual-product"))
+                .andExpect(jsonPath("$.product.deploymentUrl").value("https://actual-product.example.com"))
+                .andExpect(jsonPath("$.product.releaseNotes").value("Actual release notes from the artifact form"))
+                .andExpect(jsonPath("$.product.attachments[0].fileName").value("release.pdf"))
+                .andExpect(jsonPath("$.product.attachments[0].sizeBytes").value(2048));
+    }
 
     @Test
     void rejectRequiresStructuredFeedbackAndKeepsSubmissionUnchanged() throws Exception {
@@ -169,7 +198,7 @@ class MilestoneSubmissionIntegrationTest {
                 .andExpect(jsonPath("$.currentVersion.title").value("Corrected delivery ready for review"))
                 .andExpect(jsonPath("$.currentVersion.artifacts.length()").value(2))
                 .andExpect(jsonPath("$.currentVersion.artifacts[0].type").value("REPOSITORY"))
-                .andExpect(jsonPath("$.currentVersion.checklist.length()").value(2))
+                .andExpect(jsonPath("$.currentVersion.checklist.length()").value(4))
                 // A student's draft payload cannot complete acceptance criteria; only the reviewer can.
                 .andExpect(jsonPath("$.currentVersion.checklist[0].completed").value(false))
                 .andExpect(jsonPath("$.versions[1].versionNumber").value(1))
@@ -183,15 +212,56 @@ class MilestoneSubmissionIntegrationTest {
     }
 
     @Test
+    void requestChangesRequiresRevisionInstructions() throws Exception {
+        JsonNode detail = submittedDetail();
+        Map<String, Object> request = reviewRequest(detail, "REQUEST_CHANGES", "Please revise this criterion.");
+        request.remove("overallFeedback");
+
+        mockMvc.perform(post("/api/milestone-submissions/{id}/review", detail.get("id").asText())
+                        .header("Authorization", bearer())
+                        .header("Idempotency-Key", "request-changes-without-instructions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors.overallFeedback").isArray());
+    }
+
+    @Test
+    void studentMySubmissionsAreFilteredByAuthenticatedOwner() throws Exception {
+        mockMvc.perform(get("/api/milestone-submissions/mine")
+                        .header("Authorization", studentBearer())
+                        .param("size", "50"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(5))
+                .andExpect(jsonPath("$.content[?(@.studentName == 'Student Demo')]").exists())
+                .andExpect(jsonPath("$.content[?(@.teamName == 'Atlas Team')]").doesNotExist());
+    }
+
+    @Test
+    void studentCannotReadAnotherStudentsSubmission() throws Exception {
+        String page = mockMvc.perform(get("/api/milestone-submissions")
+                        .header("Authorization", bearer())
+                        .param("search", "Atlas Team"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String id = objectMapper.readTree(page).get("content").get(0).get("id").asText();
+
+        mockMvc.perform(get("/api/milestone-submissions/mine/{id}", id)
+                        .header("Authorization", studentBearer()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void requestChangesIsBlockedAfterNoLateDeadline() throws Exception {
         Instant now = Instant.now();
         UUID actor = UUID.randomUUID();
         Milestone milestone = Milestone.create(MockMilestoneData.TENANT_ID, MockMilestoneData.PROJECT_ID,
+                MockMilestoneData.TEAM_ID,
                 "Closed request-changes test " + UUID.randomUUID(), null, now.minusSeconds(3600), true,
                 MockMilestoneData.RUBRIC_ID, MockMilestoneData.TECHNICAL_REVIEWER_ID,
                 LatePolicyType.NO_LATE, null, null, actor, now.minusSeconds(7200));
         milestone = milestones.saveAndFlush(milestone);
-        MilestoneSubmission submission = MilestoneSubmission.create(milestone, UUID.randomUUID(), "Closed Team",
+        MilestoneSubmission submission = MilestoneSubmission.create(milestone, 901L, "Closed Team",
                 UUID.randomUUID(), "Student", MockMilestoneData.TECHNICAL_REVIEWER_ID, "Reviewer", now.minusSeconds(1800));
         submission = submissions.saveAndFlush(submission);
         SubmissionVersion version = SubmissionVersion.draft(submission, 1, "Late work", null, null, actor, now.minusSeconds(1200));
@@ -217,9 +287,9 @@ class MilestoneSubmissionIntegrationTest {
     void gradeLockAndWaiverBothReevaluateBrUni12() throws Exception {
         Instant now = Instant.now();
         UUID actor = UUID.randomUUID();
-        UUID projectId = UUID.randomUUID();
-        UUID teamId = UUID.randomUUID();
-        Milestone milestone = Milestone.create(MockMilestoneData.TENANT_ID, projectId,
+        Long projectId = 902L;
+        Long teamId = 903L;
+        Milestone milestone = Milestone.create(MockMilestoneData.TENANT_ID, projectId, teamId,
                 "Mandatory completion gate", null, now.plusSeconds(3600), true,
                 MockMilestoneData.RUBRIC_ID, MockMilestoneData.TECHNICAL_REVIEWER_ID,
                 LatePolicyType.NO_LATE, null, null, actor, now);
@@ -300,13 +370,24 @@ class MilestoneSubmissionIntegrationTest {
         for (JsonNode item : detail.get("currentVersion").get("checklist")) {
             checklist.add(Map.of("checklistItemId", item.get("id").asText(), "completed", true));
         }
-        return Map.of("decision", decision, "expectedVersion", detail.get("lockVersion").asLong(),
-                "criteria", criteria, "checklist", checklist);
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("decision", decision);
+        request.put("expectedVersion", detail.get("lockVersion").asLong());
+        request.put("criteria", criteria);
+        request.put("checklist", checklist);
+        if ("REQUEST_CHANGES".equals(decision)) request.put("overallFeedback", "Please revise the submission using the criterion feedback.");
+        return request;
     }
 
     private String bearer() {
         var teacher = userDetailsService.loadUserByUsername("teacher@example.com");
         return "Bearer " + tokenService.generateAccessToken(
                 new UsernamePasswordAuthenticationToken(teacher, null, teacher.getAuthorities()));
+    }
+
+    private String studentBearer() {
+        var student = userDetailsService.loadUserByUsername("student@example.com");
+        return "Bearer " + tokenService.generateAccessToken(
+                new UsernamePasswordAuthenticationToken(student, null, student.getAuthorities()));
     }
 }

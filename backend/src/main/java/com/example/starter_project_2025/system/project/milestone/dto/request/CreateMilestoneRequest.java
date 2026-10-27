@@ -41,10 +41,17 @@ public record CreateMilestoneRequest(
 
         @Valid ResubmissionPolicyRequest resubmissionPolicy
 ) {
+    public CreateMilestoneRequest(Long teamId, String title, String description, Instant deadline,
+                                  boolean mandatory, List<ChecklistItemRequest> checklist,
+                                  UUID rubricSnapshotId, UUID reviewerId, LatePolicyRequest latePolicy) {
+        this(teamId, title, description, deadline, mandatory, checklist, rubricSnapshotId,
+                reviewerId, latePolicy, null);
+    }
+
     public CreateMilestoneRequest(String title, String description, Instant deadline, boolean mandatory,
                                   List<ChecklistItemRequest> checklist, UUID rubricSnapshotId,
                                   UUID reviewerId, LatePolicyRequest latePolicy) {
-        this(title, description, deadline, mandatory, checklist, rubricSnapshotId, reviewerId,
+        this(null, title, description, deadline, mandatory, checklist, rubricSnapshotId, reviewerId,
                 latePolicy, null);
     }
 }

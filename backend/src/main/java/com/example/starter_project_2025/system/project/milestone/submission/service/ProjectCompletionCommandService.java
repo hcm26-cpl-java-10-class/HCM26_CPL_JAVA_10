@@ -2,7 +2,7 @@ package com.example.starter_project_2025.system.project.milestone.submission.ser
 
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.project.milestone.integration.port.CurrentActorProvider;
-import com.example.starter_project_2025.system.project.milestone.integration.port.CurrentTenantProvider;
+import com.example.starter_project_2025.system.project.milestone.integration.port.MilestoneTenantProvider;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
 import com.example.starter_project_2025.system.project.milestone.submission.domain.FinalProjectGrade;
 import com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneWaiver;
@@ -23,14 +23,14 @@ public class ProjectCompletionCommandService {
     private final MilestoneWaiverRepository waivers;
     private final MilestoneRepository milestones;
     private final ProjectCompletionService completionService;
-    private final CurrentTenantProvider tenantProvider;
+    private final MilestoneTenantProvider tenantProvider;
     private final CurrentActorProvider actorProvider;
     private final Clock milestoneClock;
 
     @Transactional
     public SubmissionDtos.ProjectCompletionResult lockFinalGrade(
-            UUID projectId, UUID teamId, SubmissionDtos.LockFinalGradeRequest request) {
-        UUID tenantId = tenantProvider.requireCurrentTenantId();
+            Long projectId, Long teamId, SubmissionDtos.LockFinalGradeRequest request) {
+        Long tenantId = tenantProvider.requireCurrentTenantId();
         UUID actorId = actorProvider.requireCurrentActorId();
         var now = milestoneClock.instant();
         FinalProjectGrade grade = grades.findByTenantIdAndProjectIdAndTeamId(tenantId, projectId, teamId)
@@ -44,8 +44,8 @@ public class ProjectCompletionCommandService {
 
     @Transactional
     public SubmissionDtos.ProjectCompletionResult waive(
-            UUID projectId, UUID teamId, UUID milestoneId, SubmissionDtos.WaiveMilestoneRequest request) {
-        UUID tenantId = tenantProvider.requireCurrentTenantId();
+            Long projectId, Long teamId, UUID milestoneId, SubmissionDtos.WaiveMilestoneRequest request) {
+        Long tenantId = tenantProvider.requireCurrentTenantId();
         var milestone = milestones.findByIdAndProjectIdAndTenantId(milestoneId, projectId, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone does not exist or has changed"));
         UUID actorId = actorProvider.requireCurrentActorId();

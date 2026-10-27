@@ -22,7 +22,7 @@ public class ProjectCompletionService {
     private final ProjectCompletionPort completionPort;
 
     @Transactional
-    public boolean reevaluate(UUID tenantId, UUID projectId, UUID teamId, UUID actorId, Instant now) {
+    public boolean reevaluate(Long tenantId, Long projectId, Long teamId, UUID actorId, Instant now) {
         if (!completionPort.isActive(projectId, tenantId)) return false;
         boolean gradeLocked = finalGrades.findByTenantIdAndProjectIdAndTeamId(tenantId, projectId, teamId)
                 .map(grade -> grade.isLocked()).orElse(false);

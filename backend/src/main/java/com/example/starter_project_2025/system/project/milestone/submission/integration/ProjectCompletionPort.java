@@ -4,6 +4,6 @@ import java.time.Instant;
 import java.util.UUID;
 
 public interface ProjectCompletionPort {
-    boolean isActive(UUID projectId, UUID tenantId);
-    void complete(UUID projectId, UUID teamId, UUID actorId, Instant completedAt);
+    boolean isActive(Long projectId, Long tenantId);
+    void complete(Long projectId, Long teamId, UUID actorId, Instant completedAt);
 }

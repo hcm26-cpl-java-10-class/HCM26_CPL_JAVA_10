@@ -12,13 +12,13 @@ import java.util.*;
 @Component
 @Profile("!milestone-real-integrations")
 public class MockProjectCompletionAdapter implements ProjectCompletionPort {
-    private final Set<UUID> completed = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final Set<Long> completed = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
-    @Override public boolean isActive(UUID projectId, UUID tenantId) {
+    @Override public boolean isActive(Long projectId, Long tenantId) {
         return MockMilestoneData.TENANT_ID.equals(tenantId) && !completed.contains(projectId);
     }
 
-    @Override public void complete(UUID projectId, UUID teamId, UUID actorId, Instant completedAt) {
+    @Override public void complete(Long projectId, Long teamId, UUID actorId, Instant completedAt) {
         completed.add(projectId);
         log.info("Mock BR-UNI-12 completion: project={}, team={}, actor={}, at={}",
                 projectId, teamId, actorId, completedAt);

@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import type { SaveSubmissionDraftRequest, SubmissionArtifactType, SubmissionDetail } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, ArrowLeft, FilePlus2, Link2, Plus, Save, Send, Trash2 } from "lucide-react";
+import { AlertCircle, ArrowLeft, CalendarClock, ExternalLink, Link2, Plus, RotateCcw, Save, Send, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -32,7 +32,7 @@ export function StudentSubmissionPage() {
   const navigate = useNavigate();
   const client = useQueryClient();
   const submitKey = useRef<string | null>(null);
-  const query = useQuery({ queryKey: ["student-submission", submissionId], queryFn: () => milestoneSubmissionApi.getDetail(submissionId as string), enabled: Boolean(submissionId), retry: false });
+  const query = useQuery({ queryKey: ["student-submission", submissionId], queryFn: () => milestoneSubmissionApi.getMyDetail(submissionId as string), enabled: Boolean(submissionId), retry: false });
   const [form, setForm] = useState<SaveSubmissionDraftRequest | null>(null);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [error, setError] = useState<string>();
@@ -43,26 +43,19 @@ export function StudentSubmissionPage() {
     client.setQueryData(["student-submission", submissionId], data);
     client.setQueryData(["milestone-submissions", submissionId], data);
     void client.invalidateQueries({ queryKey: ["milestone-submissions"] });
+    void client.invalidateQueries({ queryKey: ["my-milestone-submissions"] });
   };
-  const createVersion = useMutation({
-    mutationFn: (item: SubmissionDetail) => milestoneSubmissionApi.createNextVersion(item.id, {
-      title: `${item.milestoneTitle} · version ${item.currentVersionNumber + 1}`,
-      notes: "", submissionUrl: undefined,
-    }),
-    onSuccess: (data) => { store(data); setForm(toForm(data)); toast.success(`Version ${data.currentVersionNumber} draft created`); },
-    onError: () => toast.error("Could not start the revised version"),
-  });
   const saveDraft = useMutation({
     mutationFn: ({ item, payload }: { item: SubmissionDetail; payload: SaveSubmissionDraftRequest }) =>
-      milestoneSubmissionApi.updateDraft(item.id, item.currentVersion.id, payload),
+      milestoneSubmissionApi.updateMyDraft(item.id, item.currentVersion.id, payload),
     onSuccess: (data) => { store(data); setForm(toForm(data)); toast.success("Draft saved"); },
     onError: () => toast.error("Could not save this draft"),
   });
   const submit = useMutation({
     mutationFn: async ({ item, payload }: { item: SubmissionDetail; payload: SaveSubmissionDraftRequest }) => {
-      await milestoneSubmissionApi.updateDraft(item.id, item.currentVersion.id, payload);
+      await milestoneSubmissionApi.updateMyDraft(item.id, item.currentVersion.id, payload);
       submitKey.current ??= crypto.randomUUID();
-      return milestoneSubmissionApi.submit(item.id, submitKey.current);
+      return milestoneSubmissionApi.submitMine(item.id, submitKey.current);
     },
     onSuccess: (data) => { store(data); submitKey.current = null; setConfirmSubmit(false); toast.success("Submission sent to reviewer"); },
     onError: () => toast.error("Could not submit this version"),
@@ -72,21 +65,25 @@ export function StudentSubmissionPage() {
   if (!query.data || query.isError) return <MainLayout pathName={{ student: "Student", submission: "Submission" }}><Alert variant="destructive"><AlertCircle /><AlertTitle>Submission could not be loaded</AlertTitle></Alert></MainLayout>;
   const item = query.data;
   const latestFeedback = item.reviews[0];
+  const artifactPath = item.projectId
+    ? `/projects/${item.projectId}/milestones/${item.milestoneId}/submit?reviewSubmissionId=${item.id}`
+    : `/teams/${item.teamId}/milestones/${item.milestoneId}/submit`;
 
   if (item.status === "CHANGES_REQUESTED") return (
     <MainLayout pathName={{ student: "Student", submission: item.milestoneTitle }}>
       <div className="mx-auto grid max-w-5xl gap-5">
-        <Button variant="ghost" className="w-fit" onClick={() => navigate(-1)}><ArrowLeft className="size-4" /> Back</Button>
-        <Card><CardHeader><SubmissionStatusBadge status={item.status} /><CardTitle>{item.milestoneTitle}</CardTitle><CardDescription>Reviewer requested changes to version {item.currentVersionNumber}.</CardDescription></CardHeader></Card>
-        {latestFeedback ? <Card className="border-amber-500/40"><CardHeader><CardTitle>Required changes</CardTitle><CardDescription>{latestFeedback.overallFeedback || "Address the criterion feedback before submitting again."}</CardDescription></CardHeader><CardContent className="grid gap-2">{latestFeedback.evaluations.filter((value) => value.feedback).map((value) => <div key={value.criterionId} className="rounded-lg bg-muted/50 p-3"><p className="font-medium">{value.criterionName}</p><p className="text-sm text-muted-foreground">{value.feedback}</p></div>)}</CardContent></Card> : null}
-        <Card><CardHeader><CardTitle>Start corrected version {item.currentVersionNumber + 1}</CardTitle><CardDescription>The reviewed version stays immutable. This creates one new student draft.</CardDescription></CardHeader><CardContent className="flex justify-end"><Button disabled={createVersion.isPending || !item.availableActions.createNextVersion} onClick={() => createVersion.mutate(item)}><FilePlus2 className="size-4" /> {createVersion.isPending ? "Creating draft..." : "Start revised draft"}</Button></CardContent></Card>
+        <Button variant="ghost" className="w-fit" onClick={() => navigate("/student/milestone-submissions")}><ArrowLeft className="size-4" /> Quay lại bài nộp của tôi</Button>
+        <Alert className="border-amber-400 bg-amber-50 text-amber-950 dark:bg-amber-950/20 dark:text-amber-100"><RotateCcw /><AlertTitle>Reviewer yêu cầu chỉnh sửa</AlertTitle><AlertDescription>Version {item.currentVersionNumber} được giữ nguyên. Hãy đọc feedback và chuẩn bị Version {item.currentVersionNumber + 1} trước khi cửa sổ nộp lại đóng.</AlertDescription></Alert>
+        <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle>{item.milestoneTitle}</CardTitle><CardDescription>{item.teamName} · Version {item.currentVersionNumber}</CardDescription></div><SubmissionStatusBadge status={item.status} /></div></CardHeader><CardContent className="flex flex-wrap gap-4 text-sm text-muted-foreground"><span className="flex items-center gap-2"><CalendarClock className="size-4" /> Deadline: {new Date(item.deadline).toLocaleString("vi-VN")}</span>{item.lateUntil ? <span>Late policy đóng: {new Date(item.lateUntil).toLocaleString("vi-VN")}</span> : null}<span>Lần nộp: {item.submissionAttempts}{item.maxSubmissionAttempts ? `/${item.maxSubmissionAttempts}` : ""}</span></CardContent></Card>
+        {latestFeedback ? <Card className="border-amber-500/40"><CardHeader><CardTitle>Hướng dẫn chỉnh sửa</CardTitle><CardDescription className="whitespace-pre-wrap text-foreground">{latestFeedback.overallFeedback || "Hãy xử lý các feedback theo từng tiêu chí bên dưới."}</CardDescription></CardHeader><CardContent className="grid gap-2">{latestFeedback.evaluations.filter((value) => value.feedback).map((value) => <div key={value.criterionId} className="rounded-lg bg-muted/50 p-3"><p className="font-medium">{value.criterionName}</p><p className="whitespace-pre-wrap text-sm text-muted-foreground">{value.feedback}</p></div>)}</CardContent></Card> : null}
+        <Card><CardHeader><CardTitle>Chuẩn bị Version {item.currentVersionNumber + 1}</CardTitle><CardDescription>Form artifact sẽ tạo sản phẩm mới; version đã review không bị thay đổi.</CardDescription></CardHeader><CardContent className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{item.availableActions.createNextVersion ? "Bạn vẫn còn thời gian và lượt nộp lại." : "Cửa sổ nộp lại đã đóng hoặc đã hết số lần nộp."}</p><Button disabled={!item.availableActions.createNextVersion} onClick={() => navigate(artifactPath)}><RotateCcw className="size-4" /> Chuẩn bị bài nộp lại</Button></CardContent></Card>
       </div>
     </MainLayout>
   );
 
   if (item.status !== "DRAFT" || !form) return (
     <MainLayout pathName={{ student: "Student", submission: item.milestoneTitle }}>
-      <div className="mx-auto grid max-w-5xl gap-5"><Button variant="ghost" className="w-fit" onClick={() => navigate(-1)}><ArrowLeft className="size-4" /> Back</Button><Card><CardHeader><SubmissionStatusBadge status={item.status} /><CardTitle>{item.milestoneTitle}</CardTitle><CardDescription>This version is read-only because it has already been submitted.</CardDescription></CardHeader></Card></div>
+      <div className="mx-auto grid max-w-5xl gap-5"><Button variant="ghost" className="w-fit" onClick={() => navigate("/student/milestone-submissions")}><ArrowLeft className="size-4" /> Quay lại bài nộp của tôi</Button><Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle>{item.milestoneTitle}</CardTitle><CardDescription>Version {item.currentVersionNumber} chỉ đọc vì đã được nộp.</CardDescription></div><SubmissionStatusBadge status={item.status} /></div></CardHeader><CardContent className="grid gap-4 text-sm"><p className="whitespace-pre-wrap"><strong>Ghi chú:</strong> {item.currentVersion.notes || "—"}</p>{item.product ? <div className="grid gap-2 rounded-lg border p-3"><p><strong>Repository:</strong> {item.product.repositoryUrl ? <a className="text-primary underline" href={item.product.repositoryUrl} target="_blank" rel="noreferrer">{item.product.repositoryUrl} <ExternalLink className="inline size-3" /></a> : "—"}</p><p><strong>Deployment:</strong> {item.product.deploymentUrl ? <a className="text-primary underline" href={item.product.deploymentUrl} target="_blank" rel="noreferrer">{item.product.deploymentUrl} <ExternalLink className="inline size-3" /></a> : "—"}</p><p><strong>Release notes:</strong> {item.product.releaseNotes || "—"}</p><p><strong>Tệp đính kèm:</strong> {item.product.attachments.length}</p></div> : null}</CardContent></Card>{latestFeedback ? <Card><CardHeader><CardTitle>Feedback gần nhất</CardTitle><CardDescription className="whitespace-pre-wrap">{latestFeedback.overallFeedback || "Không có feedback tổng quan."}</CardDescription></CardHeader></Card> : null}</div>
     </MainLayout>
   );
 

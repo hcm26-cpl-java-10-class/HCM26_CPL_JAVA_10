@@ -23,11 +23,11 @@ import java.util.*;
 
 @Slf4j
 @Component
-@Profile("!milestone-real-integrations")
+@Profile("milestone-mock | test")
 @Order(13)
 @RequiredArgsConstructor
 public class SubmissionMockDataInitializer implements CommandLineRunner {
-    public static final UUID TEAM_ID = UUID.fromString("66666666-6666-6666-6666-666666666666");
+    public static final Long TEAM_ID = MockMilestoneData.TEAM_ID;
     public static final UUID STUDENT_ID = UUID.nameUUIDFromBytes("student@example.com".getBytes(StandardCharsets.UTF_8));
     public static final UUID REVIEWER_ID = UUID.nameUUIDFromBytes("teacher@example.com".getBytes(StandardCharsets.UTF_8));
 
@@ -39,7 +39,7 @@ public class SubmissionMockDataInitializer implements CommandLineRunner {
     private final FinalProjectGradeRepository finalGrades;
     private final Clock milestoneClock;
 
-    @Value("${milestone.submission.mock.seed-enabled:true}") private boolean enabled;
+    @Value("${milestone.submission.mock.seed-enabled:false}") private boolean enabled;
 
     @Override
     @Transactional
@@ -80,7 +80,7 @@ public class SubmissionMockDataInitializer implements CommandLineRunner {
 
     private void seedPendingReview(PendingSubmissionSample sample, int index) {
         Milestone milestone = requireMilestone(sample.milestoneTitle());
-        UUID teamId = stableId("milestone-submission-team:" + sample.teamName());
+        Long teamId = stableLong("milestone-submission-team:" + sample.teamName());
         if (submissions.findByMilestoneIdAndTeamId(milestone.getId(), teamId).isPresent()) return;
 
         UUID studentId = stableId("milestone-submission-student:" + sample.studentName());
@@ -119,6 +119,10 @@ public class SubmissionMockDataInitializer implements CommandLineRunner {
         return UUID.nameUUIDFromBytes(value.getBytes(StandardCharsets.UTF_8));
     }
 
+    private Long stableLong(String value) {
+        return Integer.toUnsignedLong(value.hashCode()) + 10_000L;
+    }
+
     private record PendingSubmissionSample(String milestoneTitle, String teamName, String studentName) { }
 
     private void seed(String title, SubmissionStatus target, RubricRatingLevel ratingLevel, String feedback) {
@@ -153,7 +157,7 @@ public class SubmissionMockDataInitializer implements CommandLineRunner {
     private void seedReview(MilestoneSubmission submission, SubmissionVersion version, ReviewDecision decision,
                             RubricRatingLevel level, String feedback, Instant reviewedAt) {
         RubricVersion rubric = rubrics.findByIdAndRubricTenantId(
-                submission.getMilestone().getRubricSnapshotId(), MockMilestoneData.TENANT_ID).orElseThrow();
+                submission.getMilestone().getRubricSnapshotId(), rubricTenantAlias(MockMilestoneData.TENANT_ID)).orElseThrow();
         BigDecimal raw = BigDecimal.ZERO;
         List<Object[]> values = new ArrayList<>();
         for (RubricCriterion criterion : rubric.getCriteria()) {
@@ -210,5 +214,9 @@ public class SubmissionMockDataInitializer implements CommandLineRunner {
     private Milestone requireMilestone(String title) {
         return milestones.findByTenantIdAndProjectIdAndTitle(
                 MockMilestoneData.TENANT_ID, MockMilestoneData.PROJECT_ID, title).orElseThrow();
+    }
+
+    private UUID rubricTenantAlias(Long tenantId) {
+        return UUID.nameUUIDFromBytes(("tenant:" + tenantId).getBytes(StandardCharsets.UTF_8));
     }
 }

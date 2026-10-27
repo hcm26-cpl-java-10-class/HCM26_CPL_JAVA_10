@@ -19,13 +19,13 @@ public class MilestoneWaiver {
     @Column(name = "waiver_id", nullable = false, updatable = false)
     private UUID id;
     @Column(name = "tenant_id", nullable = false, updatable = false)
-    private UUID tenantId;
+    private Long tenantId;
     @Column(name = "project_id", nullable = false, updatable = false)
-    private UUID projectId;
+    private Long projectId;
     @Column(name = "milestone_id", nullable = false, updatable = false)
     private UUID milestoneId;
     @Column(name = "team_id", nullable = false, updatable = false)
-    private UUID teamId;
+    private Long teamId;
     @Column(nullable = false, length = 500)
     private String reason;
     @Column(name = "waived_by", nullable = false, updatable = false)
@@ -33,8 +33,8 @@ public class MilestoneWaiver {
     @Column(name = "waived_at", nullable = false, updatable = false)
     private Instant waivedAt;
 
-    public static MilestoneWaiver create(UUID tenantId, UUID projectId, UUID milestoneId,
-                                         UUID teamId, String reason, UUID actorId, Instant now) {
+    public static MilestoneWaiver create(Long tenantId, Long projectId, UUID milestoneId,
+                                         Long teamId, String reason, UUID actorId, Instant now) {
         MilestoneWaiver waiver = new MilestoneWaiver();
         waiver.tenantId = tenantId;
         waiver.projectId = projectId;

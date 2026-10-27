@@ -43,7 +43,8 @@ export function SubmissionReviewForm({ submission, pending, apiError, onReview }
       if (next !== "ACCEPT" && !value?.feedback.trim()) errors[`${item.id}.feedback`] = "Please enter feedback";
       if ((value?.feedback.length ?? 0) > 500) errors[`${item.id}.feedback`] = "Feedback must not exceed 500 characters";
     });
-    if (overallFeedback.length > 1000) errors.overallFeedback = "Overall feedback must not exceed 1,000 characters";
+    if (next === "REQUEST_CHANGES" && !overallFeedback.trim()) errors.overallFeedback = "Revision instructions are required";
+    if (overallFeedback.length > 500) errors.overallFeedback = "Feedback must not exceed 500 characters";
     if (next === "ACCEPT" && submission.currentVersion.checklist.some((item) => item.mandatory && !checklist[item.id as string])) {
       errors.checklist = "Check every required acceptance item before accepting";
     }
@@ -66,7 +67,7 @@ export function SubmissionReviewForm({ submission, pending, apiError, onReview }
           </div>
         </CardHeader>
         <CardContent className="grid gap-4">
-          {apiError ? <Alert variant="destructive"><AlertCircle /><AlertTitle>Review could not be saved</AlertTitle><AlertDescription>{apiError.message ?? "Check the highlighted fields and try again."}</AlertDescription></Alert> : null}
+          {apiError ? <Alert variant="destructive"><AlertCircle /><AlertTitle>Review could not be saved</AlertTitle><AlertDescription>{apiError.errors?.decision?.[0] ?? apiError.message ?? "Check the highlighted fields and try again."}</AlertDescription></Alert> : null}
           {ordered.map((criterion, index) => {
             const value = draft[criterion.id] ?? { feedback: "" };
             const serverFeedback = apiError?.errors?.[`criteria[${index}].feedback`]?.[0];
@@ -109,9 +110,9 @@ export function SubmissionReviewForm({ submission, pending, apiError, onReview }
             {localErrors.checklist || apiError?.errors?.checklist?.[0] ? <p className="mt-3 text-sm text-destructive">{localErrors.checklist ?? apiError?.errors?.checklist?.[0]}</p> : null}
           </section>
           <section className="rounded-xl border p-4">
-            <div className="flex justify-between gap-2"><Label htmlFor="overall-feedback">Overall feedback <span className="font-normal text-muted-foreground">(optional)</span></Label><span className={`text-xs ${overallFeedback.length > 1000 ? "text-destructive" : "text-muted-foreground"}`}>{overallFeedback.length}/1000</span></div>
-            <Textarea id="overall-feedback" className="mt-3" rows={4} maxLength={1100} value={overallFeedback} placeholder="Overall review and recommended improvements" onChange={(event) => { setOverallFeedback(event.target.value); setLocalErrors((current) => { const next = { ...current }; delete next.overallFeedback; return next; }); }} />
-            {localErrors.overallFeedback ? <p className="mt-2 text-sm text-destructive">{localErrors.overallFeedback}</p> : null}
+            <div className="flex justify-between gap-2"><Label htmlFor="overall-feedback">Revision instructions <span className="font-normal text-muted-foreground">(required for Request Changes)</span></Label><span className={`text-xs ${overallFeedback.length > 500 ? "text-destructive" : "text-muted-foreground"}`}>{overallFeedback.length}/500</span></div>
+            <Textarea id="overall-feedback" className="mt-3" rows={4} maxLength={501} disabled={pending} value={overallFeedback} aria-invalid={Boolean(localErrors.overallFeedback || apiError?.errors?.overallFeedback?.[0])} placeholder="Summarize exactly what the student must revise" onChange={(event) => { setOverallFeedback(event.target.value); setLocalErrors((current) => { const next = { ...current }; delete next.overallFeedback; return next; }); }} />
+            {localErrors.overallFeedback || apiError?.errors?.overallFeedback?.[0] ? <p className="mt-2 text-sm text-destructive">{localErrors.overallFeedback ?? apiError?.errors?.overallFeedback?.[0]}</p> : null}
           </section>
         </CardContent>
       </Card>
