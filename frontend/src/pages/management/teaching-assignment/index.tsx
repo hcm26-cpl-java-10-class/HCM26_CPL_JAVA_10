@@ -2,7 +2,8 @@ import { useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import axios from "axios";
-import { AlertCircle, ChevronLeft, ChevronRight, Eye, LoaderCircle, Plus, RefreshCw, Search, Users, X } from "lucide-react";
+import { AlertCircle, ChevronLeft, ChevronRight, Eye, LoaderCircle, Pencil, Plus, RefreshCw, Search, Users, X } from "lucide-react";
+import { EditAssignmentDialog } from "./components/EditAssignmentDialog";
 import { CreateAssignmentDialog } from "./components/CreateAssignmentDialog";
 import { AssignmentDetailDialog } from "./components/AssignmentDetailDialog";
 import { classSetupApi, type AssignmentRole, type AssignmentSearchParams } from "@/api/features/class-setup.api";
@@ -53,6 +54,8 @@ export default function TeachingAssignmentPage() {
   const { hasPermission } = usePermissions();
   const canRead = hasPermission("ASSIGNMENT_READ");
   const canCreate = hasPermission("ASSIGNMENT_CREATE");
+  const canUpdate = hasPermission("ASSIGNMENT_UPDATE");
+  const [editing, setEditing] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
   const [url, setUrl] = useSearchParams();
   const detailId = positiveId(url.get("assignmentId"));
@@ -166,7 +169,8 @@ export default function TeachingAssignmentPage() {
                 <TableCell>{a.trainerName || `Trainer #${a.trainerId}`}</TableCell>
                 <TableCell><Badge variant={a.role === "MAIN" ? "default" : "outline"}>{a.role === "MAIN" ? "Main" : "Assistant"}</Badge></TableCell>
                 <TableCell className="whitespace-nowrap">{displayDate(a.effectiveFrom)}</TableCell><TableCell className="whitespace-nowrap">{a.effectiveTo ? displayDate(a.effectiveTo) : "No end date"}</TableCell>
-                <TableCell><Button variant="ghost" size="sm" aria-label={`View assignment details for ${a.subjectCode} in ${a.classCode || a.classId}`} onClick={() => showDetails(a.id)}><Eye className="size-4" />Details</Button></TableCell>
+                <TableCell><div className="flex gap-1"><Button variant="ghost" size="sm" aria-label={`View assignment details for ${a.subjectCode} in ${a.classCode || a.classId}`} onClick={() => showDetails(a.id)}><Eye className="size-4" />Details</Button>
+                {canUpdate && <Button variant="ghost" size="sm" aria-label={`Edit assignment for ${a.subjectCode} in ${a.classCode || a.classId}`} onClick={() => setEditing(a.id)}><Pencil className="size-4" />Edit</Button>}</div></TableCell>
               </TableRow>)}</TableBody></Table>}
           {!assignments.isPending && !assignments.isError && data && <div className="flex flex-wrap items-center justify-between gap-4 border-t pt-4">
             <p className="text-sm text-muted-foreground" role="status">{data.content.length ? `${page * size + 1}–${page * size + data.content.length}` : "0"} / {total} assignments</p>
@@ -182,5 +186,6 @@ export default function TeachingAssignmentPage() {
     {creating && canCreate && <CreateAssignmentDialog initialClassId={params.classId}
       onClose={() => setCreating(false)} onCreated={() => { setCreating(false); }} />}
     {detailId && canRead && <AssignmentDetailDialog key={detailId} assignmentId={detailId} onClose={() => showDetails()} />}
+    {editing && canUpdate && <EditAssignmentDialog key={editing} assignmentId={editing} onClose={() => setEditing(null)} />}
   </MainLayout>;
 }

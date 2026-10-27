@@ -19,7 +19,7 @@ export function isISODate(value: string): boolean {
 
 export function validateAssignmentForm(
   form: AssignmentForm,
-  context: AssignmentClassContext | undefined,
+  context: (Pick<AssignmentClassContext, "classProfile"> & { subjects: { programSubjectId: number }[] }) | undefined,
   classIds: number[],
   trainerIds: number[],
 ): AssignmentErrors {

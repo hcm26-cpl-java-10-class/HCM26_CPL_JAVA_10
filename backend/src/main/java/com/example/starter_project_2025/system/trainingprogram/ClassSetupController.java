@@ -127,6 +127,19 @@ public class ClassSetupController {
         return ResponseEntity.ok(service.updateAssignment(id, request));
     }
 
+    @GetMapping("/teaching-assignments/{id}/edit-context")
+    @PreAuthorize("hasAuthority('ASSIGNMENT_UPDATE')")
+    public ResponseEntity<TeachingAssignmentEditContext> getAssignmentEditContext(@PathVariable Long id) {
+        return ResponseEntity.ok(service.getAssignmentEditContext(id));
+    }
+
+    @PostMapping("/teaching-assignments/{id}/impact-preview")
+    @PreAuthorize("hasAuthority('ASSIGNMENT_UPDATE')")
+    public ResponseEntity<TeachingAssignmentImpactResponse> previewAssignmentImpact(@PathVariable Long id,
+            @Valid @RequestBody TeachingAssignmentRequest request, @PageableDefault(size = 10) Pageable pageable) {
+        return ResponseEntity.ok(service.previewAssignmentImpact(id, request, pageable));
+    }
+
     @DeleteMapping("/teaching-assignments/{id}")
     @PreAuthorize("hasAuthority('ASSIGNMENT_DELETE')")
     public ResponseEntity<Void> deleteAssignment(@PathVariable Long id) {

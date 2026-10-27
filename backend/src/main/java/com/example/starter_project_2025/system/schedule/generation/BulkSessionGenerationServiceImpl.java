@@ -30,6 +30,7 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
     ClassTrainingProgramRepository classTrainingProgramRepository;
     TeachingAssignmentRepository teachingAssignmentRepository;
     SessionRepository sessionRepository;
+    TeachingAssignmentSessionGuard assignmentGuard;
 
     Map<String, BulkSaveSessionsResponseDTO> idempotencyStore = new ConcurrentHashMap<>();
 
@@ -220,6 +221,7 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
     @Override
     @Transactional(rollbackFor = Exception.class)
     public BulkSaveSessionsResponseDTO saveBulkSessions(Long classId, BulkSaveSessionsRequestDTO request, String idempotencyKey) {
+        assignmentGuard.lockForWrite();
         // 1. Chống gửi lặp bằng Idempotency Key
         if (idempotencyKey != null && !idempotencyKey.trim().isEmpty()) {
             BulkSaveSessionsResponseDTO cached = idempotencyStore.get(idempotencyKey.trim());
@@ -262,6 +264,11 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
         }
 
         // 3. Batch Insert nguyên tử (All-or-Nothing qua @Transactional)
+        for (Session session : sessionsToSave) {
+            assignmentGuard.requireCompatible(new com.example.starter_project_2025.system.schedule.ScheduleCandidate(
+                    null, session.getClassId(), session.getTopicId(), session.getTrainerId(), session.getTeachingAssignmentId(),
+                    session.getRoomId(), session.getLocation(), session.getMeetingUrl(), session.getTitle(), session.getStartTime(), session.getEndTime()));
+        }
         List<Session> saved = sessionRepository.saveAll(sessionsToSave);
 
         BulkSaveSessionsResponseDTO response = BulkSaveSessionsResponseDTO.builder()

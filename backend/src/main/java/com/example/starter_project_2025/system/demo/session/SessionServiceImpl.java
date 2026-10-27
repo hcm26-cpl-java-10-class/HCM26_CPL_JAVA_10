@@ -27,6 +27,7 @@ public class SessionServiceImpl
     SessionMapper sessionMapper;
     SessionRepository sessionRepository;
     ScheduleValidationEngine conflicts;
+    com.example.starter_project_2025.system.trainingprogram.TeachingAssignmentSessionGuard assignmentGuard;
 
     @Override
     public SessionDTO create(SessionDTO request) {
@@ -87,6 +88,7 @@ public class SessionServiceImpl
 
     @Override
     protected void beforeCreate(Session session, SessionDTO request, ValidationContext ctx) {
+        assignmentGuard.requireCompatible(candidate(null, request));
         conflicts.requireValid(List.of(candidate(null, request)));
         // 1. Kiểm tra thời gian: end_time phải sau start_time (BR-02, FR-CAL-01)
         validateSessionTime(request.getStartTime(), request.getEndTime(), ctx);
@@ -113,6 +115,7 @@ public class SessionServiceImpl
         LocalDateTime newEnd = request.getEndTime() != null ? request.getEndTime() : session.getEndTime();
 
         validateSessionTime(newStart, newEnd, ctx);
+        assignmentGuard.requireCompatible(candidate(session, request));
         conflicts.requireValid(List.of(candidate(session, request)));
         // An explicit empty location clears a previously selected physical room.
         if (request.getRoomId() == null && request.getLocation() != null && request.getLocation().isBlank()) {

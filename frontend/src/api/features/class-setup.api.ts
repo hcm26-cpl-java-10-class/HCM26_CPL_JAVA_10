@@ -26,7 +26,10 @@ export interface TeachingAssignmentRequest {
   role: AssignmentRole;
   effectiveFrom: string;
   effectiveTo: string | null;
+  revision?: number;
 }
+
+export type TeachingAssignmentUpdateRequest = TeachingAssignmentRequest & { revision: number };
 
 export interface TeachingAssignment {
   id: number;
@@ -48,6 +51,24 @@ export interface TeachingAssignment {
   programCode?: string;
   programName?: string;
   programVersion?: string;
+  revision: number;
+}
+
+export interface AssignmentEditContext {
+  assignment: TeachingAssignment;
+  classProfile: SharedClass;
+  trainers: SharedTrainer[];
+  linkedSessionCount: number;
+}
+
+export interface AssignmentImpact {
+  canSave: boolean;
+  revision: number;
+  linkedSessionCount: number;
+  affectedSessionCount: number;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  affectedSessions: AssignmentPage<{ session: AssignmentSession; reasons: string[] }>;
 }
 
 export type AssignmentSessionStatus = "SCHEDULED" | "COMPLETED" | "CANCELLED";
@@ -162,7 +183,11 @@ export const classSetupApi = {
     (await axiosInstance.get<AssignmentPage<AssignmentSession>>(`/teaching-assignments/${id}/sessions`, { params, signal })).data,
   createAssignment: async (request: TeachingAssignmentRequest) =>
     (await axiosInstance.post<TeachingAssignment>("/teaching-assignments", request)).data,
-  updateAssignment: async (id: number, request: TeachingAssignmentRequest) =>
+  getAssignmentEditContext: async (id: number, signal?: AbortSignal) =>
+    (await axiosInstance.get<AssignmentEditContext>(`/teaching-assignments/${id}/edit-context`, { signal })).data,
+  previewAssignmentImpact: async (id: number, request: TeachingAssignmentUpdateRequest, page: number, signal?: AbortSignal) =>
+    (await axiosInstance.post<AssignmentImpact>(`/teaching-assignments/${id}/impact-preview`, request, { params: { page, size: 10 }, signal })).data,
+  updateAssignment: async (id: number, request: TeachingAssignmentUpdateRequest) =>
     (await axiosInstance.put<TeachingAssignment>(`/teaching-assignments/${id}`, request)).data,
   deleteAssignment: async (id: number) =>
     axiosInstance.delete(`/teaching-assignments/${id}`),

@@ -34,5 +34,9 @@ public interface ClassSetupService {
 
     TeachingAssignmentResponse updateAssignment(Long id, TeachingAssignmentRequest request);
 
+    TeachingAssignmentEditContext getAssignmentEditContext(Long id);
+
+    TeachingAssignmentImpactResponse previewAssignmentImpact(Long id, TeachingAssignmentRequest request, Pageable pageable);
+
     void deleteAssignment(Long id);
 }

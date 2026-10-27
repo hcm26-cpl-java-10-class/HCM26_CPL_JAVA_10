@@ -55,6 +55,16 @@ Local end-to-end session scheduling can use the existing `local,schedule-demo` p
 
 Assignment profiles and session history load independently, with separate loading/error/retry states. Deleted shared profiles fall back to local identifiers, and an upstream profile outage does not block the local session-history endpoint. Schedule timestamps are displayed without shifting their local date or time. Meeting links accept only absolute HTTP/HTTPS URLs without embedded credentials.
 
+## Edit an assignment and preview its impact
+
+Accounts with `ASSIGNMENT_UPDATE` can click **Edit** in an assignment row. The form loads a fresh edit context and preserves input until the user saves, closes or explicitly reloads it. Class and subject are fixed. Trainer changes are allowed only while there are no linked sessions, including cancelled or archived history.
+
+Use **Preview impact** after changing the role or effective dates. The preview lists affected sessions and reasons with server pagination. Non-cancelled sessions, including completed and archived sessions, must remain within the proposed inclusive date range and retain their class/trainer context. Cancelled sessions do not block date changes, but still prevent changing the trainer on a used assignment. Replacement assignments and session reassignment are separate, explicit operations; this form never rewrites session history.
+
+**Save changes** becomes available only for the exact form values and revision that passed preview. Any further edit invalidates that preview. The backend always repeats validation at save time, even if the caller skips preview. Both preview and update require the current `revision` from the assignment response; stale or missing revisions return HTTP 409 and require an explicit reload.
+
+Updates share the existing schedule write lock with single-session writes and the bulk session writer. After taking the lock, the backend reloads the assignment, checks its revision and validates linked sessions before committing. Single-session and bulk writes also recheck the local assignment class, trainer and effective period, so stale external assignment references cannot bypass an update. Existing bulk conflict/idempotency behavior remains the responsibility of schedule integration.
+
 ## API additions
 
 Both lookup endpoints require `ASSIGNMENT_CREATE`, without requiring class/program management permissions:
@@ -65,6 +75,14 @@ Both lookup endpoints require `ASSIGNMENT_CREATE`, without requiring class/progr
 The existing `POST /api/teaching-assignments` contract is preserved.
 
 Assignment readers use the existing `GET /api/teaching-assignments/{id}` endpoint, now with additive class/subject/program/trainer display fields. `GET /api/teaching-assignments/{id}/sessions` returns a page of linked session summaries and requires `ASSIGNMENT_READ`. Parameters are `page`, `size` (at most 100), `sort` (`id`, `startTime`, `endTime`, `status`) and optional `status` (`SCHEDULED`, `COMPLETED`, `CANCELLED`). A unique ID tie breaker keeps pages stable for sessions with equal times. Session summaries exclude session notes and cancellation details.
+
+Editing uses `ASSIGNMENT_UPDATE` for all three endpoints:
+
+- `GET /api/teaching-assignments/{id}/edit-context`: current assignment/revision, class dates, active trainers and linked session count.
+- `POST /api/teaching-assignments/{id}/impact-preview`: proposed assignment fields plus `revision`; accepts `page`/`size` (at most 100) and returns a paginated impact report without saving.
+- `PUT /api/teaching-assignments/{id}`: the same fields plus current `revision`; revalidates in the write transaction and returns the incremented revision.
+
+The existing class-setup editing path also supplies the revision and receives the same backend protections.
 
 ## Validation commands
 
@@ -80,4 +98,6 @@ npm exec -- eslint src/pages/management/teaching-assignment src/api/features/cla
 
 The integration tests cover permissions, creation lookups, date boundaries, invalid input, inactive/foreign data, overlap policies, service failures and simultaneous Main assignment requests. Detail tests also cover exact session linkage, historical statuses, pagination, missing profiles and upstream outages. Frontend tests cover form validation, schedule-time formatting and safe meeting links. Existing list and class-setup tests remain regression coverage.
 
-Session impact previews, safe trainer changes on used assignments, ending assignments and deletion rules are subsequent implementation stages.
+Edit integration tests cover read-only preview, immutable identity, historical/cancelled sessions, stale revisions, changed sessions after preview, local single/bulk write guards and simultaneous session/assignment edits. Frontend tests verify that only an exact, successful preview can enable save.
+
+Ending assignments, deletion rules and the remaining schedule integration are subsequent implementation stages.

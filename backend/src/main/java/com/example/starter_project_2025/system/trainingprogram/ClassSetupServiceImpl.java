@@ -44,6 +44,7 @@ public class ClassSetupServiceImpl implements ClassSetupService {
     private final ProgramSubjectRepository programSubjectRepository;
     private final ExternalApiService externalApiService;
     private final SessionRepository sessionRepository;
+    private final TeachingAssignmentSessionGuard assignmentSessionGuard;
 
     @Override
     public ClassProgramSubjectsResponse assignProgram(Long classId, Long programId) {
@@ -252,16 +253,83 @@ public class ClassSetupServiceImpl implements ClassSetupService {
 
     @Override
     public TeachingAssignmentResponse updateAssignment(Long id, TeachingAssignmentRequest request) {
-        TeachingAssignment assignment = findAssignment(id);
         ExternalClassDTO externalClass = requireClass(request.classId());
         requireActiveClass(externalClass);
         request = boundEffectiveTo(request, externalClass);
         ExternalTrainerDTO trainer = requireActiveTrainer(request.trainerId());
+        // Same lock as single/batch session writers, acquired before reading linked sessions.
+        assignmentSessionGuard.lockForWrite();
+        TeachingAssignment assignment = teachingAssignmentRepository.findForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Teaching assignment not found with ID: " + id));
+        requireEditIdentity(assignment, request);
         validateAssignment(request, id, externalClass);
+        if (impact(assignment, request, PageRequest.of(0, 1)).affectedSessionCount() > 0) {
+            throw new ConflictException("This change affects linked sessions. Preview the impact and resolve those sessions before saving.");
+        }
 
         apply(assignment, request);
-        TeachingAssignment saved = teachingAssignmentRepository.save(assignment);
+        TeachingAssignment saved = teachingAssignmentRepository.saveAndFlush(assignment);
         return toResponse(saved, externalClass, trainer);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public TeachingAssignmentEditContext getAssignmentEditContext(Long id) {
+        var assignment = findAssignment(id);
+        var clazz = requireClass(assignment.getClassId());
+        return new TeachingAssignmentEditContext(toResponse(assignment, clazz, fetchTrainerLookup().get(assignment.getTrainerId())),
+                clazz, externalApiService.fetchTrainers("active").stream().filter(t -> isActive(t.getStatus())).toList(),
+                sessionRepository.countByTeachingAssignmentId(id));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public TeachingAssignmentImpactResponse previewAssignmentImpact(Long id, TeachingAssignmentRequest request, Pageable pageable) {
+        var assignment = findAssignment(id);
+        requireEditIdentity(assignment, request);
+        var clazz = requireClass(assignment.getClassId());
+        requireActiveClass(clazz);
+        request = boundEffectiveTo(request, clazz);
+        requireActiveTrainer(request.trainerId());
+        validateAssignment(request, id, clazz, false);
+        if (pageable.getPageSize() > 100 || pageable.getPageNumber() > 100000) {
+            throw new IllegalArgumentException("Page size must be at most 100 and page at most 100000.");
+        }
+        return impact(assignment, request, pageable);
+    }
+
+    private void requireEditIdentity(TeachingAssignment assignment, TeachingAssignmentRequest request) {
+        if (request.revision() == null || !Objects.equals(assignment.getRevision(), request.revision())) {
+            throw new ConflictException("The assignment has changed or its revision is missing. Reload the current assignment before editing.");
+        }
+        if (!Objects.equals(assignment.getClassId(), request.classId())) throw fieldError("classId", "The class cannot be changed. Create a new assignment.");
+        if (!Objects.equals(assignment.getProgramSubject().getId(), request.programSubjectId())) throw fieldError("programSubjectId", "The subject cannot be changed. Create a new assignment.");
+    }
+
+    private TeachingAssignmentImpactResponse impact(TeachingAssignment assignment, TeachingAssignmentRequest request, Pageable pageable) {
+        boolean trainerChanged = !Objects.equals(assignment.getTrainerId(), request.trainerId());
+        var until = request.effectiveTo() == null || request.effectiveTo().equals(LocalDate.MAX)
+                ? null : request.effectiveTo().plusDays(1).atStartOfDay();
+        var affected = sessionRepository.findAssignmentImpacts(assignment.getId(), trainerChanged, request.classId(),
+                request.trainerId(), request.effectiveFrom().atStartOfDay(), until, Session.SessionStatus.CANCELLED,
+                PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), Sort.by("startTime").and(Sort.by("id"))));
+        var rows = affected.map(session -> {
+            List<String> reasons = new ArrayList<>();
+            if (trainerChanged) reasons.add("Trainer changes are blocked once any session references this assignment. Create a replacement assignment instead.");
+            if (session.getStatus() != Session.SessionStatus.CANCELLED) {
+                if (session.getStartTime().toLocalDate().isBefore(request.effectiveFrom())
+                        || (request.effectiveTo() != null && session.getEndTime().toLocalDate().isAfter(request.effectiveTo()))) {
+                    reasons.add("The session falls outside the proposed effective period.");
+                }
+                if (!Objects.equals(session.getClassId(), request.classId()) || !Objects.equals(session.getTrainerId(), request.trainerId())) {
+                    reasons.add("The session class or trainer does not match the proposed assignment.");
+                }
+            }
+            return new TeachingAssignmentImpactResponse.SessionImpact(TeachingAssignmentSessionResponse.from(session), reasons);
+        });
+        return new TeachingAssignmentImpactResponse(affected.getTotalElements() == 0, assignment.getRevision(),
+                sessionRepository.countByTeachingAssignmentId(assignment.getId()), affected.getTotalElements(),
+                request.effectiveFrom(), request.effectiveTo(), rows);
     }
 
     @Override
@@ -300,6 +368,10 @@ public class ClassSetupServiceImpl implements ClassSetupService {
     }
 
     private void validateAssignment(TeachingAssignmentRequest request, Long ignoreId, ExternalClassDTO externalClass) {
+        validateAssignment(request, ignoreId, externalClass, true);
+    }
+
+    private void validateAssignment(TeachingAssignmentRequest request, Long ignoreId, ExternalClassDTO externalClass, boolean lock) {
         validateClassDates(externalClass);
         if (request.effectiveTo() != null && request.effectiveTo().isBefore(request.effectiveFrom())) {
             throw fieldError("effectiveTo", "The end date must be on or after the start date.");
@@ -320,7 +392,8 @@ public class ClassSetupServiceImpl implements ClassSetupService {
             throw fieldError("classId", "Assign an active training program to this class first.");
         }
 
-        ProgramSubject programSubject = programSubjectRepository.findForAssignmentById(request.programSubjectId())
+        ProgramSubject programSubject = (lock ? programSubjectRepository.findForAssignmentById(request.programSubjectId())
+                : programSubjectRepository.findById(request.programSubjectId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Program subject not found with ID: " + request.programSubjectId()));
         if (!Objects.equals(programSubject.getProgram().getId(), assignedProgramId)) {
             throw fieldError("programSubjectId", "The subject does not belong to this class training program.");
@@ -435,7 +508,7 @@ public class ClassSetupServiceImpl implements ClassSetupService {
         // An omitted end date is bounded by the class end, when the shared class has one.
         LocalDate end = request.effectiveTo() == null ? classDate(externalClass.getEndDate()) : request.effectiveTo();
         return new TeachingAssignmentRequest(request.classId(), request.programSubjectId(), request.trainerId(),
-                request.role(), request.effectiveFrom(), end);
+                request.role(), request.effectiveFrom(), end, request.revision());
     }
 
     private Map<Long, ExternalTrainerDTO> fetchTrainerLookup() {
@@ -457,7 +530,7 @@ public class ClassSetupServiceImpl implements ClassSetupService {
                 externalClass == null ? null : externalClass.getName(), subject.getVersion(),
                 trainer == null ? null : trainer.getEmail(), assignment.getProgramSubject().getProgram().getId(),
                 assignment.getProgramSubject().getProgram().getCode(), assignment.getProgramSubject().getProgram().getName(),
-                assignment.getProgramSubject().getProgram().getVersion());
+                assignment.getProgramSubject().getProgram().getVersion(), assignment.getRevision());
     }
 
     private boolean isEffectiveOn(TeachingAssignment assignment, LocalDate date) {

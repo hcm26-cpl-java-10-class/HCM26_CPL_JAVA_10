@@ -21,5 +21,6 @@ public record TeachingAssignmentResponse(
         Long programId,
         String programCode,
         String programName,
-        String programVersion
+        String programVersion,
+        Long revision
 ) {}

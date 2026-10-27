@@ -12,6 +12,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -33,6 +34,9 @@ import java.time.LocalDate;
 @ResourceMenu(title = "Teaching Assignments", group = "Training Operations", icon = "users",
         url = "/teaching-assignments", order = 2, permission = "ASSIGNMENT_READ")
 public class TeachingAssignment extends BaseEntity {
+    @Version
+    Long revision;
+
     /** ID of the class in the shared system; class profile data stays there. */
     @Column(name = "class_id", nullable = false)
     Long classId;
