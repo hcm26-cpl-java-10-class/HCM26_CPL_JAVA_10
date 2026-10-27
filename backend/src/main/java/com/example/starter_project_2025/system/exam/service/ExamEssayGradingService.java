@@ -1,6 +1,6 @@
 package com.example.starter_project_2025.system.exam.service;
 
-import java.math.BigDecimal; // NEW
+import java.math.BigDecimal;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.exam.domain.Exam;
@@ -62,7 +62,7 @@ public class ExamEssayGradingService {
         detail.setStartedAt(attempt.getStartedAt());
         detail.setSubmittedAt(attempt.getSubmittedAt());
         detail.setTotalPoints(attempt.getTotalPoints());
-        detail.setMaxScore(ExamScoring.effectiveMax(attempt.getMaxScore())); // NEW
+        detail.setMaxScore(ExamScoring.effectiveMax(attempt.getMaxScore()));
         detail.setObjectiveScore(attempt.getObjectiveScore());
         detail.setFinalScore(attempt.getFinalScore());
         detail.setAlreadyGraded(attempt.getFinalScore() != null || attempt.getStatus() == ExamAttemptStatus.SUBMITTED);
@@ -113,7 +113,6 @@ public class ExamEssayGradingService {
             if (grade.getQuestionId() == null) {
                 throw new BadRequestException("Question ID is required for each grade");
             }
-            // CHANGED: điểm để trống coi như chưa chấm = 0 (không báo lỗi)
             if (grade.getScore() != null && grade.getScore().signum() < 0) {
                 throw new BadRequestException("Score cannot be negative");
             }
@@ -131,12 +130,10 @@ public class ExamEssayGradingService {
             Long sourceQId = question.getSourceQuestionId();
             EssayGradingDTO.QuestionGrade grade = gradeMap.get(sourceQId);
 
-            // CHANGED: câu tự luận không có điểm gửi lên (chưa chấm) = 0 điểm, thay vì báo lỗi "Missing grade"
             BigDecimal score = grade == null || grade.getScore() == null
                     ? BigDecimal.ZERO
                     : grade.getScore();
 
-            // CHANGED: điểm tối đa của câu = quy từ tỉ lệ điểm theo thang điểm của đề
             BigDecimal cap = ExamScoring.gradingCap(maxScore, question.getPoints(), attempt.getTotalPoints());
             if (score.compareTo(cap) > 0) {
                 throw new BadRequestException(
@@ -162,7 +159,6 @@ public class ExamEssayGradingService {
         BigDecimal objectiveScore = attempt.getObjectiveScore() != null ? attempt.getObjectiveScore() : BigDecimal.ZERO;
         BigDecimal unpenalizedTotal = objectiveScore.add(totalEssayScoreAwarded);
 
-        // CHANGED: trừ điểm muộn rồi giới hạn trong [0, thang điểm của đề]
         BigDecimal penalized = ExamScoring.applyPenalty(unpenalizedTotal, attempt.getLatePenaltyPercentApplied());
         attempt.setFinalScore(ExamScoring.clamp(penalized, maxScore));
         attempt.setStatus(ExamAttemptStatus.SUBMITTED);
@@ -223,7 +219,6 @@ public class ExamEssayGradingService {
         return aiClient.requestProposal(payloads);
     }
 
-    // REMOVED: applyPenalty(int, Integer) -> dùng ExamScoring.applyPenalty (BigDecimal)
 
     private Exam requireExam(Long examId) {
         return examRepository.findById(examId)
@@ -253,7 +248,6 @@ public class ExamEssayGradingService {
         item.setDisplayOrder(question.getDisplayOrder());
         item.setContent(question.getContent());
         item.setPoints(question.getPoints());
-        // NEW: điểm tối đa quy đổi cho câu này (giáo viên không thể nhập cao hơn)
         item.setMaxScore(ExamScoring.gradingCap(ExamScoring.effectiveMax(attempt.getMaxScore()), question.getPoints(), attempt.getTotalPoints()));
         item.setAnswerText(answerText(attempt, question));
 

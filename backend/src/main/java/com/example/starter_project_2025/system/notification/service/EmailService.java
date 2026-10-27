@@ -1,6 +1,6 @@
 package com.example.starter_project_2025.system.notification.service;
 
-import java.math.BigDecimal; // NEW
+import java.math.BigDecimal;
 import com.example.starter_project_2025.system.auth.util.MailUtil;
 import com.example.starter_project_2025.system.exam.domain.Invitation;
 import com.example.starter_project_2025.system.rbac.user.User;
@@ -38,8 +38,6 @@ public class EmailService {
 
     @Value("${spring.mail.username}")
     private String hostEmail;
-
-    // ==================== INVITATION ====================
 
     public void sendExamInvitation(Invitation invitation, User recipient) {
         String examTitle = invitation.getExam().getTitle();
@@ -84,8 +82,6 @@ public class EmailService {
 
         send("[Đã xác nhận] " + examTitle, invitation.getUser().getEmail(), EXAM_ACCEPTED_EMAIL, vars);
     }
-
-    // ==================== REMINDER ====================
 
     public void sendExamReminder(Invitation invitation, LocalDateTime now) {
         if (invitation.getUser() == null || invitation.getExam() == null) {
@@ -133,13 +129,8 @@ public class EmailService {
         send("[Nhắc nhở] " + examTitle + " sắp bắt đầu", invitation.getGuestEmail(), EXAM_REMINDER_EMAIL, vars);
     }
 
-    // ==================== ACCESS / REVOKED ====================
-
     public void sendAnonymousAccessLink(Invitation invitation, String email) {
         String examTitle = invitation.getExam().getTitle();
-        // Link phải khớp đúng format mà frontend đọc: /anonymous-exam?code=...
-        // Frontend chỉ đọc tham số "code", nên không thêm các tham số khác
-        // (ví dụ one-time token) vào link.
         String accessLink = String.format("%s/anonymous-exam?code=%s",
                 frontendUrl, invitation.getAccessCode());
 
@@ -172,22 +163,12 @@ public class EmailService {
         send("[Hủy] " + examTitle, invitation.getUser().getEmail(), EXAM_REVOKED_EMAIL, vars);
     }
 
-    // ==================== RESULT (KHÔNG CÓ TÀI KHOẢN RBAC) ====================
-
-    /**
-     * Gửi kết quả bài thi cho học sinh thi qua link anonymous.
-     * <p>
-     * Học sinh này không có tài khoản RBAC nên không thể xem điểm trên hệ
-     * thống - kết quả được gửi thẳng về email đã khai báo ở lời mời.
-     *
-     * @param pendingReview true khi còn câu tự luận chờ giáo viên chấm
-     */
     public void sendAnonymousExamResult(
             String recipientEmail,
             String studentName,
             String examTitle,
-            BigDecimal score, // CHANGED: Integer -> BigDecimal
-            BigDecimal totalPoints, // CHANGED: giờ là thang điểm của đề
+            BigDecimal score,
+            BigDecimal totalPoints,
             String submittedAt,
             boolean pendingReview
     ) {
@@ -209,8 +190,6 @@ public class EmailService {
 
         send("[Kết quả] " + examTitle, recipientEmail, EXAM_RESULT_EMAIL, vars);
     }
-
-    // ==================== HELPERS ====================
 
     private void send(String subject, String to, String template, List<Map.Entry<String, Object>> vars) {
         try {

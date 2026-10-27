@@ -8,7 +8,6 @@ public final class ExamTypePolicy {
     private ExamTypePolicy() {
     }
 
-    /** null được coi là MIXED (đề cũ chưa có kiểu). */
     public static ExamType effective(ExamType type) {
         return type == null ? ExamType.MIXED : type;
     }

@@ -7,4 +7,3 @@ public enum ExamAttemptStatus {
     PENDING_REVIEW,
     EXPIRED
 }
-

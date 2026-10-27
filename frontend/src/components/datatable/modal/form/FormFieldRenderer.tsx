@@ -23,9 +23,6 @@ interface FormFieldRendererProps {
   onChange: (name: string, value: any) => void;
 }
 
-/**
- * Render input phù hợp cho từng loại field trong form.
- */
 export function FormFieldRenderer({
   field,
   value,
@@ -113,7 +110,6 @@ export function FormFieldRenderer({
       if (!rel) return null;
       const items: any[] = relationOptions[field.name] ?? [];
 
-      // Multiple select with checkboxes
       if (rel.multiple) {
         return (
           <MultiRelationSelect
@@ -128,7 +124,6 @@ export function FormFieldRenderer({
         );
       }
 
-      // Single select
       return (
         <div className="grid gap-2">
           <Label htmlFor={field.name}>{field.label}</Label>

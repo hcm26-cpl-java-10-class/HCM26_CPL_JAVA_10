@@ -7,7 +7,7 @@ const path = "/users";
 const base = createBaseApiService<UserDTO, UserFilter>({ path: path });
 
 export const userApi = Object.assign({}, base, {
-    /** Danh sách sinh viên đang hoạt động - dùng để chọn nhanh nhiều sinh viên. */
+
     getStudents: async (): Promise<StudentSummaryDTO[]> => {
         const response = await axiosInstance.get<StudentSummaryDTO[]>(`${path}/students`);
         return response.data;

@@ -43,8 +43,6 @@ class ExamAttemptServiceTest {
     @Mock
     private ExamAttemptRepository attemptRepository;
 
-
-
     @Mock
     private com.example.starter_project_2025.system.rbac.user.UserRepository userRepository;
 
@@ -96,13 +94,10 @@ class ExamAttemptServiceTest {
         exam.setQuestions(Set.of(question(1L, QuestionType.MULTIPLE_CHOICE, 5)));
         when(examRepository.lockForAttemptStart(20L)).thenReturn(Optional.of(exam));
 
-        // Không được có attempt IN_PROGRESS sẵn, nếu không service resume
-        // attempt cũ và không tới bước kiểm tra lời mời.
         attempt.setStatus(ExamAttemptStatus.SUBMITTED);
         when(attemptRepository.findAllByExam_IdAndStudent_IdOrderByAttemptNumberAsc(20L, 40L))
                 .thenReturn(List.of(attempt));
 
-        // Đề CÓ lời mời, nhưng sinh viên này chưa accept lời mời nào -> phải bị chặn.
         Invitation pending = Invitation.builder()
                 .id(77L)
                 .exam(exam)
@@ -115,7 +110,6 @@ class ExamAttemptServiceTest {
                 () -> service.startOrResume(20L, 40L));
         assertEquals("Bạn cần chấp nhận lời mời trước khi làm bài", ex.getMessage());
     }
-
 
     @Test
     void startOrResumeRejectsBeforeExamOpens() {
@@ -178,7 +172,6 @@ class ExamAttemptServiceTest {
         verify(attemptRepository).save(captor.capture());
         ExamAttempt started = captor.getValue();
 
-        // Teacher edits the live question after the attempt started.
         live.setContent("Edited");
         live.getOptions().get(0).setCorrect(false);
 
@@ -191,8 +184,6 @@ class ExamAttemptServiceTest {
         assertEquals(11L, snap.getOptions().get(0).getSourceOptionId());
         assertTrue(snap.getOptions().get(0).isCorrect());
     }
-
-
 
     @Test
     void submitAwardsPointsOnlyWhenEveryCorrectOptionIsSelected() {
@@ -235,7 +226,7 @@ class ExamAttemptServiceTest {
 
         var result = service.submit(30L, 40L, List.of());
 
-        assertScore("8", result.getFinalScore()); // 10 điểm trừ 20%
+        assertScore("8", result.getFinalScore());
         assertEquals(20, result.getLatePenaltyPercentApplied());
         assertEquals(true, result.isLate());
     }
@@ -308,7 +299,6 @@ class ExamAttemptServiceTest {
                 () -> service.reviewAttempt(30L, 99L));
     }
 
-    // ----- live entities (used by the start-attempt tests) -----
     private static void assertScore(String expected, java.math.BigDecimal actual) {
         assertTrue(actual != null && new java.math.BigDecimal(expected).compareTo(actual) == 0,
                 "expected " + expected + " but was " + actual);
@@ -332,7 +322,6 @@ class ExamAttemptServiceTest {
         return option;
     }
 
-    // ----- snapshot entities (used by the grading tests) -----
     private ExamAttemptQuestion snapshotQuestion(Long id, QuestionType type, int points) {
         ExamAttemptQuestion question = new ExamAttemptQuestion();
         question.setId(id);

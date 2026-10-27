@@ -187,12 +187,10 @@ export function QuestionForm({
     const contentRef = useRef<HTMLTextAreaElement>(null);
     const [isPreview, setIsPreview] = useState(false);
 
-    // Topic state
     const [isAddingNewTopic, setIsAddingNewTopic] = useState(false);
     const [newTopicText, setNewTopicText] = useState("");
     const [localCustomTopics, setLocalCustomTopics] = useState<string[]>([]);
 
-    // Fetch existing questions to provide topic suggestions
     const { data: questionPage } = useQuery({
         queryKey: ["question-topics"],
         queryFn: () => questionApi.getPage({ page: 0, size: 200 }),
@@ -317,7 +315,6 @@ export function QuestionForm({
 
     return (
         <form className="grid gap-5" onSubmit={handleSubmit}>
-            {/* 1. TOPIC ROW */}
             <div className="grid gap-2">
                 <Label htmlFor="question-topic">Topic</Label>
 
@@ -400,7 +397,6 @@ export function QuestionForm({
                 )}
             </div>
 
-            {/* 2. TYPE & DIFFICULTY */}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="grid gap-2">
                     <Label>Question Type</Label>
@@ -451,7 +447,6 @@ export function QuestionForm({
                 </div>
             </div>
 
-            {/* 3. QUESTION CONTENT */}
             <div className="grid gap-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <Label htmlFor="question-content">Question Content</Label>
@@ -544,7 +539,7 @@ export function QuestionForm({
                 )}
 
                 <ImageUrlField
-                    value={form.imageUrl ?? ""} // FIXED: imageUrl có thể undefined -> luôn truyền string
+                    value={form.imageUrl ?? ""}
                     onChange={(url) => setForm((prev) => ({ ...prev, imageUrl: url }))}
                     placeholder="Question image URL (optional, https://...)"
                 />
@@ -560,7 +555,6 @@ export function QuestionForm({
                 )}
             </div>
 
-            {/* 4. ANSWER OPTIONS */}
             {form.type === "ESSAY" ? (
                 <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
                     Essay questions have no options; students type their answer in an editor and the teacher grades it manually.
@@ -639,9 +633,7 @@ export function QuestionForm({
                 </div>
             )}
 
-            {/* 5. POINTS ROW */}
             <div className="grid max-w-xs gap-2 border-t pt-3">
-                {/* CHANGED: "Points" is now a weight; real score = exam max score × weight ÷ total weight */}
                 <Label htmlFor="question-points">Score weight</Label>
                 <Input
                     id="question-points"
@@ -659,7 +651,6 @@ export function QuestionForm({
                 </p>
             </div>
 
-            {/* 6. BOTTOM ROW: Active switch + action buttons */}
             <CardFooter className="flex items-center justify-between border-t px-0 pt-4">
                 <div>
                     {showActive && (

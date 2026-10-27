@@ -1,6 +1,6 @@
 package com.example.starter_project_2025.system.exam.service;
 
-import java.math.BigDecimal; // NEW
+import java.math.BigDecimal;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.system.exam.domain.Exam;
 import com.example.starter_project_2025.system.exam.domain.LatePolicy;
@@ -9,7 +9,6 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-
 
 @Component
 public class ExamConfigValidator {
@@ -22,7 +21,6 @@ public class ExamConfigValidator {
         Integer maxAttempts = r.getMaxAttempts() != null ? r.getMaxAttempts()
                 : (existing == null ? Integer.valueOf(1) : existing.getMaxAttempts());
         BigDecimal passScore = r.getPassScore() != null ? r.getPassScore() : (existing == null ? null : existing.getPassScore());
-        // NEW: thang điểm của đề (bỏ trống = 10)
         BigDecimal maxScore = ExamScoring.effectiveMax(r.getMaxScore() != null ? r.getMaxScore()
                 : (existing == null ? null : existing.getMaxScore()));
         if (r.getMaxScore() != null && (r.getMaxScore().signum() <= 0 || r.getMaxScore().compareTo(BigDecimal.valueOf(1000)) > 0)) {
@@ -68,7 +66,6 @@ public class ExamConfigValidator {
             if (passScore.signum() < 0) {
                 ctx.add("passScore", "Điểm đạt phải >= 0");
             } else if (passScore.compareTo(maxScore) > 0) {
-                // CHANGED: so với thang điểm của đề thay vì tổng điểm cứng của các câu
                 ctx.add("passScore", "Điểm đạt (" + passScore.stripTrailingZeros().toPlainString()
                         + ") không được lớn hơn thang điểm của đề (" + maxScore.stripTrailingZeros().toPlainString() + ")");
             }

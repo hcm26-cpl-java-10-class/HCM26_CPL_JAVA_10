@@ -33,9 +33,6 @@ export function StudentNavbar() {
   const { count: pendingInvitationCount } = usePendingInvitations();
   const pathname = normalizePath(location.pathname);
 
-  // Badge đỏ cạnh mục menu: chỉ áp cho entry "Lời mời thi".
-  // Render trực tiếp trong JSX (không đưa vào navGroups) để useMemo bên dưới
-  // không phải phụ thuộc vào số lượng lời mời.
   const renderPendingBadge = (url: string) => {
     if (normalizePath(url) !== "/invitations" || pendingInvitationCount <= 0) {
       return null;

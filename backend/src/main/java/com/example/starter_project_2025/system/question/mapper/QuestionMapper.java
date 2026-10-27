@@ -87,7 +87,7 @@ public class QuestionMapper implements BaseCrudMapper<Question, QuestionDTO> {
                 o.setImageUrl(od.getImageUrl() == null || od.getImageUrl().isBlank() ? null : od.getImageUrl().trim());
                 kept.add(o);
             }
-            q.getOptions().removeIf(o -> kept.stream().noneMatch(k -> k == o)); // orphanRemoval xóa đáp án không còn
+            q.getOptions().removeIf(o -> kept.stream().noneMatch(k -> k == o));
         }
     }
 }

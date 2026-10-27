@@ -1,4 +1,3 @@
-// ===== NEW FILE: ô trả lời tự luận. Bấm vào ô để mở cửa sổ popup nhập văn bản (xuống dòng thoải mái như Notepad) =====
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -12,9 +11,9 @@ import { PencilLine } from 'lucide-react';
 import { useState } from 'react';
 
 interface EssayAnswerDialogProps {
-    /** Ví dụ "Câu 3" — dùng làm tiêu đề popup và aria-label. */
+
     label: string;
-    /** Nội dung câu hỏi, hiển thị trong popup để sinh viên đối chiếu khi viết. */
+
     questionContent: string;
     value: string;
     disabled?: boolean;

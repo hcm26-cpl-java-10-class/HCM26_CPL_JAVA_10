@@ -32,9 +32,6 @@ export function NavMain({
 }) {
     const groupActive = items.some((i) => i.isActive);
 
-    /* ================= COLLAPSED =================
-       icons only
-    ============================================= */
     if (sidebarState !== "expanded") {
         return (
             <>
@@ -78,9 +75,6 @@ export function NavMain({
         );
     }
 
-    /* ================= EXPANDED =================
-             module group + collapsible
-    ============================================= */
     return (
         <Collapsible
             key={title}

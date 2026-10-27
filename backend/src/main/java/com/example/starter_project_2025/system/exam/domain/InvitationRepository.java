@@ -31,10 +31,6 @@ public interface InvitationRepository extends BaseCrudRepository<Invitation, Lon
 
     boolean existsByExamIdAndUserId(Long examId, Long userId);
 
-    /**
-     * Khoá lời mời khi tạo phiên, để hai request đồng thời không cùng vượt qua
-     * check "còn lượt truy cập" và không tạo ra 2 phiên cho 1 lượt.
-     */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT i FROM Invitation i WHERE i.accessCode = :accessCode")
     Optional<Invitation> lockByAccessCode(@Param("accessCode") String accessCode);

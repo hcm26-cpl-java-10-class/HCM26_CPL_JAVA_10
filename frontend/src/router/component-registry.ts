@@ -8,7 +8,6 @@ import { Unauthorized } from "@/pages/error/Unauthorized";
 import { Dashboard } from "@/pages/management/dashboard";
 import ExamManagementPage from "@/pages/management/exam";
 import ResultStatisticsPage from "@/pages/management/exam/ResultStatisticsPage";
-// NEW: trang giáo viên xem bài tự luận
 import EssayAttemptListPage from "@/pages/management/exam/grading/EssayAttemptListPage";
 import EssayAttemptDetailPage from "@/pages/management/exam/grading/EssayAttemptDetailPage";
 import InvitationsPage from "@/pages/management/exam/invitation";
@@ -28,7 +27,6 @@ import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModule
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 
-
 export interface RouteConfig {
   path: string;
   component: ComponentType<any>;
@@ -42,16 +40,11 @@ export const routes: RouteConfig[] = [
   { path: "/module-group-module", component: ModuleGroupModulePage, isPublic: true },
   { path: "/dashboard", component: Dashboard, isModuleDriven: true },
   { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
-  // /invitations là static route (KHÔNG isModuleDriven) vì đây là entry point chính
-  // của STUDENT. Nếu đăng ký động theo Module table thì lúc mới load trang
-  // moduleGroups còn rỗng -> route chưa tồn tại -> match catch-all -> 404.
   { path: "/invitations", component: UnifiedInvitationsPage, requiredPermission: "INVITATION_READ" },
   { path: "/exams/:examId/invitations", component: InvitationsPage, requiredPermission: "INVITATION_READ" },
-  // NEW
   { path: "/exams/:examId/grading", component: EssayAttemptListPage, requiredPermission: "EXAM_UPDATE" },
   { path: "/exams/:examId/grading/:attemptId", component: EssayAttemptDetailPage, requiredPermission: "EXAM_UPDATE" },
   { path: "/anonymous-exam", component: AnonymousAccessPage, isPublic: true },
-  // Trang làm bài cho học sinh không có tài khoản RBAC (dùng sessionToken)
   { path: "/anonymous-exam/take", component: AnonymousExamTakingPage, isPublic: true },
   { path: "/student/invitations", component: StudentInvitationsRedirect, requiredPermission: "INVITATION_READ" },
   {

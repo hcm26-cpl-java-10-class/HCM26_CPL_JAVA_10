@@ -20,7 +20,6 @@ function getErrorMessage(error: any, fallback: string): string {
   return firstFieldError || data?.message || fallback;
 }
 
-// Đề đã đến giờ bắt đầu thì không còn được sửa câu hỏi
 export function isExamStarted(exam: ExamDTO | null | undefined): boolean {
   return Boolean(exam?.startTime && new Date(exam.startTime).getTime() <= Date.now());
 }
@@ -52,7 +51,6 @@ interface EditExamQuestionDialogProps {
   onSaved: (exam: ExamDTO) => void;
 }
 
-// Sửa bản sao của câu hỏi trong đề; câu hỏi gốc trong ngân hàng không bị thay đổi
 export function EditExamQuestionDialog({ exam, question, onClose, onSaved }: EditExamQuestionDialogProps) {
   const [form, setForm] = useState<QuestionFormValues>(initialQuestionForm);
 

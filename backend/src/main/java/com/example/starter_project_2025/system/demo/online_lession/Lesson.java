@@ -43,11 +43,9 @@ public class Lesson extends BaseEntity {
     @Column(length = 500)
     String videoUrl;
 
-    /** Duration in minutes. */
     @Column
     Integer durationMinutes;
 
-    /** Position of the lesson inside its course (1, 2, 3...). */
     @Column(nullable = false)
     Integer orderIndex;
 

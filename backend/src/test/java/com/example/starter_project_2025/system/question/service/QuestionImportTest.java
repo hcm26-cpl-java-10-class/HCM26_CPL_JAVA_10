@@ -92,7 +92,6 @@ class QuestionImportTest {
     void testImport_PreventDuplicatesOnRerun() {
         MockMultipartFile file = new MockMultipartFile("file", "template.csv", "text/csv", SAMPLE_CSV.getBytes(StandardCharsets.UTF_8));
 
-        // Giả lập câu hỏi đã tồn tại trong CSDL
         when(repository.exists(any(Specification.class))).thenReturn(true);
 
         ImportResult result = importService.importQuestionsFromCsv(file);
@@ -108,9 +107,7 @@ class QuestionImportTest {
     @DisplayName("Báo lỗi dòng rõ ràng: Kiểm tra validation (MULTIPLE_CHOICE không có đáp án đúng, ESSAY có đáp án)")
     void testImport_ReportDetailedRowErrors() {
         String csv = "Content,Type,Difficulty,Topic,Points,Option 1,Correct 1,Option 2,Correct 2\n" +
-                // Dòng 2: MULTIPLE_CHOICE nhưng cả 2 đáp án đều false -> Lỗi
                 "\"Câu trắc nghiệm sai?\",MULTIPLE_CHOICE,EASY,Java,1,Đáp án 1,false,Đáp án 2,false\n" +
-                // Dòng 3: ESSAY nhưng lại gửi đáp án -> Lỗi
                 "\"Câu tự luận có đáp án?\",ESSAY,MEDIUM,Java,2,Đáp án thừa,true,,\n";
 
         MockMultipartFile file = new MockMultipartFile("file", "test.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8));
@@ -122,12 +119,10 @@ class QuestionImportTest {
         assertEquals(2, result.getFailureCount());
         assertEquals(2, result.getErrors().size());
 
-        // Kiểm tra dòng 2 báo đúng lỗi của QuestionValidator
         assertEquals(2, result.getErrors().get(0).getRowNumber());
         assertTrue(result.getErrors().get(0).getMessage().contains("Cần ít nhất 1 đáp án đúng"),
                 "Lỗi thực tế: " + result.getErrors().get(0).getMessage());
 
-        // Kiểm tra dòng 3 báo đúng lỗi của QuestionValidator
         assertEquals(3, result.getErrors().get(1).getRowNumber());
         assertTrue(result.getErrors().get(1).getMessage().contains("Câu tự luận không có đáp án"));
     }

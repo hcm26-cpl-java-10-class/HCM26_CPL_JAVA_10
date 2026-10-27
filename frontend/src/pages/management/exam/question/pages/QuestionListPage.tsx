@@ -47,7 +47,6 @@ export default function QuestionListPage() {
 
     const table = useProTable(entityConfig.api, entityConfig.schema);
 
-    // Synchronize initial topic from URL to table filter once
     useEffect(() => {
         if (initialTopic) {
             table.setFilters((prev: any) => ({ ...prev, topic: initialTopic }));
@@ -55,7 +54,6 @@ export default function QuestionListPage() {
         }
     }, []);
 
-    // Fetch questions summary to build topics list with counts
     const { data: allQuestionsData, isLoading: isLoadingTopics } = useQuery({
         queryKey: ["question", "topics-summary"],
         queryFn: () => questionApi.getPage({ page: 0, size: 2000, sort: "id,desc" }),
@@ -128,7 +126,6 @@ export default function QuestionListPage() {
         navigate(`/questions/create?topic=${encodeURIComponent(trimmed)}`);
     };
 
-    // Table routing & actions
     const createPage = entityConfig.actionPages?.create;
     const editPage = entityConfig.actionPages?.edit;
     const detailPage = entityConfig.actionPages?.detail;
@@ -203,9 +200,7 @@ export default function QuestionListPage() {
     return (
         <MainLayout pathName={{ questions: "Questions" }}>
             <div className="flex flex-1 min-h-0 gap-4 h-[calc(100vh-6.5rem)]">
-                {/* Left Column: Topics Sidebar */}
                 <aside className="w-64 xl:w-72 shrink-0 flex flex-col bg-card border rounded-xl overflow-hidden shadow-sm">
-                    {/* Header */}
                     <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/20">
                         <div className="flex items-center gap-2">
                             <div className="p-1.5 rounded-md bg-primary/10 text-primary">
@@ -227,7 +222,6 @@ export default function QuestionListPage() {
                         </Button>
                     </div>
 
-                    {/* Search Topic */}
                     <div className="p-3 pb-2">
                         <div className="relative">
                             <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
@@ -248,9 +242,7 @@ export default function QuestionListPage() {
                         </div>
                     </div>
 
-                    {/* Topics List */}
                     <div className="flex-1 overflow-y-auto px-2 space-y-1 py-1">
-                        {/* All Questions Button */}
                         <button
                             type="button"
                             onClick={() => handleSelectTopic("")}
@@ -276,7 +268,6 @@ export default function QuestionListPage() {
 
                         <div className="h-px bg-border my-1.5 mx-1" />
 
-                        {/* Distinct Topics */}
                         {isLoadingTopics ? (
                             <div className="py-6 text-center text-xs text-muted-foreground animate-pulse">
                                 Loading topics...
@@ -323,7 +314,6 @@ export default function QuestionListPage() {
                         )}
                     </div>
 
-                    {/* Sidebar Footer */}
                     <div className="p-3 border-t bg-muted/10">
                         <Button
                             variant="outline"
@@ -337,9 +327,7 @@ export default function QuestionListPage() {
                     </div>
                 </aside>
 
-                {/* Right Column: Question Table */}
                 <main className="flex-1 min-w-0 flex flex-col bg-card border rounded-xl p-4 shadow-sm overflow-hidden">
-                    {/* Active Filter Pill Bar */}
                     {selectedTopic && (
                         <div className="flex items-center justify-between px-3 py-2 mb-3 rounded-lg bg-primary/10 border border-primary/20 text-xs">
                             <div className="flex items-center gap-2">
@@ -377,7 +365,6 @@ export default function QuestionListPage() {
                 </main>
             </div>
 
-            {/* Dialog: Create Question with New Topic */}
             <Dialog open={isNewTopicOpen} onOpenChange={setIsNewTopicOpen}>
                 <DialogContent className="sm:max-w-[420px]">
                     <DialogHeader>

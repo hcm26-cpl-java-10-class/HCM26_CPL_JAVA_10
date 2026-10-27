@@ -49,20 +49,14 @@ public class InvitationService {
     private static final int ACCESS_CODE_LENGTH = 8;
     private static final SecureRandom random = new SecureRandom();
 
-    /**
-     * Parse datetime string to LocalDateTime.
-     * Handles: "2024-12-31T23:59", "2024-12-31T23:59:00", "2024-12-31T23:59:00Z", "2024-12-31T23:59:00+07:00"
-     */
     private LocalDateTime parseDateTime(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
         try {
-            // Try standard LocalDateTime parsing first
             return LocalDateTime.parse(value, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
         } catch (DateTimeParseException e1) {
             try {
-                // Try with ZonedDateTime (handles "Z" or "+07:00" suffix)
                 ZonedDateTime zdt = ZonedDateTime.parse(value, DateTimeFormatter.ISO_ZONED_DATE_TIME);
                 return zdt.withZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
             } catch (DateTimeParseException e2) {
@@ -73,7 +67,6 @@ public class InvitationService {
 
     @Transactional
     public InvitationDTO createInvitation(Long examId, InvitationCreateRequest request, UserPrincipal principal) {
-        // Verify caller is ADMIN or TEACHER (not just by permission, but by actual role)
         boolean isAdminOrTeacher = principal.getUser().getRoles().stream()
                 .anyMatch(r -> "ADMIN".equals(r.getName()) || "TEACHER".equals(r.getName()));
         if (!isAdminOrTeacher) {
@@ -88,7 +81,6 @@ public class InvitationService {
                 .filter(u -> Boolean.TRUE.equals(u.getIsActive()))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + request.getUserId()));
 
-        // Check if invitation already exists
         if (invitationRepository.existsByExamIdAndUserId(examId, user.getId())) {
             throw new BadRequestException("Invitation already exists for this user and exam");
         }
@@ -107,7 +99,6 @@ public class InvitationService {
 
         invitation = invitationRepository.save(invitation);
 
-        // Send email
         emailService.sendExamInvitation(invitation, user);
 
         invitation.setStatus(InvitationStatus.SENT);
@@ -117,7 +108,6 @@ public class InvitationService {
 
     @Transactional
     public BatchInvitationResponse createBatchInvitations(Long examId, BatchInvitationRequest request, UserPrincipal principal) {
-        // Verify caller is ADMIN or TEACHER
         boolean isAdminOrTeacher = principal.getUser().getRoles().stream()
                 .anyMatch(r -> "ADMIN".equals(r.getName()) || "TEACHER".equals(r.getName()));
         if (!isAdminOrTeacher) {
@@ -181,7 +171,6 @@ public class InvitationService {
         Invitation invitation = invitationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Invitation not found with id: " + id));
 
-        // Verify ownership
         if (invitation.getUser() == null || !invitation.getUser().getId().equals(currentUser.getUser().getId())) {
             throw new BadRequestException("You are not authorized to accept this invitation");
         }
@@ -201,7 +190,6 @@ public class InvitationService {
         Invitation invitation = invitationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Invitation not found with id: " + id));
 
-        // Verify ownership
         if (invitation.getUser() == null || !invitation.getUser().getId().equals(currentUser.getUser().getId())) {
             throw new BadRequestException("You are not authorized to reject this invitation");
         }
@@ -273,11 +261,8 @@ public class InvitationService {
         return generateQRCodeImage(url, 300, 300);
     }
 
-    // ============ ANONYMOUS METHODS ============
-
     @Transactional
     public InvitationDTO createAnonymousInvitation(Long examId, AnonymousInvitationRequest request, UserPrincipal principal) {
-        // Verify caller is ADMIN or TEACHER (not just by permission, but by actual role)
         boolean isAdminOrTeacher = principal.getUser().getRoles().stream()
                 .anyMatch(r -> "ADMIN".equals(r.getName()) || "TEACHER".equals(r.getName()));
         if (!isAdminOrTeacher) {
@@ -290,14 +275,12 @@ public class InvitationService {
 
         String accessCode = generateAccessCode();
 
-        // Tên/email học sinh là tuỳ chọn ở phía giáo viên. Nếu không nhập,
-        // học sinh sẽ tự khai báo khi mở link (AnonymousSessionRequest).
         String guestName = blankToNull(request.getStudentName());
         String guestEmail = blankToNull(request.getStudentEmail());
 
         Invitation invitation = Invitation.builder()
                 .exam(exam)
-                .user(null) // Anonymous - no RBAC account
+                .user(null)
                 .token(generateToken())
                 .status(InvitationStatus.SENT)
                 .sentAt(LocalDateTime.now())
@@ -317,8 +300,6 @@ public class InvitationService {
 
         invitation = invitationRepository.save(invitation);
 
-        // Chỉ gửi email khi giáo viên có nhập email học sinh. Nếu không có email
-        // thì giáo viên copy link / QR để chia sẻ trực tiếp.
         if (guestEmail != null) {
             emailService.sendAnonymousAccessLink(invitation, guestEmail);
         }
@@ -330,11 +311,6 @@ public class InvitationService {
         return value == null || value.isBlank() ? null : value.trim();
     }
 
-    /**
-     * Xác minh mã truy cập. Không dùng {@code readOnly} vì khi phát hiện lời
-     * mời đã quá hạn, hàm này cập nhật status sang EXPIRED — đó là side-effect
-     * nên transaction phải cho phép ghi.
-     */
     @Transactional
     public AnonymousAccessResponse verifyAccessCode(String accessCode) {
         Invitation invitation = invitationRepository.findByAccessCode(accessCode)
@@ -399,15 +375,8 @@ public class InvitationService {
 
         validateInvitationForAction(invitation);
 
-        // Tạo (hoặc tái sử dụng) user khách để gắn kết quả bài thi.
         User guestUser = guestUserService.findOrCreateGuest(studentEmail, studentName);
 
-        // === QUAY LẠI LINK ĐÃ TỪNG NHẬP THÔNG TIN ===
-        // Học sinh có thể mở link, nhập tên/email, rồi quay lại trang truy cập
-        // (đóng tab, refresh, ...) mà chưa hề bắt đầu làm bài. Lúc đó KHÔNG
-        // được chặn, vì họ vẫn chưa dùng lượt thi nào.
-        // Ta tái sử dụng phiên gần nhất của chính học sinh đó (cùng email)
-        // nếu phiên đó còn dùng được.
         Optional<AnonymousSession> reusable = reusableSessionFor(invitation, guestUser);
         if (reusable.isPresent()) {
             AnonymousSession session = reusable.get();
@@ -419,7 +388,6 @@ public class InvitationService {
             }
             anonymousSessionRepository.save(session);
 
-            // Ghi lại thông tin người thực sự làm bài (giống lần đầu).
             invitation.setGuestName(studentName);
             invitation.setGuestEmail(studentEmail);
             invitation.setGuestUserId(guestUser.getId());
@@ -428,13 +396,10 @@ public class InvitationService {
             return buildSessionResponse(session, invitation, "Bạn đã xác nhận thông tin. Có thể vào phòng thi.");
         }
 
-        // === HỌC SINH MỚI (chưa từng nhập thông tin trên link này) ===
-        // Check access attempts
         if (invitation.getAccessAttemptCount() >= invitation.getMaxAccessAttempts()) {
             throw new BadRequestException("Maximum access attempts reached for this invitation");
         }
 
-        // Check for duplicate fingerprint
         if (fingerprint != null) {
             anonymousSessionRepository.findByInvitationIdAndFingerprint(invitation.getId(), fingerprint)
                     .ifPresent(session -> {
@@ -442,17 +407,13 @@ public class InvitationService {
                     });
         }
 
-        // Increment access count
         invitation.setAccessAttemptCount(invitation.getAccessAttemptCount() + 1);
 
-        // Ghi lại thông tin người thực sự làm bài. Nếu giáo viên không nhập sẵn
-        // khi tạo link thì đây là nơi duy nhất lưu lại tên/email của học sinh.
         invitation.setGuestName(studentName);
         invitation.setGuestEmail(studentEmail);
         invitation.setGuestUserId(guestUser.getId());
         invitationRepository.save(invitation);
 
-        // Create session
         String sessionToken = generateToken();
         AnonymousSession session = AnonymousSession.builder()
                 .invitation(invitation)
@@ -470,13 +431,6 @@ public class InvitationService {
         return buildSessionResponse(session, invitation, "Session created successfully");
     }
 
-    /**
-     * Tìm phiên có thể tái sử dụng cho học sinh đã quay lại link.
-     * <p>
-     * Chỉ dùng lại phiên của CHÍNH học sinh đó (khớp guest user) và phiên đó
-     * chưa bị hủy/hoàn tất. Nếu học sinh đã nộp bài xong thì không tái sử dụng
-     * (để lời mời vẫn giữ đúng số lượt thi).
-     */
     private Optional<AnonymousSession> reusableSessionFor(Invitation invitation, User guestUser) {
         List<AnonymousSession> sessions = anonymousSessionRepository
                 .findByInvitationIdAndGuestUserIdOrderByAccessedAtDesc(invitation.getId(), guestUser.getId());
@@ -510,8 +464,6 @@ public class InvitationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Invitation not found with id: " + id)));
     }
 
-    // ============ PRIVATE HELPERS ============
-
     private void validateInvitationForAction(Invitation invitation) {
         if (invitation.getStatus() == InvitationStatus.REVOKED) {
             throw new BadRequestException("Invitation has been revoked");
@@ -528,8 +480,6 @@ public class InvitationService {
         if (invitation.getStatus() == InvitationStatus.REJECTED) {
             throw new BadRequestException("Invitation has already been rejected");
         }
-        // maxAccessTime là mốc cuối để mở link (khác expiresAt là hạn của
-        // lời mời). Quá mốc này thì link không dùng được nữa.
         if (invitation.getMaxAccessTime() != null
             && LocalDateTime.now().isAfter(invitation.getMaxAccessTime())) {
             invitation.setStatus(InvitationStatus.EXPIRED);
@@ -551,7 +501,6 @@ public class InvitationService {
     }
 
     private String buildAnonymousAccessUrl(Invitation invitation) {
-        // Khớp với link frontend sinh ra: /anonymous-exam?code=...
         return frontendUrl + "/anonymous-exam?code=" + invitation.getAccessCode();
     }
 
@@ -603,8 +552,6 @@ public class InvitationService {
         dto.setMaxAccessAttempts(invitation.getMaxAccessAttempts());
         dto.setAccessAttemptCount(invitation.getAccessAttemptCount());
 
-        // Thông tin đề thi cho phía student: dùng để render notification,
-        // kiểm tra time window và biết đề có mật khẩu hay không.
         if (exam != null) {
             dto.setExamStartTime(exam.getStartTime());
             dto.setExamEndTime(exam.getEndTime());

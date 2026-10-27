@@ -4,7 +4,7 @@ import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.system.exam.domain.Exam;
 import com.example.starter_project_2025.system.exam.dto.ExamDTO;
 import com.example.starter_project_2025.system.exam.service.ExamScoring;
-import com.example.starter_project_2025.system.exam.service.ExamTypePolicy; // NEW
+import com.example.starter_project_2025.system.exam.service.ExamTypePolicy;
 import com.example.starter_project_2025.system.exam.domain.ExamCategory;
 import com.example.starter_project_2025.system.question.domain.Question;
 import com.example.starter_project_2025.system.question.mapper.QuestionMapper;
@@ -47,12 +47,12 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setShuffleOptions(e.getShuffleOptions());
         d.setShowAnswersAfterExam(e.getShowAnswersAfterExam());
         d.setPassScore(e.getPassScore());
-        d.setMaxScore(ExamScoring.effectiveMax(e.getMaxScore())); // NEW
+        d.setMaxScore(ExamScoring.effectiveMax(e.getMaxScore()));
         d.setLatePolicy(e.getLatePolicy());
         d.setLatePenaltyPercent(e.getLatePenaltyPercent());
         d.setLateGraceMinutes(e.getLateGraceMinutes());
         d.setResultVisibility(e.getResultVisibility());
-        d.setExamType(ExamTypePolicy.effective(e.getExamType())); // NEW
+        d.setExamType(ExamTypePolicy.effective(e.getExamType()));
         d.setCategory(e.getCategory() == null ? ExamCategory.ASSESSMENT : e.getCategory());
 
         List<Question> sorted = e.getQuestions().stream()
@@ -82,14 +82,13 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         if (d.getShuffleOptions() != null) e.setShuffleOptions(d.getShuffleOptions());
         if (d.getShowAnswersAfterExam() != null) e.setShowAnswersAfterExam(d.getShowAnswersAfterExam());
         if (d.getPassScore() != null) e.setPassScore(d.getPassScore());
-        // NEW: bỏ trống thang điểm = 10
         if (d.getMaxScore() != null) e.setMaxScore(d.getMaxScore());
         else if (e.getMaxScore() == null) e.setMaxScore(ExamScoring.DEFAULT_MAX_SCORE);
         if (d.getLatePolicy() != null) e.setLatePolicy(d.getLatePolicy());
         if (d.getLatePenaltyPercent() != null) e.setLatePenaltyPercent(d.getLatePenaltyPercent());
         if (d.getLateGraceMinutes() != null) e.setLateGraceMinutes(d.getLateGraceMinutes());
         if (d.getResultVisibility() != null) e.setResultVisibility(d.getResultVisibility());
-        if (d.getExamType() != null) e.setExamType(d.getExamType()); // NEW
+        if (d.getExamType() != null) e.setExamType(d.getExamType());
         if (d.getCategory() != null) e.setCategory(d.getCategory());
         if (d.getAccessCode() != null) {
             String trimmed = d.getAccessCode().trim();

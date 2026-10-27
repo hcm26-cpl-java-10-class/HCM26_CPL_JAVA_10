@@ -98,7 +98,6 @@ export function OverflowBadges({
   return (
     <TooltipWrapper content={fullText || "—"}>
       <div ref={containerRef} className="relative overflow-hidden">
-        {/* Hidden measurement div */}
         <div
           ref={measureRef}
           className="flex gap-1 flex-nowrap absolute top-0 left-0 invisible pointer-events-none h-0"
@@ -118,7 +117,6 @@ export function OverflowBadges({
           </Badge>
         </div>
 
-        {/* Visible badges */}
         <div className="flex gap-1 flex-nowrap">
           {items.slice(0, visibleCount).map((m) => (
             <Badge

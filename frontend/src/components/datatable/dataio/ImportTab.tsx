@@ -6,7 +6,7 @@ import { Download, FileSpreadsheet, Loader2, Upload, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 interface ImportTabProps {
   loading: boolean;
@@ -209,4 +209,3 @@ export function ImportTab({ loading, onImport, entityName }: ImportTabProps) {
     </TabsContent>
   );
 }
-

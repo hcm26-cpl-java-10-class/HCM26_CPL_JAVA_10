@@ -1,4 +1,3 @@
-// Common types used across multiple features
 export * from "./common/datatable";
 export * from "./common/error";
 export * from "./common/file-format";
@@ -6,7 +5,6 @@ export * from "./common/import-result";
 export * from "./common/pageable";
 export * from "./common/registry";
 
-// Feature-specific types
 export * from "./features/auth";
 export * from "./features/demo/book";
 export * from "./features/demo/course";

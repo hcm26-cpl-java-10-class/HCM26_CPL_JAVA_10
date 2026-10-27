@@ -25,12 +25,6 @@ public class ReminderService {
     private final ExamRepository examRepository;
     private final EmailService emailService;
 
-    /**
-     * Schedule a reminder for an exam.
-     * If reminderType is ONE_HOUR / ONE_DAY, scheduledAt is derived from exam.startTime.
-     * If CUSTOM, scheduledAt must be provided.
-     * If invitationId is null, a reminder will be created for all active invitations of the exam.
-     */
     @Transactional
     public List<ReminderDTO> scheduleReminder(Long examId, ReminderRequest request) {
         Exam exam = examRepository.findById(examId)
@@ -70,7 +64,6 @@ public class ReminderService {
         List<ReminderDTO> created = new ArrayList<>();
 
         for (Invitation invitation : targets) {
-            // Avoid duplicate pending reminders for the same invitation + scheduled time
             boolean duplicate = reminderRepository
                     .findActivePendingByInvitationId(invitation.getId()).stream()
                     .anyMatch(r -> r.getScheduledAt().equals(scheduledAt));
@@ -127,9 +120,6 @@ public class ReminderService {
         reminderRepository.save(reminder);
     }
 
-    /**
-     * Send all pending reminders that are due. Invoked by the scheduler job.
-     */
     @Transactional
     public int sendPendingReminders() {
         LocalDateTime now = LocalDateTime.now();
@@ -179,8 +169,6 @@ public class ReminderService {
         return sent;
     }
 
-    // ==================== HELPERS ====================
-
     private LocalDateTime resolveScheduledAt(Exam exam, ReminderRequest request) {
         if (request.getReminderType() == ReminderType.CUSTOM) {
             if (request.getScheduledAt() == null) {
@@ -212,7 +200,6 @@ public class ReminderService {
         if (invitation.getExpiresAt() != null && LocalDateTime.now().isAfter(invitation.getExpiresAt())) {
             return false;
         }
-        // Need a destination: registered user email or guest email
         return Boolean.TRUE.equals(invitation.getAnonymous())
                 ? invitation.getGuestEmail() != null && !invitation.getGuestEmail().isBlank()
                 : invitation.getUser() != null;

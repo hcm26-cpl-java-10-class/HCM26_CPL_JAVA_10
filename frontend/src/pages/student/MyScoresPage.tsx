@@ -20,7 +20,6 @@ function formatSubmittedAt(value?: string | null): string {
   return date.toLocaleString();
 }
 
-/** Một card điểm bài thi. Tự chọn điểm cuối cùng hay điểm tạm tính của phần trắc nghiệm. */
 function ExamScoreCard({ score }: { score: PublishedExamScore }) {
   const isFinalized = score.finalScore != null;
   const displayScore = isFinalized ? score.finalScore : score.objectiveScore;
@@ -28,24 +27,24 @@ function ExamScoreCard({ score }: { score: PublishedExamScore }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-3">
-        <CardTitle>{score.examTitle || `Đề thi #${score.examId}`}</CardTitle>
+        <CardTitle>{score.examTitle || `Exam #${score.examId}`}</CardTitle>
         <Badge variant={isFinalized ? "default" : "secondary"}>
-          {isFinalized ? "Đã chấm" : "Chưa chấm xong"}
+          {isFinalized ? "Graded" : "Pending grade"}
         </Badge>
       </CardHeader>
       <CardContent className="space-y-1 text-sm">
         <div className="flex justify-between border-b pb-2 text-base font-semibold">
-          <span>{isFinalized ? "Điểm" : "Điểm tạm tính"}</span>
+          <span>{isFinalized ? "Score" : "Provisional score"}</span>
           <span>
             {formatScore(displayScore ?? 0)}/{formatScore(score.maxScore ?? 10)}
           </span>
         </div>
         <div className="flex justify-between text-muted-foreground">
-          <span>Lần làm thứ</span>
+          <span>Attempt</span>
           <span>{score.attemptNumber}</span>
         </div>
         <div className="flex justify-between text-muted-foreground">
-          <span>Nộp lúc</span>
+          <span>Submitted at</span>
           <span>{formatSubmittedAt(score.submittedAt)}</span>
         </div>
       </CardContent>
@@ -77,24 +76,22 @@ export default function MyScoresPage() {
       <div className="space-y-6 p-4">
         <h1 className="text-2xl font-bold">My Scores</h1>
 
-        {/* Điểm các bài thi student đã làm */}
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold">Điểm bài thi</h2>
+          <h2 className="text-lg font-semibold">Exam Scores</h2>
           {isExamScoresLoading && <p className="text-muted-foreground">Loading...</p>}
           {isExamScoresError && (
             <p className="text-destructive">Could not load exam scores.</p>
           )}
           {!isExamScoresLoading && !isExamScoresError && examScores.length === 0 && (
-            <p className="text-muted-foreground">Chưa có bài thi nào đã chấm.</p>
+            <p className="text-muted-foreground">No graded exam attempts yet.</p>
           )}
           {examScores.map((score) => (
             <ExamScoreCard key={`${score.examId}-${score.attemptNumber}`} score={score} />
           ))}
         </section>
 
-        {/* Điểm môn học (dữ liệu demo, giữ nguyên hành vi cũ) */}
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold">Điểm môn học</h2>
+          <h2 className="text-lg font-semibold">Course Scores</h2>
           {isCourseScoresLoading && <p className="text-muted-foreground">Loading...</p>}
           {isCourseScoresError && (
             <p className="text-destructive">Could not load scores.</p>

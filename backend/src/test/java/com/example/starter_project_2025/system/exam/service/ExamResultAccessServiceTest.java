@@ -85,8 +85,6 @@ class ExamResultAccessServiceTest {
         assertTrue(service.canStudentViewAnswers(exam, ExamAttemptStatus.SUBMITTED, 2));
     }
 
-    // --- canStudentSeeScoreOnMyScores: điểm hiện ở My Scores ngay khi chấm xong ---
-
     @Test
     void myScoresAllowsWhenNotPublished() {
         publication.setPublished(false);

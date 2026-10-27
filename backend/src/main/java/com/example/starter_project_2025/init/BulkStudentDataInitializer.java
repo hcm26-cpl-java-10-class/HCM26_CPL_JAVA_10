@@ -15,22 +15,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
-/**
- * Seed nhiều tài khoản role STUDENT để test luồng invitation hàng loạt.
- * <p>
- * Cố ý KHÔNG tạo invitation ở đây - mục tiêu là test việc tạo lời mời
- * thông qua UI/API thật, nên chỉ cần đủ user để chọn.
- * <p>
- * Idempotent: nếu email đã tồn tại thì bỏ qua, không ghi đè mật khẩu/role.
- * Nhờ vậy restart backend không làm hỏng dữ liệu đã tạo.
- */
 @Slf4j
 @Order(4)
 @Component
 @RequiredArgsConstructor
 public class BulkStudentDataInitializer implements CommandLineRunner {
 
-    /** Họ và tên Việt dùng để sinh dữ liệu cho dễ đọc. */
     private static final List<String[]> STUDENT_NAMES = List.of(
             new String[]{"Nguyen", "Van An"},
             new String[]{"Tran", "Thi Binh"},
@@ -118,10 +108,6 @@ public class BulkStudentDataInitializer implements CommandLineRunner {
         return "student" + index + "@example.com";
     }
 
-    /**
-     * Lấy tên theo vòng tròn danh sách để số lượng seed không bị giới hạn
-     * bởi độ dài danh sách tên có sẵn.
-     */
     private String[] pickName(int index) {
         return STUDENT_NAMES.get((index - 1) % STUDENT_NAMES.size());
     }

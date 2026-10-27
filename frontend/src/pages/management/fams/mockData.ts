@@ -32,7 +32,6 @@ export const initialModuleGroups: ModuleGroupItem[] = [
 ];
 
 export const initialModules: ModuleItem[] = [
-    // Training Group (matching SCR-31 reference image)
     {
         id: "mod-1",
         groupId: "group-training",
@@ -104,7 +103,6 @@ export const initialModules: ModuleItem[] = [
         displayOrder: 7,
     },
 
-    // System Group
     {
         id: "mod-101",
         groupId: "group-system",
@@ -146,7 +144,6 @@ export const initialModules: ModuleItem[] = [
         displayOrder: 4,
     },
 
-    // Learning Group
     {
         id: "mod-201",
         groupId: "group-learning",
@@ -178,7 +175,6 @@ export const initialModules: ModuleItem[] = [
         displayOrder: 3,
     },
 
-    // Reporting Group
     {
         id: "mod-301",
         groupId: "group-reporting",

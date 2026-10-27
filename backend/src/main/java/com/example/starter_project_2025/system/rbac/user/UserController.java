@@ -57,10 +57,6 @@ public class UserController
         return ResponseEntity.noContent().build();
     }
 
-    /**
-     * Danh sách sinh viên đang hoạt động - dùng để chọn nhiều sinh viên khi
-     * tạo lời mời hàng loạt.
-     */
     @GetMapping("/students")
     @PreAuthorize("hasAuthority('INVITATION_READ') or hasAuthority('USER_READ')")
     public ResponseEntity<List<StudentSummaryDTO>> students() {

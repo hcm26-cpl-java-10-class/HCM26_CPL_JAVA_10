@@ -56,7 +56,6 @@ class ExamEssayGradingServiceTest {
         attempt.setStatus(ExamAttemptStatus.PENDING_REVIEW);
         attempt.setObjectiveScore(new BigDecimal(20));
         attempt.setTotalPoints(30);
-        // thang điểm 30 = tổng tỉ lệ điểm, nên câu tự luận (tỉ lệ 10) được tối đa 10 điểm
         attempt.setMaxScore(new BigDecimal(30));
         attempt.setStartedAt(Instant.now().minusSeconds(3600));
         attempt.setSubmittedAt(Instant.now().minusSeconds(100));
@@ -107,7 +106,7 @@ class ExamEssayGradingServiceTest {
         assertScore("8", essayAnswer.getScore());
         assertEquals("Clear explanation of runtime polymorphism.", essayAnswer.getFeedback());
         assertEquals(ExamAttemptStatus.SUBMITTED, attempt.getStatus());
-        assertScore("28", attempt.getFinalScore()); // 20 objective + 8 essay
+        assertScore("28", attempt.getFinalScore());
         verify(attemptRepository).save(attempt);
     }
 
@@ -118,7 +117,7 @@ class ExamEssayGradingServiceTest {
 
         EssayGradingDTO.QuestionGrade grade = new EssayGradingDTO.QuestionGrade();
         grade.setQuestionId(101L);
-        grade.setScore(new BigDecimal(15)); // max is 10
+        grade.setScore(new BigDecimal(15));
         grade.setFeedback("Too high");
 
         EssayGradingDTO.GradeSubmissionRequest request = new EssayGradingDTO.GradeSubmissionRequest();
@@ -168,7 +167,7 @@ class ExamEssayGradingServiceTest {
 
         EssayGradingDTO.GradeSubmissionRequest request = new EssayGradingDTO.GradeSubmissionRequest();
         request.setGrades(List.of(grade));
-        request.setConfirmOverwrite(false); // not confirmed
+        request.setConfirmOverwrite(false);
 
         BadRequestException ex = assertThrows(
                 BadRequestException.class,
@@ -252,7 +251,6 @@ class ExamEssayGradingServiceTest {
         ArgumentCaptor<List<AiEssayGradingClient.EssayQuestionPayload>> captor = ArgumentCaptor.forClass(List.class);
         when(aiClient.requestProposal(captor.capture())).thenReturn(mockResponse);
 
-        // Call without passing reference answer or rubric
         EssayGradingDTO.AiGradingResponse result = gradingService.requestAiGrading(10L, 100L, null);
 
         assertNotNull(result);
@@ -385,7 +383,6 @@ class ExamEssayGradingServiceTest {
         ObjectMapper mapper = new ObjectMapper();
         AiEssayGradingClient realAiClient = new AiEssayGradingClient(props, mapper);
 
-        // Score 25 for a 10-point question and -5 for another question
         String geminiJson = """
         {
           "candidates": [

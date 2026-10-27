@@ -1,6 +1,6 @@
 package com.example.starter_project_2025.system.exam.service;
 
-import java.math.BigDecimal; // NEW
+import java.math.BigDecimal;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.exam.domain.*;
@@ -48,12 +48,6 @@ public class ExamAttemptService {
         return startOrResumeInternal(examId, studentId, password, false);
     }
 
-    /**
-     * Bắt đầu làm bài cho học sinh thi bằng link anonymous.
-     * <p>
-     * Khác với học sinh có tài khoản RBAC, học sinh anonymous không có lời mời
-     * gắn với user nên bỏ qua bước kiểm tra "đã accept lời mời".
-     */
     public ExamAttemptDTO startOrResumeForGuest(Long examId, Long guestUserId) {
         return startOrResumeForGuest(examId, guestUserId, null);
     }
@@ -110,8 +104,8 @@ public class ExamAttemptService {
                 .max()
                 .orElse(0) + 1);
         attempt.setDurationMinutes(exam.getDurationMinutes());
-        attempt.setTotalPoints(questions.stream().mapToInt(Question::getPoints).sum()); // tổng tỉ lệ điểm (trọng số)
-        attempt.setMaxScore(ExamScoring.effectiveMax(exam.getMaxScore())); // NEW: thang điểm của đề
+        attempt.setTotalPoints(questions.stream().mapToInt(Question::getPoints).sum());
+        attempt.setMaxScore(ExamScoring.effectiveMax(exam.getMaxScore()));
         attempt.setStartedAt(startedAt);
         Instant durationDeadline = startedAt.plus(Duration.ofMinutes(exam.getDurationMinutes()));
         Instant examDeadline = exam.getEndTime() == null
@@ -177,15 +171,6 @@ public class ExamAttemptService {
         }
     }
 
-    /**
-     * Chỉ cho phép làm bài khi sinh viên đã chấp nhận lời mời của đề thi đó.
-     *
-     * Quy tắc phản hồi ngược (backward compatible):
-     * - Nếu đề thi KHÔNG có lời mời nào -> vẫn cho thi (giữ tương thích dữ liệu cũ,
-     *   nơi đề thi được publish cho toàn bộ sinh viên chứ không qua lời mời).
-     * - Nếu đề thi CÓ lời mời -> sinh viên phải có lời mời ở trạng thái ACCEPTED
-     *   mới được bắt đầu làm bài.
-     */
     private void ensureInvitationAccepted(Long examId, Long studentId) {
         List<Invitation> invitations = invitationRepository.findByExamId(examId);
         if (invitations.isEmpty()) {
@@ -240,7 +225,7 @@ public class ExamAttemptService {
         response.setAttemptNumber(attempt.getAttemptNumber());
         response.setStatus(attempt.getStatus());
         response.setTotalPoints(attempt.getTotalPoints());
-        response.setMaxScore(ExamScoring.effectiveMax(attempt.getMaxScore())); // NEW
+        response.setMaxScore(ExamScoring.effectiveMax(attempt.getMaxScore()));
         response.setObjectiveScore(attempt.getObjectiveScore());
         response.setFinalScore(attempt.getFinalScore());
         response.setSubmittedAt(attempt.getSubmittedAt());
@@ -264,7 +249,7 @@ public class ExamAttemptService {
         dto.setImageUrl(question.getImageUrl());
         dto.setType(question.getType());
         dto.setPoints(question.getPoints());
-        dto.setMaxScore(ExamScoring.gradingCap(maxScore, question.getPoints(), totalWeight)); // NEW: điểm tối đa quy đổi
+        dto.setMaxScore(ExamScoring.gradingCap(maxScore, question.getPoints(), totalWeight));
 
         if (question.getType() == QuestionType.ESSAY) {
             dto.setOptions(List.of());
@@ -410,7 +395,6 @@ public class ExamAttemptService {
             String previousText = answer.getTextAnswer();
             answer.setSelectedOptions(selectedOptions);
             answer.setTextAnswer(question.getType() == QuestionType.ESSAY ? textAnswer : null);
-            // NEW: trạng thái "đã lưu" của câu tự luận
             if (question.getType() == QuestionType.ESSAY) {
                 String newText = answer.getTextAnswer();
                 boolean hasText = newText != null && !newText.isBlank();
@@ -421,7 +405,7 @@ public class ExamAttemptService {
                     answer.setSaved(true);
                 } else if (!java.util.Objects.equals(previousText == null ? "" : previousText,
                         newText == null ? "" : newText)) {
-                    answer.setSaved(false); // sửa lại sau khi lưu -> phải bấm lưu lại
+                    answer.setSaved(false);
                 }
             }
         }
@@ -461,7 +445,6 @@ public class ExamAttemptService {
     }
 
     private void gradeAndSubmit(ExamAttempt attempt, Instant submittedAt, boolean expired) {
-        // CHANGED: chấm theo tỉ lệ điểm. Điểm 1 câu = maxScore * trọngSốCâu / tổngTrọngSố
         long correctWeight = 0;
         boolean hasEssay = false;
 
@@ -476,7 +459,7 @@ public class ExamAttemptService {
 
         for (ExamAttemptQuestion question : attempt.getQuestions()) {
             if (question.getType() == QuestionType.ESSAY) {
-                hasEssay = true; // tự luận chưa chấm = 0 điểm cho tới khi giáo viên chấm
+                hasEssay = true;
                 continue;
             }
             Set<Long> correctIds = question.getOptions().stream()
@@ -518,7 +501,6 @@ public class ExamAttemptService {
         response.setTitle(attempt.getExam().getTitle());
         response.setDurationMinutes(attempt.getDurationMinutes());
         response.setTotalPoints(attempt.getTotalPoints());
-        // NEW: thang điểm, điểm trắc nghiệm / điểm cuối / điểm tạm (tự luận chưa chấm = 0)
         response.setMaxScore(ExamScoring.effectiveMax(attempt.getMaxScore()));
         response.setObjectiveScore(attempt.getObjectiveScore());
         response.setFinalScore(attempt.getFinalScore());
@@ -560,7 +542,7 @@ public class ExamAttemptService {
                 .sorted()
                 .toList());
         response.setTextAnswer(answer.getTextAnswer());
-        response.setSaved(answer.isSaved()); // NEW
+        response.setSaved(answer.isSaved());
         return response;
     }
 
@@ -571,9 +553,9 @@ public class ExamAttemptService {
         response.setAttemptNumber(attempt.getAttemptNumber());
         response.setStatus(attempt.getStatus());
         response.setTotalPoints(attempt.getTotalPoints());
-        response.setMaxScore(ExamScoring.effectiveMax(attempt.getMaxScore())); // NEW
-        response.setObjectiveScore(attempt.getObjectiveScore()); // NEW
-        response.setFinalScore(attempt.getFinalScore()); // NEW
+        response.setMaxScore(ExamScoring.effectiveMax(attempt.getMaxScore()));
+        response.setObjectiveScore(attempt.getObjectiveScore());
+        response.setFinalScore(attempt.getFinalScore());
         response.setStartedAt(attempt.getStartedAt());
         response.setDeadlineAt(deadlineOf(attempt));
         response.setSubmittedAt(attempt.getSubmittedAt());

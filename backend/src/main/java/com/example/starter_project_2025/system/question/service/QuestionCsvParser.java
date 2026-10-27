@@ -159,14 +159,12 @@ public class QuestionCsvParser {
     private QuestionDTO parseRow(String[] row, Map<String, Integer> headerMap) {
         QuestionDTO dto = new QuestionDTO();
 
-        // 1. Content (Nội dung câu hỏi)
         String content = getValue(row, headerMap, "content", "nội dung");
         if (content == null || content.trim().isEmpty()) {
             throw new IllegalArgumentException("Nội dung câu hỏi không được để trống");
         }
         dto.setContent(content.trim());
 
-        // 2. Type (Loại câu hỏi)
         String typeStr = getValue(row, headerMap, "type", "loại câu hỏi", "loại");
         if (typeStr == null || typeStr.trim().isEmpty()) {
             throw new IllegalArgumentException("Loại câu hỏi không được để trống (MULTIPLE_CHOICE, ESSAY)");
@@ -181,7 +179,6 @@ public class QuestionCsvParser {
             throw new IllegalArgumentException("Loại câu hỏi [" + typeStr.trim() + "] không hợp lệ. Cho phép: MULTIPLE_CHOICE, ESSAY");
         }
 
-        // 3. Difficulty (Độ khó)
         String diffStr = getValue(row, headerMap, "difficulty", "độ khó");
         if (diffStr == null || diffStr.trim().isEmpty()) {
             throw new IllegalArgumentException("Độ khó không được để trống (EASY, MEDIUM, HARD)");
@@ -192,13 +189,11 @@ public class QuestionCsvParser {
             throw new IllegalArgumentException("Độ khó [" + diffStr.trim() + "] không hợp lệ. Cho phép: EASY, MEDIUM, HARD");
         }
 
-        // 4. Topic (Chủ đề)
         String topic = getValue(row, headerMap, "topic", "chủ đề");
         if (topic != null && !topic.trim().isEmpty()) {
             dto.setTopic(topic.trim().toLowerCase());
         }
 
-        // 5. Points (Điểm)
         String pointsStr = getValue(row, headerMap, "points", "điểm");
         if (pointsStr != null && !pointsStr.trim().isEmpty()) {
             try {
@@ -214,7 +209,6 @@ public class QuestionCsvParser {
             dto.setPoints(1);
         }
 
-        // 6. Options (Đáp án từ 1 đến 6)
         List<QuestionDTO.OptionDTO> options = new ArrayList<>();
         for (int optIndex = 1; optIndex <= 6; optIndex++) {
             String optContent = getValue(row, headerMap, "option " + optIndex, "option" + optIndex, "đáp án " + optIndex, "đáp án" + optIndex);

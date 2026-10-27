@@ -34,12 +34,10 @@ public class PdfExporter implements Exporter {
 
         Table table = new Table(config.columns().size());
 
-        // Header
         for (ExportColumn<T> col : config.columns()) {
             table.addHeaderCell(col.header());
         }
 
-        // Data
         for (T item : data) {
             for (ExportColumn<T> col : config.columns()) {
                 Object v = col.valueExtractor().apply(item);
@@ -51,5 +49,3 @@ public class PdfExporter implements Exporter {
         document.close();
     }
 }
-
-

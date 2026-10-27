@@ -60,7 +60,5 @@ public class QuestionDTO extends BaseDTO {
                 groups = {OnCreate.class, OnUpdate.class})
         private String imageUrl;
 
-
-
     }
 }

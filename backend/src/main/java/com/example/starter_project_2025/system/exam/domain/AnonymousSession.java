@@ -37,7 +37,6 @@ public class AnonymousSession extends BaseEntity {
     @Column(length = 150)
     private String guestEmail;
 
-    /** User "khách" được tạo tự động cho học sinh này (null nếu chưa xác định). */
     @Column(name = "guest_user_id")
     private Long guestUserId;
 

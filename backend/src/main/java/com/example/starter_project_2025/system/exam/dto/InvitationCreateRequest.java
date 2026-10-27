@@ -16,6 +16,5 @@ public class InvitationCreateRequest {
 
     private String note;
 
-    /** ISO-8601 datetime string (e.g. 2024-12-31T23:59) */
     private String expiresAt;
 }

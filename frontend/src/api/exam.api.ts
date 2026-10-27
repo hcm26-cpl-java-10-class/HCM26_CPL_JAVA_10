@@ -7,7 +7,7 @@ export interface Exam {
     durationMinutes: number;
     category?: ExamCategory;
     totalPoints?: number;
-    maxScore?: number; // NEW: exam score scale
+    maxScore?: number;
     isActive?: boolean;
     startTime?: string | null;
     endTime?: string | null;
@@ -29,10 +29,10 @@ export type ExamAttemptStatus =
 export interface ExamAttemptQuestion {
     id: number;
     content: string;
-    /** Khớp với enum QuestionType của backend (MULTIPLE_CHOICE | ESSAY). */
+
     type: 'MULTIPLE_CHOICE' | 'ESSAY';
     points: number;
-    /** true = nhiều đáp án đúng -> ô vuông (checkbox); false = ô tròn (radio). */
+
     multiSelect: boolean;
     options: { id: number; content: string; imageUrl?: string | null }[];
     imageUrl?: string | null;
@@ -51,11 +51,11 @@ export interface ExamAttempt {
     attemptNumber: number;
     title: string;
     durationMinutes: number;
-    totalPoints: number; // sum of question weights
-    maxScore?: number; // NEW: exam score scale
+    totalPoints: number;
+    maxScore?: number;
     objectiveScore: number | null;
     finalScore: number | null;
-    provisionalScore?: number | null; // NEW: ungraded essays count as 0
+    provisionalScore?: number | null;
     status: ExamAttemptStatus;
     startedAt: string;
     officialDeadlineAt?: string | null;
@@ -81,7 +81,7 @@ export interface ExamAttemptSummary {
     objectiveScore: number | null;
     finalScore: number | null;
     totalPoints: number;
-    maxScore?: number; // NEW
+    maxScore?: number;
     startedAt: string;
     deadlineAt: string;
     submittedAt: string | null;
@@ -100,9 +100,9 @@ export interface ExamReviewQuestion {
     content: string;
     imageUrl?: string | null;
     type: ExamAttemptQuestion['type'];
-    points: number; // weight
-    maxScore?: number; // NEW: converted max score of this question
-    /** null for essay questions */
+    points: number;
+    maxScore?: number;
+
     correct: boolean | null;
     options: ExamReviewOption[];
     textAnswer?: string | null;
@@ -117,7 +117,7 @@ export interface ExamAttemptReview {
     attemptNumber: number;
     status: ExamAttemptStatus;
     totalPoints: number;
-    maxScore?: number; // NEW
+    maxScore?: number;
     objectiveScore: number | null;
     finalScore: number | null;
     submittedAt: string | null;
@@ -128,7 +128,7 @@ export interface SaveExamAnswerRequest {
     questionId: number;
     selectedOptionIds?: number[];
     textAnswer?: string | null;
-    markSaved?: boolean; // NEW: true khi sinh viên bấm "Lưu bài" ở câu tự luận
+    markSaved?: boolean;
 }
 
 export interface PageResponse<T> {
@@ -182,13 +182,10 @@ export const submitExamAttempt = async (attemptId: number, answers: SaveExamAnsw
     return response.data;
 };
 
-// ============ HỌC SINH THI QUA LINK (KHÔNG CÓ TÀI KHOẢN) ============
-
 export const SESSION_TOKEN_KEY = 'anonymous_session_token';
 export const SESSION_EMAIL_KEY = 'anonymous_student_email';
 export const SESSION_NAME_KEY = 'anonymous_student_name';
 
-/** Bắt đầu/tiếp tục làm bài bằng phiên anonymous. */
 export const startAnonymousExam = async (sessionToken: string, password?: string) => {
     const response = await api.post<ExamAttempt>('/exams/anonymous/attempt', {
         sessionToken,

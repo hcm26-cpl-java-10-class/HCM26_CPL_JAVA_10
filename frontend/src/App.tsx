@@ -18,25 +18,18 @@ function AppRoutes() {
 
     const homePath = isAuthenticated ? getHomePathByRole(activeRole) : "/login";
 
-    // Create component lookup map from module-driven routes
     const componentRegistry = Object.fromEntries(
         routes.filter((r) => r.isModuleDriven).map((r) => [r.path, r.component]),
     );
 
-    // Get non-module routes (frontend-controlled)
     const staticRoutes = routes.filter((r) => !r.isModuleDriven);
 
-    // Các path đã được đăng ký bằng static route. Module trong DB có thể trùng
-    // path này (ví dụ /invitations) -> phải bỏ qua khi render dynamic route để
-    // tránh đăng ký route hai lần (React Router match bản đầu tiên).
     const staticRoutePaths = new Set(staticRoutes.map((r) => r.path));
 
     return (
         <Routes>
-            {/* Root redirect */}
             <Route path="/" element={<Navigate to={homePath} replace />} />
 
-            {/* ============ STATIC ROUTES FIRST (higher priority in matching) ============ */}
             {staticRoutes.map((route, index) => {
                 const Component = route.component;
 
@@ -57,8 +50,6 @@ function AppRoutes() {
                 );
             })}
 
-            {/* ============ DYNAMIC ROUTES from backend Module table ============ */}
-            {/* Dynamic routes from backend Module table */}
             {moduleGroups.flatMap((group) =>
                 group.modules.map((m) => {
                     if (!m.url) return null;
@@ -67,7 +58,6 @@ function AppRoutes() {
 
                     if (!Component) {
                         return <Route key={`missing-${m.id ?? m.url}`} path={m.url} element={<Navigate to="/not-found-page" replace />} />;
-                        // Skip routes without a component - let them fall through to static routes or 404
                         return null;
                     }
 
@@ -85,7 +75,6 @@ function AppRoutes() {
                 }),
             )}
 
-            {/* Static routes from componentRegistry */}
             {staticRoutes.map((route, index) => {
                 const Component = route.component;
 
@@ -106,7 +95,6 @@ function AppRoutes() {
                 );
             })}
 
-            {/* Catch all */}
             <Route path="*" element={<NotFoundRedirect />} />
         </Routes>
     );

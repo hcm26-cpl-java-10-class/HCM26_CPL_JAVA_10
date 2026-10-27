@@ -44,12 +44,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * Test cho phần điều phối làm bài của học sinh thi qua link anonymous.
- *
- * <p>Trọng tâm là ranh giới bảo mật: phiên này chỉ được chạm vào bài thi đúng của nó,
- * và việc gửi email kết quả không được làm hỏng request nộp bài.
- */
 @ExtendWith(MockitoExtension.class)
 class AnonymousExamServiceTest {
 
@@ -122,8 +116,6 @@ class AnonymousExamServiceTest {
         lenient().when(sessionRepository.findBySessionToken(TOKEN)).thenReturn(Optional.of(session));
     }
 
-    // ============ Xác thực phiên ============
-
     @Test
     @DisplayName("Token rỗng thì bị từ chối, không gọi xuống tầng dưới")
     void blankTokenRejected() {
@@ -165,8 +157,6 @@ class AnonymousExamServiceTest {
         assertNotNull(result);
         verify(attemptService).startOrResumeForGuest(EXAM_ID, GUEST_ID, null);
     }
-
-    // ============ Ranh giới bài thi của phiên ============
 
     @Test
     @DisplayName("Lưu đáp án cho bài thi của học sinh khác thì bị chặn")
@@ -221,8 +211,6 @@ class AnonymousExamServiceTest {
         verify(attemptService).saveAnswers(ATTEMPT_ID, GUEST_ID, answers);
     }
 
-    // ============ Nộp bài và gửi email ============
-
     @Test
     @DisplayName("Nộp bài xong thì gửi email kết quả và vô hiệu hoá phiên")
     void submitSendsResultEmailAndInvalidatesSession() {
@@ -246,7 +234,6 @@ class AnonymousExamServiceTest {
                 anyString(),
                 eq(false)
         );
-        // Phiên bị vô hiệu hoá sau khi nộp.
         verify(sessionRepository).save(session);
         assertNotNull(session.getCompletedAt());
         assertEquals(false, session.getIsValid());
@@ -266,8 +253,6 @@ class AnonymousExamServiceTest {
 
         service.submit(TOKEN, ATTEMPT_ID, List.of());
 
-        // Lần hai bị chặn ngay ở requireSession vì phiên đã bị vô hiệu hoá
-        // sau lần nộp đầu -> không thể nộp lại, cũng không gửi lại email.
         assertThrows(BadRequestException.class, () -> service.submit(TOKEN, ATTEMPT_ID, List.of()));
 
         verify(emailService, times(1)).sendAnonymousExamResult(
@@ -290,7 +275,6 @@ class AnonymousExamServiceTest {
 
         verify(emailService, never()).sendAnonymousExamResult(
                 any(), any(), any(), any(), any(), any(), anyBoolean());
-        // Cũng không đóng phiên.
         assertEquals(null, session.getCompletedAt());
     }
 
@@ -335,8 +319,6 @@ class AnonymousExamServiceTest {
         assertNotNull(result);
         assertEquals(ATTEMPT_ID, result.getId());
     }
-
-    // ============ Gửi bổ sung sau khi giáo viên chấm ============
 
     @Test
     @DisplayName("Gửi kết quả cuối cho học sinh anonymous sau khi chấm")

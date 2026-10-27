@@ -21,4 +21,3 @@ public interface ModuleRepository extends BaseCrudRepository<Module, Long> {
 
     List<Module> findByIsActive(Boolean isActive);
 }
-

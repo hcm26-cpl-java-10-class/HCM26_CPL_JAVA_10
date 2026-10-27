@@ -4,10 +4,6 @@ import type { AiGradingRequest, AiGradingResponse, EssayGradingDetail, EssayGrad
 
 const examBase = createBaseApiService<ExamDTO, ExamFilter>({ path: "/exams" });
 
-/**
- * Điểm một bài thi đã chấm xong của student, trả về từ GET /api/exams/my-scores.
- * Mỗi đề chỉ trả về lần làm có attemptNumber cao nhất.
- */
 export interface PublishedExamScore {
   examId: number;
   examTitle: string;
@@ -28,7 +24,6 @@ export const examApi = {
     const response = await axiosInstance.post<ExamDTO>(`/exams/${examId}/questions`, { questionIds });
     return response.data;
   },
-  // NEW: giáo viên xem bài tự luận cần chấm của một đề
   listEssayAttempts: async (examId: number): Promise<EssayGradingSummary[]> => {
     const response = await axiosInstance.get<EssayGradingSummary[]>(`/exams/${examId}/grading/attempts`);
     return response.data;

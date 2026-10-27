@@ -1,6 +1,5 @@
 import type { BaseDTO, BaseFilter } from "@/types/common/base";
 
-/** Khớp enum UserStatus trong class diagram. */
 export type UserStatus = "ACTIVE" | "LOCKED" | "INACTIVE";
 
 export const USER_STATUS_OPTIONS: { value: UserStatus; label: string }[] = [
@@ -19,9 +18,9 @@ export interface UserDTO extends BaseDTO {
   phone?: string;
   description?: string;
   status?: UserStatus;
-  /** Quan hệ N-N user_roles (ít nhất 1 role). */
+
   roleIds?: Array<string | number>;
-  /** Quan hệ N-N user_departments. */
+
   departmentIds?: Array<string | number>;
   lastLoginAt?: string;
 }
@@ -32,7 +31,6 @@ export interface UserFilter extends BaseFilter {
   status?: UserStatus;
 }
 
-/** Danh sách sinh viên rút gọn - dùng cho chức năng chọn nhiều sinh viên khi tạo lời mời. */
 export interface StudentSummaryDTO {
   id: number;
   email: string;

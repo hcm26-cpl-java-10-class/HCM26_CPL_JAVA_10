@@ -12,6 +12,5 @@ public interface SessionMapper extends BaseCrudMapper<Session, SessionDTO> {
     @IgnoreAuditFields
     Session toEntity(SessionDTO dto);
 
-    // Khai báo rõ ràng method ánh xạ sang DTO
     SessionDTO toDto(Session entity);
 }

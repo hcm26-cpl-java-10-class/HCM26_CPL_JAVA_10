@@ -1,5 +1,5 @@
 import { examApi } from "@/api";
-import { formatScore } from '@/utils/examScore'; // NEW
+import { formatScore } from '@/utils/examScore';
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -72,7 +72,6 @@ export default function EssayAttemptDetailPage() {
     });
     const detail = detailQuery.data;
 
-    // Sync loaded grades into draft editable state
     useEffect(() => {
         if (!detail?.essays) return;
         const initial: Record<number, DraftGrade> = {};
@@ -87,7 +86,6 @@ export default function EssayAttemptDetailPage() {
 
     const backToList = () => navigate(`/exams/${numericExamId}/grading`);
 
-    // Mutation for Requesting AI Grading Proposal
     const aiSuggestMutation = useMutation({
         mutationFn: () => {
             if (!detail?.essays) return examApi.requestAiEssayGrading(numericExamId, numericAttemptId);
@@ -129,7 +127,6 @@ export default function EssayAttemptDetailPage() {
         },
     });
 
-    // Mutation for Saving Official Grade
     const saveGradeMutation = useMutation({
         mutationFn: (request: GradeSubmissionRequest) =>
             examApi.submitEssayGrade(numericExamId, numericAttemptId, request),
@@ -214,14 +211,13 @@ export default function EssayAttemptDetailPage() {
                 toast.error(`Score for Essay Question ${essay.displayOrder} must be a non-negative number.`);
                 return null;
             }
-            // CHANGED: cap is the converted score (essay.maxScore), not the weight
             if (scoreNum > (essay.maxScore ?? essay.points)) {
                 toast.error(`Score for Essay Question ${essay.displayOrder} cannot exceed maximum points (${formatScore(essay.maxScore ?? essay.points)}).`);
                 return null;
             }
             gradesList.push({
                 questionId: essay.questionId,
-                score: Math.round(scoreNum * 100) / 100, // CHANGED: decimals allowed (was integer rounding)
+                score: Math.round(scoreNum * 100) / 100,
                 feedback: draft.feedback.trim(),
             });
         }
@@ -233,7 +229,6 @@ export default function EssayAttemptDetailPage() {
         const validated = validateGrades();
         if (!validated) return;
 
-        // If attempt was already graded, protect against silent overwrite
         if (detail?.alreadyGraded) {
             setIsOverwriteModalOpen(true);
             return;
@@ -367,7 +362,6 @@ export default function EssayAttemptDetailPage() {
                                         </h2>
                                     </div>
 
-                                    {/* Question Prompt */}
                                     <div>
                                         <span className="text-xs font-medium uppercase text-muted-foreground">Question Prompt</span>
                                         <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
@@ -375,7 +369,6 @@ export default function EssayAttemptDetailPage() {
                                         </p>
                                     </div>
 
-                                    {/* Student Answer */}
                                     <div className="rounded-lg border bg-muted/40 p-4">
                                         <span className="text-xs font-medium uppercase text-muted-foreground">Student Answer</span>
                                         {essay.answerText?.trim() ? (
@@ -389,7 +382,6 @@ export default function EssayAttemptDetailPage() {
                                         )}
                                     </div>
 
-{/* Optional Reference Answer and Rubric Collapsible */}
                                     <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/10 p-3">
                                         <button
                                             type="button"
@@ -435,7 +427,7 @@ export default function EssayAttemptDetailPage() {
                                         )}
                                     </div>
 
-                                    {/* AI Evaluation Proposal Section */}                                    {proposal && (
+                                    {}                                    {proposal && (
                                         <div className="rounded-lg border border-purple-200 bg-purple-50/50 p-4 dark:border-purple-900/50 dark:bg-purple-950/20">
                                             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-purple-200/60 pb-3 dark:border-purple-900/60">
                                                 <div className="flex flex-wrap items-center gap-2">
@@ -458,7 +450,6 @@ export default function EssayAttemptDetailPage() {
                                                 </Button>
                                             </div>
 
-                                            {/* Ambiguity / Teacher Review Alert */}
                                             {proposal.flagAmbiguous && (
                                                 <div className="mt-3 flex items-start gap-2.5 rounded-md border border-amber-300 bg-amber-50/90 p-3 text-amber-900 dark:border-amber-700/50 dark:bg-amber-950/40 dark:text-amber-200 text-xs leading-relaxed">
                                                     <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
@@ -469,7 +460,6 @@ export default function EssayAttemptDetailPage() {
                                                 </div>
                                             )}
 
-                                            {/* Suggested Score */}
                                             <div className="mt-3 flex items-baseline gap-2">
                                                 <span className="text-xs font-medium uppercase text-purple-800 dark:text-purple-400">
                                                     Suggested Score:
@@ -478,7 +468,6 @@ export default function EssayAttemptDetailPage() {
                                                     {formatScore(proposal.proposedScore)} / {formatScore(essay.maxScore ?? essay.points)} pts                                                </span>
                                             </div>
 
-                                            {/* Step-by-Step Analysis & Solution Evaluation */}
                                             {(proposal.analysis || proposal.reasoning) && (
                                                 <div className="mt-3 text-xs text-purple-950 dark:text-purple-200">
                                                     <span className="block font-semibold uppercase text-purple-800 dark:text-purple-400">
@@ -490,7 +479,6 @@ export default function EssayAttemptDetailPage() {
                                                 </div>
                                             )}
 
-                                            {/* Rubric Criterion Breakdown (if available) */}
                                             {proposal.criterionScores && proposal.criterionScores.length > 0 && (
                                                 <div className="mt-3">
                                                     <span className="block text-xs font-semibold uppercase text-purple-800 dark:text-purple-400 mb-1.5">
@@ -521,7 +509,6 @@ export default function EssayAttemptDetailPage() {
                                                 </div>
                                             )}
 
-                                            {/* Constructive Student Feedback */}
                                             <div className="mt-3 text-xs text-purple-950 dark:text-purple-200">
                                                 <span className="block font-semibold uppercase text-purple-800 dark:text-purple-400">
                                                     Constructive Student Feedback:
@@ -531,7 +518,7 @@ export default function EssayAttemptDetailPage() {
                                         </div>
                                     )}
 
-                                    {/* Manual Official Grading Form */}                                    <div className="grid gap-4 rounded-lg border bg-background p-4 sm:grid-cols-4">
+                                    {}                                    <div className="grid gap-4 rounded-lg border bg-background p-4 sm:grid-cols-4">
                                         <div className="sm:col-span-1">
                                             <label className="text-xs font-medium uppercase text-muted-foreground">
                                                 Official Score (0 - {formatScore(essay.maxScore ?? essay.points)})
@@ -578,7 +565,7 @@ export default function EssayAttemptDetailPage() {
                     </>
                 )}
 
-                {/* Overwrite Confirmation Dialog */}                <Dialog open={isOverwriteModalOpen} onOpenChange={setIsOverwriteModalOpen}>
+                {}                <Dialog open={isOverwriteModalOpen} onOpenChange={setIsOverwriteModalOpen}>
                     <DialogContent className="sm:max-w-md">
                         <DialogHeader>
                             <DialogTitle className="flex items-center gap-2 text-destructive">

@@ -8,7 +8,6 @@ import com.example.starter_project_2025.base.dataio.importer.annotation.ImportHa
 import com.example.starter_project_2025.base.dataio.template.annotation.ImportEntity;
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
-// import com.example.starter_project_2025.system.rbac.department.Department;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import jakarta.persistence.*;
 import lombok.*;
@@ -81,11 +80,6 @@ public class User extends BaseEntity {
     @Column(nullable = false)
     Boolean locked = false;
 
-    /**
-     * True = tài khoản "khách" được tạo tự động cho học sinh thi qua link
-     * anonymous (không có tài khoản RBAC thật). Tài khoản này bị khoá, không
-     * thể đăng nhập, chỉ dùng để gắn kết quả bài thi.
-     */
     @Builder.Default
     @Column(name = "is_guest", nullable = false)
     Boolean isGuest = false;
@@ -98,15 +92,6 @@ public class User extends BaseEntity {
                 joinColumns = @JoinColumn(name = "user_id"),
                 inverseJoinColumns = @JoinColumn(name = "role_id"))
     Set<Role> roles = new HashSet<>();
-
-    // @Builder.Default
-    // @ManyToMany(fetch = FetchType.LAZY)
-    // @ExportField(name = "Departments", relation = true, path = "code")
-    // @ImportField(name = "Departments", lookupEntity = Department.class, lookupField = "code", separator = ",")
-    // @JoinTable( name = "user_departments",
-    //             joinColumns = @JoinColumn(name = "user_id"),
-    //             inverseJoinColumns = @JoinColumn(name = "department_id"))
-    // Set<Department> departments = new HashSet<>();
 
     public String getFullName() {
         return firstName + (lastName != null ? " " + lastName : "");

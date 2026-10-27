@@ -34,13 +34,12 @@ export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
     const editPage = entity.actionPages?.edit;
     const detailPage = entity.actionPages?.detail;
 
-    // Khai báo trước khi sử dụng trong useMemo
     const normalizedActiveRole = normalizeRole(activeRole);
     const isAdminRole = normalizedActiveRole === ADMIN_ROLE;
     const isUserManagement = entity.path === "/users";
     const isStudentRole = normalizedActiveRole === STUDENT_ROLE;
 
-    
+
 const headerActions = useMemo(() => {
     const customActions = entity.headerActions?.({ table });
 
@@ -57,7 +56,6 @@ const headerActions = useMemo(() => {
         createPage.path
     );
 
-    // Ưu tiên hiển thị nút tạo tài khoản ở trang Users cho Admin
     if (isUserManagement && isAdminRole) {
         const createAccountAction = (
             <ActionButton
@@ -112,7 +110,6 @@ const headerActions = useMemo(() => {
     isUserManagement,
     navigate,
 ]);
-
 
     const onEdit = useMemo(() => {
         if (!editPage) {

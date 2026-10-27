@@ -13,25 +13,15 @@ import { useQuery } from "@tanstack/react-query";
 
 export type SidebarModule = ModuleDTO & {
     name?: string;
-    /**
-     * Module bị ẩn khỏi menu theo role hiện tại nhưng vẫn được giữ trong danh sách
-     * để route tương ứng tiếp tục được đăng ký (App.tsx đăng ký route động từ
-     * moduleGroups). Chỉ Sidebar/StudentNavbar mới bỏ qua các module này khi render.
-     */
+
     hiddenInMenu?: boolean;
-    /**
-     * Module bị chuyển sang group khác (theo role) chỉ để hiển thị menu.
-     * Route của module không đổi nên việc di chuyển không ảnh hưởng routing.
-     */
+
     menuGroupOverride?: string;
 };
 
 export type SidebarModuleGroup = ModuleGroupDTO & {
     modules: SidebarModule[];
-    /**
-     * Group bị ẩn khỏi menu theo role hiện tại. Vẫn giữ trong danh sách để các
-     * route của module bên trong được đăng ký bình thường.
-     */
+
     hiddenInMenu?: boolean;
 };
 
@@ -78,10 +68,6 @@ export function useActiveModuleGroups(enabled = true) {
                 return acc;
             }, {});
 
-            // Ensure Invitation menu under Exam Management if permitted and not already in DB.
-            // IMPORTANT: url must match a static route registered in component-registry.ts and must
-            // NOT collide with /exams/:examId/invitations (otherwise React Router falls through to
-            // catch-all and we get a 404).
             const hasInvitationInDb = modules.some((m) => m.url === "/invitations");
             if (!hasInvitationInDb && canAccessByPermission("INVITATION_READ", hasPermission)) {
                 let examGroup = groups.find(
@@ -118,10 +104,6 @@ export function useActiveModuleGroups(enabled = true) {
                 });
             }
 
-            // ---- Áp dụng chuyển group / ẩn group theo role ----
-            // STUDENT: group "Exam Management" bị ẩn hoàn toàn, module "Invitations"
-            // được chuyển sang group "Student" cho gọn. Route không đổi nên
-            // các route của module vẫn được đăng ký bình thường trong App.tsx.
             const movedModules: SidebarModule[] = [];
             const movedUrls = new Set<string>();
 
@@ -150,9 +132,6 @@ export function useActiveModuleGroups(enabled = true) {
             }
 
             if (movedUrls.size > 0) {
-                // Bước 1: gỡ module khỏi group gốc TRƯỚC khi thêm vào group đích.
-                // Nếu làm ngược thứ tự, module vừa thêm vào group đích cũng bị
-                // xoá -> mất route (404) và mất luôn item trong menu.
                 for (const group of groups) {
                     const groupId = String(group.id ?? "");
                     const groupMods = groupedModules[groupId] ?? [];
@@ -162,7 +141,6 @@ export function useActiveModuleGroups(enabled = true) {
                     );
                 }
 
-                // Bước 2: thêm vào group đích (tránh trùng module đã có sẵn ở đó).
                 for (const moved of movedModules) {
                     const targetGroupId = String(moved.moduleGroupId ?? "");
                     if (!targetGroupId) continue;
@@ -185,7 +163,6 @@ export function useActiveModuleGroups(enabled = true) {
                     const groupMods = (groupedModules[groupId] ?? [])
                         .map((module) => ({
                             ...module,
-                            // Ẩn menu theo role nhưng KHÔNG xoá module -> route vẫn còn.
                             hiddenInMenu:
                                 module.hiddenInMenu ||
                                 isModuleHiddenInMenu(module.url, activeRole) ||

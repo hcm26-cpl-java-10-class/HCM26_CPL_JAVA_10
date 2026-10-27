@@ -40,7 +40,6 @@ interface AuthForm {
     expiresAt: string;
 }
 
-/** Danh sách sinh viên được chọn để tạo lời mời hàng loạt. */
 interface SelectedStudent {
     id: string;
     email: string;
@@ -93,7 +92,6 @@ function UserPicker({
         enabled: search.length >= 2,
     });
 
-    // Danh sách student role STUDENT - dùng để chọn nhanh nhiều người.
     const { data: students, isLoading: isLoadingStudents } = useQuery({
         queryKey: ["student-list"],
         queryFn: async () => {
@@ -236,16 +234,12 @@ export function CreateInvitationModal({
     const [reminderType, setReminderType] = useState<ReminderType | "NONE">("NONE");
     const [customReminder, setCustomReminder] = useState("");
 
-    // Auth form
     const [auth, setAuth] = useState<AuthForm>(DEFAULT_AUTH);
 
-    // Danh sách student được chọn để tạo lời mời hàng loạt
     const [selectedStudents, setSelectedStudents] = useState<SelectedStudent[]>([]);
 
-    // Anon form
     const [anon, setAnon] = useState<AnonForm>(DEFAULT_ANON);
 
-    // Created invitations
     const [authInvitations, setAuthInvitations] = useState<InvitationDTO[]>([]);
     const [anonInvitations, setAnonInvitations] = useState<Map<number, { inv: InvitationDTO; qr: string | null }>>(new Map());
 
@@ -259,7 +253,6 @@ export function CreateInvitationModal({
         setSelectedStudents([]);
     };
 
-    // Create authenticated invitation
     const createAuthMutation = useMutation({
         mutationFn: async () => {
             const request: InvitationCreateRequest = {
@@ -282,11 +275,9 @@ export function CreateInvitationModal({
                     await invitationApi.scheduleReminder(examId, req);
                     toast.success("Email reminder scheduled.");
                 } catch {
-                    // ignore
                 }
             }
 
-            // Reset form
             setAuth(DEFAULT_AUTH);
             onSuccess?.();
             void queryClient.invalidateQueries({ queryKey: ["exam-invitations", examId] });
@@ -296,7 +287,6 @@ export function CreateInvitationModal({
         },
     });
 
-    // Tạo lời mời hàng loạt cho nhiều student đã chọn
     const createBatchMutation = useMutation({
         mutationFn: async () => {
             const request: BatchInvitationRequest = {
@@ -332,7 +322,6 @@ export function CreateInvitationModal({
                 try {
                     await invitationApi.scheduleReminder(examId, req);
                 } catch {
-                    // ignore
                 }
             }
 
@@ -346,7 +335,6 @@ export function CreateInvitationModal({
         },
     });
 
-    // Create anonymous invitation (share link)
     const createAnonMutation = useMutation({
         mutationFn: async () => {
             const request: AnonymousInvitationRequest = {
@@ -360,13 +348,11 @@ export function CreateInvitationModal({
                 try {
                     qr = await invitationApi.getQrDataUrl(inv.id);
                 } catch {
-                    // ignore
                 }
             }
             setAnonInvitations((prev) => new Map(prev).set(inv.id!, { inv, qr }));
             toast.success("Share link created!");
 
-            // Reset form
             setAnon(DEFAULT_ANON);
             onSuccess?.();
             void queryClient.invalidateQueries({ queryKey: ["exam-invitations", examId] });
@@ -379,7 +365,6 @@ export function CreateInvitationModal({
     const canSubmitAuth = Boolean(auth.userId);
 
     const handleClose = () => {
-        // Reset khi đóng dialog, không cần effect.
         resetForm();
         onOpenChange(false);
     };
@@ -404,7 +389,6 @@ export function CreateInvitationModal({
                         </TabsTrigger>
                     </TabsList>
 
-                    {/* TAB 1: Registered Account */}
                     <TabsContent value="account" className="space-y-4 pt-4">
                         <form
                             onSubmit={(e) => {
@@ -513,7 +497,6 @@ export function CreateInvitationModal({
                             </DialogFooter>
                         </form>
 
-                        {/* List of Created Invitations */}
                         {authInvitations.length > 0 && (
                             <div className="border-t pt-4 mt-4">
                                 <h4 className="font-medium mb-3">Created Invitations</h4>
@@ -534,7 +517,6 @@ export function CreateInvitationModal({
                         )}
                     </TabsContent>
 
-                    {/* TAB 2: Shareable Link */}
                     <TabsContent value="share" className="space-y-4 pt-4">
                         <div className="rounded-md border-2 border-dashed border-primary/30 bg-primary/5 p-4">
                             <div className="flex items-start gap-3">
@@ -590,7 +572,6 @@ export function CreateInvitationModal({
                             </DialogFooter>
                         </form>
 
-                        {/* List of Created Share Links */}
                         {anonInvitations.size > 0 && (
                             <div className="border-t pt-4 mt-4">
                                 <h4 className="font-medium mb-3">Generated Share Links</h4>
@@ -625,9 +606,6 @@ interface ShareLinkCardProps {
 }
 
 function ShareLinkCard({ invitation, qrDataUrl }: ShareLinkCardProps) {
-    // Link share phải trỏ về FRONTEND (route /anonymous-exam), không phải về
-    // backend. Dùng VITE_API_URL ở đây sẽ sinh ra http://localhost:8080/...
-    // và người dùng thấy trang trắng.
     const FRONTEND_BASE = import.meta.env.VITE_FRONTEND_URL || "http://localhost:5173";
     const shareableUrl = invitation.accessCode
         ? `${FRONTEND_BASE}/anonymous-exam?code=${invitation.accessCode}`
@@ -649,7 +627,6 @@ function ShareLinkCard({ invitation, qrDataUrl }: ShareLinkCardProps) {
 
     return (
         <div className="rounded-md border p-3 space-y-3">
-            {/* Access Code */}
             <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Access Code</p>
                 <div className="flex items-center gap-2">
@@ -662,7 +639,6 @@ function ShareLinkCard({ invitation, qrDataUrl }: ShareLinkCardProps) {
                 </div>
             </div>
 
-            {/* Shareable Link */}
             <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Shareable Link</p>
                 <div className="flex items-center gap-2">
@@ -675,7 +651,6 @@ function ShareLinkCard({ invitation, qrDataUrl }: ShareLinkCardProps) {
                 </div>
             </div>
 
-            {/* QR Code */}
             <div className="flex items-center justify-between pt-2 border-t">
                 <span className="text-xs text-muted-foreground">
                     Max Attempts: {invitation.maxAccessAttempts ?? 1}

@@ -39,12 +39,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * Test cho luồng thi anonymous (học sinh không có tài khoản RBAC).
- *
- * <p>Trọng tâm là quy tắc "1 lượt truy cập = 1 lần bắt đầu thi thật", để học sinh
- * mở link, nhập thông tin rồi quay lại (chưa thi) không bị chặn oan.
- */
 @ExtendWith(MockitoExtension.class)
 class InvitationServiceAnonymousTest {
 
@@ -132,8 +126,6 @@ class InvitationServiceAnonymousTest {
                 .build();
     }
 
-    // ============ Tạo phiên lần đầu ============
-
     @Test
     @DisplayName("Nhập thông tin lần đầu thì tạo phiên mới và trừ 1 lượt truy cập")
     void firstAccessCreatesNewSessionAndConsumesAttempt() {
@@ -154,26 +146,19 @@ class InvitationServiceAnonymousTest {
         assertEquals(7L, captor.getValue().getGuestUserId());
     }
 
-    // ============ Quay lại link chưa thi ============
-
     @Test
     @DisplayName("Quay lại link cùng email khi chưa thi thì tái dùng phiên cũ, KHÔNG trừ lượt")
     void returningStudentBeforeStartingExamReusesSession() {
-        invitation.setAccessAttemptCount(1); // đã dùng hết lượt
-        AnonymousSession previous = existingSession(null); // chưa nộp bài
+        invitation.setAccessAttemptCount(1);
+        AnonymousSession previous = existingSession(null);
         when(anonymousSessionRepository.findByInvitationIdAndGuestUserIdOrderByAccessedAtDesc(11L, 7L))
                 .thenReturn(List.of(previous));
 
         AnonymousSessionResponse res =
                 service.createAnonymousSession(CODE, null, NAME, EMAIL);
 
-        // Trả lại đúng token cũ để học sinh vào được phòng thi.
         assertEquals("session-token-dung-la-i", res.getSessionToken());
-        // Quan trọng: không trừ thêm lượt nào.
         assertEquals(1, invitation.getAccessAttemptCount());
-        // Chỉ cập nhật lại phiên cũ, KHÔNG tạo phiên mới: token được lưu lại
-        // phải là token cũ (phần assert bên dưới), và không có lần save nào
-        // mang token khác.
         ArgumentCaptor<AnonymousSession> captor = ArgumentCaptor.forClass(AnonymousSession.class);
         verify(anonymousSessionRepository).save(captor.capture());
         assertEquals("session-token-dung-la-i", captor.getValue().getSessionToken());
@@ -183,7 +168,6 @@ class InvitationServiceAnonymousTest {
     @DisplayName("Quay lại link cùng email nhưng đã nộp bài xong thì không tái dùng, phải hết lượt")
     void returningStudentAfterSubmitCannotReuseSession() {
         invitation.setAccessAttemptCount(1);
-        // completedAt != null => phiên đã kết thúc, không tái sử dụng được.
         AnonymousSession finished = existingSession(LocalDateTime.now().minusMinutes(1));
         when(anonymousSessionRepository.findByInvitationIdAndGuestUserIdOrderByAccessedAtDesc(11L, 7L))
                 .thenReturn(List.of(finished));
@@ -206,14 +190,11 @@ class InvitationServiceAnonymousTest {
                 () -> service.createAnonymousSession(CODE, null, NAME, EMAIL));
     }
 
-    // ============ Chặn đúng người khác ============
-
     @Test
     @DisplayName("Học sinh khác trên link 1 lượt thì bị chặn")
     void differentStudentBlockedWhenNoAttemptsLeft() {
         invitation.setAccessAttemptCount(1);
 
-        // Học sinh khác -> user khách khác -> không có phiên nào để tái dùng.
         User otherGuest = User.builder()
                 .id(99L)
                 .email("nguoi-khac@example.com")
@@ -241,8 +222,6 @@ class InvitationServiceAnonymousTest {
                 () -> service.createAnonymousSession(CODE, "fp-1", NAME, EMAIL));
         assertEquals("This device has already accessed this exam", ex.getMessage());
     }
-
-    // ============ Trạng thái lời mời ============
 
     @Test
     @DisplayName("Lời mời đã thu hồi thì không tạo được phiên")
@@ -285,12 +264,9 @@ class InvitationServiceAnonymousTest {
                 () -> service.createAnonymousSession("NOPE0000", null, NAME, EMAIL));
     }
 
-    // ============ Không gắn bài thi vào tài khoản thật ============
-
     @Test
     @DisplayName("Email thuộc tài khoản RBAC thật thì tạo user khách riêng, không dùng user thật")
     void realAccountEmailGetsSeparateGuestUser() {
-        // GuestUserService phải KHÔNG trả về tài khoản thật cho endpoint public.
         GuestUserService realService = new GuestUserService(userRepository, roleRepository, passwordEncoder);
 
         User realUser = User.builder().id(42L).email(EMAIL).isGuest(false).isActive(true).build();
@@ -310,7 +286,6 @@ class InvitationServiceAnonymousTest {
         assertNotNull(result);
         assertTrue(Boolean.TRUE.equals(result.getIsGuest()), "user trả về phải là guest");
         assertEquals(500L, result.getId(), "phải tạo user khách MỚI, không dùng user thật");
-        // Email nội bộ để không đụng vào tài khoản thật.
         assertTrue(result.getEmail().endsWith("@anon.invalid"),
                 "email nội bộ phải dùng miền .invalid, thực tế: " + result.getEmail());
         assertTrue(result.getLocked(), "user khách phải bị khoá, không đăng nhập được");
@@ -329,8 +304,6 @@ class InvitationServiceAnonymousTest {
         assertEquals(88L, result.getId());
         verify(userRepository, never()).save(any(User.class));
     }
-
-    // ============ verifyAccessCode ============
 
     @Test
     @DisplayName("verifyAccessCode trả về số lượt còn lại")

@@ -16,10 +16,8 @@ import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
-/** Số lời mời hiển thị trong dropdown; phần còn lại xem ở trang danh sách. */
 const MAX_DROPDOWN_ITEMS = 5;
 
-/** Key localStorage lưu id các lời mời đã hiện toast, tránh toast lặp lại. */
 const TOASTED_IDS_STORAGE_KEY = "student_invitation_toasted_ids";
 
 function readToastedIds(): number[] {
@@ -32,7 +30,6 @@ function readToastedIds(): number[] {
 
         return parsed.filter((id): id is number => typeof id === "number");
     } catch {
-        // localStorage có thể bị chặn (chế độ riêng tư) hoặc chứa JSON hỏng.
         return [];
     }
 }
@@ -41,7 +38,6 @@ function writeToastedIds(ids: number[]) {
     try {
         window.localStorage.setItem(TOASTED_IDS_STORAGE_KEY, JSON.stringify(ids));
     } catch {
-        // Bỏ qua: toast chống trùng chỉ là tối ưu, không phải yêu cầu bắt buộc.
     }
 }
 
@@ -54,17 +50,10 @@ function formatExpiry(value?: string | null): string | null {
     return date.toLocaleString();
 }
 
-/**
- * Chuông thông báo lời mời thi cho student.
- *
- * Badge đỏ đếm số lời mời đang chờ phản hồi. Dữ liệu lấy từ cache dùng chung với
- * trang /invitations nên khi student chấp nhận lời mời, badge tự giảm ngay.
- */
 export function InvitationBell() {
     const navigate = useNavigate();
     const { pending, count } = usePendingInvitations();
 
-    // Lần render đầu tiên chưa có mốc so sánh -> không toast lại khi mới vào trang.
     const previousCountRef = useRef<number | null>(null);
 
     useEffect(() => {

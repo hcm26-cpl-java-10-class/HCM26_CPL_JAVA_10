@@ -12,9 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * Marks invitations as EXPIRED once their expiry time has passed.
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor

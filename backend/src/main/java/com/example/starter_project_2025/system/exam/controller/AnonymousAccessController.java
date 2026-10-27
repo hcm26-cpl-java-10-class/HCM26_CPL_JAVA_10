@@ -30,9 +30,6 @@ public class AnonymousAccessController {
     private final InvitationService service;
     private final AnonymousExamService anonymousExamService;
 
-    /**
-     * Trainer/Admin creates an access invite for a student that has no RBAC account.
-     */
     @PostMapping("/{examId}/invitations/anonymous")
     @PreAuthorize("hasAuthority('INVITATION_CREATE')")
     public ResponseEntity<InvitationDTO> createAnonymousInvitation(
@@ -43,17 +40,11 @@ public class AnonymousAccessController {
         return ResponseEntity.ok(service.createAnonymousInvitation(examId, request, principal));
     }
 
-    /**
-     * Public: verify an access code before entering the exam.
-     */
     @GetMapping("/verify-access/{code}")
     public ResponseEntity<AnonymousAccessResponse> verifyAccess(@PathVariable String code) {
         return ResponseEntity.ok(service.verifyAccessCode(code.toUpperCase()));
     }
 
-    /**
-     * Public: exchange an access code for an anonymous session token.
-     */
     @PostMapping("/anonymous-session")
     public ResponseEntity<AnonymousSessionResponse> createSession(
             @Valid @RequestBody AnonymousSessionRequest request
@@ -66,12 +57,6 @@ public class AnonymousAccessController {
         ));
     }
 
-    // ============ LÀM BÀI (không cần tài khoản RBAC) ============
-
-    /**
-     * Public: bắt đầu/tiếp tục làm bài. Phiên xác thực bằng sessionToken
-     * đã cấp lúc đổi access code.
-     */
     @PostMapping("/anonymous/attempt")
     public ResponseEntity<ExamAttemptDTO> startOrResume(
             @Valid @RequestBody AnonymousAttemptRequest request
@@ -82,7 +67,6 @@ public class AnonymousAccessController {
         ));
     }
 
-    /** Public: lưu đáp án tự động khi học sinh chọn câu trả lời. */
     @PutMapping("/anonymous/attempts/{attemptId}/answers")
     public ResponseEntity<ExamAttemptDTO> saveAnswers(
             @PathVariable Long attemptId,
@@ -92,7 +76,6 @@ public class AnonymousAccessController {
         return ResponseEntity.ok(anonymousExamService.saveAnswers(sessionToken, attemptId, requests));
     }
 
-    /** Public: nộp bài và gửi kết quả về email học sinh. */
     @PostMapping("/anonymous/attempts/{attemptId}/submit")
     public ResponseEntity<ExamAttemptDTO> submit(
             @PathVariable Long attemptId,

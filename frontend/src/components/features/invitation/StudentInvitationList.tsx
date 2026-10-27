@@ -28,21 +28,14 @@ function getStatus(invitation: InvitationDTO) {
     return { label: invitation.status ?? "Không xác định", variant: "outline" as const };
 }
 
-/**
- * Trạng thái khoá nút bấm dựa trên:
- *  - status hiện tại của invitation
- *  - expiresAt của lời mời (để phản hồi)
- *  - examStartTime / examEndTime (để vào thi)
- * Trả về { label, reason? } để hiển thị trên button khi bị disable.
- */
 type ButtonGate = {
     label: string;
     disabled: boolean;
-    /** true khi đề chưa tới giờ mở (dùng để hiện đồng hồ đếm ngược). */
+
     waiting: boolean;
-    /** true khi kỳ thi đã đóng. */
+
     closed: boolean;
-    /** Số mili giây còn lại trước khi đề mở. */
+
     remainingMs: number;
 };
 
@@ -71,7 +64,6 @@ function computeExamWindow(invitation: InvitationDTO, now: number): ButtonGate {
     return { label: "Vào thi", disabled: false, waiting: false, closed: false, remainingMs: 0 };
 }
 
-/** Định dạng khoảng thời gian còn lại trước khi đề mở. */
 function formatRemaining(ms: number): string {
     const total = Math.max(0, Math.floor(ms / 1000));
     const days = Math.floor(total / 86400);
@@ -86,8 +78,6 @@ function formatRemaining(ms: number): string {
 export default function StudentInvitationList() {
     const queryClient = useQueryClient();
     const navigate = useNavigate();
-    // Đồng hồ chạy liên tục: nhờ vậy nút "Vào thi" tự bật khi tới giờ mở đề
-    // mà không cần tải lại trang.
     const [now, setNow] = useState(() => Date.now());
 
     useEffect(() => {
@@ -95,11 +85,10 @@ export default function StudentInvitationList() {
         return () => window.clearInterval(timer);
     }, []);
 
-    // Dialog xác nhận sau khi accept / vào thi
     const [passwordPrompt, setPasswordPrompt] = useState<{
         examId: number;
         examTitle: string;
-        taking: boolean; // true = đã accept, false = vào thẳng từ ACCEPTED
+        taking: boolean;
     } | null>(null);
 
     const invitationsQuery = useQuery({
@@ -114,8 +103,6 @@ export default function StudentInvitationList() {
                 current?.map((invitation) => (invitation.id === updated.id ? updated : invitation)),
             );
 
-            // Chỉ vào thi ngay khi cửa sổ thi đang mở. Nếu chưa tới giờ thì ở lại
-            // trang này, đồng hồ đếm ngược sẽ tự bật nút "Vào thi" khi đến giờ.
             const gate = computeExamWindow(updated, Date.now());
 
             if (gate.disabled) {
@@ -130,7 +117,6 @@ export default function StudentInvitationList() {
 
             toast.success("Đã chấp nhận lời mời.");
 
-            // Sau accept: nếu đề có mật khẩu -> mở dialog; không thì vào thi thẳng.
             if (updated.examHasPassword) {
                 setPasswordPrompt({
                     examId: updated.examId,
@@ -149,7 +135,6 @@ export default function StudentInvitationList() {
     const sortedInvitations = useMemo(
         () =>
             [...invitations].sort((a, b) => {
-                // Ưu tiên: lời mời đang chờ phản hồi lên đầu
                 const rank = (status?: InvitationDTO["status"]) => {
                     if (status === "PENDING" || status === "SENT") return 0;
                     if (status === "ACCEPTED") return 1;
@@ -157,7 +142,6 @@ export default function StudentInvitationList() {
                 };
                 const byRank = rank(a.status) - rank(b.status);
                 if (byRank !== 0) return byRank;
-                // Sau đó sắp xếp theo hạn phản hồi tăng dần
                 return new Date(a.expiresAt ?? 0).getTime() - new Date(b.expiresAt ?? 0).getTime();
             }),
         [invitations],
@@ -287,8 +271,6 @@ export default function StudentInvitationList() {
                                         </p>
                                     )}
 
-                                    {/* Trường hợp đã chấp nhận lời mời nhưng đề chưa tới giờ mở:
-                                        hiện đồng hồ đếm ngược, nút "Vào thi" tự bật khi đến giờ. */}
                                     {canTake && windowGate.waiting && (
                                         <div
                                             aria-live="polite"
@@ -337,8 +319,6 @@ export default function StudentInvitationList() {
                                                 {windowGate.label}
                                             </Button>
                                         ) : null}
-                                        {/* Theo plan, chưa nối UI nút "Từ chối".
-                                            Endpoint server đã sẵn. */}
                                         {!canAccept && !canTake && (
                                             <span className="text-xs text-muted-foreground">
                                                 Không có hành động khả dụng

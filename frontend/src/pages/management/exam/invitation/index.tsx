@@ -110,7 +110,6 @@ export default function InvitationsPage() {
                 const exam = await examApi.getById(String(numericExamId));
                 if (exam.title) setExamTitle(exam.title);
             } catch {
-                // ignore - fallback to default exam title
             }
         };
         void loadExamTitle();
@@ -147,7 +146,6 @@ export default function InvitationsPage() {
     return (
         <MainLayout pathName={{ exams: "Exam Management", invitations: "Invitations" }}>
             <section className="flex flex-col gap-5">
-                {/* Header */}
                 <header className="flex flex-wrap items-end justify-between gap-4 border-b pb-4">
                     <div>
                         <p className="text-sm text-muted-foreground">
@@ -170,7 +168,6 @@ export default function InvitationsPage() {
                     </Button>
                 </header>
 
-                {/* Filters */}
                 <div className="flex flex-wrap items-center gap-3">
                     <Select
                         value={statusFilter}
@@ -209,7 +206,6 @@ export default function InvitationsPage() {
                     )}
                 </div>
 
-                {/* Table */}
                 <div className="overflow-hidden rounded-md border bg-background">
                     <Table>
                         <TableHeader>
@@ -370,7 +366,6 @@ export default function InvitationsPage() {
                 </div>
             </section>
 
-            {/* Create Modal */}
             {isValidExamId && (
                 <CreateInvitationModal
                     examId={numericExamId}
@@ -380,7 +375,6 @@ export default function InvitationsPage() {
                 />
             )}
 
-            {/* Revoke Dialog */}
             <Dialog open={!!revokeTarget} onOpenChange={(o) => { if (!o) setRevokeTarget(null); }}>
                 <DialogContent>
                     <DialogHeader>
@@ -425,7 +419,6 @@ export default function InvitationsPage() {
                 </DialogContent>
             </Dialog>
 
-            {/* QR Dialog */}
             <Dialog open={!!qrTarget} onOpenChange={(o) => { if (!o) setQrTarget(null); }}>
                 <DialogContent className="sm:max-w-sm">
                     <DialogHeader>

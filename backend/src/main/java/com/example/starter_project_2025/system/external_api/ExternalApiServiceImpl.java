@@ -37,8 +37,6 @@ public class ExternalApiServiceImpl implements ExternalApiService {
         this.token = token;
     }
 
-    // ======================== PUBLIC METHODS ========================
-
     @Override
     public List<ExternalClassDTO> fetchClasses(String status) {
         log.info("Fetching classes from external API with status={}", status);
@@ -96,11 +94,6 @@ public class ExternalApiServiceImpl implements ExternalApiService {
         return executeGetList(url, new ParameterizedTypeReference<>() {}, "rooms");
     }
 
-    // ======================== PRIVATE HELPERS ========================
-
-    /**
-     * Build HTTP headers with optional Bearer token.
-     */
     private HttpHeaders buildHeaders() {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -113,9 +106,6 @@ public class ExternalApiServiceImpl implements ExternalApiService {
         return headers;
     }
 
-    /**
-     * Execute a GET request that returns a single object.
-     */
     private <T> T executeGet(String url, Class<T> responseType, String resourceName) {
         try {
             HttpEntity<Void> entity = new HttpEntity<>(buildHeaders());
@@ -155,9 +145,6 @@ public class ExternalApiServiceImpl implements ExternalApiService {
         }
     }
 
-    /**
-     * Execute a GET request that returns a list of objects.
-     */
     private <T> List<T> executeGetList(String url,
                                        ParameterizedTypeReference<List<T>> typeRef,
                                        String resourceName) {

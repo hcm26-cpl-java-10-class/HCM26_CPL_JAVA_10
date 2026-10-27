@@ -18,7 +18,6 @@ interface InvitationQuery {
     anonymous?: boolean;
 }
 
-/** PNG data URL for the invitation QR code - usable directly in <img src> */
 const toDataUrl = (blob: Blob) =>
     new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -28,7 +27,6 @@ const toDataUrl = (blob: Blob) =>
     });
 
 export const invitationApi = {
-    // ---------- Management ----------
     create: async (examId: number, request: InvitationCreateRequest): Promise<InvitationDTO> => {
         const response = await axiosInstance.post<InvitationDTO>(`/exams/${examId}/invitations`, request);
         return response.data;
@@ -74,7 +72,6 @@ export const invitationApi = {
         return toDataUrl(response.data as Blob);
     },
 
-    // ---------- Student ----------
     getMyInvitations: async (): Promise<InvitationDTO[]> => {
         const response = await axiosInstance.get<InvitationDTO[]>("/invitations/my");
         return response.data;
@@ -90,7 +87,6 @@ export const invitationApi = {
         return response.data;
     },
 
-    // ---------- Anonymous ----------
     createAnonymous: async (
         examId: number,
         request: AnonymousInvitationRequest,
@@ -119,7 +115,6 @@ export const invitationApi = {
         return response.data;
     },
 
-    // ---------- Reminders ----------
     scheduleReminder: async (examId: number, request: ReminderRequest): Promise<ReminderDTO[]> => {
         const response = await axiosInstance.post<ReminderDTO[]>(`/exams/${examId}/reminders`, request);
         return response.data;

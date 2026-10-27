@@ -1,6 +1,5 @@
 package com.example.starter_project_2025.controller;
 
-
 import com.example.starter_project_2025.base.dataio.importer.service.ImportService;
 import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenService;
 import com.example.starter_project_2025.system.menu.module_groups.ModuleGroupController;
@@ -40,9 +39,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
                 org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration.class,
                 org.springframework.boot.autoconfigure.security.oauth2.resource.servlet.OAuth2ResourceServerAutoConfiguration.class
         })
-@AutoConfigureMockMvc(addFilters = false) // Quan trọng: Dòng này sẽ tắt các Filter như JwtAuthenticationFilter
+@AutoConfigureMockMvc(addFilters = false)
 public class ModuleGroupControllerTest {
-
 
     @Autowired
     private MockMvc mockMvc;
@@ -73,8 +71,6 @@ public class ModuleGroupControllerTest {
         mockDto.setDisplayOrder(0);
     }
 
-    // --- 1. TEST CRUD (BaseCrudController) ---
-
     @Test
     @DisplayName("GET /api/module-groups - Should return paginated list")
     void getAll_ShouldReturnPage() throws Exception {
@@ -101,14 +97,11 @@ public class ModuleGroupControllerTest {
     @Test
     @DisplayName("PUT /api/module-groups/{id} - Should update and return updated DTO")
     void update_ShouldReturnUpdatedDto() throws Exception {
-        // Given
         Long id = 1L;
         mockDto.setName("Updated Name");
 
-        // Giả lập service trả về DTO sau khi cập nhật thành công
         when(moduleGroupService.update(eq(id), any(ModuleGroupDTO.class))).thenReturn(mockDto);
 
-        // When & Then
         mockMvc.perform(put("/api/module-groups/{id}", id)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(mockDto)))
@@ -116,14 +109,12 @@ public class ModuleGroupControllerTest {
                 .andExpect(jsonPath("$.name").value("Updated Name"))
                 .andExpect(jsonPath("$.description").value("Description"));
 
-        // Xác nhận service được gọi đúng 1 lần với đúng ID và dữ liệu
         verify(moduleGroupService, times(1)).update(eq(id), any(ModuleGroupDTO.class));
     }
 
     @Test
     @DisplayName("PUT /api/module-groups/{id} - Should return 400 when validation fails")
     void update_InvalidData_ShouldReturnBadRequest() throws Exception {
-        // Giả sử tên không được để trống (Annotation @NotBlank trong DTO)
         mockDto.setName("");
 
         mockMvc.perform(put("/api/module-groups/1")
@@ -131,7 +122,6 @@ public class ModuleGroupControllerTest {
                         .content(objectMapper.writeValueAsString(mockDto)))
                 .andExpect(status().isBadRequest());
 
-        // Service không được phép gọi nếu validation ở Controller thất bại
         verify(moduleGroupService, never()).update(anyLong(), any());
     }
 
@@ -142,13 +132,9 @@ public class ModuleGroupControllerTest {
                 .andExpect(status().isNoContent());
     }
 
-    // --- 2. TEST DATA IO (BaseCrudDataIoController) ---
-
     @Test
     @DisplayName("GET /api/module-groups/export - Should trigger export service")
     void exportFile_ShouldReturnStatusOk() throws Exception {
-        // Vì exportService ghi trực tiếp vào HttpServletResponse,
-        // chúng ta chỉ cần verify status và xem service có được gọi không
         mockMvc.perform(get("/api/module-groups/export")
                         .param("format", "EXCEL"))
                 .andExpect(status().isOk());
@@ -163,8 +149,6 @@ public class ModuleGroupControllerTest {
                 "test data".getBytes()
         );
 
-        // Giả lập kết quả trả về của ImportService
-        // ImportResult là lớp bạn định nghĩa, ở đây tôi giả định nó có cấu trúc cơ bản
         when(importService.importFile(any(), any(), any())).thenReturn(null);
 
         mockMvc.perform(multipart("/api/module-groups/import")

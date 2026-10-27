@@ -12,10 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * Invalidates anonymous exam sessions that have been idle for too long
- * and hard-deletes sessions past the retention window.
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -35,7 +31,6 @@ public class AnonymousSessionCleanupJob {
         try {
             LocalDateTime now = LocalDateTime.now();
 
-            // Invalidate stale sessions
             LocalDateTime staleBefore = now.minusHours(sessionTtlHours);
             List<AnonymousSession> stale = anonymousSessionRepository.findStaleSessions(staleBefore);
 
@@ -48,7 +43,6 @@ public class AnonymousSessionCleanupJob {
                 log.info("AnonymousSessionCleanupJob invalidated {} stale session(s)", stale.size());
             }
 
-            // Purge sessions past retention
             List<AnonymousSession> expired = anonymousSessionRepository
                     .findStaleSessions(now.minusDays(retentionDays));
 

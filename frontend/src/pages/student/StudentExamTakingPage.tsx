@@ -5,7 +5,7 @@ import {
     type ExamAttemptAnswer,
     type SaveExamAnswerRequest,
 } from '@/api/exam.api';
-import { formatScore, questionScore } from '@/utils/examScore'; // NEW
+import { formatScore, questionScore } from '@/utils/examScore';
 import { Button } from '@/components/ui/button';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -95,7 +95,6 @@ export default function StudentExamTakingPage() {
         onSuccess: (attempt) => {
             queryClient.setQueryData(attemptQueryKey(examId), attempt);
             clearAllPendingSaves();
-            // Điểm bài vừa nộp sẽ xuất hiện ở /my-scores ngay khi student qua lại.
             queryClient.invalidateQueries({ queryKey: ["my-exam-scores"] });
             if (attempt.status === 'EXPIRED') {
                 toast.warning('Time is up! Your exam has been automatically submitted.');
@@ -131,7 +130,6 @@ export default function StudentExamTakingPage() {
                 try {
                     localStorage.setItem(flagKey, JSON.stringify([...next]));
                 } catch {
-                    // Ignore if localStorage is blocked
                 }
             }
             return next;
@@ -310,7 +308,6 @@ export default function StudentExamTakingPage() {
             pendingAnswersRef.current.clear();
             setHasSaveError(false);
         } catch {
-            // submitMutation handled error message
         } finally {
             submitStartedRef.current = false;
         }
@@ -608,7 +605,6 @@ export default function StudentExamTakingPage() {
                                 {attempt.status === 'SUBMITTED' && 'Exam Completed'}
                             </h2>
                             <p className="mt-3 text-lg">
-                                {/* CHANGED: score on the exam scale; ungraded essays count as 0 until the teacher grades */}
                                 {attempt.finalScore == null
                                     ? `Provisional Score: ${formatScore(attempt.provisionalScore ?? attempt.objectiveScore ?? 0)}/${formatScore(attempt.maxScore ?? 10)} (ungraded essays count as 0)`
                                     : `Score: ${formatScore(attempt.finalScore)}/${formatScore(attempt.maxScore ?? 10)}`}

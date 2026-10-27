@@ -40,7 +40,6 @@ public class ExamResultAccessService {
         return isVisibilitySatisfied(exam);
     }
 
-    // Đáp án chỉ lộ khi: cờ bật, bài đã kết thúc, điểm đã công bố, và sinh viên không còn lượt làm lại hoặc đề đã đóng
     @Transactional(readOnly = true)
     public boolean canStudentViewAnswers(Exam exam, ExamAttemptStatus attemptStatus, int attemptsRemaining) {
         if (exam == null || !Boolean.TRUE.equals(exam.getShowAnswersAfterExam())) {
@@ -71,15 +70,6 @@ public class ExamResultAccessService {
                 .orElse(false);
     }
 
-    /**
-     * Điểm bài thi hiện trong My Scores ngay khi bài đã chấm xong, KHÔNG cần
-     * teacher bấm "Publish Results". Teacher chỉ có thể ẩn chủ động bằng cách
-     * đặt release policy thành HIDDEN.
-     *
-     * Khác với {@link #canStudentViewScore(Exam)} (vẫn yêu cầu published=true và
-     * dùng cho luồng email / xem đáp án), hàm này bỏ bước publish bắt buộc vì
-     * student cần thấy điểm bài mình vừa làm.
-     */
     @Transactional(readOnly = true)
     public boolean canStudentSeeScoreOnMyScores(Exam exam) {
         if (exam == null || exam.getId() == null) {
@@ -89,7 +79,6 @@ public class ExamResultAccessService {
         return publicationRepository.findByExam_Id(exam.getId())
                 .map(publication ->
                         publication.getReleasePolicy() != ScoreReleasePolicy.HIDDEN)
-                // Chưa cấu hình publication -> cho hiện.
                 .orElse(true);
     }
 

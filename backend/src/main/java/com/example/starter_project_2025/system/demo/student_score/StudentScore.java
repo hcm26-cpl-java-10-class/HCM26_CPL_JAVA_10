@@ -91,11 +91,9 @@ public class StudentScore extends BaseEntity {
     @Column(length = 120)
     String approvedBy;
 
-    // Linked to the learner's login email; used to resolve "my scores"
     @Column(length = 120)
     String studentEmail;
 
-    // One line per post-release adjustment: time | approver | reason | old -> new
     @Column(length = 10000)
     String adjustmentLog;
 

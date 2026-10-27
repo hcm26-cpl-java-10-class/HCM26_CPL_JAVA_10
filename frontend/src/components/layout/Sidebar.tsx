@@ -43,7 +43,6 @@ export function SidebarMenu() {
 
     return (
         <Sidebar variant="inset" collapsible="icon">
-            {/* Header */}
             <SidebarHeader className="py-3 px-0">
                 <Button
                     type="button"
@@ -65,7 +64,6 @@ export function SidebarMenu() {
                 </Button>
             </SidebarHeader>
 
-            {/* Content */}
             <SidebarContent>
                 {navGroups.map((group) =>
                     group ? (
@@ -74,7 +72,6 @@ export function SidebarMenu() {
                 )}
             </SidebarContent>
 
-            {/* Footer */}
             <SidebarFooter className="p-4 text-xs flex flex-row items-center gap-2 text-muted-foreground group-data-[collapsible=icon]:justify-center">
                 {state === "expanded" && <span className="flex-1 truncate">RBAC System v1.0</span>}
 

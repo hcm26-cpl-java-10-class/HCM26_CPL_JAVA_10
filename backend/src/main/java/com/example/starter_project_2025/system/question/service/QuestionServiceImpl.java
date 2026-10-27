@@ -35,7 +35,6 @@ public class QuestionServiceImpl
 
     @Override
     protected void beforeCreate(Question entity, QuestionDTO request, ValidationContext ctx) {
-        // NEW: tạo mới luôn ở trạng thái active; chỉ đổi được khi sửa (edit) câu hỏi
         entity.setIsActive(true);
         validator.validateForCreate(request, ctx);
     }
@@ -47,13 +46,11 @@ public class QuestionServiceImpl
         validator.validateForUpdate(entity, request, inUse, ctx);
     }
 
-    // Bản sao của đề thi chỉ được sửa/xoá qua đề thi chứa nó
     private void rejectExamCopy(Question entity) {
         if (entity.getSourceQuestionId() != null) {
             throw new BadRequestException("Câu hỏi này là bản sao thuộc một đề thi, hãy sửa hoặc xóa trong đề thi");
         }
     }
-
 
     @Override
     protected void beforeDelete(Question entity) {

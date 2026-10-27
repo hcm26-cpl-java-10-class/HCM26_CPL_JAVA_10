@@ -24,8 +24,6 @@ public class InvitationController {
 
     private final InvitationService service;
 
-    // ==================== MANAGEMENT (Trainer / Admin) ====================
-
     @PostMapping("/exams/{examId}/invitations")
     @PreAuthorize("hasAuthority('INVITATION_CREATE')")
     public ResponseEntity<InvitationDTO> create(
@@ -92,8 +90,6 @@ public class InvitationController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"invitation-" + id + ".png\"")
                 .body(png);
     }
-
-    // ==================== STUDENT ====================
 
     @GetMapping("/invitations/my")
     @PreAuthorize("hasAuthority('INVITATION_READ') or hasAuthority('EXAM_TAKE')")

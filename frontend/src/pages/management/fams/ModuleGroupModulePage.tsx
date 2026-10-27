@@ -18,13 +18,11 @@ import type {
 } from "./types";
 
 export const ModuleGroupModulePage: React.FC = () => {
-    // Backend & In-memory data states
     const [groups, setGroups] = useState<ModuleGroupItem[]>(initialModuleGroups);
     const [modules, setModules] = useState<ModuleItem[]>(initialModules);
     const [selectedGroupId, setSelectedGroupId] = useState<string>("group-system");
     const [isLoadingGroups, setIsLoadingGroups] = useState(false);
 
-    // Modal states
     const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
     const [editingGroup, setEditingGroup] = useState<ModuleGroupItem | null>(null);
 
@@ -33,7 +31,6 @@ export const ModuleGroupModulePage: React.FC = () => {
 
     const [isImportExportOpen, setIsImportExportOpen] = useState(false);
 
-    // Delete dialog state
     const [deleteDialog, setDeleteDialog] = useState<{
         open: boolean;
         type: "group" | "module";
@@ -44,7 +41,6 @@ export const ModuleGroupModulePage: React.FC = () => {
         item: null,
     });
 
-    // Load module groups from backend
     const loadGroups = async () => {
         setIsLoadingGroups(true);
         try {
@@ -79,7 +75,6 @@ export const ModuleGroupModulePage: React.FC = () => {
         loadGroups();
     }, []);
 
-    // Modules filtered by selected group with smart matching
     const currentGroupModules = useMemo(() => {
         const exactMatches = modules.filter((m) => m.groupId === selectedGroupId);
         if (exactMatches.length > 0) return exactMatches;
@@ -103,7 +98,6 @@ export const ModuleGroupModulePage: React.FC = () => {
         return modules;
     }, [modules, selectedGroupId, groups]);
 
-    // Group handlers
     const handleAddGroup = () => {
         setEditingGroup(null);
         setIsGroupModalOpen(true);
@@ -159,7 +153,6 @@ export const ModuleGroupModulePage: React.FC = () => {
         });
     };
 
-    // Module handlers
     const handleAddModule = () => {
         setEditingModule(null);
         setIsModuleModalOpen(true);
@@ -238,9 +231,7 @@ export const ModuleGroupModulePage: React.FC = () => {
     return (
         <MainLayout>
             <div className="flex flex-col gap-5 font-sans">
-                {/* Page Header Area */}
                 <div className="flex flex-col gap-2">
-                    {/* Breadcrumbs */}
                     <div className="flex items-center text-xs text-gray-500 font-medium">
                         <span className="text-gray-500">FAMS &amp; LMS</span>
                         <span className="mx-2 text-gray-300">/</span>
@@ -251,7 +242,6 @@ export const ModuleGroupModulePage: React.FC = () => {
                         </span>
                     </div>
 
-                    {/* Title and Top Actions */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
                         <div>
                             <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
@@ -284,9 +274,7 @@ export const ModuleGroupModulePage: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Main 2-Panel Layout */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-                    {/* Left Panel: Module Groups (~28-30% width) */}
                     <div className="lg:col-span-4 xl:col-span-3">
                         <ModuleGroupList
                             groups={groups}
@@ -299,7 +287,6 @@ export const ModuleGroupModulePage: React.FC = () => {
                         />
                     </div>
 
-                    {/* Right Panel: Modules (~70-72% width) */}
                     <div className="lg:col-span-8 xl:col-span-9">
                         <ModuleTable
                             modules={currentGroupModules}
@@ -310,7 +297,6 @@ export const ModuleGroupModulePage: React.FC = () => {
                 </div>
             </div>
 
-            {/* Modals & Dialogs */}
             <ModuleGroupModal
                 open={isGroupModalOpen}
                 onOpenChange={setIsGroupModalOpen}

@@ -17,7 +17,6 @@ public class QuestionDataInitializer implements CommandLineRunner {
     public void run(String... args) {
         if (repository.count() > 0) return;
 
-
         repository.save(make("Java là ngôn ngữ lập trình chạy dựa trên cơ chế nào dưới đây?", QuestionType.MULTIPLE_CHOICE, Difficulty.EASY, "java", Set.of(2),
                 "Biên dịch trực tiếp ra mã máy", "Chỉ thông dịch từng dòng lệnh", "Biên dịch ra bytecode rồi chạy trên máy ảo JVM", "Chạy trực tiếp trên trình duyệt"));
 
@@ -69,10 +68,6 @@ public class QuestionDataInitializer implements CommandLineRunner {
         repository.save(make("Điểm khác biệt cơ bản giữa HashMap và HashTable trong Java Collection Framework là gì?", QuestionType.MULTIPLE_CHOICE, Difficulty.MEDIUM, "java", Set.of(1),
                 "HashMap tốn nhiều bộ nhớ hơn HashTable", "HashMap cho phép khóa null và không đồng bộ, HashTable đồng bộ và không cho phép khóa null", "HashTable chạy nhanh hơn HashMap", "HashMap không thể duyệt bằng Iterator"));
 
-
-        // ==========================================
-        // CHỦ ĐỀ 2: SPRING BOOT (17 câu) - Topic: "spring_boot"
-        // ==========================================
         repository.save(make("Annotation nào biến một class thông thường thành một RESTful Web Controller trong Spring Boot?", QuestionType.MULTIPLE_CHOICE, Difficulty.EASY, "spring_boot", Set.of(2),
                 "@Controller", "@Service", "@RestController", "@Component"));
 
@@ -105,7 +100,6 @@ public class QuestionDataInitializer implements CommandLineRunner {
 
         repository.save(make("Thư viện Lombok (với các nhãn như @Data, @Getter, @Setter) mang lại lợi ích lớn nhất nào?", QuestionType.MULTIPLE_CHOICE, Difficulty.EASY, "spring_boot", Set.of(0),
                 "Giảm bớt mã lặp dòng (boilerplate code) như sinh thủ công getter, setter", "Tối ưu hóa tốc độ kết nối cơ sở dữ liệu", "Bắt các lỗi logic lúc runtime", "Tự động cấu hình bảo mật tài khoản"));
-
 
     }
 

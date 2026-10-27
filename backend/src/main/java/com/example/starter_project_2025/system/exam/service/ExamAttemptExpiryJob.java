@@ -29,7 +29,6 @@ public class ExamAttemptExpiryJob {
         }
     }
 
-    /** @return số bài vừa được chuyển sang EXPIRED */
     int expireOverdue(Instant now) {
         List<Long> inProgressIds = attemptRepository.findIdsByStatus(ExamAttemptStatus.IN_PROGRESS);
         int expired = 0;

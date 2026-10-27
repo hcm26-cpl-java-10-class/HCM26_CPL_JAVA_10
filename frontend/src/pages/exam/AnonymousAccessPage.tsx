@@ -19,8 +19,6 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ACCESS_CODE_KEY = "anonymous_access_code";
 
 export default function AnonymousAccessPage() {
-    // Đọc mã truy cập từ URL ngay từ đầu (lazy initial state) để tránh
-    // setState trong effect.
     const [accessCode, setAccessCode] = useState(() => {
         const params = new URLSearchParams(window.location.search);
         return (params.get("code") ?? "").toUpperCase();
@@ -28,10 +26,6 @@ export default function AnonymousAccessPage() {
     const [studentName, setStudentName] = useState("");
     const [studentEmail, setStudentEmail] = useState("");
     const [qrMode, setQrMode] = useState(false);
-    // Nếu đã có phiên thi trong sessionStorage (học sinh quay lại trang truy cập),
-    // khôi phục lại để không phải nhập thông tin lần nữa.
-    // Chỉ khôi phục khi access code trên URL khớp với code đã lưu, tránh
-    // nhầm phiên của link cũ khi học sinh mở một link khác.
     const [sessionInfo, setSessionInfo] = useState<AnonymousSessionResponse | null>(() => {
         const token = sessionStorage.getItem(SESSION_TOKEN_KEY);
         if (!token) return null;
@@ -42,7 +36,6 @@ export default function AnonymousAccessPage() {
         const urlCode = (
             new URLSearchParams(window.location.search).get("code") ?? ""
         ).toUpperCase();
-        // Có mã trên URL thì chỉ khôi phục khi trùng mã đã lưu.
         if (urlCode && savedCode && urlCode !== savedCode) return null;
         if (!name && !email) return null;
         return {
@@ -60,8 +53,6 @@ export default function AnonymousAccessPage() {
             if (!data.valid) {
                 toast.error(data.message ?? "Mã truy cập không hợp lệ.");
             } else {
-                // Gợi ý tên/email đã cấp trong lời mời để học sinh không phải
-                // gõ lại từ đầu (vẫn bắt buộc xác nhận).
                 if (data.studentName) setStudentName(data.studentName);
                 toast.success("Mã hợp lệ! Vui lòng xác nhận thông tin của bạn.");
             }
@@ -81,9 +72,6 @@ export default function AnonymousAccessPage() {
                 toast.error(data.message ?? "Không thể bắt đầu phiên thi.");
                 return;
             }
-            // Phải có sessionToken thì mới vào được phòng thi. Không ghi
-            // token rỗng xuống sessionStorage, nếu không trang thi sẽ chỉ hiện
-            // "Chưa có phiên thi" mà không giải thích được nguyên nhân.
             if (!data.sessionToken) {
                 toast.error("Không nhận được phiên thi. Vui lòng thử lại.");
                 return;
@@ -140,7 +128,6 @@ export default function AnonymousAccessPage() {
     return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 p-6">
             <div className="w-full max-w-md space-y-6">
-                {/* Logo / Title */}
                 <div className="text-center">
                     <div className="mx-auto mb-3 flex size-14 items-center justify-center rounded-full bg-primary/10">
                         <Lock className="size-7 text-primary" />
@@ -151,7 +138,6 @@ export default function AnonymousAccessPage() {
                     </p>
                 </div>
 
-                {/* Session result */}
                 {sessionInfo?.valid ? (
                     <Card className="border-green-200 bg-green-50">
                         <CardHeader className="pb-3">
@@ -300,7 +286,6 @@ export default function AnonymousAccessPage() {
                     </Card>
                 )}
 
-                {/* QR Scanner */}
                 {qrMode && (
                     <Card>
                         <CardHeader className="pb-3">

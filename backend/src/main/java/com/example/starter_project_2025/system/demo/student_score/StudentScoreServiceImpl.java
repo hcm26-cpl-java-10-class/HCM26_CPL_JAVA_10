@@ -83,7 +83,6 @@ public class StudentScoreServiceImpl
             score.setScores(normalizeScores(score.getScores()));
         }
 
-        // Editing a reviewed score invalidates the review
         score.setStatus(StudentScore.Status.DRAFT);
     }
 

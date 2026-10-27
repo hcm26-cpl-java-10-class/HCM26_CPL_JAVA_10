@@ -24,7 +24,6 @@ export const ModuleTable: React.FC<ModuleTableProps> = ({
     const [currentPage, setCurrentPage] = useState(1);
     const pageSize = 5;
 
-    // Filter modules based on search query
     const filteredModules = useMemo(() => {
         if (!searchQuery.trim()) return modules;
 
@@ -39,11 +38,9 @@ export const ModuleTable: React.FC<ModuleTableProps> = ({
         );
     }, [modules, searchQuery]);
 
-    // Pagination calculations
     const totalItems = filteredModules.length;
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
 
-    // Reset current page if out of bounds after filtering
     const safeCurrentPage = Math.min(currentPage, totalPages);
 
     const paginatedModules = useMemo(() => {
@@ -56,7 +53,6 @@ export const ModuleTable: React.FC<ModuleTableProps> = ({
 
     return (
         <div className="bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-border shadow-xs p-5 flex flex-col h-full">
-            {/* Header with Title and Search */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100 dark:border-border">
                 <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">
                     Modules
@@ -77,7 +73,6 @@ export const ModuleTable: React.FC<ModuleTableProps> = ({
                 </div>
             </div>
 
-            {/* Table Area */}
             <div className="flex-1 overflow-x-auto min-h-[300px]">
                 <table className="w-full text-left border-collapse">
                     <thead>
@@ -176,7 +171,6 @@ export const ModuleTable: React.FC<ModuleTableProps> = ({
                 </table>
             </div>
 
-            {/* Footer with Result Count and Pagination */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-gray-100 dark:border-border text-sm text-gray-500">
                 <div>
                     Hiển thị {startIndex}–{endIndex} trong {totalItems} kết quả

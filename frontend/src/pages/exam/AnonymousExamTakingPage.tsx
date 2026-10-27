@@ -7,7 +7,7 @@ import {
     type ExamAttemptAnswer,
     type SaveExamAnswerRequest,
 } from "@/api/exam.api";
-import { formatScore, questionScore } from '@/utils/examScore'; // NEW
+import { formatScore, questionScore } from '@/utils/examScore';
 import { Button } from "@/components/ui/button";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
@@ -51,10 +51,6 @@ function formatCountdown(totalSeconds: number): string {
     return `${minutes}:${seconds}`;
 }
 
-/**
- * Trang làm bài dành cho học sinh không có tài khoản RBAC.
- * Xác thực bằng sessionToken lưu ở sessionStorage (do AnonymousAccessPage cấp).
- */
 export default function AnonymousExamTakingPage() {
     const queryClient = useQueryClient();
     const sessionToken = sessionStorage.getItem(SESSION_TOKEN_KEY) ?? "";
@@ -128,7 +124,6 @@ export default function AnonymousExamTakingPage() {
                 try {
                     localStorage.setItem(flagKey, JSON.stringify([...next]));
                 } catch {
-                    // Ignore if localStorage is blocked
                 }
             }
             return next;
@@ -316,7 +311,6 @@ export default function AnonymousExamTakingPage() {
             pendingAnswersRef.current.clear();
             setHasSaveError(false);
         } catch {
-            // handled in mutation
         } finally {
             submitStartedRef.current = false;
         }
@@ -334,8 +328,6 @@ export default function AnonymousExamTakingPage() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [attempt?.status, secondsRemaining, submitMutation.isPending]);
-
-    // ----- Render helpers -----
 
     if (!sessionToken) {
         return (
@@ -494,7 +486,6 @@ export default function AnonymousExamTakingPage() {
                             {attempt.status === 'SUBMITTED' && 'Hoàn thành bài thi'}
                         </h2>
                         <p className="mt-3 text-lg">
-                            {/* CHANGED: điểm theo thang điểm của đề; tự luận chưa chấm tính 0 */}
                             {attempt.finalScore === null
                                 ? `Điểm tạm thời: ${formatScore(attempt.provisionalScore ?? attempt.objectiveScore ?? 0)}/${formatScore(attempt.maxScore ?? 10)} (câu tự luận chưa chấm tính 0 điểm)`
                                 : `Điểm: ${formatScore(attempt.finalScore)}/${formatScore(attempt.maxScore ?? 10)}`}

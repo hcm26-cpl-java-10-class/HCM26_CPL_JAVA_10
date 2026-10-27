@@ -33,7 +33,6 @@ public class ExamResultPublicationService {
                 .orElseGet(() -> createDefaultDTO(examId));
     }
 
-
     @Transactional
     public ExamResultPublicationDTO publish(
             Long examId,
@@ -77,7 +76,6 @@ public class ExamResultPublicationService {
 
         return toDTO(publication);
     }
-
 
     @Transactional
     public ExamResultPublicationDTO unpublish(Long examId) {

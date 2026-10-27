@@ -1,5 +1,4 @@
 export function encodeBase64(input: string): string {
-    // encode utf-8 -> percent-encoding -> bytes -> btoa
     return btoa(
         encodeURIComponent(input).replace(/%([0-9A-F]{2})/g, (_, p1) =>
             String.fromCharCode(parseInt(p1, 16)),

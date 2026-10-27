@@ -1,6 +1,6 @@
 package com.example.starter_project_2025.system.exam.service;
 
-import java.math.BigDecimal; // NEW
+import java.math.BigDecimal;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.exam.domain.AnonymousSession;
@@ -21,12 +21,6 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
-/**
- * Điều phối luồng làm bài của học sinh thi qua link anonymous.
- * <p>
- * Học sinh này không đăng nhập được nên mọi thao tác đều xác thực bằng
- * {@code sessionToken} do backend cấp lúc đổi access code.
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -40,9 +34,6 @@ public class AnonymousExamService {
     private final ExamAttemptRepository attemptRepository;
     private final EmailService emailService;
 
-    /**
-     * Tìm phiên hợp lệ theo token và kiểm tra attempt thuộc đúng kỳ thi của phiên đó.
-     */
     @Transactional(readOnly = true)
     private AnonymousSession requireSession(String sessionToken) {
         if (sessionToken == null || sessionToken.isBlank()) {
@@ -94,10 +85,6 @@ public class AnonymousExamService {
         return result;
     }
 
-    /**
-     * Chỉ gửi email khi bài vừa chuyển sang trạng thái đã nộp (không gửi lại khi
-     * frontend gọi submit nhiều lần, ví dụ do auto-submit chạy trùng).
-     */
     private void sendResultEmailIfJustSubmitted(AnonymousSession session, Long attemptId) {
         ExamAttempt attempt = attemptRepository.findById(attemptId).orElse(null);
         if (attempt == null) {
@@ -112,7 +99,6 @@ public class AnonymousExamService {
             return;
         }
 
-        // Đã gửi rồi thì không gửi lại cho cùng một attempt.
         if (session.getCompletedAt() != null) {
             return;
         }
@@ -121,10 +107,9 @@ public class AnonymousExamService {
         session.setIsValid(false);
         sessionRepository.save(session);
 
-        // Có câu tự luận thì chưa có điểm cuối cùng, chờ giáo viên chấm.
         boolean pendingReview = attempt.getFinalScore() == null;
 
-        BigDecimal score = attempt.getFinalScore() != null // CHANGED: Integer -> BigDecimal
+        BigDecimal score = attempt.getFinalScore() != null
                 ? attempt.getFinalScore()
                 : attempt.getObjectiveScore();
 
@@ -139,12 +124,11 @@ public class AnonymousExamService {
                     session.getGuestName(),
                     attempt.getExam().getTitle(),
                     score,
-                    ExamScoring.effectiveMax(attempt.getMaxScore()), // CHANGED: thang điểm của đề thay cho tổng điểm cứng
+                    ExamScoring.effectiveMax(attempt.getMaxScore()),
                     submittedAt,
                     pendingReview
             );
         } catch (Exception e) {
-            // Không được phép việc gửi email làm fail request nộp bài.
             log.error("Failed to send anonymous exam result email for session {}: {}",
                     session.getId(), e.getMessage());
         }
@@ -162,7 +146,6 @@ public class AnonymousExamService {
         }
     }
 
-    /** Gửi bổ sung kết quả sau khi giáo viên chấm xong câu tự luận. */
     @Transactional(readOnly = true)
     public void sendFinalResultToGuest(Long attemptId) {
         ExamAttempt attempt = attemptRepository.findById(attemptId).orElse(null);
@@ -184,7 +167,7 @@ public class AnonymousExamService {
                 attempt.getStudent().getFullName(),
                 attempt.getExam().getTitle(),
                 attempt.getFinalScore(),
-                ExamScoring.effectiveMax(attempt.getMaxScore()), // CHANGED
+                ExamScoring.effectiveMax(attempt.getMaxScore()),
                 submittedAt,
                 false
         );

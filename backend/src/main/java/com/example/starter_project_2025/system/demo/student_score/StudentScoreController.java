@@ -59,7 +59,6 @@ public class StudentScoreController
         return StudentScore.class;
     }
 
-    // Re-declared so the permission check applies to inherited export/import endpoints
     @Override
     @GetMapping("/export")
     @PreAuthorize("hasAuthority('STUDENT_SCORE_READ')")

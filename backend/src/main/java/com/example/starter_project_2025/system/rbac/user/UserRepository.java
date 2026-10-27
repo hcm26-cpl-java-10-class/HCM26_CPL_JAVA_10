@@ -24,10 +24,6 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
 
     long countByRolesId(Long roleId);
 
-    /**
-     * Lấy các user đang hoạt động có role cụ thể (ví dụ STUDENT), sắp xếp theo email.
-     * Dùng cho danh sách chọn nhanh khi tạo lời mời hàng loạt.
-     */
     @Query("""
             select distinct u from User u
             join u.roles r

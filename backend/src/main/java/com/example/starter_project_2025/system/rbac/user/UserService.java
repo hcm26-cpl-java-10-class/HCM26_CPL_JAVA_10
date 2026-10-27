@@ -11,9 +11,5 @@ public interface UserService
 
     void unlockUser(Long userId);
 
-    /**
-     * Danh sách sinh viên đang hoạt động, dùng để chọn nhanh nhiều sinh viên
-     * khi tạo lời mời hàng loạt.
-     */
     List<StudentSummaryDTO> findStudents();
 }

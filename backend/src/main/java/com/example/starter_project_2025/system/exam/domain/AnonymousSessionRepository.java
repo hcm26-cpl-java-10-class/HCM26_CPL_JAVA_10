@@ -17,10 +17,6 @@ public interface AnonymousSessionRepository extends BaseCrudRepository<Anonymous
 
     Optional<AnonymousSession> findByInvitationIdAndFingerprint(Long invitationId, String fingerprint);
 
-    /**
-     * Các phiên đã tạo cho một học sinh cụ thể (guest user) trên cùng link,
-     * mới nhất trước.
-     */
     @Query("SELECT s FROM AnonymousSession s WHERE s.invitation.id = :invitationId AND s.guestUserId = :guestUserId ORDER BY s.accessedAt DESC")
     List<AnonymousSession> findByInvitationIdAndGuestUserIdOrderByAccessedAtDesc(
             @Param("invitationId") Long invitationId,

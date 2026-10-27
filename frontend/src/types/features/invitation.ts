@@ -33,7 +33,6 @@ export interface InvitationDTO extends BaseDTO {
     maxAccessTime?: string | null;
     maxAccessAttempts?: number;
 
-    // Thông tin đề thi cho phía student (enriched từ server)
     examStartTime?: string | null;
     examEndTime?: string | null;
     examDurationMinutes?: number;
@@ -44,7 +43,7 @@ export interface InvitationDTO extends BaseDTO {
 export interface InvitationCreateRequest {
     userId: number;
     note?: string;
-    /** ISO-8601 datetime string */
+
     expiresAt?: string;
 }
 
@@ -78,14 +77,14 @@ export interface BatchInvitationResponse {
 }
 
 export interface AnonymousInvitationRequest {
-    /** Tuỳ chọn — giáo viên có thể nhập trước, hoặc để học sinh tự khai khi mở link. */
+
     studentName?: string;
-    /** Tuỳ chọn — nếu có email thì link được gửi qua email cho học sinh. */
+
     studentEmail?: string;
     note?: string;
-    /** ISO-8601 datetime string */
+
     expiresAt?: string;
-    /** ISO-8601 datetime string */
+
     maxAccessTime?: string;
     maxAccessAttempts?: number;
 }
@@ -101,9 +100,9 @@ export interface AnonymousAccessResponse {
 
 export interface AnonymousSessionRequest {
     accessCode: string;
-    /** Họ tên - phải khớp với lời mời đã cấp. */
+
     studentName: string;
-    /** Email - phải khớp với lời mời, dùng để gửi kết quả bài thi. */
+
     studentEmail: string;
     fingerprint?: string;
 }
@@ -140,8 +139,8 @@ export interface ReminderDTO extends BaseDTO {
 
 export interface ReminderRequest {
     reminderType: ReminderType;
-    /** Required when reminderType is CUSTOM */
+
     scheduledAt?: string;
-    /** Omit to target every active invitation of the exam */
+
     invitationId?: number;
 }

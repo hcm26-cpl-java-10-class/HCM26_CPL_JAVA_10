@@ -68,7 +68,7 @@ class ExamConfigValidatorTest {
         existing.setStartTime(pastTime);
 
         ExamDTO request = new ExamDTO();
-        request.setStartTime(pastTime); // unchanged
+        request.setStartTime(pastTime);
         ValidationContext context = new ValidationContext();
 
         validator.validate(existing, request, 10, context);

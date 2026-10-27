@@ -1,6 +1,6 @@
 package com.example.starter_project_2025.system.exam.service;
 
-import java.math.BigDecimal; // NEW
+import java.math.BigDecimal;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.exam.domain.Exam;
 import com.example.starter_project_2025.system.exam.domain.ExamAttempt;
@@ -55,7 +55,7 @@ public class ExamResultStatisticsService {
         Double averageScore = scores.isEmpty()
                 ? null
                 : scores.stream()
-                .mapToDouble(BigDecimal::doubleValue) // CHANGED: điểm là BigDecimal
+                .mapToDouble(BigDecimal::doubleValue)
                 .average()
                 .orElse(0.0);
 
@@ -77,7 +77,6 @@ public class ExamResultStatisticsService {
         distribution.put("N/A", 0L);
 
         for (ExamAttempt attempt : completedAttempts) {
-            // CHANGED: phần trăm tính theo thang điểm của đề (maxScore), không còn theo tổng điểm cứng
             BigDecimal maxScore = ExamScoring.effectiveMax(attempt.getMaxScore());
 
             if (maxScore.signum() <= 0) {

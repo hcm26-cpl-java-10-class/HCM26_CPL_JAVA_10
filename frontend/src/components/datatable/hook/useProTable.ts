@@ -586,7 +586,6 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
       { id, data: updateData },
       {
         onError: () => {
-          // Revert on error
           invalidate();
         },
       },

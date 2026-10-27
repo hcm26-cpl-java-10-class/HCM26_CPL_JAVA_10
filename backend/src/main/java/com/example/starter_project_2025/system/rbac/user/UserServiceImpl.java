@@ -4,8 +4,6 @@ import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
-// import com.example.starter_project_2025.system.rbac.department.Department;
-// import com.example.starter_project_2025.system.rbac.department.DepartmentRepository;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
 import lombok.AccessLevel;
@@ -31,7 +29,6 @@ public class UserServiceImpl
     UserMapper userMapper;
     UserRepository userRepository;
     RoleRepository roleRepository;
-    // DepartmentRepository departmentRepository;
     PasswordEncoder passwordEncoder;
 
     @Override
@@ -59,9 +56,7 @@ public class UserServiceImpl
         validateEmployeeCodeUnique(request.getEmployeeCode(), null, ctx);
         validatePhone(request.getPhone(), ctx);
         validateRoles(request.getRoleIds(), ctx);
-        // validateDepartments(request.getDepartmentIds(), ctx);
 
-        // Mapper đã map trước khi gọi hook, nên gán lại các giá trị đã chuẩn hóa.
         user.setUsername(request.getUsername());
         user.setEmployeeCode(request.getEmployeeCode());
         user.setPhone(request.getPhone());
@@ -70,7 +65,6 @@ public class UserServiceImpl
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
 
         user.setRoles(getRoles(request.getRoleIds()));
-        // user.setDepartments(getDepartments(request.getDepartmentIds()));
     }
 
     @Override
@@ -96,10 +90,6 @@ public class UserServiceImpl
             validateRoles(request.getRoleIds(), ctx);
         }
 
-        // if (request.getDepartmentIds() != null) {
-        //     validateDepartments(request.getDepartmentIds(), ctx);
-        // }
-
         if (ctx.hasErrors()) {
             return;
         }
@@ -113,14 +103,8 @@ public class UserServiceImpl
             user.getRoles().addAll(getRoles(request.getRoleIds()));
         }
 
-        // null = giữ nguyên, [] = bỏ hết phòng ban.
-        // if (request.getDepartmentIds() != null) {
-        //     user.getDepartments().clear();
-        //     user.getDepartments().addAll(getDepartments(request.getDepartmentIds()));
-        // }
     }
 
-    /** Trim; username/mã NV rỗng coi như không gửi (null) để không vướng unique với chuỗi rỗng. */
     private void normalize(UserDTO request) {
         request.setUsername(trimToNull(request.getUsername()));
         request.setEmployeeCode(trimToNull(request.getEmployeeCode()));
@@ -132,7 +116,6 @@ public class UserServiceImpl
             request.setDescription(request.getDescription().trim());
         }
         if (request.getPhone() != null) {
-            // Chấp nhận "090 123 4567", "090.123.4567", "090-123-4567"; lưu dạng chỉ gồm số.
             request.setPhone(request.getPhone().replaceAll("[\\s.\\-]", ""));
         }
     }
@@ -209,28 +192,6 @@ public class UserServiceImpl
     private Set<Role> getRoles(Set<Long> roleIds) {
         return new HashSet<>(roleRepository.findAllById(roleIds));
     }
-
-    // private void validateDepartments(Set<Long> departmentIds, ValidationContext ctx) {
-    //
-    //     // Phòng ban không bắt buộc: null/rỗng là hợp lệ.
-    //     if (departmentIds == null || departmentIds.isEmpty()) {
-    //         return;
-    //     }
-    //
-    //     long found = departmentRepository.countByIdIn(departmentIds);
-    //
-    //     if (found != departmentIds.size()) {
-    //         ctx.add("departmentIds", "One or more departments are invalid");
-    //     }
-    // }
-    //
-    // private Set<Department> getDepartments(Set<Long> departmentIds) {
-    //     if (departmentIds == null || departmentIds.isEmpty()) {
-    //         return new HashSet<>();
-    //     }
-    //     return new HashSet<>(departmentRepository.findAllById(departmentIds));
-    // }
-
 
     @Override
     public void lockUser(Long userId) {

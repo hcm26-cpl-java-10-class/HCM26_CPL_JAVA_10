@@ -91,7 +91,6 @@ import {
 } from "lucide-react"
 
 export const iconMap = {
-    // Navigation
     home: Home,
     dashboard: LayoutDashboard,
     menu: List,
@@ -107,7 +106,6 @@ export const iconMap = {
     filter: Filter,
     "map-pin": MapPin,
 
-    // User / Auth / Security
     users: Users,
     user: User,
     person: User,
@@ -126,7 +124,6 @@ export const iconMap = {
     lock: Lock,
     unlock: Unlock,
 
-    // Common actions
     plus: Plus,
     minus: Minus,
     check: Check,
@@ -143,7 +140,6 @@ export const iconMap = {
     eye: Eye,
     "eye-off": EyeOff,
 
-    // Communication / Link
     bell: Bell,
     mail: Mail,
     message: MessageCircle,
@@ -152,14 +148,12 @@ export const iconMap = {
     link: Link,
     "external-link": ExternalLink,
 
-    // Time / Info
     calendar: Calendar,
     "calendar-days": CalendarDays,
     info: Info,
     help: HelpCircle,
     "alert-triangle": AlertTriangle,
 
-    // Business / Commerce
     building: Building,
     briefcase: Briefcase,
     books: BookOpen,
@@ -177,7 +171,6 @@ export const iconMap = {
     package: Package,
     "graduation-cap": GraduationCap,
 
-    // Data / Infra
     database: Database,
     server: Server,
     "hard-drive": HardDrive,
@@ -190,7 +183,6 @@ export const iconMap = {
     "trending-up": TrendingUp,
     "trending-down": TrendingDown,
 
-    // Device / Media
     monitor: Monitor,
     laptop: Laptop,
     smartphone: Smartphone,
@@ -202,7 +194,6 @@ export const iconMap = {
     music: Music,
     mic: Mic,
 
-    // Tech / Dev
     settings: Settings,
     code: Code,
     terminal: Terminal,

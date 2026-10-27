@@ -78,17 +78,12 @@ public class QuestionImportService {
             return result;
         }
 
-        // ======================================================================
-        // PHASE 1: VALIDATE TOÀN BỘ (Không lưu DB)
-        // Nếu có bất kỳ dòng nào lỗi -> Dừng lại, trả về danh sách lỗi (Rollback)
-        // ======================================================================
         List<QuestionDTO> validDtos = new ArrayList<>();
         Set<String> seenInFile = new HashSet<>();
 
         for (QuestionCsvParser.ParsedRow row : rows) {
             int rowNumber = row.getRowNumber();
 
-            // 1. Kiểm tra lỗi parse ban đầu (sai format cột, sai enum...)
             if (row.hasError()) {
                 result.getErrors().add(new RowError(rowNumber, row.getParseError()));
                 result.setFailureCount(result.getFailureCount() + 1);
@@ -97,7 +92,6 @@ public class QuestionImportService {
 
             QuestionDTO dto = row.getDto();
 
-            // 2. Chống trùng lặp trong cùng một file import
             String contentKey = buildUniqueKey(dto.getContent(), dto.getTopic());
             if (!seenInFile.add(contentKey)) {
                 result.getErrors().add(new RowError(rowNumber, "Câu hỏi bị trùng lặp nội dung với một dòng khác trong cùng file"));
@@ -105,14 +99,12 @@ public class QuestionImportService {
                 continue;
             }
 
-            // 3. Chống trùng lặp với CSDL
             if (isDuplicateInDatabase(dto.getContent(), dto.getTopic())) {
                 result.getErrors().add(new RowError(rowNumber, "Câu hỏi đã tồn tại trong hệ thống (trùng nội dung và chủ đề)"));
                 result.setFailureCount(result.getFailureCount() + 1);
                 continue;
             }
 
-            // 4. Kiểm tra nghiệp vụ bằng QuestionValidator của dự án
             ValidationContext ctx = new ValidationContext();
             questionValidator.validateForCreate(dto, ctx);
 
@@ -130,15 +122,11 @@ public class QuestionImportService {
             validDtos.add(dto);
         }
 
-        // Nếu Phase 1 có bất kỳ lỗi nào, dừng ngay lập tức và trả về lỗi (không lưu bất kỳ bản ghi nào)
         if (!result.getErrors().isEmpty()) {
             log.warn("Import bị hủy (Rollback): phát hiện {} dòng lỗi trong file '{}'", result.getFailureCount(), originalFilename);
             return result;
         }
 
-        // ======================================================================
-        // PHASE 2: PERSIST TẤT CẢ TRONG TRANSACTION (All-or-Nothing)
-        // ======================================================================
         for (QuestionDTO dto : validDtos) {
             try {
                 Question question = questionMapper.toEntity(dto);

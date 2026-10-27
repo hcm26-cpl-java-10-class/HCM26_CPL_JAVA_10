@@ -20,7 +20,6 @@ public class QuestionFilter extends BaseFilter {
     @FilterField(entityField = "topic")
     private String topic;
 
-    // Ngân hàng câu hỏi chỉ gồm câu gốc; bản sao của đề thi (sourceQuestionId != null) bị loại. Luôn áp dụng.
     @FilterField(entityField = "sourceQuestionId", operator = FilterOperator.IS_NULL)
     private Boolean bankOnly = Boolean.TRUE;
 

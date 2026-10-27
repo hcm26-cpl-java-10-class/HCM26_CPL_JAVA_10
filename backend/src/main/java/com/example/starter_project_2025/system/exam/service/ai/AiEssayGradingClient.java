@@ -1,6 +1,6 @@
 package com.example.starter_project_2025.system.exam.service.ai;
 
-import java.math.BigDecimal; // NEW
+import java.math.BigDecimal;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.system.exam.dto.EssayGradingDTO;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -29,7 +29,7 @@ public class AiEssayGradingClient {
             Long questionId,
             int displayOrder,
             String questionContent,
-            BigDecimal maxPoints, // CHANGED: int -> BigDecimal (điểm tối đa quy đổi)
+            BigDecimal maxPoints,
             String studentAnswer,
             String referenceAnswer,
             String rubric
@@ -311,7 +311,6 @@ public class AiEssayGradingClient {
                 BigDecimal maxPoints = payload != null ? payload.maxPoints() : BigDecimal.valueOf(100);
 
                 BigDecimal rawScore = BigDecimal.valueOf(item.path("proposedScore").asDouble(0));
-                // Validate score bounds: 0 <= score <= maxPoints
                 BigDecimal validScore = rawScore.max(BigDecimal.ZERO).min(maxPoints).setScale(2, java.math.RoundingMode.HALF_UP);
                 EssayGradingDTO.AiQuestionProposal proposal = new EssayGradingDTO.AiQuestionProposal();
                 proposal.setQuestionId(qId);
@@ -320,7 +319,6 @@ public class AiEssayGradingClient {
                 proposal.setFeedback(item.path("feedback").asText(""));
                 proposal.setAnalysis(item.path("analysis").asText(""));
 
-                // Criterion breakdown if available
                 JsonNode criterionNode = item.path("criterionScores");
                 if (criterionNode.isArray() && !criterionNode.isEmpty()) {
                     List<EssayGradingDTO.CriterionScore> criteria = new ArrayList<>();
@@ -339,7 +337,6 @@ public class AiEssayGradingClient {
                     proposal.setCriterionScores(List.of());
                 }
 
-                // Ambiguity flags
                 boolean flagAmbiguous = item.path("flagAmbiguous").asBoolean(false);
                 proposal.setFlagAmbiguous(flagAmbiguous);
                 if (flagAmbiguous && item.hasNonNull("flagReason")) {
@@ -352,7 +349,6 @@ public class AiEssayGradingClient {
             }
         }
 
-        // Ensure all requested payloads have a proposal entry
         Set<Long> processedIds = new HashSet<>();
         for (EssayGradingDTO.AiQuestionProposal p : proposals) {
             processedIds.add(p.getQuestionId());

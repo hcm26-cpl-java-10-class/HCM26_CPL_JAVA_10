@@ -62,7 +62,6 @@ public class SecurityConfig {
             "/verify/**",
             "/api/auth/**",
             "/h2-console/**",
-            // Anonymous exam access - students without a platform account
             "/api/exams/verify-access/**",
             "/api/exams/anonymous-session",
             "/api/exams/anonymous/**",
@@ -90,8 +89,8 @@ public class SecurityConfig {
                     auth.anyRequest().authenticated();
                 })
                 .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)   // 401
-                        .accessDeniedHandler(jwtAccessDeniedHandler)             // 403
+                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)
+                        .accessDeniedHandler(jwtAccessDeniedHandler)
                 )
                 .oauth2Login(oauth2 -> oauth2
                         .successHandler(oAuth2AuthenticationSuccessHandler)

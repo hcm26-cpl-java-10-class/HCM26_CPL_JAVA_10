@@ -17,10 +17,6 @@ import { examApi } from "@/api";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, Mail, Search } from "lucide-react";
 
-/**
- * Landing page that lets trainers/admin pick which exam they want to manage invitations for.
- * This is mounted at /invitations (an admin-sidebar link added by useSidebarMenus).
- */
 export default function InvitationsLandingPage() {
     const navigate = useNavigate();
     const [search, setSearch] = useState("");

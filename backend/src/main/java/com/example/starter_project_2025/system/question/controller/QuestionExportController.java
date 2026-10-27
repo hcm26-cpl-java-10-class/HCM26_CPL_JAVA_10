@@ -29,12 +29,6 @@ public class QuestionExportController {
         this.exportService = exportService;
     }
 
-    /**
-     * Legacy endpoint retained for existing clients:
-     * GET /api/questions/export
-     *
-     * Preserves the original CSV format, including options JSON and isActive.
-     */
     @GetMapping({"", "/"})
     public ResponseEntity<byte[]> exportQuestions(
             @ModelAttribute QuestionFilter filter
@@ -46,13 +40,6 @@ public class QuestionExportController {
         );
     }
 
-    /**
-     * Legacy template endpoint retained for the current frontend:
-     * GET /api/questions/export/template?format=csv
-     * GET /api/questions/export/template?format=xlsx
-     *
-     * The default format remains xlsx.
-     */
     @GetMapping("/template")
     public ResponseEntity<byte[]> downloadTemplate(
             @RequestParam(value = "format", defaultValue = "xlsx")
@@ -78,9 +65,6 @@ public class QuestionExportController {
         );
     }
 
-    /**
-     * New CSV export endpoint.
-     */
     @GetMapping("/csv")
     public ResponseEntity<byte[]> exportCsv(
             @ModelAttribute QuestionFilter filter
@@ -92,9 +76,6 @@ public class QuestionExportController {
         );
     }
 
-    /**
-     * New Excel export endpoint.
-     */
     @GetMapping("/xlsx")
     public ResponseEntity<byte[]> exportExcel(
             @ModelAttribute QuestionFilter filter
@@ -106,9 +87,6 @@ public class QuestionExportController {
         );
     }
 
-    /**
-     * New PDF export endpoint.
-     */
     @GetMapping("/pdf")
     public ResponseEntity<byte[]> exportPdf(
             @ModelAttribute QuestionFilter filter

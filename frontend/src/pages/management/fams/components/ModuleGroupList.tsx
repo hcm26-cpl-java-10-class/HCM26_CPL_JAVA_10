@@ -24,7 +24,6 @@ export const ModuleGroupList: React.FC<ModuleGroupListProps> = ({
 }) => {
     return (
         <div className="bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-border shadow-xs p-5 flex flex-col h-full">
-            {/* Header */}
             <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-border mb-3">
                 <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">
                     Module Groups
@@ -41,7 +40,6 @@ export const ModuleGroupList: React.FC<ModuleGroupListProps> = ({
                 </TooltipWrapper>
             </div>
 
-            {/* Groups list */}
             <div className="space-y-1.5 flex-1 overflow-y-auto pr-1">
                 {isLoading ? (
                     <div className="py-8 flex flex-col items-center justify-center text-gray-400 gap-2">
@@ -68,7 +66,6 @@ export const ModuleGroupList: React.FC<ModuleGroupListProps> = ({
                             >
                                 <span className="truncate pr-2">{group.name}</span>
 
-                                {/* Actions on hover or active */}
                                 <div
                                     className={`flex items-center gap-1 transition-opacity ${
                                         isSelected

@@ -14,15 +14,6 @@ import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Optional;
 
-/**
- * Quản lý tài khoản "khách" cho học sinh thi bằng link anonymous
- * (không có tài khoản RBAC).
- * <p>
- * Vì {@code ExamAttempt.student} là bắt buộc và trỏ tới {@code User}, mỗi học
- * sinh anonymous cần một user để gắn bài thi. User này được đánh dấu
- * {@code isGuest = true}, bị khoá (không đăng nhập được) và chỉ dùng để lưu
- * kết quả bài thi + gửi email.
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -34,20 +25,6 @@ public class GuestUserService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
 
-    /**
-     * Tìm hoặc tạo user khách cho học sinh.
-     * <p>
-     * Idempotent theo email: nếu email đó đã có user khách thì dùng lại user đó,
-     * không tạo trùng.
-     * <p>
-     * <b>Không bao giờ</b> gắn bài thi vào một tài khoản RBAC thật. Endpoint tạo
-     * phiên là public, chỉ cần nhập email của đồng nghiệp là bài thi sẽ bị ghi
-     * vào tài khoản của họ. Nếu email trùng tài khoản thật thì tạo một user khách
-     * riêng với email nội bộ; email học sinh nhập vẫn được giữ ở
-     * {@code Invitation}/{@code AnonymousSession} để gửi kết quả.
-     *
-     * @param fullName tên học sinh nhập, dùng làm firstName/lastName
-     */
     @Transactional
     public User findOrCreateGuest(String email, String fullName) {
         String normalizedEmail = email.trim().toLowerCase();
@@ -60,7 +37,6 @@ public class GuestUserService {
         Role studentRole = roleRepository.findByName("STUDENT")
                 .orElseThrow(() -> new IllegalStateException("Role STUDENT not found"));
 
-        // Email đã bị tài khoản thật chiếm -> user khách dùng email nội bộ riêng.
         boolean emailTaken = existing.isPresent();
         String storedEmail = emailTaken ? buildInternalGuestEmail(normalizedEmail) : normalizedEmail;
 
@@ -85,11 +61,6 @@ public class GuestUserService {
         return saved;
     }
 
-    /**
-     * Sinh email nội bộ cho user khách khi email học sinh nhập đã thuộc về một
-     * tài khoản RBAC thật. Dùng miền {@code .invalid} (RFC 2606) vì địa chỉ này
-     * không bao giờ được gửi email.
-     */
     private String buildInternalGuestEmail(String takenEmail) {
         String prefix = "guest-" + Integer.toHexString(takenEmail.hashCode());
         String candidate = prefix + "@anon.invalid";
@@ -103,7 +74,6 @@ public class GuestUserService {
     }
 
     private String generateUsername(String email) {
-        // Tối đa 50 ký tự theo ràng buộc của cột username.
         String base = "guest_" + Integer.toHexString(email.hashCode());
         if (base.length() > 50) {
             base = base.substring(0, 50);
@@ -117,7 +87,6 @@ public class GuestUserService {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
-    /** "Nguyen Van A" -> firstName "Nguyen", lastName "Van A". */
     private String toFirstName(String fullName) {
         String trimmed = fullName == null ? "" : fullName.trim();
         if (trimmed.isEmpty()) {

@@ -1,5 +1,5 @@
 import { getAttemptReview, type ExamReviewQuestion } from '@/api/exam.api';
-import { formatScore } from '@/utils/examScore'; // NEW
+import { formatScore } from '@/utils/examScore';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

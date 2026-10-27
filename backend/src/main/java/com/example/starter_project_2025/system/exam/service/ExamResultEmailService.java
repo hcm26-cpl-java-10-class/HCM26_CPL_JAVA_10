@@ -58,7 +58,6 @@ public class ExamResultEmailService {
             return;
         }
 
-
         var existingLog = emailLogRepository
                 .findByExam_IdAndStudentIdAndPublicationVersion(
                         exam.getId(),
@@ -90,7 +89,6 @@ public class ExamResultEmailService {
         log.setStatus(ScoreEmailDeliveryStatus.PENDING);
         log.setLastError(null);
         emailLogRepository.save(log);
-
 
         log.setRecipientEmail(recipientEmail);
         log.setStatus(ScoreEmailDeliveryStatus.PENDING);
@@ -130,7 +128,6 @@ public class ExamResultEmailService {
                 ? value
                 : value.substring(0, maxLength);
     }
-
 
     public void sendScoreEmails(
             Exam exam,

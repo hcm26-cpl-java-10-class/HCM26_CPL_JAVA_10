@@ -71,5 +71,4 @@ export const entityConfig: EntityConfig = {
     schema: moduleSchema,
 };
 
-// Temporarily route /menus to the combined Module Group & Module UI
 export default ModuleGroupModulePage;

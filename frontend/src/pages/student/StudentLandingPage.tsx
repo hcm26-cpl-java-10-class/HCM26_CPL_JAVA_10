@@ -56,7 +56,6 @@ export default function StudentLandingPage() {
             </p>
 
             <div className="mt-6 flex flex-wrap gap-3">
-              {/* Nút xem lời mời thi */}
               <Button asChild className="bg-cyan-600 text-white hover:bg-cyan-500">
                 <Link to="/invitations">
                   <Calendar className="mr-2 size-4" />
@@ -72,7 +71,6 @@ export default function StudentLandingPage() {
                 </Link>
               </Button>
 
-              {/* Nút Xem Books */}
               {canReadBooks ? (
                   <Button asChild className="bg-slate-900 text-white hover:bg-slate-800">
                     <Link to="/books">

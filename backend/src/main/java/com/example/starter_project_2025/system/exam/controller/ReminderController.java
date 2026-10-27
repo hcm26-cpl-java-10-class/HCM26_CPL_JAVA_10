@@ -20,11 +20,6 @@ public class ReminderController {
 
     private final ReminderService service;
 
-    /**
-     * Schedule a reminder email for an exam.
-     * reminderType ONE_HOUR / ONE_DAY derive the time from exam.startTime;
-     * CUSTOM requires scheduledAt. invitationId is optional - omit it to target all active invitations.
-     */
     @PostMapping("/exams/{examId}/reminders")
     @PreAuthorize("hasAuthority('INVITATION_CREATE')")
     public ResponseEntity<List<ReminderDTO>> schedule(

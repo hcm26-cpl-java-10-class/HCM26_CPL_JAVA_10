@@ -36,7 +36,6 @@ public class QuestionExportService {
     private static final int PAGE_SIZE = 500;
     private static final int MAX_OPTIONS = 6;
 
-    // Headers used by the new CSV and Excel exports.
     private static final List<String> HEADERS = List.of(
             "content", "type", "difficulty", "topic", "points",
             "option 1", "correct 1",
@@ -47,7 +46,6 @@ public class QuestionExportService {
             "option 6", "correct 6"
     );
 
-    // Original export headers retained for compatibility.
     private static final List<String> LEGACY_HEADERS = List.of(
             "content",
             "type",
@@ -58,7 +56,6 @@ public class QuestionExportService {
             "isActive"
     );
 
-    // Original import template headers retained without changing its layout.
     private static final List<String> TEMPLATE_HEADERS = List.of(
             "content", "type", "difficulty", "topic", "points",
             "option 1", "correct 1",
@@ -78,10 +75,6 @@ public class QuestionExportService {
         this.objectMapper = objectMapper;
     }
 
-    /**
-     * Load every page matching the existing QuestionFilter.
-     * The existing service continues to enforce its normal permissions.
-     */
     private List<QuestionDTO> getQuestions(QuestionFilter filter) {
         List<QuestionDTO> questions = new ArrayList<>();
         int pageNumber = 0;
@@ -101,10 +94,6 @@ public class QuestionExportService {
         return questions;
     }
 
-    /**
-     * Legacy CSV export.
-     * Retains the original "options" JSON and "isActive" columns.
-     */
     public byte[] exportLegacyCsv(QuestionFilter filter)
             throws IOException {
         StringBuilder csv = new StringBuilder();
@@ -131,9 +120,6 @@ public class QuestionExportService {
         return withUtf8Bom(csv);
     }
 
-    /**
-     * New CSV export with separate columns for each option.
-     */
     public byte[] exportCsv(QuestionFilter filter) throws IOException {
         StringBuilder csv = new StringBuilder();
         appendCsvRow(csv, HEADERS);
@@ -145,9 +131,6 @@ public class QuestionExportService {
         return withUtf8Bom(csv);
     }
 
-    /**
-     * New Excel export with separate columns for each option.
-     */
     public byte[] exportExcel(QuestionFilter filter) throws IOException {
         try (Workbook workbook = new XSSFWorkbook();
              ByteArrayOutputStream output = new ByteArrayOutputStream()) {
@@ -179,9 +162,6 @@ public class QuestionExportService {
         }
     }
 
-    /**
-     * New PDF export.
-     */
     public byte[] exportPdf(QuestionFilter filter) throws IOException {
         try (ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             PdfWriter writer = new PdfWriter(output);
@@ -232,9 +212,6 @@ public class QuestionExportService {
         }
     }
 
-    /**
-     * Original CSV import template, including its sample rows.
-     */
     public byte[] downloadTemplate() {
         StringBuilder csv = new StringBuilder();
         appendCsvRow(csv, TEMPLATE_HEADERS);
@@ -257,9 +234,6 @@ public class QuestionExportService {
         return withUtf8Bom(csv);
     }
 
-    /**
-     * Original Excel import template, including its sample rows.
-     */
     public byte[] downloadExcelTemplate() {
         try (Workbook workbook = new XSSFWorkbook();
              ByteArrayOutputStream output = new ByteArrayOutputStream()) {
@@ -271,7 +245,6 @@ public class QuestionExportService {
                 headerRow.createCell(i).setCellValue(TEMPLATE_HEADERS.get(i));
             }
 
-            // Sample 1: MULTIPLE_CHOICE
             Row s1 = sheet.createRow(1);
             s1.createCell(0).setCellValue(
                     "Java là ngôn ngữ lập trình loại nào?"
@@ -289,7 +262,6 @@ public class QuestionExportService {
             s1.createCell(11).setCellValue("Kịch bản");
             s1.createCell(12).setCellValue(false);
 
-            // Sample 2: ESSAY
             Row s2 = sheet.createRow(2);
             s2.createCell(0).setCellValue(
                     "Trình bày các tính chất cơ bản của lập trình hướng đối tượng (OOP)."
@@ -404,9 +376,6 @@ public class QuestionExportService {
         return value == null ? "" : value.toString();
     }
 
-    /**
-     * Prefer a bundled Unicode font. Arial is the Windows fallback.
-     */
     private PdfFont createVietnameseFont() throws IOException {
         try (InputStream fontStream = getClass().getResourceAsStream(
                 "/fonts/DejaVuSans.ttf"
@@ -425,7 +394,6 @@ public class QuestionExportService {
                     PdfEncodings.IDENTITY_H
             );
         } catch (IOException ignored) {
-            // Last resort; Vietnamese glyph coverage may be limited.
             return PdfFontFactory.createFont(StandardFonts.HELVETICA);
         }
     }

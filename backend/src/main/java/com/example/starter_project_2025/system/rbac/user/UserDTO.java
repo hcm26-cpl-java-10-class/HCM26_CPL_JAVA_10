@@ -54,17 +54,11 @@ public class UserDTO extends BaseDTO {
     @NotEmpty(groups = OnCreate.class, message = "At least one role is required")
     Set<Long> roleIds;
 
-    /** N-N user_departments; không bắt buộc. Gửi [] khi sửa = bỏ hết phòng ban, không gửi = giữ nguyên. */
     Set<Long> departmentIds;
 
-    /** Chỉ đọc: ACTIVE / LOCKED / INACTIVE, suy ra từ isActive + locked. */
     @JsonProperty(access = READ_ONLY)
     String status;
 
-    /**
-     * Chỉ đọc: tài khoản "khách" được tạo tự động cho học sinh thi bằng link
-     * anonymous (không có tài khoản RBAC thật).
-     */
     @JsonProperty(access = READ_ONLY)
     Boolean isGuest;
 }

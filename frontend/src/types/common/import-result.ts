@@ -10,6 +10,6 @@ export interface ImportResult {
   successCount: number;
 
   failureCount: number;
-  
+
   errors: ImportError[];
 }

@@ -5,7 +5,7 @@ import {
     type ExamAttemptSummary,
 } from '@/api/exam.api';
 import { EXAM_CATEGORY_LABEL } from '@/types';
-import { formatScore } from '@/utils/examScore'; // NEW
+import { formatScore } from '@/utils/examScore';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -36,7 +36,6 @@ const compare = (x: number, y: number) => (x < y ? -1 : x > y ? 1 : 0);
 const timeOf = (value: string | null | undefined, fallback: number) =>
     value ? new Date(value).getTime() : fallback;
 
-/** Open exams first (closing soonest), then upcoming (opening soonest), then closed (latest first). */
 function sortExams(exams: Exam[]) {
     const now = Date.now();
     const rank = (exam: Exam) =>
@@ -125,7 +124,7 @@ function ExamCard({
                 <CardDescription>
                     Max Score:{' '}
                     <span className="font-medium text-slate-700">
-                        {formatScore(attempt?.maxScore ?? exam.maxScore ?? 10)} {/* CHANGED: score scale instead of summed points */}
+                        {formatScore(attempt?.maxScore ?? exam.maxScore ?? 10)} {}
                     </span>
                 </CardDescription>
             </CardHeader>
