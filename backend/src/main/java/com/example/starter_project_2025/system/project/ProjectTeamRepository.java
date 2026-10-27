@@ -34,6 +34,9 @@ public interface ProjectTeamRepository
     @EntityGraph(attributePaths = {"trainingClass", "project"})
     List<ProjectTeam> findAllByTrainingClass_TenantIdOrderByIdAsc(Long tenantId);
 
+    @EntityGraph(attributePaths = {"trainingClass", "project"})
+    Optional<ProjectTeam> findByIdAndTrainingClass_TenantId(Long id, Long tenantId);
+
     Optional<ProjectTeam> findByTrainingClass_IdAndTeamName(Long trainingClassId, String teamName);
 
     List<ProjectTeam> findAllByProject_IdInOrderByIdDesc(List<Long> projectIds);

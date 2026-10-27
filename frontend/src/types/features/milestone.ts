@@ -127,6 +127,77 @@ export interface MilestoneDetailResponse {
   teamId?: number;
 }
 
+export interface ArtifactDraft {
+  milestoneId: string;
+  status: "DRAFT";
+  repositoryUrl?: string | null;
+  deploymentUrl?: string | null;
+  releaseNotes?: string | null;
+  checklist: Record<string, boolean>;
+  attachments: ArtifactAttachment[];
+  version: number;
+  createdBy: string;
+  createdAt: string;
+  updatedBy: string;
+  updatedAt: string;
+}
+
+export interface ArtifactAttachment {
+  id: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  scanStatus: "CLEAN";
+  uploadedBy: string;
+  uploadedAt: string;
+  draftVersion: number;
+}
+
+export interface ArtifactDraftRequest {
+  repositoryUrl?: string;
+  deploymentUrl?: string;
+  releaseNotes?: string;
+  checklist: Record<string, boolean>;
+  expectedVersion?: number;
+}
+
+export interface ArtifactSubmissionRequest {
+  repositoryUrl?: string;
+  deploymentUrl?: string;
+  releaseNotes?: string;
+  checklist: Record<string, boolean>;
+  attachmentIds: string[];
+}
+
+export interface ArtifactSubmissionAttachment {
+  id: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+}
+
+export interface ArtifactSubmission {
+  id: string;
+  milestoneId: string;
+  version: number;
+  status: "SUBMITTED";
+  repositoryUrl?: string | null;
+  deploymentUrl?: string | null;
+  releaseNotes?: string | null;
+  checklist: Record<string, boolean>;
+  attachments: ArtifactSubmissionAttachment[];
+  submittedAt: string;
+  submittedLate: boolean;
+  latePenaltyPercent?: number | null;
+}
+
+export interface ArtifactSubmissionWorkspace {
+  milestone: MilestoneDetailResponse;
+  draft: ArtifactDraft | null;
+  uploadPolicy: { enabled: boolean; maxBytes: number; allowedMimeTypes: string[] };
+  latestSubmission: ArtifactSubmission | null;
+}
+
 export interface MilestoneApiError {
   status?: number;
   code?: string;
