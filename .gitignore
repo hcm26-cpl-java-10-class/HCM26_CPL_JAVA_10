@@ -33,3 +33,6 @@ docker/.env
 *.log
 
 /backend.zip
+
+# === Nested clone / local workspace folder ===
+HCM26_CPL_JAVA_10/
