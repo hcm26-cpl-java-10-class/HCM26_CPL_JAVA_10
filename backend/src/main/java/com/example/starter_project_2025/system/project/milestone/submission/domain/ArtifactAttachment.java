@@ -26,8 +26,11 @@ public class ArtifactAttachment {
     @Column(name = "milestone_id", nullable = false, updatable = false)
     private UUID milestoneId;
 
-    @Column(name = "project_id", nullable = false, updatable = false)
+    @Column(name = "project_id", updatable = false)
     private Long projectId;
+
+    @Column(name = "team_id", updatable = false)
+    private Long teamId;
 
     @Column(name = "tenant_id", nullable = false, updatable = false)
     private Long tenantId;
@@ -53,12 +56,13 @@ public class ArtifactAttachment {
     @Column(name = "uploaded_at", nullable = false, updatable = false)
     private Instant uploadedAt;
 
-    public static ArtifactAttachment clean(UUID milestoneId, Long projectId, Long tenantId,
+    public static ArtifactAttachment clean(UUID milestoneId, Long projectId, Long teamId, Long tenantId,
             String storageKey, String originalName, String contentType, long sizeBytes,
             UUID actorId, Instant now) {
         ArtifactAttachment attachment = new ArtifactAttachment();
         attachment.milestoneId = milestoneId;
         attachment.projectId = projectId;
+        attachment.teamId = teamId;
         attachment.tenantId = tenantId;
         attachment.storageKey = storageKey;
         attachment.originalName = originalName;
@@ -68,5 +72,11 @@ public class ArtifactAttachment {
         attachment.uploadedBy = actorId;
         attachment.uploadedAt = now;
         return attachment;
+    }
+
+    public static ArtifactAttachment clean(UUID milestoneId, Long projectId, Long tenantId,
+            String storageKey, String originalName, String contentType, long sizeBytes, UUID actorId, Instant now) {
+        return clean(milestoneId, projectId, null, tenantId, storageKey, originalName,
+                contentType, sizeBytes, actorId, now);
     }
 }

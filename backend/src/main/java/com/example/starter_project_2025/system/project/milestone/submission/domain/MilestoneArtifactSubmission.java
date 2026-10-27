@@ -12,7 +12,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "milestone_artifact_submissions", uniqueConstraints = {
         @UniqueConstraint(name = "uk_artifact_submission_version",
-                columnNames = {"tenant_id", "project_id", "milestone_id", "submitter_id", "version"})
+                columnNames = {"tenant_id", "project_id", "team_id", "milestone_id", "submitter_id", "version"})
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -25,8 +25,11 @@ public class MilestoneArtifactSubmission {
     @Column(name = "tenant_id", nullable = false, updatable = false)
     private Long tenantId;
 
-    @Column(name = "project_id", nullable = false, updatable = false)
+    @Column(name = "project_id", updatable = false)
     private Long projectId;
+
+    @Column(name = "team_id", updatable = false)
+    private Long teamId;
 
     @Column(name = "milestone_id", nullable = false, updatable = false)
     private UUID milestoneId;
@@ -65,13 +68,14 @@ public class MilestoneArtifactSubmission {
     @Column(name = "late_penalty_percent", precision = 5, scale = 2, updatable = false)
     private BigDecimal latePenaltyPercent;
 
-    public static MilestoneArtifactSubmission submit(Long tenantId, Long projectId, UUID milestoneId,
+    public static MilestoneArtifactSubmission submit(Long tenantId, Long projectId, Long teamId, UUID milestoneId,
             UUID submitterId, long version, String repositoryUrl, String deploymentUrl, String releaseNotes,
             String checklistJson, String attachmentsJson, Instant submittedAt, boolean submittedLate,
             BigDecimal latePenaltyPercent) {
         MilestoneArtifactSubmission row = new MilestoneArtifactSubmission();
         row.tenantId = tenantId;
         row.projectId = projectId;
+        row.teamId = teamId;
         row.milestoneId = milestoneId;
         row.submitterId = submitterId;
         row.version = version;
@@ -85,5 +89,14 @@ public class MilestoneArtifactSubmission {
         row.submittedLate = submittedLate;
         row.latePenaltyPercent = latePenaltyPercent;
         return row;
+    }
+
+    public static MilestoneArtifactSubmission submit(Long tenantId, Long projectId, UUID milestoneId,
+            UUID submitterId, long version, String repositoryUrl, String deploymentUrl, String releaseNotes,
+            String checklistJson, String attachmentsJson, Instant submittedAt, boolean submittedLate,
+            BigDecimal latePenaltyPercent) {
+        return submit(tenantId, projectId, null, milestoneId, submitterId, version, repositoryUrl,
+                deploymentUrl, releaseNotes, checklistJson, attachmentsJson, submittedAt,
+                submittedLate, latePenaltyPercent);
     }
 }

@@ -21,6 +21,7 @@ import java.util.*;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice(assignableTypes = {MilestoneController.class,
         com.example.starter_project_2025.system.project.milestone.submission.controller.ArtifactSubmissionController.class,
+        com.example.starter_project_2025.system.project.milestone.submission.controller.TeamArtifactSubmissionController.class,
         com.example.starter_project_2025.system.project.milestone.risk.MilestoneRiskController.class})
 public class MilestoneExceptionHandler {
 

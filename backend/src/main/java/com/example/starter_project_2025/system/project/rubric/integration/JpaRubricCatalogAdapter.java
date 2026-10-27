@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 import java.util.*;
 
 @Component
-@Profile("!milestone-rubric-mock")
+@Profile("milestone-real-integrations")
 @RequiredArgsConstructor
 public class JpaRubricCatalogAdapter implements RubricCatalogPort {
     private final RubricVersionRepository repository;

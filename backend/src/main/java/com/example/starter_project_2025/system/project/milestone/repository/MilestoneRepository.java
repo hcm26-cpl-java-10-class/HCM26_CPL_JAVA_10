@@ -34,4 +34,9 @@ public interface MilestoneRepository extends JpaRepository<Milestone, UUID>, Jpa
 
     @EntityGraph(attributePaths = "checklistItems")
     Optional<Milestone> findByIdAndTeamIdAndTenantId(UUID id, Long teamId, Long tenantId);
+    boolean existsByTeamIdAndTenantIdAndActiveTrue(Long teamId, Long tenantId);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("select m from Milestone m where m.id = :id and m.teamId = :teamId and m.tenantId = :tenantId and m.active = true")
+    Optional<Milestone> lockForTeamSubmission(UUID id, Long teamId, Long tenantId);
 }

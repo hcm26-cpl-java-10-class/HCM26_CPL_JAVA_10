@@ -41,7 +41,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@ActiveProfiles("test")
+@ActiveProfiles({"test", "milestone-rubric-mock"})
 class MilestoneIntegrationTest {
 
     @Autowired MockMvc mockMvc;
@@ -111,6 +111,35 @@ class MilestoneIntegrationTest {
         org.junit.jupiter.api.Assertions.assertEquals(1, auditRepository.count());
         org.junit.jupiter.api.Assertions.assertEquals(1, outboxRepository.count());
         org.junit.jupiter.api.Assertions.assertEquals(1, idempotencyRepository.count());
+    }
+
+    @Test
+    void studentCanSubmitAndReviewerCanViewTeamMilestoneArtifact() throws Exception {
+        String created = mockMvc.perform(post("/api/teams/" + MockMilestoneData.TEAM_ID + "/milestones")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .header("Idempotency-Key", "team-milestone-artifact-create")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(validRequest())))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        String milestoneId = objectMapper.readTree(created).get("id").asText();
+        String base = "/api/teams/" + MockMilestoneData.TEAM_ID + "/milestones/" + milestoneId + "/artifact-draft";
+
+        mockMvc.perform(get(base).header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.draft").doesNotExist());
+        mockMvc.perform(put(base).header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"repositoryUrl\":\"https://github.com/demo/team\",\"checklist\":{}}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("DRAFT"));
+        mockMvc.perform(post(base + "/submissions").header("Authorization", "Bearer " + studentToken)
+                        .header("Idempotency-Key", "team-artifact-submit-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"repositoryUrl\":\"https://github.com/demo/team\",\"checklist\":{},\"attachmentIds\":[]}"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.version").value(1))
+                .andExpect(jsonPath("$.status").value("SUBMITTED"));
+        mockMvc.perform(get("/api/teams/" + MockMilestoneData.TEAM_ID + "/milestones/submissions")
+                        .param("milestoneId", milestoneId).header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].submission.version").value(1))
+                .andExpect(jsonPath("$[0].submission.repositoryUrl").value("https://github.com/demo/team"));
     }
 
     @Test
@@ -193,7 +222,7 @@ class MilestoneIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(header().exists("X-Correlation-ID"))
                 .andExpect(jsonPath("$.project.id").value(MockMilestoneData.PROJECT_ID.toString()))
-                .andExpect(jsonPath("$.project.name").value("OJT Management System"))
+                .andExpect(jsonPath("$.project.name").value("Kanban Board Demo"))
                 .andExpect(jsonPath("$.content").isEmpty())
                 .andExpect(jsonPath("$.page").value(0))
                 .andExpect(jsonPath("$.size").value(20))
@@ -812,7 +841,7 @@ class MilestoneIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(milestoneId))
                 .andExpect(jsonPath("$.project.id").value(MockMilestoneData.PROJECT_ID.toString()))
-                .andExpect(jsonPath("$.project.name").value("OJT Management System"))
+                .andExpect(jsonPath("$.project.name").value("Kanban Board Demo"))
                 .andExpect(jsonPath("$.title").value("Detailed milestone"))
                 .andExpect(jsonPath("$.deadline").value(deadline.toString()))
                 .andExpect(jsonPath("$.tenantTimeZone").value("Asia/Ho_Chi_Minh"))
@@ -821,7 +850,7 @@ class MilestoneIntegrationTest {
                 .andExpect(jsonPath("$.checklist[0].content").value("Source code is pushed"))
                 .andExpect(jsonPath("$.checklist[1].orderIndex").value(1))
                 .andExpect(jsonPath("$.rubric.name").value("Milestone Delivery Rubric"))
-                .andExpect(jsonPath("$.rubric.version").value("v1"))
+                .andExpect(jsonPath("$.rubric.version").value("1.0"))
                 .andExpect(jsonPath("$.rubric.criteria.length()").value(3))
                 .andExpect(jsonPath("$.rubric.criteria[0].code").value("FUNCTIONALITY"))
                 .andExpect(jsonPath("$.rubric.criteria[0].weight").value(50.00))
@@ -924,6 +953,7 @@ class MilestoneIntegrationTest {
 
     private Map<String, Object> validRequest(String title, Instant deadline) {
         Map<String, Object> body = new LinkedHashMap<>();
+        body.put("teamId", com.example.starter_project_2025.system.project.milestone.integration.mock.MockMilestoneData.TEAM_ID);
         body.put("title", title);
         body.put("description", "First milestone");
         body.put("deadline", deadline.toString());

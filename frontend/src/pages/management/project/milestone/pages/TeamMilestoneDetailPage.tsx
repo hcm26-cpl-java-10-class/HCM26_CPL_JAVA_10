@@ -6,12 +6,15 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export function TeamMilestoneDetailPage() {
   const { teamId: teamIdParam, milestoneId } = useParams<{ teamId: string; milestoneId: string }>();
   const teamId = Number(teamIdParam);
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const { hasPermission, activeRole } = usePermissions();
+  const isStudent = String(activeRole).toUpperCase().includes("STUDENT");
   const workspaceId = params.get("workspaceId");
   const query = useQuery({
     queryKey: ["team-milestone", teamId, milestoneId],
@@ -30,7 +33,11 @@ export function TeamMilestoneDetailPage() {
         <p className="flex items-center gap-2 text-sm"><CalendarClock className="size-4" />{new Date(milestone.deadline).toLocaleString("en-GB")}</p>
       </CardContent></Card>
       <Card><CardHeader><CardTitle>Acceptance checklist</CardTitle></CardHeader><CardContent className="space-y-2">{milestone.checklist.map(item => <div key={item.id} className="rounded border p-3">{item.content}</div>)}</CardContent></Card>
-      <Button variant="outline" onClick={back}><ArrowLeft />Back to workspace</Button>
+      <div className="flex flex-wrap gap-2">
+        {isStudent && hasPermission("ARTIFACT_READ") && <Button onClick={() => navigate(`/teams/${teamId}/milestones/${milestone.id}/submit`)}>Prepare artifact</Button>}
+        {hasPermission("ARTIFACT_REVIEW") && <Button variant="outline" onClick={() => navigate(`/teams/${teamId}/milestones/${milestone.id}/submissions?workspaceId=${workspaceId ?? ""}`)}>View submissions</Button>}
+        <Button variant="outline" onClick={back}><ArrowLeft />Back to workspace</Button>
+      </div>
     </div>
   </MainLayout>;
 }

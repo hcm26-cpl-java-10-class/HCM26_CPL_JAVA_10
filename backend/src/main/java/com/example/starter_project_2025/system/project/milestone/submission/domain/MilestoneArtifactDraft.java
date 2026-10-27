@@ -22,8 +22,11 @@ public class MilestoneArtifactDraft {
     @Column(name = "milestone_id", nullable = false, updatable = false)
     private UUID milestoneId;
 
-    @Column(name = "project_id", nullable = false, updatable = false)
+    @Column(name = "project_id", updatable = false)
     private Long projectId;
+
+    @Column(name = "team_id", updatable = false)
+    private Long teamId;
 
     @Column(name = "tenant_id", nullable = false, updatable = false)
     private Long tenantId;
@@ -56,16 +59,22 @@ public class MilestoneArtifactDraft {
     @Column(nullable = false)
     private long version;
 
-    public static MilestoneArtifactDraft create(UUID milestoneId, Long projectId, Long tenantId,
+    public static MilestoneArtifactDraft create(UUID milestoneId, Long projectId, Long teamId, Long tenantId,
             UUID actorId, Instant now, String checklistJson) {
         MilestoneArtifactDraft draft = new MilestoneArtifactDraft();
         draft.milestoneId = milestoneId;
         draft.projectId = projectId;
+        draft.teamId = teamId;
         draft.tenantId = tenantId;
         draft.createdBy = actorId;
         draft.createdAt = now;
         draft.update(actorId, now, null, null, null, checklistJson);
         return draft;
+    }
+
+    public static MilestoneArtifactDraft create(UUID milestoneId, Long projectId, Long tenantId,
+            UUID actorId, Instant now, String checklistJson) {
+        return create(milestoneId, projectId, null, tenantId, actorId, now, checklistJson);
     }
 
     public void update(UUID actorId, Instant now, String repositoryUrl, String deploymentUrl,

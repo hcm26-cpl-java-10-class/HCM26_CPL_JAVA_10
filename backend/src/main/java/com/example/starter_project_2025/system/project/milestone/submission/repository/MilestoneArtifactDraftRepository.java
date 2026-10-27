@@ -9,4 +9,5 @@ import java.util.UUID;
 public interface MilestoneArtifactDraftRepository extends JpaRepository<MilestoneArtifactDraft, UUID> {
     Optional<MilestoneArtifactDraft> findByMilestoneIdAndProjectIdAndTenantId(
             UUID milestoneId, Long projectId, Long tenantId);
+    Optional<MilestoneArtifactDraft> findByMilestoneIdAndTeamIdAndTenantId(UUID milestoneId, Long teamId, Long tenantId);
 }

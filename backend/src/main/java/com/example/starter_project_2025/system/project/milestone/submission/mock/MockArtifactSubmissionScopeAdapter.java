@@ -19,10 +19,17 @@ import java.util.stream.Collectors;
 @Profile("!milestone-real-integrations")
 public class MockArtifactSubmissionScopeAdapter implements ArtifactSubmissionScopePort {
     private final Map<UUID, Set<Long>> projectAssignments;
+    private final Map<UUID, Set<Long>> teamAssignments;
 
     public MockArtifactSubmissionScopeAdapter(
-            @Value("${milestone.mock.submission.assignments:student@example.com=1}") String assignments) {
-        this.projectAssignments = Arrays.stream(assignments.split(","))
+            @Value("${milestone.mock.submission.assignments:student@example.com=1}") String assignments,
+            @Value("${milestone.mock.submission.team-assignments:student@example.com=1}") String teamAssignments) {
+        this.projectAssignments = parse(assignments);
+        this.teamAssignments = parse(teamAssignments);
+    }
+
+    private Map<UUID, Set<Long>> parse(String assignments) {
+        return Arrays.stream(assignments.split(","))
                 .map(String::trim).filter(value -> !value.isEmpty())
                 .map(value -> value.split("=", 2))
                 .filter(pair -> pair.length == 2 && !pair[0].isBlank() && !pair[1].isBlank())
@@ -43,6 +50,14 @@ public class MockArtifactSubmissionScopeAdapter implements ArtifactSubmissionSco
         if (!MockMilestoneData.TENANT_ID.equals(tenantId)
                 || !projectAssignments.getOrDefault(actorId, Set.of()).contains(projectId)) {
             throw new AccessDeniedException("Student is not assigned to this demo project");
+        }
+    }
+
+    @Override
+    public void requireStudentTeamAccess(Long teamId, UUID actorId, Long tenantId) {
+        if (!MockMilestoneData.TENANT_ID.equals(tenantId)
+                || !teamAssignments.getOrDefault(actorId, Set.of()).contains(teamId)) {
+            throw new AccessDeniedException("Student is not assigned to this demo team");
         }
     }
 }
