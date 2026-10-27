@@ -7,6 +7,7 @@ public record ProjectTemplateOptions(
         String tenantName,
         List<String> categories,
         boolean canCreate,
-        boolean canUpdate
+        boolean canUpdate,
+        boolean canActivate
 ) {
 }

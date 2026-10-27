@@ -22,12 +22,8 @@ public class ProjectTemplateAccessInitializer implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
         var templatePermissions = new ArrayList<Permission>();
-        for (String action : List.of("READ", "CREATE", "UPDATE")) {
-            String name = "PROJECT_TEMPLATE_" + action;
-            Permission permission = permissions.findByName(name).orElseGet(() -> permissions.save(
-                    Permission.builder().name(name).resource("PROJECT_TEMPLATE").action(action).build()));
-            permission.setIsActive(true);
-            templatePermissions.add(permissions.save(permission));
+        for (String action : List.of("READ", "CREATE", "UPDATE", "ACTIVATE")) {
+            templatePermissions.add(permission(action));
         }
         for (String name : List.of("ADMIN", "PROGRAM_MANAGER")) {
             roles.findByName(name).ifPresent(role -> {
@@ -35,5 +31,17 @@ public class ProjectTemplateAccessInitializer implements CommandLineRunner {
                 roles.save(role);
             });
         }
+        roles.findByName("PROGRAM_MANAGER").ifPresent(role -> {
+            permissions.findByName("MENU_READ").ifPresent(permission -> role.getPermissions().add(permission));
+            roles.save(role);
+        });
+    }
+
+    private Permission permission(String action) {
+        String name = "PROJECT_TEMPLATE_" + action;
+        Permission permission = permissions.findByName(name).orElseGet(() ->
+                Permission.builder().name(name).resource("PROJECT_TEMPLATE").action(action).build());
+        permission.setIsActive(true);
+        return permissions.save(permission);
     }
 }

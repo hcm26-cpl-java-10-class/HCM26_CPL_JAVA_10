@@ -47,11 +47,20 @@ public class ProjectTemplateAccessService {
     }
 
     public boolean can(User user, String action) {
+        if ("ACTIVATE".equals(action) && !hasRole(user, "ADMIN")
+                && (!hasRole(user, "PROGRAM_MANAGER") || !hasTenantScope(user))) {
+            return false;
+        }
         String name = "PROJECT_TEMPLATE_" + action;
         return user.getRoles().stream().filter(role -> Boolean.TRUE.equals(role.getIsActive()))
                 .flatMap(role -> role.getPermissions().stream())
                 .anyMatch(permission -> Boolean.TRUE.equals(permission.getIsActive())
                         && name.equals(permission.getName()));
+    }
+
+    private boolean hasTenantScope(User user) {
+        return user.getTenantId() != null && scopes.existsByUser_IdAndTenantIdAndScopeTypeAndTargetIdAndIsActiveTrue(
+                user.getId(), user.getTenantId(), UserScopeType.TENANT, user.getTenantId());
     }
 
     private boolean hasRole(User user, String name) {

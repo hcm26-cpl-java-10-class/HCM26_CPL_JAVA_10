@@ -7,8 +7,6 @@ import jakarta.persistence.OptimisticLockException;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -52,18 +50,36 @@ public class ProjectTemplateExceptionHandler {
         String field = "request";
         if (exception.getCause() instanceof JsonMappingException mapping && !mapping.getPath().isEmpty()
                 && mapping.getPath().getFirst().getFieldName() != null) {
-            field = mapping.getPath().stream().map(JsonMappingException.Reference::getFieldName)
-                    .filter(Objects::nonNull).collect(Collectors.joining("."));
+            StringBuilder path = new StringBuilder();
+            for (var reference : mapping.getPath()) {
+                if (reference.getFieldName() != null) {
+                    if (!path.isEmpty()) path.append('.');
+                    path.append(reference.getFieldName());
+                } else if (reference.getIndex() >= 0) {
+                    path.append('[').append(reference.getIndex()).append(']');
+                }
+            }
+            field = path.toString();
         }
-        String message = switch (field) {
+        String leaf = field.substring(field.lastIndexOf('.') + 1);
+        String message = switch (leaf) {
             case "estimatedDurationWeeks" -> "Estimated duration must be a positive whole number of weeks";
             case "level" -> "Select Beginner, Intermediate or Advanced";
             case "lockVersion" -> "A valid template revision is required. Please reload the template";
             case "minMembers", "maxMembers" -> "Team size must be a positive whole number";
-            case "roleQuotas.pm", "roleQuotas.ba", "roleQuotas.dev", "roleQuotas.qa" ->
+            case "pm", "ba", "dev", "qa" ->
                     "Role minimum must be a whole number of 0 or greater";
             case "roleQuotas" -> "Enter the minimum number for PM, BA, DEV and QA";
             case "allowMultiRole" -> "Choose whether members can hold multiple roles";
+            case "dueAfter" -> "Due after must be a positive whole number";
+            case "dueUnit" -> "Select days or weeks";
+            case "weight" -> "Weight must be between 0 and 100 with up to 2 decimal places";
+            case "maxScore" -> "Maximum score must be between 0.01 and 99999999.99 (up to 2 decimal places)";
+            case "allowLateSubmission" -> "Choose whether late submissions are allowed";
+            case "maxLateDays" -> "Maximum late days must be a positive whole number";
+            case "penaltyPerDayPercent" -> "Daily penalty must be between 0 and 100 with up to 2 decimal places";
+            case "latePolicy" -> "Provide a valid late submission policy";
+            case "id" -> "Provide a valid saved item ID";
             default -> "Invalid request data";
         };
         return business(new ProjectTemplateException(422, message, Map.of(field, List.of(message))));

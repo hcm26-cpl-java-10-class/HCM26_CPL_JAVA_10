@@ -2,6 +2,8 @@ package com.example.starter_project_2025.system.project.template;
 
 import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
+import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneRepository;
+import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneScheduleValidator;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.web.CorrelationIdFilter;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -31,13 +33,16 @@ public class ProjectTemplateService {
     private final ProjectTemplateAuditRepository audits;
     private final ProjectTemplateAccessService access;
     private final ProjectTemplateValidator validator;
+    private final TemplateMilestoneRepository milestones;
+    private final TemplateMilestoneScheduleValidator scheduleValidator;
     private final TemplateTeamConstraintsMapper teamConstraintsMapper;
     private final ObjectMapper objectMapper;
 
     public ProjectTemplateOptions getOptions() {
         User user = access.requireUser("READ");
         return new ProjectTemplateOptions(user.getTenantId(), user.getTenant().getName(),
-                templates.findCategories(user.getTenantId()), access.can(user, "CREATE"), access.can(user, "UPDATE"));
+                templates.findCategories(user.getTenantId()), access.can(user, "CREATE"), access.can(user, "UPDATE"),
+                access.can(user, "ACTIVATE"));
     }
 
     public Page<ProjectTemplateResponse> getPage(String search, ProjectTemplateStatus status,
@@ -102,6 +107,8 @@ public class ProjectTemplateService {
                 user.getTenantId(), code, template.getTemplateVersion(), id)) {
             throw ProjectTemplateException.duplicateCode();
         }
+        scheduleValidator.validateDuration(request.estimatedDurationWeeks().intValueExact(),
+                milestones.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(id));
         String beforeState = state(template);
         apply(template, request);
         template = templates.saveAndFlush(template);
