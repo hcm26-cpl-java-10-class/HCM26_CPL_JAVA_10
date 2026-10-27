@@ -1,5 +1,4 @@
 import { progressApi } from "@/api";
-import { notificationQueryKey } from "@/api/features/notification.api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -8,7 +7,7 @@ import type { EnrollmentProgress, LessonProgressItem } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, BookOpen, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { LessonPreview } from "../lesson/components/LessonPreview";
 import { LessonQnA } from "../lesson/components/LessonQnA";
@@ -17,6 +16,10 @@ import { LessonProgressSidebar } from "./LessonProgressSidebar";
 export function CourseLearningPage() {
   const { id } = useParams();
   const enrollmentId = Number(id);
+  // Deep link from the "your question was answered" email: ?lessonId=&questionId=
+  const [searchParams] = useSearchParams();
+  const requestedLessonId = Number(searchParams.get("lessonId")) || undefined;
+  const requestedQuestionId = Number(searchParams.get("questionId")) || undefined;
   const queryClient = useQueryClient();
   const [activeLessonId, setActiveLessonId] = useState<number>();
   const [answerDraft, setAnswerDraft] = useState("");
@@ -41,20 +44,20 @@ export function CourseLearningPage() {
     const lessons = progressQuery.data?.lessons ?? [];
     if (lessons.length && !lessons.some((lesson) => lesson.lessonId === activeLessonId)) {
       const initialLesson =
+        lessons.find((lesson) => lesson.lessonId === requestedLessonId) ??
         lessons.find((lesson) => lesson.lessonId === progressQuery.data?.lastLessonId) ??
         lessons.find((lesson) => !lesson.completed) ??
         lessons[0];
       setActiveLessonId(initialLesson.lessonId);
       recordAccess(initialLesson.lessonId);
     }
-  }, [activeLessonId, progressQuery.data, recordAccess]);
+  }, [activeLessonId, progressQuery.data, recordAccess, requestedLessonId]);
 
   const updateMutation = useMutation({
     mutationFn: ({ lessonId, completed }: { lessonId: number; completed: boolean }) =>
       progressApi.setCompleted(enrollmentId, lessonId, completed),
     onSuccess: (updated: EnrollmentProgress) => {
       queryClient.setQueryData(["lesson-progress", enrollmentId], updated);
-      void queryClient.invalidateQueries({ queryKey: notificationQueryKey });
       toast.success("Progress updated.");
     },
     onError: (error: any) => {
@@ -203,6 +206,9 @@ export function CourseLearningPage() {
                   <LessonQnA
                     key={currentLesson.lessonId}
                     lessonId={currentLesson.lessonId}
+                    focusQuestionId={
+                      currentLesson.lessonId === requestedLessonId ? requestedQuestionId : undefined
+                    }
                     className="mt-8 border-t pt-6"
                   />
                 </div>

@@ -30,9 +30,10 @@ public class LessonQnaController {
     public ResponseEntity<Page<LessonQuestionDTO>> getQuestions(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Long lessonId,
+            @RequestParam(name = "q", required = false) String keyword,
             @PageableDefault(size = 10) Pageable pageable
     ) {
-        return ResponseEntity.ok(qnaService.getQuestions(viewer(principal), lessonId, pageable));
+        return ResponseEntity.ok(qnaService.getQuestions(viewer(principal), lessonId, keyword, pageable));
     }
 
     @PostMapping
