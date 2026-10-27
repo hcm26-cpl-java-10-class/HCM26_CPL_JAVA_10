@@ -13,22 +13,17 @@ public class MilestoneAccessPolicy {
         if (!project.tenantActive()) {
             throw new AccessDeniedException("Tenant is inactive");
         }
-        if (!project.mentorAssigned()) {
-            throw new AccessDeniedException("Mentor assignment is no longer active");
-        }
     }
 
     public void requireReadAccess(ProjectReadContext project) {
         if (!project.tenantActive()) {
             throw new AccessDeniedException("Tenant is inactive");
         }
-        if (!project.mentorAssigned()) {
-            throw new AccessDeniedException("Mentor assignment is no longer active");
-        }
     }
 
     public void requireCreatableState(ProjectCreationContext project) {
         if (!project.milestoneCreationAllowed()
+                || project.status() == ProjectStatus.DRAFT
                 || project.status() == ProjectStatus.COMPLETED
                 || project.status() == ProjectStatus.CANCELLED) {
             throw new MilestoneConflictException("Project no longer allows milestone creation; reload project state");

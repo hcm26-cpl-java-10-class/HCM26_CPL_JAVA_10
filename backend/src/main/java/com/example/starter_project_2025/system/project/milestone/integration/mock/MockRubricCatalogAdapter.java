@@ -16,7 +16,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @Component
-@Profile("!milestone-real-integrations")
+@Profile("milestone-mock | milestone-rubric-mock")
 @RequiredArgsConstructor
 public class MockRubricCatalogAdapter implements RubricCatalogPort {
     private final RubricCatalogService catalog;

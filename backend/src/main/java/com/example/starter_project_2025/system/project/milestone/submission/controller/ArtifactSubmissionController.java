@@ -28,14 +28,14 @@ public class ArtifactSubmissionController {
     private final ArtifactSubmissionService submissionService;
 
     @GetMapping
-    @PreAuthorize("hasAuthority('ARTIFACT_READ') and hasRole('STUDENT')")
+    @PreAuthorize("hasAuthority('ARTIFACT_READ') and hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ArtifactSubmissionWorkspaceResponse> getWorkspace(
             @PathVariable Long projectId, @PathVariable UUID milestoneId) {
         return ResponseEntity.ok(draftService.getWorkspace(projectId, milestoneId));
     }
 
     @PutMapping
-    @PreAuthorize("hasAuthority('ARTIFACT_DRAFT_WRITE') and hasRole('STUDENT')")
+    @PreAuthorize("hasAuthority('ARTIFACT_DRAFT_WRITE') and hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ArtifactDraftResponse> save(
             @PathVariable Long projectId,
             @PathVariable UUID milestoneId,
@@ -44,7 +44,7 @@ public class ArtifactSubmissionController {
     }
 
     @PostMapping(value = "/attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAuthority('ARTIFACT_DRAFT_WRITE') and hasRole('STUDENT')")
+    @PreAuthorize("hasAuthority('ARTIFACT_DRAFT_WRITE') and hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ArtifactAttachmentResponse> upload(
             @PathVariable Long projectId, @PathVariable UUID milestoneId,
             @RequestPart("file") MultipartFile file) {
@@ -52,7 +52,7 @@ public class ArtifactSubmissionController {
     }
 
     @PostMapping("/submissions")
-    @PreAuthorize("hasAuthority('ARTIFACT_SUBMIT') and hasRole('STUDENT')")
+    @PreAuthorize("hasAuthority('ARTIFACT_SUBMIT') and hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ArtifactSubmissionResponse> submit(
             @PathVariable Long projectId,
             @PathVariable UUID milestoneId,

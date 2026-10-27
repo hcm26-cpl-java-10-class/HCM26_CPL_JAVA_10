@@ -9,8 +9,22 @@ import org.springframework.data.domain.Pageable;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.util.List;
 
 public interface MilestoneRepository extends JpaRepository<Milestone, UUID>, JpaSpecificationExecutor<Milestone> {
+    List<Milestone> findAllByProjectIdIsNull();
+
+    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)
+    @org.springframework.data.jpa.repository.Query("""
+            update Milestone milestone
+               set milestone.projectId = :projectId
+             where milestone.id = :milestoneId
+               and milestone.tenantId = :tenantId
+               and milestone.teamId = :teamId
+               and milestone.projectId is null
+            """)
+    int attachProjectScope(UUID milestoneId, Long tenantId, Long teamId, Long projectId);
+
     java.util.List<Milestone> findByProjectIdAndTenantIdAndActiveTrueOrderByDeadlineAscIdAsc(Long projectId, Long tenantId);
 
     /**
@@ -29,6 +43,8 @@ public interface MilestoneRepository extends JpaRepository<Milestone, UUID>, Jpa
 
     boolean existsByTenantIdAndProjectIdAndTitle(Long tenantId, Long projectId, String title);
 
+    Optional<Milestone> findByTenantIdAndProjectIdAndTitle(Long tenantId, Long projectId, String title);
+
     boolean existsByRubricSnapshotId(UUID rubricSnapshotId);
 
     long countByRubricSnapshotId(UUID rubricSnapshotId);
@@ -37,6 +53,9 @@ public interface MilestoneRepository extends JpaRepository<Milestone, UUID>, Jpa
 
     @EntityGraph(attributePaths = "checklistItems")
     Optional<Milestone> findByIdAndProjectIdAndTenantId(UUID id, Long projectId, Long tenantId);
+
+    @EntityGraph(attributePaths = "checklistItems")
+    Optional<Milestone> findByIdAndTenantId(UUID id, Long tenantId);
 
     @EntityGraph(attributePaths = "checklistItems")
     Optional<Milestone> findByIdAndTeamIdAndTenantId(UUID id, Long teamId, Long tenantId);

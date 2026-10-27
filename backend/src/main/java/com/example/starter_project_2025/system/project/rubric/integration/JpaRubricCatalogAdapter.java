@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 import java.util.*;
 
 @Component
-@Profile("milestone-real-integrations")
+@Profile("!milestone-mock & !milestone-rubric-mock")
 @RequiredArgsConstructor
 public class JpaRubricCatalogAdapter implements RubricCatalogPort {
     private final RubricCatalogService catalog;
@@ -36,5 +36,4 @@ public class JpaRubricCatalogAdapter implements RubricCatalogPort {
                 .map(RubricCatalogService::snapshot)
                 .orElseThrow(() -> new MilestoneDependencyException("Milestone rubric version could not be loaded"));
     }
-
 }

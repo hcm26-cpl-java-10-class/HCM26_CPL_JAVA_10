@@ -38,6 +38,7 @@ const STUDENT_MENU_OVERRIDES: Record<string, { title: string; url: string }> = {
 };
 
 const BACKLOGS_URL = "/backlogs";
+const MY_SUBMISSIONS_URL = "/student/milestone-submissions";
 
 export function StudentNavbar() {
   const location = useLocation();
@@ -113,6 +114,22 @@ export function StudentNavbar() {
             pathname === BACKLOGS_URL || pathname.startsWith(`${BACKLOGS_URL}/`),
         });
       }
+    }
+
+    const hasMySubmissions = groups.some((group) =>
+      group.items.some((item) => item.url === MY_SUBMISSIONS_URL),
+    );
+    if (!hasMySubmissions) {
+      const projectGroup = groups.find((group) => /project|dự án/i.test(group.name));
+      const item = {
+        id: "student-my-submissions",
+        title: "Bài nộp của tôi",
+        url: MY_SUBMISSIONS_URL,
+        icon: resolveIcon("menu"),
+        isActive: pathname === MY_SUBMISSIONS_URL || pathname.startsWith(`${MY_SUBMISSIONS_URL}/`),
+      };
+      if (projectGroup) projectGroup.items.push(item);
+      else groups.push({ id: "student-project", name: "Dự án", items: [item] });
     }
 
     return groups.filter((group) => group.items.length > 0);

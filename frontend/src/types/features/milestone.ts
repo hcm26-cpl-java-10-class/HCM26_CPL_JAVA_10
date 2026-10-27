@@ -1,7 +1,7 @@
 export type LatePolicyType = "NO_LATE" | "ALLOW_LATE";
 export type LatePenaltyBasis = "FIXED" | "PER_DAY";
 export type MilestoneStatus = "PLANNED" | "OPEN" | "CLOSED" | "CANCELLED";
-export type MilestoneProjectStatus = "ACTIVE" | "COMPLETED" | "CANCELLED";
+export type MilestoneProjectStatus = "DRAFT" | "PLANNING" | "ACTIVE" | "COMPLETED" | "CANCELLED";
 
 export interface MilestoneChecklistItemRequest {
   content: string;
@@ -16,6 +16,11 @@ export interface MilestoneLatePolicyRequest {
   penaltyBasis?: LatePenaltyBasis;
 }
 
+export interface MilestoneResubmissionPolicyRequest {
+  allowed: boolean;
+  maxAttempts?: number;
+}
+
 export interface CreateMilestoneRequest {
   weight?: number;
   teamId?: number;
@@ -26,10 +31,12 @@ export interface CreateMilestoneRequest {
   checklist: MilestoneChecklistItemRequest[];
   rubricSnapshotId: string;
   latePolicy: MilestoneLatePolicyRequest;
+  resubmissionPolicy: MilestoneResubmissionPolicyRequest;
 }
 
 export interface MilestoneProjectOption {
-  id: string;
+  id: string | number;
+  code?: string;
   name: string;
   status: MilestoneProjectStatus;
 }
@@ -114,6 +121,11 @@ export interface MilestoneLatePolicyDetail {
   penaltyPercent?: number | null;
 }
 
+export interface MilestoneResubmissionPolicyDetail {
+  allowed: boolean;
+  maxAttempts?: number | null;
+}
+
 export interface MilestoneDetailResponse {
   weight?: number | null;
   id: string;
@@ -128,6 +140,7 @@ export interface MilestoneDetailResponse {
   rubric: MilestoneRubricDetail;
   reviewer: MilestoneReviewerDetail;
   latePolicy: MilestoneLatePolicyDetail;
+  resubmissionPolicy: MilestoneResubmissionPolicyDetail;
   version: number;
   createdAt: string;
   createdBy: string;
@@ -187,7 +200,7 @@ export interface ArtifactSubmission {
   id: string;
   milestoneId: string;
   version: number;
-  status: "SUBMITTED";
+  status: "DRAFT" | "SUBMITTED" | "ACCEPTED" | "REJECTED" | "CHANGES_REQUESTED";
   repositoryUrl?: string | null;
   deploymentUrl?: string | null;
   releaseNotes?: string | null;
