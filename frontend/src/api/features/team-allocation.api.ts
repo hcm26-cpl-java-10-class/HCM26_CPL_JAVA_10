@@ -1,5 +1,6 @@
 import axiosInstance from "@/api/axios";
 import type {
+  AllocationReadiness,
   AllocationSession,
   ClassMember,
   ClassRosterMember,
@@ -217,6 +218,38 @@ export const teamAllocationApi = {
     const response = await axiosInstance.post<PublishTeamsResponse>(
       `${classPath(classId)}/allocation-sessions/${sessionId}/teams/publish`,
       { teamIds },
+      { headers: { "X-Idempotency-Key": idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  // ------------------------------------------------------------------
+  // US-12 — strict-mode class readiness before publishing the session
+  // ------------------------------------------------------------------
+
+  /** Read-only pre-check: returns free students (id + name) and team issues. */
+  async getReadiness(
+    classId: number,
+    sessionId: number,
+  ): Promise<AllocationReadiness> {
+    const response = await axiosInstance.get<AllocationReadiness>(
+      `${classPath(classId)}/allocation-sessions/${sessionId}/readiness`,
+    );
+    return response.data;
+  },
+
+  /**
+   * Strict publish of the whole session. Throws HTTP 422
+   * `ERR_UNASSIGNED_MEMBERS` / `ERR_TEAMS_NOT_READY` when not ready.
+   */
+  async publishSession(
+    classId: number,
+    sessionId: number,
+    idempotencyKey: string,
+  ): Promise<PublishTeamsResponse> {
+    const response = await axiosInstance.post<PublishTeamsResponse>(
+      `${classPath(classId)}/allocation-sessions/${sessionId}/publish-session`,
+      undefined,
       { headers: { "X-Idempotency-Key": idempotencyKey } },
     );
     return response.data;

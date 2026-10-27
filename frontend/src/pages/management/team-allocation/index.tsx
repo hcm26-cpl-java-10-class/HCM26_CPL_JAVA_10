@@ -18,6 +18,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import type { TrainingClassDTO } from "@/types/features/training-class";
 import type {
   AllocationApiError,
+  AllocationReadiness,
   AllocationSession,
   AllocationTeam,
   ClassMember,
@@ -28,6 +29,7 @@ import type {
   PublishTeamsResponse,
   SaveDraftRequest,
   TeamMemberRole,
+  TeamReadinessIssue,
   TeamRoleQuota,
   TeamRoleQuotaViolation,
   TeamListResponse,
@@ -41,12 +43,14 @@ import {
   CircleAlert,
   ClipboardList,
   ArrowRightLeft,
+  ListChecks,
   LoaderCircle,
   Plus,
   Ban,
   Save,
   Search,
   Send,
+  ShieldCheck,
   Trash2,
   Users,
   UsersRound,
@@ -73,6 +77,11 @@ interface ApiFailure {
   memberId: number | null;
   unassignedCount?: number;
   unassignedMemberIds?: number[];
+  /** US-12: free students with names for the red highlight banner. */
+  unassignedMembers?: AllocationReadiness["unassignedStudents"];
+  /** US-12: team-level publish blockers. */
+  teamIssues?: TeamReadinessIssue[];
+  blockers?: string[];
   invalidMemberIds?: number[];
   violations?: TeamRoleQuotaViolation[];
   multiRoleMemberIds?: number[];
@@ -118,6 +127,9 @@ function getApiFailure(error: unknown): ApiFailure {
       memberId: data?.memberId ?? null,
       unassignedCount: data?.unassignedCount,
       unassignedMemberIds: data?.unassignedMemberIds,
+      unassignedMembers: data?.unassignedMembers,
+      teamIssues: data?.teamIssues,
+      blockers: data?.blockers,
       invalidMemberIds: data?.invalidMemberIds,
       violations: data?.violations,
       multiRoleMemberIds: data?.multiRoleMemberIds,
@@ -306,6 +318,9 @@ export default function TeamAllocationPage() {
   const [saveFailure, setSaveFailure] = useState<ApiFailure | null>(null);
   const [publishFailure, setPublishFailure] = useState<ApiFailure | null>(null);
   const [publishSuccess, setPublishSuccess] = useState<string | null>(null);
+  /** US-12: latest strict-mode readiness report (null until checked). */
+  const [readiness, setReadiness] = useState<AllocationReadiness | null>(null);
+  const [readinessError, setReadinessError] = useState<ApiFailure | null>(null);
   const [publishItemFailures, setPublishItemFailures] = useState<
     PublishTeamsResponse["failedItems"]
   >([]);
@@ -494,6 +509,8 @@ export default function TeamAllocationPage() {
       setSaveFailure(null);
       setLastWarnings(response);
       saveKeyRef.current = null;
+      setReadiness(null);
+      setReadinessError(null);
       await queryClient.invalidateQueries({
         queryKey: ["team-allocation", "teams", classId, sessionId],
       });
@@ -632,7 +649,112 @@ export default function TeamAllocationPage() {
     },
   });
 
+  // US-12: strict-mode pre-check (read-only, returns free students + team issues).
+  const readinessMutation = useMutation({
+    mutationFn: () => {
+      if (sessionId === null) {
+        throw new Error("Không có phiên phân nhóm đang mở.");
+      }
+      return teamAllocationApi.getReadiness(classId, sessionId);
+    },
+    onSuccess: (report) => {
+      setReadiness(report);
+      setReadinessError(null);
+      setPublishFailure(null);
+      if (report.readyToPublish) {
+        toast.success("Lớp đủ điều kiện công bố (Ready to Publish).");
+      } else {
+        toast.warning(
+          `Lớp chưa đủ điều kiện công bố: ${report.unassignedStudentCount} học viên tự do, `
+            + `${report.teamIssues.length} lỗi nhóm.`,
+        );
+      }
+    },
+    onError: (error) => {
+      const failure = getApiFailure(error);
+      setReadiness(null);
+      setReadinessError(failure);
+      toast.error(failure.message);
+    },
+  });
+
+  // US-12: authoritative strict publish of the whole session. The backend
+  // returns 422 ERR_UNASSIGNED_MEMBERS / ERR_TEAMS_NOT_READY with the offending
+  // students and teams.
+  const publishSessionMutation = useMutation({
+    mutationFn: () => {
+      if (sessionId === null) {
+        throw new Error("Không có phiên phân nhóm đang mở.");
+      }
+      return teamAllocationApi.publishSession(
+        classId,
+        sessionId,
+        makeIdempotencyKey(),
+      );
+    },
+    onSuccess: async (response) => {
+      const succeededItems = response?.succeededItems ?? [];
+      const failedItems = response?.failedItems ?? [];
+      setPublishItemFailures(failedItems);
+      setPublishFailure(null);
+      setReadinessError(null);
+      if (succeededItems.length > 0) {
+        const successMessage = `Đã công bố chính thức ${succeededItems.length} nhóm.`;
+        setPublishSuccess(successMessage);
+        toast.success(successMessage);
+      } else {
+        setPublishSuccess(null);
+      }
+      if (failedItems.length > 0) {
+        setPublishSuccess(null);
+        toast.warning(
+          `${failedItems.length} nhóm chưa thể công bố. Xem toàn bộ lý do bên dưới.`,
+        );
+      }
+      if (failedItems.length === 0 && succeededItems.length > 0) {
+        setReadiness(null);
+        setSession((current) => {
+          if (!current) return current;
+          const publishedSession = { ...current, status: "PUBLISHED" as const };
+          localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(publishedSession));
+          return publishedSession;
+        });
+      } else {
+        // Re-run the strict check so the banner reflects the current state.
+        readinessMutation.mutate();
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["team-allocation", "teams", classId, sessionId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["team-allocation", "sessions", classId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["team-allocation", "unassigned-members", classId, sessionId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["team-allocation", "class-roster", classId, sessionId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["workspace-candidates"],
+        }),
+      ]);
+    },
+    onError: (error) => {
+      const failure = getApiFailure(error);
+      setPublishSuccess(null);
+      setPublishFailure(failure);
+      toast.error(failure.message);
+      if (failure.status === 422) {
+        readinessMutation.mutate();
+      }
+    },
+  });
+
   const invalidateMembershipQueries = async () => {
+    setReadiness(null);
+    setReadinessError(null);
     await Promise.all([
       queryClient.invalidateQueries({
         queryKey: ["team-allocation", "teams", classId, sessionId],
@@ -734,6 +856,8 @@ export default function TeamAllocationPage() {
         delete next[variables.teamId];
         return next;
       });
+      setReadiness(null);
+      setReadinessError(null);
       await queryClient.invalidateQueries({
         queryKey: ["team-allocation", "teams", classId, sessionId],
       });
@@ -786,6 +910,8 @@ export default function TeamAllocationPage() {
         delete next[updated.teamId];
         return next;
       });
+      setReadiness(null);
+      setReadinessError(null);
       await queryClient.invalidateQueries({
         queryKey: ["team-allocation", "teams", classId, sessionId],
       });
@@ -1284,6 +1410,95 @@ export default function TeamAllocationPage() {
 
         {session && (
           <>
+            {/* US-12 — strict-mode class readiness before publishing the session. */}
+            <Card
+              className={
+                readiness && !readiness.readyToPublish
+                  ? "border-destructive/50"
+                  : undefined
+              }
+            >
+              <CardHeader>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="space-y-1.5">
+                    <CardTitle className="flex items-center gap-2">
+                      <ShieldCheck className="size-5 text-primary" />
+                      Kiểm tra điều kiện công bố toàn lớp
+                    </CardTitle>
+                    <CardDescription>
+                      BR-UNI-10 · Strict mode: 100% học viên phải đã có nhóm, mọi nhóm
+                      phải được gán đề bài hợp lệ và đáp ứng đủ định suất vai trò trước
+                      khi công bố phiên.
+                    </CardDescription>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => readinessMutation.mutate()}
+                      disabled={
+                        readinessMutation.isPending ||
+                        session.status !== "OPEN" ||
+                        (!hasPermission("PEO_TEAM_ALLOCATE") &&
+                          !hasPermission("PRJ_WORKSPACE_MANAGE"))
+                      }
+                    >
+                      {readinessMutation.isPending
+                        ? <LoaderCircle className="size-4 animate-spin" />
+                        : <ListChecks className="size-4" />}
+                      Kiểm tra điều kiện công bố
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setPublishItemFailures([]);
+                        setPublishSuccess(null);
+                        publishSessionMutation.mutate();
+                      }}
+                      disabled={
+                        !hasPermission("PEO_TEAM_ALLOCATE") ||
+                        publishSessionMutation.isPending ||
+                        session.status !== "OPEN" ||
+                        draftTeams.length > 0
+                      }
+                    >
+                      {publishSessionMutation.isPending
+                        ? <LoaderCircle className="size-4 animate-spin" />
+                        : <Send className="size-4" />}
+                      Công bố chính thức
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {session.status !== "OPEN" && (
+                  <p className="text-sm text-muted-foreground">
+                    Phiên đang ở trạng thái {session.status}; chỉ phiên OPEN mới cần
+                    kiểm tra điều kiện công bố.
+                  </p>
+                )}
+                {session.status === "OPEN" && draftTeams.length > 0 && (
+                  <p className="text-sm text-amber-700 dark:text-amber-300">
+                    Còn thay đổi nhóm chưa lưu. Hãy lưu nháp trước khi kiểm tra hoặc
+                    công bố.
+                  </p>
+                )}
+                {readinessError && (
+                  <div
+                    role="alert"
+                    className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+                  >
+                    {readinessError.message}
+                  </div>
+                )}
+                {!readiness && !readinessError && session.status === "OPEN" && (
+                  <p className="text-sm text-muted-foreground">
+                    Nhấn “Kiểm tra điều kiện công bố” để xác thực sĩ số toàn lớp, đề bài
+                    và định suất vai trò của tất cả nhóm trước khi công bố chính thức.
+                  </p>
+                )}
+                {readiness && <ReadinessReport report={readiness} />}
+              </CardContent>
+            </Card>
+
             <section className="grid gap-4 sm:grid-cols-3">
               <MetricCard
                 icon={<Users className="size-5" />}
@@ -1619,25 +1834,56 @@ export default function TeamAllocationPage() {
                     <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
                       {publishFailure.message}
                       {publishFailure.status === 422 &&
-                        publishFailure.unassignedMemberIds &&
-                        publishFailure.unassignedMemberIds.length > 0 && (
+                        ((publishFailure.unassignedMembers?.length ?? 0) > 0 ||
+                          (publishFailure.unassignedMemberIds?.length ?? 0) > 0) && (
                           <div className="mt-3 rounded-lg border-2 border-destructive bg-background p-3">
                             <p className="font-semibold">
-                              Học viên chưa được xếp nhóm ({publishFailure.unassignedCount})
+                              Học viên tự do chưa được xếp nhóm (
+                              {publishFailure.unassignedCount
+                                ?? publishFailure.unassignedMembers?.length
+                                ?? publishFailure.unassignedMemberIds?.length}
+                              )
                             </p>
                             <div className="mt-2 flex flex-wrap gap-2">
-                              {publishFailure.unassignedMemberIds.map((memberId) => (
-                                <Badge
-                                  key={memberId}
-                                  variant="outline"
-                                  className="border-destructive text-destructive"
-                                >
-                                  {nameForMember(memberId)}
-                                </Badge>
-                              ))}
+                              {publishFailure.unassignedMembers?.length
+                                ? publishFailure.unassignedMembers.map((member) => (
+                                    <Badge
+                                      key={member.memberId}
+                                      variant="outline"
+                                      className="border-destructive bg-destructive/10 text-destructive"
+                                    >
+                                      {member.fullName} (#{member.memberId})
+                                    </Badge>
+                                  ))
+                                : publishFailure.unassignedMemberIds?.map((memberId) => (
+                                    <Badge
+                                      key={memberId}
+                                      variant="outline"
+                                      className="border-destructive bg-destructive/10 text-destructive"
+                                    >
+                                      {nameForMember(memberId)}
+                                    </Badge>
+                                  ))}
                             </div>
                           </div>
                         )}
+                      {(publishFailure.teamIssues?.length ?? 0) > 0 && (
+                        <div className="mt-3 rounded-lg border-2 border-destructive bg-background p-3">
+                          <p className="font-semibold">
+                            Nhóm chưa đáp ứng điều kiện công bố
+                          </p>
+                          <ul className="mt-2 space-y-1 text-xs">
+                            {publishFailure.teamIssues?.map((issue, index) => (
+                              <li key={`${issue.teamId}-${issue.code}-${index}`}>
+                                <span className="font-medium">
+                                  {issue.teamName} (#{issue.teamId}):
+                                </span>{" "}
+                                {issue.message}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   )}
                   {publishSuccess && (
@@ -1833,7 +2079,7 @@ export default function TeamAllocationPage() {
                         {publishMutation.isPending
                           ? <LoaderCircle className="size-4 animate-spin" />
                           : <Send className="size-4" />}
-                        Publish tất cả nhóm DRAFT
+                        Publish từng nhóm DRAFT còn lại
                       </Button>
                     </>
                   )}
@@ -3269,6 +3515,101 @@ function SavedTeamCard({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** US-12: renders the strict-mode readiness report returned by the backend. */
+function ReadinessReport({ report }: { report: AllocationReadiness }) {
+  if (report.readyToPublish) {
+    return (
+      <div
+        role="status"
+        className="space-y-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4"
+      >
+        <p className="flex items-center gap-2 font-semibold text-emerald-700 dark:text-emerald-300">
+          <ShieldCheck className="size-5" />
+          Đủ điều kiện công bố (Ready to Publish)
+        </p>
+        <p className="text-sm text-muted-foreground">
+          {report.assignedStudents}/{report.totalStudents} học viên đã có nhóm ·{" "}
+          {report.totalTeams} nhóm · {report.teamsWithTemplate}/{report.totalTeams} nhóm
+          có đề bài hợp lệ · không còn học viên tự do.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      role="alert"
+      className="space-y-3 rounded-xl border-2 border-destructive bg-destructive/5 p-4"
+    >
+      <p className="flex items-center gap-2 font-semibold text-destructive">
+        <CircleAlert className="size-5" />
+        Chưa đủ điều kiện công bố
+      </p>
+      <div className="flex flex-wrap gap-2 text-xs">
+        <Badge variant="outline" className="border-destructive text-destructive">
+          {report.unassignedStudentCount} học viên tự do
+        </Badge>
+        <Badge variant="outline" className="border-destructive text-destructive">
+          {report.teamIssues.length} lỗi nhóm
+        </Badge>
+        <Badge variant="outline" className="border-destructive text-destructive">
+          {report.teamsWithTemplate}/{report.totalTeams} nhóm có đề bài
+        </Badge>
+      </div>
+      {report.unassignedStudents.length > 0 && (
+        <div className="rounded-lg border-2 border-destructive bg-background p-3">
+          <p className="text-sm font-semibold text-destructive">
+            Danh sách học viên chưa có nhóm ({report.unassignedStudentCount})
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {report.unassignedStudents.map((student) => (
+              <Badge
+                key={student.memberId}
+                variant="outline"
+                className="border-destructive bg-destructive/10 text-destructive"
+              >
+                {student.fullName} (#{student.memberId})
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+      {report.teamIssues.length > 0 && (
+        <div className="rounded-lg border border-destructive/40 bg-background p-3">
+          <p className="text-sm font-semibold text-destructive">Lỗi theo nhóm</p>
+          <ul className="mt-2 space-y-2 text-xs">
+            {report.teamIssues.map((issue, index) => (
+              <li key={`${issue.teamId}-${issue.code}-${index}`}>
+                <span className="font-medium">
+                  {issue.teamName} (#{issue.teamId})
+                </span>{" "}
+                — {issue.message}
+                {issue.violations?.length ? (
+                  <ul className="mt-1 list-disc pl-4 text-muted-foreground">
+                    {issue.violations.map((violation) => (
+                      <li key={`${violation.role}-${violation.reason}`}>
+                        {violation.role}:{" "}
+                        {violation.reason === "MISSING_REQUIRED_ROLE"
+                          ? `cần tối thiểu ${violation.required}, hiện có ${violation.actual}`
+                          : `tối đa ${violation.required}, hiện có ${violation.actual}`}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {issue.memberIds?.length ? (
+                  <span className="text-muted-foreground">
+                    {" "}· Thành viên: {issue.memberIds.map((id) => `#${id}`).join(", ")}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
 

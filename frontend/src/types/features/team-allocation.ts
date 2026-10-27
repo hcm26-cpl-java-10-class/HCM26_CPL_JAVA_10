@@ -213,6 +213,41 @@ export interface PublishTeamsResponse {
   }>;
 }
 
+/** US-12: a student without a team in the session. */
+export interface ReadinessUnassignedStudent {
+  memberId: number;
+  fullName: string;
+}
+
+/** US-12: one team-level publish blocker. */
+export interface TeamReadinessIssue {
+  teamId: number;
+  teamName: string;
+  code: string;
+  message: string;
+  memberIds: number[];
+  violations: TeamRoleQuotaViolation[];
+}
+
+/** US-12: strict-mode readiness report of a whole class/session. */
+export interface AllocationReadiness {
+  allocationSessionId: number;
+  classId: number;
+  sessionStatus: AllocationSessionStatus;
+  readyToPublish: boolean;
+  totalStudents: number;
+  assignedStudents: number;
+  unassignedStudentCount: number;
+  unassignedStudents: ReadinessUnassignedStudent[];
+  totalTeams: number;
+  draftTeamCount: number;
+  activeTeamCount: number;
+  teamsWithTemplate: number;
+  teamIssues: TeamReadinessIssue[];
+  blockers: string[];
+  checkedAt: string;
+}
+
 export interface AllocationApiError {
   status?: number;
   errorCode?: string;
@@ -222,6 +257,11 @@ export interface AllocationApiError {
   conflictingTeamId?: number | null;
   unassignedCount?: number;
   unassignedMemberIds?: number[];
+  /** US-12: free students with names so the banner can highlight them. */
+  unassignedMembers?: ReadinessUnassignedStudent[];
+  /** US-12: per-team publish blockers. */
+  teamIssues?: TeamReadinessIssue[];
+  blockers?: string[];
   invalidMemberIds?: number[];
   /** US-11: per-role quota violations. */
   violations?: TeamRoleQuotaViolation[];
