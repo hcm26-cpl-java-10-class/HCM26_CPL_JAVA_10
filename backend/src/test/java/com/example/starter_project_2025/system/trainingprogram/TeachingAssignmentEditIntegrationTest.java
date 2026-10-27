@@ -199,7 +199,7 @@ class TeachingAssignmentEditIntegrationTest {
         var item = new HashMap<>(sessionRequest()); item.put("tempId","test-row"); item.put("sessionNumber",1);
         mvc.perform(post("/api/classes/1/schedule-generation/save").header("Authorization",bearer).contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(Map.of("sessions",List.of(item)))))
-                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errors.teachingAssignmentId").isArray());
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.issues[0].code").value("ASSIGNMENT_INVALID"));
         assertThat(sessions.countByTeachingAssignmentId(id)).isZero();
     }
 

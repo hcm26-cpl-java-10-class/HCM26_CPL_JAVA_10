@@ -35,6 +35,8 @@ public class ScheduleGenerationContextResponse {
     @FieldDefaults(level = AccessLevel.PRIVATE)
     public static class TopicContextItem {
         Long topicId;
+        Long programSubjectId;
+        Long subjectId;
         String topicName;
         String topicCode;
         Integer sequenceOrder;

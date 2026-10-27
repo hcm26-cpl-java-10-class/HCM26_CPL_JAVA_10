@@ -52,12 +52,11 @@ public class ScheduleGeneratorEngine {
                 : LocalTime.of(8, 0);
 
         // Map topic override nếu người dùng có tùy chỉnh trước
-        Map<Long, BulkPreviewRequestDTO.TopicOverrideDTO> overrideMap = new HashMap<>();
+        Map<String, BulkPreviewRequestDTO.TopicOverrideDTO> overrideMap = new HashMap<>();
         if (request.getTopicOverrides() != null) {
             for (BulkPreviewRequestDTO.TopicOverrideDTO o : request.getTopicOverrides()) {
-                if (o.getTopicId() != null) {
-                    overrideMap.put(o.getTopicId(), o);
-                }
+                if (o.getProgramSubjectId()!=null) overrideMap.put("PROGRAM_SUBJECT:"+o.getProgramSubjectId(),o);
+                else if (o.getTopicId()!=null) overrideMap.put("TOPIC:"+o.getTopicId(),o);
             }
         }
 
@@ -84,8 +83,9 @@ public class ScheduleGeneratorEngine {
             String roomName = request.getDefaultRoomName();
             Long teachingAssignmentId = topic.getTeachingAssignmentId();
 
-            if (overrideMap.containsKey(topic.getTopicId())) {
-                BulkPreviewRequestDTO.TopicOverrideDTO o = overrideMap.get(topic.getTopicId());
+            String overrideKey=topic.getProgramSubjectId()!=null?"PROGRAM_SUBJECT:"+topic.getProgramSubjectId():"TOPIC:"+topic.getTopicId();
+            if (overrideMap.containsKey(overrideKey)) {
+                BulkPreviewRequestDTO.TopicOverrideDTO o = overrideMap.get(overrideKey);
                 if (o.getTrainerId() != null) {
                     trainerId = o.getTrainerId();
                 }
@@ -101,6 +101,7 @@ public class ScheduleGeneratorEngine {
             }
 
             while (remainingHours > 0) {
+                if(result.size()>=200) throw new IllegalArgumentException("A preview cannot contain more than 200 sessions.");
                 // Tìm ngày học hợp lệ kế tiếp: thuộc daysOfWeek và không phải ngày nghỉ
                 while (!isValidTeachingDay(currentDate, daysOfWeek, request.getSkipHolidays(), customHolidays)) {
                     currentDate = currentDate.plusDays(1);
@@ -110,6 +111,7 @@ public class ScheduleGeneratorEngine {
                 double actualHours = Math.min(hoursPerSession, remainingHours);
 
                 long minutesToAdd = Math.round(actualHours * 60);
+                if(minutesToAdd<1) throw new IllegalArgumentException("Each session must last at least one minute.");
                 LocalTime sessionEndTime = slotStartTime.plusMinutes(minutesToAdd);
 
                 LocalDateTime sessionStart = LocalDateTime.of(currentDate, slotStartTime);
@@ -121,6 +123,8 @@ public class ScheduleGeneratorEngine {
                 PreviewSessionItemDTO sessionItem = PreviewSessionItemDTO.builder()
                         .tempId(tempId)
                         .topicId(topic.getTopicId())
+                        .programSubjectId(topic.getProgramSubjectId())
+                        .subjectId(topic.getSubjectId())
                         .topicName(topic.getTopicName())
                         .sessionNumber(sessionIndexForTopic)
                         .date(currentDate)
@@ -130,6 +134,7 @@ public class ScheduleGeneratorEngine {
                         .trainerName(trainerName)
                         .roomId(roomId)
                         .roomName(roomName)
+                        .meetingUrl(request.getMeetingUrl())
                         .teachingAssignmentId(teachingAssignmentId)
                         .title(title)
                         .status("VALID")

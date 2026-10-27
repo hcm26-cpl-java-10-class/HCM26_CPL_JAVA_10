@@ -36,6 +36,7 @@ public class BulkSessionGenerationController {
     BulkSessionGenerationService generationService;
 
     @GetMapping("/context")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('SESSION_READ')")
     @Operation(summary = "Lấy kế hoạch môn học và phân công giảng viên của lớp",
             description = "Trả về danh sách các môn theo thứ tự chương trình và phân công trainer để chuẩn bị sinh lịch")
     public ResponseEntity<ScheduleGenerationContextResponse> getGenerationContext(
@@ -44,6 +45,7 @@ public class BulkSessionGenerationController {
     }
 
     @PostMapping("/preview")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('SESSION_READ') and hasAuthority('SESSION_CREATE')")
     @Operation(summary = "Sinh danh sách các buổi học dự kiến trên RAM",
             description = "Tính toán phân bổ các buổi học theo thứ trong tuần, ca/slot, né ngày nghỉ lễ; chưa lưu xuống DB")
     public ResponseEntity<BulkPreviewResponseDTO> generatePreview(
@@ -53,6 +55,7 @@ public class BulkSessionGenerationController {
     }
 
     @PostMapping("/save")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('SESSION_READ') and hasAuthority('SESSION_CREATE')")
     @Operation(summary = "Lưu lô toàn bộ các buổi học vào hệ thống (All-or-Nothing)",
             description = "Lưu danh sách buổi học đã được người dùng chỉnh sửa trên preview; hỗ trợ Idempotency-Key chống click đúp")
     public ResponseEntity<BulkSaveSessionsResponseDTO> saveBulkSessions(

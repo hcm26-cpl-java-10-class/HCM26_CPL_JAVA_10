@@ -31,6 +31,7 @@ public class BulkPreviewRequestDTO {
     Long defaultRoomId;
 
     String defaultRoomName;
+    String meetingUrl;
 
     @Builder.Default
     Boolean skipHolidays = true;
@@ -62,6 +63,7 @@ public class BulkPreviewRequestDTO {
     @FieldDefaults(level = AccessLevel.PRIVATE)
     public static class TopicOverrideDTO {
         Long topicId;
+        Long programSubjectId;
         Long trainerId;
         String trainerName;
         Long roomId;
