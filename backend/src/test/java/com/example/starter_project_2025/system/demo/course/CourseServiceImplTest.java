@@ -9,6 +9,7 @@ import com.example.starter_project_2025.system.demo.section.SectionRepository;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
+import com.example.starter_project_2025.system.notification.NotificationService;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
@@ -34,7 +35,8 @@ class CourseServiceImplTest {
             courseRepository,
             userRepository,
             categoryRepository,
-            new CurriculumValidator(mock(SectionRepository.class), mock(LessonRepository.class))
+            new CurriculumValidator(mock(SectionRepository.class), mock(LessonRepository.class)),
+            mock(NotificationService.class)
     );
 
     @Test
@@ -172,6 +174,49 @@ class CourseServiceImplTest {
                 CourseDTO.builder().name("Java").thumbnailUrl("https://example.com/image.png").build(), context);
 
         assertTrue(context.getErrors().isEmpty());
+    }
+
+    @Test
+    void rejectsPublishingWhenRequiredCourseDetailsAreMissing() {
+        Course course = Course.builder()
+                .id(10L)
+                .status(CourseStatus.DRAFT)
+                .build();
+        CourseDTO request = CourseDTO.builder()
+                .status(CourseStatus.PUBLISHED)
+                .description(" ")
+                .build();
+        ValidationContext context = new ValidationContext();
+
+        service.beforeUpdate(course, request, context);
+
+        assertEquals("Assign an instructor before publishing",
+                context.getErrors().get("instructorId").getFirst());
+        assertEquals("Select at least one category before publishing",
+                context.getErrors().get("categoryIds").getFirst());
+        assertEquals("Select a course level before publishing",
+                context.getErrors().get("level").getFirst());
+        assertEquals("Add a course description before publishing",
+                context.getErrors().get("description").getFirst());
+    }
+
+    @Test
+    void acceptsExistingRequiredCourseDetailsDuringPublishValidation() {
+        Course course = Course.builder()
+                .id(10L)
+                .status(CourseStatus.DRAFT)
+                .instructorUser(teacher(22L))
+                .categories(new HashSet<>(Set.of(Category.builder().id(1L).name("Java").build())))
+                .level(CourseLevel.BEGINNER)
+                .description("Learn Java fundamentals")
+                .build();
+        ValidationContext context = new ValidationContext();
+
+        service.beforeUpdate(course,
+                CourseDTO.builder().status(CourseStatus.PUBLISHED).build(), context);
+
+        assertTrue(context.getErrors().keySet().stream()
+                .noneMatch(Set.of("instructorId", "categoryIds", "level", "description")::contains));
     }
 
     private static User teacher(Long id) {

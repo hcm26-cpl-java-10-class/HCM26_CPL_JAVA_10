@@ -17,6 +17,8 @@ public interface CourseEnrollmentRepository
             Long userId
     );
 
+    List<CourseEnrollment> findAllByCourse_Id(Long courseId);
+
     Optional<CourseEnrollment> findByIdAndUser_Id(
             Long enrollmentId,
             Long userId
