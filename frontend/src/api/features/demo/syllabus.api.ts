@@ -1,4 +1,11 @@
+
 import api from "@/api/axios";
+
+// ==========================================
+// SYLLABUS TYPES
+// ==========================================
+
+export type SyllabusStatus = "DRAFT" | "PUBLISHED";
 
 export type SyllabusInput = {
     code: string;
@@ -10,6 +17,8 @@ export type SyllabusSummary = SyllabusInput & {
     id: number;
     sectionCount: number;
     isActive: boolean;
+    status: SyllabusStatus;
+    completionPercent: number;
 };
 
 export type Topic = {
@@ -30,12 +39,37 @@ export type SyllabusDetail = SyllabusInput & {
     id: number;
     sections: SyllabusSection[];
     isActive: boolean;
+    status: SyllabusStatus;
+    completionPercent: number;
 };
 
 export type SyllabusValidation = {
     valid: boolean;
     errors: string[];
 };
+
+// ==========================================
+// COMPLETION PROGRESS / WORKFLOW
+// ==========================================
+
+export type SyllabusProgressCheck = {
+    key: string;
+    label: string;
+    complete: boolean;
+};
+
+export type SyllabusProgress = {
+    syllabusId: number;
+    status: SyllabusStatus;
+    completionPercent: number;
+    canPublish: boolean;
+    checks: SyllabusProgressCheck[];
+    missing: string[];
+};
+
+// ==========================================
+// GENERAL INFORMATION
+// ==========================================
 
 export type SyllabusInformationInput = {
     code: string;
@@ -49,12 +83,24 @@ export type SyllabusInformationInput = {
     scoringScale: number | null;
 };
 
+export type SyllabusInformation = SyllabusInformationInput & {
+    id: number;
+};
+
+// ==========================================
+// CLO
+// ==========================================
+
 export type SyllabusClo = {
     id: number;
     code: string;
     details: string;
     orderIndex: number;
 };
+
+// ==========================================
+// LEARNING MATERIALS
+// ==========================================
 
 export type SyllabusMaterialType =
     | "DOCUMENT"
@@ -78,11 +124,9 @@ export type SyllabusMaterial = SyllabusMaterialInput & {
     id: number;
 };
 
-
-export type SyllabusInformation = SyllabusInformationInput & {
-    id: number;
-};
-
+// ==========================================
+// EXCEL IMPORT
+// ==========================================
 
 export type SyllabusImportSummary = {
     syllabuses: number;
@@ -94,7 +138,46 @@ export type SyllabusImportSummary = {
 
 const root = "/syllabuses";
 
+// ==========================================
+// API METHODS
+// ==========================================
+
 export const syllabusApi = {
+
+    // --------------------------------------
+    // COMPLETION PROGRESS / PUBLISH
+    // --------------------------------------
+
+    progress: async (
+        id: number
+    ): Promise<SyllabusProgress> =>
+        (
+            await api.get<SyllabusProgress>(
+                `${root}/${id}/progress`
+            )
+        ).data,
+
+    publish: async (
+        id: number
+    ): Promise<SyllabusProgress> =>
+        (
+            await api.post<SyllabusProgress>(
+                `${root}/${id}/publish`
+            )
+        ).data,
+
+    returnToDraft: async (
+        id: number
+    ): Promise<SyllabusProgress> =>
+        (
+            await api.post<SyllabusProgress>(
+                `${root}/${id}/return-to-draft`
+            )
+        ).data,
+
+    // --------------------------------------
+    // EXCEL IMPORT
+    // --------------------------------------
 
     importExcel: async (
         file: File
@@ -116,8 +199,10 @@ export const syllabusApi = {
         return response.data;
     },
 
+    // --------------------------------------
+    // CLO MANAGEMENT
+    // --------------------------------------
 
-    // CLO Management
     listClos: async (syllabusId: number) =>
         (
             await api.get<SyllabusClo[]>(
@@ -156,7 +241,9 @@ export const syllabusApi = {
             `${root}/${syllabusId}/clos/${cloId}`
         ),
 
-// Learning Materials
+    // --------------------------------------
+    // LEARNING MATERIALS
+    // --------------------------------------
 
     listMaterials: async (syllabusId: number) =>
         (
@@ -195,6 +282,11 @@ export const syllabusApi = {
         api.delete(
             `${root}/${syllabusId}/materials/${materialId}`
         ),
+
+    // --------------------------------------
+    // GENERAL INFORMATION
+    // --------------------------------------
+
     getInformation: async (id: number) =>
         (
             await api.get<SyllabusInformation>(
@@ -213,15 +305,18 @@ export const syllabusApi = {
             )
         ).data,
 
-
-
-    
+    // --------------------------------------
+    // SYLLABUS CRUD
+    // --------------------------------------
 
     list: async (search = "") =>
         (
-            await api.get<SyllabusSummary[]>(root, {
-                params: { search },
-            })
+            await api.get<SyllabusSummary[]>(
+                root,
+                {
+                    params: { search },
+                }
+            )
         ).data,
 
     get: async (id: number) =>
@@ -260,6 +355,10 @@ export const syllabusApi = {
             )
         ).data,
 
+    // --------------------------------------
+    // SECTIONS
+    // --------------------------------------
+
     addSection: async (
         id: number,
         title: string,
@@ -286,6 +385,7 @@ export const syllabusApi = {
                 { title, orderIndex, mission }
             )
         ).data,
+
     bulkSections: async (
         id: number,
         titles: string[]
@@ -297,8 +397,6 @@ export const syllabusApi = {
             )
         ).data,
 
-
-
     deleteSection: async (
         id: number,
         sectionId: number
@@ -306,6 +404,10 @@ export const syllabusApi = {
         api.delete(
             `${root}/${id}/sections/${sectionId}`
         ),
+
+    // --------------------------------------
+    // TOPICS
+    // --------------------------------------
 
     addTopic: async (
         id: number,

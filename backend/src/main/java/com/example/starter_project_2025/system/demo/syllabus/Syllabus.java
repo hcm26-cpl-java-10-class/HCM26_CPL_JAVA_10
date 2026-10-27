@@ -9,7 +9,8 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 @Entity
 @Table(name = "syllabuses")
 @Getter
@@ -53,4 +54,7 @@ public class Syllabus extends BaseEntity {
     @Column(name = "scoring_scale")
     private Integer scoringScale;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 16)
+    private SyllabusStatus status = SyllabusStatus.DRAFT;
 }

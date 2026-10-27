@@ -18,7 +18,7 @@ public class SyllabusService {
     private final SyllabusRepository syllabuses;
     private final SyllabusSectionRepository sections;
     private final SyllabusTopicRepository topics;
-
+    private final SyllabusWorkflowService workflow;
     private static String clean(String raw) {
         return raw == null
                 ? ""
@@ -117,6 +117,7 @@ public class SyllabusService {
         return topic;
     }
 
+
     @Transactional(readOnly = true)
     public List<Summary> list(String query) {
         String q = clean(query);
@@ -127,16 +128,23 @@ public class SyllabusService {
 
         return syllabuses.search(q)
                 .stream()
-                .map(s -> new Summary(
-                        s.getId(),
-                        s.getCode(),
-                        s.getName(),
-                        s.getDescription(),
-                        sections.countBySyllabus_Id(s.getId()),
-                        Boolean.TRUE.equals(s.getIsActive())
-                ))
+                .map(s -> {
+                    var progress = workflow.progress(s.getId());
+
+                    return new Summary(
+                            s.getId(),
+                            s.getCode(),
+                            s.getName(),
+                            s.getDescription(),
+                            sections.countBySyllabus_Id(s.getId()),
+                            Boolean.TRUE.equals(s.getIsActive()),
+                            progress.status().name(),
+                            progress.completionPercent()
+                    );
+                })
                 .toList();
     }
+
 
     @Transactional(readOnly = true)
     public Detail get(Long id) {
@@ -163,13 +171,17 @@ public class SyllabusService {
                         ))
                         .toList();
 
+        var progress = workflow.progress(id);
+
         return new Detail(
                 s.getId(),
                 s.getCode(),
                 s.getName(),
                 s.getDescription(),
                 content,
-                Boolean.TRUE.equals(s.getIsActive())
+                Boolean.TRUE.equals(s.getIsActive()),
+                progress.status().name(),
+                progress.completionPercent()
         );
     }
 
@@ -242,6 +254,7 @@ public class SyllabusService {
             Long id,
             SyllabusInput input
     ) {
+        workflow.requireDraft(id);
         Syllabus entity = syllabus(id);
 
         fillSyllabus(entity, input);
@@ -252,6 +265,7 @@ public class SyllabusService {
     }
 
     public void delete(Long id) {
+        workflow.requireDraft(id);
         Syllabus entity = syllabus(id);
         if (clos.countBySyllabus_Id(id) > 0) {
             fail("clos", "Delete all CLOs before deleting this Syllabus");
@@ -315,6 +329,7 @@ public class SyllabusService {
             Long syllabusId,
             SectionInput input
     ) {
+        workflow.requireDraft(syllabusId);
         Syllabus parent = syllabus(syllabusId);
 
         if (input == null) {
@@ -353,6 +368,7 @@ public class SyllabusService {
             Long sectionId,
             SectionInput input
     ) {
+        workflow.requireDraft(syllabusId);
         SyllabusSection entity = section(
                 syllabusId,
                 sectionId
@@ -393,6 +409,7 @@ public class SyllabusService {
             Long syllabusId,
             BulkSectionInput input
     ) {
+        workflow.requireDraft(syllabusId);
         Syllabus parent = syllabus(syllabusId);
 
         if (input == null
@@ -457,6 +474,7 @@ public class SyllabusService {
             Long syllabusId,
             Long sectionId
     ) {
+        workflow.requireDraft(syllabusId);
         SyllabusSection entity = section(
                 syllabusId,
                 sectionId
@@ -496,6 +514,7 @@ public class SyllabusService {
             Long sectionId,
             TopicInput input
     ) {
+        workflow.requireDraft(syllabusId);
         SyllabusSection parent = section(
                 syllabusId,
                 sectionId
@@ -518,10 +537,21 @@ public class SyllabusService {
 
         verifyTopicName(existing, title, null);
 
-        int nextOrder = existing.stream()
-                .mapToInt(SyllabusTopic::getOrderIndex)
-                .max()
-                .orElse(0) + 1;
+        int nextOrder = input.orderIndex() == null
+                ? existing.stream()
+                  .mapToInt(SyllabusTopic::getOrderIndex)
+                  .max()
+                  .orElse(0) + 1
+                : requiredOrder(input.orderIndex());
+
+        boolean duplicateOrder = existing.stream()
+                .anyMatch(t ->
+                        Objects.equals(t.getOrderIndex(), nextOrder)
+                );
+
+        if (duplicateOrder) {
+            fail("orderIndex", "Topic order already exists in this Section");
+        }
 
         SyllabusTopic entity = new SyllabusTopic();
 
@@ -540,6 +570,7 @@ public class SyllabusService {
             Long topicId,
             TopicInput input
     ) {
+        workflow.requireDraft(syllabusId);
         SyllabusTopic entity = topic(
                 syllabusId,
                 sectionId,
@@ -563,6 +594,25 @@ public class SyllabusService {
 
         verifyTopicName(siblings, title, topicId);
 
+        if (input.orderIndex() != null) {
+            int order = requiredOrder(input.orderIndex());
+
+            boolean duplicateOrder = siblings.stream()
+                    .anyMatch(t ->
+                            !Objects.equals(t.getId(), topicId)
+                                    && Objects.equals(t.getOrderIndex(), order)
+                    );
+
+            if (duplicateOrder) {
+                fail(
+                        "orderIndex",
+                        "Topic order already exists in this Section"
+                );
+            }
+
+            entity.setOrderIndex(order);
+        }
+
         entity.setTitle(title);
 
         topics.save(entity);
@@ -575,6 +625,7 @@ public class SyllabusService {
             Long sectionId,
             Long topicId
     ) {
+        workflow.requireDraft(syllabusId);
         SyllabusTopic entity = topic(
                 syllabusId,
                 sectionId,
@@ -592,28 +643,11 @@ public class SyllabusService {
 
     @Transactional(readOnly = true)
     public ValidationResult validate(Long syllabusId) {
-        Detail detail = get(syllabusId);
-
-        List<String> errors = new ArrayList<>();
-
-        if (detail.sections().isEmpty()) {
-            errors.add(
-                    "Syllabus must have at least one section"
-            );
-        }
-
-        for (SectionView section : detail.sections()) {
-            if (section.topics().isEmpty()) {
-                errors.add(
-                        "Section '" + section.title()
-                                + "' needs at least one topic"
-                );
-            }
-        }
+        var progress = workflow.progress(syllabusId);
 
         return new ValidationResult(
-                errors.isEmpty(),
-                errors
+                progress.canPublish(),
+                progress.missing()
         );
     }
 
@@ -655,6 +689,7 @@ public class SyllabusService {
             Long syllabusId,
             InformationInput input
     ) {
+        workflow.requireDraft(syllabusId);
         if (input == null) {
             fail("information", "Request body is required");
         }

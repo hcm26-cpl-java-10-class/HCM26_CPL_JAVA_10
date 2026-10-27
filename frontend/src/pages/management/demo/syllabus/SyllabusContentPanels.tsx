@@ -60,15 +60,17 @@ function clean(value: string): string {
 
 export function CloPanel({
                              syllabusId,
+                             readOnly = false,
                          }: {
     syllabusId: number;
+    readOnly?: boolean;
 }) {
     const qc = useQueryClient();
     const { hasPermission } = usePermissions();
 
-    const canCreate = hasPermission("SYLLABUS_CREATE");
-    const canEdit = hasPermission("SYLLABUS_UPDATE");
-    const canDelete = hasPermission("SYLLABUS_DELETE");
+    const canCreate = !readOnly && hasPermission("SYLLABUS_CREATE");
+    const canEdit = !readOnly && hasPermission("SYLLABUS_UPDATE");
+    const canDelete = !readOnly && hasPermission("SYLLABUS_DELETE");
 
     const [open, setOpen] = useState(false);
     const [editing, setEditing] = useState<SyllabusClo | null>(null);
@@ -85,18 +87,22 @@ export function CloPanel({
     const clos = query.data ?? [];
 
     async function refresh() {
-        await qc.invalidateQueries({
-            queryKey: ["syllabus-clos", syllabusId],
-        });
+        await Promise.all([
+            qc.invalidateQueries({ queryKey: ["syllabus-clos", syllabusId] }),
+            qc.invalidateQueries({ queryKey: ["syllabus-progress", syllabusId] }),
+            qc.invalidateQueries({ queryKey: ["syllabuses"] }),
+        ]);
     }
 
     function openCreate() {
+        if (readOnly) return;
         setEditing(null);
         setDetails("");
         setOpen(true);
     }
 
     function openEdit(item: SyllabusClo) {
+        if (readOnly) return;
         setEditing(item);
         setDetails(item.details);
         setOpen(true);
@@ -105,7 +111,7 @@ export function CloPanel({
     async function save(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
 
-        if (busy) return;
+        if (busy || readOnly) return;
 
         const value = clean(details);
 
@@ -153,7 +159,7 @@ export function CloPanel({
     }
 
     async function remove() {
-        if (!deleting || busy) return;
+        if (!deleting || busy || readOnly) return;
 
         setBusy(true);
 
@@ -265,7 +271,7 @@ export function CloPanel({
             )}
 
             <Modal
-                open={open}
+                open={open && !readOnly}
                 title={editing ? `Edit ${editing.code}` : "Create CLO"}
                 size="lg"
                 onClose={() => {
@@ -312,7 +318,7 @@ export function CloPanel({
             </Modal>
 
             <ConfirmDialog
-                open={!!deleting}
+                open={!!deleting && !readOnly}
                 title="Delete CLO?"
                 description={`Delete ${deleting?.code ?? "this CLO"}?`}
                 loading={busy}
@@ -383,16 +389,18 @@ const materialTypes: SyllabusMaterialType[] = [
 export function MaterialsPanel({
                                    syllabusId,
                                    topicId = null,
+                                   readOnly = false,
                                }: {
     syllabusId: number;
     topicId?: number | null;
+    readOnly?: boolean;
 }) {
     const qc = useQueryClient();
     const { hasPermission } = usePermissions();
 
-    const canCreate = hasPermission("SYLLABUS_CREATE");
-    const canEdit = hasPermission("SYLLABUS_UPDATE");
-    const canDelete = hasPermission("SYLLABUS_DELETE");
+    const canCreate = !readOnly && hasPermission("SYLLABUS_CREATE");
+    const canEdit = !readOnly && hasPermission("SYLLABUS_UPDATE");
+    const canDelete = !readOnly && hasPermission("SYLLABUS_DELETE");
 
     const scopedTopicId = topicId ?? null;
     const insideTopic = scopedTopicId !== null;
@@ -424,12 +432,15 @@ export function MaterialsPanel({
     );
 
     async function refresh() {
-        await qc.invalidateQueries({
-            queryKey: ["syllabus-materials", syllabusId],
-        });
+        await Promise.all([
+            qc.invalidateQueries({ queryKey: ["syllabus-materials", syllabusId] }),
+            qc.invalidateQueries({ queryKey: ["syllabus-progress", syllabusId] }),
+            qc.invalidateQueries({ queryKey: ["syllabuses"] }),
+        ]);
     }
 
     function openCreate() {
+        if (readOnly) return;
         setEditing(null);
         setForm({
             ...emptyMaterial,
@@ -439,6 +450,7 @@ export function MaterialsPanel({
     }
 
     function openEdit(item: SyllabusMaterial) {
+        if (readOnly) return;
         setEditing(item);
 
         setForm({
@@ -468,7 +480,7 @@ export function MaterialsPanel({
     async function save(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
 
-        if (busy) return;
+        if (busy || readOnly) return;
 
         const url = form.url.trim();
 
@@ -553,7 +565,7 @@ export function MaterialsPanel({
     }
 
     async function remove() {
-        if (!deleting || busy) return;
+        if (!deleting || busy || readOnly) return;
 
         setBusy(true);
 
@@ -721,7 +733,7 @@ export function MaterialsPanel({
             )}
 
             <Modal
-                open={open}
+                open={open && !readOnly}
                 title={
                     editing
                         ? "Edit Learning Material"
@@ -894,7 +906,7 @@ export function MaterialsPanel({
             </Modal>
 
             <ConfirmDialog
-                open={!!deleting}
+                open={!!deleting && !readOnly}
                 title="Delete Learning Material?"
                 description={`Delete "${deleting?.title ?? "this material"}"?`}
                 loading={busy}
