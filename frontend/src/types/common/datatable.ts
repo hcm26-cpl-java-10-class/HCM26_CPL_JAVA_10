@@ -61,7 +61,7 @@ export interface FieldSchema {
 
   hideable?: boolean;
 
-  width?: number;
+  width?: number | string;
 
   minWidth?: number;
 
@@ -115,7 +115,7 @@ export interface DynamicFieldBuilderOptions {
   editable?: boolean;
   visible?: boolean;
   hideable?: boolean;
-  width?: number;
+  width?: number | string;
   minWidth?: number;
 }
 
