@@ -22,7 +22,9 @@ export interface MilestoneAlert extends Row { title: string; status: string; dea
   canViewMemberProgress?:boolean; memberProgress?:MilestoneMemberProgress[]|null; workWithoutCurrentStudent?:number|null }
 export interface InactiveAlert extends Row { userCode: string | null; displayName: string; projectRole: string | null; joinedAt: string | null;
   lastContributionAt: string | null; activityStatus: string; inactive: boolean; lastReminderAt: string | null;
-  nextReminderAt: string | null; coolingDown: boolean }
+  nextReminderAt: string | null; coolingDown: boolean; workResults?: MemberWorkSummary | null }
+export interface MemberWorkSummary { assigned:number; done:number; overdue:number; inReview:number; withoutDeadline:number; percentage:number|null }
+export interface MemberWorkDetail { userId:number; displayName:string; team:AlertTeam; summary:MemberWorkSummary; items:BacklogAlert[] }
 export type AlertRow = BacklogAlert | MilestoneAlert | InactiveAlert;
 export interface AlertPayload { teamId: number; kind: AlertKind; selections: { id: string; version?: number }[]; warningNote: string }
 export interface AlertResult { batchId: string; eventId: string; status: string; recipientCount: number; createdAt: string; correlationId: string }

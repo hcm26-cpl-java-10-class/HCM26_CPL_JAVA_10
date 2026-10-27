@@ -16,10 +16,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { usePermissions } from "@/hooks/usePermissions";
 import { projectAlertApi } from "@/api/features/project-alert.api";
 import { alertRowKey, alertRowName, type AlertFilters, type AlertKind, type AlertOptions, type AlertPage,
-  type AlertRow, type MilestoneAlert } from "@/types/features/project-alert";
+  type AlertRow, type MilestoneAlert, type InactiveAlert } from "@/types/features/project-alert";
 import { AlertSendDialog } from "./AlertSendDialog";
 import { MilestoneWorkItemsDialog } from "./MilestoneWorkItemsDialog";
 import { MilestoneMemberProgressDialog } from "./MilestoneMemberProgressDialog";
+import { MemberWorkResultsDialog } from "./MemberWorkResultsDialog";
 import { getAlertError } from "./alert-errors";
 
 const kinds: AlertKind[] = ["BACKLOG","MILESTONE","INACTIVE"];
@@ -61,6 +62,7 @@ function AlertResults({ kind,owner,data,loading,fetching,error,options,page,team
   const [selected,setSelected]=useState<Map<string,AlertRow>>(new Map()),[note,setNote]=useState(""),[open,setOpen]=useState(false);
   const [linking,setLinking]=useState<MilestoneAlert>(),[historyTeam,setHistoryTeam]=useState<number>();
   const [progressId,setProgressId]=useState<string>();
+  const [workMember,setWorkMember]=useState<InactiveAlert>();
   const request=useRef<{fingerprint:string;key:string}|null>(null),draftScope=useRef("");
   const failure=error?getAlertError(error):undefined,denied=[401,403].includes(failure?.status??0);
   const rows=error?[]:data?.content??[],selectedRows=[...selected.values()],selectedTeam=selectedRows[0]?.team.id;
@@ -85,6 +87,7 @@ function AlertResults({ kind,owner,data,loading,fetching,error,options,page,team
     <p className="text-sm text-muted-foreground">{kind==="BACKLOG"?"Top-level stories, bugs and tasks approaching or past their deadline. Only overdue To Do / In Progress items can receive an overdue alert. Subtasks are excluded."
       :kind==="MILESTONE"?"Work progress counts linked backlog items marked Done. Without a valid submission, Open milestones with less than 48 hours left and progress below 80% are at risk; past-deadline milestones are overdue. Received submissions await review and do not trigger team deadline alerts."
       :`Members with no recorded contribution for at least ${options.inactiveHours/24} days. For members with no contributions, the window starts when they join the team. Only actions performed by the member count. Cooldown: ${options.cooldownSeconds/3600} hours.`}</p>
+    {kind==="INACTIVE"&&<p className="text-xs text-muted-foreground">Recent activity does not confirm completed or accepted work. Review assigned work, Done items and overdue items separately. The 80% milestone risk threshold applies to the team.</p>}
   </CardHeader><CardContent className="space-y-4">
     {projectClosed&&<p role="status" className="rounded border p-3 text-sm">This project is {label(selectedContext!.projectStatus!).toLowerCase()}. New alerts are disabled. You can still view team alert history.</p>}
     {!denied&&selected.size>0&&<div className="flex flex-wrap gap-2" aria-label="Selected items">{selectedRows.map(row=><Button size="sm" variant="secondary" key={alertRowKey(row)} disabled={busy}
@@ -96,7 +99,8 @@ function AlertResults({ kind,owner,data,loading,fetching,error,options,page,team
         {kind==="INACTIVE"?(inactiveOnly?"No inactive members match these filters.":"No current student members match these filters."):"No upcoming or overdue items match these filters."}</div>
       :<Table><TableHeader><TableRow>{kind!=="MILESTONE"&&<TableHead>Select</TableHead>}<TableHead>{kind==="INACTIVE"?"Member":"Item"}</TableHead>
         <TableHead>Class / Team</TableHead><TableHead>{kind==="INACTIVE"?"Last contribution":"Deadline"}</TableHead>
-        <TableHead>{kind==="MILESTONE"?"Work progress":"Status"}</TableHead>{kind==="MILESTONE"&&<TableHead>Submission</TableHead>}<TableHead>Actions</TableHead></TableRow></TableHeader>
+        <TableHead>{kind==="MILESTONE"?"Work progress":kind==="INACTIVE"?"Activity status":"Status"}</TableHead>
+        {kind==="INACTIVE"&&<TableHead>Work results</TableHead>}{kind==="MILESTONE"&&<TableHead>Submission</TableHead>}<TableHead>Actions</TableHead></TableRow></TableHeader>
       <TableBody>{rows.map(row=>{
         const member="displayName"in row?row:undefined,milestone="progress"in row?row:undefined,backlog="workType"in row?row:undefined;
         const selectable=canSend&&(member?member.inactive:row.canSend);
@@ -115,6 +119,12 @@ function AlertResults({ kind,owner,data,loading,fetching,error,options,page,team
             :member?<div className="space-y-1"><Badge variant={member.inactive?"destructive":"outline"}>{label(member.activityStatus)}</Badge>
               {member.coolingDown&&<p className="text-xs text-muted-foreground">Cooldown until {date(member.nextReminderAt)}</p>}</div>
             :<Badge variant="outline">{label(backlog!.status)}</Badge>}</TableCell>
+          {member&&<TableCell className="min-w-48 whitespace-normal">{member.workResults?<div className="space-y-1">
+            {member.workResults.assigned===0?<p className="text-sm text-muted-foreground">No assigned backlog items</p>:<>
+              <p>{member.workResults.done}/{member.workResults.assigned} Done · {member.workResults.percentage}%</p>
+              <p className="text-xs text-muted-foreground">{member.workResults.overdue} overdue · {member.workResults.inReview} in review</p>
+            </>}
+          </div>:<p className="text-xs text-muted-foreground">Work results require permission to view backlog items and member details.</p>}</TableCell>}
           {milestone&&<TableCell className="min-w-48 whitespace-normal"><div className="space-y-1">
             {milestone.submission?.status==="SUBMITTED"?<><Badge variant="outline">Submitted</Badge>
               {milestone.alertReason==="AWAITING_REVIEW"&&<p className="text-xs">Awaiting review</p>}
@@ -124,6 +134,8 @@ function AlertResults({ kind,owner,data,loading,fetching,error,options,page,team
               <p className="text-xs text-muted-foreground">Acceptance is handled separately.</p></>:<Badge variant="outline">Not submitted</Badge>}
           </div></TableCell>}
           <TableCell><div className="flex flex-wrap gap-2">
+            {member&&member.workResults&&<Button size="sm" variant="outline" aria-label={"Work results for "+member.displayName}
+              disabled={busy||fetching} onClick={()=>setWorkMember(member)}>Work results</Button>}
             {milestone&&milestone.canConfigure&&!projectClosed&&<Button size="sm" variant="outline" disabled={busy} onClick={()=>setLinking(milestone)}>Link backlog items</Button>}
             {milestone&&milestone.canViewMemberProgress&&<Button size="sm" variant="outline" disabled={busy||fetching||!milestone.progress.configured} onClick={()=>setProgressId(milestone.id)}>Member progress</Button>}
             {milestone&&canSend&&<Button size="sm" disabled={busy||fetching||!row.canSend} onClick={()=>showSend([row])}>{milestone.alertReason==="OVERDUE"?"Send overdue alert":"Send risk alert"}</Button>}
@@ -139,6 +151,8 @@ function AlertResults({ kind,owner,data,loading,fetching,error,options,page,team
       onSent={()=>{setOpen(false);setSelected(new Map());setNote("");request.current=null;onChanged();}}/>}
     {linking&&!denied&&<MilestoneWorkItemsDialog row={linking} owner={owner} onClose={()=>setLinking(undefined)} onSaved={()=>{setLinking(undefined);onChanged();}}/>}
     {progressRow&&!denied&&<MilestoneMemberProgressDialog row={progressRow} onClose={()=>setProgressId(undefined)}/>}
+    {workMember&&!denied&&<MemberWorkResultsDialog key={`${workMember.team.id}:${workMember.id}`} row={workMember} owner={owner}
+      onClose={()=>setWorkMember(undefined)} onAccessChanged={onChanged}/>}
     {historyTeam!==undefined&&!denied&&<TeamHistory teamId={historyTeam} kind={kind} owner={owner} onClose={()=>setHistoryTeam(undefined)}/>}
   </CardContent></Card>;
 }

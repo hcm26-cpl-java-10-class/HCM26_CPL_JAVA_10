@@ -452,7 +452,10 @@ class ProjectAlertIntegrationTest {
         list("backlog",adminToken,ids[1]).andExpect(status().isForbidden());
     }
     @Test void teamCanBeMonitoredBeforeAProjectExists() throws Exception {
-        tx.executeWithoutResult(status->teams.findById(teamId).orElseThrow().setProject(null));
+        tx.executeWithoutResult(status->{
+            teams.findById(teamId).orElseThrow().setProject(null);
+            sprints.findById(sprintId).orElseThrow().setProjectId(null);
+        });
         list("backlog",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(2))
                 .andExpect(jsonPath("$.content[0].team.projectId").isEmpty());
         send(mentorToken,UUID.randomUUID().toString(),payload("BACKLOG","Reminder",overdueId)).andExpect(status().isAccepted());
@@ -622,6 +625,245 @@ class ProjectAlertIntegrationTest {
                 .header("Authorization","Bearer "+studentToken).header("Idempotency-Key",UUID.randomUUID()).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"repositoryUrl\":\"https://example.com/repository\"}")).andExpect(status().isConflict());
     }
+    @Test void actualBoardTaskEditsCountTheActorAndUnchangedUnassignedSavesDoNotResetInactivity() throws Exception {
+        tx.executeWithoutResult(status->{
+            for(Long userId:List.of(aId,mentorId))em.persist(BoardProjectMember.builder().projectId(projectId).userId(userId)
+                    .projectRole(userId.equals(mentorId)?com.example.starter_project_2025.system.project.team.ProjectRole.MENTOR
+                            :com.example.starter_project_2025.system.project.team.ProjectRole.MEMBER).build());
+        });
+        String created=mvc.perform(post("/api/projects/{project}/sprints/{sprint}/tasks",projectId,sprintId)
+                .header("Authorization","Bearer "+mentorToken).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"title\":\"Real Board task without an assignee\"}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        Long taskId=json.readTree(created).get("id").asLong();
+        long count=activity.count();
+        // Looking at the Board, and saving exactly the current values, are not contributions.
+        mvc.perform(get("/api/projects/{project}/tasks",projectId).header("Authorization","Bearer "+studentToken))
+                .andExpect(status().isOk());
+        mvc.perform(put("/api/projects/{project}/tasks/{task}",projectId,taskId)
+                .header("Authorization","Bearer "+studentToken).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isOk());
+        assertThat(activity.count()).isEqualTo(count);
+        list("inactive-members",mentorToken,teamId).andExpect(jsonPath("$.total").value(2));
+
+        String edit="{\"description\":\"Student records actual implementation work\"}";
+        mvc.perform(put("/api/projects/{project}/tasks/{task}",projectId,taskId)
+                .header("Authorization","Bearer "+studentToken).contentType(MediaType.APPLICATION_JSON).content(edit))
+                .andExpect(status().isOk());
+        assertThat(activity.count()).isEqualTo(count+1);
+        var audit=activity.findByProjectIdOrderByOccurredAtDesc(projectId,org.springframework.data.domain.PageRequest.of(0,10))
+                .stream().filter(row->"TASK_UPDATED".equals(row.getActionType())).findFirst().orElseThrow();
+        assertThat(audit.getActorId()).isEqualTo(aId);
+        assertThat(json.readTree(audit.getBeforeState()).get("description").isNull()).isTrue();
+        assertThat(json.readTree(audit.getAfterState()).get("description").asText()).contains("actual implementation");
+        mvc.perform(put("/api/projects/{project}/tasks/{task}",projectId,taskId)
+                .header("Authorization","Bearer "+studentToken).contentType(MediaType.APPLICATION_JSON).content(edit))
+                .andExpect(status().isOk());
+        assertThat(activity.count()).isEqualTo(count+1);
+        list("inactive-members",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(bId.toString()));
+        send(mentorToken,UUID.randomUUID().toString(),memberPayload("Stale selection",aId)).andExpect(status().isConflict());
+        // Board tasks are activity evidence, never extra parent items in the deadline list.
+        list("backlog",mentorToken,teamId).andExpect(jsonPath("$.total").value(2));
+        assertThat(batches.count()).isEqualTo(oldBatches);
+    }
+
+    @Test void realBacklogUpdatesRefreshStudentAndMilestoneProgressIndependentlyFromInactivity() throws Exception {
+        links(mentorToken,overdueId,doneId).andExpect(status().isOk());
+        // A mentor completing the student's work changes progress, not the student's last activity.
+        mvc.perform(put("/api/sprint-backlogs/{id}",overdueId).header("Authorization","Bearer "+mentorToken)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"DONE\",\"isActive\":true}"))
+                .andExpect(status().isOk());
+        var finished=milestoneView(mentorToken);
+        assertThat(finished.get("progress").get("percentage").asInt()).isEqualTo(100);
+        assertThat(memberWork(finished,aId).get("percentage").asInt()).isEqualTo(100);
+        list("inactive-members",mentorToken,teamId).andExpect(jsonPath("$.total").value(2));
+
+        tx.executeWithoutResult(status->roles.findByName("STUDENT").orElseThrow().getPermissions()
+                .add(permissions.findByName("SPRINT_BACKLOG_UPDATE").orElseThrow()));
+        // A student's real edit counts even while their linked work remains at 100%.
+        mvc.perform(put("/api/sprint-backlogs/{id}",doneId).header("Authorization","Bearer "+studentToken)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"description\":\"Updated implementation notes\",\"isActive\":true}"))
+                .andExpect(status().isOk());
+        list("inactive-members",mentorToken,teamId).andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(bId.toString()));
+        var finalView=milestoneView(mentorToken);
+        assertThat(finalView.get("progress").get("percentage").asInt()).isEqualTo(100);
+        assertThat(finalView.get("submission").get("status").asText()).isEqualTo("NOT_SUBMITTED");
+        assertThat(milestones.findById(milestoneId).orElseThrow().getStatus()).isEqualTo(MilestoneStatus.OPEN);
+        assertThat(projects.findById(projectId).orElseThrow().getStatus()).isEqualTo(ProjectStatus.ACTIVE);
+        assertThat(batches.count()).isEqualTo(oldBatches);
+    }
+
+    @Test void conflictingSprintProjectCannotLeakWorkProgressOrContributionIntoTheTeam() throws Exception {
+        links(mentorToken,overdueId,doneId).andExpect(status().isOk());
+        tx.executeWithoutResult(status->{
+            var project=new Project();project.setTenant(tenants.findById(tenantId).orElseThrow());
+            project.setCode("OTHER-"+UUID.randomUUID());project.setName("Another project");project.setStatus(ProjectStatus.ACTIVE);
+            sprints.findById(sprintId).orElseThrow().setProjectId(projects.saveAndFlush(project).getId());
+        });
+        tx.executeWithoutResult(status->{
+            var item=backlogs.findById(overdueId).orElseThrow();
+            em.persist(com.example.starter_project_2025.system.project.sprint_backlog.audit.SprintBacklogAuditLog.builder()
+                    .sprintBacklogId(item.getId()).sprintId(sprintId).action("UPDATE").actorId(aId)
+                    .actorEmail("test-only").beforeState("TODO").afterState("IN_PROGRESS").correlationId("wrong-project").build());
+        });
+        list("backlog",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
+        var view=milestoneView(mentorToken);
+        assertThat(view.get("progress").get("total").asInt()).isZero();
+        list("inactive-members",mentorToken,teamId).andExpect(jsonPath("$.total").value(2));
+        send(mentorToken,UUID.randomUUID().toString(),payload("BACKLOG","Wrong project",overdueId)).andExpect(status().isConflict());
+        unchanged();
+    }
+
+    @Test void projectBoundMilestoneAndItsArtifactsMustMatchTheCurrentTeamProject() throws Exception {
+        submitArtifact(UUID.randomUUID().toString(),"Artifact for the previous project").andExpect(status().isCreated());
+        long events=outbox.count();
+        tx.executeWithoutResult(status->{
+            var project=new Project();project.setTenant(tenants.findById(tenantId).orElseThrow());
+            project.setCode("NEXT-"+UUID.randomUUID());project.setName("Current team project");project.setStatus(ProjectStatus.ACTIVE);
+            teams.findById(teamId).orElseThrow().setProject(projects.saveAndFlush(project));
+        });
+        list("milestones",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
+        list("inactive-members",mentorToken,teamId).andExpect(jsonPath("$.total").value(2));
+        mvc.perform(get("/api/project-alerts/teams/{team}/milestones/{milestone}/backlog-items",teamId,milestoneId)
+                .header("Authorization","Bearer "+mentorToken)).andExpect(status().isNotFound());
+        send(mentorToken,UUID.randomUUID().toString(),milestonePayload()).andExpect(status().isNotFound());
+        assertThat(outbox.count()).isEqualTo(events);assertThat(batches.count()).isEqualTo(oldBatches);
+    }
+
+    @Test void actualUuidTaskApiUsesTheProjectBridgeAndIgnoresTechnicalOnlyAuditChanges() throws Exception {
+        UUID projectAlias=UUID.randomUUID(),memberAlias=UUID.randomUUID();
+        mvc.perform(put("/api/task-alerts/project-links/{alias}",projectAlias).header("Authorization","Bearer "+adminToken)
+                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("projectId",projectId))))
+                .andExpect(status().isOk());
+        mvc.perform(put("/api/task-alerts/member-links/{alias}",memberAlias).header("Authorization","Bearer "+adminToken)
+                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("projectId",projectAlias,
+                        "source","PROJECT_MEMBER","sourceMemberId",aMembershipId)))).andExpect(status().isOk());
+        tx.executeWithoutResult(status->roles.findByName("STUDENT").orElseThrow().getPermissions()
+                .add(permissions.findByName("TASK_UPDATE").orElseThrow()));
+        var created=json.readTree(mvc.perform(post("/api/tasks").header("Authorization","Bearer "+mentorToken)
+                .header("Idempotency-Key",UUID.randomUUID()).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("projectId",projectAlias,"assigneeProjectMemberId",memberAlias,
+                        "title","Shared UUID task","estimatedHours",2,"isActive",true))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        list("inactive-members",mentorToken,teamId).andExpect(jsonPath("$.total").value(2));
+        var unchanged=(com.fasterxml.jackson.databind.node.ObjectNode)created.deepCopy();
+        var saved=json.readTree(mvc.perform(put("/api/tasks/{id}",created.get("id").asText())
+                .header("Authorization","Bearer "+studentToken).header("Idempotency-Key",UUID.randomUUID())
+                .contentType(MediaType.APPLICATION_JSON).content(unchanged.toString()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        // Task CRUD may record a new version/updatedBy even for the same business fields.
+        list("inactive-members",mentorToken,teamId).andExpect(jsonPath("$.total").value(2));
+        var inProgress=json.readTree(mvc.perform(patch("/api/tasks/{id}/status",created.get("id").asText())
+                .header("Authorization","Bearer "+studentToken).header("Idempotency-Key",UUID.randomUUID())
+                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of(
+                        "status","IN_PROGRESS","version",saved.get("version").asLong()))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        list("inactive-members",mentorToken,teamId).andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(bId.toString()));
+        var changed=(com.fasterxml.jackson.databind.node.ObjectNode)inProgress.deepCopy();
+        changed.put("description","Student changed the implementation");
+        mvc.perform(put("/api/tasks/{id}",created.get("id").asText())
+                .header("Authorization","Bearer "+studentToken).header("Idempotency-Key",UUID.randomUUID())
+                .contentType(MediaType.APPLICATION_JSON).content(changed.toString())).andExpect(status().isOk());
+        list("inactive-members",mentorToken,teamId).andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(bId.toString()));
+        list("backlog",mentorToken,teamId).andExpect(jsonPath("$.total").value(2));
+        assertThat(batches.count()).isEqualTo(oldBatches);
+    }
+
+    ResultActions memberResults(String token,Long team,Long user) throws Exception {
+        var request=get("/api/project-alerts/teams/{team}/members/{user}/work-results",team,user);
+        if(token!=null)request.header("Authorization","Bearer "+token);
+        return mvc.perform(request);
+    }
+    JsonNode currentMember(Long userId) throws Exception {
+        String body=mvc.perform(get("/api/project-alerts/inactive-members").param("teamId",teamId.toString()).param("inactiveOnly","false")
+                .header("Authorization","Bearer "+mentorToken)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        for(var row:json.readTree(body).get("content"))if(row.get("id").asLong()==userId)return row;
+        throw new AssertionError("Expected current member "+userId);
+    }
+    @Test void workResultsNeverChangeInactivityOrApplyTheTeamRiskThresholdToAnIndividual() throws Exception {
+        var inactive=currentMember(aId);
+        assertThat(inactive.get("inactive").asBoolean()).isTrue();
+        assertThat(inactive.get("workResults").get("assigned").asInt()).isEqualTo(3);
+        assertThat(inactive.get("workResults").get("done").asInt()).isEqualTo(1);
+        assertThat(inactive.get("workResults").get("overdue").asInt()).isEqualTo(1);
+        assertThat(inactive.get("workResults").get("percentage").decimalValue()).isEqualByComparingTo("33.33");
+        tx.executeWithoutResult(status->activity.saveAndFlush(ProjectActivityLog.builder().projectId(projectId).actorId(aId)
+                .actionType("TASK_STATUS_CHANGED").entityType("TASK").entityId(9L).beforeState("TODO").afterState("IN_PROGRESS")
+                .correlationId("activity-is-not-performance").build()));
+        var active=currentMember(aId);
+        assertThat(active.get("activityStatus").asText()).isEqualTo("ACTIVE");
+        assertThat(active.get("canSend").asBoolean()).isFalse();
+        assertThat(active.get("workResults")).isEqualTo(inactive.get("workResults"));
+        // Low completion still permits no inactivity reminder to this recently active member.
+        send(mentorToken,UUID.randomUUID().toString(),memberPayload("Review work separately",aId)).andExpect(status().isConflict());
+        var empty=currentMember(bId);
+        assertThat(empty.get("inactive").asBoolean()).isTrue();assertThat(empty.get("canSend").asBoolean()).isTrue();
+        assertThat(empty.get("workResults").get("assigned").asInt()).isZero();
+        assertThat(empty.get("workResults").get("percentage").isNull()).isTrue();
+        memberResults(mentorToken,teamId,bId).andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(0))
+                .andExpect(jsonPath("$.summary.percentage").isEmpty());unchanged();
+    }
+    @Test void memberWorkResultsUseCurrentTeamAssignmentsAndSeparateReviewAndUndatedWork() throws Exception {
+        tx.executeWithoutResult(status->{
+            var sprint=sprints.findById(sprintId).orElseThrow();
+            item(sprint,aMembershipId,"Awaiting review",SprintBacklogStatus.REVIEW,now.minusSeconds(3600));
+            item(sprint,aMembershipId,"Unscheduled work",SprintBacklogStatus.TODO,null);
+            item(sprint,aMembershipId,"Deleted work",SprintBacklogStatus.TODO,now.minusSeconds(1)).setIsActive(false);
+            item(sprint,null,"Unassigned work",SprintBacklogStatus.TODO,now.minusSeconds(1));
+            var other=sprints.saveAndFlush(Sprint.builder().teamId(otherTeamId).name("Other team's sprint "+UUID.randomUUID()).build());
+            item(other,aMembershipId,"Work outside the team",SprintBacklogStatus.TODO,now.minusSeconds(1));
+        });
+        String body=memberResults(mentorToken,teamId,aId).andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary.assigned").value(5)).andExpect(jsonPath("$.summary.done").value(1))
+                .andExpect(jsonPath("$.summary.overdue").value(1)).andExpect(jsonPath("$.summary.inReview").value(1))
+                .andExpect(jsonPath("$.summary.withoutDeadline").value(1)).andExpect(jsonPath("$.summary.percentage").value(20))
+                .andExpect(jsonPath("$.items.length()").value(5)).andReturn().getResponse().getContentAsString();
+        assertThat(body).doesNotContain("Deleted work","Unassigned work","Work outside the team");
+        for(String field:List.of("email","password","token","score","feedback"))assertThat(json.readTree(body).findValues(field)).isEmpty();
+        unchanged();
+    }
+    @Test void workResultsRefreshFromBacklogEditsAndReassignmentWithoutChangingActivityRules() throws Exception {
+        Long bMembership=tx.execute(status->members.findByTeam_IdAndClassMember_User_Id(teamId,bId).orElseThrow().getId());
+        memberResults(mentorToken,teamId,aId).andExpect(jsonPath("$.summary.assigned").value(3));
+        mvc.perform(put("/api/sprint-backlogs/{id}",overdueId).header("Authorization","Bearer "+mentorToken)
+                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("isActive",true,
+                        "status","DONE","assigneeProjectMemberId",bMembership)))).andExpect(status().isOk());
+        memberResults(mentorToken,teamId,aId).andExpect(jsonPath("$.summary.assigned").value(2))
+                .andExpect(jsonPath("$.summary.percentage").value(50));
+        memberResults(mentorToken,teamId,bId).andExpect(jsonPath("$.summary.assigned").value(1))
+                .andExpect(jsonPath("$.summary.done").value(1)).andExpect(jsonPath("$.summary.overdue").value(0))
+                .andExpect(jsonPath("$.summary.percentage").value(100));
+        assertThat(currentMember(bId).get("inactive").asBoolean()).isTrue();unchanged();
+    }
+    @Test void workResultsRequireBothBacklogAndMemberDetailPermissionAndDoNotLeakThroughMemberList() throws Exception {
+        for(String permission:List.of("SPRINT_BACKLOG_READ","WORKSPACE_MEMBER_READ")) {
+            tx.executeWithoutResult(status->roles.findById(mentorRoleId).orElseThrow().getPermissions()
+                    .removeIf(p->permission.equals(p.getName())));
+            assertThat(currentMember(aId).get("workResults").isNull()).isTrue();
+            memberResults(mentorToken,teamId,aId).andExpect(status().isForbidden());
+            tx.executeWithoutResult(status->roles.findById(mentorRoleId).orElseThrow().getPermissions()
+                    .add(permissions.findByName(permission).orElseThrow()));
+        }
+        unchanged();
+    }
+    @Test void memberWorkResultsAreReadOnlyAndCheckSessionTeamScopeAndCurrentRoster() throws Exception {
+        long work=backlogs.count(),roster=members.count(),logs=activity.count();
+        memberResults(null,teamId,aId).andExpect(status().isUnauthorized());
+        memberResults(mentorToken,otherTeamId,aId).andExpect(status().isForbidden());
+        memberResults(mentorToken,teamId,mentorId).andExpect(status().isNotFound());
+        memberResults(mentorToken,teamId,aId).andExpect(status().isOk());
+        memberResults(mentorToken,teamId,aId).andExpect(status().isOk());
+        assertThat(backlogs.count()).isEqualTo(work);assertThat(members.count()).isEqualTo(roster);
+        assertThat(activity.count()).isEqualTo(logs);
+        assertThat(projects.findById(projectId).orElseThrow().getStatus()).isEqualTo(ProjectStatus.ACTIVE);
+        tx.executeWithoutResult(status->members.findById(aMembershipId).orElseThrow().setIsActive(false));
+        memberResults(mentorToken,teamId,aId).andExpect(status().isNotFound());unchanged();
+    }
+
     @Test void parallelRetriesWithSameKeyQueueOneBatch() throws Exception {
         String key=UUID.randomUUID().toString(),body=payload("BACKLOG","Concurrent",overdueId);var gate=new CountDownLatch(1);
         try(var executor=Executors.newFixedThreadPool(2)) {

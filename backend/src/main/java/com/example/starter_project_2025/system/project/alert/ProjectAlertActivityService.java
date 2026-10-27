@@ -17,6 +17,7 @@ public class ProjectAlertActivityService {
     private final MemberReminderSettings settings;
     private final ProjectAlertRecipientRepository recipients;
     private final ProjectAlertArtifactReadStore artifacts;
+    private final ProjectAlertContributionPolicy contributions;
     public List<MemberRow> members(ProjectTeam team,ProjectAlertReadStore.Scope scope,Instant now) {
         Map<Long,ProjectMember> users=new LinkedHashMap<>();
         scope.members().values().stream().filter(m->team.getId().equals(m.getTeam().getId()))
@@ -27,14 +28,14 @@ public class ProjectAlertActivityService {
         LocalDateTime localNow=LocalDateTime.ofInstant(now,settings.auditZone());
         Map<Long,Instant> latest=new HashMap<>();
         store.taskContributions(team.getProjectId(),users.keySet(),localNow).stream()
-                .filter(a->"TASK_CREATED".equals(a.getActionType())||!Objects.equals(a.getBeforeState(),a.getAfterState()))
+                .filter(a->"TASK_CREATED".equals(a.getActionType())||contributions.changed(a.getBeforeState(),a.getAfterState()))
                 .forEach(a->merge(latest,a.getActorId(),a.getOccurredAt().atZone(settings.auditZone()).toInstant(),now));
         store.uuidTaskContributions(team,users.keySet(),localNow).stream()
-                .filter(a->"CREATE".equals(a.getAction())||!Objects.equals(a.getBeforeState(),a.getAfterState()))
+                .filter(a->"CREATE".equals(a.getAction())||contributions.changed(a.getBeforeState(),a.getAfterState()))
                 .forEach(a->merge(latest,a.getActorId(),a.getOccurredAt().atZone(settings.auditZone()).toInstant(),now));
         var ids=scope.items().stream().filter(item->team.getId().equals(store.owner(scope,item).getId())).map(item->item.getId()).toList();
         store.backlogContributions(team,users.keySet(),ids,localNow).stream()
-                .filter(a->"CREATE".equals(a.getAction())||!Objects.equals(a.getBeforeState(),a.getAfterState()))
+                .filter(a->"CREATE".equals(a.getAction())||contributions.changed(a.getBeforeState(),a.getAfterState()))
                 .forEach(a->merge(latest,a.getActorId(),a.getCreatedAt().atZone(settings.auditZone()).toInstant(),now));
         artifacts.contributions(team, users.values().stream().map(m->m.getClassMember().getUser()).toList(), now)
                 .forEach((id,at)->merge(latest,id,at,now));
@@ -60,7 +61,7 @@ public class ProjectAlertActivityService {
             boolean cooling=next!=null&&now.isBefore(next);
             return new MemberRow(user.getId().toString(),access.describe(team),user.getUserCode(),user.getFullName(),
                     member.getRole(),joined,last,joined==null?"JOIN_DATE_UNKNOWN":inactive?"INACTIVE":last==null?"NEW_MEMBER":"ACTIVE",
-                    inactive,sent,next,cooling,inactive&&!cooling);
+                    inactive,sent,next,cooling,inactive&&!cooling,null);
         }).toList();
     }
     private void merge(Map<Long,Instant> values,Long id,Instant at,Instant now) {

@@ -36,7 +36,12 @@ public final class ProjectAlertDtos {
                                boolean canViewMemberProgress, List<MemberProgress> memberProgress, Long workWithoutCurrentStudent) { }
     public record MemberRow(String id, TeamInfo team, String userCode, String displayName, String projectRole,
                             Instant joinedAt, Instant lastContributionAt, String activityStatus, boolean inactive,
-                            Instant lastReminderAt, Instant nextReminderAt, boolean coolingDown, boolean canSend) { }
+                            Instant lastReminderAt, Instant nextReminderAt, boolean coolingDown, boolean canSend,
+                            MemberWorkSummary workResults) { }
+    public record MemberWorkSummary(long assigned,long done,long overdue,long inReview,long withoutDeadline,
+                                    BigDecimal percentage) { }
+    public record MemberWorkDetail(Long userId,String displayName,TeamInfo team,MemberWorkSummary summary,
+                                   List<BacklogRow> items) { }
     public record Selection(@NotBlank String id, @PositiveOrZero Long version) { }
     public record Send(@NotNull @Positive Long teamId, @NotNull Kind kind,
                        @NotEmpty @Size(max=200) List<@NotNull @Valid Selection> selections,

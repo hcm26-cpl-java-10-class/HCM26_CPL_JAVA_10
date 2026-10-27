@@ -19,7 +19,6 @@ import com.example.starter_project_2025.system.project.sprint.TaskPriority;
 import com.example.starter_project_2025.system.project.sprint.TaskRepository;
 import com.example.starter_project_2025.system.project.sprint.TaskStatus;
 import com.example.starter_project_2025.system.project.task.event.TaskOutboxService;
-import com.example.starter_project_2025.system.project.sprint.Sprint;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import com.example.starter_project_2025.system.project.tenant.TenantRepository;
@@ -399,6 +398,7 @@ try {
         Task task = taskRepository.findByIdAndProjectIdAndIsActiveTrue(taskId, projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Task", "id", taskId));
 
+        Map<String, Object> beforeState = taskState(task);
         if (request.title() != null) {
             task.setTitle(request.title().trim());
         }
@@ -422,34 +422,29 @@ try {
         task = taskRepository.saveAndFlush(task);
 
         String correlationId = SprintCorrelationIds.current();
-        Map<String, Object> afterState = Map.of(
-                "taskId", task.getId(),
-                "code", task.getCode(),
-                "title", task.getTitle(),
-                "status", task.getStatus().name(),
-                "priority", task.getPriority() != null ? task.getPriority().name() : null,
-                "assigneeProjectMemberId", task.getAssigneeProjectMemberId()
-        );
-        recordActivity(ProjectActivityLog.builder()
+        Map<String, Object> afterState = taskState(task);
+        if (!beforeState.equals(afterState)) {
+            recordActivity(ProjectActivityLog.builder()
                 .projectId(projectId)
                 .actorId(actor.getId())
                 .actorDisplayName(actor.getFullName())
                 .actionType("TASK_UPDATED")
                 .entityType("TASK")
                 .entityId(task.getId())
-                .beforeState(null)
+                .beforeState(toJson(beforeState))
                 .afterState(toJson(afterState))
                 .correlationId(correlationId)
                 .build());
 
-        taskOutboxService.enqueue(
+            taskOutboxService.enqueue(
                 task.getId(),
                 projectId,
                 task.getSprintId(),
                 actor.getId(),
                 correlationId,
                 afterState
-        );
+            );
+        }
 
         TaskCardResponse.AssigneeResponse assigneeResponse = task.getAssigneeProjectMemberId() == null
                 ? null
@@ -776,6 +771,22 @@ try {
     private String normalizeDescription(String description) {
         if (description == null || description.isBlank()) return null;
         return description.trim();
+    }
+
+    // Keep business fields, including nullable values, so Alerts can distinguish
+    // a student's actual edit from an unchanged save. Technical versions do not
+    // represent a contribution.
+    private Map<String, Object> taskState(Task task) {
+        Map<String, Object> state = new java.util.LinkedHashMap<>();
+        state.put("taskId", task.getId());
+        state.put("code", task.getCode());
+        state.put("title", task.getTitle());
+        state.put("description", task.getDescription());
+        state.put("estimatedHours", task.getEstimatedHours());
+        state.put("status", task.getStatus().name());
+        state.put("priority", task.getPriority() == null ? null : task.getPriority().name());
+        state.put("assigneeProjectMemberId", task.getAssigneeProjectMemberId());
+        return state;
     }
 
     private String toJson(Object value) {

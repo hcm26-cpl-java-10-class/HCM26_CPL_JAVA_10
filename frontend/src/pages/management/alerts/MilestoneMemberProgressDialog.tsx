@@ -19,7 +19,7 @@ export function MilestoneMemberProgressDialog({row,onClose}:{row:MilestoneAlert;
           <TableCell>{member.percentage==null?<span className="text-xs text-muted-foreground">No assigned backlog items</span>:`${member.percentage}%`}</TableCell>
         </TableRow>)}</TableBody></Table>}
         {(row.workWithoutCurrentStudent??0)>0&&<p className="rounded border p-3 text-sm">{row.workWithoutCurrentStudent} linked item(s) have no current student assignee. These items still count toward the milestone's total work.</p>}
-        <p className="text-xs text-muted-foreground">Individual progress = Done assigned items / all assigned items in this milestone × 100. Refresh Alerts after assignments or statuses change.</p>
+        <p className="text-xs text-muted-foreground">Individual progress = Done assigned items / all assigned items in this milestone × 100. Refresh Alerts after assignments or statuses change. Activity status is checked separately using the student's latest recorded contribution; a low completion percentage does not mean the student is inactive.</p>
       </>}
   </DialogContent></Dialog>;
 }

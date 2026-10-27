@@ -54,18 +54,20 @@ public class ProjectAlertArtifactReadStore {
         Map<Long, Instant> latest = new HashMap<>();
         var submissions = em.createQuery("select s from MilestoneArtifactSubmission s, Milestone m "
                 + "where m.id=s.milestoneId and m.tenantId=:tenant and s.tenantId=:tenant and m.teamId=:team "
+                + "and (m.projectId is null or m.projectId=:project) "
                 + "and s.submitterId in :actors and s.submittedAt<=:now and "
                 + "((s.teamId=:team and (s.projectId is null or s.projectId=m.projectId)) "
                 + "or (s.teamId is null and s.projectId=m.projectId))", MilestoneArtifactSubmission.class)
-                .setParameter("tenant",tenantId).setParameter("team",team.getId()).setParameter("actors",actors.keySet())
+                .setParameter("tenant",tenantId).setParameter("team",team.getId()).setParameter("project",team.getProjectId()).setParameter("actors",actors.keySet())
                 .setParameter("now",now).getResultList();
         submissions.forEach(row -> merge(latest,actors.get(row.getSubmitterId()),row.getSubmittedAt()));
         // Draft changes count as contribution; viewing, reviewing and alerting do not.
         var audits = em.createQuery("select a from MilestoneAuditLog a, Milestone m "
                 + "where m.id=a.milestoneId and m.tenantId=:tenant and a.tenantId=:tenant and m.teamId=:team "
+                + "and (m.projectId is null or m.projectId=:project) "
                 + "and (a.projectId=m.projectId or a.projectId is null) and a.actorId in :actors and a.createdAt<=:now "
                 + "and a.action in ('ARTIFACT_SUBMITTED','ARTIFACT_DRAFT_SAVED','ARTIFACT_UPDATED')",MilestoneAuditLog.class)
-                .setParameter("tenant",tenantId).setParameter("team",team.getId()).setParameter("actors",actors.keySet())
+                .setParameter("tenant",tenantId).setParameter("team",team.getId()).setParameter("project",team.getProjectId()).setParameter("actors",actors.keySet())
                 .setParameter("now",now).getResultList();
         audits.forEach(row -> merge(latest,actors.get(row.getActorId()),row.getCreatedAt()));
         return latest;

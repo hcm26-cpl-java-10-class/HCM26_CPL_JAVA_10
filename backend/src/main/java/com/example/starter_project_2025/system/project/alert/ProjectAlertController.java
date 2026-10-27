@@ -11,6 +11,8 @@ public class ProjectAlertController {
     @GetMapping("/backlog") public Page<BacklogRow> backlog(FilterRequest query) {return service.backlog(query.filter());}
     @GetMapping("/milestones") public Page<MilestoneRow> milestones(FilterRequest query) {return service.milestones(query.filter());}
     @GetMapping("/inactive-members") public Page<MemberRow> inactive(FilterRequest query,@RequestParam(defaultValue="true") boolean inactiveOnly) {return service.inactive(query.filter(),inactiveOnly);}
+    @GetMapping("/teams/{teamId}/members/{userId}/work-results")
+    public MemberWorkDetail memberWork(@PathVariable Long teamId,@PathVariable Long userId) {return service.memberWork(teamId,userId);}
     @GetMapping("/teams/{teamId}/history") public List<History> history(@PathVariable Long teamId,@RequestParam Kind kind) {return service.history(teamId,kind);}
     @GetMapping("/teams/{teamId}/milestones/{milestoneId}/backlog-items")
     public LinkOptions links(@PathVariable Long teamId,@PathVariable UUID milestoneId) {return service.links(teamId,milestoneId);}

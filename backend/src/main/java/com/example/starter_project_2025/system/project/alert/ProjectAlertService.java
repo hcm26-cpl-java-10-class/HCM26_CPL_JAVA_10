@@ -42,6 +42,7 @@ public class ProjectAlertService {
     private final ProjectAlertArtifactReadStore artifacts;
     private final ProjectRepository projects;
     private final ProjectAlertMemberProgress memberProgress;
+    private final ProjectAlertWorkResults workResults;
     @Autowired @Qualifier("memberReminderClock") private Clock clock;
     @Value("${app.project-alerts.time-zone:Asia/Ho_Chi_Minh}") private String timeZone;
     private ZoneId zone() {return ZoneId.of(timeZone);}
@@ -79,15 +80,34 @@ public class ProjectAlertService {
     }
     public Page<MemberRow> inactive(Filter filter,boolean inactiveOnly) {
         User actor=read(Kind.INACTIVE);Instant now=clock.instant();
+        boolean canViewWork=canViewWorkResults(actor);
         var scope=store.load(access.filter(actor,filter).stream().filter(access::monitoring).toList());List<MemberRow> rows=new ArrayList<>();
         for(var team:scope.teams().values())for(var row:activity.members(team,scope,now)) {
             if(inactiveOnly&&!row.inactive())continue;
             rows.add(new MemberRow(row.id(),row.team(),row.userCode(),row.displayName(),row.projectRole(),row.joinedAt(),
                     row.lastContributionAt(),row.activityStatus(),row.inactive(),row.lastReminderAt(),row.nextReminderAt(),
-                    row.coolingDown(),row.canSend()&&access.has(actor,access.sendPermission(Kind.INACTIVE))));
+                    row.coolingDown(),row.canSend()&&access.has(actor,access.sendPermission(Kind.INACTIVE)),
+                    canViewWork?workResults.summarize(workResults.assigned(scope,team.getId(),Long.valueOf(row.id())),now,zone()):null));
         }
         rows.sort(Comparator.comparing(MemberRow::displayName,String.CASE_INSENSITIVE_ORDER).thenComparing(MemberRow::id));
         return page(rows,filter,now);
+    }
+    public MemberWorkDetail memberWork(Long teamId,Long userId) {
+        User actor=read(Kind.INACTIVE);
+        access.require(actor,"SPRINT_BACKLOG_READ");access.require(actor,"WORKSPACE_MEMBER_READ");
+        var team=access.team(actor,teamId);var scope=store.load(List.of(team));Instant now=clock.instant();
+        var member=scope.members().values().stream().filter(row->userId.equals(row.getClassMember().getUser().getId()))
+                .filter(row->row.getClassMember().getUser().getRoles().stream().anyMatch(role->Boolean.TRUE.equals(role.getIsActive())
+                        &&Set.of("STUDENT","TRAINEE").contains(role.getName())))
+                .findFirst().orElseThrow(()->new ResourceNotFoundException("Current student member is unavailable in this team"));
+        var assigned=workResults.assigned(scope,teamId,userId);
+        return new MemberWorkDetail(userId,member.getClassMember().getUser().getFullName(),access.describe(team),
+                workResults.summarize(assigned,now,zone()),assigned.stream().map(item->backlogRow(actor,scope,item,now))
+                    .sorted(Comparator.comparing(BacklogRow::deadline,Comparator.nullsLast(Comparator.naturalOrder()))
+                            .thenComparing(BacklogRow::id)).toList());
+    }
+    private boolean canViewWorkResults(User actor) {
+        return access.has(actor,"SPRINT_BACKLOG_READ")&&access.has(actor,"WORKSPACE_MEMBER_READ");
     }
     public List<History> history(Long teamId,Kind kind) {
         User actor=read(kind);var team=access.team(actor,teamId);
@@ -224,7 +244,10 @@ public class ProjectAlertService {
                 .setParameter("id",id).setParameter("team",team.getId()).setParameter("tenant",team.getTrainingClass().getTenantId());
         if(lock)query.setLockMode(LockModeType.PESSIMISTIC_WRITE);
         var row=query.getResultStream().findFirst().orElseThrow(()->new ResourceNotFoundException("Milestone does not exist or has been changed"));
-        if(lock)em.refresh(row);return row;
+        if(lock)em.refresh(row);
+        if(row.getProjectId()!=null&&!Objects.equals(row.getProjectId(),team.getProjectId()))
+            throw new ResourceNotFoundException("Milestone does not exist or has been changed");
+        return row;
     }
     private BacklogRow backlogRow(User actor,ProjectAlertReadStore.Scope scope,SprintBacklog item,Instant now) {
         var assignee=store.assignee(scope,item);Instant due=deadline(item);
