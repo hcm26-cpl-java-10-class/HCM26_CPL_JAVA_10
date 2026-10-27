@@ -85,6 +85,9 @@ class StudySessionCancellationServiceTest {
     @InjectMocks
     private StudySessionServiceImpl studySessionService;
 
+    @Mock
+    private com.example.starter_project_2025.system.study_session.StudySessionAssignmentResolver assignmentResolver;
+
     private StudySession scheduledSession;
 
     @AfterAll

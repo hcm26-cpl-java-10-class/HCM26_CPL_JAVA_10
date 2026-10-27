@@ -43,17 +43,21 @@ import java.time.LocalTime;
 )
 public class StudySession extends BaseEntity {
 
-    // Scalar references only; business relationships are not resolved in phase 3.1A.
+    // Scalar references only; assignment links are checked by the module-local resolver.
     @Column(name = "class_id")
+    @ImportField(name = "Class ID")
     Long classId;
 
     @Column(name = "teaching_assignment_id")
+    @ImportField(name = "Teaching Assignment ID")
     Long teachingAssignmentId;
 
     @Column(name = "program_subject_id")
+    @ImportField(name = "Program Subject ID")
     Long programSubjectId;
 
     @Column(name = "trainer_id")
+    @ImportField(name = "Trainer ID")
     Long trainerId;
 
     @Column(name = "room_id")

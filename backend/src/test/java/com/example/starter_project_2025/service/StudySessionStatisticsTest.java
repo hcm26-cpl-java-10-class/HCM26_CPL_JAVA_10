@@ -30,7 +30,7 @@ class StudySessionStatisticsTest {
     @Test
     void requiresReadPermissionBeforeQueryingDatabase() {
         var repository = mock(StudySessionRepository.class);
-        var service = new StudySessionServiceImpl(mock(StudySessionMapper.class), repository, mock(SubjectRepository.class), null, null, null);
+        var service = new StudySessionServiceImpl(mock(StudySessionMapper.class), repository, mock(SubjectRepository.class), null, null, null, null);
         try {
             SecurityContextHolder.clearContext();
             assertThrows(AccessDeniedException.class, () -> service.statistics(null, null, null));

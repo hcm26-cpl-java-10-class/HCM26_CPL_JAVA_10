@@ -22,7 +22,7 @@ class StudySessionStatisticsPersistenceTest {
     @Test
     void aggregatesAllRowsFiltersInclusivelyAndReflectsTransitions() {
         em.getEntityManager().createNativeQuery("SET REFERENTIAL_INTEGRITY FALSE").executeUpdate();
-        var service = new StudySessionServiceImpl(null, repository, null, id -> false, event -> {}, null);
+        var service = new StudySessionServiceImpl(null, repository, null, id -> false, event -> {}, null, null);
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
                 "reader", "", List.of(new SimpleGrantedAuthority("STUDY_SESSION_READ"),
                 new SimpleGrantedAuthority("STUDY_SESSION_UPDATE"))));
@@ -46,7 +46,7 @@ class StudySessionStatisticsPersistenceTest {
             assertEquals(12, service.statistics(null, null, null).total());
             // Use the real lifecycle methods while keeping DTO mapping irrelevant to aggregation.
             var mapper = org.mockito.Mockito.mock(StudySessionMapper.class);
-            var lifecycle = new StudySessionServiceImpl(mapper, repository, null, id -> false, event -> {}, null);
+            var lifecycle = new StudySessionServiceImpl(mapper, repository, null, id -> false, event -> {}, null, null);
             lifecycle.complete(first.getId(), null);
             var cancel = new CancelSessionRequest();
             cancel.setReason("Unavailable");

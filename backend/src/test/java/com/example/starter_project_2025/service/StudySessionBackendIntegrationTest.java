@@ -37,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Real shared Subject/JPA repositories and real module beans; no external API calls. */
 @DataJpaTest
 @Import({StudySessionServiceImpl.class, StudySessionMapperImpl.class, StudySessionValidator.class,
+        StudySessionAssignmentResolver.class,
         MockStudySessionVersionLock.class, StudySessionController.class, StudySessionImportService.class,
         AutoSpecBuilder.class, StudySessionBackendIntegrationTest.ValidationConfig.class})
 class StudySessionBackendIntegrationTest {
@@ -51,6 +52,8 @@ class StudySessionBackendIntegrationTest {
     @MockBean ParserFactory fallbackParsers;
     @MockBean RelationLookupEngine relations;
     @MockBean RelationGraphBuilder graph;
+    @MockBean com.example.starter_project_2025.system.trainingprogram.TeachingAssignmentRepository assignments;
+    @MockBean com.example.starter_project_2025.system.trainingprogram.ClassSetupService classSetup;
     @Autowired StudySessionService service;
     @Autowired StudySessionController controller;
     @Autowired StudySessionRepository sessions;
@@ -142,6 +145,24 @@ class StudySessionBackendIntegrationTest {
         dto.setTrainerId(14L);
         dto.setRoomId(15L);
         dto.setMeetingUrl("https://example.com/lesson");
+        var program = new com.example.starter_project_2025.system.trainingprogram.TrainingProgram();
+        program.setId(17L);
+        var programSubject = new com.example.starter_project_2025.system.trainingprogram.ProgramSubject();
+        programSubject.setId(13L);
+        programSubject.setProgram(program);
+        programSubject.setSubject(subjects.findById(dto.getSubjectId()).orElseThrow());
+        var assignment = new com.example.starter_project_2025.system.trainingprogram.TeachingAssignment();
+        assignment.setId(12L);
+        assignment.setClassId(11L);
+        assignment.setTrainerId(14L);
+        assignment.setProgramSubject(programSubject);
+        assignment.setEffectiveFrom(dto.getSessionDate());
+        org.mockito.Mockito.when(assignments.findById(12L)).thenReturn(java.util.Optional.of(assignment));
+        org.mockito.Mockito.when(classSetup.getClassProgramSubjects(11L)).thenReturn(
+                new com.example.starter_project_2025.system.trainingprogram.ClassProgramSubjectsResponse(
+                        11L, null, null,
+                        new com.example.starter_project_2025.system.trainingprogram.ClassProgramSubjectsResponse.ProgramSummary(
+                                17L, null, null, null, null), java.util.List.of()));
         var created = service.create(dto);
         sessions.flush();
         entityManager.clear();
@@ -167,6 +188,30 @@ class StudySessionBackendIntegrationTest {
         changes.setTrainerId(0L);
         assertThrows(com.example.starter_project_2025.exception.BusinessValidationException.class,
                 () -> service.update(created.getId(), changes));
+        changes.setTrainerId(null);
+        changes.setSessionDate(dto.getSessionDate().minusDays(1));
+        assertThrows(com.example.starter_project_2025.exception.BusinessValidationException.class,
+                () -> service.update(created.getId(), changes));
+        assertEquals(dto.getSessionDate(), service.getById(created.getId()).getSessionDate());
+        var invalidCreate = request(dto.getSubjectId());
+        invalidCreate.setTeachingAssignmentId(12L);
+        invalidCreate.setClassId(99L);
+        long count = sessions.count();
+        assertThrows(com.example.starter_project_2025.exception.BusinessValidationException.class,
+                () -> service.create(invalidCreate));
+        assertEquals(count, sessions.count());
+        var linkedCreate = request(dto.getSubjectId());
+        linkedCreate.setClassId(11L);
+        linkedCreate.setTeachingAssignmentId(12L);
+        var linked = service.create(linkedCreate);
+        assertEquals(13L, linked.getProgramSubjectId());
+        assertEquals(14L, linked.getTrainerId());
+        // Lifecycle transitions must not revalidate a subsequently changed/expired assignment.
+        assignment.setEffectiveTo(dto.getSessionDate().minusDays(1));
+        assertEquals(SessionStatus.COMPLETED, service.complete(created.getId(), null).getStatus());
+        var cancellation = new CancelSessionRequest();
+        cancellation.setReason("Class unavailable");
+        assertEquals(SessionStatus.CANCELLED, service.cancel(linked.getId(), cancellation).getStatus());
     }
 
     private Subject subject() {

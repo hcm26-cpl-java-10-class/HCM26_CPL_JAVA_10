@@ -31,6 +31,7 @@ public class StudySessionServiceImpl
     StudySessionVersionLock studySessionVersionLock;
     ApplicationEventPublisher eventPublisher;
     StudySessionValidator studySessionValidator;
+    StudySessionAssignmentResolver assignmentResolver;
 
     @Override
     @Transactional(readOnly = true)
@@ -71,6 +72,11 @@ public class StudySessionServiceImpl
     @Override
     protected void beforeCreate(StudySession studySession, StudySessionDTO request, ValidationContext ctx) {
         studySessionValidator.validate(request, ctx);
+        var resolved = assignmentResolver.resolve(request, ctx);
+        if (resolved != null) {
+            studySession.setProgramSubjectId(resolved.programSubjectId());
+            studySession.setTrainerId(resolved.trainerId());
+        }
         assignSubject(studySession, request.getSubjectId(), ctx);
         studySession.setStatus(SessionStatus.SCHEDULED);
         studySession.setCancelReason(null);
@@ -101,6 +107,11 @@ public class StudySessionServiceImpl
         }
 
         studySessionValidator.validateUpdate(studySession, request, ctx);
+        var resolved = assignmentResolver.resolveUpdate(studySession, request, ctx);
+        if (resolved != null) {
+            request.setProgramSubjectId(resolved.programSubjectId());
+            request.setTrainerId(resolved.trainerId());
+        }
 
         if (request.getSubjectId() != null) {
             assignSubject(studySession, request.getSubjectId(), ctx);

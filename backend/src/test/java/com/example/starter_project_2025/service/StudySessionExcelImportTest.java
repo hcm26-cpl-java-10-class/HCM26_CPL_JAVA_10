@@ -185,7 +185,7 @@ class StudySessionExcelImportTest {
         var mapper = new GenericImportMapper(mock(RelationLookupEngine.class), mock(RelationGraphBuilder.class), converter);
         var service = new StudySessionImportService(new ParserFactory(List.of(parser)), mapper);
         return new StudySessionController(null, sessions, service, subjects,
-                new StudySessionValidator(FACTORY.getValidator()));
+                new StudySessionValidator(FACTORY.getValidator()), mock(com.example.starter_project_2025.system.study_session.StudySessionAssignmentResolver.class));
     }
 
     private MockMultipartFile file(Object... ids) throws Exception {

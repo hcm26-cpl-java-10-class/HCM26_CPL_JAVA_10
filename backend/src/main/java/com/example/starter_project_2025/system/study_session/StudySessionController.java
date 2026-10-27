@@ -52,6 +52,7 @@ public class StudySessionController
     StudySessionImportService studySessionImportService;
     SubjectRepository subjectRepository;
     StudySessionValidator studySessionValidator;
+    StudySessionAssignmentResolver assignmentResolver;
 
     @org.springframework.web.bind.annotation.GetMapping("/statistics")
     public StudySessionStatistics statistics(
@@ -67,6 +68,11 @@ public class StudySessionController
         return studySessionImportService.importFile(file, studySessionRepository, session -> {
             ValidationContext ctx = new ValidationContext();
             studySessionValidator.validateImport(session, ctx);
+            var resolved = assignmentResolver.resolveImport(session, ctx);
+            if (resolved != null) {
+                session.setProgramSubjectId(resolved.programSubjectId());
+                session.setTrainerId(resolved.trainerId());
+            }
             if (session.getSubjectId() == null || !subjectRepository.existsById(session.getSubjectId())) {
                 ctx.add("subjectId", "Subject ID " + session.getSubjectId()
                         + " does not exist. Select an existing Subject ID from Subjects before importing.");

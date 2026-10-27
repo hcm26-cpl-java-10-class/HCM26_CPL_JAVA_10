@@ -42,7 +42,7 @@ class StudySessionSearchFilterTest {
             dto.setTitle(session.getTitle());
             return dto;
         });
-        var service = new StudySessionServiceImpl(mapper, repository, null, null, null, null);
+        var service = new StudySessionServiceImpl(mapper, repository, null, null, null, null, null);
         ReflectionTestUtils.setField(service, "autoSpecBuilder", new AutoSpecBuilder());
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
             "tester", "", List.of(new SimpleGrantedAuthority("STUDY_SESSION_READ"))));

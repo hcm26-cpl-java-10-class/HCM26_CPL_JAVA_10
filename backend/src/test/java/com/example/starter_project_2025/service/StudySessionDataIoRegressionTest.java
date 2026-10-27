@@ -77,7 +77,7 @@ class StudySessionDataIoRegressionTest {
     void exportUsesPermissionCheckedFilteredServiceInsteadOfAllRepositoryRows() throws Exception {
         var service = mock(StudySessionService.class);
         var controller = new StudySessionController(service, mock(StudySessionRepository.class),
-                mock(StudySessionImportService.class), mock(SubjectRepository.class), mock(StudySessionValidator.class));
+                mock(StudySessionImportService.class), mock(SubjectRepository.class), mock(StudySessionValidator.class), mock(StudySessionAssignmentResolver.class));
         var exporter = mock(ExportService.class);
         ReflectionTestUtils.setField(controller, "exportService", exporter);
         var filter = new StudySessionFilter();
