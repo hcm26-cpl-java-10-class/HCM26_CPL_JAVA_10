@@ -9,6 +9,7 @@ import com.example.starter_project_2025.system.demo.section.SectionRepository;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
+import com.example.starter_project_2025.system.notification.NotificationService;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
@@ -34,7 +35,8 @@ class CourseServiceImplTest {
             courseRepository,
             userRepository,
             categoryRepository,
-            new CurriculumValidator(mock(SectionRepository.class), mock(LessonRepository.class))
+            new CurriculumValidator(mock(SectionRepository.class), mock(LessonRepository.class)),
+            mock(NotificationService.class)
     );
 
     @Test

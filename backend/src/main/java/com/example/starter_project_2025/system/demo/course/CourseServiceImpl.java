@@ -8,6 +8,7 @@ import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.system.notification.NotificationService;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +40,7 @@ public class CourseServiceImpl
     UserRepository userRepository;
     CategoryRepository categoryRepository;
     CurriculumValidator curriculumValidator;
+    NotificationService notificationService;
 
     @Override
     protected BaseCrudRepository<Course, Long> getRepository() {
@@ -101,6 +103,19 @@ public class CourseServiceImpl
             request.setIsFree(course.getIsFree());
         }
         validatePublishTransition(course, request, ctx);
+    }
+
+    @Override
+    protected void afterUpdate(Course course, CourseDTO request) {
+        if (request.getStatus() == CourseStatus.PUBLISHED && course.getInstructorUser() != null) {
+            notificationService.createOnce(
+                    course.getInstructorUser().getId(),
+                    "course-published:" + course.getId(),
+                    "Course published",
+                    course.getName() + " is now available to students.",
+                    "/courses/" + course.getId()
+            );
+        }
     }
 
     /** Chuyển sang PUBLISHED phải qua Validate Publish (>=1 section, mỗi section >=1 lesson, URL hợp lệ). */

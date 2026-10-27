@@ -1,4 +1,5 @@
 import { progressApi } from "@/api";
+import { notificationQueryKey } from "@/api/features/notification.api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -29,6 +30,7 @@ export function CourseLearningPage() {
     mutationFn: (lessonId: number) => progressApi.recordAccess(enrollmentId, lessonId),
     onSuccess: (updated: EnrollmentProgress) => {
       queryClient.setQueryData(["lesson-progress", enrollmentId], updated);
+      void queryClient.invalidateQueries({ queryKey: notificationQueryKey });
     },
     onError: (error: any) => {
       toast.error(error?.response?.data?.message || "Could not record lesson access.");

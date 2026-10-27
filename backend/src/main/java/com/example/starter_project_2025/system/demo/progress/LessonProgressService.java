@@ -5,6 +5,7 @@ import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentR
 import com.example.starter_project_2025.system.demo.lesson.Lesson;
 import com.example.starter_project_2025.system.demo.lesson.LessonContentType;
 import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
+import com.example.starter_project_2025.system.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -24,11 +25,22 @@ public class LessonProgressService {
     private final LessonProgressRepository progressRepository;
     private final CourseEnrollmentRepository enrollmentRepository;
     private final LessonRepository lessonRepository;
+    private final NotificationService notificationService;
 
     @Transactional(readOnly = true)
     public LessonProgressDTO getProgress(Long userId, Long enrollmentId) {
         CourseEnrollment enrollment = getOwnedEnrollment(userId, enrollmentId);
-        return buildProgress(enrollment);
+        LessonProgressDTO result = buildProgress(enrollment);
+        if (result.progressPercentage() == 100) {
+            notificationService.createOnce(
+                    userId,
+                    "course-completed:" + enrollmentId,
+                    "Course completed",
+                    "You completed " + enrollment.getCourse().getName() + ".",
+                    "/courses/" + enrollment.getCourse().getId()
+            );
+        }
+        return result;
     }
 
     @Transactional

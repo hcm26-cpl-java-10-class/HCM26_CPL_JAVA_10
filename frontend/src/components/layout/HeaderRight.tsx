@@ -12,6 +12,7 @@ import {
   uniqueRoles,
 } from "@/utils/rbac.utils";
 import { useNavigate } from "react-router-dom";
+import { NotificationBell } from "@/components/layout/NotificationBell";
 
 export default function HeaderRight() {
   const { role, roles } = useSelector((state: RootState) => state.auth);
@@ -57,6 +58,7 @@ export default function HeaderRight() {
           {formatRoleLabel(currentRole)}
         </Badge>
 
+        <NotificationBell />
         <ToggleTheme />
       </div>
     );
@@ -141,6 +143,7 @@ export default function HeaderRight() {
         </Badge>
       )}
 
+      <NotificationBell />
       <ToggleTheme />
     </div >
   );

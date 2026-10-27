@@ -8,6 +8,7 @@ import com.example.starter_project_2025.system.demo.department.Department;
 import com.example.starter_project_2025.system.demo.department.DepartmentRepository;
 import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
 import com.example.starter_project_2025.system.demo.progress.LessonProgressRepository;
+import com.example.starter_project_2025.system.notification.NotificationService;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
@@ -30,6 +31,7 @@ public class CourseEnrollmentService {
     private final DepartmentRepository departmentRepository;
     private final LessonRepository lessonRepository;
     private final LessonProgressRepository progressRepository;
+    private final NotificationService notificationService;
 
     @Transactional
     public CourseEnrollment enroll(Long userId, Long courseId) {
@@ -56,7 +58,15 @@ public class CourseEnrollmentService {
                 .course(course)
                 .build();
 
-        return enrollmentRepository.save(enrollment);
+        CourseEnrollment saved = enrollmentRepository.save(enrollment);
+        notificationService.createOnce(
+                userId,
+                "enrollment:" + saved.getId(),
+                "Enrollment confirmed",
+                "You enrolled in " + course.getName() + ".",
+                "/courses/" + course.getId()
+        );
+        return saved;
     }
 
     @Transactional(readOnly = true)
@@ -132,7 +142,16 @@ public class CourseEnrollmentService {
                 newEnrollments.add(enrollment);
             }
         }
-        enrollmentRepository.saveAll(newEnrollments);
+        List<CourseEnrollment> savedEnrollments = enrollmentRepository.saveAll(newEnrollments);
+        for (CourseEnrollment enrollment : savedEnrollments) {
+            notificationService.createOnce(
+                    enrollment.getUser().getId(),
+                    "enrollment:" + enrollment.getId(),
+                    "Enrollment confirmed",
+                    "You were enrolled in " + course.getName() + ".",
+                    "/courses/" + course.getId()
+            );
+        }
 
         return new DepartmentEnrollmentResultDTO(
                 department.getId(),
