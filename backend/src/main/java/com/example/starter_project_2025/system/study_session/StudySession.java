@@ -5,7 +5,6 @@ import com.example.starter_project_2025.base.dataio.exporter.annotation.ExportEn
 import com.example.starter_project_2025.base.dataio.exporter.annotation.ExportField;
 import com.example.starter_project_2025.base.dataio.importer.annotation.ImportField;
 import com.example.starter_project_2025.base.dataio.template.annotation.ImportEntity;
-import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import com.example.starter_project_2025.system.subject.Subject;
 import jakarta.persistence.*;
@@ -33,14 +32,6 @@ import java.time.LocalTime;
 @ImportEntity("study_session")
 @ExportEntity(fileName = "study_sessions", sheetName = "Study Sessions")
 @ResourcePermission("STUDY_SESSION")
-@ResourceMenu(
-    title = "Study Sessions",
-    group = "Academic Management",
-    icon = "calendar-days",
-    url = "/study-sessions",
-    order = 2,
-    permission = "STUDY_SESSION_READ"
-)
 public class StudySession extends BaseEntity {
 
     // Scalar references only; assignment links are checked by the module-local resolver.
