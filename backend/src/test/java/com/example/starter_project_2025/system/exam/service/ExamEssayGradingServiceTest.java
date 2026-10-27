@@ -6,6 +6,7 @@ import com.example.starter_project_2025.system.exam.dto.EssayGradingDTO;
 import com.example.starter_project_2025.system.exam.service.ai.AiEssayGradingClient;
 import com.example.starter_project_2025.system.exam.service.ai.AiGradingProperties;
 import com.example.starter_project_2025.system.question.domain.QuestionType;
+import com.example.starter_project_2025.system.question.domain.EssayGradingCriterion;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -258,6 +259,28 @@ class ExamEssayGradingServiceTest {
         assertEquals(1, captured.size());
         assertNull(captured.get(0).referenceAnswer(), "Must not invent reference answer when none provided");
         assertNull(captured.get(0).rubric(), "Must not invent rubric when none provided");
+    }
+
+    @Test
+    void requestAiGradingUsesSavedQuestionCriteriaAsDefaultRubric() {
+        when(examRepository.findById(10L)).thenReturn(Optional.of(exam));
+        when(attemptRepository.findById(100L)).thenReturn(Optional.of(attempt));
+        EssayGradingCriterion criterion = new EssayGradingCriterion();
+        criterion.setName("Correct explanation");
+        criterion.setDescription("Explains the key concept accurately");
+        criterion.setWeightPercentage(70);
+        essayQuestion.getGradingCriteria().add(criterion);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AiEssayGradingClient.EssayQuestionPayload>> captor = ArgumentCaptor.forClass(List.class);
+        when(aiClient.requestProposal(captor.capture())).thenReturn(new EssayGradingDTO.AiGradingResponse());
+
+        gradingService.requestAiGrading(10L, 100L, null);
+
+        assertEquals("Correct explanation (70%): Explains the key concept accurately",
+                captor.getValue().get(0).rubric());
+        assertEquals("Correct explanation",
+                gradingService.getDetail(10L, 100L).getEssays().get(0).getGradingCriteria().get(0).getName());
     }
 
     @Test

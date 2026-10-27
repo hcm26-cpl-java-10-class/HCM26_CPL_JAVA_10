@@ -86,6 +86,28 @@ export function QuestionDetailPage() {
                                 </div>
                             ))}
                         </div>
+                        {data?.type === "ESSAY" && (
+                            <div className="grid gap-2">
+                                <span className="font-medium text-muted-foreground">Grading Criteria</span>
+                                {(data.gradingCriteria ?? []).length === 0 ? (
+                                    <span className="text-muted-foreground">No criteria defined.</span>
+                                ) : (
+                                    (data.gradingCriteria ?? []).map((criterion, index) => (
+                                        <div key={`${criterion.name}-${index}`} className="rounded border p-3">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <span className="font-medium">{criterion.name}</span>
+                                                <Badge variant="outline">{criterion.weightPercentage}%</Badge>
+                                            </div>
+                                            {criterion.description && (
+                                                <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
+                                                    {criterion.description}
+                                                </p>
+                                            )}
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
                     </CardContent>
                 )}
 

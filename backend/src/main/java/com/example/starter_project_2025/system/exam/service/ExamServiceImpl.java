@@ -34,6 +34,7 @@ import com.example.starter_project_2025.system.exam.dto.ExamDTO;
 import com.example.starter_project_2025.system.exam.dto.ExamFilter;
 import com.example.starter_project_2025.system.exam.mapper.ExamMapper;
 import com.example.starter_project_2025.system.question.domain.Question;
+import com.example.starter_project_2025.system.question.domain.EssayGradingCriterion;
 import com.example.starter_project_2025.system.question.domain.QuestionOption;
 import com.example.starter_project_2025.system.question.domain.QuestionRepository;
 import com.example.starter_project_2025.system.question.dto.QuestionDTO;
@@ -313,6 +314,13 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		copy.setImageUrl(source.getImageUrl());
 		copy.setPoints(source.getPoints());
 		copy.setSourceQuestionId(source.getId());
+		source.getGradingCriteria().forEach(sourceCriterion -> {
+			EssayGradingCriterion criterion = new EssayGradingCriterion();
+			criterion.setName(sourceCriterion.getName());
+			criterion.setDescription(sourceCriterion.getDescription());
+			criterion.setWeightPercentage(sourceCriterion.getWeightPercentage());
+			copy.getGradingCriteria().add(criterion);
+		});
 		for (QuestionOption o : source.getOptions()) {
 			QuestionOption optionCopy = new QuestionOption();
 			optionCopy.setContent(o.getContent());

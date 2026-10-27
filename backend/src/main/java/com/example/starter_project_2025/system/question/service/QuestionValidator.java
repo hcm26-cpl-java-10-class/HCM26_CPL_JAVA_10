@@ -4,6 +4,7 @@ import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.system.question.domain.Question;
 import com.example.starter_project_2025.system.question.domain.QuestionOption;
 import com.example.starter_project_2025.system.question.domain.QuestionType;
+import com.example.starter_project_2025.system.question.dto.QuestionDTO.EssayCriterionDTO;
 import com.example.starter_project_2025.system.question.dto.QuestionDTO;
 import com.example.starter_project_2025.system.question.dto.QuestionDTO.OptionDTO;
 import org.springframework.stereotype.Component;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Component;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -18,6 +20,7 @@ import java.util.Set;
 public class QuestionValidator {
 
     public void validateForCreate(QuestionDTO r, ValidationContext ctx) {
+        validateGradingCriteria(r.getType(), r.getGradingCriteria(), ctx);
         if (r.getType() == QuestionType.ESSAY) {
             rejectOptionsForEssay(r.getOptions(), ctx);
             return;
@@ -33,11 +36,13 @@ public class QuestionValidator {
     public void validateForUpdate(Question existing, QuestionDTO r, boolean inUse, ValidationContext ctx) {
         QuestionType type = r.getType() != null ? r.getType() : existing.getType();
         List<OptionDTO> options = r.getOptions();
+        validateGradingCriteria(type, r.getGradingCriteria(), ctx);
 
         if (inUse) {
             if (r.getType() != null && r.getType() != existing.getType()) {
                 ctx.add("type", "Câu hỏi đang nằm trong đề thi, không thể đổi loại câu hỏi");
             }
+
             if (r.getPoints() != null && r.getPoints() != existing.getPoints()) {
                 ctx.add("points", "Câu hỏi đang nằm trong đề thi, không thể đổi điểm");
             }
@@ -65,6 +70,48 @@ public class QuestionValidator {
             }).toList();
         }
         validateOptions(type, options, ctx);
+    }
+
+    private void validateGradingCriteria(
+            QuestionType type,
+            List<EssayCriterionDTO> criteria,
+            ValidationContext ctx
+    ) {
+        if (criteria == null || criteria.isEmpty()) return;
+        if (type != QuestionType.ESSAY) {
+            ctx.add("gradingCriteria", "Tiêu chí chấm điểm chỉ áp dụng cho câu tự luận");
+            return;
+        }
+        if (criteria.size() > 20) {
+            ctx.add("gradingCriteria", "Tối đa 20 tiêu chí chấm điểm");
+        }
+
+        Set<String> names = new HashSet<>();
+        int totalWeight = 0;
+        for (EssayCriterionDTO criterion : criteria) {
+            if (criterion == null) {
+                ctx.add("gradingCriteria", "Tiêu chí chấm điểm không được để trống");
+                continue;
+            }
+            String name = criterion.getName() == null ? "" : criterion.getName().trim();
+            if (name.isEmpty()) {
+                ctx.add("gradingCriteria", "Tên tiêu chí không được để trống");
+            } else if (!names.add(name.toLowerCase(Locale.ROOT))) {
+                ctx.add("gradingCriteria", "Tên các tiêu chí không được trùng nhau");
+            }
+            if (criterion.getDescription() != null && criterion.getDescription().trim().length() > 1000) {
+                ctx.add("gradingCriteria", "Mô tả tiêu chí tối đa 1000 ký tự");
+            }
+            Integer weight = criterion.getWeightPercentage();
+            if (weight == null || weight < 1 || weight > 100) {
+                ctx.add("gradingCriteria", "Tỷ trọng mỗi tiêu chí phải từ 1% đến 100%");
+            } else {
+                totalWeight += weight;
+            }
+        }
+        if (totalWeight != 100) {
+            ctx.add("gradingCriteria", "Tổng tỷ trọng các tiêu chí phải bằng 100%");
+        }
     }
 
     private void validateOptionIds(Question existing, List<OptionDTO> options, ValidationContext ctx) {

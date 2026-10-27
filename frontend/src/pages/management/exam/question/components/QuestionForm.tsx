@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import type { QuestionDifficulty, QuestionOptionDTO, QuestionType } from "@/types";
+import type { EssayGradingCriterion, QuestionDifficulty, QuestionOptionDTO, QuestionType } from "@/types";
 import { useQuery } from "@tanstack/react-query";
 import {
     ArrowLeft,
@@ -47,6 +47,7 @@ export interface QuestionFormValues {
     points: number;
     isActive: boolean;
     options: QuestionOptionDTO[];
+    gradingCriteria: EssayGradingCriterion[];
     imageUrl?: string;
 }
 
@@ -62,6 +63,7 @@ const defaultInitialQuestionForm: QuestionFormValues = {
         { content: "", correct: false },
         { content: "", correct: false },
     ],
+    gradingCriteria: [],
 };
 
 export const initialQuestionForm = defaultInitialQuestionForm;
@@ -255,6 +257,14 @@ export function QuestionForm({
             options: prev.options.map((option, i) => (i === index ? { ...option, ...patch } : option)),
         }));
 
+    const updateGradingCriterion = (index: number, patch: Partial<EssayGradingCriterion>) =>
+        setForm((prev) => ({
+            ...prev,
+            gradingCriteria: prev.gradingCriteria.map((criterion, i) =>
+                i === index ? { ...criterion, ...patch } : criterion,
+            ),
+        }));
+
     const toggleCorrect = (index: number, checked: boolean) =>
         setForm((prev) => ({
             ...prev,
@@ -291,7 +301,25 @@ export function QuestionForm({
             return;
         }
         if (form.type === "ESSAY") {
-            onSubmit({ ...form, content, imageUrl, topic: form.topic.trim(), options: [] });
+            const criteria = form.gradingCriteria.map((criterion) => ({
+                ...criterion,
+                name: criterion.name.trim(),
+                description: criterion.description?.trim() || null,
+            }));
+            if (criteria.some((criterion) => !criterion.name || !Number.isInteger(criterion.weightPercentage)
+                || criterion.weightPercentage < 1 || criterion.weightPercentage > 100)) {
+                toast.error("Each criterion needs a name and a percentage from 1 to 100.");
+                return;
+            }
+            if (criteria.length > 0 && criteria.reduce((sum, criterion) => sum + criterion.weightPercentage, 0) !== 100) {
+                toast.error("Criterion percentages must add up to 100%.");
+                return;
+            }
+            if (criteria.length > 20) {
+                toast.error("You can add up to 20 grading criteria.");
+                return;
+            }
+            onSubmit({ ...form, content, imageUrl, topic: form.topic.trim(), options: [], gradingCriteria: criteria });
             return;
         }
 
@@ -407,6 +435,7 @@ export function QuestionForm({
                             setForm((prev) => ({
                                 ...prev,
                                 type: value as QuestionType,
+                                gradingCriteria: value === "ESSAY" ? prev.gradingCriteria : [],
                                 options:
                                     value === "ESSAY"
                                         ? []
@@ -556,9 +585,86 @@ export function QuestionForm({
             </div>
 
             {form.type === "ESSAY" ? (
-                <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
-                    Essay questions have no options; students type their answer in an editor and the teacher grades it manually.
-                </p>
+                <section className="grid gap-3 rounded-md border p-4">
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="grid gap-1">
+                            <Label>Essay Grading Criteria (optional)</Label>
+                            <p className="text-xs text-muted-foreground">
+                                Add criteria and percentages to guide grading. If provided, percentages must total 100%.
+                            </p>
+                        </div>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={form.gradingCriteria.length >= 20}
+                            onClick={() => setForm((prev) => ({
+                                ...prev,
+                                gradingCriteria: [...prev.gradingCriteria, { name: "", description: "", weightPercentage: 0 }],
+                            }))}
+                        >
+                            <Plus className="mr-1 size-4" />
+                            Add criterion
+                        </Button>
+                    </div>
+                    {form.gradingCriteria.length > 0 && (
+                        <div className="grid gap-3">
+                            {form.gradingCriteria.map((criterion, index) => (
+                                <div key={index} className="grid gap-2 rounded-md bg-muted/40 p-3 sm:grid-cols-[1fr_7rem_auto]">
+                                    <div className="grid gap-2">
+                                        <Input
+                                            maxLength={200}
+                                            value={criterion.name}
+                                            onChange={(event) => updateGradingCriterion(index, { name: event.target.value })}
+                                            placeholder={`Criterion ${index + 1}`}
+                                            aria-label={`Criterion ${index + 1} name`}
+                                        />
+                                        <Textarea
+                                            maxLength={1000}
+                                            rows={2}
+                                            value={criterion.description ?? ""}
+                                            onChange={(event) => updateGradingCriterion(index, { description: event.target.value })}
+                                            placeholder="Description (optional)"
+                                            aria-label={`Criterion ${index + 1} description`}
+                                        />
+                                    </div>
+                                    <label className="grid content-start gap-1 text-xs text-muted-foreground">
+                                        Weight (%)
+                                        <Input
+                                            type="number"
+                                            min={1}
+                                            max={100}
+                                            step={1}
+                                            value={criterion.weightPercentage || ""}
+                                            onChange={(event) => updateGradingCriterion(index, {
+                                                weightPercentage: event.target.value === "" ? 0 : Number(event.target.value),
+                                            })}
+                                            aria-label={`Criterion ${index + 1} weight percentage`}
+                                        />
+                                    </label>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        aria-label={`Remove criterion ${index + 1}`}
+                                        onClick={() => setForm((prev) => ({
+                                            ...prev,
+                                            gradingCriteria: prev.gradingCriteria.filter((_, i) => i !== index),
+                                        }))}
+                                    >
+                                        <Trash2 className="size-4" />
+                                    </Button>
+                                </div>
+                            ))}
+                            <p className={`text-xs ${form.gradingCriteria.reduce((sum, criterion) => sum + (criterion.weightPercentage || 0), 0) === 100 ? "text-emerald-700" : "text-muted-foreground"}`}>
+                                Total: {form.gradingCriteria.reduce((sum, criterion) => sum + (criterion.weightPercentage || 0), 0)}%
+                            </p>
+                        </div>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                        Students type their answer in an editor; teachers can still grade manually when no criteria are defined.
+                    </p>
+                </section>
             ) : (
                 <div className="grid gap-3 border-t pt-3">
                     <div className="flex items-center justify-between">

@@ -4,6 +4,7 @@ import com.example.starter_project_2025.system.exam.domain.*;
 import com.example.starter_project_2025.exception.BadRequestException;
 
 import com.example.starter_project_2025.system.question.domain.Question;
+import com.example.starter_project_2025.system.question.domain.EssayGradingCriterion;
 import com.example.starter_project_2025.system.question.domain.QuestionOption;
 import com.example.starter_project_2025.system.question.domain.QuestionType;
 import com.example.starter_project_2025.system.question.mapper.QuestionTakerMapper;
@@ -183,6 +184,30 @@ class ExamAttemptServiceTest {
         assertEquals(1, snap.getOptions().size());
         assertEquals(11L, snap.getOptions().get(0).getSourceOptionId());
         assertTrue(snap.getOptions().get(0).isCorrect());
+    }
+
+    @Test
+    void startOrResumeSnapshotsEssayGradingCriteriaAtStart() {
+        Exam exam = attempt.getExam();
+        Question live = question(1L, QuestionType.ESSAY, 5);
+        EssayGradingCriterion sourceCriterion = new EssayGradingCriterion();
+        sourceCriterion.setName("Correctness");
+        sourceCriterion.setWeightPercentage(100);
+        live.getGradingCriteria().add(sourceCriterion);
+        exam.setQuestions(Set.of(live));
+        when(examRepository.lockForAttemptStart(20L)).thenReturn(Optional.of(exam));
+        when(attemptRepository.findAllByExam_IdAndStudent_IdOrderByAttemptNumberAsc(20L, 40L))
+                .thenReturn(List.of());
+        when(userRepository.findById(40L)).thenReturn(Optional.of(attempt.getStudent()));
+
+        service.startOrResume(20L, 40L);
+
+        ArgumentCaptor<ExamAttempt> captor = ArgumentCaptor.forClass(ExamAttempt.class);
+        verify(attemptRepository).save(captor.capture());
+        ExamAttempt started = captor.getValue();
+        sourceCriterion.setName("Edited after attempt start");
+
+        assertEquals("Correctness", started.getQuestions().get(0).getGradingCriteria().get(0).getName());
     }
 
     @Test

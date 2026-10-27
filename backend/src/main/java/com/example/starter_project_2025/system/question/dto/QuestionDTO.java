@@ -46,6 +46,22 @@ public class QuestionDTO extends BaseDTO {
     @Valid
     private List<OptionDTO> options;
 
+    @Valid
+    private List<EssayCriterionDTO> gradingCriteria;
+
+    @Getter @Setter
+    public static class EssayCriterionDTO {
+        @NotBlank(groups = {OnCreate.class, OnUpdate.class})
+        @Size(max = 200, groups = {OnCreate.class, OnUpdate.class})
+        private String name;
+
+        @Size(max = 1000, groups = {OnCreate.class, OnUpdate.class})
+        private String description;
+
+        @Min(value = 1, groups = {OnCreate.class, OnUpdate.class})
+        private Integer weightPercentage;
+    }
+
     @Getter @Setter
     public static class OptionDTO {
         private Long id;

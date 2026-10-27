@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.question.mapper;
 
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.system.question.domain.Question;
+import com.example.starter_project_2025.system.question.domain.EssayGradingCriterion;
 import com.example.starter_project_2025.system.question.domain.QuestionOption;
 import com.example.starter_project_2025.system.question.domain.QuestionType;
 import com.example.starter_project_2025.system.question.dto.QuestionDTO;
@@ -39,6 +40,13 @@ public class QuestionMapper implements BaseCrudMapper<Question, QuestionDTO> {
         d.setTopic(q.getTopic());
         d.setPoints(q.getPoints());
         d.setSourceQuestionId(q.getSourceQuestionId());
+        d.setGradingCriteria(q.getGradingCriteria().stream().map(criterion -> {
+            QuestionDTO.EssayCriterionDTO dto = new QuestionDTO.EssayCriterionDTO();
+            dto.setName(criterion.getName());
+            dto.setDescription(criterion.getDescription());
+            dto.setWeightPercentage(criterion.getWeightPercentage());
+            return dto;
+        }).toList());
         d.setOptions(q.getOptions().stream().map(o -> {
             QuestionDTO.OptionDTO od = new QuestionDTO.OptionDTO();
             od.setId(o.getId());
@@ -66,6 +74,23 @@ public class QuestionMapper implements BaseCrudMapper<Question, QuestionDTO> {
             q.setTopic(d.getTopic().isBlank() ? null : d.getTopic().trim().toLowerCase());
         }
         if (d.getPoints() != null) q.setPoints(d.getPoints());
+
+        if (d.getGradingCriteria() != null) {
+            q.getGradingCriteria().clear();
+            if (q.getType() == QuestionType.ESSAY) {
+                d.getGradingCriteria().forEach(dto -> {
+                    if (dto == null) return;
+                    EssayGradingCriterion criterion = new EssayGradingCriterion();
+                    criterion.setName(dto.getName() == null ? "" : dto.getName().trim());
+                    criterion.setDescription(dto.getDescription() == null || dto.getDescription().isBlank()
+                            ? null : dto.getDescription().trim());
+                    criterion.setWeightPercentage(dto.getWeightPercentage() == null ? 0 : dto.getWeightPercentage());
+                    q.getGradingCriteria().add(criterion);
+                });
+            }
+        } else if (q.getType() != QuestionType.ESSAY) {
+            q.getGradingCriteria().clear();
+        }
 
         if (q.getType() == QuestionType.ESSAY) {
             q.getOptions().clear();
