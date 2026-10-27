@@ -53,7 +53,15 @@ public class ProjectTemplateSnapshotAuditLog {
     @Column(name = "project_id")
     Long projectId;
 
-    @Column(nullable = false, length = 20)
+    /**
+     * Action code of the audited transition.
+     * <p>
+     * US-07 uses {@code CREATE_INITIAL_VERSION} (22 characters), so the column
+     * must be wider than the short {@code CREATE} / {@code PUBLISH} codes: a
+     * 20 character column made every template creation fail with a
+     * {@code DataIntegrityViolationException}.
+     */
+    @Column(nullable = false, length = 50)
     String action;
 
     @Column(name = "actor_id")
