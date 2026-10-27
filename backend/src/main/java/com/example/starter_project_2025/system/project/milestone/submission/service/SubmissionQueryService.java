@@ -7,6 +7,7 @@ import com.example.starter_project_2025.system.project.milestone.submission.doma
 import com.example.starter_project_2025.system.project.milestone.submission.dto.SubmissionDtos;
 import com.example.starter_project_2025.system.project.milestone.submission.repository.*;
 import com.example.starter_project_2025.system.project.rubric.domain.RubricVersion;
+import com.example.starter_project_2025.system.project.rubric.integration.RubricTenantIdentity;
 import com.example.starter_project_2025.system.project.rubric.repository.RubricVersionRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -85,9 +86,8 @@ public class SubmissionQueryService {
         SubmissionVersion current = versionList.stream()
                 .filter(item -> item.getVersionNumber() == submission.getCurrentVersionNumber())
                 .findFirst().orElseThrow(() -> new ResourceNotFoundException("Submission version not found"));
-        RubricVersion rubric = rubrics.findByIdAndRubricTenantId(
-                        submission.getMilestone().getRubricSnapshotId(), tenantAlias(submission.getTenantId()))
-                .orElseThrow(() -> new ResourceNotFoundException("Submission rubric not found"));
+        RubricVersion rubric = resolveRubric(
+                submission.getMilestone().getRubricSnapshotId(), submission.getTenantId());
         List<MilestoneReview> reviewList = reviews
                 .findAllBySubmissionVersionSubmissionIdOrderByReviewedAtDesc(submissionId);
         return toDetail(submission, current, versionList, rubric, reviewList);
@@ -106,7 +106,13 @@ public class SubmissionQueryService {
         return submission;
     }
 
-    private UUID tenantAlias(Long tenantId) {
+    RubricVersion resolveRubric(UUID rubricSnapshotId, Long tenantId) {
+        return rubrics.findByIdAndRubricTenantId(rubricSnapshotId, RubricTenantIdentity.from(tenantId))
+                .or(() -> rubrics.findByIdAndRubricTenantId(rubricSnapshotId, legacyTenantAlias(tenantId)))
+                .orElseThrow(() -> new ResourceNotFoundException("Submission rubric not found"));
+    }
+
+    private UUID legacyTenantAlias(Long tenantId) {
         return UUID.nameUUIDFromBytes(("tenant:" + tenantId)
                 .getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }

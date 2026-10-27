@@ -6,6 +6,7 @@ import com.example.starter_project_2025.system.project.milestone.repository.Mile
 import com.example.starter_project_2025.system.project.milestone.submission.domain.*;
 import com.example.starter_project_2025.system.project.milestone.submission.repository.*;
 import com.example.starter_project_2025.system.project.rubric.domain.*;
+import com.example.starter_project_2025.system.project.rubric.integration.RubricTenantIdentity;
 import com.example.starter_project_2025.system.project.rubric.repository.RubricVersionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -217,6 +218,6 @@ public class SubmissionMockDataInitializer implements CommandLineRunner {
     }
 
     private UUID rubricTenantAlias(Long tenantId) {
-        return UUID.nameUUIDFromBytes(("tenant:" + tenantId).getBytes(StandardCharsets.UTF_8));
+        return RubricTenantIdentity.from(tenantId);
     }
 }

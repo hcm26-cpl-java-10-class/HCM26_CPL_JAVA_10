@@ -109,6 +109,10 @@ export const routes: RouteConfig[] = [
   { path: "/management/workspaces/:id", component: WorkspaceDetailPage, requiredPermission: "WORKSPACE_READ" },
   { path: "/management/project-teams", component: () => createElement(Navigate, { to: "/management/workspaces/candidates", replace: true }), requiredPermission: "WORKSPACE_READ" },
   {
+    path: "/milestones",
+    component: MilestoneListPage,
+  },
+  {
     path: "/projects/:projectId/milestones",
     component: MilestoneListPage,
   },

@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.project.milestone.service;
 
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.project.milestone.dto.response.MilestonePageResponse;
+import com.example.starter_project_2025.system.project.milestone.dto.response.MilestoneProjectOptionResponse;
 import com.example.starter_project_2025.system.project.milestone.dto.response.MilestoneDetailResponse;
 import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
 import com.example.starter_project_2025.system.project.milestone.dto.request.MilestoneListQuery;
@@ -50,6 +51,13 @@ public class MilestoneQueryService {
     private final ReviewerDirectoryPort reviewerPort;
     private final TenantSettingsPort tenantSettingsPort;
     private final WorkspaceMilestoneScopeService scopeService;
+
+    @Transactional(readOnly = true)
+    public List<MilestoneProjectOptionResponse> getProjectOptions() {
+        UUID actorId = actorProvider.requireCurrentActorId();
+        Long tenantId = tenantProvider.requireCurrentTenantId();
+        return projectPort.listAccessibleProjects(actorId, tenantId);
+    }
 
     @Transactional(readOnly = true)
     public MilestonePageResponse getList(Long projectId, MilestoneListQuery query) {

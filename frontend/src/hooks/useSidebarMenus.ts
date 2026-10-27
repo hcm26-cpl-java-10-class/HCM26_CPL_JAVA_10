@@ -194,15 +194,13 @@ export function useActiveModuleGroups(enabled = true) {
                 });
             }
 
-            const milestoneProjectId = import.meta.env.VITE_MILESTONE_MOCK_PROJECT_ID
-                || "1";
             const projectWorkspaceModules: SidebarModule[] = [
                 {
                     id: 100002,
                     moduleGroupId: projectGroupId,
                     title: "Milestones",
                     name: "Milestones",
-                    url: `/projects/${milestoneProjectId}/milestones`,
+                    url: "/milestones",
                     icon: "bookmark",
                     displayOrder: 3,
                     isActive: true,

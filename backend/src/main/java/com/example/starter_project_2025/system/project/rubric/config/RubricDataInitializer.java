@@ -55,8 +55,8 @@ public class RubricDataInitializer implements CommandLineRunner {
     private void seed(UUID rubricId, UUID versionId, String name, String description,
                       List<RubricVersion.CriterionValue> criteria) {
         if (repository.existsById(rubricId)) {
-            jdbc.update("UPDATE rubrics SET tenant_id = ? WHERE rubric_id = ? AND tenant_id = ?",
-                    RubricTenantIdentity.from(MockMilestoneData.TENANT_ID), rubricId,
+            jdbc.update("UPDATE rubrics SET tenant_id = ? WHERE tenant_id = ?",
+                    RubricTenantIdentity.from(MockMilestoneData.TENANT_ID),
                     UUID.nameUUIDFromBytes(("tenant:" + MockMilestoneData.TENANT_ID).getBytes(StandardCharsets.UTF_8)));
             return;
         }

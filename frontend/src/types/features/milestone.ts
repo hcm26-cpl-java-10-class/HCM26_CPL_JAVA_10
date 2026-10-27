@@ -1,7 +1,7 @@
 export type LatePolicyType = "NO_LATE" | "ALLOW_LATE";
 export type LatePenaltyBasis = "FIXED" | "PER_DAY";
 export type MilestoneStatus = "PLANNED" | "OPEN" | "CLOSED" | "CANCELLED";
-export type MilestoneProjectStatus = "ACTIVE" | "COMPLETED" | "CANCELLED";
+export type MilestoneProjectStatus = "DRAFT" | "PLANNING" | "ACTIVE" | "COMPLETED" | "CANCELLED";
 
 export interface MilestoneChecklistItemRequest {
   content: string;
@@ -35,7 +35,8 @@ export interface CreateMilestoneRequest {
 }
 
 export interface MilestoneProjectOption {
-  id: string;
+  id: string | number;
+  code?: string;
   name: string;
   status: MilestoneProjectStatus;
 }

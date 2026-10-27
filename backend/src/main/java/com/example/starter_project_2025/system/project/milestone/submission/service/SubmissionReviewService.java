@@ -6,6 +6,7 @@ import com.example.starter_project_2025.system.project.milestone.submission.doma
 import com.example.starter_project_2025.system.project.milestone.submission.dto.SubmissionDtos;
 import com.example.starter_project_2025.system.project.milestone.submission.repository.*;
 import com.example.starter_project_2025.system.project.rubric.domain.*;
+import com.example.starter_project_2025.system.project.rubric.integration.RubricTenantIdentity;
 import com.example.starter_project_2025.system.project.rubric.repository.RubricVersionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -66,7 +67,9 @@ public class SubmissionReviewService {
         }
         Map<UUID, Boolean> checklist = validateChecklist(request, version);
         RubricVersion rubric = rubrics.findByIdAndRubricTenantId(
-                        submission.getMilestone().getRubricSnapshotId(), tenantAlias(submission.getTenantId()))
+                        submission.getMilestone().getRubricSnapshotId(), RubricTenantIdentity.from(submission.getTenantId()))
+                .or(() -> rubrics.findByIdAndRubricTenantId(
+                        submission.getMilestone().getRubricSnapshotId(), tenantAlias(submission.getTenantId())))
                 .orElseThrow(() -> new MilestoneDependencyException("Submission rubric could not be loaded"));
 
         Map<UUID, SubmissionDtos.CriterionEvaluationRequest> inputs = validateEvaluations(request, rubric);

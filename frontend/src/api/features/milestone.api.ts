@@ -12,6 +12,7 @@ import type {
   MilestoneListParams,
   MilestoneOption,
   MilestonePageResponse,
+  MilestoneProjectOption,
   MilestoneResponse,
   PageResponse,
 } from "@/types";
@@ -19,6 +20,14 @@ import type {
 const backlogMilestoneOptionsPath = "/backlog-items/milestone-options";
 
 export const milestoneApi = {
+  async getProjectOptions(signal?: AbortSignal): Promise<MilestoneProjectOption[]> {
+    const response = await axiosInstance.get<MilestoneProjectOption[]>(
+      "/projects/milestone-options",
+      { signal },
+    );
+    return response.data ?? [];
+  },
+
   async getTeamList(teamId: number, params: MilestoneListParams): Promise<MilestonePageResponse> {
     const response = await axiosInstance.get<MilestonePageResponse>(
       `/teams/${teamId}/milestones`,
