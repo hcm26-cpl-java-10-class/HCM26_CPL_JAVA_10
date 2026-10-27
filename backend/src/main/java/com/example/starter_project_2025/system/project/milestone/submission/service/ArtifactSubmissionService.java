@@ -36,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 @Service
@@ -56,12 +57,14 @@ public class ArtifactSubmissionService {
     private final MilestoneAuditRepository auditRepository;
     private final OutboxEventWriter outboxWriter;
     private final ObjectMapper objectMapper;
+    private final ArtifactContributionLock contributionLock;
     private final ArtifactReviewSubmissionSyncService reviewSyncService;
 
     @Transactional
     public ArtifactSubmissionResponse submit(Long projectId, UUID milestoneId, String idempotencyKey,
             ArtifactSubmissionRequest request) {
         Scope scope = requireScope(projectId);
+        contributionLock.lockCurrentActor();
         if (idempotencyKey == null || idempotencyKey.isBlank() || idempotencyKey.length() > 100) {
             throw validation("idempotencyKey", "Idempotency-Key is required and must not exceed 100 characters");
         }
@@ -96,7 +99,8 @@ public class ArtifactSubmissionService {
             throw validation("artifact", "Provide at least one valid repository URL, deployment URL, or uploaded attachment");
         }
 
-        Instant now = Instant.now();
+        // Match persisted timestamp precision so an idempotent replay returns the same result.
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
         boolean late = now.isAfter(milestone.getDeadline());
         if (late && (milestone.getLatePolicyType() != LatePolicyType.ALLOW_LATE
                 || milestone.getLateUntil() == null || now.isAfter(milestone.getLateUntil()))) {

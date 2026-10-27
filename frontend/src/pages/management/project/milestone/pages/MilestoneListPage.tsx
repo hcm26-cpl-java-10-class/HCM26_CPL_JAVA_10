@@ -25,7 +25,7 @@ import type {
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, ClipboardCheck, Eye, FolderKanban, Plus, ShieldAlert } from "lucide-react";
 import { useCallback, useEffect, useMemo } from "react";
-import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { MilestoneEmptyState, MilestoneListError } from "../components/MilestoneListStates";
 import { MilestoneTableCard } from "../components/MilestoneTableCard";
 import { milestoneListSchema } from "../milestone-list.schema";
@@ -35,8 +35,6 @@ import {
   serializeMilestoneListParams,
 } from "../milestone-list-query.utils";
 import { getMilestoneApiError } from "../milestone.utils";
-import { MilestoneRiskPage } from "./MilestoneRiskPage";
-
 interface MilestoneTableFilters {
   status?: MilestoneStatus[];
   mandatory?: boolean;
@@ -59,7 +57,7 @@ function getProjectStatusBadgeVariant(status?: string): "default" | "secondary" 
 
 export function MilestoneListPage() {
   const [params] = useSearchParams();
-  return params.get("view") === "risk" ? <MilestoneRiskPage /> : <MilestoneStandardListPage />;
+  return params.get("view") === "risk" ? <Navigate replace to="/management/alerts?view=MILESTONE"/> : <MilestoneStandardListPage />;
 }
 
 function MilestoneStandardListPage() {

@@ -93,11 +93,7 @@ public class SubmissionVersion {
 
     public void replaceArtifacts(List<ArtifactValue> values) {
         if (status != SubmissionStatus.DRAFT) throw new IllegalStateException("Only a draft version can be edited");
-        artifacts.clear();
-        for (int index = 0; index < values.size(); index++) {
-            ArtifactValue item = values.get(index);
-            artifacts.add(SubmissionArtifact.create(this, item.type(), item.name(), item.url(), index));
-        }
+        applyArtifactValues(values);
     }
 
     public void clearArtifacts() {
@@ -154,10 +150,17 @@ public class SubmissionVersion {
         this.submittedAt = now;
         this.late = isLate;
         this.penaltyPercent = penalty == null ? BigDecimal.ZERO.setScale(2) : penalty.setScale(2);
-        artifacts.clear();
+        applyArtifactValues(values);
+    }
+
+    private void applyArtifactValues(List<ArtifactValue> values) {
+        // Keep occupied order slots instead of inserting replacements before
+        // Hibernate has removed their orphans (unique version + order index).
+        while (artifacts.size() > values.size()) artifacts.remove(artifacts.size() - 1);
         for (int index = 0; index < values.size(); index++) {
             ArtifactValue item = values.get(index);
-            artifacts.add(SubmissionArtifact.create(this, item.type(), item.name(), item.url(), index));
+            if (index < artifacts.size()) artifacts.get(index).update(item.type(), item.name(), item.url());
+            else artifacts.add(SubmissionArtifact.create(this, item.type(), item.name(), item.url(), index));
         }
     }
 

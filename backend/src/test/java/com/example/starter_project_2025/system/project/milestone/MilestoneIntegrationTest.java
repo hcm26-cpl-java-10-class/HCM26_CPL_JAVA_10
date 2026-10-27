@@ -59,6 +59,8 @@ class MilestoneIntegrationTest {
     @Autowired com.example.starter_project_2025.system.rbac.user.UserRepository users;
     @Autowired com.example.starter_project_2025.system.rbac.role.RoleRepository roles;
     @Autowired org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+    @Autowired jakarta.persistence.EntityManager entityManager;
+    @Autowired org.springframework.transaction.support.TransactionTemplate transactionTemplate;
 
     private String teacherToken;
     private String studentToken;
@@ -83,6 +85,7 @@ class MilestoneIntegrationTest {
         jdbcTemplate.execute("DELETE FROM milestone_waivers");
         jdbcTemplate.execute("DELETE FROM milestone_submissions");
         milestoneRepository.deleteAll();
+        ensureActualTeamFixture();
         var teacher = userDetailsService.loadUserByUsername("teacher@example.com");
         teacherToken = tokenService.generateAccessToken(
                 new UsernamePasswordAuthenticationToken(teacher, null, teacher.getAuthorities()));
@@ -471,7 +474,8 @@ class MilestoneIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("DRAFT"))
                 .andExpect(jsonPath("$.repositoryUrl").value("https://github.com/example/project"))
-                .andExpect(jsonPath("$.checklist." + itemId).value(true));
+                // Reviewer-owned acceptance checks are never confirmed by a student draft.
+                .andExpect(jsonPath("$.checklist." + itemId).value(false));
 
         mockMvc.perform(put(draftEndpoint)
                         .header("Authorization", "Bearer " + studentToken)
@@ -529,7 +533,7 @@ class MilestoneIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.draft.repositoryUrl").value("https://github.com/example/kept"))
                 .andExpect(jsonPath("$.draft.releaseNotes").value(org.hamcrest.Matchers.nullValue()))
-                .andExpect(jsonPath("$.draft.checklist." + itemId).value(true));
+                .andExpect(jsonPath("$.draft.checklist." + itemId).value(false));
     }
 
     @Test
@@ -545,7 +549,7 @@ class MilestoneIntegrationTest {
         mockMvc.perform(get(endpoint() + "/99999999-9999-9999-9999-999999999999/artifact-draft")
                         .header("Authorization", "Bearer " + studentToken))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(get("/api/projects/" + MockMilestoneData.OUT_OF_SCOPE_PROJECT_ID
+        mockMvc.perform(get("/api/projects/" + outOfScopeProjectId()
                         + "/milestones/" + milestoneId + "/artifact-draft")
                         .header("Authorization", "Bearer " + studentToken))
                 .andExpect(status().isForbidden())
@@ -815,7 +819,7 @@ class MilestoneIntegrationTest {
                         .header("Idempotency-Key", "artifact-submit-teacher")
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(post("/api/projects/" + MockMilestoneData.OUT_OF_SCOPE_PROJECT_ID
+        mockMvc.perform(post("/api/projects/" + outOfScopeProjectId()
                         + "/milestones/" + milestoneId + "/artifact-draft/submissions")
                         .header("Authorization", "Bearer " + studentToken)
                         .header("Idempotency-Key", "artifact-submit-out-of-scope")
@@ -831,7 +835,7 @@ class MilestoneIntegrationTest {
 
     @Test
     void rejectsProjectOutsideCurrentScopeWithoutReturningProjectData() throws Exception {
-        mockMvc.perform(get("/api/projects/" + MockMilestoneData.OUT_OF_SCOPE_PROJECT_ID + "/milestones")
+        mockMvc.perform(get("/api/projects/" + outOfScopeProjectId() + "/milestones")
                         .header("Authorization", "Bearer " + teacherToken))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
@@ -840,7 +844,7 @@ class MilestoneIntegrationTest {
 
     @Test
     void returnsNotFoundForUnknownProject() throws Exception {
-        mockMvc.perform(get("/api/projects/99999999-9999-9999-9999-999999999999/milestones")
+        mockMvc.perform(get("/api/projects/999999999/milestones")
                         .header("Authorization", "Bearer " + teacherToken))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
@@ -867,7 +871,7 @@ class MilestoneIntegrationTest {
                 .andExpect(jsonPath("$.checklist[0].content").value("Source code is pushed"))
                 .andExpect(jsonPath("$.checklist[1].orderIndex").value(1))
                 .andExpect(jsonPath("$.rubric.name").value("Milestone Delivery Rubric"))
-                .andExpect(jsonPath("$.rubric.version").value("1.0"))
+                .andExpect(jsonPath("$.rubric.version").value("v1"))
                 .andExpect(jsonPath("$.rubric.criteria.length()").value(3))
                 .andExpect(jsonPath("$.rubric.criteria[0].code").value("FUNCTIONALITY"))
                 .andExpect(jsonPath("$.rubric.criteria[0].weight").value(50.00))
@@ -908,7 +912,7 @@ class MilestoneIntegrationTest {
                 "Protected milestone", Instant.now().plusSeconds(86400), "detail-out-of-scope"
         );
 
-        mockMvc.perform(get("/api/projects/" + MockMilestoneData.OUT_OF_SCOPE_PROJECT_ID
+        mockMvc.perform(get("/api/projects/" + outOfScopeProjectId()
                         + "/milestones/" + milestoneId)
                         .header("Authorization", "Bearer " + teacherToken))
                 .andExpect(status().isForbidden())
@@ -925,6 +929,59 @@ class MilestoneIntegrationTest {
         mockMvc.perform(get(endpoint() + "/" + milestoneId)
                         .header("Authorization", "Bearer " + tokenWithoutMilestonePermissions()))
                 .andExpect(status().isForbidden());
+    }
+
+    private Long outOfScopeProjectId() {
+        return jdbcTemplate.queryForObject("SELECT id FROM projects WHERE code='DEMO-NON-MEMBER'", Long.class);
+    }
+
+    private void ensureActualTeamFixture() {
+        transactionTemplate.executeWithoutResult(status -> {
+            var teacher = entityManager.createQuery("select u from User u where u.email=:email",
+                    com.example.starter_project_2025.system.rbac.user.User.class)
+                    .setParameter("email", "teacher@example.com").getSingleResult();
+            var student = entityManager.createQuery("select u from User u where u.email=:email",
+                    com.example.starter_project_2025.system.rbac.user.User.class)
+                    .setParameter("email", "student@example.com").getSingleResult();
+            var project = entityManager.find(com.example.starter_project_2025.system.project.domain.Project.class,
+                    MockMilestoneData.PROJECT_ID);
+            var team = entityManager.find(com.example.starter_project_2025.system.project.ProjectTeam.class,
+                    MockMilestoneData.TEAM_ID);
+            if (team == null) {
+                var training = new com.example.starter_project_2025.system.project.trainingclass.TrainingClass();
+                training.setTenantId(teacher.getTenantId());training.setCode("MILESTONE-INTEGRATION-CLASS");
+                training.setName("Milestone integration class");training.setMentorId(teacher.getId());
+                training.setProgramId(1L);training.setProgramName("Milestone integration program");
+                training.setStatus(com.example.starter_project_2025.system.project.trainingclass.TrainingClassStatus.ONGOING);
+                entityManager.persist(training);
+                var session = new com.example.starter_project_2025.system.project.TeamAllocationSession();
+                session.setTrainingClass(training);session.setMaxMembers(8);session.setVersion(0L);
+                session.setStatus(com.example.starter_project_2025.system.project.TeamAllocationSessionStatus.PUBLISHED);
+                entityManager.persist(session);
+                team = new com.example.starter_project_2025.system.project.ProjectTeam();
+                team.setTrainingClass(training);team.setAllocationSession(session);team.setProject(project);
+                team.setTeamName("Milestone integration team");team.setAssignedMentorId(teacher.getId());
+                team.setMaxMembers(8);team.setVersion(0L);
+                team.setStatus(com.example.starter_project_2025.system.project.ProjectTeamStatus.ACTIVE);
+                entityManager.persist(team);
+                org.junit.jupiter.api.Assertions.assertEquals(MockMilestoneData.TEAM_ID, team.getId());
+                var cm = new com.example.starter_project_2025.system.project.trainingclass.ClassMember();
+                cm.setTrainingClass(training);cm.setUser(student);cm.setJoinedAt(java.time.LocalDateTime.now().minusDays(30));
+                cm.setStatus(com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus.ACTIVE);
+                entityManager.persist(cm);
+                var member = new com.example.starter_project_2025.system.project.ProjectMember();
+                member.setTeam(team);member.setClassMember(cm);member.setRole("DEV");entityManager.persist(member);
+            }
+            // The wrong-milestone test requires a second project the teacher is actually assigned to.
+            long secondAssignment = entityManager.createQuery("select count(m) from BoardProjectMember m "
+                    + "where m.projectId=:project and m.userId=:user and m.projectRole=:role", Long.class)
+                    .setParameter("project", MockMilestoneData.SECOND_PROJECT_ID).setParameter("user", teacher.getId())
+                    .setParameter("role", com.example.starter_project_2025.system.project.team.ProjectRole.MENTOR)
+                    .getSingleResult();
+            if (secondAssignment == 0) entityManager.persist(com.example.starter_project_2025.system.project.BoardProjectMember.builder()
+                    .projectId(MockMilestoneData.SECOND_PROJECT_ID).userId(teacher.getId())
+                    .projectRole(com.example.starter_project_2025.system.project.team.ProjectRole.MENTOR).build());
+        });
     }
 
     private String tokenWithoutMilestonePermissions() {

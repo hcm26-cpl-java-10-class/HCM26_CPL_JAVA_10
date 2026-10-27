@@ -15,7 +15,12 @@ import javax.sql.DataSource;
 public class WorkspaceDemoDataInitializer implements CommandLineRunner {
     private final WorkspaceDemoDataService demo;
     private final DataSource dataSource;
+    private final com.example.starter_project_2025.system.project.workspace.config.LegacyH2ProjectSchemaMigration legacyMigration;
     @Override public void run(String... args) throws Exception {
+        if (legacyMigration.isMigratedDatabase()) {
+            log.info("Workspace demo reset skipped: this database contains preserved legacy workspaces.");
+            return;
+        }
         try (var connection = dataSource.getConnection()) {
             // Default fixtures are only for the local H2 application.
             if (!connection.getMetaData().getURL().startsWith("jdbc:h2:")) return;

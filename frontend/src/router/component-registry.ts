@@ -22,6 +22,7 @@ import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import { MilestoneCreatePage } from "@/pages/management/project/milestone/pages/MilestoneCreatePage";
 import { MilestoneDetailPage } from "@/pages/management/project/milestone/pages/MilestoneDetailPage";
 import { MilestoneListPage } from "@/pages/management/project/milestone/pages/MilestoneListPage";
+import { MilestoneEntryPage } from "@/pages/management/project/milestone/pages/MilestoneEntryPage";
 import { TeamMilestoneListPage } from "@/pages/management/project/milestone/pages/TeamMilestoneListPage";
 import { TeamMilestoneDetailPage } from "@/pages/management/project/milestone/pages/TeamMilestoneDetailPage";
 import TeamArtifactSubmissionPage from "@/pages/student/TeamArtifactSubmissionPage";
@@ -39,6 +40,7 @@ import WorkspaceDetailPage from "@/pages/management/workspace/WorkspaceDetailPag
 import { createElement} from "react";
 import { Navigate } from "react-router-dom";
 import TaskManagementPage from "@/pages/management/task";
+import ProjectAlertsPage from "@/pages/management/alerts";
 import { TaskFormPage } from "@/pages/management/task/pages/TaskFormPage";
 import { TaskDetailPage } from "@/pages/management/task/pages/TaskDetailPage";
 import ProjectTemplateListPage from "@/pages/management/project-template";
@@ -65,6 +67,7 @@ export const routes: RouteConfig[] = [
   { path: "/dashboard", component: Dashboard, requiredPermission: "USER_READ" },
   { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
   { path: "/tasks", component: TaskManagementPage, requiredPermission: "TASK_READ", isModuleDriven: true },
+  { path: "/management/alerts", component: ProjectAlertsPage, requiredPermission: "PROJECT_ALERT_READ" },
   { path: "/tasks/create", component: TaskFormPage, requiredPermission: "TASK_CREATE" },
   { path: "/tasks/:id/edit", component: TaskFormPage, requiredPermission: "TASK_UPDATE" },
   { path: "/tasks/:id/detail", component: TaskDetailPage, requiredPermission: "TASK_READ" },
@@ -138,17 +141,11 @@ export const routes: RouteConfig[] = [
   { path: "/management/workspaces/candidates", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
   { path: "/management/workspaces/:id", component: WorkspaceDetailPage, requiredPermission: "WORKSPACE_READ" },
   { path: "/management/project-teams", component: () => createElement(Navigate, { to: "/management/workspaces/candidates", replace: true }), requiredPermission: "WORKSPACE_READ" },
-  {
-    path: "/milestones",
-    component: MilestoneListPage,
-  },
-  {
-    path: "/projects/:projectId/milestones",
-    component: MilestoneListPage,
-  },
-  { path: "/teams/:teamId/milestones", component: TeamMilestoneListPage },
-  { path: "/teams/:teamId/milestones/new", component: MilestoneCreatePage },
-  { path: "/teams/:teamId/milestones/:milestoneId", component: TeamMilestoneDetailPage },
+  { path: "/milestones", component: MilestoneEntryPage, requiredPermission: "MILESTONE_READ" },
+  { path: "/projects/:projectId/milestones", component: MilestoneListPage, requiredPermission: "MILESTONE_READ" },
+  { path: "/teams/:teamId/milestones", component: TeamMilestoneListPage, requiredPermission: "MILESTONE_READ" },
+  { path: "/teams/:teamId/milestones/new", component: MilestoneCreatePage, requiredPermission: "MILESTONE_WRITE" },
+  { path: "/teams/:teamId/milestones/:milestoneId", component: TeamMilestoneDetailPage, requiredPermission: "MILESTONE_READ" },
   { path: "/teams/:teamId/milestones/:milestoneId/submit", component: TeamArtifactSubmissionPage, requiredPermission: "ARTIFACT_READ" },
   { path: "/teams/:teamId/milestones/:milestoneId/submissions", component: TeamMilestoneSubmissionsPage },
   {
@@ -182,6 +179,5 @@ export const routes: RouteConfig[] = [
   { path: "/register", component: RegisterPage, isPublic: true },
   { path: "/forgot-password", component: ForgotPasswordPage, isPublic: true },
   { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true },
-  { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true,},
   { path: "/unauthorized", component: Unauthorized, isPublic: true },
 ];

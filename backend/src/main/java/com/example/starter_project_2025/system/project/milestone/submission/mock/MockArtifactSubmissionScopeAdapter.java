@@ -69,6 +69,13 @@ public class MockArtifactSubmissionScopeAdapter implements ArtifactSubmissionSco
         }
     }
 
+    @Override
+    public void requireReviewerTeamAccess(Long teamId,UUID actorId,Long tenantId) {
+        if(!MockMilestoneData.TENANT_ID.equals(tenantId)
+                ||teamAssignments.values().stream().noneMatch(ids->ids.contains(teamId)))
+            throw new AccessDeniedException("Reviewer is outside this demo team");
+    }
+
     private boolean isAdministrator() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         return authentication != null && authentication.getAuthorities().stream()

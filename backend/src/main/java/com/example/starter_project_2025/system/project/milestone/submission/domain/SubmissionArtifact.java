@@ -38,4 +38,10 @@ public class SubmissionArtifact {
         value.orderIndex = orderIndex;
         return value;
     }
+
+    void update(SubmissionArtifactType type, String name, String url) {
+        this.type = type;
+        this.name = name.trim();
+        this.url = url.trim();
+    }
 }

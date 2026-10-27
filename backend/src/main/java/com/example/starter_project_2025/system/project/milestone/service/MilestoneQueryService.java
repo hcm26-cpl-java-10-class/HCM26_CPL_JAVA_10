@@ -50,6 +50,7 @@ public class MilestoneQueryService {
     private final RubricCatalogPort rubricPort;
     private final ReviewerDirectoryPort reviewerPort;
     private final TenantSettingsPort tenantSettingsPort;
+    private final TeamMilestoneReadPort teamRead;
     private final WorkspaceMilestoneScopeService scopeService;
 
     @Transactional(readOnly = true)
@@ -109,7 +110,7 @@ public class MilestoneQueryService {
     public MilestonePageResponse getTeamList(Long teamId, MilestoneListQuery query) {
         String search = normalizeSearch(query.search());
         validateListQuery(query, search);
-        Long tenantId = tenantProvider.requireCurrentTenantId();
+        Long tenantId = teamRead.requireTenant(teamId);
         scopeService.requireTeamScope(null, teamId, tenantId);
         return mapper.toPageResponse(null, repository.findAll(
                 MilestoneSpecifications.matching(tenantId, null, teamId, search, query.status(),
@@ -137,7 +138,7 @@ public class MilestoneQueryService {
 
     @Transactional(readOnly = true)
     public MilestoneDetailResponse getTeamDetail(Long teamId, UUID milestoneId) {
-        Long tenantId = tenantProvider.requireCurrentTenantId();
+        Long tenantId = teamRead.requireTenant(teamId);
         var scope = scopeService.requireTeamScope(null, teamId, tenantId);
         var milestone = repository.findByIdAndTeamIdAndTenantId(milestoneId, teamId, tenantId)
                 .filter(Milestone::isActive)

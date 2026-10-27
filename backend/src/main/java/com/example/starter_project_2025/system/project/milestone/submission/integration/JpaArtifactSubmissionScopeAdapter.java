@@ -1,73 +1,139 @@
 package com.example.starter_project_2025.system.project.milestone.submission.integration;
 
-import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.project.ProjectMemberRepository;
-import com.example.starter_project_2025.system.project.ProjectRepository;
+import com.example.starter_project_2025.system.project.ProjectTeam;
 import com.example.starter_project_2025.system.project.ProjectTeamRepository;
+import com.example.starter_project_2025.system.project.ProjectTeamStatus;
 import com.example.starter_project_2025.system.project.milestone.submission.port.ArtifactSubmissionScopePort;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
+import com.example.starter_project_2025.system.project.workspace.service.WorkspaceAccessService;
+import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
-/** Uses the authenticated user and persisted team membership instead of configured demo IDs. */
 @Component
-@Profile("!milestone-mock & !test")
+@Primary
+@Profile("(!test & !milestone-mock) | artifact-real-scope")
 @RequiredArgsConstructor
-public class JpaArtifactSubmissionScopeAdapter implements ArtifactSubmissionScopePort {
+public class JpaArtifactSubmissionScopeAdapter
+        implements ArtifactSubmissionScopePort {
 
-    private final ProjectRepository projects;
-    private final ProjectTeamRepository teams;
+    private final WorkspaceAccessService access;
     private final ProjectMemberRepository members;
+    private final ProjectTeamRepository teams;
 
     @Override
-    public void requireStudentProjectAccess(Long projectId, UUID actorId, Long tenantId) {
-        var principal = requirePrincipal(tenantId);
-        projects.findById(projectId)
-                .filter(project -> project.getTenant() != null
-                        && tenantId.equals(project.getTenant().getId())
-                        && Boolean.TRUE.equals(project.getIsActive()))
-                .orElseThrow(() -> new AccessDeniedException("Project is outside the current tenant"));
-        if (isAdministrator()) return;
+    public void requireStudentTeamAccess(
+            Long teamId, UUID actorId, Long tenantId) {
 
-        boolean assigned = teams.findAllByProject_IdInOrderByIdDesc(java.util.List.of(projectId)).stream()
-                .anyMatch(team -> members.existsByTeam_IdAndClassMember_User_IdAndClassMember_Status(
-                        team.getId(), principal.getUser().getId(), ClassMemberStatus.ACTIVE));
-        if (!assigned) throw new AccessDeniedException("Student is not assigned to this project");
-    }
+        User user = actor(actorId, tenantId);
+        ProjectTeam team = access.requireTeam(user, teamId, false);
 
-    @Override
-    public void requireStudentTeamAccess(Long teamId, UUID actorId, Long tenantId) {
-        var principal = requirePrincipal(tenantId);
-        teams.findByIdAndTrainingClass_TenantId(teamId, tenantId)
-                .orElseThrow(() -> new AccessDeniedException("Team is outside the current tenant"));
-        if (isAdministrator()) return;
-        if (!members.existsByTeam_IdAndClassMember_User_IdAndClassMember_Status(
-                teamId, principal.getUser().getId(), ClassMemberStatus.ACTIVE)) {
-            throw new AccessDeniedException("Student is not assigned to this team");
+        if (!isAdministrator(user) && !currentStudent(user, team)) {
+            throw denied();
         }
     }
 
-    private UserPrincipal requirePrincipal(Long tenantId) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()
-                || !(authentication.getPrincipal() instanceof UserPrincipal principal)
-                || principal.getTenantId() == null || !tenantId.equals(principal.getTenantId())) {
-            throw new AccessDeniedException("Authenticated tenant scope is required");
+    @Override
+    public void requireStudentProjectAccess(
+            Long projectId, UUID actorId, Long tenantId) {
+
+        User user = actor(actorId, tenantId);
+        access.requireProject(user, projectId, false);
+
+        if (isAdministrator(user)) {
+            return;
         }
-        return principal;
+
+        boolean assigned = teams
+                .findAllByProject_IdInOrderByIdDesc(List.of(projectId))
+                .stream()
+                .filter(team -> Boolean.TRUE.equals(team.getIsActive())
+                        && team.getStatus() == ProjectTeamStatus.ACTIVE
+                        && Objects.equals(
+                        team.getTrainingClass().getTenantId(),
+                        tenantId))
+                .anyMatch(team -> currentStudent(user, team));
+
+        if (!assigned) {
+            throw denied();
+        }
     }
 
-    private boolean isAdministrator() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        return authentication != null && authentication.getAuthorities().stream()
-                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority())
-                        || "ROLE_SUPER_ADMIN".equals(authority.getAuthority())
-                        || "ROLE_ADMINISTRATOR".equals(authority.getAuthority()));
+    @Override
+    public void requireReviewerTeamAccess(
+            Long teamId, UUID actorId, Long tenantId) {
+
+        User user = actor(actorId, tenantId);
+        access.requireTeam(user, teamId, false);
+
+        if (!access.permitted(user, "ARTIFACT_REVIEW")) {
+            throw denied();
+        }
+    }
+
+    private User actor(UUID actorId, Long tenantId) {
+        User user = access.requireUser(false);
+        access.requireTenant(user, false);
+
+        UUID expectedActorId = UUID.nameUUIDFromBytes(
+                user.getEmail().getBytes(StandardCharsets.UTF_8));
+
+        if (!Objects.equals(user.getTenantId(), tenantId)
+                || !expectedActorId.equals(actorId)) {
+            throw denied();
+        }
+
+        return user;
+    }
+
+    private boolean currentStudent(User user, ProjectTeam team) {
+        boolean student = user.getRoles().stream()
+                .anyMatch(role -> Boolean.TRUE.equals(role.getIsActive())
+                        && "STUDENT".equals(role.getName()));
+
+        if (!student) {
+            return false;
+        }
+
+        return members
+                .findByTeam_IdAndClassMember_User_Id(
+                        team.getId(), user.getId())
+                .filter(member ->
+                        Boolean.TRUE.equals(member.getIsActive())
+                                && Boolean.TRUE.equals(
+                                member.getClassMember().getIsActive())
+                                && member.getClassMember().getStatus()
+                                == ClassMemberStatus.ACTIVE
+                                && Objects.equals(
+                                member.getClassMember()
+                                        .getTrainingClass().getId(),
+                                team.getTrainingClass().getId()))
+                .isPresent();
+    }
+
+    private boolean isAdministrator(User user) {
+        return user.getRoles().stream()
+                .anyMatch(role -> Boolean.TRUE.equals(role.getIsActive())
+                        && Set.of(
+                        "ADMIN",
+                        "ADMINISTRATOR",
+                        "SUPER_ADMIN",
+                        "SYSTEM_ADMIN"
+                ).contains(role.getName()));
+    }
+
+    private AccessDeniedException denied() {
+        return new AccessDeniedException(
+                "Artifact access is outside the current student/team scope");
     }
 }

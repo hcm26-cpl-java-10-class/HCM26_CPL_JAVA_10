@@ -51,6 +51,7 @@ public class ArtifactDraftService {
     private final MilestoneAuditRepository auditRepository;
     private final OutboxEventWriter outboxWriter;
     private final ObjectMapper objectMapper;
+    private final ArtifactContributionLock contributionLock;
     private final ClamAvScanner clamAvScanner;
     private final WorkspaceMilestoneScopeService scopeService;
     @org.springframework.beans.factory.annotation.Value("${app.artifact.upload.enabled:false}")
@@ -78,6 +79,7 @@ public class ArtifactDraftService {
     @Transactional
     public ArtifactDraftResponse save(Long projectId, UUID milestoneId, ArtifactDraftRequest request) {
         Scope scope = requireScope(projectId);
+        contributionLock.lockCurrentActor();
         var milestone = resolveMilestone(projectId, milestoneId, scope.tenantId());
         validateUrl("repositoryUrl", request.repositoryUrl());
         validateUrl("deploymentUrl", request.deploymentUrl());

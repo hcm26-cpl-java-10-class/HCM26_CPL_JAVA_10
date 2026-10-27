@@ -30,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 /** Team-scoped counterpart of the Project artifact workflow. Uploaded files stay disabled until team storage policy is configured. */
@@ -51,6 +52,7 @@ public class TeamArtifactSubmissionService {
     private final ObjectMapper objectMapper;
     private final com.example.starter_project_2025.system.rbac.user.UserRepository userRepository;
     private final com.example.starter_project_2025.system.project.ProjectTeamRepository projectTeamRepository;
+    private final ArtifactContributionLock contributionLock;
     private final WorkspaceMilestoneScopeService milestoneScopeService;
     private final ArtifactReviewSubmissionSyncService reviewSyncService;
 
@@ -71,6 +73,7 @@ public class TeamArtifactSubmissionService {
     @Transactional
     public ArtifactDraftResponse save(Long teamId, UUID milestoneId, ArtifactDraftRequest request) {
         Scope s = studentScope(teamId);
+        contributionLock.lockCurrentActor();
         var milestone = milestoneRepository.findByIdAndTeamIdAndTenantId(milestoneId, teamId, s.tenantId)
                 .filter(com.example.starter_project_2025.system.project.milestone.domain.Milestone::isActive)
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
@@ -101,6 +104,7 @@ public class TeamArtifactSubmissionService {
     @Transactional
     public ArtifactSubmissionResponse submit(Long teamId, UUID milestoneId, String key, ArtifactSubmissionRequest request) {
         Scope s = studentScope(teamId);
+        contributionLock.lockCurrentActor();
         if (key == null || key.isBlank() || key.length() > 100) throw validation("idempotencyKey", "Idempotency-Key is required");
         var milestone = milestoneRepository.lockForTeamSubmission(milestoneId, teamId, s.tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
@@ -118,7 +122,7 @@ public class TeamArtifactSubmissionService {
         Map<UUID, Boolean> checklist = validateChecklist(milestone, request.checklist());
         if (request.attachmentIds() != null && !request.attachmentIds().isEmpty()) throw validation("attachments", "Team milestone file upload is not configured");
         if (blank(request.repositoryUrl()) == null && blank(request.deploymentUrl()) == null) throw validation("artifact", "Provide a repository URL or deployment URL");
-        Instant now = Instant.now(); boolean late = now.isAfter(milestone.getDeadline());
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS); boolean late = now.isAfter(milestone.getDeadline());
         if (late && (milestone.getLatePolicyType() != LatePolicyType.ALLOW_LATE || milestone.getLateUntil() == null || now.isAfter(milestone.getLateUntil())))
             throw validation("deadline", "The late policy does not accept submissions now");
         var previous = submissionRepository.findTopByTenantIdAndTeamIdAndMilestoneIdAndSubmitterIdOrderByVersionDesc(s.tenantId, teamId, milestoneId, s.actorId);
@@ -170,16 +174,24 @@ public class TeamArtifactSubmissionService {
     private Scope reviewerScope(Long teamId) {
         UUID actor = actorProvider.requireCurrentActorId(); Long tenant = tenantProvider.requireCurrentTenantId();
         var milestoneScope = milestoneScopeService.requireTeamScope(null, teamId, tenant);
+        scopePort.requireReviewerTeamAccess(teamId,actor,tenant);
         if (!milestoneRepository.existsByTeamIdAndTenantIdAndActiveTrue(teamId, tenant)) throw new ResourceNotFoundException("Team milestone not found");
         return new Scope(actor, tenant, milestoneScope.projectId());
     }
     private void requireActiveTeamWorkspace(Long teamId, Long tenantId) {
-        var team = projectTeamRepository.findByIdAndTrainingClass_TenantId(teamId, tenantId)
-                .orElseThrow(() -> new ResourceNotFoundException("Team workspace not found"));
-        if (team.getStatus() != com.example.starter_project_2025.system.project.ProjectTeamStatus.ACTIVE
+        var team = projectTeamRepository
+                .findByIdAndTrainingClass_TenantId(teamId, tenantId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Team workspace not found"));
+
+        if (team.getStatus()
+                != com.example.starter_project_2025.system.project.ProjectTeamStatus.ACTIVE
                 || team.getProject() == null
-                || team.getProject().getStatus() != com.example.starter_project_2025.system.project.domain.ProjectStatus.ACTIVE)
-            throw new MilestoneConflictException("Team workspace or its project is not active");
+                || team.getProject().getStatus()
+                != com.example.starter_project_2025.system.project.domain.ProjectStatus.ACTIVE) {
+            throw new MilestoneConflictException(
+                    "Team workspace or its project is not active");
+        }
     }
     private Map<UUID, Boolean> validateChecklist(com.example.starter_project_2025.system.project.milestone.domain.Milestone m, Map<UUID, Boolean> requested) {
         var allowed = m.getChecklistItems().stream().map(x -> x.getId()).collect(java.util.stream.Collectors.toSet());

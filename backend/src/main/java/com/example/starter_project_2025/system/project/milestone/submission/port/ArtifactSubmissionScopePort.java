@@ -6,4 +6,7 @@ import java.util.UUID;
 public interface ArtifactSubmissionScopePort {
     void requireStudentProjectAccess(Long projectId, UUID actorId, Long tenantId);
     void requireStudentTeamAccess(Long teamId, UUID actorId, Long tenantId);
+    default void requireReviewerTeamAccess(Long teamId, UUID actorId, Long tenantId) {
+        throw new org.springframework.security.access.AccessDeniedException("Reviewer team access is not configured");
+    }
 }

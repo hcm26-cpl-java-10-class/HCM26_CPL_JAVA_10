@@ -13,11 +13,17 @@ public class MilestoneAccessPolicy {
         if (!project.tenantActive()) {
             throw new AccessDeniedException("Tenant is inactive");
         }
+        if (!project.mentorAssigned()) {
+            throw new AccessDeniedException("Project assignment is no longer active");
+        }
     }
 
     public void requireReadAccess(ProjectReadContext project) {
         if (!project.tenantActive()) {
             throw new AccessDeniedException("Tenant is inactive");
+        }
+        if (!project.mentorAssigned()) {
+            throw new AccessDeniedException("Project assignment is no longer active");
         }
     }
 
