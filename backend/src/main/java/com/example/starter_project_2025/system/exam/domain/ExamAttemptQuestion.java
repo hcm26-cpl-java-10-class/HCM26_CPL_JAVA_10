@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.exam.domain;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.system.question.domain.QuestionType;
+import com.example.starter_project_2025.system.question.domain.EssayGradingCriterion;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -43,4 +44,9 @@ public class ExamAttemptQuestion extends BaseEntity {
     @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("displayOrder ASC")
     private List<ExamAttemptOption> options = new ArrayList<>();
+
+    @ElementCollection
+    @CollectionTable(name = "exam_attempt_question_criterion", joinColumns = @JoinColumn(name = "question_id"))
+    @OrderColumn(name = "display_order")
+    private List<EssayGradingCriterion> gradingCriteria = new ArrayList<>();
 }

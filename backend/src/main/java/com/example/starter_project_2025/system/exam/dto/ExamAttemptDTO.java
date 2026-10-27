@@ -35,6 +35,19 @@ public class ExamAttemptDTO {
     private List<QuestionTakerDTO> questions;
     private List<AnswerDTO> answers;
 
+    // NEW (anti-cheat): cau hinh giam sat de FE biet can bat tinh nang nao
+    private Integrity integrity;
+
+    @Getter
+    @Setter
+    public static class Integrity {
+        private boolean enabled;
+        private boolean detectTabSwitch;
+        private boolean blockCopyPaste;
+        private boolean requireFullscreen;
+        private boolean singleSession;
+    }
+
     @Getter
     @Setter
     public static class AnswerDTO {

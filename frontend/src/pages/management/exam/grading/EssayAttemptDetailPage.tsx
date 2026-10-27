@@ -382,6 +382,30 @@ export default function EssayAttemptDetailPage() {
                                         )}
                                     </div>
 
+                                    {essay.gradingCriteria && essay.gradingCriteria.length > 0 && (
+                                        <div className="rounded-lg border border-sky-200 bg-sky-50/50 p-4 dark:border-sky-900 dark:bg-sky-950/20">
+                                            <span className="text-xs font-medium uppercase text-sky-800 dark:text-sky-300">
+                                                Saved Grading Criteria
+                                            </span>
+                                            <ul className="mt-2 grid gap-2">
+                                                {essay.gradingCriteria.map((criterion, criterionIndex) => (
+                                                    <li key={`${criterion.name}-${criterionIndex}`} className="text-sm">
+                                                        <span className="font-medium">{criterion.name}</span>
+                                                        <span className="ml-2 text-muted-foreground">{criterion.weightPercentage}%</span>
+                                                        {criterion.description && (
+                                                            <p className="mt-0.5 whitespace-pre-wrap text-muted-foreground">
+                                                                {criterion.description}
+                                                            </p>
+                                                        )}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                            <p className="mt-2 text-xs text-muted-foreground">
+                                                These saved criteria are included as the default rubric when requesting AI suggestions.
+                                            </p>
+                                        </div>
+                                    )}
+
                                     <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/10 p-3">
                                         <button
                                             type="button"

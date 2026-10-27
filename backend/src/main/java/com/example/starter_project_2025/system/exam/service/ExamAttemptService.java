@@ -10,6 +10,7 @@ import com.example.starter_project_2025.system.exam.dto.ExamAttemptSummaryDTO;
 import com.example.starter_project_2025.system.exam.dto.SaveExamAnswerRequest;
 
 import com.example.starter_project_2025.system.question.domain.Question;
+import com.example.starter_project_2025.system.question.domain.EssayGradingCriterion;
 import com.example.starter_project_2025.system.question.domain.QuestionOption;
 import com.example.starter_project_2025.system.question.domain.QuestionType;
 import com.example.starter_project_2025.system.question.mapper.QuestionTakerMapper;
@@ -141,6 +142,13 @@ public class ExamAttemptService {
             snap.setType(q.getType());
             snap.setPoints(q.getPoints());
             snap.setDisplayOrder(questionOrder++);
+            q.getGradingCriteria().forEach(sourceCriterion -> {
+                EssayGradingCriterion criterion = new EssayGradingCriterion();
+                criterion.setName(sourceCriterion.getName());
+                criterion.setDescription(sourceCriterion.getDescription());
+                criterion.setWeightPercentage(sourceCriterion.getWeightPercentage());
+                snap.getGradingCriteria().add(criterion);
+            });
 
             List<QuestionOption> options = new ArrayList<>(q.getOptions());
             options.sort(Comparator.comparing(QuestionOption::getId));
@@ -524,6 +532,15 @@ public class ExamAttemptService {
         int attemptsUsed = Math.max(attempt.getAttemptNumber(), attempts.size());
         response.setAttemptsUsed(attemptsUsed);
         response.setAttemptsRemaining(Math.max(0, maxAttempts(attempt.getExam()) - attemptsUsed));
+        // NEW (anti-cheat)
+        Exam ex = attempt.getExam();
+        ExamAttemptDTO.Integrity integrity = new ExamAttemptDTO.Integrity();
+        integrity.setEnabled(Boolean.TRUE.equals(ex.getAntiCheatEnabled()));
+        integrity.setDetectTabSwitch(integrity.isEnabled() && Boolean.TRUE.equals(ex.getDetectTabSwitch()));
+        integrity.setBlockCopyPaste(integrity.isEnabled() && Boolean.TRUE.equals(ex.getBlockCopyPaste()));
+        integrity.setRequireFullscreen(integrity.isEnabled() && Boolean.TRUE.equals(ex.getRequireFullscreen()));
+        integrity.setSingleSession(integrity.isEnabled() && Boolean.TRUE.equals(ex.getSingleSession()));
+        response.setIntegrity(integrity);
         response.setQuestions(attempt.getQuestions().stream()
                 .map(questionTakerMapper::toTakerResponse)
                 .toList());

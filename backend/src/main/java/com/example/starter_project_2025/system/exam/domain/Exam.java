@@ -81,6 +81,29 @@ public class Exam extends BaseEntity {
     @Column(length = 100)
     private String accessCode;
 
+    // ===== NEW (anti-cheat): cau hinh chong gian lan theo tung de (mac dinh TAT) =====
+    @Column(nullable = false)
+    private Boolean antiCheatEnabled = false;
+
+    /** Dem so lan roi tab / chuyen cua so. */
+    @Column(nullable = false)
+    private Boolean detectTabSwitch = false;
+
+    /** Chan copy/cut/paste/chuot phai/phim tat F12,Ctrl+U,Ctrl+P. */
+    @Column(nullable = false)
+    private Boolean blockCopyPaste = false;
+
+    /** Yeu cau toan man hinh, ghi lai khi thoat. */
+    @Column(nullable = false)
+    private Boolean requireFullscreen = false;
+
+    /** Phat hien mo bai thi o nhieu tab/thiet bi. */
+    @Column(nullable = false)
+    private Boolean singleSession = false;
+
+    /** So vi pham de danh dau "nghi van" trong bao cao (null/0 = khong danh dau). */
+    private Integer flagThreshold;
+
     @ManyToMany
     @JoinTable(name = "exam_question",
             joinColumns = @JoinColumn(name = "exam_id"),

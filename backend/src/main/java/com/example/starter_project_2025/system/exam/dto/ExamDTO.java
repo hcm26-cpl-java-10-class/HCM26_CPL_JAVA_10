@@ -82,6 +82,17 @@ public class ExamDTO extends BaseDTO {
     @Size(max = 100, groups = {OnCreate.class, OnUpdate.class})
     private String accessCode;
 
+    // NEW (anti-cheat)
+    private Boolean antiCheatEnabled;
+    private Boolean detectTabSwitch;
+    private Boolean blockCopyPaste;
+    private Boolean requireFullscreen;
+    private Boolean singleSession;
+
+    @Min(value = 0, groups = {OnCreate.class, OnUpdate.class}, message = "flagThreshold phải >= 0")
+    @Max(value = 1000, groups = {OnCreate.class, OnUpdate.class}, message = "flagThreshold tối đa 1000")
+    private Integer flagThreshold;
+
     @JsonProperty(access = READ_ONLY)
     private Boolean hasPassword;
 }

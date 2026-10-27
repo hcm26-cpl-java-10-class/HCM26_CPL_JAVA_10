@@ -52,6 +52,11 @@ public class Question extends BaseEntity {
     @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<QuestionOption> options = new ArrayList<>();
 
+    @ElementCollection
+    @CollectionTable(name = "question_essay_criterion", joinColumns = @JoinColumn(name = "question_id"))
+    @OrderColumn(name = "display_order")
+    private List<EssayGradingCriterion> gradingCriteria = new ArrayList<>();
+
     @PrePersist
     @PreUpdate
     private void normalizeTopic() {

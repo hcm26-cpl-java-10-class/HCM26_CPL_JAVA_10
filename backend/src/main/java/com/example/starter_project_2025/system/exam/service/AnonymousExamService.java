@@ -9,6 +9,7 @@ import com.example.starter_project_2025.system.exam.domain.ExamAttempt;
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptRepository;
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus;
 import com.example.starter_project_2025.system.exam.dto.ExamAttemptDTO;
+import com.example.starter_project_2025.system.exam.dto.IntegrityEventRequest;
 import com.example.starter_project_2025.system.exam.dto.SaveExamAnswerRequest;
 import com.example.starter_project_2025.system.notification.service.EmailService;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class AnonymousExamService {
     private final ExamAttemptService attemptService;
     private final ExamAttemptRepository attemptRepository;
     private final EmailService emailService;
+    private final ExamIntegrityService integrityService; // NEW (anti-cheat)
 
     @Transactional(readOnly = true)
     private AnonymousSession requireSession(String sessionToken) {
@@ -71,6 +73,15 @@ public class AnonymousExamService {
         assertAttemptBelongsToSession(session, attemptId);
 
         return attemptService.saveAnswers(attemptId, session.getGuestUserId(), requests);
+    }
+
+    /** NEW (anti-cheat): ghi vi pham cua thi sinh an danh. */
+    @Transactional
+    public void recordIntegrity(String sessionToken, Long attemptId, IntegrityEventRequest request,
+                                String userAgent, String ip) {
+        AnonymousSession session = requireSession(sessionToken);
+        assertAttemptBelongsToSession(session, attemptId);
+        integrityService.record(attemptId, session.getGuestUserId(), request, userAgent, ip);
     }
 
     @Transactional

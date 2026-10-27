@@ -1,5 +1,6 @@
 import {
     saveAnonymousAnswers,
+    sendAnonymousIntegrityEvents, // NEW (anti-cheat)
     startAnonymousExam,
     submitAnonymousExam,
     SESSION_EMAIL_KEY,
@@ -15,6 +16,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Save, Star } from "lucide-react";
 import { toast } from "sonner";
+import { ExamIntegrityNotice, useExamIntegrity } from '@/hooks/useExamIntegrity'; // NEW (anti-cheat)
 
 const attemptQueryKey = (examId: string) => ["anonymous-exam-attempt", examId] as const;
 
@@ -82,6 +84,14 @@ export default function AnonymousExamTakingPage() {
     });
 
     const attempt = attemptQuery.data;
+
+    // NEW (anti-cheat)
+    const integrity = useExamIntegrity({
+        attemptId: attempt?.id,
+        config: attempt?.integrity,
+        active: attempt?.status === 'IN_PROGRESS',
+        send: (id, payload) => sendAnonymousIntegrityEvents(id, sessionToken, payload),
+    });
     const flagKey = attempt ? `anonymous-exam-flagged-${attempt.id}` : null;
 
     const submitMutation = useMutation({
@@ -465,6 +475,7 @@ export default function AnonymousExamTakingPage() {
             </header>
 
             <main className="mx-auto flex max-w-4xl flex-col gap-5 px-4 py-6">
+                {!isFinished && <ExamIntegrityNotice config={attempt.integrity} state={integrity} />}
                 {hasSaveError && (
                     <div role="alert" className="flex items-center justify-between rounded-lg border border-destructive bg-red-50 p-3 text-sm text-destructive">
                         <span>Một số câu trả lời chưa được lưu.</span>
