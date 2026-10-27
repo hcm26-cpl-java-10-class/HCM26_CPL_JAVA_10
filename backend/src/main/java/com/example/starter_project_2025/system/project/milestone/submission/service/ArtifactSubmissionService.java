@@ -81,6 +81,11 @@ public class ArtifactSubmissionService {
                     .orElseThrow(() -> new IllegalStateException("Idempotent submission record is missing"));
         }
 
+        accessPolicy.requireSubmittableState(scope.project());
+        if (milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN) {
+            throw new MilestoneConflictException("Milestone must be OPEN before students can submit artifacts");
+        }
+
         validateUrl("repositoryUrl", request.repositoryUrl());
         validateUrl("deploymentUrl", request.deploymentUrl());
         Map<UUID, Boolean> checklist = validateChecklist(milestone, request.checklist());
@@ -141,7 +146,7 @@ public class ArtifactSubmissionService {
         ProjectReadContext project = projectPort.requireProjectForRead(projectId, actorId, tenantId);
         accessPolicy.requireReadAccess(project);
         submissionScope.requireStudentProjectAccess(projectId, actorId, tenantId);
-        return new Scope(actorId, tenantId);
+        return new Scope(actorId, tenantId, project);
     }
 
     private List<ArtifactAttachment> validateAttachments(List<UUID> ids, UUID milestoneId,
@@ -277,5 +282,5 @@ public class ArtifactSubmissionService {
 
     private String normalize(String value) { return blank(value) ? null : value.trim(); }
     private boolean blank(String value) { return value == null || value.isBlank(); }
-    private record Scope(UUID actorId, Long tenantId) { }
+    private record Scope(UUID actorId, Long tenantId, ProjectReadContext project) { }
 }

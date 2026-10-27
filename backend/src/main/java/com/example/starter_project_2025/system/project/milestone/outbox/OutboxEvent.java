@@ -57,6 +57,12 @@ public class OutboxEvent {
         return event;
     }
 
+    public static OutboxEvent milestoneOpened(UUID milestoneId, String payloadJson, Instant now) {
+        OutboxEvent event = milestoneCreated(milestoneId, payloadJson, now);
+        event.eventType = "MILESTONE_OPENED";
+        return event;
+    }
+
     public static OutboxEvent milestoneAtRiskAlert(UUID eventId, UUID milestoneId, String payloadJson, Instant now) {
         OutboxEvent event = milestoneCreated(milestoneId, payloadJson, now);
         event.eventId = eventId;

@@ -122,6 +122,7 @@ class MilestoneIntegrationTest {
                         .content(objectMapper.writeValueAsString(validRequest())))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         String milestoneId = objectMapper.readTree(created).get("id").asText();
+        openTeamMilestone(milestoneId);
         String base = "/api/teams/" + MockMilestoneData.TEAM_ID + "/milestones/" + milestoneId + "/artifact-draft";
 
         mockMvc.perform(get(base).header("Authorization", "Bearer " + studentToken))
@@ -565,6 +566,9 @@ class MilestoneIntegrationTest {
         String milestoneId = createMilestoneAndGetId(
                 "Artifact submission milestone", Instant.now().plusSeconds(86400), "artifact-submit-success"
         );
+        assertPlannedSubmissionRejected(milestoneId, "artifact-submit-before-open");
+        openProjectMilestone(milestoneId);
+        openProjectMilestone(milestoneId); // Reopening is idempotent and must not duplicate audit/outbox events.
         String submitUrl = endpoint() + "/" + milestoneId + "/artifact-draft/submissions";
         Map<String, Object> body = Map.of(
                 "repositoryUrl", "https://github.com/example/submitted-v1",
@@ -607,9 +611,9 @@ class MilestoneIntegrationTest {
                 .andExpect(status().isConflict());
         org.junit.jupiter.api.Assertions.assertEquals(1, artifactSubmissionRepository.count());
         org.junit.jupiter.api.Assertions.assertEquals(1, idempotencyRepository.countByOperation("ARTIFACT_SUBMISSION"));
-        org.junit.jupiter.api.Assertions.assertEquals(2, auditRepository.countByMilestoneId(
+        org.junit.jupiter.api.Assertions.assertEquals(3, auditRepository.countByMilestoneId(
                 java.util.UUID.fromString(milestoneId)));
-        org.junit.jupiter.api.Assertions.assertEquals(2, outboxRepository.count());
+        org.junit.jupiter.api.Assertions.assertEquals(3, outboxRepository.count());
         mockMvc.perform(get(endpoint() + "/" + milestoneId + "/artifact-draft")
                         .header("Authorization", "Bearer " + studentToken))
                 .andExpect(status().isOk())
@@ -623,6 +627,7 @@ class MilestoneIntegrationTest {
         Map<String, Object> noLateMilestone = validRequest("Artifact invalid submission", futureDeadline);
         noLateMilestone.put("latePolicy", Map.of("type", "NO_LATE"));
         String milestoneId = createMilestoneAndGetId(noLateMilestone, "artifact-submit-denied");
+        openProjectMilestone(milestoneId);
         jdbcTemplate.update("update milestones set deadline = ? where milestone_id = ?",
                 java.sql.Timestamp.from(Instant.now().minusSeconds(600)), java.util.UUID.fromString(milestoneId));
         String submitUrl = endpoint() + "/" + milestoneId + "/artifact-draft/submissions";
@@ -662,9 +667,9 @@ class MilestoneIntegrationTest {
                 .andExpect(jsonPath("$.errors.attachments").exists());
         org.junit.jupiter.api.Assertions.assertEquals(0, artifactSubmissionRepository.count());
         org.junit.jupiter.api.Assertions.assertEquals(0, idempotencyRepository.countByOperation("ARTIFACT_SUBMISSION"));
-        org.junit.jupiter.api.Assertions.assertEquals(1, auditRepository.countByMilestoneId(
+        org.junit.jupiter.api.Assertions.assertEquals(2, auditRepository.countByMilestoneId(
                 java.util.UUID.fromString(milestoneId)));
-        org.junit.jupiter.api.Assertions.assertEquals(1, outboxRepository.count());
+        org.junit.jupiter.api.Assertions.assertEquals(2, outboxRepository.count());
     }
 
     @Test
@@ -672,6 +677,7 @@ class MilestoneIntegrationTest {
         String milestoneId = createMilestoneAndGetId(
                 "Concurrent artifact submission", Instant.now().plusSeconds(86400), "artifact-submit-concurrent"
         );
+        openProjectMilestone(milestoneId);
         String submitUrl = endpoint() + "/" + milestoneId + "/artifact-draft/submissions";
         String body = objectMapper.writeValueAsString(Map.of(
                 "repositoryUrl", "https://github.com/example/concurrent", "checklist", Map.of()));
@@ -699,9 +705,9 @@ class MilestoneIntegrationTest {
         }
         org.junit.jupiter.api.Assertions.assertEquals(1, artifactSubmissionRepository.count());
         org.junit.jupiter.api.Assertions.assertEquals(1, idempotencyRepository.countByOperation("ARTIFACT_SUBMISSION"));
-        org.junit.jupiter.api.Assertions.assertEquals(2, auditRepository.countByMilestoneId(
+        org.junit.jupiter.api.Assertions.assertEquals(3, auditRepository.countByMilestoneId(
                 java.util.UUID.fromString(milestoneId)));
-        org.junit.jupiter.api.Assertions.assertEquals(2, outboxRepository.count());
+        org.junit.jupiter.api.Assertions.assertEquals(3, outboxRepository.count());
     }
 
     @Test
@@ -710,6 +716,7 @@ class MilestoneIntegrationTest {
         String milestoneId = createMilestoneAndGetId(
                 "Artifact late submission", deadline, "artifact-submit-late-allowed"
         );
+        openProjectMilestone(milestoneId);
         jdbcTemplate.update("update milestones set deadline = ? where milestone_id = ?",
                 java.sql.Timestamp.from(Instant.now().minusSeconds(600)), java.util.UUID.fromString(milestoneId));
         String submitUrl = endpoint() + "/" + milestoneId + "/artifact-draft/submissions";
@@ -944,6 +951,32 @@ class MilestoneIntegrationTest {
 
     private String endpoint() {
         return "/api/projects/" + MockMilestoneData.PROJECT_ID + "/milestones";
+    }
+
+    private void openProjectMilestone(String milestoneId) throws Exception {
+        mockMvc.perform(post(endpoint() + "/" + milestoneId + "/open")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("OPEN"));
+    }
+
+    private void openTeamMilestone(String milestoneId) throws Exception {
+        mockMvc.perform(post("/api/teams/" + MockMilestoneData.TEAM_ID + "/milestones/" + milestoneId + "/open")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("OPEN"));
+    }
+
+    private void assertPlannedSubmissionRejected(String milestoneId, String key) throws Exception {
+        mockMvc.perform(post(endpoint() + "/" + milestoneId + "/artifact-draft/submissions")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .header("Idempotency-Key", key)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "repositoryUrl", "https://github.com/example/planned",
+                                "checklist", Map.of()))))
+                .andExpect(status().isConflict());
+        org.junit.jupiter.api.Assertions.assertEquals(0, artifactSubmissionRepository.count());
     }
 
     private Map<String, Object> validRequest() {

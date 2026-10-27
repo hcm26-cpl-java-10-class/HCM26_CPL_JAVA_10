@@ -91,4 +91,9 @@ public class MilestoneAuditLog {
         log.correlationId = correlationId;
         return log;
     }
+
+    public static MilestoneAuditLog statusEvent(UUID milestoneId, Long projectId, Long tenantId,
+            UUID actorId, String action, String correlationId, String detailsJson, Instant now) {
+        return artifactEvent(milestoneId, projectId, tenantId, actorId, action, correlationId, detailsJson, now);
+    }
 }

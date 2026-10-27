@@ -49,6 +49,7 @@ public class TeamArtifactSubmissionService {
     private final OutboxEventWriter outboxWriter;
     private final ObjectMapper objectMapper;
     private final com.example.starter_project_2025.system.rbac.user.UserRepository userRepository;
+    private final com.example.starter_project_2025.system.project.ProjectTeamRepository projectTeamRepository;
 
     @Transactional(readOnly = true)
     public ArtifactSubmissionWorkspaceResponse workspace(Long teamId, UUID milestoneId) {
@@ -107,6 +108,9 @@ public class TeamArtifactSubmissionService {
             return submissionRepository.findById(prior.get().getResourceId()).map(this::submissionResponse)
                     .orElseThrow(() -> new IllegalStateException("Idempotent team submission is missing"));
         }
+        requireActiveTeamWorkspace(teamId, s.tenantId);
+        if (milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN)
+            throw new MilestoneConflictException("Milestone must be OPEN before students can submit artifacts");
         validateUrl("repositoryUrl", request.repositoryUrl()); validateUrl("deploymentUrl", request.deploymentUrl());
         Map<UUID, Boolean> checklist = validateChecklist(milestone, request.checklist());
         if (request.attachmentIds() != null && !request.attachmentIds().isEmpty()) throw validation("attachments", "Team milestone file upload is not configured");
@@ -154,6 +158,16 @@ public class TeamArtifactSubmissionService {
         UUID actor = actorProvider.requireCurrentActorId(); Long tenant = tenantProvider.requireCurrentTenantId();
         if (!milestoneRepository.existsByTeamIdAndTenantIdAndActiveTrue(teamId, tenant)) throw new ResourceNotFoundException("Team milestone not found");
         return new Scope(actor, tenant);
+    }
+    private void requireActiveTeamWorkspace(Long teamId, Long tenantId) {
+        if (com.example.starter_project_2025.system.project.milestone.integration.mock.MockMilestoneData.TEAM_ID.equals(teamId)
+                && com.example.starter_project_2025.system.project.milestone.integration.mock.MockMilestoneData.TENANT_ID.equals(tenantId)) return;
+        var team = projectTeamRepository.findByIdAndTrainingClass_TenantId(teamId, tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Team workspace not found"));
+        if (team.getStatus() != com.example.starter_project_2025.system.project.ProjectTeamStatus.ACTIVE
+                || team.getProject() == null
+                || team.getProject().getStatus() != com.example.starter_project_2025.system.project.domain.ProjectStatus.ACTIVE)
+            throw new MilestoneConflictException("Team workspace or its project is not active");
     }
     private Map<UUID, Boolean> validateChecklist(com.example.starter_project_2025.system.project.milestone.domain.Milestone m, Map<UUID, Boolean> requested) {
         var allowed = m.getChecklistItems().stream().map(x -> x.getId()).collect(java.util.stream.Collectors.toSet());

@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, ArrowLeft, CalendarClock, Clock3, Globe2, ListChecks, RotateCw } from "lucide-react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { milestoneApi } from "@/api/features/milestone.api";
@@ -18,6 +18,7 @@ export function TeamMilestoneDetailPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const { hasPermission, activeRole } = usePermissions();
+  const queryClient = useQueryClient();
   const isStudent = String(activeRole).toUpperCase().includes("STUDENT");
   const workspaceId = params.get("workspaceId");
   const query = useQuery({
@@ -25,6 +26,10 @@ export function TeamMilestoneDetailPage() {
     queryFn: () => milestoneApi.getTeamDetail(teamId, milestoneId!),
     enabled: teamId > 0 && !!milestoneId,
     retry: false,
+  });
+  const openMilestone = useMutation({
+    mutationFn: () => milestoneApi.openTeamMilestoneForSubmissions(teamId, milestoneId!),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-milestone", teamId, milestoneId] }),
   });
   const back = () => navigate(workspaceId ? `/management/workspaces/${workspaceId}?tab=milestones` : `/teams/${teamId}/milestones`);
 
@@ -66,7 +71,7 @@ export function TeamMilestoneDetailPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
         <Button variant="outline" onClick={back}><ArrowLeft />Back to workspace</Button>
-        <div className="flex flex-wrap gap-2">{hasPermission("ARTIFACT_REVIEW") && <Button variant="outline" onClick={() => navigate(`/teams/${teamId}/milestones/${milestone.id}/submissions?workspaceId=${workspaceId ?? ""}`)}>View submissions</Button>}{isStudent && hasPermission("ARTIFACT_READ") && <Button onClick={() => navigate(`/teams/${teamId}/milestones/${milestone.id}/submit`)}>Prepare artifact</Button>}</div>
+        <div className="flex flex-wrap items-center gap-2">{milestone.status === "PLANNED" && hasPermission("MILESTONE_WRITE") && <Button onClick={() => openMilestone.mutate()} disabled={openMilestone.isPending}>{openMilestone.isPending ? "Opening…" : "Open milestone"}</Button>}{milestone.status === "PLANNED" && <p className="w-full text-right text-xs text-muted-foreground">Open the milestone before students can submit.</p>}{openMilestone.isError && <p className="w-full text-right text-xs text-destructive">Could not open milestone. Check that the workspace project is active.</p>}{hasPermission("ARTIFACT_REVIEW") && <Button variant="outline" onClick={() => navigate(`/teams/${teamId}/milestones/${milestone.id}/submissions?workspaceId=${workspaceId ?? ""}`)}>View submissions</Button>}{isStudent && hasPermission("ARTIFACT_READ") && <Button onClick={() => navigate(`/teams/${teamId}/milestones/${milestone.id}/submit`)}>Prepare artifact</Button>}</div>
       </div>
     </main>
   </MainLayout>;

@@ -33,6 +33,17 @@ public class OutboxEventWriter {
         }
     }
 
+    public void writeMilestoneOpened(Milestone milestone, Instant now) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("milestoneId", milestone.getId()); payload.put("projectId", milestone.getProjectId());
+            payload.put("teamId", milestone.getTeamId()); payload.put("tenantId", milestone.getTenantId());
+            payload.put("actorId", milestone.getUpdatedBy()); payload.put("status", milestone.getStatus());
+            payload.put("occurredAt", now);
+            repository.save(OutboxEvent.milestoneOpened(milestone.getId(), objectMapper.writeValueAsString(payload), now));
+        } catch (JsonProcessingException ex) { throw new IllegalStateException("Unable to serialize milestone open event", ex); }
+    }
+
     public void writeArtifactDraftSaved(java.util.UUID milestoneId, Long projectId,
             Long tenantId, java.util.UUID actorId, long version, Instant now) {
         try {

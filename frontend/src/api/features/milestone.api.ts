@@ -65,6 +65,15 @@ export const milestoneApi = {
     return response.data;
   },
 
+  async openForSubmissions(projectId: string, milestoneId: string): Promise<MilestoneResponse> {
+    const response = await axiosInstance.post<MilestoneResponse>(`/projects/${projectId}/milestones/${milestoneId}/open`);
+    return response.data;
+  },
+  async openTeamMilestoneForSubmissions(teamId: number, milestoneId: string): Promise<MilestoneResponse> {
+    const response = await axiosInstance.post<MilestoneResponse>(`/teams/${teamId}/milestones/${milestoneId}/open`);
+    return response.data;
+  },
+
   async create(
     projectId: string,
     payload: CreateMilestoneRequest,
