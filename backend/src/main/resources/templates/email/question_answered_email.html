@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Your question was answered</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6;">
+<h2>Hello <span th:text="${recipientName}">Student</span>,</h2>
+<p>
+    <strong th:text="${answererName}">The instructor</strong> answered your question in
+    <strong th:text="${courseName}">Course</strong>, lesson
+    <strong th:text="${lessonTitle}">Lesson</strong>.
+</p>
+<p style="margin-bottom: 4px;"><strong>Your question</strong></p>
+<blockquote style="margin: 0 0 12px 0; padding: 8px 16px; border-left: 4px solid #bbb; background: #f6f6f6;"
+            th:text="${questionContent}">Question text</blockquote>
+<p style="margin-bottom: 4px;"><strong>Answer</strong></p>
+<blockquote style="margin: 0 0 12px 0; padding: 8px 16px; border-left: 4px solid #4CAF50; background: #f6f6f6;"
+            th:text="${answerContent}">Answer text</blockquote>
+<a th:href="${link}"
+   style="display:inline-block; background-color:#4CAF50; color:white; padding:10px 20px;
+              text-decoration:none; border-radius:5px;">View the answer</a>
+<br><br>
+<p>Best regards,<br>The Support Team</p>
+</body>
+</html>

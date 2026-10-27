@@ -21,7 +21,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import type { LessonDTO } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, Pencil, Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { LessonFormModal } from "./LessonFormModal";
 import { LessonQnA } from "./LessonQnA";
@@ -29,10 +29,17 @@ import { formatDuration, LessonPreview } from "./LessonPreview";
 
 interface SectionLessonsProps {
   sectionId: number;
+  /**
+   * Open this lesson's preview (and jump to one of its questions) once the lessons are loaded.
+   * Used by the instructor's "Unanswered questions" inbox and notification emails.
+   */
+  deepLink?: { lessonId: number; questionId?: number | null } | null;
+  /** Called once the deep link has been handled, so it is not re-applied on the next expand. */
+  onDeepLinkConsumed?: () => void;
 }
 
 
-export function SectionLessons({ sectionId }: SectionLessonsProps) {
+export function SectionLessons({ sectionId, deepLink, onDeepLinkConsumed }: SectionLessonsProps) {
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission("LESSON_CREATE");
@@ -42,6 +49,7 @@ export function SectionLessons({ sectionId }: SectionLessonsProps) {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<LessonDTO | null>(null);
   const [previewing, setPreviewing] = useState<LessonDTO | null>(null);
+  const [focusQuestionId, setFocusQuestionId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState<LessonDTO | null>(null);
 
   const lessonsQuery = useQuery({
@@ -49,6 +57,18 @@ export function SectionLessons({ sectionId }: SectionLessonsProps) {
     queryFn: () => lessonApi.getBySection(sectionId),
   });
   const lessons = lessonsQuery.data ?? [];
+
+  useEffect(() => {
+    if (!deepLink || !lessonsQuery.isSuccess) return;
+    const target = lessonsQuery.data.find((lesson) => lesson.id === deepLink.lessonId);
+    if (target) {
+      setPreviewing(target);
+      setFocusQuestionId(deepLink.questionId ?? null);
+    } else {
+      toast.info("That lesson no longer exists.");
+    }
+    onDeepLinkConsumed?.();
+  }, [deepLink, lessonsQuery.isSuccess, lessonsQuery.data, onDeepLinkConsumed]);
 
   const nextOrderIndex = useMemo(
     () => (lessons.length ? Math.max(...lessons.map((l) => l.orderIndex ?? 0)) + 1 : 0),
@@ -179,7 +199,15 @@ export function SectionLessons({ sectionId }: SectionLessonsProps) {
         defaultOrderIndex={nextOrderIndex}
       />
 
-      <Dialog open={!!previewing} onOpenChange={(open) => !open && setPreviewing(null)}>
+      <Dialog
+        open={!!previewing}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPreviewing(null);
+            setFocusQuestionId(null);
+          }
+        }}
+      >
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>{previewing?.title}</DialogTitle>
@@ -190,6 +218,7 @@ export function SectionLessons({ sectionId }: SectionLessonsProps) {
             <LessonQnA
               key={previewing.id}
               lessonId={previewing.id}
+              focusQuestionId={focusQuestionId}
               className="mt-6 border-t pt-6"
             />
           )}

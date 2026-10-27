@@ -5,13 +5,21 @@ import { ConfirmDialog } from "@/components/ui/confirmdialog";
 import { Textarea } from "@/components/ui/textarea";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { LessonAnswer, LessonQuestion } from "@/types";
-import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { GraduationCap, MessageSquare, Pencil, Reply, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useDebouncedValue } from "@/pages/management/demo/course/hooks/useDebouncedValue";
+import { Input } from "@/components/ui/input";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { GraduationCap, MessageSquare, Pencil, Reply, Search, Trash2, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 const PAGE_SIZE = 10;
 const MAX_LENGTH = 2000;
+const MAX_SEARCH_LENGTH = 100;
 
 function errorMessage(error: any, fallback: string): string {
   const data = error?.response?.data;
@@ -90,34 +98,44 @@ type Deleting = { questionId: number; answerId?: number };
 interface LessonQnAProps {
   lessonId: number;
   className?: string;
+  /** Scroll to and briefly highlight this question (loads more pages until it is found). */
+  focusQuestionId?: number | null;
 }
 
 /**
  * Hỏi đáp dưới từng bài học: học viên đặt câu hỏi, giảng viên (chủ khóa học) / admin trả lời.
  * Quyền sửa / xóa / trả lời do backend tính sẵn trong từng item (canEdit, canDelete, canAnswer).
  */
-export function LessonQnA({ lessonId, className }: LessonQnAProps) {
+export function LessonQnA({ lessonId, className, focusQuestionId }: LessonQnAProps) {
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
   const canRead = hasPermission("LESSON_QUESTION_READ");
   const canAsk = hasPermission("LESSON_QUESTION_CREATE");
 
-  const queryKey = ["lesson-qna", lessonId];
+  const baseKey = ["lesson-qna", lessonId];
 
+  const [searchInput, setSearchInput] = useState("");
+  const search = useDebouncedValue(searchInput.trim(), 350);
   const [askDraft, setAskDraft] = useState("");
   const [editing, setEditing] = useState<Editing | null>(null);
   const [replying, setReplying] = useState<Replying | null>(null);
   const [deleting, setDeleting] = useState<Deleting | null>(null);
 
   const questionsQuery = useInfiniteQuery({
-    queryKey,
-    queryFn: ({ pageParam }) => qnaApi.list(lessonId, pageParam, PAGE_SIZE),
+    queryKey: [...baseKey, search],
+    queryFn: ({ pageParam }) => qnaApi.list(lessonId, pageParam, PAGE_SIZE, search),
     initialPageParam: 0,
+    placeholderData: keepPreviousData,
     getNextPageParam: (last) => (last.number + 1 < last.totalPages ? last.number + 1 : undefined),
     enabled: canRead && Number.isInteger(lessonId) && lessonId > 0,
   });
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey });
+  const refresh = () => {
+    // Answering / deleting changes the instructor's "unanswered questions" inbox too.
+    void queryClient.invalidateQueries({ queryKey: ["unanswered-questions"] });
+    void queryClient.invalidateQueries({ queryKey: ["unanswered-courses"] });
+    return queryClient.invalidateQueries({ queryKey: baseKey });
+  };
   const onError = (fallback: string) => (error: unknown) =>
     toast.error(errorMessage(error, fallback));
 
@@ -125,6 +143,7 @@ export function LessonQnA({ lessonId, className }: LessonQnAProps) {
     mutationFn: (content: string) => qnaApi.ask(lessonId, content),
     onSuccess: async () => {
       setAskDraft("");
+      setSearchInput("");
       await refresh();
       toast.success("Question posted.");
     },
@@ -192,6 +211,33 @@ export function LessonQnA({ lessonId, className }: LessonQnAProps) {
     onError: onError("Could not delete the answer."),
   });
 
+  // Jump to a specific question (deep link from the instructor inbox / notification email).
+  const focusDone = useRef(false);
+  const [highlightId, setHighlightId] = useState<number | null>(focusQuestionId ?? null);
+  const { data: loadedPages, hasNextPage, isFetchingNextPage, fetchNextPage } = questionsQuery;
+  useEffect(() => {
+    if (!focusQuestionId || focusDone.current || search || !loadedPages) return;
+    const found = loadedPages.pages.some((page) =>
+      page.content.some((question) => question.id === focusQuestionId),
+    );
+    if (found) {
+      focusDone.current = true;
+      requestAnimationFrame(() =>
+        document
+          .getElementById(`qna-question-${focusQuestionId}`)
+          ?.scrollIntoView({ behavior: "smooth", block: "center" }),
+      );
+      const timer = window.setTimeout(() => setHighlightId(null), 5000);
+      return () => window.clearTimeout(timer);
+    }
+    if (hasNextPage) {
+      if (!isFetchingNextPage) void fetchNextPage();
+    } else {
+      focusDone.current = true; // The question no longer exists (deleted); stop looking.
+      setHighlightId(null);
+    }
+  }, [focusQuestionId, search, loadedPages, hasNextPage, isFetchingNextPage, fetchNextPage]);
+
   if (!canRead) return null;
 
   const questions: LessonQuestion[] =
@@ -228,6 +274,41 @@ export function LessonQnA({ lessonId, className }: LessonQnAProps) {
         {total > 0 && <Badge variant="secondary">{total}</Badge>}
       </div>
 
+      <div className="relative mt-4">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          aria-label="Search questions"
+          value={searchInput}
+          maxLength={MAX_SEARCH_LENGTH}
+          placeholder={
+            canAsk
+              ? "Search before you ask - your question may already be answered..."
+              : "Search questions and answers..."
+          }
+          className="pl-9 pr-9"
+          onChange={(event) => setSearchInput(event.target.value)}
+        />
+        {searchInput && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Clear search"
+            className="absolute right-1 top-1/2 -translate-y-1/2"
+            onClick={() => setSearchInput("")}
+          >
+            <X className="size-4" />
+          </Button>
+        )}
+      </div>
+      {search && !questionsQuery.isLoading && !questionsQuery.isError && (
+        <p role="status" className="mt-2 text-xs text-muted-foreground">
+          {questionsQuery.isPlaceholderData
+            ? "Searching..."
+            : `${total} result${total === 1 ? "" : "s"} for \u201c${search}\u201d`}
+        </p>
+      )}
+
       {canAsk && (
         <div className="mt-4 rounded-xl border bg-muted/20 p-4">
           <label htmlFor={`qna-ask-${lessonId}`} className="mb-2 block text-sm font-medium">
@@ -260,12 +341,37 @@ export function LessonQnA({ lessonId, className }: LessonQnAProps) {
             </Button>
           </div>
         ) : questions.length === 0 ? (
-          <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-            No questions yet.{canAsk ? " Be the first to ask!" : ""}
-          </p>
+          search ? (
+            <div className="space-y-3 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+              <p>No questions match &ldquo;{search}&rdquo;.</p>
+              {canAsk && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setAskDraft((draft) => draft || search);
+                    document.getElementById(`qna-ask-${lessonId}`)?.focus();
+                  }}
+                >
+                  Ask it as a new question
+                </Button>
+              )}
+            </div>
+          ) : (
+            <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+              No questions yet.{canAsk ? " Be the first to ask!" : ""}
+            </p>
+          )
         ) : (
           questions.map((question) => (
-            <article key={question.id} className="min-w-0 space-y-3 rounded-xl border p-4">
+            <article
+              key={question.id}
+              id={`qna-question-${question.id}`}
+              className={`min-w-0 space-y-3 rounded-xl border p-4 transition-shadow ${
+                highlightId === question.id ? "ring-2 ring-primary/60" : ""
+              }`}
+            >
               <header className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-medium">{question.authorName}</span>
