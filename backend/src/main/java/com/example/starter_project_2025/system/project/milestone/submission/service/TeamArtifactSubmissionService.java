@@ -127,7 +127,7 @@ public class TeamArtifactSubmissionService {
         String checklistJson = write(checklist);
         var row = submissionRepository.saveAndFlush(MilestoneArtifactSubmission.submit(s.tenantId, null, teamId,
                 milestoneId, s.actorId, version, blank(request.repositoryUrl()), blank(request.deploymentUrl()),
-                blank(request.releaseNotes()), checklistJson, "[]", now, late, late ? milestone.getLatePenaltyPercent() : null));
+                blank(request.releaseNotes()), checklistJson, "[]", now, late, milestone.latePenaltyAt(now)));
         var response = submissionResponse(row);
         try {
             auditRepository.save(MilestoneAuditLog.artifactEvent(milestoneId, null, s.tenantId, s.actorId,

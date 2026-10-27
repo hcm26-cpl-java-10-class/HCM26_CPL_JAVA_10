@@ -30,6 +30,8 @@ export function getMilestoneRubricMetrics(rubric?: MilestoneRubricOption) {
 }
 
 interface MilestoneRubricSelectorProps {
+  id?: string;
+  allowManage?: boolean;
   rubrics: MilestoneRubricOption[];
   value: string;
   error?: string;
@@ -38,6 +40,8 @@ interface MilestoneRubricSelectorProps {
 }
 
 export function MilestoneRubricSelector({
+  id = "milestone-rubric",
+  allowManage = true,
   rubrics,
   value,
   error,
@@ -62,21 +66,21 @@ export function MilestoneRubricSelector({
                 Choose the rubric version used to evaluate submissions for this milestone.
               </CardDescription>
             </div>
-            <Button asChild type="button" variant="ghost" size="sm" className="w-fit shrink-0">
+            {allowManage && <Button asChild type="button" variant="ghost" size="sm" className="w-fit shrink-0">
               <a href="/rubrics" target="_blank" rel="noreferrer">
                 Manage rubrics <ExternalLink className="size-4" />
               </a>
-            </Button>
+            </Button>}
           </div>
         </CardHeader>
 
         <CardContent className="grid gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="milestone-rubric">
+            <Label htmlFor={id}>
               Rubric version <span className="text-destructive">*</span>
             </Label>
             <Select value={value} onValueChange={onChange} disabled={disabled || !rubrics.length}>
-              <SelectTrigger id="milestone-rubric" aria-invalid={Boolean(error)}>
+              <SelectTrigger id={id} aria-invalid={Boolean(error)} aria-describedby={error ? `${id}-error` : undefined}>
                 <SelectValue placeholder="Select a rubric version" />
               </SelectTrigger>
               <SelectContent>
@@ -87,7 +91,7 @@ export function MilestoneRubricSelector({
                 ))}
               </SelectContent>
             </Select>
-            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+            {error ? <p id={`${id}-error`} className="text-sm text-destructive">{error}</p> : null}
           </div>
 
           {rubric ? (

@@ -7,6 +7,9 @@ import org.springframework.stereotype.Repository;
 public interface UserDataScopeRepository
         extends BaseCrudRepository<UserDataScope, Long> {
 
+    boolean existsByUser_IdAndTenantIdAndScopeTypeAndTargetIdAndIsActiveTrue(
+            Long userId, Long tenantId, UserScopeType scopeType, Long targetId);
+
     boolean existsByUser_IdAndTenantIdAndScopeTypeAndTargetId(
             Long userId,
             Long tenantId,

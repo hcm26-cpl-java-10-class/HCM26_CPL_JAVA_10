@@ -12,9 +12,11 @@ interface ImportTabProps {
   loading: boolean;
   onImport: (file: File) => Promise<void>;
   entityName?: string;
+  onDownloadTemplate?: () => Promise<void>;
+  maxFileSize?: number;
 }
 
-export function ImportTab({ loading, onImport, entityName }: ImportTabProps) {
+export function ImportTab({ loading, onImport, entityName, onDownloadTemplate, maxFileSize = MAX_FILE_SIZE }: ImportTabProps) {
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -22,17 +24,18 @@ export function ImportTab({ loading, onImport, entityName }: ImportTabProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const validateFile = (file: File): boolean => {
+    const name = file.name.toLowerCase();
     if (
-      !file.name.endsWith(".xlsx") &&
-      !file.name.endsWith(".xls") &&
-      !file.name.endsWith(".csv")
+      !name.endsWith(".xlsx") &&
+      !name.endsWith(".xls") &&
+      !name.endsWith(".csv")
     ) {
       setError("Only Excel or CSV files (.xlsx, .xls, .csv) are allowed");
       return false;
     }
 
-    if (file.size > MAX_FILE_SIZE) {
-      setError("File size must be less than 50MB");
+    if (file.size > maxFileSize) {
+      setError(`File size must not exceed ${maxFileSize / (1024 * 1024)}MB`);
       return false;
     }
 
@@ -54,17 +57,19 @@ export function ImportTab({ loading, onImport, entityName }: ImportTabProps) {
       setError(null);
       await onImport(file);
       clearFile();
-    } catch (err: any) {
-      setError(err?.response?.data?.message ?? "Failed to import data");
+    } catch (err: unknown) {
+      const failure = err as { response?: { data?: { message?: string } }; message?: string };
+      setError(failure.response?.data?.message ?? failure.message ?? "Failed to import data");
     }
   };
 
   const handleDownloadTemplate = async () => {
-    if (!entityName) return;
+    if (!entityName && !onDownloadTemplate) return;
 
     try {
       setDownloadingTemplate(true);
-      await downloadTemplate(entityName);
+      if (onDownloadTemplate) await onDownloadTemplate();
+      else if (entityName) await downloadTemplate(entityName);
       toast.success("Template downloaded successfully");
     } catch (error) {
       console.error("Error downloading template:", error);
@@ -104,7 +109,7 @@ export function ImportTab({ loading, onImport, entityName }: ImportTabProps) {
 
   return (
     <TabsContent value="import" className="mt-4 flex-1 flex flex-col gap-4">
-      {entityName && (
+      {(entityName || onDownloadTemplate) && (
         <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
           <div className="flex-1">
             <p className="text-sm font-medium">Download Template</p>
@@ -116,6 +121,7 @@ export function ImportTab({ loading, onImport, entityName }: ImportTabProps) {
             variant="outline"
             size="sm"
             onClick={handleDownloadTemplate}
+            aria-label="Download import template"
             disabled={downloadingTemplate || loading}
             className="gap-2"
           >
@@ -147,7 +153,7 @@ export function ImportTab({ loading, onImport, entityName }: ImportTabProps) {
           </div>
           <p className="text-sm font-medium">Click to upload or drag and drop</p>
           <p className="text-xs text-muted-foreground">
-            Excel or CSV files (.xlsx, .xls, .csv) up to 50MB
+            Excel or CSV files (.xlsx, .xls, .csv) up to {maxFileSize / (1024 * 1024)}MB
           </p>
 
           <Input
@@ -184,8 +190,6 @@ export function ImportTab({ loading, onImport, entityName }: ImportTabProps) {
             </Button>
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
-
           <Button
             className="w-full bg-primary hover:bg-primary/80 text-white mt-auto"
             onClick={handleImportClick}
@@ -206,6 +210,7 @@ export function ImportTab({ loading, onImport, entityName }: ImportTabProps) {
           </Button>
         </div>
       )}
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     </TabsContent>
   );
 }
