@@ -173,7 +173,7 @@ public class LessonServiceImpl
         boolean hasText = text != null && !text.isBlank();
 
         switch (type) {
-            case VIDEO, DOCUMENT, LINK -> {
+            case VIDEO, AUDIO, DOCUMENT, LINK -> {
                 if (!hasUrl) {
                     ctx.add("contentUrl", "Content URL is required for " + type + " lessons");
                 } else if (!isValidHttpUrl(url.trim())) {

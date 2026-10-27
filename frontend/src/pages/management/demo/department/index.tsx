@@ -245,7 +245,7 @@ export default function DepartmentManagementPage() {
                 ) : departmentsQuery.data?.departments.length ? (
                     <div className="grid gap-5 xl:grid-cols-2">
                         {departmentsQuery.data.departments.map((department) => (
-                            <article key={department.id} className="rounded-2xl border bg-card p-5 shadow-sm">
+                            <article key={department.id} className="flex h-full flex-col rounded-2xl border bg-card p-5 shadow-sm">
                                 <div className="flex items-start gap-4">
                                     <span className="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
                                         <Building2 className="size-8" />
@@ -259,7 +259,7 @@ export default function DepartmentManagementPage() {
                                                 {department.isActive === false ? "Inactive" : "Active"}
                                             </Badge>
                                         </div>
-                                        <p className="mt-1 text-sm text-muted-foreground">
+                                        <p className="mt-1 line-clamp-2 text-sm text-muted-foreground" title={department.description || department.code}>
                                             {department.description || department.code}
                                         </p>
                                         <p className="mt-1 text-xs text-muted-foreground">Code: {department.code}</p>
@@ -298,36 +298,39 @@ export default function DepartmentManagementPage() {
                                     </PermissionGate>
                                 </div>
 
-                                <div className="mt-5 grid grid-cols-2 gap-4 border-t pt-5">
-                                    <div>
-                                        <p className="text-sm text-muted-foreground">Members</p>
-                                        <p className="mt-2 text-2xl font-bold">{department.stats.members}</p>
+                                {/* mt-auto: đẩy Members + nút xuống đáy card để các card cùng hàng thẳng hàng */}
+                                <div className="mt-auto">
+                                    <div className="mt-5 grid grid-cols-2 gap-4 border-t pt-5">
+                                        <div>
+                                            <p className="text-sm text-muted-foreground">Members</p>
+                                            <p className="mt-2 text-2xl font-bold">{department.stats.members}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-muted-foreground">Enrolled courses</p>
+                                            <p className="mt-2 text-2xl font-bold">{department.stats.enrolledCourses}</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="text-sm text-muted-foreground">Enrolled courses</p>
-                                        <p className="mt-2 text-2xl font-bold">{department.stats.enrolledCourses}</p>
-                                    </div>
-                                </div>
 
-                                <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                                    <PermissionGate permission="USER_UPDATE">
-                                        <Button
-                                            variant="outline"
-                                            className="w-full"
-                                            onClick={() => setMembersDepartment(department)}
-                                        >
-                                            <Users className="size-4" /> Manage Members
-                                        </Button>
-                                    </PermissionGate>
-                                    <PermissionGate permission="ENROLLMENT_CREATE">
-                                        <Button
-                                            className="w-full"
-                                            disabled={department.stats.members === 0 || department.isActive === false}
-                                            onClick={() => setEnrollDepartment(department)}
-                                        >
-                                            Enroll Course
-                                        </Button>
-                                    </PermissionGate>
+                                    <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                                        <PermissionGate permission="USER_UPDATE">
+                                            <Button
+                                                variant="outline"
+                                                className="w-full"
+                                                onClick={() => setMembersDepartment(department)}
+                                            >
+                                                <Users className="size-4" /> Manage Members
+                                            </Button>
+                                        </PermissionGate>
+                                        <PermissionGate permission="ENROLLMENT_CREATE">
+                                            <Button
+                                                className="w-full"
+                                                disabled={department.stats.members === 0 || department.isActive === false}
+                                                onClick={() => setEnrollDepartment(department)}
+                                            >
+                                                Enroll Course
+                                            </Button>
+                                        </PermissionGate>
+                                    </div>
                                 </div>
                             </article>
                         ))}

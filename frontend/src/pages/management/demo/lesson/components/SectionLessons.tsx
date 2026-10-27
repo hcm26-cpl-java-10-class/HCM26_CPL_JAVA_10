@@ -24,6 +24,7 @@ import { Eye, Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { LessonFormModal } from "./LessonFormModal";
+import { LessonQnA } from "./LessonQnA";
 import { formatDuration, LessonPreview } from "./LessonPreview";
 
 interface SectionLessonsProps {
@@ -185,6 +186,13 @@ export function SectionLessons({ sectionId }: SectionLessonsProps) {
             <DialogDescription>Lesson preview</DialogDescription>
           </DialogHeader>
           {previewing && <LessonPreview lesson={previewing} hideHeader />}
+          {previewing?.id !== undefined && (
+            <LessonQnA
+              key={previewing.id}
+              lessonId={previewing.id}
+              className="mt-6 border-t pt-6"
+            />
+          )}
         </DialogContent>
       </Dialog>
 

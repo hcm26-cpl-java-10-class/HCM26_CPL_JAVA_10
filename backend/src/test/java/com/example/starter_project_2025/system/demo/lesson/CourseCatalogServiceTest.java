@@ -86,7 +86,7 @@ class CourseCatalogServiceTest {
         stubCourseContent();
         when(enrollmentRepository.existsByUser_IdAndCourse_Id(7L, 10L)).thenReturn(false);
 
-        CourseDetailDTO detail = service.getDetail(10L, 7L, false);
+        CourseDetailDTO detail = service.getDetail(10L, 7L, false, false);
 
         CourseDetailDTO.LessonItem item = detail.sections().getFirst().lessons().getFirst();
         assertFalse(detail.enrolled());
@@ -106,7 +106,7 @@ class CourseCatalogServiceTest {
         stubCourseContent();
         when(enrollmentRepository.existsByUser_IdAndCourse_Id(7L, 10L)).thenReturn(true);
 
-        CourseDetailDTO detail = service.getDetail(10L, 7L, false);
+        CourseDetailDTO detail = service.getDetail(10L, 7L, false, false);
 
         CourseDetailDTO.LessonItem item = detail.sections().getFirst().lessons().getFirst();
         assertTrue(detail.enrolled());
@@ -121,7 +121,7 @@ class CourseCatalogServiceTest {
         stubCourseContent();
         when(enrollmentRepository.existsByUser_IdAndCourse_Id(7L, 10L)).thenReturn(false);
 
-        CourseDetailDTO detail = service.getDetail(10L, 7L, true);
+        CourseDetailDTO detail = service.getDetail(10L, 7L, true, true);
 
         assertFalse(detail.enrolled());
         assertTrue(detail.contentUnlocked());
@@ -134,7 +134,7 @@ class CourseCatalogServiceTest {
         stubCourseContent();
         when(enrollmentRepository.existsByUser_IdAndCourse_Id(7L, 10L)).thenReturn(false);
 
-        CourseDetailDTO detail = service.getDetail(10L, 7L, false);
+        CourseDetailDTO detail = service.getDetail(10L, 7L, false, false);
 
         assertTrue(detail.isFree());
         assertFalse(detail.enrolled());
@@ -150,7 +150,7 @@ class CourseCatalogServiceTest {
         stubCourseContent();
         when(enrollmentRepository.existsByUser_IdAndCourse_Id(7L, 10L)).thenReturn(false);
 
-        CourseDetailDTO detail = service.getDetail(10L, 7L, false);
+        CourseDetailDTO detail = service.getDetail(10L, 7L, false, false);
 
         assertTrue(detail.contentUnlocked());
         assertNotNull(detail.sections().getFirst().lessons().getFirst().contentUrl());
@@ -161,7 +161,15 @@ class CourseCatalogServiceTest {
         course.setStatus(CourseStatus.DRAFT);
         when(courseRepository.findById(10L)).thenReturn(Optional.of(course));
 
-        assertThrows(ResourceNotFoundException.class, () -> service.getDetail(10L, 7L, false));
+        assertThrows(ResourceNotFoundException.class, () -> service.getDetail(10L, 7L, false, false));
+    }
+
+    @Test
+    void archivedCourseIsNotFoundForNormalUsers() {
+        course.setStatus(CourseStatus.ARCHIVED);
+        when(courseRepository.findById(10L)).thenReturn(Optional.of(course));
+
+        assertThrows(ResourceNotFoundException.class, () -> service.getDetail(10L, 7L, false, false));
     }
 
     @Test
@@ -170,6 +178,19 @@ class CourseCatalogServiceTest {
         stubCourseContent();
         when(enrollmentRepository.existsByUser_IdAndCourse_Id(7L, 10L)).thenReturn(false);
 
-        assertEquals(10L, service.getDetail(10L, 7L, true).id());
+        assertEquals(10L, service.getDetail(10L, 7L, true, true).id());
+    }
+
+    @Test
+    void courseManagerCanViewDraftWithoutAdminContentAccess() {
+        course.setStatus(CourseStatus.DRAFT);
+        stubCourseContent();
+        when(enrollmentRepository.existsByUser_IdAndCourse_Id(7L, 10L)).thenReturn(false);
+
+        CourseDetailDTO detail = service.getDetail(10L, 7L, true, false);
+
+        assertEquals(10L, detail.id());
+        assertFalse(detail.contentUnlocked());
+        assertTrue(detail.sections().getFirst().lessons().getFirst().locked());
     }
 }
