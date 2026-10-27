@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { LessonPreview } from "../lesson/components/LessonPreview";
+import { LessonQnA } from "../lesson/components/LessonQnA";
 import { LessonProgressSidebar } from "./LessonProgressSidebar";
 
 export function CourseLearningPage() {
@@ -197,6 +198,11 @@ export function CourseLearningPage() {
                       </Button>
                     </div>
                   </div>
+                  <LessonQnA
+                    key={currentLesson.lessonId}
+                    lessonId={currentLesson.lessonId}
+                    className="mt-8 border-t pt-6"
+                  />
                 </div>
               )}
             </main>
