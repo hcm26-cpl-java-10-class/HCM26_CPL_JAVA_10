@@ -132,9 +132,10 @@ export default function ProjectTemplateVersionWorkspacePage() {
   );
 
   const templateLabel =
-    selectedVersion?.templateId != null
+    selectedVersion?.templateName?.trim() ||
+    (selectedVersion?.templateId != null
       ? `TPL-${selectedVersion.templateId}`
-      : "TEMPLATE VERSIONS";
+      : "TEMPLATE VERSIONS");
 
   const refreshVersions = async () => {
     await queryClient.invalidateQueries({ queryKey: VERSIONS_QUERY_KEY });

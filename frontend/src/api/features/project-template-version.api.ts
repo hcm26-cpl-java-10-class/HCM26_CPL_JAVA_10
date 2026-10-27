@@ -17,6 +17,20 @@ const base = createBaseApiService<
 
 export const projectTemplateVersionApi = Object.assign({}, base, {
   /**
+   * US-07: seeds the baseline `v1.0` / `DRAFT` version of a template that does
+   * not own any version yet (template created before the version chain was
+   * wired to the Project Template module).
+   */
+  createInitialVersion: async (
+    templateId: number | string,
+  ): Promise<ProjectTemplateVersionDTO | null> => {
+    const response = await axiosInstance.post<ProjectTemplateVersionDTO | null>(
+      `${path}/by-template/${templateId}/initial-version`,
+    );
+    return response.data ?? null;
+  },
+
+  /**
    * US-07: creates the next version (`v1.0 -> v2.0`) from an existing one.
    * The server copies the configuration, stores the new row as `DRAFT` and
    * links `parentTemplateId` back to the source version.

@@ -101,7 +101,7 @@ export default function StudentDraftTeamPage() {
   });
   const templatesQuery = useQuery({
     queryKey: ["project-templates", "options"],
-    queryFn: () => projectTemplateApi.getOptions(),
+    queryFn: () => projectTemplateApi.getAssignableOptions(),
   });
 
   const assignMutation = useMutation({

@@ -53,7 +53,6 @@ export function useActiveModuleGroups(enabled = true) {
                 const url = module.url ?? "";
                 const isExcludedPath = [
                     "/management/project-templates",
-                    "/project-templates",
                     "/management/project-teams",
                 ].some((path) => url.startsWith(path));
 

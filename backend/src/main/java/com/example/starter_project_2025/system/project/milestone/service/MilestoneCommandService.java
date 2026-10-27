@@ -2,6 +2,8 @@ package com.example.starter_project_2025.system.project.milestone.service;
 
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.project.milestone.audit.MilestoneAuditWriter;
+import com.example.starter_project_2025.system.project.milestone.audit.MilestoneAuditLog;
+import com.example.starter_project_2025.system.project.milestone.audit.MilestoneAuditRepository;
 import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
 import com.example.starter_project_2025.system.project.milestone.dto.request.CreateMilestoneRequest;
 import com.example.starter_project_2025.system.project.milestone.dto.response.MilestoneResponse;
@@ -15,6 +17,9 @@ import com.example.starter_project_2025.system.project.milestone.outbox.OutboxEv
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
 import com.example.starter_project_2025.system.project.ProjectTeamRepository;
 import com.example.starter_project_2025.system.project.milestone.integration.mock.MockMilestoneData;
+import com.example.starter_project_2025.system.project.workspace.service.WorkspaceAccessService;
+import com.example.starter_project_2025.security.UserPrincipal;
+import com.example.starter_project_2025.web.CorrelationIdFilter;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -43,14 +48,53 @@ public class MilestoneCommandService {
     private final MilestoneValidator validator;
     private final MilestoneRepository milestoneRepository;
     private final ProjectTeamRepository projectTeamRepository;
+    private final WorkspaceAccessService workspaceAccessService;
     private final EntityManager entityManager;
     private final IdempotencyRepository idempotencyRepository;
     private final RequestHashService requestHashService;
     private final MilestoneAuditWriter auditWriter;
+    private final MilestoneAuditRepository auditRepository;
     private final OutboxEventWriter outboxWriter;
     private final MilestoneMapper mapper;
     private final TransactionTemplate transactionTemplate;
     private final Clock milestoneClock;
+
+    @org.springframework.transaction.annotation.Transactional
+    public MilestoneResponse openForSubmissions(Long projectId, Long teamId, UUID milestoneId) {
+        if ((projectId == null) == (teamId == null)) throw new IllegalArgumentException("Exactly one milestone scope is required");
+        UUID actorId = actorProvider.requireCurrentActorId(); Long tenantId = tenantProvider.requireCurrentTenantId();
+        if (projectId != null) {
+            var project = projectPort.requireProjectForRead(projectId, actorId, tenantId);
+            accessPolicy.requireReadAccess(project); accessPolicy.requireSubmittableState(project);
+        } else {
+            requireActiveTeamWorkspace(teamId, tenantId);
+        }
+        Milestone milestone = projectId != null
+                ? milestoneRepository.lockForProjectOpen(milestoneId, projectId, tenantId).orElseThrow(() -> new ResourceNotFoundException("Milestone not found"))
+                : milestoneRepository.lockForTeamOpen(milestoneId, teamId, tenantId).orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
+        if (milestone.getStatus() == com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN) return mapper.toResponse(milestone);
+        if (milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.PLANNED)
+            throw new MilestoneConflictException("Only a planned milestone can be opened for submissions");
+        Instant now = milestoneClock.instant(); milestone.openForWork(actorId, now); milestoneRepository.saveAndFlush(milestone);
+        auditRepository.save(MilestoneAuditLog.statusEvent(milestoneId, projectId, tenantId, actorId,
+                "MILESTONE_OPENED", CorrelationIdFilter.currentId(), "{\"before\":\"PLANNED\",\"after\":\"OPEN\"}", now));
+        outboxWriter.writeMilestoneOpened(milestone, now);
+        return mapper.toResponse(milestone);
+    }
+
+    private void requireActiveTeamWorkspace(Long teamId, Long tenantId) {
+        if (MockMilestoneData.TEAM_ID.equals(teamId) && MockMilestoneData.TENANT_ID.equals(tenantId)) return;
+        var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof UserPrincipal principal)) {
+            throw new org.springframework.security.access.AccessDeniedException("Authenticated team scope is required");
+        }
+        var team = workspaceAccessService.requireTeam(principal.getUser(), teamId, false);
+        if (!tenantId.equals(principal.getTenantId())) throw new org.springframework.security.access.AccessDeniedException("Team workspace is outside the current tenant");
+        if (team.getStatus() != com.example.starter_project_2025.system.project.ProjectTeamStatus.ACTIVE
+                || team.getProject() == null
+                || team.getProject().getStatus() != com.example.starter_project_2025.system.project.domain.ProjectStatus.ACTIVE)
+            throw new MilestoneConflictException("Team workspace or its project is not active");
+    }
 
     public MilestoneResponse create(Long projectId, String idempotencyKey, CreateMilestoneRequest request) {
         validateIdempotencyKey(idempotencyKey);
@@ -124,6 +168,7 @@ public class MilestoneCommandService {
                 actorId,
                 now
         );
+        milestone.configureAssessment(request.weight(), request.latePolicy().penaltyBasis());
         request.checklist().forEach(item -> milestone.addChecklistItem(
                 item.content().trim(), item.mandatory(), item.orderIndex()));
 

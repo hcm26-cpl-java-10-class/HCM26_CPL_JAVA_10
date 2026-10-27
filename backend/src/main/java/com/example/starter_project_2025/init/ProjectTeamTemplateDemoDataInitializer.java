@@ -87,9 +87,9 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
         int created = 0;
         for (TemplateSeed seed : TEMPLATES) {
             ProjectTemplate template = projectTemplateRepository
-                    .findByCodeAndIsActiveTrue(seed.code())
+                    .findByCodeAndTenantIdIsNullAndIsActiveTrue(seed.code())
                     .or(() -> projectTemplateRepository.findAll().stream()
-                            .filter(row -> seed.code().equals(row.getCode()))
+                            .filter(row -> row.getTenantId() == null && seed.code().equals(row.getCode()))
                             .findFirst())
                     .orElseGet(() -> {
                         ProjectTemplate fresh = new ProjectTemplate();
@@ -117,7 +117,7 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
      * explicit window keeps {@code ProjectTemplateConstraints} happy.
      */
     private void ensureManualDefaultTemplate() {
-        projectTemplateRepository.findByCodeAndIsActiveTrue("MANUAL-GROUPING-DEFAULT")
+        projectTemplateRepository.findByCodeAndTenantIdIsNullAndIsActiveTrue("MANUAL-GROUPING-DEFAULT")
                 .ifPresent(template -> {
                     String expected = "{\"min_members\":1,\"max_members\":5}";
                     if (!expected.equals(template.getConstraintsJson())) {

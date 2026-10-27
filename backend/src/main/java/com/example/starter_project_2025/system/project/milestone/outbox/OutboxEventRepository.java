@@ -6,4 +6,5 @@ import java.util.UUID;
 
 public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> {
     long countByAggregateId(UUID aggregateId);
+    long countByEventType(String eventType);
 }

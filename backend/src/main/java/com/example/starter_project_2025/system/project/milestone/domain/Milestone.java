@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -71,6 +72,13 @@ public class Milestone {
     @Column(name = "late_penalty_percent", precision = 5, scale = 2)
     private BigDecimal latePenaltyPercent;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "late_penalty_basis", nullable = false, columnDefinition = "varchar(20) default 'FIXED'")
+    private LatePenaltyBasis latePenaltyBasis = LatePenaltyBasis.FIXED;
+
+    @Column(precision = 5, scale = 2)
+    private BigDecimal weight;
+
     @Version
     @Column(nullable = false)
     private long version;
@@ -130,6 +138,21 @@ public class Milestone {
 
     public void addChecklistItem(String content, boolean mandatory, int orderIndex) {
         checklistItems.add(MilestoneChecklistItem.create(this, content, mandatory, orderIndex));
+    }
+
+    public void configureAssessment(BigDecimal weight, LatePenaltyBasis penaltyBasis) {
+        this.weight = weight;
+        this.latePenaltyBasis = latePolicyType == LatePolicyType.ALLOW_LATE && penaltyBasis != null
+                ? penaltyBasis : LatePenaltyBasis.FIXED;
+    }
+
+    public BigDecimal latePenaltyAt(Instant submittedAt) {
+        if (!submittedAt.isAfter(deadline) || latePolicyType != LatePolicyType.ALLOW_LATE || latePenaltyPercent == null) return null;
+        if (latePenaltyBasis != LatePenaltyBasis.PER_DAY) return latePenaltyPercent;
+        Duration elapsed = Duration.between(deadline, submittedAt);
+        long days = elapsed.toDays();
+        if (!elapsed.minusDays(days).isZero()) days++;
+        return latePenaltyPercent.multiply(BigDecimal.valueOf(days)).min(new BigDecimal("100"));
     }
 
     public void openForWork(UUID actorId, Instant now) {

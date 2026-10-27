@@ -38,9 +38,7 @@ export function CreateVersionDialog({
   loading = false,
   onConfirm,
 }: CreateVersionDialogProps) {
-  const nextLabel = source
-    ? nextVersionLabel(versions, source.templateId)
-    : "";
+  const nextLabel = nextVersionLabel(versions, source?.templateId ?? null);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -53,11 +51,20 @@ export function CreateVersionDialog({
             Create New Version
           </DialogTitle>
           <DialogDescription className="pt-2">
-            A new version of this Project Template will be created from{" "}
-            <span className="font-semibold text-foreground">
-              {versionLabel(source)}
-            </span>
-            .
+            {source ? (
+              <>
+                A new version of this Project Template will be created from{" "}
+                <span className="font-semibold text-foreground">
+                  {versionLabel(source)}
+                </span>
+                .
+              </>
+            ) : (
+              <>
+                The first version of this Project Template will be created from
+                its current configuration.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -80,7 +87,9 @@ export function CreateVersionDialog({
             </li>
             <li>
               <span className="font-semibold text-foreground">Parent Version ID</span>{" "}
-              will point at {versionLabel(source)} for traceability.
+              {source
+                ? <>will point at {versionLabel(source)} for traceability.</>
+                : <>stays empty because this is the first version.</>}
             </li>
             <li>
               Workspaces and projects already created from the older version are
@@ -98,7 +107,7 @@ export function CreateVersionDialog({
             >
               Cancel
             </Button>
-            <Button onClick={onConfirm} disabled={loading || !source}>
+            <Button onClick={onConfirm} disabled={loading}>
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

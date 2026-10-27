@@ -56,10 +56,14 @@ export const contentKeys = (version?: ProjectTemplateVersionDTO | null) => {
   return parsed ? Object.keys(parsed) : [];
 };
 
-/** Human readable label of a version row (`v1.0 · TPL-1`). */
+/**
+ * Human readable label of a version row (`v1.0 · Capstone Template`).
+ * Falls back to the raw `template_id` while the owner is unknown.
+ */
 export const versionLabel = (version?: ProjectTemplateVersionDTO | null) => {
   if (!version) return "—";
-  return `${version.version ?? `#${version.id}`} · TPL-${version.templateId ?? "—"}`;
+  const owner = version.templateName?.trim() || `TPL-${version.templateId ?? "—"}`;
+  return `${version.version ?? `#${version.id}`} · ${owner}`;
 };
 
 /**

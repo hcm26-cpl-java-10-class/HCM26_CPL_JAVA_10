@@ -10,12 +10,14 @@ export type ProjectTemplateVersionStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
  * Project Template Version (snapshot) as exposed by
  * `/api/project-template-versions`.
  * <p>
- * `templateId` and `projectId` are plain identifiers: the Project Template and
- * Project modules are owned by other teams, so the values are carried along
- * without being resolved.
+ * `templateId` is the raw owner identifier; `templateName` is resolved by the
+ * backend from the `project_templates` row so the UI can render a readable
+ * label instead of a raw id.
  */
 export interface ProjectTemplateVersionDTO extends BaseDTO {
   templateId?: number;
+  /** Name of the owning Project Template (read-only, resolved by the API). */
+  templateName?: string | null;
   projectId?: number;
   /**
    * Id of the version this one was cloned from (`parent_template_id`), kept for

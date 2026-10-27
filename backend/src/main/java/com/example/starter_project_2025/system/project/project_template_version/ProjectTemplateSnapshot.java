@@ -7,11 +7,18 @@ import com.example.starter_project_2025.base.dataio.importer.annotation.ImportFi
 import com.example.starter_project_2025.base.dataio.template.annotation.ImportEntity;
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
+import com.example.starter_project_2025.system.project.ProjectTemplate;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
+import jakarta.persistence.ConstraintMode;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
@@ -87,6 +94,25 @@ public class ProjectTemplateSnapshot extends BaseEntity {
     @ImportField(name = "Template Id", required = true)
     @ExportField(name = "Template Id")
     Long templateId;
+
+    /**
+     * Owning {@link ProjectTemplate}, resolved through the very same
+     * {@code template_id} column as {@link #templateId}.
+     * <p>
+     * The association is read-only ({@code insertable = false, updatable =
+     * false}) so writes keep going through {@link #templateId}, which is what
+     * the importer/exporter and the CRUD filter address. A database level
+     * foreign key is intentionally not generated
+     * ({@link ConstraintMode#NO_CONSTRAINT}) because the sample seeder runs
+     * before the template fixtures and legacy rows may point at templates owned
+     * by other modules; referential integrity is enforced by
+     * {@code ProjectTemplateSnapshotServiceImpl#beforeCreate} instead.
+     */
+    @JsonIgnore
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "template_id", insertable = false, updatable = false,
+            foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))
+    ProjectTemplate template;
 
     /**
      * Reference to the {@code Project} the snapshot was taken for (nullable).

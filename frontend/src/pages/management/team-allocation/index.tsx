@@ -366,7 +366,7 @@ export default function TeamAllocationPage() {
   // US-10: assignable project templates (min/max capacity window).
   const templatesQuery = useQuery({
     queryKey: ["project-templates", "options"],
-    queryFn: () => projectTemplateApi.getOptions(),
+    queryFn: () => projectTemplateApi.getAssignableOptions(),
   });
 
   useEffect(() => {

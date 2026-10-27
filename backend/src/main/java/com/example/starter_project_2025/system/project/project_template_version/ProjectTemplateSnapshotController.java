@@ -88,6 +88,25 @@ public class ProjectTemplateSnapshotController
     }
 
     /**
+     * US-07: seeds the baseline {@code v1.0} / {@code DRAFT} version of a
+     * template that does not own any version yet (templates created before the
+     * version chain was wired to the Project Template module).
+     * <p>
+     * The payload is derived from the template itself (overview, constraints
+     * and milestone plan); the source template row is never modified.
+     */
+    @PostMapping("/by-template/{templateId}/initial-version")
+    @PreAuthorize("hasAuthority('PROJECT_TEMPLATE_VERSION_CREATE')")
+    public ResponseEntity<ProjectTemplateSnapshotDTO> createInitialVersion(
+            @PathVariable Long templateId) {
+        ProjectTemplateSnapshotDTO created = snapshotService.createInitialVersion(templateId);
+        if (created == null) {
+            return ResponseEntity.ok(null);
+        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    }
+
+    /**
      * US-08: duplicates the template behind the given version into a brand new,
      * fully independent Project Template.
      * <p>

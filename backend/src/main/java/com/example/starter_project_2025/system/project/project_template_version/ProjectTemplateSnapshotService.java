@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.project.project_template_version;
 
 import com.example.starter_project_2025.base.crud.service.BaseCrudService;
+import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.example.starter_project_2025.system.project.project_template_version.audit.ProjectTemplateSnapshotAuditLogDTO;
 
 import java.util.List;
@@ -36,6 +37,42 @@ public interface ProjectTemplateSnapshotService
      * creates a new template instead.
      */
     ProjectTemplateSnapshotDTO duplicateTemplate(Long sourceVersionId, String name);
+
+    /**
+     * US-07 / AC01: seeds the baseline {@code v1.0} / {@code DRAFT} snapshot of
+     * a freshly created Project Template.
+     * <p>
+     * Called by the Project Template module right after the template row is
+     * persisted, so every template has a version chain from the start (the
+     * Program Manager can then derive {@code v2.0}, {@code v3.0}, ... without
+     * having to POST a version by hand).
+     * <p>
+     * The call is idempotent - it returns {@code null} when the template already
+     * owns at least one version - and bypasses the
+     * {@code PROJECT_TEMPLATE_VERSION_CREATE} permission check because the caller
+     * already authorised {@code PROJECT_TEMPLATE_CREATE}.
+     */
+    ProjectTemplateSnapshotDTO createInitialVersion(ProjectTemplate template);
+
+    /**
+     * Same as {@link #createInitialVersion(ProjectTemplate)} but loads the
+     * template first, so the version chain of a template created before the
+     * linkage was wired can be initialised from the API.
+     */
+    ProjectTemplateSnapshotDTO createInitialVersion(Long templateId);
+
+    /**
+     * Publishes the newest active version of a template ({@code DRAFT} ->
+     * {@code PUBLISHED}).
+     * <p>
+     * Called when the Project Template itself is activated: the DRAFT version
+     * being published is refreshed with the configuration that is being
+     * activated (overview, constraints, milestone plan) so a version can never
+     * be published with a stale payload. Older versions are never touched,
+     * which keeps the snapshot isolation of already created
+     * workspaces/projects (US-07 / AC02).
+     */
+    ProjectTemplateSnapshotDTO publishLatestVersion(ProjectTemplate template);
 
     /**
      * All versions of a project template, newest first.

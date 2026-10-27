@@ -12,11 +12,15 @@ import com.example.starter_project_2025.system.project.ProjectTemplateRepository
 import com.example.starter_project_2025.system.project.project_template_version.audit.ProjectTemplateSnapshotAuditLogDTO;
 import com.example.starter_project_2025.system.project.project_template_version.audit.ProjectTemplateSnapshotAuditService;
 import com.example.starter_project_2025.system.project.project_template_version.event.ProjectTemplateSnapshotOutboxService;
+import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestone;
+import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -26,8 +30,11 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * CRUD use case implementation for project template versions (snapshots).
@@ -88,6 +95,9 @@ public class ProjectTemplateSnapshotServiceImpl
     /** US-08: the copy always starts at the default version label. */
     static final String DUPLICATE_INITIAL_VERSION = "v1.0";
 
+    /** US-07: baseline version created together with a new Project Template. */
+    static final String INITIAL_VERSION = "v1.0";
+
     /** Mirrors the {@code ProjectTemplate.name} column. */
     static final int MAX_NAME_LENGTH = 255;
 
@@ -98,6 +108,12 @@ public class ProjectTemplateSnapshotServiceImpl
 
     /** US-07: audit action that distinguishes a derived version from a plain create. */
     static final String ACTION_NEW_VERSION = "CREATE_NEW_VERSION";
+
+    /** US-07 / AC01: audit action of the baseline version of a new template. */
+    static final String ACTION_INITIAL_VERSION = "CREATE_INITIAL_VERSION";
+
+    /** US-07: audit action of the DRAFT -> PUBLISHED transition. */
+    static final String ACTION_PUBLISH = "PUBLISH";
 
     /** US-08: audit action of a template duplication. */
     static final String ACTION_DUPLICATE = "DUPLICATE";
@@ -119,6 +135,8 @@ public class ProjectTemplateSnapshotServiceImpl
      * ownership of {@code project_templates} stays in a single module.
      */
     ProjectTemplateRepository projectTemplateRepository;
+    /** Used to derive the baseline snapshot payload from the template plan. */
+    TemplateMilestoneRepository templateMilestoneRepository;
     ObjectMapper objectMapper;
 
     @Override
@@ -150,6 +168,7 @@ public class ProjectTemplateSnapshotServiceImpl
         Map<String, List<String>> errors = new LinkedHashMap<>();
 
         validateTemplateId(snapshot.getTemplateId(), errors);
+        validateTemplateExists(snapshot.getTemplateId(), errors);
         validateVersion(snapshot.getVersion(), errors);
         validateContentJson(snapshot.getContentJson(), errors);
 
@@ -204,6 +223,10 @@ public class ProjectTemplateSnapshotServiceImpl
 
         ProjectTemplateSnapshot saved = snapshotRepository.save(created);
 
+        // US-07: the Project Template row reports the same revision as its
+        // newest version (v2.0 -> template_version = 2).
+        syncTemplateVersion(saved.getTemplateId(), nextVersion);
+
         // AC01: the audit trail records that this row was derived from another
         // version (not just "created"), so the lineage can be reviewed later.
         // AC02: the source row is only read here - it is never saved, therefore
@@ -225,7 +248,128 @@ public class ProjectTemplateSnapshotServiceImpl
                 currentActorEmail(),
                 after);
 
-        return snapshotMapper.toResponse(saved);
+        return toResponse(saved);
+    }
+
+    // ---------------------------------------------------------------------
+    // Baseline version of a new template (US-07 / AC01)
+    // ---------------------------------------------------------------------
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * The payload is derived from the Project Template itself (overview,
+     * constraints and milestone plan), so the very first version of a template
+     * already carries its whole configuration instead of an empty JSON blob.
+     */
+    @Override
+    public ProjectTemplateSnapshotDTO createInitialVersion(ProjectTemplate template) {
+
+        if (template == null || template.getId() == null) {
+            return null;
+        }
+
+        // Idempotent: a template owns exactly one v1.0 baseline.
+        if (!snapshotRepository.findByTemplateIdOrderByCreatedAtDesc(template.getId()).isEmpty()) {
+            return null;
+        }
+
+        ProjectTemplateSnapshot baseline = ProjectTemplateSnapshot.builder()
+                .templateId(template.getId())
+                // A template is a reusable blueprint: it is not bound to a project yet.
+                .projectId(null)
+                // First version of the chain: nothing to trace back to.
+                .parentTemplateId(null)
+                .version(INITIAL_VERSION)
+                .contentJson(initialContentJson(template))
+                .status(ProjectTemplateVersionStatus.DRAFT)
+                .isActive(true)
+                .build();
+
+        ProjectTemplateSnapshot saved = snapshotRepository.save(baseline);
+
+        Map<String, Object> after = snapshot(saved);
+        after.put("sourceTemplateId", template.getId());
+        after.put("sourceTemplateCode", template.getCode());
+
+        snapshotAuditService.record(
+                ACTION_INITIAL_VERSION, saved.getId(), saved.getTemplateId(), saved.getProjectId(), null, after);
+
+        snapshotOutboxService.enqueue(
+                EVENT_CREATED,
+                saved.getId(),
+                saved.getTemplateId(),
+                saved.getProjectId(),
+                currentActorEmail(),
+                after);
+
+        return toResponse(saved);
+    }
+
+    @Override
+    public ProjectTemplateSnapshotDTO createInitialVersion(Long templateId) {
+
+        if (templateId == null) {
+            return null;
+        }
+
+        return createInitialVersion(projectTemplateRepository.findById(templateId).orElse(null));
+    }
+
+    // ---------------------------------------------------------------------
+    // Publish the newest version (US-07)
+    // ---------------------------------------------------------------------
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Only the newest active version is promoted; every older row is left
+     * untouched, so the snapshots already consumed by workspaces/projects can
+     * never be rewritten by a later revision (AC02).
+     */
+    @Override
+    public ProjectTemplateSnapshotDTO publishLatestVersion(ProjectTemplate template) {
+
+        if (template == null || template.getId() == null) {
+            return null;
+        }
+
+        ProjectTemplateSnapshot latest = snapshotRepository
+                .findFirstByTemplateIdAndIsActiveTrueOrderByCreatedAtDesc(template.getId())
+                .orElse(null);
+
+        if (latest == null) {
+            return null;
+        }
+
+        if (latest.getStatus() != ProjectTemplateVersionStatus.DRAFT) {
+            return toResponse(latest);
+        }
+
+        Map<String, Object> before = snapshot(latest);
+
+        // AC01: the version that goes live mirrors the template configuration
+        // that is being activated (the baseline was built before the Program
+        // Manager filled in milestones / sample content).
+        latest.setContentJson(initialContentJson(template));
+        latest.setStatus(ProjectTemplateVersionStatus.PUBLISHED);
+
+        ProjectTemplateSnapshot saved = snapshotRepository.save(latest);
+
+        Map<String, Object> after = snapshot(saved);
+
+        snapshotAuditService.record(
+                ACTION_PUBLISH, saved.getId(), saved.getTemplateId(), saved.getProjectId(), before, after);
+
+        snapshotOutboxService.enqueue(
+                EVENT_UPDATED,
+                saved.getId(),
+                saved.getTemplateId(),
+                saved.getProjectId(),
+                currentActorEmail(),
+                after);
+
+        return toResponse(saved);
     }
 
     // ---------------------------------------------------------------------
@@ -310,7 +454,7 @@ public class ProjectTemplateSnapshotServiceImpl
                 currentActorEmail(),
                 after);
 
-        return snapshotMapper.toResponse(saved);
+        return toResponse(saved);
     }
 
     /**
@@ -410,7 +554,24 @@ public class ProjectTemplateSnapshotServiceImpl
                     List.of("Phiên bản không thể là cha của chính nó"));
         }
 
+        // US-07 / AC02 (snapshot isolation): once a version is PUBLISHED or
+        // ARCHIVED it is the payload already consumed by workspaces/projects.
+        // Rewriting it in place would silently change those projects, so the
+        // configuration may only be edited while the version is still DRAFT.
+        if (snapshot.getStatus() != null
+                && snapshot.getStatus() != ProjectTemplateVersionStatus.DRAFT) {
+            if (contentJson != null && !contentJson.equals(snapshot.getContentJson())) {
+                errors.put(CONTENT_JSON_FIELD,
+                        List.of("Chỉ phiên bản DRAFT mới được sửa nội dung; hãy tạo phiên bản mới để thay đổi cấu hình"));
+            }
+            if (version != null && !version.equals(snapshot.getVersion())) {
+                errors.put(VERSION_FIELD,
+                        List.of("Không thể đổi nhãn của phiên bản đã công bố; hãy tạo phiên bản mới"));
+            }
+        }
+
         validateTemplateId(templateId, errors);
+        validateTemplateExists(templateId, errors);
         validateVersion(version, errors);
         validateContentJson(contentJson, errors);
 
@@ -446,7 +607,7 @@ public class ProjectTemplateSnapshotServiceImpl
                 currentActorEmail(),
                 after);
 
-        return snapshotMapper.toResponse(saved);
+        return toResponse(saved);
     }
 
     // ---------------------------------------------------------------------
@@ -480,6 +641,42 @@ public class ProjectTemplateSnapshotServiceImpl
     // Queries
     // ---------------------------------------------------------------------
 
+    /**
+     * Enriches every row with the name of its Project Template so the client
+     * never has to resolve a raw {@code template_id}.
+     */
+    @Override
+    public Page<ProjectTemplateSnapshotDTO> getAll(Pageable pageable,
+                                                   String search,
+                                                   ProjectTemplateSnapshotFilter filter) {
+
+        Page<ProjectTemplateSnapshotDTO> page = super.getAll(pageable, search, filter);
+
+        enrichTemplateNames(page.getContent());
+
+        return page;
+    }
+
+    @Override
+    public ProjectTemplateSnapshotDTO getById(Long id) {
+
+        ProjectTemplateSnapshotDTO dto = super.getById(id);
+
+        enrichTemplateNames(List.of(dto));
+
+        return dto;
+    }
+
+    @Override
+    public ProjectTemplateSnapshotDTO create(ProjectTemplateSnapshotDTO request) {
+
+        ProjectTemplateSnapshotDTO created = super.create(request);
+
+        enrichTemplateNames(List.of(created));
+
+        return created;
+    }
+
     @Override
     @Transactional(readOnly = true)
     public List<ProjectTemplateSnapshotDTO> getByTemplate(Long templateId) {
@@ -491,10 +688,15 @@ public class ProjectTemplateSnapshotServiceImpl
                     TEMPLATE_ID_FIELD, "Vui lòng chọn Project Template");
         }
 
-        return snapshotRepository.findByTemplateIdOrderByCreatedAtDesc(templateId)
+        List<ProjectTemplateSnapshotDTO> versions = snapshotRepository
+                .findByTemplateIdOrderByCreatedAtDesc(templateId)
                 .stream()
                 .map(snapshotMapper::toResponse)
-                .toList();
+                .collect(Collectors.toCollection(ArrayList::new));
+
+        enrichTemplateNames(versions);
+
+        return versions;
     }
 
     @Override
@@ -733,5 +935,141 @@ public class ProjectTemplateSnapshotServiceImpl
         }
 
         return authentication.getName();
+    }
+
+    // ---------------------------------------------------------------------
+    // ProjectTemplate linkage helpers
+    // ---------------------------------------------------------------------
+
+    /**
+     * US-07: a version can only hang from a Project Template that exists, which
+     * turns {@code template_id} from an opaque number into a real reference.
+     */
+    private void validateTemplateExists(Long templateId, Map<String, List<String>> errors) {
+
+        if (templateId == null) {
+            return;
+        }
+
+        if (!projectTemplateRepository.existsById(templateId)) {
+            errors.put(TEMPLATE_ID_FIELD,
+                    List.of("Project Template không tồn tại: " + templateId));
+        }
+    }
+
+    /**
+     * US-07: keeps {@code project_templates.template_version} aligned with the
+     * newest snapshot label ({@code v2.0} -> {@code 2}).
+     */
+    private void syncTemplateVersion(Long templateId, String versionLabel) {
+
+        Integer major = majorOf(versionLabel);
+
+        if (templateId == null || major == null) {
+            return;
+        }
+
+        projectTemplateRepository.findById(templateId).ifPresent(template -> {
+            if (!Objects.equals(template.getTemplateVersion(), major)) {
+                template.syncVersion(major);
+                projectTemplateRepository.save(template);
+            }
+        });
+    }
+
+    /**
+     * US-07 / AC01: baseline payload of a new template, built from the template
+     * overview, its team constraints and its milestone plan.
+     */
+    private String initialContentJson(ProjectTemplate template) {
+
+        Map<String, Object> content = new LinkedHashMap<>();
+
+        content.put("templateId", template.getId());
+        content.put("code", template.getCode());
+        content.put("name", template.getName());
+        content.put("description", template.getDescription());
+        content.put("category", template.getCategory());
+        content.put("level", template.getLevel() == null ? null : template.getLevel().name());
+        content.put("estimatedDurationWeeks", template.getEstimatedDurationWeeks());
+        content.put("constraints", readJsonOrNull(template.getConstraintsJson()));
+        content.put("milestones", milestonesOf(template.getId()));
+
+        try {
+            return objectMapper.writeValueAsString(content);
+        } catch (JsonProcessingException ex) {
+            return DEFAULT_CONSTRAINTS_JSON;
+        }
+    }
+
+    private List<Map<String, Object>> milestonesOf(Long templateId) {
+
+        if (templateId == null) {
+            return List.of();
+        }
+
+        List<TemplateMilestone> plan = templateMilestoneRepository
+                .findAllByTemplate_IdOrderByOrderIndexAscIdAsc(templateId);
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+
+        for (TemplateMilestone milestone : plan) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", milestone.getId());
+            row.put("title", milestone.getTitle());
+            row.put("description", milestone.getDescription());
+            row.put("dueAfter", milestone.getDueAfter());
+            row.put("dueUnit", milestone.getDueUnit() == null ? null : milestone.getDueUnit().name());
+            row.put("weight", milestone.getWeight());
+            row.put("mandatory", milestone.isMandatory());
+            rows.add(row);
+        }
+
+        return rows;
+    }
+
+    private Object readJsonOrNull(String json) {
+
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+
+        try {
+            return objectMapper.readTree(json);
+        } catch (JsonProcessingException ex) {
+            return null;
+        }
+    }
+
+    /** Mapper output enriched with the owning template name. */
+    private ProjectTemplateSnapshotDTO toResponse(ProjectTemplateSnapshot snapshot) {
+
+        ProjectTemplateSnapshotDTO dto = snapshotMapper.toResponse(snapshot);
+
+        enrichTemplateNames(List.of(dto));
+
+        return dto;
+    }
+
+    private void enrichTemplateNames(List<ProjectTemplateSnapshotDTO> rows) {
+
+        if (rows == null || rows.isEmpty()) {
+            return;
+        }
+
+        Set<Long> templateIds = rows.stream()
+                .map(ProjectTemplateSnapshotDTO::getTemplateId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        if (templateIds.isEmpty()) {
+            return;
+        }
+
+        Map<Long, String> names = projectTemplateRepository.findAllById(templateIds)
+                .stream()
+                .collect(Collectors.toMap(ProjectTemplate::getId, ProjectTemplate::getName, (left, right) -> left));
+
+        rows.forEach(row -> row.setTemplateName(names.get(row.getTemplateId())));
     }
 }

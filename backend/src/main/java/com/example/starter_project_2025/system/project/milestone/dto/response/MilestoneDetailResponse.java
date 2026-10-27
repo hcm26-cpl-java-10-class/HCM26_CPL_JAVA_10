@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.project.milestone.dto.response;
 import com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus;
 
 import java.time.Instant;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,6 +22,7 @@ public record MilestoneDetailResponse(
         MilestoneLatePolicyResponse latePolicy,
         long version,
         Instant createdAt,
-        UUID createdBy
+        UUID createdBy,
+        BigDecimal weight
 ) {
 }

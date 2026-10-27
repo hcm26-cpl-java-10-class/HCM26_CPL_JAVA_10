@@ -12,9 +12,11 @@ import lombok.experimental.FieldDefaults;
 /**
  * Payload of the project template version (snapshot) use case.
  * <p>
- * {@code templateId} and {@code projectId} are plain identifiers: the owning
- * modules are not implemented yet, so clients can send any id and the value is
- * stored without being validated against another table.
+ * {@code templateId} and {@code projectId} are stored as plain identifiers so
+ * the importer/exporter and the CRUD filter keep working on the raw columns.
+ * The owning Project Template is still validated on create and resolved on
+ * read: {@code templateName} is filled by the service from the
+ * {@code project_templates} row, so clients never have to render a raw id.
  */
 @Getter
 @Setter
@@ -25,6 +27,12 @@ import lombok.experimental.FieldDefaults;
 public class ProjectTemplateSnapshotDTO extends BaseDTO {
 
     Long templateId;
+
+    /**
+     * Name of the owning Project Template. Read-only projection resolved by the
+     * service (never stored on the snapshot row).
+     */
+    String templateName;
 
     Long projectId;
 

@@ -34,4 +34,10 @@ public class MilestoneAccessPolicy {
             throw new MilestoneConflictException("Project no longer allows milestone creation; reload project state");
         }
     }
+
+    public void requireSubmittableState(ProjectReadContext project) {
+        if (project.status() != ProjectStatus.ACTIVE) {
+            throw new MilestoneConflictException("Project does not accept artifact submissions in its current state");
+        }
+    }
 }
