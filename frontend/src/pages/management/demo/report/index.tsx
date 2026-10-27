@@ -22,6 +22,8 @@ const STATUS_OPTIONS = [
 export default function CourseReportPage() {
     const [query, setQuery] = useState("");
     const [status, setStatus] = useState("ALL");
+    const [expandedRowId, setExpandedRowId] = useState<number | string | null>(null);
+    const [learnerSearch, setLearnerSearch] = useState<Record<string, string>>({});
 
     const { data = [] } = useQuery({
         queryKey: ["course-report"],
@@ -136,41 +138,75 @@ export default function CourseReportPage() {
                                     </td>
                                 </tr>
                             ) : (
-                                filteredRows.map((row) => (
-                                    <tr key={row.courseId} className="border-t">
-                                        <td className="px-4 py-3 align-top">
-                                            <div className="font-medium">{row.courseName}</div>
-                                        </td>
+                                filteredRows.map((row) => {
+                                    const rowId = String(row.courseId ?? -1);
+                                    const searchTerm = (learnerSearch[rowId] ?? "").trim().toLowerCase();
+                                    const filteredStudents = (row.students ?? []).filter(
+                                        (student) => !searchTerm || student.toLowerCase().includes(searchTerm),
+                                    );
 
-                                        <td className="px-4 py-3 align-top">
-                                            {row.instructor || "-"}
-                                        </td>
+                                    return (
+                                        <tr key={row.courseId} className="border-t">
+                                            <td className="px-4 py-3 align-top">
+                                                <div className="font-medium">{row.courseName}</div>
+                                            </td>
 
-                                        <td className="px-4 py-3 align-top">
-                        <span className="rounded-full bg-muted px-2 py-1 text-xs font-medium uppercase">
-                          {row.courseStatus || "DRAFT"}
-                        </span>
-                                        </td>
+                                            <td className="px-4 py-3 align-top">
+                                                {row.instructor || "-"}
+                                            </td>
 
-                                        <td className="px-4 py-3 align-top">
-                                            <div className="space-y-1">
-                                                <div className="font-medium text-blue-700">
-                                                    {row.studentCount ?? 0} learners
-                                                </div>
+                                            <td className="px-4 py-3 align-top">
+                                                <span className="rounded-full bg-muted px-2 py-1 text-xs font-medium uppercase">
+                                                    {row.courseStatus || "DRAFT"}
+                                                </span>
+                                            </td>
 
-                                                {row.students && row.students.length > 0 ? (
-                                                    row.students.map((student) => (
-                                                        <div key={student} className="text-muted-foreground">
-                                                            • {student}
+                                            <td className="px-4 py-3 align-top">
+                                                <div className="space-y-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            setExpandedRowId((prev) =>
+                                                                prev === rowId ? null : rowId,
+                                                            )
+                                                        }
+                                                        className="font-medium text-blue-700 hover:underline"
+                                                    >
+                                                        {row.studentCount ?? 0} learners
+                                                    </button>
+
+                                                    {expandedRowId === rowId && (
+                                                        <div className="w-72 rounded-md border border-slate-700 bg-slate-950 p-2 text-xs text-slate-200 shadow-lg">
+                                                            <input
+                                                                value={learnerSearch[rowId] ?? ""}
+                                                                onChange={(e) =>
+                                                                    setLearnerSearch((prev) => ({
+                                                                        ...prev,
+                                                                        [rowId]: e.target.value,
+                                                                    }))
+                                                                }
+                                                                placeholder="Tìm kiếm learner..."
+                                                                className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-2 text-sm text-white outline-none placeholder:text-slate-400"
+                                                            />
+
+                                                            <div className="mt-2 max-h-32 overflow-y-auto pr-1 learner-scroll">
+                                                                {filteredStudents.length > 0 ? (
+                                                                    filteredStudents.map((student) => (
+                                                                        <div key={student} className="py-1 text-slate-200">
+                                                                            • {student}
+                                                                        </div>
+                                                                    ))
+                                                                ) : (
+                                                                    <div className="py-1 text-slate-400">No learners</div>
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                    ))
-                                                ) : (
-                                                    <div className="text-muted-foreground">No learners</div>
-                                                )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
                             )}
                             </tbody>
                         </table>
