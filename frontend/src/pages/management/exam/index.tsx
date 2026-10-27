@@ -1,4 +1,4 @@
-import { examApi, questionApi } from "@/api";
+import { examApi, questionApi, examTemplateApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { EXAM_CATEGORY_LABEL, EXAM_CATEGORY_SHOW_ANSWERS_DEFAULT, type ExamCategory, type ExamDTO, type ExamType, type LatePolicy, type QuestionDTO, type QuestionDifficulty, type QuestionFilter, type QuestionType, type ResultVisibility } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, CheckCheck, CheckSquare, ClipboardCheck, Dices, Layers, Mail, MoreVertical, Pencil, Plus, Search, Sparkles, Tags, Trash2, X } from "lucide-react";
+import { BookOpen, CheckCheck, CheckSquare, ClipboardCheck, Dices, Layers, Mail, MoreVertical, Pencil, Plus, Search, Sparkles, BookmarkPlus, Tags, Trash2, X } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -197,6 +197,11 @@ export default function ExamManagementPage() {
   const [randomTopic, setRandomTopic] = useState<string>("");
   const [randomDifficulty, setRandomDifficulty] = useState<string>("ALL");
   const [randomQuestionType, setRandomQuestionType] = useState<string>("ALL");
+  const [examToSaveAsTemplate, setExamToSaveAsTemplate] =
+      useState<ExamDTO | null>(null);
+
+  const [templateName, setTemplateName] = useState("");
+  const [templateDescription, setTemplateDescription] = useState("");
 
   const examsQuery = useQuery({
     queryKey: ["exam-management", examPage, examSearch, examCategoryFilter],
@@ -307,6 +312,36 @@ export default function ExamManagementPage() {
     onError: (error) => toast.error(getErrorMessage(error, "Failed to delete exam")),
   });
 
+  const saveExamAsTemplateMutation = useMutation({
+    mutationFn: () => {
+      if (!examToSaveAsTemplate?.id) {
+        throw new Error("Select an exam before saving it as a template.");
+      }
+      const name = templateName.trim();
+      if (!name) {
+        throw new Error("Template name is required.");
+      }
+      return examTemplateApi.saveFromExam(examToSaveAsTemplate.id, {
+        name,
+        description: templateDescription.trim() || undefined,
+      });
+    },
+    onSuccess: () => {
+      setExamToSaveAsTemplate(null);
+      setTemplateName("");
+      setTemplateDescription("");
+      toast.success("Exam saved as template successfully");
+    },
+    onError: (error) =>
+        toast.error(getErrorMessage(error, "Failed to save exam as template")),
+  });
+
+  const openSaveAsTemplate = (exam: ExamDTO) => {
+    setExamToSaveAsTemplate(exam);
+    setTemplateName(`${exam.title} - Template`);
+    setTemplateDescription("");
+  };
+
   const openDeleteConfirm = (exam: ExamDTO) => {
     setExamToDelete(exam);
     setDeleteConfirmInput("");
@@ -327,7 +362,7 @@ export default function ExamManagementPage() {
 
   const addQuestionsMutation = useMutation({
     mutationFn: (overrideIds?: number[]) =>
-      examApi.addQuestions(activeExam!.id!, overrideIds ?? [...selectedQuestionIds]),
+        examApi.addQuestions(activeExam!.id!, overrideIds ?? [...selectedQuestionIds]),
     onSuccess: (exam) => {
       setActiveExam(exam);
       setSelectedQuestionIds(new Set());
@@ -423,7 +458,7 @@ export default function ExamManagementPage() {
   const eligibleTopicQuestions = useMemo(() => {
     if (!questionTopic.trim()) return [];
     return allBankQuestions.filter(
-      (q) => !sourceIdsInExam.has(q.id) && (q.topic || "").trim().toLowerCase() === questionTopic.trim().toLowerCase()
+        (q) => !sourceIdsInExam.has(q.id) && (q.topic || "").trim().toLowerCase() === questionTopic.trim().toLowerCase()
     );
   }, [allBankQuestions, sourceIdsInExam, questionTopic]);
 
@@ -436,16 +471,16 @@ export default function ExamManagementPage() {
   }, [questionsQuery.data?.content, sourceIdsInExam]);
 
   const isAllPageSelected =
-    selectablePageQuestions.length > 0 &&
-    selectablePageQuestions.every((q) => selectedQuestionIds.has(q.id));
+      selectablePageQuestions.length > 0 &&
+      selectablePageQuestions.every((q) => selectedQuestionIds.has(q.id));
 
   const isAllFilteredSelected =
-    eligibleFilteredQuestions.length > 0 &&
-    eligibleFilteredQuestions.every((q) => selectedQuestionIds.has(q.id));
+      eligibleFilteredQuestions.length > 0 &&
+      eligibleFilteredQuestions.every((q) => selectedQuestionIds.has(q.id));
 
   const isAllTopicSelected =
-    eligibleTopicQuestions.length > 0 &&
-    eligibleTopicQuestions.every((q) => selectedQuestionIds.has(q.id));
+      eligibleTopicQuestions.length > 0 &&
+      eligibleTopicQuestions.every((q) => selectedQuestionIds.has(q.id));
 
   const handleToggleSelectAllPage = () => {
     setSelectedQuestionIds((prev) => {
@@ -479,7 +514,7 @@ export default function ExamManagementPage() {
 
   const handleToggleSelectAllInTopic = (topicName: string) => {
     const list = allBankQuestions.filter(
-      (q) => !sourceIdsInExam.has(q.id) && (q.topic || "").trim().toLowerCase() === topicName.trim().toLowerCase()
+        (q) => !sourceIdsInExam.has(q.id) && (q.topic || "").trim().toLowerCase() === topicName.trim().toLowerCase()
     );
     if (list.length === 0) {
       toast.info(`All questions in topic "${topicName}" are already in this exam.`);
@@ -561,6 +596,13 @@ export default function ExamManagementPage() {
             <Button onClick={() => { setEditingExam(null); setNewTitle(""); setNewDuration("60"); setCfg(DEFAULT_CONFIG); setCreateOpen(true); }}>
               <Plus />
               Create Exam
+            </Button>
+            <Button
+                variant="outline"
+                onClick={() => navigate("/management/exam/templates")}
+            >
+              <BookmarkPlus className="mr-2 size-4" />
+              Use Template
             </Button>
           </header>
 
@@ -699,6 +741,13 @@ export default function ExamManagementPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                  className="cursor-pointer"
+                                  onClick={() => openSaveAsTemplate(exam)}
+                              >
+                                <BookmarkPlus className="mr-2 size-4" />
+                                Save as Template
+                              </DropdownMenuItem>
                               <DropdownMenuItem
                                   className="text-destructive focus:text-destructive cursor-pointer"
                                   onClick={() => openDeleteConfirm(exam)}
@@ -942,11 +991,11 @@ export default function ExamManagementPage() {
                     </SelectContent>
                   </Select>
                   <Select
-                    value={questionTopic || "ALL"}
-                    onValueChange={(value) => {
-                      setQuestionTopic(value === "ALL" ? "" : value);
-                      setQuestionPage(0);
-                    }}
+                      value={questionTopic || "ALL"}
+                      onValueChange={(value) => {
+                        setQuestionTopic(value === "ALL" ? "" : value);
+                        setQuestionPage(0);
+                      }}
                   >
                     <SelectTrigger aria-label="Filter topic">
                       <SelectValue placeholder="All Topics" />
@@ -954,131 +1003,131 @@ export default function ExamManagementPage() {
                     <SelectContent>
                       <SelectItem value="ALL">All Topics ({allBankQuestions.length})</SelectItem>
                       {topicList.map((t) => (
-                        <SelectItem key={t} value={t}>
-                          {t} ({topicCounts[t] ?? 0})
-                        </SelectItem>
+                          <SelectItem key={t} value={t}>
+                            {t} ({topicCounts[t] ?? 0})
+                          </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
 
                 {topicList.length > 0 && (
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
                     <span className="shrink-0 text-muted-foreground font-medium flex items-center gap-1">
                       <Tags className="size-3 text-indigo-500" /> Topics:
                     </span>
-                    <Badge
-                      variant={questionTopic === "" ? "default" : "outline"}
-                      className="cursor-pointer hover:opacity-80 transition-opacity"
-                      onClick={() => { setQuestionTopic(""); setQuestionPage(0); }}
-                    >
-                      All ({allBankQuestions.length})
-                    </Badge>
-                    {topicList.map((t) => (
                       <Badge
-                        key={t}
-                        variant={questionTopic.toLowerCase() === t.toLowerCase() ? "default" : "secondary"}
-                        className="cursor-pointer hover:opacity-80 whitespace-nowrap transition-opacity"
-                        onClick={() => {
-                          setQuestionTopic(questionTopic.toLowerCase() === t.toLowerCase() ? "" : t);
-                          setQuestionPage(0);
-                        }}
+                          variant={questionTopic === "" ? "default" : "outline"}
+                          className="cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => { setQuestionTopic(""); setQuestionPage(0); }}
                       >
-                        {t} ({topicCounts[t] ?? 0})
+                        All ({allBankQuestions.length})
                       </Badge>
-                    ))}
-                  </div>
+                      {topicList.map((t) => (
+                          <Badge
+                              key={t}
+                              variant={questionTopic.toLowerCase() === t.toLowerCase() ? "default" : "secondary"}
+                              className="cursor-pointer hover:opacity-80 whitespace-nowrap transition-opacity"
+                              onClick={() => {
+                                setQuestionTopic(questionTopic.toLowerCase() === t.toLowerCase() ? "" : t);
+                                setQuestionPage(0);
+                              }}
+                          >
+                            {t} ({topicCounts[t] ?? 0})
+                          </Badge>
+                      ))}
+                    </div>
                 )}
 
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/40 p-2 text-xs">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="font-medium text-muted-foreground text-[11px]">Select:</span>
                     <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs px-2"
-                      onClick={handleToggleSelectAllPage}
-                      disabled={selectablePageQuestions.length === 0}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs px-2"
+                        onClick={handleToggleSelectAllPage}
+                        disabled={selectablePageQuestions.length === 0}
                     >
                       <CheckSquare className="mr-1 size-3.5" />
                       {isAllPageSelected ? "Deselect Page" : `Page (${selectablePageQuestions.length})`}
                     </Button>
 
                     {questionTopic.trim() ? (
-                      <>
-                        <Button
-                          type="button"
-                          variant={isAllTopicSelected ? "secondary" : "outline"}
-                          size="sm"
-                          className="h-7 text-xs px-2"
-                          onClick={() => handleToggleSelectAllInTopic(questionTopic)}
-                          disabled={eligibleTopicQuestions.length === 0}
-                          title={`Toggle select all questions in topic "${questionTopic}"`}
-                        >
-                          <Layers className="mr-1 size-3.5" />
-                          {isAllTopicSelected
-                            ? `Deselect Topic "${questionTopic}"`
-                            : `All Topic "${questionTopic}" (${eligibleTopicQuestions.length})`}
-                        </Button>
-
-                        {eligibleFilteredQuestions.length !== eligibleTopicQuestions.length && (
+                        <>
                           <Button
+                              type="button"
+                              variant={isAllTopicSelected ? "secondary" : "outline"}
+                              size="sm"
+                              className="h-7 text-xs px-2"
+                              onClick={() => handleToggleSelectAllInTopic(questionTopic)}
+                              disabled={eligibleTopicQuestions.length === 0}
+                              title={`Toggle select all questions in topic "${questionTopic}"`}
+                          >
+                            <Layers className="mr-1 size-3.5" />
+                            {isAllTopicSelected
+                                ? `Deselect Topic "${questionTopic}"`
+                                : `All Topic "${questionTopic}" (${eligibleTopicQuestions.length})`}
+                          </Button>
+
+                          {eligibleFilteredQuestions.length !== eligibleTopicQuestions.length && (
+                              <Button
+                                  type="button"
+                                  variant={isAllFilteredSelected ? "secondary" : "outline"}
+                                  size="sm"
+                                  className="h-7 text-xs px-2"
+                                  onClick={handleToggleSelectAllFiltered}
+                                  disabled={eligibleFilteredQuestions.length === 0}
+                                  title="Select questions matching search/difficulty inside this topic"
+                              >
+                                <CheckCheck className="mr-1 size-3.5" />
+                                {isAllFilteredSelected
+                                    ? `Deselect Filtered (${eligibleFilteredQuestions.length})`
+                                    : `Filtered (${eligibleFilteredQuestions.length})`}
+                              </Button>
+                          )}
+                        </>
+                    ) : (
+                        <Button
                             type="button"
                             variant={isAllFilteredSelected ? "secondary" : "outline"}
                             size="sm"
                             className="h-7 text-xs px-2"
                             onClick={handleToggleSelectAllFiltered}
                             disabled={eligibleFilteredQuestions.length === 0}
-                            title="Select questions matching search/difficulty inside this topic"
-                          >
-                            <CheckCheck className="mr-1 size-3.5" />
-                            {isAllFilteredSelected
-                              ? `Deselect Filtered (${eligibleFilteredQuestions.length})`
-                              : `Filtered (${eligibleFilteredQuestions.length})`}
-                          </Button>
-                        )}
-                      </>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant={isAllFilteredSelected ? "secondary" : "outline"}
-                        size="sm"
-                        className="h-7 text-xs px-2"
-                        onClick={handleToggleSelectAllFiltered}
-                        disabled={eligibleFilteredQuestions.length === 0}
-                        title="Select all unadded questions matching the current filter"
-                      >
-                        <CheckCheck className="mr-1 size-3.5" />
-                        {isAllFilteredSelected
-                          ? `Deselect All (${eligibleFilteredQuestions.length})`
-                          : `Select All (${eligibleFilteredQuestions.length})`}
-                      </Button>
+                            title="Select all unadded questions matching the current filter"
+                        >
+                          <CheckCheck className="mr-1 size-3.5" />
+                          {isAllFilteredSelected
+                              ? `Deselect All (${eligibleFilteredQuestions.length})`
+                              : `Select All (${eligibleFilteredQuestions.length})`}
+                        </Button>
                     )}
 
                     {selectedQuestionIds.size > 0 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        onClick={handleDeselectAll}
-                        title="Clear all selections across all pages"
-                      >
-                        <X className="mr-1 size-3.5" />
-                        Deselect All ({selectedQuestionIds.size})
-                      </Button>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            onClick={handleDeselectAll}
+                            title="Clear all selections across all pages"
+                        >
+                          <X className="mr-1 size-3.5" />
+                          Deselect All ({selectedQuestionIds.size})
+                        </Button>
                     )}
                   </div>
 
                   <div className="flex items-center gap-1.5">
                     <Button
-                      type="button"
-                      variant="default"
-                      size="sm"
-                      className="h-7 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-sm"
-                      onClick={() => openRandomDialog(questionTopic)}
-                      disabled={allAvailableBankQuestions.length === 0}
+                        type="button"
+                        variant="default"
+                        size="sm"
+                        className="h-7 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-sm"
+                        onClick={() => openRandomDialog(questionTopic)}
+                        disabled={allAvailableBankQuestions.length === 0}
                     >
                       <Dices className="mr-1 size-3.5" />
                       {questionTopic.trim() ? `Random from "${questionTopic}"...` : "Random Questions..."}
@@ -1092,12 +1141,12 @@ export default function ExamManagementPage() {
                       <TableRow>
                         <TableHead className="w-12 text-center">
                           <input
-                            type="checkbox"
-                            className="size-4 accent-primary"
-                            aria-label="Select all on this page"
-                            checked={isAllPageSelected}
-                            disabled={selectablePageQuestions.length === 0}
-                            onChange={handleToggleSelectAllPage}
+                              type="checkbox"
+                              className="size-4 accent-primary"
+                              aria-label="Select all on this page"
+                              checked={isAllPageSelected}
+                              disabled={selectablePageQuestions.length === 0}
+                              onChange={handleToggleSelectAllPage}
                           />
                         </TableHead>
                         <TableHead>Content</TableHead>
@@ -1163,16 +1212,16 @@ export default function ExamManagementPage() {
                       {addQuestionsMutation.isPending ? "Adding..." : `Add ${selectedQuestionIds.size} Selected Question(s)`}
                     </Button>
                     {selectedQuestionIds.size > 0 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="text-xs text-muted-foreground hover:text-destructive"
-                        onClick={handleDeselectAll}
-                      >
-                        <X className="mr-1 size-3.5" />
-                        Clear selection
-                      </Button>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs text-muted-foreground hover:text-destructive"
+                            onClick={handleDeselectAll}
+                        >
+                          <X className="mr-1 size-3.5" />
+                          Clear selection
+                        </Button>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
@@ -1253,16 +1302,16 @@ export default function ExamManagementPage() {
                 <label className="text-xs font-semibold text-muted-foreground">Quick Select Quantity</label>
                 <div className="grid grid-cols-4 gap-2">
                   {[10, 20, 30, 50].map((num) => (
-                    <Button
-                      key={num}
-                      type="button"
-                      variant={randomCount === num ? "default" : "outline"}
-                      size="sm"
-                      className="text-xs h-8 font-medium"
-                      onClick={() => setRandomCount(num)}
-                    >
-                      {num} Questions
-                    </Button>
+                      <Button
+                          key={num}
+                          type="button"
+                          variant={randomCount === num ? "default" : "outline"}
+                          size="sm"
+                          className="text-xs h-8 font-medium"
+                          onClick={() => setRandomCount(num)}
+                      >
+                        {num} Questions
+                      </Button>
                   ))}
                 </div>
               </div>
@@ -1270,12 +1319,12 @@ export default function ExamManagementPage() {
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-muted-foreground">Or Enter Custom Number</label>
                 <Input
-                  type="number"
-                  min={1}
-                  max={eligibleForRandom.length || 100}
-                  value={randomCount}
-                  onChange={(e) => setRandomCount(Math.max(1, parseInt(e.target.value) || 1))}
-                  placeholder="e.g. 15, 25, 50"
+                    type="number"
+                    min={1}
+                    max={eligibleForRandom.length || 100}
+                    value={randomCount}
+                    onChange={(e) => setRandomCount(Math.max(1, parseInt(e.target.value) || 1))}
+                    placeholder="e.g. 15, 25, 50"
                 />
               </div>
 
@@ -1291,12 +1340,12 @@ export default function ExamManagementPage() {
                     </SelectItem>
                     {topicList.map((t) => {
                       const count = allBankQuestions.filter(
-                        (q) => !sourceIdsInExam.has(q.id) && (q.topic || "").trim().toLowerCase() === t.toLowerCase()
+                          (q) => !sourceIdsInExam.has(q.id) && (q.topic || "").trim().toLowerCase() === t.toLowerCase()
                       ).length;
                       return (
-                        <SelectItem key={t} value={t} disabled={count === 0}>
-                          {t} ({count} available)
-                        </SelectItem>
+                          <SelectItem key={t} value={t} disabled={count === 0}>
+                            {t} ({count} available)
+                          </SelectItem>
                       );
                     })}
                   </SelectContent>
@@ -1307,9 +1356,9 @@ export default function ExamManagementPage() {
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-muted-foreground">Question Type</label>
                   <Select
-                    value={lockedQuestionType ?? randomQuestionType}
-                    disabled={lockedQuestionType !== null}
-                    onValueChange={setRandomQuestionType}
+                      value={lockedQuestionType ?? randomQuestionType}
+                      disabled={lockedQuestionType !== null}
+                      onValueChange={setRandomQuestionType}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="All Types" />
@@ -1321,7 +1370,7 @@ export default function ExamManagementPage() {
                     </SelectContent>
                   </Select>
                   {lockedQuestionType && (
-                    <p className="text-[10px] text-muted-foreground">Locked by exam type</p>
+                      <p className="text-[10px] text-muted-foreground">Locked by exam type</p>
                   )}
                 </div>
 
@@ -1360,16 +1409,91 @@ export default function ExamManagementPage() {
                 Cancel
               </Button>
               <Button
-                type="button"
-                className="bg-indigo-600 hover:bg-indigo-700 text-white"
-                disabled={eligibleForRandom.length === 0 || addQuestionsMutation.isPending}
-                onClick={handleConfirmRandomAdd}
+                  type="button"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                  disabled={eligibleForRandom.length === 0 || addQuestionsMutation.isPending}
+                  onClick={handleConfirmRandomAdd}
               >
                 {addQuestionsMutation.isPending
-                  ? "Adding..."
-                  : `Add ${Math.min(randomCount, eligibleForRandom.length)} Random Question(s)`}
+                    ? "Adding..."
+                    : `Add ${Math.min(randomCount, eligibleForRandom.length)} Random Question(s)`}
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+            open={Boolean(examToSaveAsTemplate)}
+            onOpenChange={(open) => {
+              if (!open && !saveExamAsTemplateMutation.isPending) {
+                setExamToSaveAsTemplate(null);
+                setTemplateName("");
+                setTemplateDescription("");
+              }
+            }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (!templateName.trim()) {
+                    toast.error("Template name is required.");
+                    return;
+                  }
+                  saveExamAsTemplateMutation.mutate();
+                }}
+            >
+              <DialogHeader>
+                <DialogTitle>Save Exam as Template</DialogTitle>
+                <DialogDescription>
+                  Save the configuration, questions, and answer options from
+                  <strong className="text-foreground"> {examToSaveAsTemplate?.title}</strong>
+                  {" "}as a reusable template. The original exam will not be changed.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-5">
+                <label className="grid gap-2 text-sm font-medium">
+                  Template Name
+                  <Input
+                      required
+                      maxLength={200}
+                      value={templateName}
+                      onChange={(event) => setTemplateName(event.target.value)}
+                      placeholder="Enter template name"
+                  />
+                </label>
+                <label className="grid gap-2 text-sm font-medium">
+                  Description (optional)
+                  <textarea
+                      className="min-h-24 rounded-md border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      maxLength={1000}
+                      value={templateDescription}
+                      onChange={(event) => setTemplateDescription(event.target.value)}
+                      placeholder="Describe when this template should be reused"
+                  />
+                </label>
+              </div>
+              <DialogFooter>
+                <Button
+                    type="button"
+                    variant="outline"
+                    disabled={saveExamAsTemplateMutation.isPending}
+                    onClick={() => {
+                      setExamToSaveAsTemplate(null);
+                      setTemplateName("");
+                      setTemplateDescription("");
+                    }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                    type="submit"
+                    disabled={saveExamAsTemplateMutation.isPending || !templateName.trim()}
+                >
+                  {saveExamAsTemplateMutation.isPending ? "Saving..." : "Save Template"}
+                </Button>
+              </DialogFooter>
+            </form>
           </DialogContent>
         </Dialog>
 
@@ -1422,3 +1546,4 @@ export default function ExamManagementPage() {
       </MainLayout>
   );
 }
+
