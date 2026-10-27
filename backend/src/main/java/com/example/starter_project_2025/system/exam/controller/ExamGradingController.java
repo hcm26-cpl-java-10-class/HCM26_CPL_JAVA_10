@@ -47,8 +47,9 @@ public class ExamGradingController {
     @PostMapping("/attempts/{attemptId}/ai-suggest")
     public ResponseEntity<EssayGradingDTO.AiGradingResponse> requestAiGrading(
             @PathVariable Long examId,
-            @PathVariable Long attemptId
+            @PathVariable Long attemptId,
+            @RequestBody(required = false) EssayGradingDTO.AiGradingRequest request
     ) {
-        return ResponseEntity.ok(service.requestAiGrading(examId, attemptId));
+        return ResponseEntity.ok(service.requestAiGrading(examId, attemptId, request));
     }
 }

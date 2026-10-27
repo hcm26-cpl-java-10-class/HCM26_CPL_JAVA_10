@@ -7,6 +7,7 @@ import lombok.Setter;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 @Getter
 @Setter
@@ -25,6 +26,7 @@ public class EssayGradingDTO {
         private int essayCount;
         private int essayAnswered;
     }
+
     @Getter
     @Setter
     public static class Detail {
@@ -57,6 +59,8 @@ public class EssayGradingDTO {
         private String answerText;
         private BigDecimal score; // CHANGED: Integer -> BigDecimal
         private String feedback;
+        private String referenceAnswer;
+        private String rubric;
     }
 
     @Getter
@@ -76,8 +80,31 @@ public class EssayGradingDTO {
 
     @Getter
     @Setter
+    public static class AiGradingRequest {
+        private Map<Long, QuestionContext> questions;
+    }
+
+    @Getter
+    @Setter
+    public static class QuestionContext {
+        private String referenceAnswer;
+        private String rubric;
+    }
+
+    @Getter
+    @Setter
     public static class AiGradingResponse {
+        private String model;
         private List<AiQuestionProposal> proposals;
+    }
+
+    @Getter
+    @Setter
+    public static class CriterionScore {
+        private String criterion;
+        private Integer maxPoints;
+        private Integer awardedPoints;
+        private String comment;
     }
 
     @Getter
@@ -87,5 +114,9 @@ public class EssayGradingDTO {
         private BigDecimal proposedScore; // CHANGED: Integer -> BigDecimal
         private String feedback;
         private String reasoning;
+        private String analysis;
+        private List<CriterionScore> criterionScores;
+        private Boolean flagAmbiguous;
+        private String flagReason;
     }
 }

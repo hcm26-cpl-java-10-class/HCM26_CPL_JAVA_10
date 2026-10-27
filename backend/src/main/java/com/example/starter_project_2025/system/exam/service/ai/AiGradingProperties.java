@@ -14,25 +14,25 @@ public class AiGradingProperties {
     /**
      * Whether AI-assisted grading is enabled.
      */
-    private boolean enabled = false;
+    private boolean enabled = true;
 
     /**
-     * API key for the AI provider (e.g. OpenAI / Gemini-compatible endpoint).
+     * API key for Google Gemini API (read from GEMINI_API_KEY).
      */
     private String apiKey;
 
     /**
-     * Model name (e.g. gpt-4o-mini, gpt-4o, gemini-1.5-flash).
+     * Model name (e.g. gemini-3.5-flash-lite, gemini-2.5-flash).
      */
-    private String model = "gpt-4o-mini";
+    private String model = "gemini-3.5-flash-lite";
 
     /**
-     * Chat completions API endpoint.
+     * Google Gemini API endpoint.
      */
-    private String endpoint = "https://api.openai.com/v1/chat/completions";
+    private String endpoint = "https://generativelanguage.googleapis.com/v1beta/models";
 
     /**
      * Request timeout in seconds.
      */
-    private int timeoutSeconds = 30;
+    private int timeoutSeconds = 45;
 }

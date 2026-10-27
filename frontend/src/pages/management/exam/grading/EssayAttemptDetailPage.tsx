@@ -13,13 +13,17 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import type { AiQuestionProposal, GradeSubmissionRequest } from "@/types";
+import type { AiGradingRequest, AiQuestionProposal, GradeSubmissionRequest } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     AlertTriangle,
     Bot,
     Check,
+    CheckCheck,
+    ChevronDown,
     ChevronLeft,
+    ChevronUp,
+    Info,
     Loader2,
     Save,
     Sparkles,
@@ -34,11 +38,16 @@ interface DraftGrade {
     feedback: string;
 }
 
+interface QuestionGuidelines {
+    referenceAnswer: string;
+    rubric: string;
+    isOpen: boolean;
+}
+
 const getErrorMessage = (error: unknown, fallback: string): string => {
     const err = error as { response?: { data?: { errors?: Record<string, string[]>; message?: string } } };
     const data = err?.response?.data;
-    const fieldError = data?.errors ? (Object.values(data.errors).flat()[0]) : undefined;
-    return fieldError || data?.message || fallback;
+    const fieldError = data?.errors ? (Object.values(data.errors).flat()[0]) : undefined;    return fieldError || data?.message || fallback;
 };
 
 export default function EssayAttemptDetailPage() {
@@ -52,6 +61,8 @@ export default function EssayAttemptDetailPage() {
 
     const [draftGrades, setDraftGrades] = useState<Record<number, DraftGrade>>({});
     const [aiProposals, setAiProposals] = useState<Record<number, AiQuestionProposal>>({});
+    const [aiModelUsed, setAiModelUsed] = useState<string | null>(null);
+    const [guidelines, setGuidelines] = useState<Record<number, QuestionGuidelines>>({});
     const [isOverwriteModalOpen, setIsOverwriteModalOpen] = useState(false);
 
     const detailQuery = useQuery({
@@ -78,13 +89,39 @@ export default function EssayAttemptDetailPage() {
 
     // Mutation for Requesting AI Grading Proposal
     const aiSuggestMutation = useMutation({
-        mutationFn: () => examApi.requestAiEssayGrading(numericExamId, numericAttemptId),
+        mutationFn: () => {
+            if (!detail?.essays) return examApi.requestAiEssayGrading(numericExamId, numericAttemptId);
+
+            const questionMap: Record<number, { referenceAnswer?: string; rubric?: string }> = {};
+            let hasCustomContext = false;
+            for (const essay of detail.essays) {
+                const guide = guidelines[essay.questionId];
+                const ref = guide?.referenceAnswer?.trim();
+                const rub = guide?.rubric?.trim();
+                if (ref || rub) {
+                    questionMap[essay.questionId] = {
+                        referenceAnswer: ref || undefined,
+                        rubric: rub || undefined,
+                    };
+                    hasCustomContext = true;
+                }
+            }
+
+            const payload: AiGradingRequest | undefined = hasCustomContext
+                ? { questions: questionMap }
+                : undefined;
+
+            return examApi.requestAiEssayGrading(numericExamId, numericAttemptId, payload);
+        },
         onSuccess: (data) => {
             const map: Record<number, AiQuestionProposal> = {};
             for (const proposal of data.proposals) {
                 map[proposal.questionId] = proposal;
             }
             setAiProposals(map);
+            if (data.model) {
+                setAiModelUsed(data.model);
+            }
             toast.success("AI score suggestions received. You can review and apply them below.");
         },
         onError: (error) => {
@@ -118,6 +155,48 @@ export default function EssayAttemptDetailPage() {
             },
         }));
         toast.info("AI proposal applied to draft. You may edit before saving.");
+    };
+
+    const handleApplyAllProposals = () => {
+        if (!detail?.essays) return;
+        setDraftGrades((prev) => {
+            const updated = { ...prev };
+            let count = 0;
+            for (const essay of detail.essays) {
+                const proposal = aiProposals[essay.questionId];
+                if (proposal) {
+                    updated[essay.questionId] = {
+                        score: String(proposal.proposedScore),
+                        feedback: proposal.feedback,
+                    };
+                    count++;
+                }
+            }
+            toast.info(`Applied ${count} AI suggestion(s) to draft grades.`);
+            return updated;
+        });
+    };
+
+    const toggleGuidelines = (questionId: number) => {
+        setGuidelines((prev) => ({
+            ...prev,
+            [questionId]: {
+                referenceAnswer: prev[questionId]?.referenceAnswer || "",
+                rubric: prev[questionId]?.rubric || "",
+                isOpen: !prev[questionId]?.isOpen,
+            },
+        }));
+    };
+
+    const updateGuideline = (questionId: number, field: "referenceAnswer" | "rubric", value: string) => {
+        setGuidelines((prev) => ({
+            ...prev,
+            [questionId]: {
+                referenceAnswer: field === "referenceAnswer" ? value : (prev[questionId]?.referenceAnswer || ""),
+                rubric: field === "rubric" ? value : (prev[questionId]?.rubric || ""),
+                isOpen: prev[questionId]?.isOpen ?? true,
+            },
+        }));
     };
 
     const validateGrades = (): GradeSubmissionRequest | null => {
@@ -169,6 +248,8 @@ export default function EssayAttemptDetailPage() {
         saveGradeMutation.mutate({ ...validated, confirmOverwrite: true });
     };
 
+    const hasAiProposals = Object.keys(aiProposals).length > 0;
+
     return (
         <MainLayout pathName={{ exams: "Exam Management", grading: "Essay Grading", detail: "Submission Review" }}>
             <section className="mx-auto flex w-full max-w-4xl flex-col gap-6 pb-12">
@@ -178,7 +259,18 @@ export default function EssayAttemptDetailPage() {
                         Back to submissions
                     </Button>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                        {hasAiProposals && (
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={handleApplyAllProposals}
+                                className="border border-purple-300 text-purple-900 hover:bg-purple-100 dark:border-purple-800 dark:text-purple-200"
+                            >
+                                <CheckCheck className="mr-1.5 size-4" />
+                                Apply All AI Suggestions
+                            </Button>
+                        )}
                         <Button
                             variant="outline"
                             onClick={() => aiSuggestMutation.mutate()}
@@ -259,6 +351,7 @@ export default function EssayAttemptDetailPage() {
                         {detail.essays.map((essay, index) => {
                             const draft = draftGrades[essay.questionId] || { score: "", feedback: "" };
                             const proposal = aiProposals[essay.questionId];
+                            const guide = guidelines[essay.questionId] || { referenceAnswer: "", rubric: "", isOpen: false };
 
                             return (
                                 <article
@@ -296,20 +389,68 @@ export default function EssayAttemptDetailPage() {
                                         )}
                                     </div>
 
-                                    {/* Display AI-proposed score and feedback separately from official grade */}
-                                    {proposal && (
+{/* Optional Reference Answer and Rubric Collapsible */}
+                                    <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/10 p-3">
+                                        <button
+                                            type="button"
+                                            className="flex w-full items-center justify-between text-xs font-medium text-muted-foreground hover:text-foreground"
+                                            onClick={() => toggleGuidelines(essay.questionId)}
+                                        >
+                                            <span className="flex items-center gap-1.5">
+                                                <Info className="size-3.5" />
+                                                Optional Grading Guidelines & Rubric for AI
+                                                {(guide.referenceAnswer || guide.rubric) && (
+                                                    <Badge variant="outline" className="ml-1 text-[10px] py-0">Customized</Badge>
+                                                )}
+                                            </span>
+                                            {guide.isOpen ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                                        </button>
+                                        {guide.isOpen && (
+                                            <div className="mt-3 grid gap-3 border-t pt-3 sm:grid-cols-2 text-xs">
+                                                <div>
+                                                    <label className="font-medium text-muted-foreground">
+                                                        Reference / Model Answer (Optional)
+                                                    </label>
+                                                    <Textarea
+                                                        rows={3}
+                                                        className="mt-1 text-xs"
+                                                        placeholder="Provide the expected solution, formula steps, or standard answer..."
+                                                        value={guide.referenceAnswer}
+                                                        onChange={(e) => updateGuideline(essay.questionId, "referenceAnswer", e.target.value)}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="font-medium text-muted-foreground">
+                                                        Grading Rubric & Criteria (Optional)
+                                                    </label>
+                                                    <Textarea
+                                                        rows={3}
+                                                        className="mt-1 text-xs"
+                                                        placeholder="e.g. Method: 2 pts, Correct calculations: 2 pts, Final conclusion: 1 pt..."
+                                                        value={guide.rubric}
+                                                        onChange={(e) => updateGuideline(essay.questionId, "rubric", e.target.value)}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* AI Evaluation Proposal Section */}                                    {proposal && (
                                         <div className="rounded-lg border border-purple-200 bg-purple-50/50 p-4 dark:border-purple-900/50 dark:bg-purple-950/20">
-                                            <div className="flex flex-wrap items-center justify-between gap-2">
-                                                <div className="flex items-center gap-2">
+                                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-purple-200/60 pb-3 dark:border-purple-900/60">
+                                                <div className="flex flex-wrap items-center gap-2">
                                                     <Bot className="size-4 text-purple-600 dark:text-purple-400" />
                                                     <span className="text-sm font-semibold text-purple-900 dark:text-purple-300">
                                                         AI Evaluation Proposal
                                                     </span>
+                                                    <Badge variant="outline" className="border-purple-300 bg-purple-100/60 text-purple-800 text-[11px] dark:border-purple-800 dark:bg-purple-900/40 dark:text-purple-300">
+                                                        Google Gemini ({aiModelUsed || "gemini-3.5-flash-lite"})
+                                                    </Badge>
                                                 </div>
                                                 <Button
                                                     size="sm"
                                                     variant="secondary"
-                                                    className="h-8 gap-1 border border-purple-300 dark:border-purple-800"
+                                                    className="h-8 gap-1 border border-purple-300 text-purple-900 hover:bg-purple-100 dark:border-purple-800 dark:text-purple-200"
                                                     onClick={() => handleApplyAiProposal(essay.questionId)}
                                                 >
                                                     <Check className="size-3.5" />
@@ -317,32 +458,80 @@ export default function EssayAttemptDetailPage() {
                                                 </Button>
                                             </div>
 
+                                            {/* Ambiguity / Teacher Review Alert */}
+                                            {proposal.flagAmbiguous && (
+                                                <div className="mt-3 flex items-start gap-2.5 rounded-md border border-amber-300 bg-amber-50/90 p-3 text-amber-900 dark:border-amber-700/50 dark:bg-amber-950/40 dark:text-amber-200 text-xs leading-relaxed">
+                                                    <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                                                    <div>
+                                                        <span className="font-semibold">Teacher Review Recommended: </span>
+                                                        {proposal.flagReason || "The submission has ambiguous reasoning or missing grading criteria. Teacher verification advised."}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Suggested Score */}
                                             <div className="mt-3 flex items-baseline gap-2">
                                                 <span className="text-xs font-medium uppercase text-purple-800 dark:text-purple-400">
                                                     Suggested Score:
                                                 </span>
-                                                <span className="font-semibold text-base text-purple-950 dark:text-purple-100">
-                                                    {formatScore(proposal.proposedScore)} / {formatScore(essay.maxScore ?? essay.points)} pts
-                                                </span>
+                                                <span className="text-lg font-bold text-purple-950 dark:text-purple-100">
+                                                    {formatScore(proposal.proposedScore)} / {formatScore(essay.maxScore ?? essay.points)} pts                                                </span>
                                             </div>
 
-                                            <div className="mt-2 text-sm text-purple-950 dark:text-purple-200">
-                                                <span className="block text-xs font-medium uppercase text-purple-800 dark:text-purple-400">
-                                                    AI Feedback:
+                                            {/* Step-by-Step Analysis & Solution Evaluation */}
+                                            {(proposal.analysis || proposal.reasoning) && (
+                                                <div className="mt-3 text-xs text-purple-950 dark:text-purple-200">
+                                                    <span className="block font-semibold uppercase text-purple-800 dark:text-purple-400">
+                                                        AI Solution Analysis & Reasoning:
+                                                    </span>
+                                                    <p className="mt-1 whitespace-pre-wrap leading-relaxed">
+                                                        {proposal.analysis || proposal.reasoning}
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            {/* Rubric Criterion Breakdown (if available) */}
+                                            {proposal.criterionScores && proposal.criterionScores.length > 0 && (
+                                                <div className="mt-3">
+                                                    <span className="block text-xs font-semibold uppercase text-purple-800 dark:text-purple-400 mb-1.5">
+                                                        Rubric Criterion Breakdown:
+                                                    </span>
+                                                    <div className="overflow-x-auto rounded-md border border-purple-200 bg-white dark:border-purple-800 dark:bg-card">
+                                                        <table className="w-full text-xs text-left">
+                                                            <thead className="bg-purple-100/70 text-purple-900 font-semibold border-b border-purple-200 dark:bg-purple-950/50 dark:text-purple-200 dark:border-purple-800">
+                                                                <tr>
+                                                                    <th className="py-2 px-3">Criterion</th>
+                                                                    <th className="py-2 px-3 w-28 text-center">Score</th>
+                                                                    <th className="py-2 px-3">Evaluation / Justification</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-purple-100 dark:divide-purple-900/40">
+                                                                {proposal.criterionScores.map((c, i) => (
+                                                                    <tr key={i} className="hover:bg-purple-50/50 dark:hover:bg-purple-950/30">
+                                                                        <td className="py-2 px-3 font-medium text-foreground">{c.criterion}</td>
+                                                                        <td className="py-2 px-3 text-center font-semibold text-purple-900 dark:text-purple-300">
+                                                                            {c.awardedPoints} / {c.maxPoints}
+                                                                        </td>
+                                                                        <td className="py-2 px-3 text-muted-foreground">{c.explanation}</td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Constructive Student Feedback */}
+                                            <div className="mt-3 text-xs text-purple-950 dark:text-purple-200">
+                                                <span className="block font-semibold uppercase text-purple-800 dark:text-purple-400">
+                                                    Constructive Student Feedback:
                                                 </span>
                                                 <p className="mt-1 whitespace-pre-wrap leading-relaxed">{proposal.feedback}</p>
                                             </div>
-
-                                            {proposal.reasoning && (
-                                                <div className="mt-2 text-xs italic text-purple-700 dark:text-purple-400">
-                                                    Reasoning: {proposal.reasoning}
-                                                </div>
-                                            )}
                                         </div>
                                     )}
 
-                                    {/* Manual official grading review and edit inputs */}
-                                    <div className="grid gap-4 rounded-lg border bg-background p-4 sm:grid-cols-4">
+                                    {/* Manual Official Grading Form */}                                    <div className="grid gap-4 rounded-lg border bg-background p-4 sm:grid-cols-4">
                                         <div className="sm:col-span-1">
                                             <label className="text-xs font-medium uppercase text-muted-foreground">
                                                 Official Score (0 - {formatScore(essay.maxScore ?? essay.points)})
@@ -389,8 +578,7 @@ export default function EssayAttemptDetailPage() {
                     </>
                 )}
 
-                {/* Confirm overwrite modal */}
-                <Dialog open={isOverwriteModalOpen} onOpenChange={setIsOverwriteModalOpen}>
+                {/* Overwrite Confirmation Dialog */}                <Dialog open={isOverwriteModalOpen} onOpenChange={setIsOverwriteModalOpen}>
                     <DialogContent className="sm:max-w-md">
                         <DialogHeader>
                             <DialogTitle className="flex items-center gap-2 text-destructive">

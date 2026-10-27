@@ -1,6 +1,6 @@
 import { createBaseApiService } from "@/api/base-service.api";
 import axiosInstance from "@/api/axios";
-import type { AiGradingResponse, EssayGradingDetail, EssayGradingSummary, ExamDTO, ExamFilter, GradeSubmissionRequest, QuestionDTO, QuestionFilter } from "@/types";
+import type { AiGradingRequest, AiGradingResponse, EssayGradingDetail, EssayGradingSummary, ExamDTO, ExamFilter, GradeSubmissionRequest, QuestionDTO, QuestionFilter } from "@/types";
 
 const examBase = createBaseApiService<ExamDTO, ExamFilter>({ path: "/exams" });
 
@@ -50,10 +50,12 @@ export const examApi = {
   },
   requestAiEssayGrading: async (
       examId: number,
-      attemptId: number
+      attemptId: number,
+      payload?: AiGradingRequest
   ): Promise<AiGradingResponse> => {
     const response = await axiosInstance.post<AiGradingResponse>(
-        `/exams/${examId}/grading/attempts/${attemptId}/ai-suggest`
+        `/exams/${examId}/grading/attempts/${attemptId}/ai-suggest`,
+        payload || {}
     );
     return response.data;
   },

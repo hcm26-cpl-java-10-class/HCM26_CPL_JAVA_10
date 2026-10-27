@@ -136,13 +136,34 @@ export interface GradeSubmissionRequest {
   confirmOverwrite?: boolean;
 }
 
+export interface CriterionScore {
+  criterion: string;
+  maxPoints?: number;
+  awardedPoints: number;
+  comment?: string;
+}
+
 export interface AiQuestionProposal {
   questionId: number;
   proposedScore: number;
   feedback: string;
   reasoning?: string;
+  analysis?: string;
+  criterionScores?: CriterionScore[];
+  flagAmbiguous?: boolean;
+  flagReason?: string;
+}
+
+export interface QuestionContextInput {
+  referenceAnswer?: string;
+  rubric?: string;
+}
+
+export interface AiGradingRequest {
+  questions?: Record<number, QuestionContextInput>;
 }
 
 export interface AiGradingResponse {
+  model?: string;
   proposals: AiQuestionProposal[];
 }

@@ -172,6 +172,14 @@ public class ExamEssayGradingService {
     }
 
     public EssayGradingDTO.AiGradingResponse requestAiGrading(Long examId, Long attemptId) {
+        return requestAiGrading(examId, attemptId, null);
+    }
+
+    public EssayGradingDTO.AiGradingResponse requestAiGrading(
+            Long examId,
+            Long attemptId,
+            EssayGradingDTO.AiGradingRequest request
+    ) {
         requireExam(examId);
         ExamAttempt attempt = attemptRepository.findById(attemptId)
                 .filter(candidate -> candidate.getExam().getId().equals(examId))
@@ -185,14 +193,31 @@ public class ExamEssayGradingService {
         List<AiEssayGradingClient.EssayQuestionPayload> payloads = attempt.getQuestions().stream()
                 .filter(q -> q.getType() == QuestionType.ESSAY)
                 .sorted(Comparator.comparingInt(ExamAttemptQuestion::getDisplayOrder))
-                .map(q -> new AiEssayGradingClient.EssayQuestionPayload(
-                        q.getSourceQuestionId(),
-                        q.getDisplayOrder(),
-                        q.getContent(),
-                        // CHANGED: gửi điểm tối đa đã quy đổi (không phải tỉ lệ điểm) cho AI
-                        ExamScoring.gradingCap(ExamScoring.effectiveMax(attempt.getMaxScore()), q.getPoints(), attempt.getTotalPoints()),
-                        answerText(attempt, q)
-                ))
+                .map(q -> {
+                    String refAnswer = null;
+                    String rubric = null;
+                    if (request != null && request.getQuestions() != null) {
+                        EssayGradingDTO.QuestionContext ctx = request.getQuestions().get(q.getSourceQuestionId());
+                        if (ctx != null) {
+                            refAnswer = ctx.getReferenceAnswer();
+                            rubric = ctx.getRubric();
+                        }
+                    }
+                    BigDecimal maxPoints = ExamScoring.gradingCap(
+                            ExamScoring.effectiveMax(attempt.getMaxScore()),
+                            q.getPoints(),
+                            attempt.getTotalPoints()
+                    );
+                    return new AiEssayGradingClient.EssayQuestionPayload(
+                            q.getSourceQuestionId(),
+                            q.getDisplayOrder(),
+                            q.getContent(),
+                            maxPoints,
+                            answerText(attempt, q),
+                            refAnswer,
+                            rubric
+                    );
+                })
                 .toList();
 
         return aiClient.requestProposal(payloads);
