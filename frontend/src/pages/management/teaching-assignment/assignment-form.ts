@@ -1,10 +1,11 @@
-import type { AssignmentClassContext, AssignmentRole } from "@/api/features/class-setup.api";
+import type { AssignmentClassContext } from "@/api/features/class-setup.api";
+import { parseRole } from "./assignment-text.ts";
 
 export interface AssignmentForm {
   classId: string;
   programSubjectId: string;
   trainerId: string;
-  role: AssignmentRole;
+  role: string;
   effectiveFrom: string;
   effectiveTo: string;
 }
@@ -24,14 +25,14 @@ export function validateAssignmentForm(
   trainerIds: number[],
 ): AssignmentErrors {
   const errors: AssignmentErrors = {};
-  if (!classIds.includes(Number(form.classId))) errors.classId = "Select an eligible class.";
+  if (!form.classId || !classIds.includes(Number(form.classId))) errors.classId = "Enter an eligible class code, name or ID.";
   if (!context || context.classProfile.id !== Number(form.classId)) {
     errors.programSubjectId = "Load the subjects for the selected class first.";
   } else if (!context.subjects.some((subject) => subject.programSubjectId === Number(form.programSubjectId))) {
-    errors.programSubjectId = "Select an active subject from this class.";
+    errors.programSubjectId = "Enter an active subject from this class.";
   }
-  if (!trainerIds.includes(Number(form.trainerId))) errors.trainerId = "Select an active trainer.";
-  if (!["MAIN", "ASSISTANT"].includes(form.role)) errors.role = "Select a valid role.";
+  if (!form.trainerId || !trainerIds.includes(Number(form.trainerId))) errors.trainerId = "Enter an active trainer name, email or ID.";
+  if (!parseRole(form.role)) errors.role = "Enter Main or Assistant.";
   const validStart = isISODate(form.effectiveFrom);
   if (!validStart) errors.effectiveFrom = "Enter a valid start date.";
   if (form.effectiveTo && !isISODate(form.effectiveTo)) errors.effectiveTo = "Enter a valid end date.";

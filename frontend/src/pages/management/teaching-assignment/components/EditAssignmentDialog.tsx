@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ReferenceInput } from "./ReferenceInput";
+import { parseRole, resolveText, trainerTextOptions } from "../assignment-text";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatScheduleDateTime } from "../assignment-detail";
 import { canSaveAssignmentEdit, updateKey, validateAssignmentEdit } from "../assignment-edit";
@@ -53,20 +54,26 @@ function EditForm({ context, onClose, onBusy, onReload }: {
   const a = context.assignment;
   const client = useQueryClient();
   const sending = useRef(false);
+  const trainerOptions = trainerTextOptions(context.trainers);
+  const trainerLocked = context.trainerLocked || context.linkedSessionCount > 0;
   const [form, setForm] = useState<AssignmentForm>({ classId: String(a.classId), programSubjectId: String(a.programSubjectId),
-    trainerId: String(a.trainerId), role: a.role, effectiveFrom: a.effectiveFrom, effectiveTo: a.effectiveTo || "" });
+    trainerId: trainerOptions.find((option) => option.value === String(a.trainerId))?.label || String(a.trainerId),
+    role: a.role, effectiveFrom: a.effectiveFrom, effectiveTo: a.effectiveTo || "" });
   const [errors, setErrors] = useState<AssignmentErrors>({});
   const [reviewed, setReviewed] = useState<TeachingAssignmentUpdateRequest | null>(null);
   const [page, setPage] = useState(0);
-  const request: TeachingAssignmentUpdateRequest = { classId: a.classId, programSubjectId: a.programSubjectId,
-    trainerId: Number(form.trainerId), role: form.role, effectiveFrom: form.effectiveFrom, effectiveTo: form.effectiveTo || null, revision: a.revision };
+  const trainerId = trainerLocked ? String(a.trainerId) : resolveText(form.trainerId, trainerOptions);
+  const role = parseRole(form.role);
+  const resolvedForm = { ...form, trainerId: trainerId ?? "" };
+  const request: TeachingAssignmentUpdateRequest | null = trainerId && role ? { classId: a.classId, programSubjectId: a.programSubjectId,
+    trainerId: Number(trainerId), role, effectiveFrom: form.effectiveFrom, effectiveTo: form.effectiveTo || null, revision: a.revision } : null;
   const impact = useQuery({
     queryKey: ["teaching-assignment-impact", a.id, reviewed, page],
     queryFn: ({ signal }) => classSetupApi.previewAssignmentImpact(a.id, reviewed!, page, signal),
     enabled: reviewed !== null, retry: false, refetchOnWindowFocus: false, refetchOnReconnect: false,
   });
   const save = useMutation({
-    mutationFn: () => classSetupApi.updateAssignment(a.id, request), retry: false,
+    mutationFn: () => { if (!request) throw new Error("Enter a matching trainer and role."); return classSetupApi.updateAssignment(a.id, request); }, retry: false,
     onSuccess: () => {
       for (const key of ["teaching-assignments", "teaching-assignment-options", "teaching-assignment-detail",
         "teaching-assignment-edit-context", "teaching-assignment-sessions", "teaching-assignment-create-context"]) {
@@ -89,21 +96,21 @@ function EditForm({ context, onClose, onBusy, onReload }: {
     onSettled: () => { sending.current = false; onBusy(false); },
   });
   const busy = save.isPending;
-  const allowed = canSaveAssignmentEdit(request, reviewed, impact.data) && !impact.isFetching && !impact.isError;
+  const allowed = Boolean(request && canSaveAssignmentEdit(request, reviewed, impact.data)) && !impact.isFetching && !impact.isError;
 
   function change<K extends keyof AssignmentForm>(field: K, value: AssignmentForm[K]) {
     setForm((current) => ({ ...current, [field]: value })); setErrors({}); setReviewed(null); setPage(0); save.reset();
   }
   function preview() {
-    const next = validateAssignmentEdit(form, context); setErrors(next);
-    if (Object.keys(next).length) return;
+    const next = validateAssignmentEdit(resolvedForm, context); setErrors(next);
+    if (Object.keys(next).length || !request) return;
     if (reviewed && updateKey(request) === updateKey(reviewed) && page === 0) void impact.refetch();
     else { setPage(0); setReviewed(request); }
   }
   function submit(event: FormEvent) {
     event.preventDefault();
     if (!allowed || busy || sending.current) return;
-    const next = validateAssignmentEdit(form, context); setErrors(next);
+    const next = validateAssignmentEdit(resolvedForm, context); setErrors(next);
     if (Object.keys(next).length) return;
     sending.current = true; onBusy(true); save.mutate();
   }
@@ -118,10 +125,9 @@ function EditForm({ context, onClose, onBusy, onReload }: {
     {fieldError("classId")}{fieldError("programSubjectId")}
     {(context.trainerLocked || context.linkedSessionCount > 0) && <Alert><AlertCircle /><AlertTitle>Trainer is locked</AlertTitle><AlertDescription>{context.linkedSessionCount > 0 ? `This assignment has ${context.linkedSessionCount} linked sessions.` : "This assignment has been used previously."} Keep the existing trainer and create a replacement assignment if another trainer is needed.</AlertDescription></Alert>}
     <fieldset disabled={busy} className="grid gap-4 sm:grid-cols-2">
-      <div className="space-y-2"><Label htmlFor="edit-trainer">Trainer</Label><Select value={form.trainerId} disabled={busy || context.trainerLocked || context.linkedSessionCount > 0} onValueChange={(value) => change("trainerId", value)}><SelectTrigger id="edit-trainer" className="w-full"><SelectValue /></SelectTrigger><SelectContent>
-        {!context.trainers.some((t) => t.id === Number(form.trainerId)) && <SelectItem value={form.trainerId} disabled>{a.trainerName || `Trainer #${a.trainerId}`} (unavailable)</SelectItem>}
-        {context.trainers.map((t) => <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>)}</SelectContent></Select>{fieldError("trainerId")}</div>
-      <div className="space-y-2"><Label htmlFor="edit-role">Role</Label><Select value={form.role} disabled={busy} onValueChange={(value) => change("role", value as AssignmentForm["role"])}><SelectTrigger id="edit-role" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="MAIN">Main trainer</SelectItem><SelectItem value="ASSISTANT">Assistant trainer</SelectItem></SelectContent></Select>{fieldError("role")}</div>
+      <div className="space-y-2"><Label htmlFor="edit-trainer">Trainer</Label><ReferenceInput id="edit-trainer" value={trainerLocked ? a.trainerName || `Trainer ${a.trainerId}` : form.trainerId}
+        options={trainerOptions} disabled={busy} readOnly={trainerLocked} onChange={(value) => change("trainerId", value)} placeholder="Enter trainer name, email or ID" aria-describedby="edit-trainerId-error" />{fieldError("trainerId")}</div>
+      <div className="space-y-2"><Label htmlFor="edit-role">Role</Label><Input id="edit-role" value={form.role} disabled={busy} onChange={(event) => change("role", event.target.value)} placeholder="Main or Assistant" aria-describedby="edit-role-error" />{fieldError("role")}<p className="text-xs text-muted-foreground">Enter Main or Assistant.</p></div>
       <div className="space-y-2"><Label htmlFor="edit-from">Effective from</Label><Input id="edit-from" type="date" value={form.effectiveFrom} min={context.classProfile.startDate ?? undefined} max={context.classProfile.endDate ?? undefined} onChange={(e) => change("effectiveFrom", e.target.value)} aria-describedby="edit-effectiveFrom-error" />{fieldError("effectiveFrom")}</div>
       <div className="space-y-2"><Label htmlFor="edit-to">Effective to</Label><Input id="edit-to" type="date" value={form.effectiveTo} min={form.effectiveFrom || undefined} max={context.classProfile.endDate ?? undefined} onChange={(e) => change("effectiveTo", e.target.value)} aria-describedby="edit-effectiveTo-error" />{fieldError("effectiveTo")}<p className="text-xs text-muted-foreground">{context.classProfile.endDate ? `Leave blank to use the class end date (${context.classProfile.endDate}).` : "Leave blank for no end date."}</p></div>
     </fieldset>

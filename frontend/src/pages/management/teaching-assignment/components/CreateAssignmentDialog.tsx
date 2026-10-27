@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ReferenceInput } from "./ReferenceInput";
+import { parseRole, resolveText, trainerTextOptions } from "../assignment-text";
 import { validateAssignmentForm, type AssignmentErrors, type AssignmentForm } from "../assignment-form";
 
 function requestError(error: unknown): string {
@@ -56,7 +57,10 @@ export function CreateAssignmentDialog({ initialClassId, onClose, onCreated }: {
     queryKey: ["teaching-assignment-create-options"],
     queryFn: ({ signal }) => classSetupApi.getAssignmentCreateOptions(signal), retry: 1,
   });
-  const selectedClass = options.data?.classes.find((item) => String(item.id) === form.classId);
+  const classOptions = (options.data?.classes ?? []).map((item) => ({ value: String(item.id), label: `${item.code} · ${item.name}`, aliases: [item.code, item.name] }));
+  const trainerOptions = trainerTextOptions(options.data?.trainers ?? []);
+  const classId = resolveText(form.classId, classOptions) ?? "";
+  const selectedClass = options.data?.classes.find((item) => String(item.id) === classId);
   const context = useQuery({
     queryKey: ["teaching-assignment-create-context", selectedClass?.id],
     queryFn: ({ signal }) => classSetupApi.getAssignmentCreateContext(selectedClass!.id, signal),
@@ -75,6 +79,10 @@ export function CreateAssignmentDialog({ initialClassId, onClose, onCreated }: {
     },
   });
   const errors = { ...serverErrors(mutation.error), ...validationErrors };
+  const subjectOptions = (context.data?.subjects ?? []).map((item) => ({ value: String(item.programSubjectId),
+    label: `${item.code} · ${item.name} · v${item.version}`, aliases: [item.code, item.name, `${item.code} v${item.version}`] }));
+  const resolvedForm = { ...form, classId, programSubjectId: resolveText(form.programSubjectId, subjectOptions) ?? "",
+    trainerId: resolveText(form.trainerId, trainerOptions) ?? "" };
   const ready = Boolean(options.data && !options.isError && selectedClass && context.data && !context.isFetching && !context.isError);
   const busy = mutation.isPending;
   const dates = context.data?.classProfile;
@@ -88,14 +96,16 @@ export function CreateAssignmentDialog({ initialClassId, onClose, onCreated }: {
   function submit(event: FormEvent) {
     event.preventDefault();
     if (busy || submitting.current || !ready) return;
-    const nextErrors = validateAssignmentForm(form, context.data,
+    const nextErrors = validateAssignmentForm(resolvedForm, context.data,
       options.data!.classes.map((item) => item.id), options.data!.trainers.map((item) => item.id));
     setValidationErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
+    const role = parseRole(form.role);
+    if (!role) return;
     submitting.current = true;
     mutation.mutate({
-      classId: Number(form.classId), programSubjectId: Number(form.programSubjectId), trainerId: Number(form.trainerId),
-      role: form.role, effectiveFrom: form.effectiveFrom, effectiveTo: form.effectiveTo || null,
+      classId: Number(resolvedForm.classId), programSubjectId: Number(resolvedForm.programSubjectId), trainerId: Number(resolvedForm.trainerId),
+      role, effectiveFrom: form.effectiveFrom, effectiveTo: form.effectiveTo || null,
     }, { onSettled: () => { submitting.current = false; } });
   }
 
@@ -120,10 +130,8 @@ export function CreateAssignmentDialog({ initialClassId, onClose, onCreated }: {
         <fieldset disabled={busy} className="space-y-5">
           <div className="space-y-2">
             <Label htmlFor="create-class">Class <span aria-hidden="true">*</span></Label>
-            <Select value={selectedClass ? form.classId : ""} onValueChange={(value) => change("classId", value)} disabled={busy || !options.data?.classes.length}>
-              <SelectTrigger id="create-class" className="w-full" {...fieldProps("classId")}><SelectValue placeholder="Select a class" /></SelectTrigger>
-              <SelectContent>{options.data?.classes.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.code} · {item.name}</SelectItem>)}</SelectContent>
-            </Select>
+            <ReferenceInput id="create-class" value={form.classId} onChange={(value) => change("classId", value)}
+              options={classOptions} placeholder="Enter class code, name or ID" disabled={busy || !options.data?.classes.length} {...fieldProps("classId")} />
             <FieldError field="classId" errors={errors} />
           </div>
           {selectedClass && context.isPending && <p role="status" className="flex items-center gap-2 text-muted-foreground"><LoaderCircle className="size-4 animate-spin" />Loading class subjects...</p>}
@@ -136,26 +144,20 @@ export function CreateAssignmentDialog({ initialClassId, onClose, onCreated }: {
           <div className="grid gap-5 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="create-subject">Subject <span aria-hidden="true">*</span></Label>
-              <Select value={form.programSubjectId} onValueChange={(value) => change("programSubjectId", value)} disabled={busy || !ready || !context.data?.subjects.length}>
-                <SelectTrigger id="create-subject" className="w-full" {...fieldProps("programSubjectId")}><SelectValue placeholder="Select a class subject" /></SelectTrigger>
-                <SelectContent>{context.data?.subjects.map((item) => <SelectItem key={item.programSubjectId} value={String(item.programSubjectId)}>{item.code} · {item.name} · v{item.version}</SelectItem>)}</SelectContent>
-              </Select>
+              <ReferenceInput id="create-subject" value={form.programSubjectId} onChange={(value) => change("programSubjectId", value)}
+                options={subjectOptions} placeholder="Enter subject code, name or program-subject ID" disabled={busy || !ready || !context.data?.subjects.length} {...fieldProps("programSubjectId")} />
               <FieldError field="programSubjectId" errors={errors} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="create-trainer">Trainer <span aria-hidden="true">*</span></Label>
-              <Select value={form.trainerId} onValueChange={(value) => change("trainerId", value)} disabled={busy || !options.data?.trainers.length}>
-                <SelectTrigger id="create-trainer" className="w-full" {...fieldProps("trainerId")}><SelectValue placeholder="Select a trainer" /></SelectTrigger>
-                <SelectContent>{options.data?.trainers.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name}{item.email ? ` · ${item.email}` : ""}</SelectItem>)}</SelectContent>
-              </Select>
+              <ReferenceInput id="create-trainer" value={form.trainerId} onChange={(value) => change("trainerId", value)}
+                options={trainerOptions} placeholder="Enter trainer name, email or ID" disabled={busy || !options.data?.trainers.length} {...fieldProps("trainerId")} />
               <FieldError field="trainerId" errors={errors} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="create-role">Role <span aria-hidden="true">*</span></Label>
-              <Select value={form.role} onValueChange={(value) => change("role", value as AssignmentForm["role"])} disabled={busy}>
-                <SelectTrigger id="create-role" className="w-full" {...fieldProps("role")}><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="MAIN">Main trainer</SelectItem><SelectItem value="ASSISTANT">Assistant trainer</SelectItem></SelectContent>
-              </Select>
+              <Input id="create-role" value={form.role} onChange={(event) => change("role", event.target.value)} placeholder="Main or Assistant" disabled={busy} {...fieldProps("role")} />
+              <p className="text-xs text-muted-foreground">Enter Main or Assistant.</p>
               <FieldError field="role" errors={errors} />
             </div>
             <div className="space-y-2">

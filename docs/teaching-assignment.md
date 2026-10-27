@@ -27,11 +27,13 @@ Sample data uses an in-memory database and is cleared on restart. The default pr
 
 1. Sign in with an account that has `ASSIGNMENT_READ` and `ASSIGNMENT_CREATE`.
 2. Open **Teaching Assignments** and click **New assignment**.
-3. Select an eligible class, then one of its active program subjects.
-4. Select an active trainer from the trainer directory and the Main or Assistant role.
+3. Enter an eligible class code, name or ID, then an active subject code, name or program-subject ID from that class.
+4. Enter an active trainer name, email or ID and type Main or Assistant for the role.
 5. Set the effective start date and optional end date, then click **Create assignment**.
 
 If the page is already filtered by class, that class is preselected when eligible. Changing the class clears the subject selection. Errors retain the form values, and a successful create closes the dialog and refreshes list/filter queries while keeping the current list filters.
+
+All assignment controls use input fields. Reference inputs match existing records without requiring a dropdown selection; case/accent differences and unique name tokens are supported. Ambiguous names require more text, an email or the ID. Unknown text does not create classes, subjects or trainers. The edit form preserves the trainer lock for assignments already used. Filters/sort apply on Enter or blur; clearing a filter means all records. Row counts accept whole numbers from 1 to 100. Main and Assistant remain the only valid business roles.
 
 ## Creation rules
 
