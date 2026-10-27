@@ -29,6 +29,13 @@ import java.time.LocalDate;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class SprintDataInitializer implements CommandLineRunner {
 
+    /**
+     * Demo project every seeded sprint belongs to. The milestone demo data is
+     * seeded for the same project id, so backlog items can link a milestone of
+     * their own project (UFR-PRJ-003-02).
+     */
+    static final long DEMO_PROJECT_ID = 1L;
+
     SprintRepository sprintRepository;
 
     @Override
@@ -77,6 +84,7 @@ public class SprintDataInitializer implements CommandLineRunner {
 
         sprint.setName(name);
         sprint.setSprintGoal(sprintGoal);
+        sprint.setProjectId(DEMO_PROJECT_ID);
         sprint.setStartDate(startDate.atStartOfDay());
         sprint.setEndDate(endDate.atStartOfDay());
         sprint.setStatus(status);

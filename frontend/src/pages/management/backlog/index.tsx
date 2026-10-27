@@ -1,4 +1,4 @@
-import { sprintApi, sprintBacklogApi } from "@/api";
+import { milestoneApi, sprintApi, sprintBacklogApi } from "@/api";
 import Loading from "@/components/datatable/common/Loading";
 import { ConfirmDeleteModal } from "@/components/datatable/modal/ConfirmDeleteModal";
 import { FormModal } from "@/components/datatable/modal/form/FormModal";
@@ -16,6 +16,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import type {
   BacklogPriority,
   BacklogStatus,
+  MilestoneOption,
   SprintBacklogDTO,
   SprintBacklogStatus,
   SprintBacklogWorkType,
@@ -24,6 +25,7 @@ import type {
   SprintStatus,
 } from "@/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
 import {
   ArrowLeft,
   Layers,
@@ -50,11 +52,16 @@ import { BacklogSection } from "./components/BacklogSection";
 import { BacklogToolbar } from "./components/BacklogToolbar";
 import {
   SprintCreateRow,
+  type BacklogCreateResult,
   type BacklogCreateValues,
 } from "./components/SprintCreateRow";
 
 const SPRINTS_QUERY_KEY = ["sprints", "backlog"] as const;
 const BACKLOG_ITEMS_QUERY_KEY = ["sprint-backlogs", "backlog-page"] as const;
+const MILESTONE_OPTIONS_QUERY_KEY = ["milestones", "backlog-options"] as const;
+
+const MILESTONE_CHANGED_MESSAGE =
+  "Milestone không tồn tại hoặc đã bị thay đổi";
 
 /** Key of the product backlog box (items without a sprint). */
 const BACKLOG_SECTION_KEY = "backlog";
@@ -127,15 +134,66 @@ const toPlanningItem = (dto: SprintBacklogDTO): SprintPlanningItem => ({
   assigneeProjectMemberId: dto.assigneeProjectMemberId ?? null,
   startDate: dto.startDate ?? null,
   endDate: dto.endDate ?? null,
+  projectId: dto.projectId ?? null,
+  milestoneId: dto.milestoneId ?? null,
+  milestoneName: dto.milestoneName ?? null,
+  milestoneDueDate: dto.milestoneDueDate ?? null,
   estimatedHours: dto.estimatedHours ?? null,
   sprintOrder: null,
 });
+
+/**
+ * Maps an API failure of the create call onto the inline create bar.
+ * <p>
+ * 422 responses carry a per-field map (`errors`) that is forwarded so the
+ * offending input can be highlighted while the other values stay untouched
+ * (AC02). A 404 means the linked milestone vanished, so the shared message of
+ * AC03 is shown instead.
+ */
+const toCreateResult = (error: unknown): BacklogCreateResult => {
+  if (!axios.isAxiosError(error)) {
+    return { ok: false, message: "Không thể tạo Backlog item." };
+  }
+
+  const status = error.response?.status;
+  const data = error.response?.data as
+    | { message?: string; errors?: Record<string, string[]> }
+    | undefined;
+
+  const fieldErrors: Record<string, string> = {};
+
+  Object.entries(data?.errors ?? {}).forEach(([field, messages]) => {
+    const first = Array.isArray(messages) ? messages[0] : messages;
+
+    if (typeof first === "string" && first.trim()) {
+      fieldErrors[field] = first;
+    }
+  });
+
+  if (status === 404) {
+    return { ok: false, message: MILESTONE_CHANGED_MESSAGE };
+  }
+
+  const firstFieldError = Object.values(fieldErrors)[0];
+
+  return {
+    ok: false,
+    fieldErrors,
+    message:
+      firstFieldError ??
+      (typeof data?.message === "string" && data.message.trim()
+        ? data.message
+        : "Không thể tạo Backlog item."),
+  };
+};
 
 /** One collapsible box of the board: a sprint, or the product backlog. */
 interface BoardSection {
   key: string;
   sprint: SprintDTO | null;
   sprintId: number | null;
+  /** Project of the box, used to scope the milestone picker. */
+  projectId: number | null;
   title: string;
   meta: string | null;
   prefix: string;
@@ -204,6 +262,18 @@ export default function BacklogPage() {
     queryFn: () =>
       sprintBacklogApi.getPage({ page: 0, size: 500, sort: ["id,asc"] }),
   });
+
+  /** Active milestones the user can link a backlog item to (UFR-PRJ-003-02). */
+  const milestonesQuery = useQuery({
+    queryKey: MILESTONE_OPTIONS_QUERY_KEY,
+    queryFn: () => milestoneApi.getBacklogOptions(),
+    staleTime: 60_000,
+  });
+
+  const milestones = useMemo<MilestoneOption[]>(
+    () => milestonesQuery.data ?? [],
+    [milestonesQuery.data],
+  );
 
   const sprints = useMemo<SprintDTO[]>(
     () => sprintsQuery.data?.content ?? [],
@@ -281,6 +351,7 @@ export default function BacklogPage() {
         key: sprint?.id != null ? sprintSectionKey(sprint.id) : BACKLOG_SECTION_KEY,
         sprint,
         sprintId: sprint?.id ?? null,
+        projectId: sprint?.projectId ?? null,
         title:
           sprint?.name?.trim() ||
           (sprint?.id != null ? `Sprint ${sprint.id}` : "Backlog"),
@@ -460,23 +531,29 @@ export default function BacklogPage() {
    * The owning sprint comes from the box that opened the bar (`null` for the
    * product backlog) and the due date picked in the bar is stored as the
    * schedule the backend expects (`startDate` / `endDate` are a both-or-none
-   * pair).
+   * pair). The milestone is optional (UFR-PRJ-003-02).
    *
-   * @returns `true` when the item was created so the bar can reset itself.
+   * @returns the outcome so the bar can reset itself or highlight the fields
+   *          rejected by the API (422) and keep the typed values (404).
    */
   const handleCreateItem = async (
     boxKey: string,
     sprintId: number | null,
     values: BacklogCreateValues,
-  ): Promise<boolean> => {
-    if (creatingKey !== null) return false;
+  ): Promise<BacklogCreateResult> => {
+    if (creatingKey !== null) {
+      return { ok: false, message: "Another backlog item is being saved." };
+    }
 
     setCreatingKey(boxKey);
 
     try {
       await sprintBacklogApi.create({
         sprintId,
+        projectId: milestoneProjectIdOf(values.milestoneId),
+        milestoneId: values.milestoneId,
         title: values.title,
+        description: values.description,
         workType: values.workType,
         status: "TODO",
         priority: "MEDIUM",
@@ -495,15 +572,28 @@ export default function BacklogPage() {
           : "Đã tạo công việc trong Sprint.",
       );
 
-      return true;
+      return { ok: true };
     } catch (error) {
-      toast.error(extractErrorMessage(error, "Không thể tạo công việc."));
+      const result = toCreateResult(error);
 
-      return false;
+      // AC03: the milestone disappeared between loading the options and
+      // saving, so the form keeps its values and asks for another milestone.
+      if (result.message) {
+        toast.error(result.message);
+      }
+
+      return result;
     } finally {
       setCreatingKey(null);
     }
   };
+
+  /** Project of the picked milestone, so the item joins the right project. */
+  const milestoneProjectIdOf = (milestoneId: string | null) =>
+    milestoneId == null
+      ? null
+      : (milestones.find((milestone) => milestone.id === milestoneId)
+          ?.projectId ?? null);
 
   /**
    * The board works with three buckets (`SPRINT_BACKLOG` / `IN_PROGRESS` /
@@ -769,6 +859,22 @@ export default function BacklogPage() {
     return [...ids].sort((left, right) => left - right).slice(0, 8);
   }, [itemsQuery.data]);
 
+  /**
+   * Milestones a box may link: the ones of its project. The product backlog box
+   * has no project, so it offers every active milestone and the backend derives
+   * the project of the item from the chosen milestone.
+   */
+  const milestonesFor = useCallback(
+    (projectId: number | null) =>
+      projectId == null
+        ? milestones
+        : milestones.filter(
+            (milestone) =>
+              milestone.projectId == null || milestone.projectId === projectId,
+          ),
+    [milestones],
+  );
+
   const loading = sprintsQuery.isLoading || itemsQuery.isLoading;
   const loadError = sprintsQuery.isError
     ? extractErrorMessage(
@@ -895,6 +1001,7 @@ export default function BacklogPage() {
                       }
                       creating={creatingKey === section.key}
                       assigneeOptions={assigneeOptions}
+                      milestones={milestonesFor(section.projectId)}
                       onCreate={(values) =>
                         handleCreateItem(section.key, section.sprintId, values)
                       }
@@ -985,6 +1092,9 @@ export default function BacklogPage() {
         }
         sprintName={detailSection?.sprint?.name ?? null}
         sprints={sprints}
+        milestones={milestonesFor(
+          detailItem?.projectId ?? detailSection?.projectId ?? null,
+        )}
         canEdit={canEditTask && !detailSection?.locked}
         canMove={canEditBoard && !detailSection?.locked}
         canDelete={canDelete}

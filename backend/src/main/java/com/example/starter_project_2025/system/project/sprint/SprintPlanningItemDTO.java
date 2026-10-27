@@ -1,9 +1,12 @@
 package com.example.starter_project_2025.system.project.sprint;
 
+import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklog;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogStatus;
 
 import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.UUID;
 
 /**
  * Backlog item as rendered by the Sprint Planning / Backlog board
@@ -14,9 +17,9 @@ import java.time.LocalDate;
  * panel only lists items that are not assigned to any sprint yet
  * ({@link SprintBacklog#getSprint()} is {@code null}).
  * <p>
- * The payload keeps the fields the board renders. Milestone data is not
- * modelled by the Sprint Backlog module yet, so it is always {@code null} and
- * the UI simply hides it.
+ * The payload keeps the fields the board renders, including the milestone the
+ * item is linked to (UFR-PRJ-003-02): the board groups / warns by milestone
+ * deadline, so the name and the due date are part of the projection.
  *
  * @param sprintOrder 1-based position of the item inside the sprint panel.
  */
@@ -27,7 +30,7 @@ public record SprintPlanningItemDTO(
         String priority,
         String status,
         Long projectId,
-        Long milestoneId,
+        UUID milestoneId,
         String milestoneName,
         LocalDate milestoneDueDate,
         Double estimatedHours,
@@ -57,16 +60,20 @@ public record SprintPlanningItemDTO(
 
     public static SprintPlanningItemDTO from(SprintBacklog backlog, Long projectId, int position) {
 
+        Milestone milestone = backlog.getMilestone();
+
         return new SprintPlanningItemDTO(
                 backlog.getId(),
                 backlog.getTitle(),
                 backlog.getDescription(),
                 backlog.getPriority() == null ? null : backlog.getPriority().name(),
                 toBoardStatus(backlog.getStatus()),
-                projectId,
-                null,
-                null,
-                null,
+                backlog.getProjectId() != null ? backlog.getProjectId() : projectId,
+                milestone == null ? null : milestone.getId(),
+                milestone == null ? null : milestone.getTitle(),
+                milestone == null || milestone.getDeadline() == null
+                        ? null
+                        : milestone.getDeadline().atZone(ZoneOffset.UTC).toLocalDate(),
                 backlog.getEstimatedHours(),
                 position
         );

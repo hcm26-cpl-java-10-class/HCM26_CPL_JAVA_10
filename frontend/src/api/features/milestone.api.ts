@@ -7,10 +7,10 @@ import type {
   MilestoneOption,
   MilestonePageResponse,
   MilestoneResponse,
-  PageResponse,
 } from "@/types";
 
-const backlogMilestoneOptionsPath = "/backlog-items/milestone-options";
+/** Backlog form / detail panel milestone picker (UFR-PRJ-003-02). */
+const backlogMilestoneOptionsPath = "/sprint-backlogs/milestone-options";
 
 export const milestoneApi = {
   async getTeamList(teamId: number, params: MilestoneListParams): Promise<MilestonePageResponse> {
@@ -104,20 +104,14 @@ export const milestoneApi = {
     return response.data;
   },
 
-  /** Compatibility adapter for the temporary backlog relation selector. */
-  getPage: async (): Promise<PageResponse<MilestoneOption>> => {
-    const response = await axiosInstance.get<MilestoneOption[]>(backlogMilestoneOptionsPath);
-    const content = response.data ?? [];
-
-    return {
-      content,
-      items: content,
-      page: 0,
-      size: content.length,
-      totalPages: 1,
-      totalElements: content.length,
-      hasNext: false,
-      hasPrevious: false,
-    };
+  /**
+   * Milestones that can be linked to a backlog item (UFR-PRJ-003-02).
+   * Only active milestones of the current tenant are returned.
+   */
+  getBacklogOptions: async (): Promise<MilestoneOption[]> => {
+    const response = await axiosInstance.get<MilestoneOption[]>(
+      backlogMilestoneOptionsPath,
+    );
+    return response.data ?? [];
   },
 };

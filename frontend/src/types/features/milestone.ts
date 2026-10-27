@@ -187,22 +187,25 @@ export interface MilestoneListParams {
 }
 
 /**
- * Milestone reference used by the temporary `backlog_temp` backend module.
- * Kept as a compatibility shape while backlog is migrated to the UUID-based
- * milestone module above.
+ * Milestone reference used by the backlog item form / detail panel
+ * (UFR-PRJ-003-02). Served by `GET /api/sprint-backlogs/milestone-options`.
  */
 export type BacklogMilestoneStatus =
   | "PLANNED"
-  | "ACTIVE"
-  | "COMPLETED"
+  | "OPEN"
+  | "CLOSED"
   | "CANCELLED";
 
 export interface MilestoneOption {
-  id: number;
-  projectId: number;
+  /** Milestone UUID, written back in `SprintBacklogDTO.milestoneId`. */
+  id: string;
+  projectId?: number | null;
+  /** Milestone title. */
   name: string;
-  /** Name prefixed with the project, used as the selector label. */
+  /** Display label of the selector (project prefix + title). */
   label: string;
-  status: BacklogMilestoneStatus;
+  status?: BacklogMilestoneStatus | null;
+  /** Milestone deadline (ISO instant). */
   dueDate?: string | null;
+  mandatory?: boolean;
 }

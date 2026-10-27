@@ -10,7 +10,9 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -34,6 +36,36 @@ public class SprintBacklogDTO extends BaseDTO {
      */
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     String sprintName;
+
+    /**
+     * Owning project (UFR-PRJ-003-02).
+     * <p>
+     * Optional on write: the service derives it from the sprint or from the
+     * linked milestone when the client does not send it.
+     */
+    Long projectId;
+
+    /**
+     * Milestone linked to the item (UFR-PRJ-003-02).
+     * <p>
+     * Send the milestone UUID to link the item; send nothing to keep the
+     * current link when updating.
+     */
+    UUID milestoneId;
+
+    /**
+     * Set to {@code true} on update to remove the milestone link (sending a
+     * {@code null} {@code milestoneId} means "keep the current milestone").
+     */
+    Boolean clearMilestone;
+
+    /** Milestone title, read-only convenience for the board. */
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    String milestoneName;
+
+    /** Milestone deadline (ISO instant), read-only convenience for the board. */
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    Instant milestoneDueDate;
 
     /**
      * TEMPORARY assignee id (project member module not implemented yet).
