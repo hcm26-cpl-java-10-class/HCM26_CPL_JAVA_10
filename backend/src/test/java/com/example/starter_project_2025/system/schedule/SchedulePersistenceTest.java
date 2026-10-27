@@ -35,6 +35,8 @@ class SchedulePersistenceTest {
     static class Config {}
 
     @MockBean AutoSpecBuilder autoSpecBuilder;
+    // This repository slice tests schedule-resource conflicts; local assignment rules have full integration coverage.
+    @MockBean com.example.starter_project_2025.system.trainingprogram.TeachingAssignmentSessionGuard assignmentGuard;
     @Autowired SessionRepository repository;
     @Autowired ScheduleWriteLockRepository locks;
     @Autowired SessionService service;

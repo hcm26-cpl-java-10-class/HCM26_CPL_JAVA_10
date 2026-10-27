@@ -127,6 +127,7 @@ export default function ClassSetupPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingRevision, setEditingRevision] = useState<number | null>(null);
   const [pendingDelete, setPendingDelete] = useState<TeachingAssignment | null>(null);
   const [form, setForm] = useState<AssignmentForm>(emptyForm);
 
@@ -203,6 +204,7 @@ export default function ClassSetupPage() {
 
   const resetAssignmentForm = () => {
     setEditingId(null);
+    setEditingRevision(null);
     setForm(emptyForm());
   };
 
@@ -239,7 +241,10 @@ export default function ClassSetupPage() {
     };
     try {
       if (editingId === null) await classSetupApi.createAssignment(request);
-      else await classSetupApi.updateAssignment(editingId, request);
+      else {
+        if (editingRevision === null) throw new Error("Reload the assignment before editing.");
+        await classSetupApi.updateAssignment(editingId, { ...request, revision: editingRevision });
+      }
       const successMessage = editingId === null ? "Đã tạo phân công giảng dạy." : "Đã cập nhật phân công giảng dạy.";
       resetAssignmentForm();
       await loadClass(Number(selectedClassId));
@@ -253,6 +258,7 @@ export default function ClassSetupPage() {
 
   const editAssignment = (assignment: TeachingAssignment) => {
     setEditingId(assignment.id);
+    setEditingRevision(assignment.revision);
     setForm({
       programSubjectId: String(assignment.programSubjectId),
       trainerId: String(assignment.trainerId),
@@ -271,7 +277,7 @@ export default function ClassSetupPage() {
     setNotice("");
     setSaving(true);
     try {
-      await classSetupApi.deleteAssignment(pendingDelete.id);
+      await classSetupApi.deleteAssignment(pendingDelete.id, pendingDelete.revision);
       setPendingDelete(null);
       if (selectedClassId) await loadClass(Number(selectedClassId));
       setNotice("Đã xóa phân công.");

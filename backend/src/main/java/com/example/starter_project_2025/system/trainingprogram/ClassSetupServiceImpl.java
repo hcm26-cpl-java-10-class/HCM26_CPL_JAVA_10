@@ -1,26 +1,34 @@
 package com.example.starter_project_2025.system.trainingprogram;
 
 import com.example.starter_project_2025.exception.ConflictException;
+import com.example.starter_project_2025.exception.BusinessValidationException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.external_api.ExternalApiService;
 import com.example.starter_project_2025.system.external_api.dto.ExternalClassDTO;
 import com.example.starter_project_2025.system.external_api.dto.ExternalTrainerDTO;
 import com.example.starter_project_2025.system.external_api.exception.ExternalApiException;
 import com.example.starter_project_2025.system.subject.Subject;
+import com.example.starter_project_2025.system.subject.SubjectStatus;
+import com.example.starter_project_2025.system.demo.session.Session;
+import com.example.starter_project_2025.system.demo.session.SessionRepository;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -35,6 +43,8 @@ public class ClassSetupServiceImpl implements ClassSetupService {
     private final TrainingProgramRepository trainingProgramRepository;
     private final ProgramSubjectRepository programSubjectRepository;
     private final ExternalApiService externalApiService;
+    private final SessionRepository sessionRepository;
+    private final TeachingAssignmentSessionGuard assignmentSessionGuard;
 
     @Override
     public ClassProgramSubjectsResponse assignProgram(Long classId, Long programId) {
@@ -97,11 +107,44 @@ public class ClassSetupServiceImpl implements ClassSetupService {
     @Transactional(readOnly = true)
     public Page<TeachingAssignmentResponse> searchAssignments(Long classId, Long programSubjectId,
                                                                 Long trainerId, AssignmentRole role,
-                                                                LocalDate effectiveOn, Pageable pageable) {
+                                                                LocalDate effectiveOn, String search, Long subjectId, Pageable pageable) {
+        if (pageable.getPageSize() > 100 || pageable.getPageNumber() > 100000) {
+            throw new IllegalArgumentException("Page size must be at most 100 and page at most 100000.");
+        }
+        String term = search == null ? "" : search.trim().toLowerCase(Locale.ROOT);
+        if (term.length() > 100) throw new IllegalArgumentException("Search must be at most 100 characters.");
+        Set<String> sortable = Set.of("id", "effectiveFrom", "effectiveTo", "role", "classId", "trainerId");
+        for (Sort.Order order : pageable.getSort()) {
+            if (!sortable.contains(order.getProperty())) throw new IllegalArgumentException("Unsupported assignment sort field.");
+        }
+        // A unique tie breaker keeps records stable between server pages.
+        Sort sort = pageable.getSort().getOrderFor("id") == null
+                ? pageable.getSort().and(Sort.by("id")) : pageable.getSort();
+        Pageable stablePage = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
+        Map<Long, ExternalClassDTO> classes = externalApiService.fetchClasses(null).stream()
+                .filter(item -> item.getId() != null).collect(Collectors.toMap(ExternalClassDTO::getId, item -> item, (a, b) -> a));
+        Map<Long, ExternalTrainerDTO> trainers = fetchTrainerLookup();
+        List<Long> matchingClasses = classes.values().stream()
+                .filter(item -> contains(item.getCode(), term) || contains(item.getName(), term))
+                .map(ExternalClassDTO::getId).toList();
+        List<Long> matchingTrainers = trainers.values().stream()
+                .filter(item -> contains(item.getName(), term) || contains(item.getEmail(), term))
+                .map(ExternalTrainerDTO::getId).toList();
+        String pattern = "%" + term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
         Specification<TeachingAssignment> specification = (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (classId != null) predicates.add(criteriaBuilder.equal(root.get("classId"), classId));
             if (programSubjectId != null) predicates.add(criteriaBuilder.equal(root.get("programSubject").get("id"), programSubjectId));
+            if (subjectId != null) predicates.add(criteriaBuilder.equal(root.get("programSubject").get("subject").get("id"), subjectId));
+            if (!term.isEmpty()) {
+                List<Predicate> matches = new ArrayList<>();
+                var subject = root.get("programSubject").get("subject");
+                matches.add(criteriaBuilder.like(criteriaBuilder.lower(subject.get("code")), pattern, '\\'));
+                matches.add(criteriaBuilder.like(criteriaBuilder.lower(subject.get("name")), pattern, '\\'));
+                if (!matchingClasses.isEmpty()) matches.add(root.get("classId").in(matchingClasses));
+                if (!matchingTrainers.isEmpty()) matches.add(root.get("trainerId").in(matchingTrainers));
+                predicates.add(criteriaBuilder.or(matches.toArray(Predicate[]::new)));
+            }
             if (trainerId != null) predicates.add(criteriaBuilder.equal(root.get("trainerId"), trainerId));
             if (role != null) predicates.add(criteriaBuilder.equal(root.get("role"), role));
             if (effectiveOn != null) {
@@ -113,13 +156,58 @@ public class ClassSetupServiceImpl implements ClassSetupService {
             return criteriaBuilder.and(predicates.toArray(Predicate[]::new));
         };
 
-        Page<TeachingAssignment> page = teachingAssignmentRepository.findAll(specification, pageable);
-        Set<Long> classIds = page.getContent().stream().map(TeachingAssignment::getClassId).collect(Collectors.toSet());
-        Map<Long, ExternalClassDTO> classes = new HashMap<>();
-        for (Long id : classIds) classes.put(id, findClassOrNull(id));
-        Map<Long, ExternalTrainerDTO> trainers = fetchTrainerLookup();
+        Page<TeachingAssignment> page = teachingAssignmentRepository.findAll(specification, stablePage);
         return page.map(assignment -> toResponse(assignment, classes.get(assignment.getClassId()),
                 trainers.get(assignment.getTrainerId())));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public TeachingAssignmentOptions getAssignmentOptions() {
+        return new TeachingAssignmentOptions(externalApiService.fetchClasses(null), externalApiService.fetchTrainers(null),
+                teachingAssignmentRepository.findAssignedSubjects().stream()
+                        .map(s -> new TeachingAssignmentOptions.SubjectOption(s.getId(), s.getCode(), s.getName(), s.getVersion())).toList(),
+                externalApiService.isSampleData());
+    }
+
+    private boolean contains(String value, String term) {
+        return value != null && value.toLowerCase(Locale.ROOT).contains(term);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public TeachingAssignmentCreateOptions getAssignmentCreateOptions() {
+        Map<Long, Long> linkedPrograms = classTrainingProgramRepository.findAll().stream()
+                .collect(Collectors.toMap(ClassTrainingProgram::getClassId, link -> link.getProgram().getId()));
+        Set<Long> activePrograms = trainingProgramRepository.findAll().stream()
+                .filter(program -> program.getStatus() == ProgramStatus.ACTIVE)
+                .map(TrainingProgram::getId).collect(Collectors.toSet());
+        List<ExternalClassDTO> classes = externalApiService.fetchClasses("active").stream()
+                .filter(item -> isActive(item.getStatus()))
+                .filter(item -> activePrograms.contains(linkedPrograms.getOrDefault(item.getId(), item.getProgramId())))
+                .toList();
+        return new TeachingAssignmentCreateOptions(classes, externalApiService.fetchTrainers("active").stream()
+                .filter(item -> isActive(item.getStatus())).toList(), externalApiService.isSampleData());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public TeachingAssignmentCreateOptions.ClassContext getAssignmentCreateContext(Long classId) {
+        ExternalClassDTO externalClass = requireClass(classId);
+        requireActiveClass(externalClass);
+        validateClassDates(externalClass);
+        Long programId = resolveProgramId(classId, externalClass);
+        if (programId == null) throw fieldError("classId", "Assign an active training program to this class first.");
+        TrainingProgram program = requireProgram(programId);
+        if (program.getStatus() != ProgramStatus.ACTIVE) {
+            throw fieldError("classId", "The class training program is not active.");
+        }
+        return new TeachingAssignmentCreateOptions.ClassContext(externalClass,
+                new ClassProgramSubjectsResponse.ProgramSummary(program.getId(), program.getCode(), program.getName(), program.getVersion(), program.getStatus()),
+                program.getSubjects().stream().sorted(Comparator.comparing(ProgramSubject::getOrderIndex))
+                        .filter(item -> isActiveSubject(item.getSubject()))
+                        .map(item -> new TeachingAssignmentCreateOptions.SubjectOption(item.getId(), item.getSubject().getId(),
+                                item.getSubject().getCode(), item.getSubject().getName(), item.getSubject().getVersion())).toList());
     }
 
     @Override
@@ -131,11 +219,31 @@ public class ClassSetupServiceImpl implements ClassSetupService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Page<TeachingAssignmentSessionResponse> getAssignmentSessions(Long id, Session.SessionStatus status, Pageable pageable) {
+        // This endpoint works even when the external profile service is unavailable.
+        findAssignment(id);
+        if (pageable.getPageSize() > 100 || pageable.getPageNumber() > 100000) {
+            throw new IllegalArgumentException("Page size must be at most 100 and page at most 100000.");
+        }
+        Set<String> sortable = Set.of("id", "startTime", "endTime", "status");
+        for (Sort.Order order : pageable.getSort()) {
+            if (!sortable.contains(order.getProperty())) throw new IllegalArgumentException("Unsupported session sort field.");
+        }
+        Sort sort = pageable.getSort().getOrderFor("id") == null
+                ? pageable.getSort().and(Sort.by("id")) : pageable.getSort();
+        return sessionRepository.findAssignmentSessions(id, status,
+                PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort))
+                .map(TeachingAssignmentSessionResponse::from);
+    }
+
+    @Override
     public TeachingAssignmentResponse createAssignment(TeachingAssignmentRequest request) {
         ExternalClassDTO externalClass = requireClass(request.classId());
         requireActiveClass(externalClass);
-        validateAssignment(request, null, externalClass);
+        request = boundEffectiveTo(request, externalClass);
         ExternalTrainerDTO trainer = requireActiveTrainer(request.trainerId());
+        validateAssignment(request, null, externalClass);
 
         TeachingAssignment assignment = new TeachingAssignment();
         apply(assignment, request);
@@ -145,20 +253,154 @@ public class ClassSetupServiceImpl implements ClassSetupService {
 
     @Override
     public TeachingAssignmentResponse updateAssignment(Long id, TeachingAssignmentRequest request) {
-        TeachingAssignment assignment = findAssignment(id);
         ExternalClassDTO externalClass = requireClass(request.classId());
         requireActiveClass(externalClass);
-        validateAssignment(request, id, externalClass);
+        request = boundEffectiveTo(request, externalClass);
         ExternalTrainerDTO trainer = requireActiveTrainer(request.trainerId());
+        // Same lock as single/batch session writers, acquired before reading linked sessions.
+        assignmentSessionGuard.lockForWrite();
+        TeachingAssignment assignment = teachingAssignmentRepository.findForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Teaching assignment not found with ID: " + id));
+        requireEditIdentity(assignment, request);
+        validateAssignment(request, id, externalClass);
+        if (impact(assignment, request, PageRequest.of(0, 1)).affectedSessionCount() > 0) {
+            throw new ConflictException("This change affects linked sessions. Preview the impact and resolve those sessions before saving.");
+        }
 
         apply(assignment, request);
-        TeachingAssignment saved = teachingAssignmentRepository.save(assignment);
+        TeachingAssignment saved = teachingAssignmentRepository.saveAndFlush(assignment);
         return toResponse(saved, externalClass, trainer);
     }
 
     @Override
-    public void deleteAssignment(Long id) {
-        TeachingAssignment assignment = findAssignment(id);
+    @Transactional(readOnly = true)
+    public TeachingAssignmentEditContext getAssignmentEditContext(Long id) {
+        var assignment = findAssignment(id);
+        var clazz = requireClass(assignment.getClassId());
+        long linkedCount = sessionRepository.countByTeachingAssignmentId(id);
+        return new TeachingAssignmentEditContext(toResponse(assignment, clazz, fetchTrainerLookup().get(assignment.getTrainerId())),
+                clazz, externalApiService.fetchTrainers("active").stream().filter(t -> isActive(t.getStatus())).toList(),
+                linkedCount, Boolean.TRUE.equals(assignment.getEverUsed()) || linkedCount > 0);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public TeachingAssignmentImpactResponse previewAssignmentImpact(Long id, TeachingAssignmentRequest request, Pageable pageable) {
+        var assignment = findAssignment(id);
+        requireEditIdentity(assignment, request);
+        var clazz = requireClass(assignment.getClassId());
+        requireActiveClass(clazz);
+        request = boundEffectiveTo(request, clazz);
+        requireActiveTrainer(request.trainerId());
+        validateAssignment(request, id, clazz, false);
+        if (pageable.getPageSize() > 100 || pageable.getPageNumber() > 100000) {
+            throw new IllegalArgumentException("Page size must be at most 100 and page at most 100000.");
+        }
+        return impact(assignment, request, pageable);
+    }
+
+    private void requireEditIdentity(TeachingAssignment assignment, TeachingAssignmentRequest request) {
+        requireRevision(assignment, request.revision());
+        if (!Objects.equals(assignment.getClassId(), request.classId())) throw fieldError("classId", "The class cannot be changed. Create a new assignment.");
+        if (!Objects.equals(assignment.getProgramSubject().getId(), request.programSubjectId())) throw fieldError("programSubjectId", "The subject cannot be changed. Create a new assignment.");
+        if (Boolean.TRUE.equals(assignment.getEverUsed()) && !Objects.equals(assignment.getTrainerId(), request.trainerId())) {
+            throw new ConflictException("This assignment has been used before. Keep its trainer and create a replacement assignment instead.");
+        }
+    }
+
+    private void requireRevision(TeachingAssignment assignment, Long revision) {
+        if (revision == null || !Objects.equals(assignment.getRevision(), revision)) {
+            throw new ConflictException("The assignment has changed or its revision is missing. Reload the current assignment before retrying.");
+        }
+    }
+
+    private TeachingAssignmentImpactResponse impact(TeachingAssignment assignment, TeachingAssignmentRequest request, Pageable pageable) {
+        boolean trainerChanged = !Objects.equals(assignment.getTrainerId(), request.trainerId());
+        var until = request.effectiveTo() == null || request.effectiveTo().equals(LocalDate.MAX)
+                ? null : request.effectiveTo().plusDays(1).atStartOfDay();
+        var affected = sessionRepository.findAssignmentImpacts(assignment.getId(), trainerChanged, request.classId(),
+                request.trainerId(), request.effectiveFrom().atStartOfDay(), until, Session.SessionStatus.CANCELLED,
+                PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), Sort.by("startTime").and(Sort.by("id"))));
+        var rows = affected.map(session -> {
+            List<String> reasons = new ArrayList<>();
+            if (trainerChanged) reasons.add("Trainer changes are blocked once any session references this assignment. Create a replacement assignment instead.");
+            if (session.getStatus() != Session.SessionStatus.CANCELLED) {
+                if (session.getStartTime().toLocalDate().isBefore(request.effectiveFrom())
+                        || (request.effectiveTo() != null && session.getEndTime().toLocalDate().isAfter(request.effectiveTo()))) {
+                    reasons.add("The session falls outside the proposed effective period.");
+                }
+                if (!Objects.equals(session.getClassId(), request.classId()) || !Objects.equals(session.getTrainerId(), request.trainerId())) {
+                    reasons.add("The session class or trainer does not match the proposed assignment.");
+                }
+            }
+            return new TeachingAssignmentImpactResponse.SessionImpact(TeachingAssignmentSessionResponse.from(session), reasons);
+        });
+        return new TeachingAssignmentImpactResponse(affected.getTotalElements() == 0, assignment.getRevision(),
+                sessionRepository.countByTeachingAssignmentId(assignment.getId()), affected.getTotalElements(),
+                request.effectiveFrom(), request.effectiveTo(), rows);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public TeachingAssignmentLifecycleContext getAssignmentLifecycleContext(Long id) {
+        var assignment = findAssignment(id);
+        long count = sessionRepository.countByTeachingAssignmentId(id);
+        boolean used = Boolean.TRUE.equals(assignment.getEverUsed()) || count > 0;
+        return new TeachingAssignmentLifecycleContext(toResponse(assignment, null, null), count, !used, used);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public TeachingAssignmentImpactResponse previewAssignmentEnd(Long id, TeachingAssignmentEndRequest request, Pageable pageable) {
+        var assignment = findAssignment(id);
+        var proposal = endProposal(assignment, request);
+        if (pageable.getPageSize() > 100 || pageable.getPageNumber() > 100000) {
+            throw new IllegalArgumentException("Page size must be at most 100 and page at most 100000.");
+        }
+        return impact(assignment, proposal, pageable);
+    }
+
+    @Override
+    public TeachingAssignmentResponse endAssignment(Long id, TeachingAssignmentEndRequest request) {
+        assignmentSessionGuard.lockForWrite();
+        var assignment = findAssignmentForLifecycleWrite(id);
+        var proposal = endProposal(assignment, request);
+        if (impact(assignment, proposal, PageRequest.of(0, 1)).affectedSessionCount() > 0) {
+            throw new ConflictException("Linked sessions fall outside the proposed end date. Preview the impact and resolve those sessions first.");
+        }
+        assignment.setEffectiveTo(request.effectiveTo());
+        teachingAssignmentRepository.saveAndFlush(assignment);
+        return toResponse(assignment, null, null);
+    }
+
+    private TeachingAssignmentRequest endProposal(TeachingAssignment assignment, TeachingAssignmentEndRequest request) {
+        requireRevision(assignment, request.revision());
+        if (request.effectiveTo().isBefore(assignment.getEffectiveFrom())) {
+            throw fieldError("effectiveTo", "The end date must be on or after the assignment start date.");
+        }
+        if (assignment.getEffectiveTo() != null && request.effectiveTo().isAfter(assignment.getEffectiveTo())) {
+            throw fieldError("effectiveTo", "Ending an assignment cannot extend its current effective period.");
+        }
+        return new TeachingAssignmentRequest(assignment.getClassId(), assignment.getProgramSubject().getId(),
+                assignment.getTrainerId(), assignment.getRole(), assignment.getEffectiveFrom(), request.effectiveTo(), request.revision());
+    }
+
+    private TeachingAssignment findAssignmentForLifecycleWrite(Long id) {
+        return teachingAssignmentRepository.findForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Teaching assignment not found with ID: " + id));
+    }
+
+    @Override
+    public void deleteAssignment(Long id, Long revision) {
+        assignmentSessionGuard.lockForWrite();
+        var assignment = findAssignmentForLifecycleWrite(id);
+        requireRevision(assignment, revision);
+        long references = sessionRepository.countByTeachingAssignmentId(id);
+        if (references > 0 || Boolean.TRUE.equals(assignment.getEverUsed())) {
+            throw new ConflictException(references > 0 ? "This assignment is referenced by " + references
+                    + " session(s), including historical records, and cannot be deleted. End its effective period instead."
+                    : "This assignment has been used previously and cannot be deleted. End its effective period instead.");
+        }
         try {
             teachingAssignmentRepository.delete(assignment);
             teachingAssignmentRepository.flush();
@@ -192,22 +434,42 @@ public class ClassSetupServiceImpl implements ClassSetupService {
     }
 
     private void validateAssignment(TeachingAssignmentRequest request, Long ignoreId, ExternalClassDTO externalClass) {
+        validateAssignment(request, ignoreId, externalClass, true);
+    }
+
+    private void validateAssignment(TeachingAssignmentRequest request, Long ignoreId, ExternalClassDTO externalClass, boolean lock) {
+        validateClassDates(externalClass);
         if (request.effectiveTo() != null && request.effectiveTo().isBefore(request.effectiveFrom())) {
-            throw new IllegalArgumentException("effectiveTo must be on or after effectiveFrom.");
+            throw fieldError("effectiveTo", "The end date must be on or after the start date.");
+        }
+        LocalDate classStart = classDate(externalClass.getStartDate());
+        LocalDate classEnd = classDate(externalClass.getEndDate());
+        if (classStart != null && request.effectiveFrom().isBefore(classStart)) {
+            throw fieldError("effectiveFrom", "The start date must be within the class dates.");
+        }
+        if (classEnd != null && request.effectiveFrom().isAfter(classEnd)) {
+            throw fieldError("effectiveFrom", "The start date must be within the class dates.");
+        }
+        if (classEnd != null && request.effectiveTo() != null && request.effectiveTo().isAfter(classEnd)) {
+            throw fieldError("effectiveTo", "The end date must not be after the class end date.");
         }
         Long assignedProgramId = resolveProgramId(request.classId(), externalClass);
         if (assignedProgramId == null) {
-            throw new IllegalArgumentException("Assign an ACTIVE training program to the class before adding teaching assignments.");
+            throw fieldError("classId", "Assign an active training program to this class first.");
         }
 
-        ProgramSubject programSubject = programSubjectRepository.findById(request.programSubjectId())
+        ProgramSubject programSubject = (lock ? programSubjectRepository.findForAssignmentById(request.programSubjectId())
+                : programSubjectRepository.findById(request.programSubjectId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Program subject not found with ID: " + request.programSubjectId()));
         if (!Objects.equals(programSubject.getProgram().getId(), assignedProgramId)) {
-            throw new IllegalArgumentException("The selected subject does not belong to the program assigned to this class.");
+            throw fieldError("programSubjectId", "The subject does not belong to this class training program.");
+        }
+        if (programSubject.getProgram().getStatus() != ProgramStatus.ACTIVE) {
+            throw fieldError("classId", "The class training program is not active.");
         }
         Subject subject = programSubject.getSubject();
-        if (!Boolean.TRUE.equals(subject.getIsActive())) {
-            throw new IllegalArgumentException("Inactive subjects cannot be assigned to a trainer.");
+        if (!isActiveSubject(subject)) {
+            throw fieldError("programSubjectId", "Select an active subject.");
         }
         if (teachingAssignmentRepository.existsOverlappingTrainerAssignment(request.classId(), request.programSubjectId(),
                 request.trainerId(), request.effectiveFrom(), request.effectiveTo(), ignoreId)) {
@@ -267,17 +529,52 @@ public class ClassSetupServiceImpl implements ClassSetupService {
     }
 
     private void requireActiveClass(ExternalClassDTO externalClass) {
-        if (externalClass.getStatus() != null && !externalClass.getStatus().isBlank()
-                && !"active".equalsIgnoreCase(externalClass.getStatus())) {
-            throw new IllegalArgumentException("Only active classes can receive program or teaching assignments.");
+        if (!isActive(externalClass.getStatus())) {
+            throw fieldError("classId", "Select an active class.");
         }
     }
 
     private ExternalTrainerDTO requireActiveTrainer(Long trainerId) {
         return externalApiService.fetchTrainers("active").stream()
                 .filter(trainer -> Objects.equals(trainer.getId(), trainerId))
+                .filter(trainer -> isActive(trainer.getStatus()))
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Trainer not found or inactive: " + trainerId));
+                .orElseThrow(() -> fieldError("trainerId", "Select an active trainer from the trainer directory."));
+    }
+
+    private boolean isActive(String status) {
+        return "active".equalsIgnoreCase(status);
+    }
+
+    private boolean isActiveSubject(Subject subject) {
+        return Boolean.TRUE.equals(subject.getIsActive()) && subject.getStatus() == SubjectStatus.ACTIVE;
+    }
+
+    private BusinessValidationException fieldError(String field, String message) {
+        return new BusinessValidationException(Map.of(field, List.of(message)));
+    }
+
+    private LocalDate classDate(String date) {
+        try {
+            return date == null || date.isBlank() ? null : LocalDate.parse(date);
+        } catch (DateTimeParseException exception) {
+            throw new ExternalApiException("The shared class has an invalid date. Contact the class administrator.", 502, null);
+        }
+    }
+
+    private void validateClassDates(ExternalClassDTO externalClass) {
+        LocalDate start = classDate(externalClass.getStartDate());
+        LocalDate end = classDate(externalClass.getEndDate());
+        if (start != null && end != null && end.isBefore(start)) {
+            throw new ExternalApiException("The shared class date range is invalid. Contact the class administrator.", 502, null);
+        }
+    }
+
+    private TeachingAssignmentRequest boundEffectiveTo(TeachingAssignmentRequest request, ExternalClassDTO externalClass) {
+        // An omitted end date is bounded by the class end, when the shared class has one.
+        LocalDate end = request.effectiveTo() == null ? classDate(externalClass.getEndDate()) : request.effectiveTo();
+        return new TeachingAssignmentRequest(request.classId(), request.programSubjectId(), request.trainerId(),
+                request.role(), request.effectiveFrom(), end, request.revision());
     }
 
     private Map<Long, ExternalTrainerDTO> fetchTrainerLookup() {
@@ -295,7 +592,11 @@ public class ClassSetupServiceImpl implements ClassSetupService {
                 assignment.getId(), assignment.getClassId(), externalClass == null ? null : externalClass.getCode(),
                 assignment.getProgramSubject().getId(), subject.getId(), subject.getCode(), subject.getName(),
                 assignment.getTrainerId(), trainer == null ? null : trainer.getName(), assignment.getRole(),
-                assignment.getEffectiveFrom(), assignment.getEffectiveTo());
+                assignment.getEffectiveFrom(), assignment.getEffectiveTo(),
+                externalClass == null ? null : externalClass.getName(), subject.getVersion(),
+                trainer == null ? null : trainer.getEmail(), assignment.getProgramSubject().getProgram().getId(),
+                assignment.getProgramSubject().getProgram().getCode(), assignment.getProgramSubject().getProgram().getName(),
+                assignment.getProgramSubject().getProgram().getVersion(), assignment.getRevision());
     }
 
     private boolean isEffectiveOn(TeachingAssignment assignment, LocalDate date) {

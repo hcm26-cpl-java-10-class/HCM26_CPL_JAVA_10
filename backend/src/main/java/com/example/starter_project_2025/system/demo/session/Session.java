@@ -19,7 +19,10 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "sessions", indexes = @Index(name = "ix_sessions_validation_time", columnList = "start_time,end_time"))
+@Table(name = "sessions", indexes = {
+        @Index(name = "ix_sessions_validation_time", columnList = "start_time,end_time"),
+        @Index(name = "ix_sessions_assignment_time", columnList = "teaching_assignment_id,start_time,id")
+})
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ImportEntity("session")
 @ExportEntity(fileName = "class_sessions", sheetName = "Class Sessions")
