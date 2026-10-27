@@ -9,13 +9,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Enrollment } from "@/types";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { BookOpen, CalendarDays, GraduationCap, UserRound } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { EnrollmentProgressBar } from "../management/demo/progress/EnrollmentProgressBar";
 import type { DepartmentMember } from "@/types";
 import { useAdminStudentPreview } from "./useAdminStudentPreview";
+import { StudentCheckboxList, studentFullName } from "./StudentCheckboxList";
 
 const formatEnrollmentDate = (value: string) => {
   const date = new Date(value);
@@ -68,7 +69,7 @@ export function AdminDepartmentStudentCourses() {
   const isAdminStudentPreview = useAdminStudentPreview();
   const [selectionMode, setSelectionMode] = useState<"student" | "department">("student");
   const [departmentId, setDepartmentId] = useState("");
-  const [studentId, setStudentId] = useState("");
+  const [selectedStudents, setSelectedStudents] = useState<DepartmentMember[]>([]);
   const [studentSearch, setStudentSearch] = useState("");
   const [studentPage, setStudentPage] = useState(0);
 
@@ -90,15 +91,15 @@ export function AdminDepartmentStudentCourses() {
     enabled: isAdminStudentPreview && selectionMode === "student",
   });
 
-  const coursesQuery = useQuery({
-    queryKey: ["admin-student-preview-courses", selectionMode, departmentId, studentId],
-    queryFn: () =>
-      selectionMode === "department"
-        ? enrollmentApi.getDepartmentStudentCourses(Number(departmentId), Number(studentId))
-        : enrollmentApi.getStudentCourses(Number(studentId)),
-    enabled: isAdminStudentPreview
-      && Boolean(studentId)
-      && (selectionMode === "student" || Boolean(departmentId)),
+  const coursesQueries = useQueries({
+    queries: selectedStudents.map((student) => ({
+      queryKey: ["admin-student-preview-courses", selectionMode, departmentId, student.id],
+      queryFn: () =>
+        selectionMode === "department"
+          ? enrollmentApi.getDepartmentStudentCourses(Number(departmentId), student.id)
+          : enrollmentApi.getStudentCourses(student.id),
+      enabled: isAdminStudentPreview && (selectionMode === "student" || Boolean(departmentId)),
+    })),
   });
 
   if (!isAdminStudentPreview) {
@@ -109,9 +110,6 @@ export function AdminDepartmentStudentCourses() {
   const studentPageResult =
     selectionMode === "department" ? studentsQuery.data : allStudentsQuery.data;
   const students = studentPageResult?.content ?? [];
-  const selectedStudent: DepartmentMember | undefined = students.find(
-    (student) => String(student.id) === studentId,
-  );
   const studentQuery = selectionMode === "department" ? studentsQuery : allStudentsQuery;
 
   return (
@@ -132,7 +130,7 @@ export function AdminDepartmentStudentCourses() {
               if (value !== "student" && value !== "department") return;
               setSelectionMode(value);
               setDepartmentId("");
-              setStudentId("");
+              setSelectedStudents([]);
               setStudentSearch("");
               setStudentPage(0);
             }}
@@ -154,7 +152,7 @@ export function AdminDepartmentStudentCourses() {
               value={departmentId}
               onValueChange={(value) => {
                 setDepartmentId(value);
-                setStudentId("");
+                setSelectedStudents([]);
                 setStudentPage(0);
               }}
               disabled={departmentsQuery.isLoading || departmentsQuery.isError}
@@ -190,37 +188,24 @@ export function AdminDepartmentStudentCourses() {
             value={studentSearch}
             onChange={(event) => {
               setStudentSearch(event.target.value);
-              setStudentId("");
               setStudentPage(0);
             }}
           />
         )}
 
-        <label className="block space-y-2 text-sm font-medium">
+        <div className="block space-y-2 text-sm font-medium">
           Student
-          <Select
-            value={studentId}
-            onValueChange={setStudentId}
+          <StudentCheckboxList
+            students={students}
+            selected={selectedStudents}
+            onChange={setSelectedStudents}
             disabled={
               (selectionMode === "department" && !departmentId)
               || studentQuery.isLoading
               || studentQuery.isError
             }
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Choose a student" />
-            </SelectTrigger>
-            <SelectContent>
-              {students.map((student) => (
-                <SelectItem key={student.id} value={String(student.id)}>
-                  {[student.firstName, student.lastName].filter(Boolean).join(" ")} ({student.email})
-                  {selectionMode === "student" && student.departmentName
-                    ? ` — ${student.departmentName}`
-                    : ""}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            showDepartment={selectionMode === "student"}
+          />
           {studentQuery.isLoading && <span className="text-xs text-muted-foreground">Loading students...</span>}
           {studentQuery.isError && (
             <span role="alert" className="block text-xs text-destructive">
@@ -238,7 +223,6 @@ export function AdminDepartmentStudentCourses() {
                   className="underline disabled:opacity-50"
                   disabled={studentPage === 0}
                   onClick={() => {
-                    setStudentId("");
                     setStudentPage((page) => page - 1);
                   }}
                 >
@@ -249,7 +233,6 @@ export function AdminDepartmentStudentCourses() {
                   className="underline disabled:opacity-50"
                   disabled={studentPage >= studentPageResult.totalPages - 1}
                   onClick={() => {
-                    setStudentId("");
                     setStudentPage((page) => page + 1);
                   }}
                 >
@@ -258,7 +241,7 @@ export function AdminDepartmentStudentCourses() {
               </span>
             </div>
           )}
-        </label>
+        </div>
       </div>
 
       {selectionMode === "department" && departmentId && studentsQuery.data?.totalElements === 0 && (
@@ -271,35 +254,40 @@ export function AdminDepartmentStudentCourses() {
           {studentSearch.trim() ? "No students match this search." : "No active students are available."}
         </p>
       )}
-      {studentId && selectedStudent && coursesQuery.isLoading && (
-        <p role="status" className="rounded-xl border p-6 text-center text-sm text-muted-foreground">
-          Loading student courses...
-        </p>
-      )}
-      {studentId && coursesQuery.isError && (
-        <p role="alert" className="rounded-xl border border-destructive/30 p-5 text-sm text-destructive">
-          Could not load student courses: {coursesQuery.error instanceof Error
-            ? coursesQuery.error.message
-            : "Unknown error"}
-        </p>
-      )}
-      {studentId && coursesQuery.data && (
-        <div className="space-y-4">
-          <div>
-            <h3 className="font-semibold">
-              {[selectedStudent?.firstName, selectedStudent?.lastName].filter(Boolean).join(" ")}&apos;s courses
-            </h3>
-            <p className="text-sm text-muted-foreground">{coursesQuery.data.length} enrolled courses</p>
+      {selectedStudents.map((student, index) => {
+        const query = coursesQueries[index];
+        return (
+          <div key={student.id} className="space-y-4">
+            <div>
+              <h3 className="font-semibold">{studentFullName(student)}&apos;s courses</h3>
+              {query?.data && (
+                <p className="text-sm text-muted-foreground">{query.data.length} enrolled courses</p>
+              )}
+            </div>
+            {query?.isLoading && (
+              <p role="status" className="rounded-xl border p-6 text-center text-sm text-muted-foreground">
+                Loading student courses...
+              </p>
+            )}
+            {query?.isError && (
+              <p role="alert" className="rounded-xl border border-destructive/30 p-5 text-sm text-destructive">
+                Could not load student courses: {query.error instanceof Error
+                  ? query.error.message
+                  : "Unknown error"}
+              </p>
+            )}
+            {query?.data && (
+              query.data.length ? (
+                <CourseCards enrollments={query.data} />
+              ) : (
+                <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+                  This student has no enrolled courses.
+                </p>
+              )
+            )}
           </div>
-          {coursesQuery.data.length ? (
-            <CourseCards enrollments={coursesQuery.data} />
-          ) : (
-            <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-              This student has no enrolled courses.
-            </p>
-          )}
-        </div>
-      )}
+        );
+      })}
     </section>
   );
 }

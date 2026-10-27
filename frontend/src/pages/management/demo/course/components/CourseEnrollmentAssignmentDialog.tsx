@@ -16,7 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { CatalogCourse } from "@/types";
+import { StudentCheckboxList } from "@/pages/student/StudentCheckboxList";
+import type { CatalogCourse, DepartmentMember } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LoaderCircle, UserRound, Users } from "lucide-react";
 import { useState } from "react";
@@ -32,7 +33,7 @@ export function CourseEnrollmentAssignmentDialog({
   const [open, setOpen] = useState(false);
   const [target, setTarget] = useState<EnrollmentTarget>("department");
   const [departmentId, setDepartmentId] = useState("");
-  const [studentId, setStudentId] = useState("");
+  const [selectedStudents, setSelectedStudents] = useState<DepartmentMember[]>([]);
   const [studentSearch, setStudentSearch] = useState("");
   const [studentPage, setStudentPage] = useState(0);
   const queryClient = useQueryClient();
@@ -97,15 +98,29 @@ export function CourseEnrollmentAssignmentDialog({
   });
 
   const studentMutation = useMutation({
-    mutationFn: () =>
-      enrollmentApi.enrollStudent({
-        studentId: Number(studentId),
-        courseId: course.id,
-      }),
-    onSuccess: async () => {
-      toast.success("Student enrolled in this course.");
+    mutationFn: async () => {
+      const results = await Promise.allSettled(
+        selectedStudents.map((student) =>
+          enrollmentApi.enrollStudent({ studentId: student.id, courseId: course.id }),
+        ),
+      );
+      const failed = results.filter((result) => result.status === "rejected").length;
+      return { total: results.length, failed };
+    },
+    onSuccess: async ({ total, failed }) => {
+      const succeeded = total - failed;
+      if (succeeded > 0) {
+        toast.success(`${succeeded} student${succeeded === 1 ? "" : "s"} enrolled in this course.`);
+      }
+      if (failed > 0) {
+        toast.error(`${failed} student${failed === 1 ? "" : "s"} could not be enrolled.`);
+      }
       await refreshCourseData();
-      setOpen(false);
+      if (failed === 0) {
+        setOpen(false);
+      } else {
+        setSelectedStudents([]);
+      }
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : "Student enrollment failed.");
@@ -115,15 +130,12 @@ export function CourseEnrollmentAssignmentDialog({
   const selectedDepartment = departmentsQuery.data?.find(
     (department) => String(department.id) === departmentId,
   );
-  const selectedStudent = studentsQuery.data?.content.find(
-    (student) => String(student.id) === studentId,
-  );
   const isPending = departmentMutation.isPending || studentMutation.isPending;
 
   const resetForm = () => {
     setTarget("department");
     setDepartmentId("");
-    setStudentId("");
+    setSelectedStudents([]);
     setStudentSearch("");
     setStudentPage(0);
   };
@@ -156,7 +168,7 @@ export function CourseEnrollmentAssignmentDialog({
               if (value !== "department" && value !== "student") return;
               setTarget(value);
               setDepartmentId("");
-              setStudentId("");
+              setSelectedStudents([]);
               setStudentPage(0);
             }}
             disabled={isPending}
@@ -258,7 +270,6 @@ export function CourseEnrollmentAssignmentDialog({
                 value={studentSearch}
                 onChange={(event) => {
                   setStudentSearch(event.target.value);
-                  setStudentId("");
                   setStudentPage(0);
                 }}
               />
@@ -279,22 +290,12 @@ export function CourseEnrollmentAssignmentDialog({
                 </div>
               ) : studentsQuery.data?.content.length ? (
                 <>
-                  <Select
-                    value={studentId}
-                    onValueChange={(value) => setStudentId(value)}
+                  <StudentCheckboxList
+                    students={studentsQuery.data.content}
+                    selected={selectedStudents}
+                    onChange={setSelectedStudents}
                     disabled={isPending}
-                  >
-                    <SelectTrigger aria-label="Student" className="w-full">
-                      <SelectValue placeholder="Choose a student" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {studentsQuery.data.content.map((student) => (
-                        <SelectItem key={student.id} value={String(student.id)}>
-                          {[student.firstName, student.lastName].filter(Boolean).join(" ")} ({student.email})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                   {studentsQuery.data.totalPages > 1 && (
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
                       <span>
@@ -306,7 +307,6 @@ export function CourseEnrollmentAssignmentDialog({
                           size="sm"
                           disabled={studentPage === 0}
                           onClick={() => {
-                            setStudentId("");
                             setStudentPage((page) => page - 1);
                           }}
                         >
@@ -317,7 +317,6 @@ export function CourseEnrollmentAssignmentDialog({
                           size="sm"
                           disabled={studentPage >= studentsQuery.data.totalPages - 1}
                           onClick={() => {
-                            setStudentId("");
                             setStudentPage((page) => page + 1);
                           }}
                         >
@@ -326,14 +325,14 @@ export function CourseEnrollmentAssignmentDialog({
                       </div>
                     </div>
                   )}
-                  {studentId && (
+                  {selectedStudents.length > 0 && (
                     <Button
                       className="w-full"
                       disabled={isPending}
                       onClick={() => studentMutation.mutate()}
                     >
                       {studentMutation.isPending && <LoaderCircle className="size-4 animate-spin" />}
-                      Enroll {selectedStudent?.firstName || "student"}
+                      Enroll {selectedStudents.length} student{selectedStudents.length === 1 ? "" : "s"}
                     </Button>
                   )}
                 </>
