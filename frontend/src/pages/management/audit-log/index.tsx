@@ -1,13 +1,19 @@
-
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import ExcelJS from "exceljs";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { AnimatePresence, motion } from "framer-motion";
+import { SearchInput } from "@/components/datatable/toolbar/SearchInput";
+import { FilterPopover } from "@/components/datatable/toolbar/filter/FilterPopover";
+import { Pagination } from "@/components/datatable/table/Pagination";
+import type { FieldSchema } from "@/types";
 import {
   auditLogApi,
   type AuditLogDTO,
   type AuditLogFilter,
 } from "@/api";
+
+
 
 const PAGE_SIZE = 20;
 
@@ -125,36 +131,58 @@ function ResultBadge({ result }: { result: string | null }) {
 }
 
 function AuditLogDetails({ log }: { log: AuditLogDTO }) {
-  return (
-    <div className="grid gap-5 border-t border-slate-200 bg-slate-50 p-5 md:grid-cols-2">
-      <div>
-        <h4 className="mb-2 text-sm font-semibold text-slate-800">
-          Giá trị trước thay đổi
-        </h4>
-        <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-slate-200 bg-white p-3 text-xs leading-5 text-slate-700">
+    const fields = [
+        { label: "Log ID", value: log.id },
+        { label: "Created At", value: formatDate(log.createdAt) },
+        { label: "Actor ID", value: log.actorId },
+        { label: "Actor Email", value: log.actorEmail },
+        { label: "Action", value: getActionLabel(log.action) },
+        { label: "Result", value: log.result },
+        { label: "Entity Type", value: log.entityType },
+        { label: "Entity ID", value: log.entityId },
+        { label: "Correlation ID", value: log.correlationId },
+    ];
+
+    return (
+        <div className="space-y-0">
+            {fields.map(({ label, value }) => (
+                <div
+                    key={label}
+                    className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 border-b border-slate-200 py-4"
+                >
+          <span className="text-sm font-semibold text-slate-500">
+            {label}
+          </span>
+
+                    <span className="break-words text-sm text-slate-800">
+            {value === null || value === undefined || value === ""
+                ? "N/A"
+                : value}
+          </span>
+                </div>
+            ))}
+
+            <div className="border-b border-slate-200 py-4">
+                <h3 className="mb-3 text-sm font-semibold text-slate-500">
+                    Old Value
+                </h3>
+
+                <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-700">
           {formatValue(log.oldValue)}
         </pre>
-      </div>
+            </div>
 
-      <div>
-        <h4 className="mb-2 text-sm font-semibold text-slate-800">
-          Giá trị sau thay đổi
-        </h4>
-        <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-slate-200 bg-white p-3 text-xs leading-5 text-slate-700">
+            <div className="py-4">
+                <h3 className="mb-3 text-sm font-semibold text-slate-500">
+                    New Value
+                </h3>
+
+                <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-700">
           {formatValue(log.newValue)}
         </pre>
-      </div>
-
-      <div className="md:col-span-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Correlation ID
-        </span>
-        <p className="mt-1 break-all text-sm text-slate-700">
-          {log.correlationId || "Không có"}
-        </p>
-      </div>
-    </div>
-  );
+            </div>
+        </div>
+    );
 }
 
 
@@ -201,7 +229,7 @@ const blob = new Blob(["\uFEFF", csv], {
 const url = URL.createObjectURL(blob);
 const link = document.createElement("a");
 
-link.href = url;downloadExcel
+link.href = url;
 link.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
 
 document.body.appendChild(link);
@@ -524,30 +552,117 @@ export default function AuditLogPage() {
     const [showExportModal, setShowExportModal] = useState(false);
     const [exporting, setExporting] = useState(false);
 
-    const [action, setAction] = useState("");
     const [period, setPeriod] = useState<Period>("7days");
 
-    const [actorId, setActorId] = useState("");
-    const [entityType, setEntityType] = useState("");
-    const [result, setResult] = useState("");
-    const [fromDate, setFromDate] = useState("");
-    const [toDate, setToDate] = useState("");
-    const [showAdvanced, setShowAdvanced] = useState(false);
+
+    const [page, setPage] = useState(0);
+    const [size, setSize] = useState(20);
+    const [search, setSearch] = useState("");
+    const [filters, setFilters] = useState<Record<string, unknown>>({});
+    const [selectedLog, setSelectedLog] = useState<AuditLogDTO | null>(null)
+
+    const auditSchema = useMemo(
+        () => ({
+            fields: [
+                {
+                    name: "dateRange",
+                    label: "Date Range",
+                    type: "date",
+                    filterable: true,
+                },
+                {
+                    name: "action",
+                    label: "Action",
+                    type: "select",
+                    filterable: true,
+                    filterOptions: [
+                        { label: "Create", value: "CREATE" },
+                        { label: "Update", value: "UPDATE" },
+                        { label: "Delete", value: "DELETE" },
+                    ],
+                },
+                {
+                    name: "actorName",
+                    label: "Actor Name",
+                    type: "text",
+                    filterable: true,
+                },
+                {
+                    name: "entityType",
+                    label: "Entity Type",
+                    type: "text",
+                    filterable: true,
+                },
+                {
+                    name: "result",
+                    label: "Result",
+                    type: "select",
+                    filterable: true,
+                    filterOptions: [
+                        { label: "Success", value: "SUCCESS" },
+                        { label: "Failed", value: "FAILED" },
+                    ],
+                },
+            ] as FieldSchema[],
+        }),
+        [],
+    );
+
+
+    const auditTableAdapter = {
+        schema: auditSchema,
+        filters,
+
+        setFilters: (
+            updater:
+                | Record<string, unknown>
+                | ((
+                previous: Record<string, unknown>,
+            ) => Record<string, unknown>),
+        ) => {
+            setFilters((previous) =>
+                typeof updater === "function" ? updater(previous) : updater,
+            );
+        },
+
+        clearFilters: () => {
+            setFilters({});
+            setPage(0);
+        },
+    };
+
 
     const [appliedFilters, setAppliedFilters] = useState<AuditLogFilter>(() => ({
         ...getDateRange("7days"),
     }));
 
-    const [page, setPage] = useState(0);
-    const [expandedLogId, setExpandedLogId] = useState<number | null>(null);
+    useEffect(() => {
+        const dateRange = filters.dateRange as
+            | { from?: string; to?: string }
+            | undefined;
+
+        const presetRange = getDateRange(period);
+
+        setPage(0);
+
+        setAppliedFilters({
+            fromDate: dateRange?.from || presetRange.fromDate,
+            toDate: dateRange?.to || presetRange.toDate,
+            actorName: String(filters.actorName ?? "").trim() || undefined,
+            action: String(filters.action ?? "") || undefined,
+            entityType: String(filters.entityType ?? "").trim() || undefined,
+            result: String(filters.result ?? "") || undefined,
+        });
+    }, [filters, period]);
+
 
     const queryFilter = useMemo(
         () => ({
             ...appliedFilters,
             page,
-            size: PAGE_SIZE,
+            size,
         }),
-        [appliedFilters, page],
+        [appliedFilters, page, size],
     );
 
     const auditQuery = useQuery({
@@ -556,69 +671,47 @@ export default function AuditLogPage() {
     });
 
     const logs = auditQuery.data?.content ?? [];
-    const totalPages = auditQuery.data?.totalPages ?? 0;
     const totalElements = auditQuery.data?.totalElements ?? 0;
 
-    function applyFilters(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault();
+    const filteredLogs = useMemo(() => {
+        const keyword = search.trim().toLowerCase();
 
-        const parsedActorId = actorId.trim() ? Number(actorId) : undefined;
+        if (!keyword) return logs;
 
-        if (
-            parsedActorId !== undefined &&
-            (!Number.isInteger(parsedActorId) || parsedActorId < 0)
-        ) {
-            window.alert("Actor ID phải là số nguyên không âm.");
-            return;
-        }
+        return logs.filter((log) =>
+            [
+                log.actorEmail,
+                log.actorId,
+                log.action,
+                log.entityType,
+                log.entityId,
+                log.result,
+                log.correlationId,
+            ]
+                .map((value) => String(value ?? "").toLowerCase())
+                .some((value) => value.includes(keyword)),
+        );
+    }, [logs, search]);
 
-        if (fromDate && toDate && fromDate > toDate) {
-            window.alert("Ngày bắt đầu không được lớn hơn ngày kết thúc.");
-            return;
-        }
+    const paginationTable = {
+        page,
+        size,
+        total: totalElements,
+        data: filteredLogs,
+        selected: [],
+        setPage,
+    };
 
-        const dateRange =
-            fromDate || toDate
-                ? {
-                    fromDate: fromDate || undefined,
-                    toDate: toDate || undefined,
-                }
-                : getDateRange(period);
-
-        setPage(0);
-        setExpandedLogId(null);
-
-        setAppliedFilters({
-            actorId: parsedActorId,
-            action: action || undefined,
-            entityType: entityType.trim() || undefined,
-            result: result || undefined,
-            ...dateRange,
-        });
-    }
-
-    function resetFilters() {
-        setAction("");
-        setPeriod("7days");
-        setActorId("");
-        setEntityType("");
-        setResult("");
-        setFromDate("");
-        setToDate("");
-        setAppliedFilters(getDateRange("7days"));
-        setPage(0);
-        setExpandedLogId(null);
-    }
 
     return (
         <MainLayout
             pathName={{
                 admin: "Administration",
-                "audit-log": "Audit log",
+                "audit-log": "Audit Log",
             }}
         >
-            <div className="min-h-full bg-slate-50/70 px-4 py-6 md:px-7 lg:px-8">
-                <div className="mx-auto max-w-[1440px] space-y-6">
+            <div className="min-h-full bg-slate-50/70 px-4 py-4 md:px-6 lg:px-7">
+                <div className="mx-auto max-w-none space-y-4">
                     {/* Page heading */}
                     <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div>
@@ -626,12 +719,12 @@ export default function AuditLogPage() {
                                 <span>Administration</span>
                                 <span className="text-slate-300">/</span>
                                 <span className="font-semibold text-slate-800">
-                  Audit log
+                  Audit Log
                 </span>
                             </div>
 
                             <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-                                Audit log
+                                Audit Log
                             </h1>
 
                             <p className="mt-1.5 text-sm text-slate-500">
@@ -671,174 +764,56 @@ export default function AuditLogPage() {
 
                     {/* Filters and audit table */}
                     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                        <form onSubmit={applyFilters} className="p-4 md:p-5">
-                            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(180px,240px)_minmax(180px,240px)_1fr]">
-                                <div>
-                                    <label
-                                        htmlFor="audit-action"
-                                        className="mb-1.5 block text-sm font-semibold text-slate-700"
-                                    >
-                                        Action
-                                    </label>
-                                    <select
-                                        id="audit-action"
-                                        value={action}
-                                        onChange={(event) => setAction(event.target.value)}
-                                        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                                    >
-                                        <option value="">All actions</option>
-                                        <option value="CREATE">Create</option>
-                                        <option value="UPDATE">Update</option>
-                                        <option value="DELETE">Delete</option>
-                                    </select>
-                                </div>
 
-                                <div>
-                                    <label
-                                        htmlFor="audit-period"
-                                        className="mb-1.5 block text-sm font-semibold text-slate-700"
-                                    >
-                                        Period
-                                    </label>
-                                    <select
-                                        id="audit-period"
-                                        value={period}
-                                        onChange={(event) =>
-                                            setPeriod(event.target.value as Period)
-                                        }
-                                        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                                    >
-                                        <option value="7days">Last 7 days</option>
-                                        <option value="30days">Last 30 days</option>
-                                        <option value="thisMonth">This month</option>
-                                        <option value="all">All time</option>
-                                    </select>
-                                </div>
-
-                                <div className="flex flex-wrap items-end gap-2">
-                                    <button
-                                        type="submit"
-                                        className="h-10 rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white transition hover:bg-slate-700"
-                                    >
-                                        Apply filters
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={resetFilters}
-                                        className="h-10 rounded-lg border border-slate-200 px-4 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
-                                    >
-                                        Reset
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowAdvanced((current) => !current)}
-                                        className="h-10 rounded-lg px-3 text-sm font-medium text-blue-700 transition hover:bg-blue-50"
-                                    >
-                                        {showAdvanced ? "Hide advanced" : "Advanced filters"}
-                                    </button>
-                                </div>
+                        <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 p-4 md:px-5">
+                            {/* 1. Search */}
+                            <div className="min-w-[200px] flex-1">
+                                <SearchInput
+                                    search={search}
+                                    onSearchChange={(value: string) => {
+                                        setSearch(value);
+                                        setPage(0);
+                                    }}
+                                />
                             </div>
 
-                            {showAdvanced && (
-                                <div className="mt-5 grid gap-4 border-t border-slate-100 pt-5 sm:grid-cols-2 lg:grid-cols-4">
-                                    <div>
-                                        <label
-                                            htmlFor="audit-actor"
-                                            className="mb-1.5 block text-sm font-medium text-slate-700"
-                                        >
-                                            Actor ID
-                                        </label>
-                                        <input
-                                            id="audit-actor"
-                                            type="number"
-                                            min="0"
-                                            value={actorId}
-                                            onChange={(event) => setActorId(event.target.value)}
-                                            placeholder="Enter actor ID"
-                                            className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                                        />
-                                    </div>
+                            {/* 2. Preset date range */}
+                            <select
+                                value={period}
+                                onChange={(event) => {
+                                    setPeriod(event.target.value as Period);
+                                    setPage(0);
+                                }}
+                                className="h-9 min-w-[150px] rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                aria-label="Filter by period"
+                            >
+                                <option value="7days">Last 7 days</option>
+                                <option value="30days">Last 30 days</option>
+                                <option value="thisMonth">This month</option>
+                                <option value="all">All time</option>
+                            </select>
 
-                                    <div>
-                                        <label
-                                            htmlFor="audit-entity"
-                                            className="mb-1.5 block text-sm font-medium text-slate-700"
-                                        >
-                                            Entity type
-                                        </label>
-                                        <input
-                                            id="audit-entity"
-                                            value={entityType}
-                                            onChange={(event) => setEntityType(event.target.value)}
-                                            placeholder="e.g. USER, ROLE"
-                                            className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                                        />
-                                    </div>
 
-                                    <div>
-                                        <label
-                                            htmlFor="audit-result"
-                                            className="mb-1.5 block text-sm font-medium text-slate-700"
-                                        >
-                                            Result
-                                        </label>
+                            {/* 3. Filters */}
+                            <FilterPopover
+                                table={auditTableAdapter}
+                                hasFilters={auditSchema.fields.some(
+                                    (field) => field.filterable,
+                                )}
+                                activeFilterCount={
+                                    Object.values(filters).filter(
+                                        (value) => value !== undefined && value !== "",
+                                    ).length
+                                }
+                            />
 
-                                        <select
-                                            id="audit-result"
-                                            value={result}
-                                            onChange={(event) => setResult(event.target.value)}
-                                            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                                        >
-                                            <option value="">All results</option>
-                                            <option value="SUCCESS">Success</option>
-                                            <option value="FAILED">Failed</option>
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label
-                                            htmlFor="audit-from"
-                                            className="mb-1.5 block text-sm font-medium text-slate-700"
-                                        >
-                                            From date
-                                        </label>
-                                        <input
-                                            id="audit-from"
-                                            type="date"
-                                            value={fromDate}
-                                            max={toDate || undefined}
-                                            onChange={(event) => setFromDate(event.target.value)}
-                                            className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label
-                                            htmlFor="audit-to"
-                                            className="mb-1.5 block text-sm font-medium text-slate-700"
-                                        >
-                                            To date
-                                        </label>
-                                        <input
-                                            id="audit-to"
-                                            type="date"
-                                            value={toDate}
-                                            min={fromDate || undefined}
-                                            onChange={(event) => setToDate(event.target.value)}
-                                            className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                                        />
-                                    </div>
-                                </div>
-                            )}
-                        </form>
+                        </div>
 
                         <div className="border-t border-slate-200">
                             <div className="flex flex-col gap-2 px-4 py-4 sm:flex-row sm:items-center sm:justify-between md:px-5">
                                 <div>
                                     <h2 className="text-sm font-semibold text-slate-800">
-                                        Audit records
+                                        Audit Records
                                     </h2>
                                     <p className="mt-1 text-xs text-slate-500">
                                         {totalElements} records found
@@ -896,7 +871,7 @@ export default function AuditLogPage() {
                                         Try again
                                     </button>
                                 </div>
-                            ) : logs.length === 0 ? (
+                            ) : filteredLogs.length === 0 ? (
                                 <div className="px-6 py-16 text-center">
                                     <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
                                         <svg
@@ -924,67 +899,56 @@ export default function AuditLogPage() {
                             ) : (
                                 <>
                                     <div className="overflow-x-auto">
-                                        <table className="w-full min-w-[760px] border-collapse border border-black text-left text-sm">
-                                            <thead className="border border-black bg-slate-100 text-xs text-slate-700">
+                                        <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+                                            <thead className="border-b border-slate-200 bg-white text-sm text-slate-700">
                                             <tr>
-                                                <th className="px-5 py-3 font-medium">Time</th>
-                                                <th className="px-5 py-3 font-medium">Actor</th>
-                                                <th className="px-5 py-3 font-medium">Action</th>
-                                                <th className="px-5 py-3 font-medium">Object</th>
-                                                <th className="px-5 py-3 font-medium">Result</th>
-                                                <th className="px-5 py-3 text-right font-medium">
+                                                <th className="whitespace-nowrap px-5 py-3 font-semibold">
+                                                    Time
+                                                </th>
+                                                <th className="whitespace-nowrap px-5 py-3 font-semibold">
+                                                    Actor
+                                                </th>
+                                                <th className="whitespace-nowrap px-5 py-3 font-semibold">
+                                                    Action
+                                                </th>
+                                                <th className="whitespace-nowrap px-5 py-3 font-semibold">
+                                                    Object
+                                                </th>
+                                                <th className="whitespace-nowrap px-5 py-3 font-semibold">
+                                                    Result
+                                                </th>
+                                                <th className="whitespace-nowrap px-5 py-3 text-right font-semibold">
                                                     Details
                                                 </th>
                                             </tr>
                                             </thead>
 
-                                            <tbody className="divide-y divide-slate-100">
-                                            {logs.map((log) => (
+                                            <tbody className="divide-y divide-slate-200">
+                                            {filteredLogs.map((log) => (
                                                 <AuditLogRow
                                                     key={log.id}
                                                     log={log}
-                                                    expanded={expandedLogId === log.id}
-                                                    onToggle={() =>
-                                                        setExpandedLogId((current) =>
-                                                            current === log.id ? null : log.id,
-                                                        )
-                                                    }
+                                                    onViewDetails={() => setSelectedLog(log)}
                                                 />
                                             ))}
                                             </tbody>
                                         </table>
                                     </div>
 
-                                    <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between md:px-5">
-                                        <p className="text-sm text-slate-500">
-                                            Showing {logs.length} of {totalElements} records
-                                            <span className="mx-2 text-slate-300">·</span>
-                                            Page {page + 1} of {Math.max(totalPages, 1)}
-                                        </p>
+                                    <div className="border-t border-slate-200 px-4 py-4 md:px-5">
+                                        <Pagination
+                                            table={paginationTable}
+                                            onPageSizeChange={(value) => {
+                                                if (value === "auto") return;
 
-                                        <div className="flex gap-2">
-                                            <button
-                                                type="button"
-                                                disabled={page === 0 || auditQuery.isFetching}
-                                                onClick={() =>
-                                                    setPage((current) => Math.max(0, current - 1))
-                                                }
-                                                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                                            >
-                                                Previous
-                                            </button>
+                                                const newSize = Number(value);
 
-                                            <button
-                                                type="button"
-                                                disabled={
-                                                    page + 1 >= totalPages || auditQuery.isFetching
+                                                if (Number.isInteger(newSize) && newSize > 0) {
+                                                    setSize(newSize);
+                                                    setPage(0);
                                                 }
-                                                onClick={() => setPage((current) => current + 1)}
-                                                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                                            >
-                                                Next
-                                            </button>
-                                        </div>
+                                            }}
+                                        />
                                     </div>
                                 </>
                             )}
@@ -992,6 +956,74 @@ export default function AuditLogPage() {
                     </section>
                 </div>
             </div>
+            <AnimatePresence>
+                {selectedLog && (
+                    <>
+                        {/* Backdrop */}
+                        <motion.button
+                            type="button"
+                            aria-label="Close details"
+                            className="fixed inset-0 z-[110] cursor-default bg-black/40 backdrop-blur-sm"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            onClick={() => setSelectedLog(null)}
+                        />
+
+                        {/* Right-side detail drawer */}
+                        <motion.aside
+                            role="dialog"
+                            aria-modal="true"
+                            aria-labelledby="audit-detail-title"
+                            className="fixed inset-y-0 right-0 z-[120] flex w-full flex-col border-l border-slate-200 bg-white shadow-2xl sm:w-[560px] xl:w-[640px]"
+                            initial={{ x: "100%" }}
+                            animate={{ x: 0 }}
+                            exit={{ x: "100%" }}
+                            transition={{
+                                type: "tween",
+                                duration: 0.3,
+                                ease: "easeInOut",
+                            }}
+                        >
+                            <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 py-4">
+                                <h2
+                                    id="audit-detail-title"
+                                    className="text-base font-semibold text-slate-900"
+                                >
+                                    Detail
+                                </h2>
+
+                                <button
+                                    type="button"
+                                    aria-label="Close details"
+                                    onClick={() => setSelectedLog(null)}
+                                    className="rounded-md border border-slate-300 p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                                >
+                                    <svg
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="1.8"
+                                        className="h-5 w-5"
+                                        aria-hidden="true"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            d="M6 6l12 12M18 6L6 18"
+                                        />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <div className="min-h-0 flex-1 overflow-y-auto px-5">
+                                <AuditLogDetails log={selectedLog} />
+                            </div>
+                        </motion.aside>
+                    </>
+                )}
+            </AnimatePresence>
 
             {showExportModal && (
                 <div
@@ -1192,67 +1224,75 @@ export default function AuditLogPage() {
 
 function AuditLogRow({
                          log,
-                         expanded,
-                         onToggle,
+                         onViewDetails,
                      }: {
     log: AuditLogDTO;
-    expanded: boolean;
-    onToggle: () => void;
+    onViewDetails: () => void;
 }) {
     const objectName = log.entityType || "Unknown object";
     const objectId = log.entityId ? `#${log.entityId}` : "";
 
     return (
-        <>
-            <tr className="transition-colors hover:bg-slate-50/80">
-                <td className="whitespace-nowrap px-5 py-3.5 text-slate-600">
-                    {formatDate(log.createdAt)}
-                </td>
+        <tr className="transition-colors hover:bg-slate-50/80">
+            <td className="whitespace-nowrap px-5 py-3.5 text-slate-600">
+                {formatDate(log.createdAt)}
+            </td>
 
-                <td className="px-5 py-3.5">
-                    <div className="font-medium text-slate-800">
-                        {log.actorEmail || "Unknown actor"}
-                    </div>
+            <td className="px-5 py-3.5">
+                <div className="font-medium text-slate-800">
+                    {log.actorEmail || "Unknown actor"}
+                </div>
+                <div className="mt-1 text-xs text-slate-400">
+                    ID: {log.actorId ?? "-"}
+                </div>
+            </td>
+
+            <td className="px-5 py-3.5">
+                <ActionBadge action={log.action} />
+            </td>
+
+            <td className="px-5 py-3.5">
+                <div className="font-medium text-slate-700">
+                    {objectName}
+                </div>
+
+                {objectId && (
                     <div className="mt-1 text-xs text-slate-400">
-                        ID: {log.actorId ?? "-"}
+                        {objectId}
                     </div>
-                </td>
+                )}
+            </td>
 
-                <td className="px-5 py-3.5">
-                    <ActionBadge action={log.action} />
-                </td>
+            <td className="px-5 py-3.5">
+                <ResultBadge result={log.result} />
+            </td>
 
-                <td className="px-5 py-3.5">
-                    <div className="font-medium text-slate-700">{objectName}</div>
-                    {objectId && (
-                        <div className="mt-1 text-xs text-slate-400">{objectId}</div>
-                    )}
-                </td>
-
-                <td className="px-5 py-3.5">
-                    <ResultBadge result={log.result} />
-                </td>
-
-                <td className="px-5 py-3.5 text-right">
-                    <button
-                        type="button"
-                        onClick={onToggle}
-                        aria-expanded={expanded}
-                        className="rounded-md px-2.5 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-50"
+            <td className="px-5 py-3.5 text-right">
+                <button
+                    type="button"
+                    onClick={onViewDetails}
+                    title="View Details"
+                    aria-label="View Details"
+                    className="inline-flex items-center justify-center rounded-md p-2 text-slate-500 transition hover:bg-slate-100 hover:text-blue-600"
+                >
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
                     >
-                        {expanded ? "Hide details" : "View details"}
-                    </button>
-                </td>
-            </tr>
-
-            {expanded && (
-                <tr>
-                    <td colSpan={6} className="p-0">
-                        <AuditLogDetails log={log} />
-                    </td>
-                </tr>
-            )}
-        </>
+                        <path d="M2.5 12s3.5-7 9.5-7 9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7Z" />
+                        <circle cx="12" cy="12" r="3" />
+                    </svg>
+                </button>
+            </td>
+        </tr>
     );
 }
 

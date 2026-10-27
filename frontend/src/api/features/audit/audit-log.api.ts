@@ -16,7 +16,7 @@ export interface AuditLogDTO {
 }
 
 export interface AuditLogFilter {
-    actorId?: number;
+    actorName?: string;
     action?: string;
     entityType?: string;
     result?: string;
