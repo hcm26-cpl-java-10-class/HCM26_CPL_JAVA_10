@@ -18,7 +18,7 @@ import SyllabusDetailPage from "@/pages/management/demo/syllabus/detail";
 import StudentSyllabusPage from "@/pages/student/StudentSyllabusPage";
 import CourseReportPage from "@/pages/management/demo/report";
 
-import MyCertificatesPage from "@/pages/student/MyCertificatesPage";
+import CertificateDetailPage from "@/pages/management/demo/certificate/pages/CertificateDetailPage";
 import VerifyCertificatePage from "@/pages/student/VerifyCertificatePage";
 
 export interface RouteConfig {
@@ -61,8 +61,8 @@ export const routes: RouteConfig[] = [
     isModuleDriven: false,
   },
   {
-    path: "/my-certificates",
-    component: MyCertificatesPage,
+    path: "/my-certificates/:verificationToken",
+    component: CertificateDetailPage,
     isModuleDriven: false,
   },
   {
