@@ -1,0 +1,108 @@
+import { projectTemplateApi } from "@/api/features/project-template.api";
+import { FieldError } from "@/components/datatable/modal/form/FieldError";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import ConfirmDialog from "@/components/ui/confirmdialog";
+import type { TemplateSampleContent, TemplateSampleContentPayload } from "@/types/features/project-template";
+import { useMutation } from "@tanstack/react-query";
+import { AlertCircle, ClipboardList, Files, Loader2, Plus, Save } from "lucide-react";
+import { useRef, useState, type FormEvent } from "react";
+import { toast } from "sonner";
+import { getTemplateError } from "../project-template.utils";
+import { newArtifact, newBacklogItem, sampleFieldId, toSamplePayload, toSampleValues, validateSampleContent,
+  type ArtifactValues, type BacklogItemValues, type SampleContentErrors } from "../sample-content.utils";
+import { TemplateBacklogImportDialog } from "./TemplateBacklogImportDialog";
+import { TemplateArtifactEditor, TemplateBacklogEditor } from "./TemplateSampleEditors";
+
+function moved<T>(items: T[], index: number, direction: -1 | 1): T[] {
+  const result = [...items]; [result[index], result[index + direction]] = [result[index + direction], result[index]]; return result;
+}
+
+export function TemplateSampleContentForm({ content, editable, onSaved }: {
+  content: TemplateSampleContent; editable: boolean; onSaved: (saved: TemplateSampleContent) => void;
+}) {
+  const [values, setValues] = useState(() => toSampleValues(content));
+  const [lockVersion, setLockVersion] = useState(content.lockVersion);
+  const [errors, setErrors] = useState<SampleContentErrors>({});
+  const [submitError, setSubmitError] = useState<ReturnType<typeof getTemplateError> | null>(null);
+  const [removing, setRemoving] = useState<{ kind: "backlogItems" | "artifacts"; key: string; title: string } | null>(null);
+  const submitting = useRef(false);
+  const mutation = useMutation({ mutationFn: (payload: TemplateSampleContentPayload) => projectTemplateApi.saveSampleContent(content.templateId, payload),
+    onSuccess: (saved) => {
+      setValues(toSampleValues(saved)); setLockVersion(saved.lockVersion); setErrors({}); setSubmitError(null);
+      onSaved(saved); toast.success("Sample backlog and artifact requirements saved successfully.");
+    },
+    onError: (error) => { const result = getTemplateError(error); setErrors(result.fields); setSubmitError(result); },
+    onSettled: () => { submitting.current = false; },
+  });
+  const disabled = !editable || mutation.isPending;
+  const clearErrors = (prefix: string) => setErrors((current) => Object.fromEntries(Object.entries(current).filter(([field]) => !field.startsWith(prefix))));
+  const changeBacklog = (index: number, patch: Partial<BacklogItemValues>) => {
+    setValues((current) => ({ ...current, backlogItems: current.backlogItems.map((item, i) => i === index ? { ...item, ...patch } : item) }));
+    clearErrors(`backlogItems[${index}]`);
+  };
+  const changeArtifact = (index: number, patch: Partial<ArtifactValues>) => {
+    setValues((current) => ({ ...current, artifacts: current.artifacts.map((item, i) => i === index ? { ...item, ...patch } : item) }));
+    clearErrors(`artifacts[${index}]`);
+  };
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); if (submitting.current || !editable) return;
+    setSubmitError(null); const nextErrors = validateSampleContent(values, content); setErrors(nextErrors);
+    const first = Object.keys(nextErrors)[0];
+    if (first) { requestAnimationFrame(() => document.getElementById(sampleFieldId(first))?.focus()); return; }
+    submitting.current = true; mutation.mutate(toSamplePayload(values, lockVersion));
+  };
+
+  return <form onSubmit={submit} noValidate aria-busy={mutation.isPending} className="grid min-w-0 gap-6">
+    {submitError && <Alert variant="destructive"><AlertCircle /><AlertTitle>Unable to save sample content</AlertTitle><AlertDescription>{submitError.message}</AlertDescription></Alert>}
+    <FieldError errors={errors.request ?? errors.lockVersion} />
+    <section id={sampleFieldId("backlogItems")} tabIndex={-1} className="grid min-w-0 gap-4">
+      <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div>
+        <CardTitle className="flex items-center gap-2"><ClipboardList className="size-5" />Sample backlog</CardTitle>
+        <CardDescription className="mt-2">Prepare initial work and suggested roles for teams using this template.</CardDescription>
+      </div><Badge variant="outline">{values.backlogItems.length} {values.backlogItems.length === 1 ? "item" : "items"}</Badge></div></CardHeader>
+        <CardContent className="grid gap-3"><p className="text-sm text-muted-foreground">Suggested roles describe who should handle the work. Teams assign individual members when planning their project.</p>
+          {editable && <div className="flex flex-wrap gap-2"><TemplateBacklogImportDialog templateId={content.templateId}
+            remaining={content.maxItems - values.backlogItems.length} maxImportBytes={content.maxImportBytes} disabled={disabled}
+            onAppend={(items) => { setValues((current) => ({ ...current, backlogItems: [...current.backlogItems, ...items.map(newBacklogItem)] })); clearErrors("backlogItems"); }} />
+            <Button type="button" variant="outline" disabled={disabled || values.backlogItems.length >= content.maxItems}
+              onClick={() => { setValues((current) => ({ ...current, backlogItems: [...current.backlogItems, newBacklogItem()] })); clearErrors("backlogItems"); }}><Plus />Add backlog item</Button>
+          </div>}<FieldError errors={errors.backlogItems} /></CardContent>
+      </Card>
+      {!values.backlogItems.length && <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">No sample backlog items yet.</p>}
+      {values.backlogItems.map((item, index) => <TemplateBacklogEditor key={item.key} item={item} index={index} count={values.backlogItems.length}
+        roles={content.roles} disabled={disabled} editable={editable} errors={errors} onChange={(patch) => changeBacklog(index, patch)}
+        onMove={(direction) => { setValues((current) => ({ ...current, backlogItems: moved(current.backlogItems, index, direction) })); setErrors({}); }}
+        onRemove={() => setRemoving({ kind: "backlogItems", key: item.key, title: item.title.trim() || "New backlog item" })} />)}
+    </section>
+
+    <section id={sampleFieldId("artifacts")} tabIndex={-1} className="grid min-w-0 gap-4">
+      <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div>
+        <CardTitle className="flex items-center gap-2"><Files className="size-5" />Required artifacts</CardTitle>
+        <CardDescription className="mt-2">Define the files and links teams must submit for each milestone.</CardDescription>
+      </div><Badge variant="outline">{values.artifacts.length} {values.artifacts.length === 1 ? "requirement" : "requirements"}</Badge></div></CardHeader>
+        <CardContent className="grid gap-3"><p className="text-sm text-muted-foreground">Every artifact listed here is required for its linked milestone.</p>
+          {!content.milestones.length && <p className="text-sm text-muted-foreground">Create and save a milestone in the Milestones tab before adding artifact requirements.</p>}
+          {editable && <Button type="button" variant="outline" className="w-fit" disabled={disabled || !content.milestones.length || values.artifacts.length >= content.maxItems}
+            onClick={() => { setValues((current) => ({ ...current, artifacts: [...current.artifacts, newArtifact()] })); clearErrors("artifacts"); }}><Plus />Add artifact requirement</Button>}
+          <FieldError errors={errors.artifacts} /></CardContent>
+      </Card>
+      {!values.artifacts.length && <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">No artifact requirements yet.</p>}
+      {values.artifacts.map((item, index) => <TemplateArtifactEditor key={item.key} item={item} index={index} count={values.artifacts.length}
+        content={content} disabled={disabled} editable={editable} errors={errors} onChange={(patch) => changeArtifact(index, patch)}
+        onMove={(direction) => { setValues((current) => ({ ...current, artifacts: moved(current.artifacts, index, direction) })); setErrors({}); }}
+        onRemove={() => setRemoving({ kind: "artifacts", key: item.key, title: item.title.trim() || "New artifact requirement" })} />)}
+    </section>
+    {editable && <div className="flex justify-end rounded-xl border bg-background p-3"><Button type="submit" disabled={disabled}>
+      {mutation.isPending ? <Loader2 className="animate-spin" /> : <Save />}{mutation.isPending ? "Saving..." : "Save sample content"}
+    </Button></div>}
+    <ConfirmDialog open={!!removing} title="Remove this item?" description={`Remove "${removing?.title ?? ""}" from this template? The change is applied when you save sample content.`}
+      confirmLabel="Remove item" onCancel={() => setRemoving(null)} onConfirm={() => {
+        if (!removing) return;
+        setValues((current) => removing.kind === "backlogItems" ? { ...current, backlogItems: current.backlogItems.filter((item) => item.key !== removing.key) }
+          : { ...current, artifacts: current.artifacts.filter((item) => item.key !== removing.key) }); setRemoving(null); setErrors({});
+      }} />
+  </form>;
+}

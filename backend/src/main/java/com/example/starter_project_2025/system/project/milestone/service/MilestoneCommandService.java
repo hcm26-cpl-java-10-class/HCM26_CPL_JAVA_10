@@ -159,6 +159,7 @@ public class MilestoneCommandService {
                     request.resubmissionPolicy().allowed(),
                     request.resubmissionPolicy().maxAttempts());
         }
+        milestone.configureAssessment(request.weight(), request.latePolicy().penaltyBasis());
         request.checklist().forEach(item -> milestone.addChecklistItem(
                 item.content().trim(), item.mandatory(), item.orderIndex()));
 

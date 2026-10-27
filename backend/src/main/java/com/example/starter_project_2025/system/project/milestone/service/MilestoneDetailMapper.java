@@ -47,12 +47,13 @@ public class MilestoneDetailMapper {
                 ),
                 reviewer == null ? null : new MilestoneReviewerResponse(reviewer.id(), reviewer.displayName()),
                 new MilestoneLatePolicyResponse(
-                        milestone.getLatePolicyType(), milestone.getLateUntil(), milestone.getLatePenaltyPercent()),
+                        milestone.getLatePolicyType(), milestone.getLateUntil(), milestone.getLatePenaltyPercent(),
+                        milestone.getLatePenaltyBasis()),
                 new MilestoneResubmissionPolicyResponse(
                         milestone.isAllowResubmission(), milestone.getMaxSubmissionAttempts()),
                 milestone.getVersion(),
                 milestone.getCreatedAt(),
-                milestone.getCreatedBy()
+                milestone.getCreatedBy(), milestone.getWeight()
         );
     }
 

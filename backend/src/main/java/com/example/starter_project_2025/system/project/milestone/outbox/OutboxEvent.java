@@ -63,6 +63,21 @@ public class OutboxEvent {
         return event;
     }
 
+    public static OutboxEvent templateSampleContentUpdated(Long tenantId, Long templateId, String payloadJson, Instant now) {
+        UUID aggregateId = UUID.nameUUIDFromBytes(("project-template:" + tenantId + ":" + templateId)
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        OutboxEvent event = milestoneCreated(aggregateId, payloadJson, now);
+        event.aggregateType = "PROJECT_TEMPLATE";
+        event.eventType = "PROJECT_TEMPLATE_SAMPLE_CONTENT_UPDATED";
+        return event;
+    }
+
+    public static OutboxEvent templateArchived(Long tenantId, Long templateId, String payloadJson, Instant now) {
+        OutboxEvent event = templateSampleContentUpdated(tenantId, templateId, payloadJson, now);
+        event.eventType = "PROJECT_TEMPLATE_ARCHIVED";
+        return event;
+    }
+
     public static OutboxEvent milestoneAtRiskAlert(UUID eventId, UUID milestoneId, String payloadJson, Instant now) {
         OutboxEvent event = milestoneCreated(milestoneId, payloadJson, now);
         event.eventId = eventId;

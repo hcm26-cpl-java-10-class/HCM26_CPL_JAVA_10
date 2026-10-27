@@ -5,6 +5,8 @@ import com.example.starter_project_2025.system.project.milestone.exception.Miles
 import com.example.starter_project_2025.system.project.milestone.integration.model.RubricCriterionData;
 import com.example.starter_project_2025.system.project.milestone.integration.model.RubricSnapshotData;
 import com.example.starter_project_2025.system.project.milestone.integration.port.RubricCatalogPort;
+import com.example.starter_project_2025.system.project.rubric.service.RubricCatalogService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
@@ -15,7 +17,9 @@ import java.util.UUID;
 
 @Component
 @Profile("milestone-mock | milestone-rubric-mock")
+@RequiredArgsConstructor
 public class MockRubricCatalogAdapter implements RubricCatalogPort {
+    private final RubricCatalogService catalog;
 
     private final List<RubricSnapshotData> rubrics = List.of(
             new RubricSnapshotData(
@@ -55,12 +59,19 @@ public class MockRubricCatalogAdapter implements RubricCatalogPort {
 
     @Override
     public List<RubricSnapshotData> findAllowedRubrics(Long projectId, UUID actorId, Long tenantId) {
-        return rubrics;
+        List<RubricSnapshotData> published = catalog.findPublished(tenantId).stream()
+                .map(RubricCatalogService::snapshot).toList();
+        return published.isEmpty() && MockMilestoneData.TENANT_ID.equals(tenantId) ? rubrics : published;
     }
 
     @Override
     public RubricSnapshotData requireAllowedSnapshot(
             UUID rubricSnapshotId, Long projectId, UUID actorId, Long tenantId) {
+        var published = catalog.findPublished(rubricSnapshotId, tenantId);
+        if (published.isPresent()) return RubricCatalogService.snapshot(published.get());
+        if (!MockMilestoneData.TENANT_ID.equals(tenantId)) {
+            throw new MilestoneValidationException(Map.of("rubricSnapshotId", List.of("Rubric is not available")));
+        }
         return rubrics.stream()
                 .filter(rubric -> rubric.active() && rubric.id().equals(rubricSnapshotId))
                 .findFirst()
@@ -72,6 +83,8 @@ public class MockRubricCatalogAdapter implements RubricCatalogPort {
     @Override
     public RubricSnapshotData requireSnapshotForRead(
             UUID rubricSnapshotId, Long projectId, Long tenantId) {
+        var published = catalog.findPublished(rubricSnapshotId, tenantId);
+        if (published.isPresent()) return RubricCatalogService.snapshot(published.get());
         if (!MockMilestoneData.TENANT_ID.equals(tenantId)) {
             throw new MilestoneDependencyException("Milestone rubric snapshot could not be loaded");
         }

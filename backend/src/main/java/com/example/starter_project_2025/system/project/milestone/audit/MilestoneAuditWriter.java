@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.UUID;
 
 @Component
@@ -19,11 +20,14 @@ public class MilestoneAuditWriter {
 
     public void writeCreated(Milestone milestone, UUID actorId, String idempotencyKey, Instant now) {
         try {
-            String details = objectMapper.writeValueAsString(Map.of(
-                    "title", milestone.getTitle(),
-                    "deadline", milestone.getDeadline().toString(),
-                    "checklistItemCount", milestone.getChecklistItems().size()
-            ));
+            Map<String, Object> state = new LinkedHashMap<>();
+            state.put("title", milestone.getTitle());
+            state.put("deadline", milestone.getDeadline());
+            state.put("checklistItemCount", milestone.getChecklistItems().size());
+            state.put("rubricSnapshotId", milestone.getRubricSnapshotId());
+            state.put("weight", milestone.getWeight());
+            state.put("latePenaltyBasis", milestone.getLatePenaltyBasis());
+            String details = objectMapper.writeValueAsString(state);
             repository.save(MilestoneAuditLog.created(
                     milestone.getId(), milestone.getProjectId(), milestone.getTenantId(), actorId,
                     idempotencyKey, details, now

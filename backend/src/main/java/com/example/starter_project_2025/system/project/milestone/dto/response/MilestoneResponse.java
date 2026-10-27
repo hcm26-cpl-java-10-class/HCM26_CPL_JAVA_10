@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.project.milestone.dto.response;
 
 import com.example.starter_project_2025.system.project.milestone.domain.LatePolicyType;
+import com.example.starter_project_2025.system.project.milestone.domain.LatePenaltyBasis;
 import com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus;
 
 import java.math.BigDecimal;
@@ -25,6 +26,8 @@ public record MilestoneResponse(
         long version,
         Instant createdAt,
         UUID createdBy,
-        List<ChecklistItemResponse> checklist
+        List<ChecklistItemResponse> checklist,
+        BigDecimal weight,
+        LatePenaltyBasis latePenaltyBasis
 ) {
 }

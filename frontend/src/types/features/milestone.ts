@@ -1,4 +1,5 @@
 export type LatePolicyType = "NO_LATE" | "ALLOW_LATE";
+export type LatePenaltyBasis = "FIXED" | "PER_DAY";
 export type MilestoneStatus = "PLANNED" | "OPEN" | "CLOSED" | "CANCELLED";
 export type MilestoneProjectStatus = "ACTIVE" | "COMPLETED" | "CANCELLED";
 
@@ -12,6 +13,7 @@ export interface MilestoneLatePolicyRequest {
   type: LatePolicyType;
   lateUntil?: string;
   penaltyPercent?: number;
+  penaltyBasis?: LatePenaltyBasis;
 }
 
 export interface MilestoneResubmissionPolicyRequest {
@@ -20,6 +22,7 @@ export interface MilestoneResubmissionPolicyRequest {
 }
 
 export interface CreateMilestoneRequest {
+  weight?: number;
   teamId?: number;
   title: string;
   description?: string;
@@ -63,6 +66,8 @@ export interface MilestoneChecklistItemResponse {
 }
 
 export interface MilestoneResponse {
+  weight?: number | null;
+  latePenaltyBasis?: LatePenaltyBasis;
   id: string;
   projectId: string;
   title: string;
@@ -109,6 +114,7 @@ export interface MilestoneReviewerDetail {
 }
 
 export interface MilestoneLatePolicyDetail {
+  penaltyBasis?: LatePenaltyBasis;
   type: LatePolicyType;
   lateUntil?: string | null;
   penaltyPercent?: number | null;
@@ -120,6 +126,7 @@ export interface MilestoneResubmissionPolicyDetail {
 }
 
 export interface MilestoneDetailResponse {
+  weight?: number | null;
   id: string;
   project: MilestoneProjectOption;
   title: string;
@@ -228,6 +235,8 @@ export interface MilestoneDetailRouteState {
 }
 
 export interface MilestoneListItem {
+  weight?: number | null;
+  latePenaltyBasis?: LatePenaltyBasis;
   id: string;
   teamId?: number;
   title: string;

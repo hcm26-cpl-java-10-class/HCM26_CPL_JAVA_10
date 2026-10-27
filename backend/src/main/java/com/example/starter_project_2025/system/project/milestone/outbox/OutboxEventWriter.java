@@ -24,6 +24,9 @@ public class OutboxEventWriter {
             payload.put("projectId", milestone.getProjectId());
             payload.put("tenantId", milestone.getTenantId());
             payload.put("deadline", milestone.getDeadline());
+            payload.put("rubricSnapshotId", milestone.getRubricSnapshotId());
+            payload.put("weight", milestone.getWeight());
+            payload.put("latePenaltyBasis", milestone.getLatePenaltyBasis());
             payload.put("occurredAt", now);
             repository.save(OutboxEvent.milestoneCreated(
                     milestone.getId(), objectMapper.writeValueAsString(payload), now

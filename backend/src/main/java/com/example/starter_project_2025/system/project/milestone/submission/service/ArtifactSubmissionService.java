@@ -115,7 +115,7 @@ public class ArtifactSubmissionService {
                 scope.tenantId(), projectId, milestone.getTeamId(), milestoneId, scope.actorId(), version,
                 normalize(request.repositoryUrl()), normalize(request.deploymentUrl()),
                 normalize(request.releaseNotes()), checklistJson, attachmentsJson, now, late,
-                late ? milestone.getLatePenaltyPercent() : null));
+                milestone.latePenaltyAt(now)));
         reviewSyncService.synchronize(milestone, submission);
         ArtifactSubmissionResponse response = toResponse(submission);
 
