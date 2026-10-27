@@ -20,6 +20,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -68,7 +70,10 @@ public class CourseServiceImpl
         if (course.getIsFree() == null) {
             course.setIsFree(true);
         }
-        resolveInstructor(course, request);
+        if (request.getInstructorId() != null) {
+            resolveInstructor(course, request, ctx);
+        }
+        validateThumbnailUrl(request.getThumbnailUrl(), ctx);
         resolveCategories(course, request, ctx);
     }
 
@@ -79,14 +84,19 @@ public class CourseServiceImpl
                 courseRepository.existsByName(request.getName())) {
             ctx.add("name", "Course name already exists");
         }
-        if (request.getInstructorId() != null) {
-            resolveInstructor(course, request);
+        if (Boolean.TRUE.equals(request.getClearInstructor()) && request.getInstructorId() != null) {
+            ctx.add("instructorId", "Cannot assign and clear the instructor in the same request");
+        } else if (Boolean.TRUE.equals(request.getClearInstructor())) {
+            course.setInstructorUser(null);
+        } else if (request.getInstructorId() != null) {
+            resolveInstructor(course, request, ctx);
         }
         if (Boolean.TRUE.equals(request.getClearCategory())) {
-            course.setCategories(null);
+            course.getCategories().clear();
         } else if (request.getCategoryIds() != null) {
             resolveCategories(course, request, ctx);
         }
+        validateThumbnailUrl(request.getThumbnailUrl(), ctx);
         if (request.getIsFree() == null) {
             request.setIsFree(course.getIsFree());
         }
@@ -99,6 +109,26 @@ public class CourseServiceImpl
                 || course.getStatus() == CourseStatus.PUBLISHED) {
             return;
         }
+
+        if (course.getInstructorUser() == null) {
+            ctx.add("instructorId", "Assign an instructor before publishing");
+        }
+        if (course.getCategories() == null || course.getCategories().isEmpty()) {
+            ctx.add("categoryIds", "Select at least one category before publishing");
+        }
+
+        CourseLevel level = request.getLevel() != null ? request.getLevel() : course.getLevel();
+        if (level == null) {
+            ctx.add("level", "Select a course level before publishing");
+        }
+
+        String description = request.getDescription() != null
+                ? request.getDescription()
+                : course.getDescription();
+        if (description == null || description.isBlank()) {
+            ctx.add("description", "Add a course description before publishing");
+        }
+
         CurriculumValidationResult result = curriculumValidator.validatePublish(course.getId());
         result.errors().forEach(issue -> ctx.add("status", issue.message()));
     }
@@ -135,18 +165,34 @@ public class CourseServiceImpl
      * - course.instructorUser = user
      * - course.instructor = user.fullName (nếu instructor string không được set thủ công)
      */
-    private void resolveInstructor(Course course, CourseDTO request) {
-        if (request.getInstructorId() != null) {
-            userRepository.findById(request.getInstructorId()).ifPresent(user -> {
-                course.setInstructorUser(user);
-                // Auto-fill instructor name from user if not manually provided
-                if (request.getInstructor() == null || request.getInstructor().isBlank()) {
-                    course.setInstructor(user.getFullName());
-                }
-            });
-        } else {
-            // Clear instructor user if no instructorId provided
-            course.setInstructorUser(null);
+    private void resolveInstructor(Course course, CourseDTO request, ValidationContext ctx) {
+        userRepository.findById(request.getInstructorId()).ifPresentOrElse(user -> {
+            boolean isTeacher = user.getRoles().stream()
+                    .anyMatch(role -> "TEACHER".equals(role.getName()));
+            if (!isTeacher) {
+                ctx.add("instructorId", "Selected user is not authorized to teach courses");
+                return;
+            }
+            course.setInstructorUser(user);
+            if (request.getInstructor() == null || request.getInstructor().isBlank()) {
+                course.setInstructor(user.getFullName());
+            }
+        }, () -> ctx.add("instructorId", "Instructor not found: " + request.getInstructorId()));
+    }
+
+    private void validateThumbnailUrl(String thumbnailUrl, ValidationContext ctx) {
+        if (thumbnailUrl == null || thumbnailUrl.isBlank()) {
+            return;
+        }
+        try {
+            URI uri = new URI(thumbnailUrl.trim());
+            String scheme = uri.getScheme();
+            if (!("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
+                    || uri.getHost() == null || uri.getHost().isBlank()) {
+                ctx.add("thumbnailUrl", "Thumbnail URL must be a valid http/https URL");
+            }
+        } catch (URISyntaxException ex) {
+            ctx.add("thumbnailUrl", "Thumbnail URL must be a valid http/https URL");
         }
     }
 

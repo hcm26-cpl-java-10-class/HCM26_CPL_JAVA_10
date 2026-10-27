@@ -32,6 +32,9 @@ public class CourseDTO extends BaseDTO {
 
     Long instructorId;
 
+    /** true = chủ động bỏ giảng viên đang được gán; null/false = không thay đổi khi cập nhật. */
+    Boolean clearInstructor;
+
     List<Long> categoryIds;
 
     /** true = bỏ danh mục của khóa học (PUT bỏ qua null nên cần cờ riêng). */
