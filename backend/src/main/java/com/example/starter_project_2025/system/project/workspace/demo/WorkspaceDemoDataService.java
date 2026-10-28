@@ -31,6 +31,9 @@ import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMember;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberRepository;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
+import com.example.starter_project_2025.system.project.trainingclass.ClassStaffAssignment;
+import com.example.starter_project_2025.system.project.trainingclass.ClassStaffAssignmentRepository;
+import com.example.starter_project_2025.system.project.trainingclass.ClassStaffRoleType;
 import com.example.starter_project_2025.system.project.trainingclass.TrainingClass;
 import com.example.starter_project_2025.system.project.trainingclass.TrainingClassRepository;
 import com.example.starter_project_2025.system.project.trainingclass.TrainingClassStatus;
@@ -59,6 +62,7 @@ public class WorkspaceDemoDataService {
     private final ProjectMemberRepository projectMembers;
     private final TeamAllocationSessionRepository sessions;
     private final ClassMemberRepository classMembers;
+    private final ClassStaffAssignmentRepository classStaff;
     private final TrainingClassRepository trainingClasses;
     private final WorkspaceRepository workspaces;
     private final ProjectTopicSnapshotRepository snapshots;
@@ -80,7 +84,8 @@ public class WorkspaceDemoDataService {
         User student = existingUser("student@example.com", tenant);
 
         Cohort cohort = cohort(tenant);
-        TrainingClass trainingClass = trainingClass(tenant, cohort);
+        TrainingClass trainingClass = trainingClass(tenant, cohort, teacher);
+        ensureClassMentor(trainingClass, teacher);
         TeamAllocationSession session = allocationSession(trainingClass);
         ClassMember adminMember = classMember(trainingClass, admin);
         ClassMember teacherMember = classMember(trainingClass, teacher);
@@ -123,9 +128,9 @@ public class WorkspaceDemoDataService {
         });
     }
 
-    private TrainingClass trainingClass(Tenant tenant, Cohort cohort) {
-        return trainingClasses.findByCodeAndTenantId(CLASS_CODE, tenant.getId()).orElseGet(() ->
-                trainingClasses.saveAndFlush(TrainingClass.builder()
+    private TrainingClass trainingClass(Tenant tenant, Cohort cohort, User mentor) {
+        TrainingClass trainingClass = trainingClasses.findByCodeAndTenantId(CLASS_CODE, tenant.getId())
+                .orElseGet(() -> trainingClasses.saveAndFlush(TrainingClass.builder()
                         .code(CLASS_CODE)
                         .name("Workspace Demo Class")
                         .tenantId(tenant.getId())
@@ -135,6 +140,25 @@ public class WorkspaceDemoDataService {
                         .cohortName(cohort.getName())
                         .status(TrainingClassStatus.ONGOING)
                         .build()));
+        if (trainingClass.getMentorId() == null) {
+            trainingClass.setMentorId(mentor.getId());
+            trainingClass = trainingClasses.saveAndFlush(trainingClass);
+        }
+        return trainingClass;
+    }
+
+    /** Sample class-level mentor so the allocation screens have a default mentor option. */
+    private void ensureClassMentor(TrainingClass trainingClass, User mentor) {
+        ClassStaffAssignment assignment = classStaff
+                .findByTrainingClass_IdAndUser_IdAndRoleType(
+                        trainingClass.getId(), mentor.getId(), ClassStaffRoleType.MENTOR)
+                .orElseGet(() -> ClassStaffAssignment.builder()
+                        .trainingClass(trainingClass)
+                        .user(mentor)
+                        .roleType(ClassStaffRoleType.MENTOR)
+                        .build());
+        assignment.setIsActive(true);
+        classStaff.save(assignment);
     }
 
     private TeamAllocationSession allocationSession(TrainingClass trainingClass) {
