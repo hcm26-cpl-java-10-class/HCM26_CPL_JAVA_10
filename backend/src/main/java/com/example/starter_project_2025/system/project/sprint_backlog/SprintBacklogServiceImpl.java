@@ -86,11 +86,11 @@ public class SprintBacklogServiceImpl
     static final String EVENT_UPDATED = "SPRINT_BACKLOG_ITEM_UPDATED";
 
     private static final Map<SprintBacklogStatus, Set<SprintBacklogStatus>> STATUS_TRANSITIONS = Map.of(
-            SprintBacklogStatus.TODO, Set.of(SprintBacklogStatus.IN_PROGRESS, SprintBacklogStatus.BLOCKED),
-            SprintBacklogStatus.IN_PROGRESS, Set.of(SprintBacklogStatus.REVIEW, SprintBacklogStatus.BLOCKED, SprintBacklogStatus.TODO),
-            SprintBacklogStatus.REVIEW, Set.of(SprintBacklogStatus.DONE, SprintBacklogStatus.BLOCKED, SprintBacklogStatus.IN_PROGRESS),
-            SprintBacklogStatus.BLOCKED, Set.of(SprintBacklogStatus.TODO, SprintBacklogStatus.IN_PROGRESS),
-            SprintBacklogStatus.DONE, Set.of(SprintBacklogStatus.IN_PROGRESS)
+            SprintBacklogStatus.TODO, Set.of(SprintBacklogStatus.IN_PROGRESS),
+            SprintBacklogStatus.IN_PROGRESS, Set.of(SprintBacklogStatus.REVIEW, SprintBacklogStatus.BLOCKED),
+            SprintBacklogStatus.REVIEW, Set.of(SprintBacklogStatus.DONE, SprintBacklogStatus.IN_PROGRESS),
+            SprintBacklogStatus.BLOCKED, Set.of(SprintBacklogStatus.IN_PROGRESS),
+            SprintBacklogStatus.DONE, Set.of()
     );
 
     static final String MILESTONE_NOT_FOUND_MESSAGE =
@@ -230,13 +230,6 @@ public class SprintBacklogServiceImpl
                 ? request.getEstimatedHours()
                 : backlog.getEstimatedHours();
 
-        SprintBacklogStatus requestedStatus = request.getStatus();
-        if (requestedStatus != null && requestedStatus != backlog.getStatus()
-                && !STATUS_TRANSITIONS.getOrDefault(backlog.getStatus(), Set.of()).contains(requestedStatus)) {
-            throw new SprintBacklogConflictException(
-                    "Workflow không cho phép chuyển từ " + backlog.getStatus() + " sang " + requestedStatus);
-        }
-
         Map<String, List<String>> errors = new LinkedHashMap<>();
 
         validateTitle(title, errors);
@@ -277,6 +270,13 @@ public class SprintBacklogServiceImpl
         );
 
         throwIfInvalid(errors);
+
+        SprintBacklogStatus requestedStatus = request.getStatus();
+        if (requestedStatus != null && requestedStatus != backlog.getStatus()
+                && !STATUS_TRANSITIONS.getOrDefault(backlog.getStatus(), Set.of()).contains(requestedStatus)) {
+            throw new SprintBacklogConflictException(
+                    "Workflow does not allow transition from " + backlog.getStatus() + " to " + requestedStatus);
+        }
 
         Map<String, Object> before = snapshot(backlog);
 
