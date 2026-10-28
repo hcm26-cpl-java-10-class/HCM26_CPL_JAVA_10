@@ -32,7 +32,6 @@ import type {
   TeamReadinessIssue,
   TeamRoleQuota,
   TeamRoleQuotaViolation,
-  TeamListResponse,
   TeamTemplateApiError,
   TransferTeamMemberRequest,
 } from "@/types/features/team-allocation";
@@ -341,7 +340,6 @@ export default function TeamAllocationPage() {
     Record<number, TeamTemplateApiError>
   >({});
   const saveKeyRef = useRef<{ fingerprint: string; key: string } | null>(null);
-  const publishKeyRef = useRef<{ fingerprint: string; key: string } | null>(null);
 
   const sessionId = session?.id ?? null;
   const sessionsQuery = useQuery({
@@ -1138,14 +1136,6 @@ export default function TeamAllocationPage() {
       }
       return next;
     });
-  };
-
-  const togglePublishTeam = (team: AllocationTeam) => {
-    if (publishMutation.isPending) return;
-    setPublishItemFailures([]);
-    setPublishFailure(null);
-    setPublishSuccess(null);
-    publishMutation.mutate([team.teamId]);
   };
 
   const nameForMember = (memberId: number) => {
@@ -2906,11 +2896,15 @@ function SavedTeamCard({
         ...member,
         roles: memberRolesOf(member),
       }))
-    : team.memberIds.map((memberId) => ({
-        memberId,
-        fullName: memberName(memberId),
-        roles: memberRoles[memberId] ?? ([`DEV`] as TeamMemberRole[]),
-      }));
+    : team.memberIds.map((memberId) => {
+        const member = memberOptions.find((option) => option.memberId === memberId);
+        return {
+          memberId,
+          fullName: member?.fullName ?? memberName(memberId),
+          userCode: member?.userCode ?? null,
+          roles: memberRoles[memberId] ?? ([`DEV`] as TeamMemberRole[]),
+        };
+      });
   const currentQuotaGaps = roleQuotaGaps(team, memberRoles);
   const mentorValue = team.assignedMentorId === null
     ? ""
