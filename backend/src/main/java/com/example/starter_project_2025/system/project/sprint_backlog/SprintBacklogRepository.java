@@ -13,6 +13,10 @@ import java.util.Optional;
 public interface SprintBacklogRepository extends BaseCrudRepository<SprintBacklog, Long> {
     boolean existsByMilestone_Id(java.util.UUID milestoneId);
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select item from SprintBacklog item where item.id = :id")
+    Optional<SprintBacklog> findForSubtaskUpdate(@Param("id") Long id);
+
     List<SprintBacklog> findBySprintIdOrderByIdAsc(Long sprintId);
 
     /**

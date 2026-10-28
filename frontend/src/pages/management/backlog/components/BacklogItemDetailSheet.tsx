@@ -52,6 +52,7 @@ import {
   backlogStatusMeta,
   backlogWorkTypeMeta,
 } from "../backlog.constants";
+import { BacklogSubtasksPanel } from "./BacklogSubtasksPanel";
 
 const NO_SPRINT = "none";
 const NO_MILESTONE = "none";
@@ -671,6 +672,10 @@ export function BacklogItemDetailSheet({
               >
                 {draft.description.length}/{MAX_DESCRIPTION_LENGTH} ký tự
               </p>
+            </div>
+
+            <div className="px-5 pb-5">
+              <BacklogSubtasksPanel key={item.id} backlogId={item.id} />
             </div>
 
             <div className="px-5 pb-8">

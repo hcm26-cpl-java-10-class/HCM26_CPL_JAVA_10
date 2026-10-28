@@ -1,5 +1,4 @@
 import { taskApi } from "@/api/features/task.api";
-import { taskAlertApi } from "@/api/features/task-alert.api";
 import { FieldError } from "@/components/datatable/modal/form/FieldError";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -18,7 +17,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import type { TaskDTO, TaskPayload, TaskPriority } from "@/types/features/task";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, FileText, Loader2, Save, SlidersHorizontal } from "lucide-react";
-import { useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   getTaskError,
@@ -35,9 +34,12 @@ import { TaskTagsInput } from "./TaskTagsInput";
 
 interface TaskFormProps {
   projectId: string;
+  backlogItemId: number;
+  assignees: { id: string; displayName: string }[];
   task?: TaskDTO;
   onSaved: (task: TaskDTO) => void;
   onCancel: () => void;
+  onBusyChange?: (busy: boolean) => void;
 }
 
 function TaskField({
@@ -67,7 +69,7 @@ function TaskField({
   );
 }
 
-export function TaskForm({ projectId, task, onSaved, onCancel }: TaskFormProps) {
+export function TaskForm({ projectId, backlogItemId, assignees, task, onSaved, onCancel, onBusyChange }: TaskFormProps) {
   const { user, activeRole } = usePermissions();
   const queryClient = useQueryClient();
   const [values, setValues] = useState<TaskFormValues>(() => toTaskFormValues(task));
@@ -82,18 +84,15 @@ export function TaskForm({ projectId, task, onSaved, onCancel }: TaskFormProps) 
     queryFn: () => taskApi.getTags(projectId),
     retry: false,
   });
-  const membersQuery = useQuery({
-    queryKey: ["task-alert-assignees", user.email, activeRole, projectId],
-    queryFn: ({ signal }) => taskAlertApi.assignees(projectId, signal),
-    retry: false, gcTime: 0,
-  });
+
 
   const saveMutation = useMutation({
     mutationFn: ({ payload, requestId }: { payload: TaskPayload; requestId: string }) =>
       task ? taskApi.update(task.id, payload, requestId) : taskApi.create(payload, requestId),
     onSuccess: (saved) => {
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      toast.success(task ? "Task updated successfully." : "Task created successfully.");
+      void queryClient.invalidateQueries({ queryKey: ["backlog-subtasks"] });
+      toast.success(task ? "Subtask updated successfully." : "Subtask created successfully.");
       onSaved(saved);
     },
     onError: (error) => {
@@ -105,6 +104,8 @@ export function TaskForm({ projectId, task, onSaved, onCancel }: TaskFormProps) 
       submittingRef.current = false;
     },
   });
+
+  useEffect(() => { onBusyChange?.(saveMutation.isPending); }, [onBusyChange, saveMutation.isPending]);
 
   const changeField = <K extends keyof TaskFormValues>(key: K, value: TaskFormValues[K]) => {
     setValues((current) => ({ ...current, [key]: value }));
@@ -127,7 +128,7 @@ export function TaskForm({ projectId, task, onSaved, onCancel }: TaskFormProps) 
       );
       return;
     }
-    const payload = toTaskPayload(submittedValues, projectId, task);
+    const payload = { ...toTaskPayload(submittedValues, projectId, task), backlogItemId };
     const fingerprint = JSON.stringify(payload);
     if (requestRef.current?.fingerprint !== fingerprint) {
       requestRef.current = { fingerprint, key: crypto.randomUUID() };
@@ -142,7 +143,7 @@ export function TaskForm({ projectId, task, onSaved, onCancel }: TaskFormProps) 
         <Alert variant="destructive">
           <AlertCircle />
           <AlertTitle>
-            {submitError.status === 409 ? "Data has changed" : "Unable to save task"}
+            {submitError.status === 409 ? "Data has changed" : "Unable to save subtask"}
           </AlertTitle>
           <AlertDescription>{submitError.message}</AlertDescription>
         </Alert>
@@ -154,12 +155,12 @@ export function TaskForm({ projectId, task, onSaved, onCancel }: TaskFormProps) 
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <FileText className="size-4 text-primary" /> Task details
+              <FileText className="size-4 text-primary" /> Subtask details
             </CardTitle>
             <CardDescription>Describe the task so the team can track the work.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-5">
-            <TaskField name="title" label="Task title" required errors={errors.title}>
+            <TaskField name="title" label="Subtask title" required errors={errors.title}>
               <Input
                 id="task-title"
                 autoFocus
@@ -229,22 +230,22 @@ export function TaskForm({ projectId, task, onSaved, onCancel }: TaskFormProps) 
             >
               <Select value={values.assigneeProjectMemberId || "unassigned"}
                 onValueChange={value => changeField("assigneeProjectMemberId", value === "unassigned" ? "" : value)}
-                disabled={membersQuery.isPending || membersQuery.isError}>
+                disabled={saveMutation.isPending}>
                 <SelectTrigger id="task-assigneeProjectMemberId" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="unassigned">Unassigned</SelectItem>
-                  {values.assigneeProjectMemberId && !membersQuery.data?.some(member => member.id === values.assigneeProjectMemberId) && (
+                  {values.assigneeProjectMemberId && !assignees.some(member => member.id === values.assigneeProjectMemberId) && (
                     <SelectItem value={values.assigneeProjectMemberId}>
                       Member {values.assigneeProjectMemberId.slice(0, 8)}
                     </SelectItem>
                   )}
-                  {membersQuery.data?.map(member => <SelectItem key={member.id} value={member.id}>{member.displayName}</SelectItem>)}
+                  {assignees.map(member => <SelectItem key={member.id} value={member.id}>{member.displayName}</SelectItem>)}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                {membersQuery.isError ? "Project members are unavailable." : membersQuery.isPending ? "Loading project members..." : "Select an active project member."}
+                Select an active team member.
               </p>
             </TaskField>
             <TaskField name="deadline" label="Deadline (local time)" errors={errors.deadline}>
@@ -315,7 +316,7 @@ export function TaskForm({ projectId, task, onSaved, onCancel }: TaskFormProps) 
           ) : (
             <Save className="size-4" />
           )}
-          {saveMutation.isPending ? "Saving..." : "Save task"}
+          {saveMutation.isPending ? "Saving..." : "Save subtask"}
         </Button>
       </div>
     </form>

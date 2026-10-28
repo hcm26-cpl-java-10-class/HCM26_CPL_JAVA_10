@@ -18,20 +18,6 @@ function activityDescription(activity: TaskActivityDTO): string {
       taskStatusOptions.find((option) => option.value === activity.after.status)?.label ?? "";
     return `Changed status: ${before} → ${after}`;
   }
-  const before = activity.before?.predecessorTaskIds ?? [];
-  const after = activity.after.predecessorTaskIds ?? [];
-  if (activity.action === "DEPENDENCY_ADDED") {
-    return `Added prerequisite: ${after
-      .filter((id) => !before.includes(id))
-      .map((id) => id.slice(0, 8).toUpperCase())
-      .join(", ")}`;
-  }
-  if (activity.action === "DEPENDENCY_REMOVED") {
-    return `Removed prerequisite: ${before
-      .filter((id) => !after.includes(id))
-      .map((id) => id.slice(0, 8).toUpperCase())
-      .join(", ")}`;
-  }
   return "Updated task";
 }
 

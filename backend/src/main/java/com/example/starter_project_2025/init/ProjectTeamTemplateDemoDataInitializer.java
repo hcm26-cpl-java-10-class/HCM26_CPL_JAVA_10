@@ -4,9 +4,6 @@ import com.example.starter_project_2025.system.project.ProjectMemberRole;
 import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
 import com.example.starter_project_2025.system.project.template.ProjectTemplateLevel;
-import com.example.starter_project_2025.system.project.template.artifact.TemplateArtifactRequirement;
-import com.example.starter_project_2025.system.project.template.artifact.TemplateArtifactRequirementRepository;
-import com.example.starter_project_2025.system.project.template.artifact.TemplateArtifactType;
 import com.example.starter_project_2025.system.project.template.backlog.TemplateBacklogItem;
 import com.example.starter_project_2025.system.project.template.backlog.TemplateBacklogItemRepository;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestone;
@@ -17,7 +14,6 @@ import com.example.starter_project_2025.system.project.template.milestone.Templa
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -117,7 +113,6 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
     private final ProjectTemplateRepository projectTemplateRepository;
     private final TemplateMilestoneRepository templateMilestones;
     private final TemplateBacklogItemRepository templateBacklogItems;
-    private final TemplateArtifactRequirementRepository templateArtifacts;
 
     @Override
     @Transactional
@@ -185,7 +180,7 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
     /**
      * US-13 sample brief content: the assignment flow copies exactly this data
      * into the project snapshot and from there into milestones, sprint backlog
-     * and artifact requirements. Idempotent: a template that already owns
+     * items. Idempotent: a template that already owns
      * milestone rows is left untouched.
      */
     private void seedBriefContent(ProjectTemplate template) {
@@ -219,7 +214,7 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
                 List.of("Tài liệu hướng dẫn sử dụng", "Buổi demo với mentor"),
                 List.of("Mức độ hoàn thiện", "Tài liệu và thuyết trình")));
 
-        List<TemplateMilestone> saved = templateMilestones.saveAllAndFlush(plan);
+        templateMilestones.saveAllAndFlush(plan);
 
         List<TemplateBacklogItem> backlog = List.of(
                 backlogItem(template, "Phân tích yêu cầu & phạm vi",
@@ -234,19 +229,6 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
                         "Kiểm thử hồi quy, tài liệu bàn giao và kịch bản demo.", ProjectMemberRole.QA, 4));
         templateBacklogItems.saveAllAndFlush(backlog);
 
-        if (!saved.isEmpty()) {
-            List<TemplateArtifactRequirement> artifacts = List.of(
-                    artifact(template, saved.get(Math.min(1, saved.size() - 1)),
-                            "Báo cáo tiến độ giai đoạn 1", "Báo cáo PDF mô tả phạm vi và tiến độ.",
-                            TemplateArtifactType.FILE, Set.of("application/pdf"), 0),
-                    artifact(template, saved.get(saved.size() - 1),
-                            "Kho mã nguồn & bản demo", "Liên kết repository và bản demo deploy.",
-                            TemplateArtifactType.URL, Set.of(), 1));
-            templateArtifacts.saveAllAndFlush(artifacts);
-        }
-
-        log.info("US-13 brief content ensured for template {} ({} milestones, {} backlog items).",
-                template.getId(), saved.size(), backlog.size());
     }
 
     private TemplateMilestone milestone(ProjectTemplate template,
@@ -309,25 +291,6 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
         item.setSuggestedRole(suggestedRole);
         item.setOrderIndex(orderIndex);
         return item;
-    }
-
-    private TemplateArtifactRequirement artifact(ProjectTemplate template,
-                                                 TemplateMilestone milestone,
-                                                 String title,
-                                                 String description,
-                                                 TemplateArtifactType type,
-                                                 Set<String> allowedMimeTypes,
-                                                 int orderIndex) {
-
-        TemplateArtifactRequirement requirement = new TemplateArtifactRequirement();
-        requirement.setTemplate(template);
-        requirement.setMilestone(milestone);
-        requirement.setTitle(title);
-        requirement.setDescription(description);
-        requirement.setType(type);
-        requirement.setAllowedMimeTypes(new java.util.LinkedHashSet<>(allowedMimeTypes));
-        requirement.setOrderIndex(orderIndex);
-        return requirement;
     }
 
     private record TemplateSeed(

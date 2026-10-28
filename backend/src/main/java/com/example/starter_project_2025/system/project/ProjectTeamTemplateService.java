@@ -5,18 +5,22 @@ import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
 import com.example.starter_project_2025.system.project.trainingclass.ScopeAuthorizationService;
-import com.example.starter_project_2025.system.project.template.assignment.TemplateAssignmentProvisioningService;
+import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
 import com.example.starter_project_2025.web.CorrelationIdFilter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.MDC;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,7 +60,6 @@ public class ProjectTeamTemplateService {
     private final ProjectTeamAuditRepository auditRepository;
     private final ProjectTeamOutboxRepository outboxRepository;
     private final ScopeAuthorizationService scopeAuthorizationService;
-    private final TemplateAssignmentProvisioningService provisioningService;
     private final ObjectMapper objectMapper;
 
     // ------------------------------------------------------------------
@@ -70,8 +73,13 @@ public class ProjectTeamTemplateService {
      */
     @Transactional(readOnly = true)
     public List<ProjectTemplateOptionResponse> getAssignableTemplates() {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        currentUserId(authentication);
+        Long tenantId = ((UserPrincipal) authentication.getPrincipal()).getUser().getTenantId();
         return projectTemplateRepository.findAll().stream()
                 .filter(template -> Boolean.TRUE.equals(template.getIsActive()))
+                .filter(template -> template.getStatus() == ProjectTemplateStatus.ACTIVE)
+                .filter(template -> template.getTenantId() == null || template.getTenantId().equals(tenantId))
                 .sorted(Comparator.comparing(
                         template -> template.getName() == null ? "" : template.getName()))
                 .map(this::toOption)
@@ -140,7 +148,7 @@ public class ProjectTeamTemplateService {
         ProjectTeam team = teamRepository.findByIdAndAllocationSession_Id(teamId, sessionId)
                 .orElseThrow(() -> new ResourceNotFoundException("ProjectTeam", "id", teamId));
 
-        ProjectTemplate template = findActiveTemplate(projectTemplateId);
+        ProjectTemplate template = findActiveTemplate(projectTemplateId, team.getTrainingClass().getTenantId());
         return applyAssignment(team, template, currentUserId(authentication));
     }
 
@@ -167,7 +175,7 @@ public class ProjectTeamTemplateService {
                     "Chỉ Trưởng nhóm (vai trò PM) của nhóm mới được gán đề bài.");
         }
 
-        ProjectTemplate template = findActiveTemplate(projectTemplateId);
+        ProjectTemplate template = findActiveTemplate(projectTemplateId, team.getTrainingClass().getTenantId());
         return applyAssignment(team, template, userId);
     }
 
@@ -182,6 +190,10 @@ public class ProjectTeamTemplateService {
     ) {
         if (team.getStatus() != ProjectTeamStatus.DRAFT) {
             throw new TeamNotDraftException(team.getId(), team.getStatus());
+        }
+        if (team.getProject() != null && !Objects.equals(team.getProjectTemplateId(), template.getId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "This team already has a project. Its assigned project brief cannot be changed");
         }
 
         ProjectTemplateConstraints.Capacity capacity =
@@ -210,11 +222,6 @@ public class ProjectTeamTemplateService {
         if (correlationId == null || correlationId.isBlank()) {
             correlationId = UUID.randomUUID().toString();
         }
-
-        // US-13: assigning the brief also activates the workspace creation flow:
-        // snapshot the active template version, insert the project silently and
-        // fan the brief out into workspace components.
-        provisioningService.provision(team, template, actorId, correlationId);
 
         TeamTemplateAuditState before = new TeamTemplateAuditState(
                 team.getId(),
@@ -256,11 +263,13 @@ public class ProjectTeamTemplateService {
         return toTeamResponse(team);
     }
 
-    private ProjectTemplate findActiveTemplate(Long projectTemplateId) {
+    private ProjectTemplate findActiveTemplate(Long projectTemplateId, Long tenantId) {
         if (projectTemplateId == null) {
             throw new BadRequestException("projectTemplateId is required");
         }
         return projectTemplateRepository.findByIdAndIsActiveTrue(projectTemplateId)
+                .filter(template -> template.getStatus() == ProjectTemplateStatus.ACTIVE)
+                .filter(template -> template.getTenantId() == null || template.getTenantId().equals(tenantId))
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Active ProjectTemplate", "id", projectTemplateId));
     }

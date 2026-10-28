@@ -1,9 +1,8 @@
 package com.example.starter_project_2025.system.project.task;
 
-import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import com.example.starter_project_2025.system.project.task.tag.Tag;
-import com.example.starter_project_2025.system.project.task.dependency.TaskDependency;
+import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklog;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -16,7 +15,9 @@ import java.util.Set;
 import java.util.UUID;
 
 @Entity(name = "ProjectTask")
-@Table(name = "task", indexes = @Index(name = "idx_task_project", columnList = "project_id"))
+@Table(name = "task", indexes = {
+        @Index(name = "idx_task_project", columnList = "project_id"),
+        @Index(name = "idx_task_backlog", columnList = "backlog_item_id")})
 @Getter
 @Setter
 @Builder
@@ -24,8 +25,6 @@ import java.util.UUID;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ResourcePermission("TASK")
-@ResourceMenu(title = "Tasks", group = "Project Management", icon = "clipboard-check",
-        url = "/tasks", order = 2, permission = "TASK_READ")
 public class Task {
 
     @Id
@@ -35,6 +34,10 @@ public class Task {
 
     @Column(name = "project_id", nullable = false, updatable = false)
     UUID projectId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "backlog_item_id", updatable = false)
+    SprintBacklog backlogItem;
 
     @Column(name = "sprint_id")
     UUID sprintId;
@@ -72,10 +75,6 @@ public class Task {
     @JoinTable(name = "task_tag", joinColumns = @JoinColumn(name = "task_id"),
             inverseJoinColumns = @JoinColumn(name = "tag_id"))
     Set<Tag> tags = new LinkedHashSet<>();
-
-    @Builder.Default
-    @OneToMany(mappedBy = "successorTask")
-    Set<TaskDependency> incomingDependencies = new LinkedHashSet<>();
 
     @Version
     @Column(nullable = false)

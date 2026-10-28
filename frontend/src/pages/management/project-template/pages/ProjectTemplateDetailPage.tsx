@@ -102,7 +102,7 @@ export function ProjectTemplateDetailPage() {
                   <TabsTrigger value="overview" className="h-full min-h-9 whitespace-normal">Overview</TabsTrigger>
                   <TabsTrigger value="team-constraints" className="h-full min-h-9 whitespace-normal">Team constraints</TabsTrigger>
                   <TabsTrigger value="milestones" className="h-full min-h-9 whitespace-normal">Milestones</TabsTrigger>
-                  <TabsTrigger value="sample-content" className="h-full min-h-9 whitespace-normal">Backlog &amp; artifacts</TabsTrigger>
+                  <TabsTrigger value="sample-content" className="h-full min-h-9 whitespace-normal">Backlog</TabsTrigger>
                   <TabsTrigger value="versions" className="h-full min-h-9 whitespace-normal">Versions</TabsTrigger>
                 </TabsList>
                 <TabsContent value="overview">
