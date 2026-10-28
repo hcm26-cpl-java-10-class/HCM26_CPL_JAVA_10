@@ -33,7 +33,8 @@ public class UserDTO extends BaseDTO {
     @Size(max = 500, groups = {OnCreate.class, OnUpdate.class}, message = "Description must not exceed 500 characters")
     String description;
 
-    /** Strength is checked by PasswordPolicy in UserServiceImpl. Blank on update = keep the current password. */
+    /** Initial password set by the administrator (no email is sent). Strength is checked by PasswordPolicy. Blank on update = keep the current password. */
+    @NotBlank(groups = OnCreate.class, message = "Password is required")
     @JsonProperty(access = WRITE_ONLY)
     String password;
 

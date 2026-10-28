@@ -30,6 +30,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -51,6 +52,7 @@ public class AuthServiceImpl implements AuthService {
     UserRepository userRepository;
     RoleRepository roleRepository;
     PasswordEncoder passwordEncoder;
+    SsoAccessPolicy ssoAccessPolicy;
 
     @Override
     public AuthenticationResponse login(LoginRequest request) {
@@ -63,6 +65,21 @@ public class AuthServiceImpl implements AuthService {
 
         UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
 
+        // Temporary password (for example from an Excel import): the password was right, but the account
+        // can only be used after its owner chooses their own. No access or refresh token is issued, so the
+        // temporary password cannot be used to call the API; the user only gets a short-lived token to set
+        // the new password on the existing reset-password page.
+        if (Boolean.TRUE.equals(principal.getUser().getMustChangePassword())) {
+            String setupToken = oneTimeTokenService.createOneTimeToken(
+                    principal.getUser(), OneTimeToken.TokenType.RESET_PASSWORD, Duration.ofMinutes(30));
+
+            return AuthenticationResponse.builder()
+                    .email(principal.getUser().getEmail())
+                    .passwordChangeRequired(true)
+                    .setupToken(setupToken)
+                    .build();
+        }
+
         refreshTokenService.revokeAllRefreshTokens(principal.getUser().getId());
 
         String accessToken = refreshTokenService.generateAccessToken(authentication);
@@ -73,19 +90,24 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public AuthenticationResponse loginWithGoogle(String email, String firstName, String lastName) {
+    public AuthenticationResponse loginWithGoogle(String email, boolean emailVerified, String firstName, String lastName) {
         if (!StringUtils.hasText(email)) {
-            throw new BadRequestException("Google account email is required");
+            throw new SsoLoginException(SsoLoginException.AUTH_FAILED, "Google account email is required");
         }
 
-        User user = userRepository.findByEmail(email)
-                .orElseGet(() -> createGoogleUser(email, firstName, lastName));
+        ssoAccessPolicy.checkEmail(email, emailVerified);
 
-        if (Boolean.TRUE.equals(user.getLocked())) {
-            throw new org.springframework.security.authentication.LockedException(
-                    "Account is locked"
-            );
+        // Only accounts that already exist may sign in (imported or created by an administrator),
+        // unless app.sso.auto-create-users=true.
+        User user = userRepository.findByEmailIgnoreCase(email).orElse(null);
+        if (user == null) {
+            if (!ssoAccessPolicy.autoCreateUsers()) {
+                throw ssoAccessPolicy.notRegistered(email);
+            }
+            user = createGoogleUser(email, firstName, lastName);
         }
+
+        ssoAccessPolicy.checkAccount(user);
 
         user = updateUserFromGoogleProfile(user, firstName, lastName);
 
@@ -191,7 +213,13 @@ public class AuthServiceImpl implements AuthService {
             throw new BadRequestException(passwordProblem);
         }
 
+        // The new password must really be new (for example not the temporary one it replaces).
+        if (passwordEncoder.matches(request.newPassword(), user.getPasswordHash())) {
+            throw new BadRequestException("The new password must be different from the current password.");
+        }
+
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        user.setMustChangePassword(false);
         userRepository.save(user);
 
         refreshTokenService.revokeAllRefreshTokens(user.getId());

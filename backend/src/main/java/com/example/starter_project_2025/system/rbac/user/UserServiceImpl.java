@@ -1,9 +1,12 @@
 package com.example.starter_project_2025.system.rbac.user;
 
+import com.example.starter_project_2025.base.crud.CrudAction;
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.exception.BadRequestException;
+import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.auth.token.onetime.OneTimeTokenRepository;
 import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenRepository;
 import com.example.starter_project_2025.system.auth.util.PasswordPolicy;
@@ -42,7 +45,6 @@ public class UserServiceImpl
     OneTimeTokenRepository oneTimeTokenRepository;
     CourseEnrollmentRepository courseEnrollmentRepository;
     PasswordEncoder passwordEncoder;
-    AccountMailService accountMailService;
 
     @Override
     protected BaseCrudRepository<User, Long> getRepository() {
@@ -68,7 +70,12 @@ public class UserServiceImpl
         validatePhone(request.getPhone(), ctx);
         validateRoles(request.getRoleIds(), ctx);
         validateDepartments(request.getDepartmentIds(), ctx);
-        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+
+        // No email is sent when an account is created, so the administrator sets the initial password
+        // and hands it to the person.
+        if (request.getPassword() == null || request.getPassword().isBlank()) {
+            ctx.add("password", "Password is required");
+        } else {
             validatePassword(request.getPassword(), ctx);
         }
 
@@ -76,25 +83,12 @@ public class UserServiceImpl
         user.setPhone(request.getPhone());
         user.setDescription(request.getDescription());
 
-        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+        if (!ctx.hasErrors()) {
             user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-            user.setIsActive(true);
-        } else {
-            user.setPasswordHash(passwordEncoder.encode(UUID.randomUUID() + "Aa1!"));
-            user.setIsActive(false);
         }
 
         user.setRoles(getRoles(request.getRoleIds()));
         user.setDepartments(getDepartments(request.getDepartmentIds()));
-    }
-
-    @Override
-    protected void afterCreate(User user, UserDTO request) {
-        if (request.getPassword() != null && !request.getPassword().isBlank()) {
-            accountMailService.sendAccountCreatedNotification(user);
-        } else {
-            accountMailService.sendSetPasswordInvitation(user);
-        }
     }
 
     @Override
@@ -128,6 +122,7 @@ public class UserServiceImpl
 
         if (request.getPassword() != null) {
             user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+            user.setMustChangePassword(false);
         }
 
         if (request.getRoleIds() != null) {

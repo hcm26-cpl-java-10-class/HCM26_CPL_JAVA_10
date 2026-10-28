@@ -80,7 +80,7 @@ const userSchema: EntitySchema = {
         requiredOnCreate: true,
         maxLength: 64,
         passwordRules: true,
-        hint: "Leave blank when editing to keep the current password.",
+        hint: "No email is sent: give this initial password to the user. When editing, leave blank to keep the current password.",
         validate: (value) =>
           value ? validatePasswordStrength(String(value)) : undefined,
       },

@@ -2,7 +2,7 @@ import { authApi } from "@/api/features/auth.api";
 import { ForgotEmailForm } from "@/components/auth/ForgotEmailForm";
 import { ResetPasswordForm } from "@/components/auth/ResetPasswordForm";
 import type { ForgotPasswordEmailRequest, ResetPasswordData } from "@/types/features/auth";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -12,6 +12,13 @@ export default function ForgotPasswordPage() {
     const token = searchParams.get("token");
     const navigator = useNavigate();
     const [loading, setLoading] = useState(false);
+    const firstSignIn = searchParams.get("first") === "1";
+
+    useEffect(() => {
+        if (token && firstSignIn) {
+            toast.info("This is your first sign-in. Please create your own password to continue.");
+        }
+    }, [token, firstSignIn]);
 
     const onForgotPasswordSubmit = async (data: ForgotPasswordEmailRequest) => {
         setLoading(true);
@@ -37,7 +44,7 @@ export default function ForgotPasswordPage() {
                 token,
                 newPassword: data.password,
             });
-            toast.success("Password reset successful!");
+            toast.success(firstSignIn ? "Password created. You can sign in now." : "Password reset successful!");
             navigator("/login");
         } catch (error: any) {
             toast.error(error.response?.data?.message || "Password reset failed");

@@ -7,7 +7,7 @@ import { motion } from "motion/react";
 import { FcGoogle } from "react-icons/fc";
 import { useDispatch } from "react-redux";
 import { setLogin } from "@/store/slices/auth/authSlice";
-import { authApi } from "@/api/features/auth.api";
+import { authApi, PasswordChangeRequiredError } from "@/api/features/auth.api";
 import axios from "axios";
 import { Eye, EyeOff } from "lucide-react";
 import { getHomePathByRole } from "@/utils/rbac.utils";
@@ -26,6 +26,16 @@ const getOAuthErrorMessage = (errorParam: string | null): string => {
     switch (errorParam) {
         case "google_auth_failed":
             return "Google sign-in failed. Please try again.";
+        case "google_not_registered":
+            return "This Google account is not registered in the system. Ask an administrator to add your email address.";
+        case "google_email_unverified":
+            return "Your Google email address is not verified, so it cannot be used to sign in.";
+        case "google_domain_not_allowed":
+            return "Accounts with this email domain are not allowed to sign in.";
+        case "google_account_disabled":
+            return "Your account is inactive. Contact an administrator.";
+        case "google_account_locked":
+            return "Your account is locked. Contact an administrator.";
         case "google_token_missing":
             return "Google sign-in did not return an access token.";
         case "google_token_invalid":
@@ -66,6 +76,11 @@ export const Login: React.FC = () => {
             dispatch(setLogin(res));
             navigate(getHomePathByRole(res.role), { replace: true });
         } catch (err) {
+            if (err instanceof PasswordChangeRequiredError) {
+                // First sign-in with a temporary password: choose your own password first.
+                navigate(`/forgot-password?token=${encodeURIComponent(err.setupToken)}&first=1`, { replace: true });
+                return;
+            }
             if (axios.isAxiosError(err)) {
                 const backendMsg = err.response?.data?.message;
 
@@ -204,6 +219,8 @@ export const Login: React.FC = () => {
                     </p>
                 </div>
 
+                {/* Test accounts are shown only while developing; a production build never lists passwords. */}
+                {import.meta.env.DEV && (
                 <div className="mt-8 pt-6 border-t border-dashed">
                     <p className="text-xs font-semibold uppercase text-muted-foreground mb-3">(Test Only):</p>
                     <div className="space-y-2 text-sm bg-muted/50 p-3 rounded-lg border">
@@ -221,6 +238,7 @@ export const Login: React.FC = () => {
                         </p>
                     </div>
                 </div>
+                )}
             </motion.div>
         </div>
     );

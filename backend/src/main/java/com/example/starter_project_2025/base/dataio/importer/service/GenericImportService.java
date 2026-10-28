@@ -43,43 +43,61 @@ public class GenericImportService implements ImportService {
 
             ImportHandler<T> handler = findHandler(entityClass);
 
-            int rowIndex = 2;
+            if (handler != null) {
+                handler.beforeImport(rows);
+            }
 
-            for (Map<String, String> row : rows) {
+            try {
+                int rowIndex = 2;
 
-                try {
-                    if (handler != null && handler.shouldSkip(row)) {
-                        result.setSkippedCount(result.getSkippedCount() + 1);
-                        rowIndex++;
-                        continue;
+                for (Map<String, String> row : rows) {
+
+                    rowIndex = FileParser.rowNumberOf(row, rowIndex);
+
+                    try {
+                        if (handler != null && handler.shouldSkip(row)) {
+                            result.setSkippedCount(result.getSkippedCount() + 1);
+                            rowIndex++;
+                            continue;
+                        }
+
+                        T entity = handler != null
+                                ? handler.resolveExisting(row).orElse(null)
+                                : null;
+
+                        if (entity == null) {
+                            entity = mapper.map(row, entityClass);
+                        }
+
+                        if (handler != null) {
+                            handler.beforeSave(entity, row);
+                        }
+
+                        applyHash(entity);
+
+                        repository.save(entity);
+
+                        result.setSuccessCount(result.getSuccessCount() + 1);
+
+                        if (handler != null) {
+                            handler.afterSave(entity, row, rowIndex, result);
+                        }
+
+                    } catch (Exception e) {
+
+                        result.getErrors().add(
+                                new RowError(rowIndex, e.getMessage()));
+
+                        result.setFailureCount(result.getFailureCount() + 1);
                     }
 
-                    T entity = mapper.map(row, entityClass);
-
-                    if (handler != null) {
-                        entity = handler.mergeExisting(entity, row);
-                        handler.beforeSave(entity, row);
-                    }
-
-                    applyHash(entity);
-
-                    repository.save(entity);
-
-                    result.setSuccessCount(result.getSuccessCount() + 1);
-
-                    if (handler != null) {
-                        handler.afterSave(entity, row, rowIndex, result);
-                    }
-
-                } catch (Exception e) {
-
-                    result.getErrors().add(
-                            new RowError(rowIndex, e.getMessage()));
-
-                    result.setFailureCount(result.getFailureCount() + 1);
+                    rowIndex++;
                 }
 
-                rowIndex++;
+            } finally {
+                if (handler != null) {
+                    handler.afterImport();
+                }
             }
 
         } catch (Exception e) {

@@ -14,7 +14,10 @@ public class ImportResult {
     int successCount;
     int failureCount;
 
-    /** Rows skipped because the record already exists. */
+    /** Existing records that were changed by the import (for users: their password was updated). */
+    int updatedCount;
+
+    /** Rows skipped because nothing needed to change (for users: existing account, no password given). */
     int skippedCount;
 
     /** Notification emails sent for newly created records. */
@@ -22,5 +25,12 @@ public class ImportResult {
 
     /** Notification emails that could not be sent (the records were still created). */
     int emailsFailed;
+
+    /** Notification emails not sent because the per-import email limit was reached. */
+    int emailsSkipped;
+
+    /** Temporary passwords generated for rows that had none. Shown once to the person who imported. */
+    List<GeneratedCredential> credentials = new ArrayList<>();
+
     List<RowError> errors = new ArrayList<>();
 }
