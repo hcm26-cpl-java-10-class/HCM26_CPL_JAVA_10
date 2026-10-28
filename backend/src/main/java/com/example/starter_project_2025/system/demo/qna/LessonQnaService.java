@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -43,7 +44,7 @@ import java.util.stream.Collectors;
 public class LessonQnaService {
 
     static final int MAX_PAGE_SIZE = 50;
-    static final int MAX_CONTENT_LENGTH = 2000;
+    static final int MAX_CONTENT_LENGTH = QnaContentPolicy.MAX_LENGTH;
 
     private final LessonQuestionRepository questionRepository;
     private final LessonAnswerRepository answerRepository;
@@ -52,6 +53,7 @@ public class LessonQnaService {
     private final CourseEnrollmentRepository enrollmentRepository;
     private final CourseContentAccessGuard accessGuard;
     private final ApplicationEventPublisher eventPublisher;
+    private final QnaRateLimiter rateLimiter;
 
     /** Người đang gọi API. */
     public record Viewer(Long userId, boolean administrator) {
@@ -97,10 +99,13 @@ public class LessonQnaService {
         Access access = requireAccess(viewer, lessonId);
         User author = requireUser(viewer);
 
+        String text = QnaContentPolicy.normalize(content);
+        rateLimiter.checkCanAsk(author.getId(), lessonId, text, LocalDateTime.now());
+
         LessonQuestion question = questionRepository.save(LessonQuestion.builder()
                 .lesson(access.lesson())
                 .author(author)
-                .content(normalize(content))
+                .content(text)
                 .build());
 
         publishQuestionPosted(access, author, question);
@@ -120,7 +125,7 @@ public class LessonQnaService {
                     HttpStatus.BAD_REQUEST, "A question that already has answers can no longer be edited");
         }
 
-        question.setContent(normalize(content));
+        question.setContent(QnaContentPolicy.normalize(content));
         LessonQuestion saved = questionRepository.save(question);
         return toDto(saved, List.of(), viewer, access);
     }
@@ -150,7 +155,7 @@ public class LessonQnaService {
         LessonAnswer answer = answerRepository.save(LessonAnswer.builder()
                 .question(question)
                 .author(author)
-                .content(normalize(content))
+                .content(QnaContentPolicy.normalize(content))
                 .build());
 
         publishQuestionAnswered(access, author, question, answer);
@@ -169,7 +174,7 @@ public class LessonQnaService {
             throw forbidden("You can only edit your own answers");
         }
 
-        answer.setContent(normalize(content));
+        answer.setContent(QnaContentPolicy.normalize(content));
         answerRepository.save(answer);
         return reload(question, viewer, access);
     }
@@ -330,18 +335,6 @@ public class LessonQnaService {
 
     private static boolean isAuthor(User author, Viewer viewer) {
         return author != null && author.getId() != null && author.getId().equals(viewer.userId());
-    }
-
-    private static String normalize(String content) {
-        String text = content == null ? "" : content.strip();
-        if (text.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Content must not be blank");
-        }
-        if (text.length() > MAX_CONTENT_LENGTH) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "Content must not exceed " + MAX_CONTENT_LENGTH + " characters");
-        }
-        return text;
     }
 
     private static Pageable sanitize(Pageable pageable) {

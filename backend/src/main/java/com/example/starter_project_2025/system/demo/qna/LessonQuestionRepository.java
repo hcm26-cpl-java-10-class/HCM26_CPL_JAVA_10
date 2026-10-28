@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,6 +21,15 @@ public interface LessonQuestionRepository extends BaseCrudRepository<LessonQuest
 
     @EntityGraph(attributePaths = "author")
     Optional<LessonQuestion> findByIdAndLesson_Id(Long id, Long lessonId);
+
+    /** Câu hỏi gần nhất của một người (dùng cho cooldown). */
+    Optional<LessonQuestion> findFirstByAuthor_IdOrderByCreatedAtDescIdDesc(Long authorId);
+
+    /** Số câu hỏi của một người từ một mốc thời gian (dùng cho trần theo ngày). */
+    long countByAuthor_IdAndCreatedAtAfter(Long authorId, LocalDateTime since);
+
+    /** Đã hỏi đúng nội dung này ở bài học này chưa (không phân biệt hoa thường). */
+    boolean existsByLesson_IdAndAuthor_IdAndContentIgnoreCase(Long lessonId, Long authorId, String content);
 
     /**
      * Truy vấn động bằng {@link QnaSpecifications} (tìm kiếm trong bài học, danh sách chưa trả lời).
