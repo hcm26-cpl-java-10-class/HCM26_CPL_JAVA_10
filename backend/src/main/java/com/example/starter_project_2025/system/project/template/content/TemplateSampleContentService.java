@@ -39,7 +39,9 @@ public class TemplateSampleContentService {
 
     public TemplateSampleContentResponse get(Long id) {
         User user = access.requireUser("READ");
-        return load(findTemplate(id, user), access.can(user, "UPDATE"));
+        ProjectTemplate template = findReadableTemplate(id, user);
+        // Shared (tenant_id == null) templates are view-only.
+        return load(template, access.can(user, "UPDATE") && template.getTenantId() != null);
     }
 
     public ProjectTemplate requireDraft(Long id) {
@@ -144,6 +146,12 @@ public class TemplateSampleContentService {
 
     private ProjectTemplate findTemplate(Long id, User user) {
         return templates.findByIdAndTenantIdAndIsActiveTrue(id, user.getTenantId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project template was not found"));
+    }
+
+    /** Read-only: also resolves the shared catalogue ({@code tenant_id is null}). */
+    private ProjectTemplate findReadableTemplate(Long id, User user) {
+        return templates.findReadableById(id, user.getTenantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project template was not found"));
     }
 
