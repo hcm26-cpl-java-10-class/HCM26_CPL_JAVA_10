@@ -164,6 +164,10 @@ public class RubricService {
         UUID actorId = actorProvider.requireCurrentActorId();
         Instant now = milestoneClock.instant();
         rubric.updateMetadata(name, request.description(), actorId, now);
+        // Remove the old rows before inserting replacements with the same
+        // (rubric_version_id, code) or (rubric_version_id, order_index).
+        version.clearDraftCriteria();
+        versionRepository.flush();
         version.replaceDraft(name, request.description(), values(request.criteria()), actorId, now);
         rubricRepository.saveAndFlush(rubric);
         return toDetail(rubric);

@@ -31,10 +31,14 @@ public class RubricExceptionHandler {
         return response(HttpStatus.UNPROCESSABLE_ENTITY, "VALIDATION_FAILED", "Rubric data is invalid", ex.getErrors());
     }
 
-    @ExceptionHandler({RubricConflictException.class, OptimisticLockingFailureException.class,
-            DataIntegrityViolationException.class})
+    @ExceptionHandler({RubricConflictException.class, OptimisticLockingFailureException.class})
     ResponseEntity<RubricErrorResponse> conflict(RuntimeException ex) {
         return response(HttpStatus.CONFLICT, "CONFLICT", ex.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    ResponseEntity<RubricErrorResponse> constraintConflict(DataIntegrityViolationException ex) {
+        return response(HttpStatus.CONFLICT, "CONFLICT", "Rubric data conflicts with an existing value", Map.of());
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
