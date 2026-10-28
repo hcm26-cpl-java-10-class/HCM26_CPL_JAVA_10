@@ -243,8 +243,6 @@ export interface ProjectTemplateDTO {
   createdAt: string;
   updatedAt: string;
   editable: boolean;
-  /** Shared catalogue row (tenant_id is null): readable by every tenant, never editable. */
-  readOnly: boolean;
 }
 
 export interface ProjectTemplatePayload {

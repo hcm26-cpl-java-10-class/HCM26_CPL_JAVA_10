@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.math.*;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.*;
@@ -38,9 +39,9 @@ public class ProjectAlertService {
     private final ObjectMapper json;
     private final Validator validator;
     private final EntityManager em;
+    private final ProjectAlertArtifactReadStore artifacts;
     private final ProjectRepository projects;
-    private final ProjectAlertMilestonePolicy milestonePolicy;
-    private final ProjectAlertMonitor monitor;
+    private final ProjectAlertMemberProgress memberProgress;
     private final ProjectAlertWorkResults workResults;
     @Autowired @Qualifier("memberReminderClock") private Clock clock;
     @Value("${app.project-alerts.time-zone:Asia/Ho_Chi_Minh}") private String timeZone;
@@ -52,7 +53,7 @@ public class ProjectAlertService {
             permissions.put(kind.name()+"_READ",access.has(actor,access.readPermission(kind)));
             permissions.put(kind.name()+"_SEND",access.has(actor,access.readPermission(kind))&&access.has(actor,access.sendPermission(kind)));
         }
-
+        permissions.put("MILESTONE_CONFIGURE",canConfigure(actor));
         var allowed=access.allowed(actor);
         return new Options(allowed.stream().map(access::describe).toList(),permissions,timeZone,
                 reminderSettings.inactiveWindow().toHours(),reminderSettings.cooldown().toSeconds(),access.classOptions(actor,allowed));
@@ -61,8 +62,7 @@ public class ProjectAlertService {
         User actor=read(Kind.BACKLOG);Instant now=clock.instant();
         var scope=store.load(access.filter(actor,filter).stream().filter(access::monitoring).toList());
         var rows=scope.items().stream().filter(this::unfinished)
-                .filter(item->deadline(item)!=null&&deadline(item).isBefore(now))
-                .filter(item->!"UPCOMING".equals(filter.deadlineStatus()))
+                .filter(item->inWindow(deadline(item),now,filter))
                 .map(item->backlogRow(actor,scope,item,now))
                 .sorted(Comparator.comparing(BacklogRow::deadline).thenComparing(BacklogRow::id)).toList();
         return page(rows,filter,now);
@@ -70,9 +70,11 @@ public class ProjectAlertService {
     public Page<MilestoneRow> milestones(Filter filter) {
         User actor=read(Kind.MILESTONE);Instant now=clock.instant();
         var scope=store.load(access.filter(actor,filter).stream().filter(access::monitoring).toList());
-        var rows=monitor.milestones(scope,now).stream()
-                .filter(candidate->!"OVERDUE".equals(filter.deadlineStatus()))
-                .map(candidate->milestoneRow(actor,scope,candidate.milestone(),now,candidate.progress()))
+        var milestones=store.milestones(scope.teams()).stream()
+                .filter(m->Set.of("PLANNED","OPEN").contains(m.getStatus().name()))
+                .filter(m->inWindow(m.getDeadline(),now,filter)).toList();
+        var submissions=artifacts.summaries(milestones,now);
+        var rows=milestones.stream().map(m->milestoneRow(actor,scope,m,now,submissions.getOrDefault(m.getId(),SubmissionSummary.none())))
                 .sorted(Comparator.comparing(MilestoneRow::deadline).thenComparing(MilestoneRow::id)).toList();
         return page(rows,filter,now);
     }
@@ -83,9 +85,9 @@ public class ProjectAlertService {
         for(var team:scope.teams().values())for(var row:activity.members(team,scope,now)) {
             if(inactiveOnly&&!row.inactive())continue;
             rows.add(new MemberRow(row.id(),row.team(),row.userCode(),row.displayName(),row.projectRole(),row.joinedAt(),
-                    row.lastTaskStartedAt(),row.activityStatus(),row.inactive(),row.lastReminderAt(),row.nextReminderAt(),
+                    row.lastContributionAt(),row.activityStatus(),row.inactive(),row.lastReminderAt(),row.nextReminderAt(),
                     row.coolingDown(),row.canSend()&&access.has(actor,access.sendPermission(Kind.INACTIVE)),
-                    canViewWork?workResults.summarize(workResults.assigned(scope,team.getId(),Long.valueOf(row.id())),now,zone()):null,row.pendingSince()));
+                    canViewWork?workResults.summarize(workResults.assigned(scope,team.getId(),Long.valueOf(row.id())),now,zone()):null));
         }
         rows.sort(Comparator.comparing(MemberRow::displayName,String.CASE_INSENSITIVE_ORDER).thenComparing(MemberRow::id));
         return page(rows,filter,now);
@@ -113,8 +115,6 @@ public class ProjectAlertService {
                 .map(batch->new History(batch.getId(),batch.getKind(),batch.getWarningNote(),batch.getRecipientCount(),
                         status(batch.getId()),batch.getCreatedAt(),batch.getCorrelationId())).toList();
     }
-    /** Legacy API compatibility; selections now reflect the backlog milestone relation. */
-    @Deprecated
     public LinkOptions links(Long teamId,UUID milestoneId) {
         User actor=read(Kind.MILESTONE);requireConfigure(actor);var team=access.team(actor,teamId);
         var milestone=milestone(team,actor,milestoneId,false);var scope=store.load(List.of(team));
@@ -125,7 +125,6 @@ public class ProjectAlertService {
                 scope.items().stream().map(item->backlogRow(actor,scope,item,clock.instant())).toList());
     }
     @Transactional
-    @Deprecated
     public LinkOptions link(Long teamId,UUID milestoneId,Links request) {
         User actor=read(Kind.MILESTONE);requireConfigure(actor);access.team(actor,teamId);validate(request);
         teams.findForWorkspaceCreation(teamId).orElseThrow(()->new ResourceNotFoundException("Team is unavailable"));
@@ -138,15 +137,7 @@ public class ProjectAlertService {
         var config=configs.findById(milestoneId).orElseGet(ProjectAlertData.MilestoneConfig::new);
         config.setMilestoneId(milestoneId);config.setTeamId(teamId);config.setTenantId(team.getTrainingClass().getTenantId());
         config.setConfiguredBy(actor.getId());config.setConfiguredAt(clock.instant());
-        // Compatibility endpoint: write the real relation, never a second progress selection.
-        for(var item:store.load(List.of(team)).items()) {
-            if(request.backlogItemIds().contains(item.getId())) {
-                if(item.getMilestone()!=null&&!milestoneId.equals(item.getMilestone().getId()))
-                    throw new TaskValidationException("backlogItemIds","This backlog item already belongs to another milestone");
-                item.setMilestone(milestone);
-            } else if(item.getMilestone()!=null&&milestoneId.equals(item.getMilestone().getId())) item.setMilestone(null);
-        }
-        config.setBacklogItemIds(new HashSet<>(request.backlogItemIds()));config.setMigratedAt(clock.instant());configs.saveAndFlush(config);
+        config.setBacklogItemIds(new HashSet<>(request.backlogItemIds()));configs.saveAndFlush(config);
         return links(teamId,milestoneId);
     }
     @Transactional
@@ -212,26 +203,27 @@ public class ProjectAlertService {
                 var configured=progressSource.backlogItemIds(milestone.getId(),team.getId(),team.getTrainingClass().getTenantId());
                 if(configured.isPresent()&&!configured.get().isEmpty())store.lockItems(configured.get()).forEach(em::refresh);
                 var scope=store.load(List.of(team));var row=milestoneRow(actor,scope,milestone,now);
-                if(selection.version()==null||selection.version()!=milestone.getVersion()||!row.progress().atRisk())
-                    throw conflict("This milestone changed, reached 80%, or is no longer within 48 hours before its deadline. Reload the list.");
+                if(selection.version()==null||selection.version()!=milestone.getVersion()||!Set.of("AT_RISK","OVERDUE").contains(row.alertReason()))
+                    throw conflict("This milestone changed, has received a valid submission, or no longer needs a deadline alert. Reload the list.");
                 scope.members().values().stream().map(m->m.getClassMember().getUser())
                         .filter(user->user.getRoles().stream().anyMatch(role->Boolean.TRUE.equals(role.getIsActive())
                                 &&Set.of("STUDENT","TRAINEE").contains(role.getName()))).forEach(user->targets.add(user.getId()));
                 if(targets.isEmpty())throw conflict("This team has no active student recipients");
                 snapshots.add(row);
-
+                if(row.progress().atRisk())milestone.markAtRisk(UUID.nameUUIDFromBytes(("user:"+actor.getId()).getBytes(StandardCharsets.UTF_8)),now);
             }
         }
         String note=request.warningNote()==null?"":request.warningNote();
         if(request.kind()==Kind.MILESTONE&&note.isBlank())note="Milestone "+((MilestoneRow)snapshots.getFirst()).title()
-                +" is due within 48 hours and has less than 80% of its backlog completed. Please review your progress.";
+                +("OVERDUE".equals(((MilestoneRow)snapshots.getFirst()).alertReason())?" is overdue and has no valid submission. Please review your progress."
+                :" is at risk of missing the deadline. Please review your progress.");
         var batch=new ProjectAlertData.Batch();batch.setId(UUID.randomUUID());batch.setTeamId(team.getId());batch.setProjectId(team.getProjectId());
         batch.setTenantId(team.getTrainingClass().getTenantId());batch.setActorId(actor.getId());batch.setRequestId(key);batch.setKind(request.kind());
         batch.setRequestHash(hash);batch.setWarningNote(note);batch.setRecipientCount(targets.size());batch.setCreatedAt(now);
         batch.setCorrelationId(context.correlationId());batches.saveAndFlush(batch);
         for(Long id:targets) {var recipient=new ProjectAlertData.Recipient();recipient.setId(UUID.randomUUID());recipient.setBatch(batch);recipient.setUserId(id);recipients.save(recipient);}
         String eventType=switch(request.kind()) {case BACKLOG->"BACKLOG_OVERDUE_ALERT_BATCH_SENT";
-            case MILESTONE->"MILESTONE_AT_RISK_ALERT_SENT";
+            case MILESTONE->"OVERDUE".equals(((MilestoneRow)snapshots.getFirst()).alertReason())?"MILESTONE_OVERDUE_ALERT_SENT":"MILESTONE_AT_RISK_ALERT_SENT";
             case INACTIVE->"INACTIVE_MEMBER_ALERT_BATCH_SENT";};
         Map<String,Object> event=new LinkedHashMap<>();event.put("schema_version",2);event.put("event_id",batch.getId());event.put("event_type",eventType);
         event.put("tenant_id",team.getTrainingClass().getTenantId());event.put("team_id",team.getId());event.put("class_id",team.getTrainingClass().getId());
@@ -245,6 +237,7 @@ public class ProjectAlertService {
         audits.saveAndFlush(audit);return result(batch);
     }
     private User read(Kind kind) {User actor=access.actor();access.require(actor,access.readPermission(kind));return actor;}
+    private boolean canConfigure(User user) {return access.has(user,"MILESTONE_WRITE")&&access.has(user,"SPRINT_BACKLOG_READ");}
     private void requireConfigure(User user) {access.require(user,"MILESTONE_WRITE");access.require(user,"SPRINT_BACKLOG_READ");}
     private Milestone milestone(ProjectTeam team,User actor,UUID id,boolean lock) {
         var query=em.createQuery("select m from Milestone m where m.id=:id and m.teamId=:team and m.tenantId=:tenant and m.active=true",Milestone.class)
@@ -265,16 +258,29 @@ public class ProjectAlertService {
                         &&assignee!=null&&unfinished(item)&&due!=null&&due.isBefore(now));
     }
     private MilestoneRow milestoneRow(User actor,ProjectAlertReadStore.Scope scope,Milestone milestone,Instant now) {
-        var linked=progressSource.backlogItemIds(milestone.getId(),milestone.getTeamId(),milestone.getTenantId()).orElse(Set.of());
-        var items=scope.items().stream().filter(item->milestone.getTeamId().equals(store.owner(scope,item).getId())
-                &&linked.contains(item.getId())).toList();
-        return milestoneRow(actor,scope,milestone,now,milestonePolicy.evaluate(milestone,items,now));
+        return milestoneRow(actor,scope,milestone,now,artifacts.summaries(List.of(milestone),now)
+                .getOrDefault(milestone.getId(),SubmissionSummary.none()));
     }
-    private MilestoneRow milestoneRow(User actor,ProjectAlertReadStore.Scope scope,Milestone milestone,Instant now,Progress progress) {
+    private MilestoneRow milestoneRow(User actor,ProjectAlertReadStore.Scope scope,Milestone milestone,Instant now,SubmissionSummary submission) {
+        var linked=progressSource.backlogItemIds(milestone.getId(),milestone.getTeamId(),milestone.getTenantId());
+        var items=linked.isEmpty()?List.<SprintBacklog>of():scope.items().stream()
+                .filter(item->milestone.getTeamId().equals(store.owner(scope,item).getId())&&linked.get().contains(item.getId())).toList();
+        long done=items.stream().filter(item->item.getStatus()==SprintBacklogStatus.DONE).count(),total=items.size();
+        BigDecimal percentage=linked.isEmpty()?null:total==0?BigDecimal.ZERO:BigDecimal.valueOf(done).multiply(BigDecimal.valueOf(100)).divide(BigDecimal.valueOf(total),2,RoundingMode.HALF_UP);
+        boolean below=total==0||BigDecimal.valueOf(done).multiply(BigDecimal.valueOf(100)).compareTo(BigDecimal.valueOf(total).multiply(BigDecimal.valueOf(80)))<0;
+        boolean received="SUBMITTED".equals(submission.status());
+        boolean atRisk=!received&&linked.isPresent()&&milestone.getStatus()==MilestoneStatus.OPEN&&milestone.getDeadline().isAfter(now)
+                &&milestone.getDeadline().isBefore(now.plus(Duration.ofHours(48)))&&below;
+        boolean overdue=!received&&Set.of(MilestoneStatus.PLANNED,MilestoneStatus.OPEN).contains(milestone.getStatus())&&milestone.getDeadline().isBefore(now);
+        String reason=received?"AWAITING_REVIEW":overdue?"OVERDUE":atRisk?"AT_RISK":"NONE";
+        boolean canViewMembers=access.has(actor,"WORKSPACE_MEMBER_READ");
+        var breakdown=canViewMembers&&linked.isPresent()?memberProgress.calculate(milestone.getTeamId(),scope,items):null;
         return new MilestoneRow(milestone.getId().toString(),access.describe(scope.teams().get(milestone.getTeamId())),milestone.getTitle(),
-                milestone.getStatus().name(),milestone.getDeadline(),deadlineStatus(milestone.getDeadline(),now),milestone.getVersion(),progress,
-                progress.atRisk()&&access.monitoring(scope.teams().get(milestone.getTeamId()))&&access.has(actor,access.sendPermission(Kind.MILESTONE)),
-                milestone.isMandatory(),progress.atRisk()?"AT_RISK":"NONE");
+                milestone.getStatus().name(),milestone.getDeadline(),deadlineStatus(milestone.getDeadline(),now),milestone.getVersion(),milestone.isAtRisk(),
+                new Progress(linked.isPresent(),done,total,percentage,"BACKLOG_ITEMS",atRisk),
+                (atRisk||overdue)&&access.monitoring(scope.teams().get(milestone.getTeamId()))&&access.has(actor,access.sendPermission(Kind.MILESTONE)),
+                canConfigure(actor)&&access.monitoring(scope.teams().get(milestone.getTeamId())),milestone.isMandatory(),submission,reason,
+                canViewMembers,breakdown==null?null:breakdown.members(),breakdown==null?null:breakdown.workWithoutCurrentStudent());
     }
     private void lockProjectAndRequireMonitoring(ProjectTeam team) {
         if (team.getProjectId()!=null) {
@@ -283,9 +289,13 @@ public class ProjectAlertService {
         }
         access.requireMonitoring(team);
     }
-    private boolean unfinished(SprintBacklog item) {return item.getStatus()!=SprintBacklogStatus.DONE;}
+    private boolean unfinished(SprintBacklog item) {return item.getStatus()==SprintBacklogStatus.TODO||item.getStatus()==SprintBacklogStatus.IN_PROGRESS;}
     private Instant deadline(SprintBacklog item) {return item.getEndDate()==null?null:item.getEndDate().atZone(zone()).toInstant();}
     private String deadlineStatus(Instant due,Instant now) {return due==null?"NO_DEADLINE":due.isBefore(now)?"OVERDUE":"UPCOMING";}
+    private boolean inWindow(Instant due,Instant now,Filter filter) {
+        if(due==null||due.isAfter(now.plus(Duration.ofHours(filter.windowHours()))))return false;
+        return "ALL".equals(filter.deadlineStatus())||filter.deadlineStatus().equals(deadlineStatus(due,now));
+    }
     private <T> Page<T> page(List<T> rows,Filter filter,Instant now) {
         return new Page<>(rows.stream().skip((long)filter.page()*filter.size()).limit(filter.size()).toList(),rows.size(),filter.page(),filter.size(),now,timeZone);
     }

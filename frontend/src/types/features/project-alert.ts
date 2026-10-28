@@ -13,11 +13,15 @@ export interface AlertPage { content: AlertRow[]; total: number; page: number; s
 interface Row { id: string; team: AlertTeam; canSend: boolean }
 export interface BacklogAlert extends Row { title: string; workType: string; status: string; deadline: string | null;
   deadlineStatus: string; version: number; assigneeUserId: number | null; assigneeName: string | null }
-export interface MilestoneAlert extends Row { title: string; status: string; deadline: string; deadlineStatus: string; version: number;
-  progress: { configured: boolean; done: number; total: number; percentage: number; source: string; atRisk: boolean };
-  mandatory: boolean; alertReason: "AT_RISK" | "NONE" }
+export interface MilestoneMemberProgress { userId:number; userCode:string|null; displayName:string; projectRole:string|null;
+  assigned:number; done:number; percentage:number|null }
+export interface MilestoneAlert extends Row { title: string; status: string; deadline: string; deadlineStatus: string; version: number; flagged: boolean;
+  progress: { configured: boolean; done: number; total: number; percentage: number | null; source: string; atRisk: boolean }; canConfigure: boolean;
+  mandatory: boolean; submission: { status: "SUBMITTED" | "NOT_SUBMITTED"; versionCount: number; latestVersion: number | null;
+    submittedAt: string | null; submittedLate: boolean; acceptanceStatus: "NOT_AVAILABLE" }; alertReason?: "AT_RISK" | "OVERDUE" | "AWAITING_REVIEW" | "NONE";
+  canViewMemberProgress?:boolean; memberProgress?:MilestoneMemberProgress[]|null; workWithoutCurrentStudent?:number|null }
 export interface InactiveAlert extends Row { userCode: string | null; displayName: string; projectRole: string | null; joinedAt: string | null;
-  lastTaskStartedAt: string | null; pendingSince: string | null; activityStatus: string; inactive: boolean; lastReminderAt: string | null;
+  lastContributionAt: string | null; activityStatus: string; inactive: boolean; lastReminderAt: string | null;
   nextReminderAt: string | null; coolingDown: boolean; workResults?: MemberWorkSummary | null }
 export interface MemberWorkSummary { assigned:number; done:number; overdue:number; inReview:number; withoutDeadline:number; percentage:number|null }
 export interface MemberWorkDetail { userId:number; displayName:string; team:AlertTeam; summary:MemberWorkSummary; items:BacklogAlert[] }
@@ -25,5 +29,6 @@ export type AlertRow = BacklogAlert | MilestoneAlert | InactiveAlert;
 export interface AlertPayload { teamId: number; kind: AlertKind; selections: { id: string; version?: number }[]; warningNote: string }
 export interface AlertResult { batchId: string; eventId: string; status: string; recipientCount: number; createdAt: string; correlationId: string }
 export interface AlertHistory { batchId: string; kind: AlertKind; warningNote: string; recipientCount: number; status: string; createdAt: string; correlationId: string }
+export interface MilestoneLinks { configured: boolean; milestoneVersion: number; selectedIds: number[]; availableItems: BacklogAlert[] }
 export const alertRowName = (row: AlertRow) => "title" in row ? row.title : row.displayName;
 export const alertRowKey = (row: AlertRow) => `${row.team.id}:${row.id}`;

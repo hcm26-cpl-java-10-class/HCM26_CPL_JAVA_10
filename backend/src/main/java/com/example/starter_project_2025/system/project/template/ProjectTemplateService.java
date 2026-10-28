@@ -62,11 +62,7 @@ public class ProjectTemplateService {
         }
         Specification<ProjectTemplate> filter = (root, query, builder) -> {
             var conditions = new ArrayList<Predicate>();
-            // Tenant-scoped rows plus the shared catalogue (tenant_id is null),
-            // so the seeded/sample templates are visible to every tenant.
-            conditions.add(builder.or(
-                    builder.isNull(root.get("tenantId")),
-                    builder.equal(root.get("tenantId"), user.getTenantId())));
+            conditions.add(builder.equal(root.get("tenantId"), user.getTenantId()));
             conditions.add(builder.isTrue(root.get("isActive")));
             if (status != null) conditions.add(builder.equal(root.get("status"), status));
             if (level != null) conditions.add(builder.equal(root.get("level"), level));
@@ -86,7 +82,7 @@ public class ProjectTemplateService {
 
     public ProjectTemplateResponse getById(Long id) {
         User user = access.requireUser("READ");
-        return response(findReadableTemplate(id, user), access.can(user, "UPDATE"));
+        return response(findTemplate(id, user), access.can(user, "UPDATE"));
     }
 
     @Transactional
@@ -197,15 +193,8 @@ public class ProjectTemplateService {
         return ProjectTemplateResponse.from(template, canUpdate, teamConstraintsMapper.read(template.getConstraintsJson()));
     }
 
-    /** Tenant-owned template: required for every mutation. */
     private ProjectTemplate findTemplate(Long id, User user) {
         return templates.findByIdAndTenantIdAndIsActiveTrue(id, user.getTenantId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project template was not found"));
-    }
-
-    /** Tenant-owned or shared (tenant_id is null) template: read-only access. */
-    private ProjectTemplate findReadableTemplate(Long id, User user) {
-        return templates.findReadableById(id, user.getTenantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project template was not found"));
     }
 

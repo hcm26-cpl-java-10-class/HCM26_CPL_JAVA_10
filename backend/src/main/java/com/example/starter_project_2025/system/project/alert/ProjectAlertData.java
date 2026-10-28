@@ -58,7 +58,6 @@ public final class ProjectAlertData {
         @Column(nullable=false,updatable=false) private Long tenantId;
         @Column(nullable=false) private Long configuredBy;
         @Column(nullable=false) private Instant configuredAt;
-        private Instant migratedAt;
         @ElementCollection @CollectionTable(name="alert_milestone_backlog_items",joinColumns=@JoinColumn(name="milestone_id"),
                 uniqueConstraints=@UniqueConstraint(name="uk_alert_milestone_backlog",columnNames={"milestone_id","backlog_item_id"}))
         @Column(name="backlog_item_id",nullable=false) private Set<Long> backlogItemIds=new HashSet<>();

@@ -549,9 +549,6 @@ export default function InvitationManagementPage() {
                         <div className="font-medium">
                           {inv.userFullName || inv.userEmail || `User #${inv.userId}`}
                         </div>
-                        {inv.userCode && (
-                          <div className="text-xs text-muted-foreground">{inv.userCode}</div>
-                        )}
                         {inv.userEmail && (
                           <div className="text-xs text-muted-foreground">{inv.userEmail}</div>
                         )}
@@ -742,7 +739,7 @@ export default function InvitationManagementPage() {
                     ) : (
                       singleCandidateStudents.map((u) => (
                         <SelectItem key={u.id} value={String(u.id)}>
-                          {u.firstName} {u.lastName}{u.userCode ? ` · ${u.userCode}` : ""} ({u.email})
+                          {u.firstName} {u.lastName} ({u.email})
                         </SelectItem>
                       ))
                     )}
@@ -888,7 +885,7 @@ export default function InvitationManagementPage() {
                           />
                           <div className="flex-1 min-w-0">
                             <p className="font-medium truncate">
-                              {st.firstName} {st.lastName}{st.userCode ? ` · ${st.userCode}` : ""}
+                              {st.firstName} {st.lastName}
                             </p>
                             <p className="text-xs text-muted-foreground truncate">{st.email}</p>
                           </div>
@@ -1033,9 +1030,6 @@ export default function InvitationManagementPage() {
                 <span className="text-muted-foreground">Thí sinh:</span>
                 <div className="col-span-2">
                   <div className="font-medium">{detailInvitation.userFullName || "—"}</div>
-                  {detailInvitation.userCode && (
-                    <div className="text-xs text-muted-foreground">{detailInvitation.userCode}</div>
-                  )}
                   <div className="text-xs text-muted-foreground">{detailInvitation.userEmail}</div>
                 </div>
               </div>

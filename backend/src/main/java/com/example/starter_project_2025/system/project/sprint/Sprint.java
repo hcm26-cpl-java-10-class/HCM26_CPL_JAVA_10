@@ -4,7 +4,6 @@ import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.base.dataio.exporter.annotation.ExportEntity;
 import com.example.starter_project_2025.base.dataio.exporter.annotation.ExportField;
 import com.example.starter_project_2025.base.dataio.importer.annotation.ImportField;
-import com.example.starter_project_2025.base.dataio.importer.annotation.PostImport;
 import com.example.starter_project_2025.base.dataio.template.annotation.ImportEntity;
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
@@ -70,25 +69,23 @@ public class Sprint extends BaseEntity {
      * module is available again.
      */
     @Column(name = "project_id")
-    @ImportField(name = "Project ID")
     Long projectId;
 
     @Column(name = "team_id")
-    @ImportField(name = "Team ID")
     Long teamId;
 
     @Column(length = 255)
-    @ImportField(name = "Name", required = true)
+    @ImportField(name = "Name")
     @ExportField(name = "Name")
     String name;
 
     @Column(name = "sprint_goal", length = 500)
-    @ImportField(name = "Sprint Goal", required = true)
+    @ImportField(name = "Sprint Goal")
     @ExportField(name = "Sprint Goal")
     String sprintGoal;
 
     @Column(name = "start_date")
-    @ImportField(name = "Start Date", required = true)
+    @ImportField(name = "Start Date")
     @ExportField(name = "Start Date")
     LocalDateTime startDate;
 
@@ -103,13 +100,14 @@ public class Sprint extends BaseEntity {
     List<SprintBacklog> sprintBacklogs = new ArrayList<>();
 
     @Column(name = "end_date")
-    @ImportField(name = "End Date", required = true)
+    @ImportField(name = "End Date")
     @ExportField(name = "End Date")
     LocalDateTime endDate;
 
     @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(length = 50)
+    @ImportField(name = "Status")
     @ExportField(name = "Status")
     SprintStatus status = SprintStatus.PLANNED;
 
@@ -134,36 +132,5 @@ public class Sprint extends BaseEntity {
 
     public void setSprintId(Long sprintId) {
         setId(sprintId);
-    }
-
-    /**
-     * Import hook (bulk file import bypasses {@code SprintServiceImpl}).
-     * <p>
-     * Applies the very same normalisation the REST create path performs:
-     * trim the text fields, default the active flag, force the lifecycle back to
-     * {@link SprintStatus#PLANNED} (a new sprint can only be started through an
-     * update) and reject an end date that is not after the start date.
-     */
-    @PostImport
-    void prepareForImport() {
-
-        if (name != null) {
-            name = name.trim();
-        }
-
-        if (sprintGoal != null) {
-            sprintGoal = sprintGoal.trim();
-        }
-
-        if (isActive == null) {
-            isActive = true;
-        }
-
-        status = SprintStatus.PLANNED;
-
-        if (startDate != null && endDate != null && !startDate.isBefore(endDate)) {
-            throw new IllegalArgumentException(
-                    "Start Date phải trước End Date");
-        }
     }
 }

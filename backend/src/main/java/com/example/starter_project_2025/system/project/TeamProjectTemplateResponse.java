@@ -20,11 +20,8 @@ public record TeamProjectTemplateResponse(
         int memberCount,
         boolean allowMultiRole,
         List<ProjectTemplateConstraints.RoleQuota> roleQuotas,
-        List<Member> members,
-        /** US-13: project silently created from the brief, {@code null} before provisioning. */
-        Long projectId,
-        String projectCode
+        List<Member> members
 ) {
-    public record Member(Long memberId, String fullName, String userCode, List<String> roles) {
+    public record Member(Long memberId, String fullName, List<String> roles) {
     }
 }

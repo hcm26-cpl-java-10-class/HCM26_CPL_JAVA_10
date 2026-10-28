@@ -4,13 +4,11 @@ import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.base.dataio.exporter.annotation.ExportEntity;
 import com.example.starter_project_2025.base.dataio.exporter.annotation.ExportField;
 import com.example.starter_project_2025.base.dataio.importer.annotation.ImportField;
-import com.example.starter_project_2025.base.dataio.importer.annotation.PostImport;
 import com.example.starter_project_2025.base.dataio.template.annotation.ImportEntity;
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
 import jakarta.persistence.ConstraintMode;
@@ -85,12 +83,6 @@ import lombok.experimental.SuperBuilder;
         permission = "PROJECT_TEMPLATE_VERSION_READ"
 )
 public class ProjectTemplateSnapshot extends BaseEntity {
-
-    /** Same limit enforced by {@code ProjectTemplateSnapshotServiceImpl}. */
-    static final int MAX_VERSION_LENGTH = 50;
-
-    /** Used by the import hook to reject a malformed {@code contentJson}. */
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     /**
      * Reference to the owning {@code ProjectTemplate}.
@@ -176,48 +168,5 @@ public class ProjectTemplateSnapshot extends BaseEntity {
 
     public void setSnapshotId(Long snapshotId) {
         setId(snapshotId);
-    }
-
-    /**
-     * Import hook (bulk file import bypasses
-     * {@code ProjectTemplateSnapshotServiceImpl}).
-     * <p>
-     * Applies the same rules the REST create path enforces: the version label
-     * is trimmed and limited to 50 characters, the content must be valid JSON,
-     * and a row without a status starts as
-     * {@link ProjectTemplateVersionStatus#DRAFT}.
-     */
-    @PostImport
-    void prepareForImport() {
-
-        if (version != null) {
-            version = version.trim();
-            if (version.length() > MAX_VERSION_LENGTH) {
-                throw new IllegalArgumentException(
-                        "Version không vượt quá " + MAX_VERSION_LENGTH + " ký tự");
-            }
-        }
-
-        if (contentJson != null) {
-            contentJson = contentJson.trim();
-        }
-
-        if (contentJson == null || contentJson.isBlank()) {
-            throw new IllegalArgumentException("Content JSON không được để trống");
-        }
-
-        try {
-            OBJECT_MAPPER.readTree(contentJson);
-        } catch (Exception exception) {
-            throw new IllegalArgumentException("Content JSON không phải JSON hợp lệ");
-        }
-
-        if (isActive == null) {
-            isActive = true;
-        }
-
-        if (status == null) {
-            status = ProjectTemplateVersionStatus.DRAFT;
-        }
     }
 }

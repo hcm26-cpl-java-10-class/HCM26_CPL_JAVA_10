@@ -74,7 +74,7 @@ export default function TeamAllocationClassListPage() {
   };
 
   return (
-    <MainLayout pathName={{ "team-allocation": "Project Team Allocation" }}>
+    <MainLayout pathName={{ "team-allocation": "Phân nhóm dự án" }}>
       <ProTable
         table={table}
         hideCreate

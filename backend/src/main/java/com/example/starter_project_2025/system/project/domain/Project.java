@@ -62,28 +62,6 @@ public class Project extends BaseEntity {
     @Column(nullable = false, length = 32)
     private ProjectStatus status;
 
-    /**
-     * US-13: immutable evidence of the brief version the project was
-     * materialised from ({@code project_template_version.snapshot_id}).
-     * Written once, right after the team assignment snapshot is taken.
-     */
-    @Column(name = "template_snapshot_id")
-    private Long templateSnapshotId;
-
-    /**
-     * US-13: training class the project was created for. Also reachable through
-     * {@code ProjectTeam.trainingClass}, but stored here so the project row is
-     * self-describing as required by the assignment flow.
-     */
-    @Column(name = "class_id")
-    private Long classId;
-
-    /**
-     * US-13: team that owns the project ({@code project_teams.id}).
-     */
-    @Column(name = "team_id")
-    private Long teamId;
-
     public void setTenant(Tenant tenant) {
         this.tenant = tenant;
         this.tenantId = tenant == null ? null : tenant.getId();

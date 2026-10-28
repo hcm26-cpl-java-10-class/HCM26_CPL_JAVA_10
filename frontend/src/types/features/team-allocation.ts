@@ -28,7 +28,6 @@ export interface UpdateDraftTeamRequest {
 export interface ClassMember {
   memberId: number;
   fullName: string;
-  userCode: string | null;
 }
 
 export interface ClassRosterMember extends ClassMember {
@@ -55,7 +54,6 @@ export interface AllocationTeam {
   members?: Array<{
     memberId: number;
     fullName: string;
-    userCode: string | null;
     role: string | null;
     /** US-11: canonical role list (multi-role templates). */
     roles?: TeamMemberRole[];
@@ -117,7 +115,6 @@ export interface TeamProjectTemplate {
   members: Array<{
     memberId: number;
     fullName: string;
-    userCode: string | null;
     roles: TeamMemberRole[];
   }>;
 }
@@ -220,7 +217,6 @@ export interface PublishTeamsResponse {
 export interface ReadinessUnassignedStudent {
   memberId: number;
   fullName: string;
-  userCode: string | null;
 }
 
 /** US-12: one team-level publish blocker. */

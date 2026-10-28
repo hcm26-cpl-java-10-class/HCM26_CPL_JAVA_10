@@ -15,21 +15,22 @@ public final class ProjectLogDtos {
 
     public record CreateRequest(
             @NotNull ProjectLogType type,
-            @NotBlank @Size(max = 100) String title,
-            @NotBlank @Size(max = 2000) String content,
+            @NotBlank @Size(max = 255) String title,
+            @NotBlank String content,
             String rationale,
             String impactAnalysis,
             String category,
             String severity,
-            @Size(max = 2000) String mitigationPlan,
+            String mitigationPlan,
             Instant meetingDate,
             List<Long> attendees,
-            @Size(max = 2000) String actionItems,
+            String actionItems,
             ProjectLogTargetType targetType,
             String targetId
     ) { }
 
     public record RiskUpdateRequest(
+            @NotBlank String mitigationPlan,
             @NotBlank String status
     ) { }
 

@@ -458,12 +458,6 @@ public class SprintBacklogServiceImpl
         Long sprintProjectId = sprint == null ? null : sprint.getProjectId();
         Long milestoneProjectId = milestone == null ? null : milestone.getProjectId();
 
-        if (sprint != null && sprint.getTeamId() != null && milestone != null
-                && !sprint.getTeamId().equals(milestone.getTeamId())) {
-            addError(errors, MILESTONE_ID_FIELD,
-                    "Milestone không thuộc Team của Sprint đã chọn");
-        }
-
         if (sprintProjectId != null
                 && milestoneProjectId != null
                 && !sprintProjectId.equals(milestoneProjectId)) {

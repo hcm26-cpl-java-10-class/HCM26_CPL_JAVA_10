@@ -514,9 +514,7 @@ function TeamRoleEditor({
                 invalid ? "border-destructive" : ""
               }`}
             >
-              <span className="min-w-0 truncate">
-                {member.fullName}{member.userCode ? ` · ${member.userCode}` : ""}
-              </span>
+              <span className="min-w-0 truncate">{member.fullName}</span>
               {allowMultiRole ? (
                 <span
                   role="group"
