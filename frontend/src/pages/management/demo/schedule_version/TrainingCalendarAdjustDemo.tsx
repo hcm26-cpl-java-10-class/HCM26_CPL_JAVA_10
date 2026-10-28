@@ -35,6 +35,7 @@ import {
   CheckCircle2,
   Lock,
   RotateCcw,
+  Menu,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { ScheduleVersionDTO, SubjectDTO, SessionDTO } from "@/types";
@@ -284,6 +285,29 @@ export function getFamsDayOfWeek(dateStr: string): string {
   return days[date.getDay()] || "—";
 }
 
+export function formatFamsDateRange(days: TrainingDay[]): string {
+  if (!days || days.length === 0) return "";
+  const validDates = days.map((d) => d.date).filter(Boolean).sort();
+  if (validDates.length === 0) return "";
+  const first = validDates[0];
+  const last = validDates[validDates.length - 1];
+
+  const formatShort = (dateStr: string) => {
+    const parts = dateStr.split("-");
+    if (parts.length !== 3) return dateStr;
+    const day = parts[2];
+    const monthNames = [
+      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
+    const monthIdx = parseInt(parts[1], 10) - 1;
+    return `${day}-${monthNames[monthIdx] || parts[1]}`;
+  };
+
+  if (first === last) return formatShort(first);
+  return `${formatShort(first)} - ${formatShort(last)}`;
+}
+
 function dayOfWeekName(dateStr: string) {
   return getFamsDayOfWeek(dateStr);
 }
@@ -314,16 +338,16 @@ function newActivity(
 function makeDefaultTopics(): TrainingTopic[] {
   return [
     {
-      id: "topic-java-fundamentals",
-      code: "HCM26_FR_FU_KS_JAVA_01",
-      name: "Java Fundamentals & Basic Programming",
+      id: "topic-java-se",
+      code: "[L2_JA_JS] [NFP]",
+      name: "Java SE/Java Language Programing (1.0)",
       trainer: "NgaTTT45",
       mentor: "",
       prerequisite: "",
       location: "[HCM] [FTOWN-1] Full Time 2026",
       defaultSection: "Section 1",
       slot: "1",
-      durationHours: 24,
+      durationHours: 28,
       sessionHours: 4,
       days: [
         {
@@ -356,37 +380,183 @@ function makeDefaultTopics(): TrainingTopic[] {
             },
           ],
         },
-      ],
-    },
-    {
-      id: "topic-spring-boot",
-      code: "SPRING_BOOT",
-      name: "Spring Boot Enterprise Backend",
-      trainer: "Le Van C",
-      mentor: "Tran Thi B",
-      prerequisite: "topic-java-fundamentals",
-      location: "[HCM] [FTOWN-1] Full Time 2026",
-      defaultSection: "Section 1",
-      slot: "2",
-      durationHours: 24,
-      sessionHours: 4,
-      days: [
         {
-          id: "day-spring-1",
-          dayNo: 1,
-          name: "Spring Boot Core & RESTful APIs",
-          date: "2026-05-18",
+          id: "day-2",
+          dayNo: 2,
+          name: "Object-Oriented Programming (OOP)",
+          date: "2026-05-15",
           activities: [
             {
               id: "act-3",
-              name: "REST Controller & DTO Mapping",
-              pic: "Le Van C",
+              name: "Object-Oriented Programming (OOP)",
+              pic: "NgaTTT45",
               contribution: "Lecture",
               format: "Offline",
               duration: "4h",
               section: "1 (08h00 - 12h00)",
               start: "08:00",
               end: "12:00",
+            },
+            {
+              id: "act-4",
+              name: "Assignment",
+              pic: "",
+              contribution: "Assignment",
+              format: "Offline",
+              duration: "4h",
+              section: "2 (13h00 - 17h00)",
+              start: "13:00",
+              end: "17:00",
+            },
+          ],
+        },
+        {
+          id: "day-3",
+          dayNo: 3,
+          name: "Collections Framework, String, Exception Handling & File I/O",
+          date: "2026-05-18",
+          activities: [
+            {
+              id: "act-5",
+              name: "Collections Framework, String, Exception Handling & File I/O",
+              pic: "NgaTTT45",
+              contribution: "Lecture",
+              format: "Offline",
+              duration: "4h",
+              section: "1 (08h00 - 12h00)",
+              start: "08:00",
+              end: "12:00",
+            },
+            {
+              id: "act-6",
+              name: "Assignment",
+              pic: "",
+              contribution: "Assignment",
+              format: "Offline",
+              duration: "4h",
+              section: "2 (13h00 - 17h00)",
+              start: "13:00",
+              end: "17:00",
+            },
+          ],
+        },
+        {
+          id: "day-4",
+          dayNo: 4,
+          name: "Introduction to Thread in Java",
+          date: "2026-05-19",
+          activities: [
+            {
+              id: "act-7",
+              name: "Introduction to Thread in Java",
+              pic: "NgaTTT45",
+              contribution: "Lecture",
+              format: "Offline",
+              duration: "4h",
+              section: "1 (08h00 - 12h00)",
+              start: "08:00",
+              end: "12:00",
+            },
+            {
+              id: "act-8",
+              name: "Assignment",
+              pic: "",
+              contribution: "Assignment",
+              format: "Offline",
+              duration: "4h",
+              section: "2 (13h00 - 17h00)",
+              start: "13:00",
+              end: "17:00",
+            },
+          ],
+        },
+        {
+          id: "day-5",
+          dayNo: 5,
+          name: "Database Connectivity (JDBC)",
+          date: "2026-05-20",
+          activities: [
+            {
+              id: "act-9",
+              name: "Database Connectivity (JDBC)",
+              pic: "NgaTTT45",
+              contribution: "Lecture",
+              format: "Offline",
+              duration: "4h",
+              section: "1 (08h00 - 12h00)",
+              start: "08:00",
+              end: "12:00",
+            },
+            {
+              id: "act-10",
+              name: "Assignment",
+              pic: "",
+              contribution: "Assignment",
+              format: "Offline",
+              duration: "4h",
+              section: "2 (13h00 - 17h00)",
+              start: "13:00",
+              end: "17:00",
+            },
+          ],
+        },
+        {
+          id: "day-6",
+          dayNo: 6,
+          name: "Review ôn tập",
+          date: "2026-05-21",
+          activities: [
+            {
+              id: "act-11",
+              name: "Review ôn tập & Q&A",
+              pic: "NgaTTT45",
+              contribution: "Practice",
+              format: "Offline",
+              duration: "4h",
+              section: "1 (08h00 - 12h00)",
+              start: "08:00",
+              end: "12:00",
+            },
+            {
+              id: "act-12",
+              name: "Assignment",
+              pic: "",
+              contribution: "Assignment",
+              format: "Self Learning",
+              duration: "4h",
+              section: "2 (13h00 - 17h00)",
+              start: "13:00",
+              end: "17:00",
+            },
+          ],
+        },
+        {
+          id: "day-7",
+          dayNo: 7,
+          name: "Final Assessment & Project Evaluation",
+          date: "2026-05-22",
+          activities: [
+            {
+              id: "act-13",
+              name: "Final Examination",
+              pic: "NgaTTT45",
+              contribution: "Assessment",
+              format: "Offline",
+              duration: "4h",
+              section: "1 (08h00 - 12h00)",
+              start: "08:00",
+              end: "12:00",
+            },
+            {
+              id: "act-14",
+              name: "Wrap-up & Evaluation",
+              pic: "NgaTTT45",
+              contribution: "Assessment",
+              format: "Offline",
+              duration: "4h",
+              section: "2 (13h00 - 17h00)",
+              start: "13:00",
+              end: "17:00",
             },
           ],
         },
@@ -508,7 +678,15 @@ export default function TrainingCalendarAdjustDemo({
   const [learningStart, setLearningStart] = useState("2026-05-14");
   const [selectedDayIds, setSelectedDayIds] = useState<string[]>([]);
   const [collapsedTopics, setCollapsedTopics] = useState<string[]>([]);
-  const [collapsedDays, setCollapsedDays] = useState<string[]>([]);
+  const [collapsedDays, setCollapsedDays] = useState<string[]>([
+    "day-1",
+    "day-2",
+    "day-3",
+    "day-4",
+    "day-5",
+    "day-6",
+    "day-7",
+  ]);
   const [dirty, setDirty] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [removal, setRemoval] = useState<Removal | null>(null);
@@ -1503,10 +1681,60 @@ export default function TrainingCalendarAdjustDemo({
                 topicConflict ? "border-amber-400/70" : "border-gray-200"
               }`}
             >
-              {/* Top Topic Controls Row - Exactly matching the screenshot */}
-              <div className="flex items-center justify-between gap-3 bg-white p-3 border-b border-gray-200">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 flex-1 min-w-0">
-                  {/* Dropdown 1: Delivery Location / Mode */}
+              {/* Topic Header Bar - Matching Screenshot */}
+              <div className="flex items-center justify-between gap-3 bg-white px-4 py-3 border-b border-gray-200">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Menu className="size-4 text-gray-400 shrink-0 cursor-grab" />
+                  <span className="font-bold text-sm text-gray-800 truncate">
+                    {topic.code.startsWith("[") ? topic.code : `[${topic.code}]`} {topic.name}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="text-xs font-semibold text-gray-700">
+                    {formatFamsDateRange(topic.days)}
+                  </span>
+                  {!isReadOnly && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs gap-1 text-indigo-600 border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100 hidden md:inline-flex"
+                      title="Tự động chia lại các buổi học theo thời lượng"
+                      onClick={() => openSplitModal(topic)}
+                    >
+                      <Sparkles className="size-3 text-indigo-500" />
+                      Chia theo Duration
+                    </Button>
+                  )}
+                  {!isReadOnly && (
+                    <button
+                      type="button"
+                      title={`Remove topic ${topic.code}`}
+                      onClick={() => setRemoval({ kind: "topic", topicId: topic.id })}
+                      className="text-red-500 hover:text-red-700 transition-colors p-1"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCollapsedTopics((prev) =>
+                        collapsed ? prev.filter((id) => id !== topic.id) : [...prev, topic.id]
+                      )
+                    }
+                    className="text-gray-500 hover:text-gray-800 transition-colors p-1"
+                    title={collapsed ? "Expand topic" : "Collapse topic"}
+                  >
+                    {collapsed ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Top 5 Labeled Topic Controls - Exactly matching screenshot */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 p-3.5 bg-white border-b border-gray-200">
+                {/* 1. Slot time */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-gray-700">Slot time:</label>
                   <select
                     value={topic.location || LOCATION_OPTIONS[0]}
                     disabled={isReadOnly}
@@ -1519,8 +1747,11 @@ export default function TrainingCalendarAdjustDemo({
                       </option>
                     ))}
                   </select>
+                </div>
 
-                  {/* Dropdown 2: Default Section */}
+                {/* 2. Start Section */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-gray-700">Start Section:</label>
                   <select
                     value={topic.defaultSection || "Section 1"}
                     disabled={isReadOnly}
@@ -1533,8 +1764,11 @@ export default function TrainingCalendarAdjustDemo({
                       </option>
                     ))}
                   </select>
+                </div>
 
-                  {/* Dropdown 3: Prerequisite Topic */}
+                {/* 3. Prerequisite Module */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-gray-700">Prerequisite Module:</label>
                   <select
                     value={topic.prerequisite || ""}
                     disabled={isReadOnly}
@@ -1550,8 +1784,11 @@ export default function TrainingCalendarAdjustDemo({
                         </option>
                       ))}
                   </select>
+                </div>
 
-                  {/* Dropdown 4: Lead Trainer */}
+                {/* 4. Trainers */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-gray-700">Trainers:</label>
                   <select
                     value={topic.trainer || "NgaTTT45"}
                     disabled={isReadOnly}
@@ -1566,52 +1803,22 @@ export default function TrainingCalendarAdjustDemo({
                   </select>
                 </div>
 
-                {/* Right side of Topic Controls: Actions & Collapse Arrow */}
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <Badge variant="secondary" className="text-[11px] font-normal gap-1 hidden lg:inline-flex">
-                    <Clock className="size-3 text-muted-foreground" />
-                    {topic.durationHours ? `${topic.durationHours}h` : `${topic.days.length * 4}h`}
-                  </Badge>
-                  {!isReadOnly && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs gap-1 text-indigo-600 border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100 hidden sm:inline-flex"
-                      title="Tự động chia lại các buổi học theo thời lượng"
-                      onClick={() => openSplitModal(topic)}
-                    >
-                      <Sparkles className="size-3 text-indigo-500" />
-                      Chia theo Duration
-                    </Button>
-                  )}
-                  {!isReadOnly && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0 text-red-500 hover:bg-red-50"
-                      title={`Remove topic ${topic.code}`}
-                      onClick={() => setRemoval({ kind: "topic", topicId: topic.id })}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  )}
-                  {/* Collapse Icon on far right */}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setCollapsedTopics((prev) =>
-                        collapsed ? prev.filter((id) => id !== topic.id) : [...prev, topic.id]
-                      )
-                    }
-                    className="p-1.5 text-gray-600 hover:text-gray-900 transition-colors focus:outline-none rounded hover:bg-gray-100"
-                    title={collapsed ? "Expand topic" : "Collapse topic"}
+                {/* 5. Mentors */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-gray-700">Mentors:</label>
+                  <select
+                    value={topic.mentor || ""}
+                    disabled={isReadOnly}
+                    onChange={(e) => changeTopic(topic.id, { mentor: e.target.value })}
+                    className="h-9 w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
                   >
-                    {collapsed ? (
-                      <ChevronDown className="size-5" />
-                    ) : (
-                      <ChevronUp className="size-5" />
-                    )}
-                  </button>
+                    <option value=""> </option>
+                    {PIC_OPTIONS.map((pic) => (
+                      <option key={pic} value={pic}>
+                        {pic}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -1623,14 +1830,7 @@ export default function TrainingCalendarAdjustDemo({
                     <table className="w-full text-sm border-collapse">
                       <thead>
                         <tr className="bg-[#F8F9FA] text-gray-700 font-semibold border-b border-gray-200 text-xs">
-                          <th className="w-12 px-3 py-3 text-center">
-                            <input
-                              type="checkbox"
-                              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer"
-                              checked={allDaysSelected}
-                              onChange={() => toggleSelectAllDays(topic.days)}
-                            />
-                          </th>
+                          <th className="w-16 px-3 py-3"></th>
                           <th className="w-20 px-3 py-3 text-center">Day No</th>
                           <th className="px-4 py-3 text-left">
                             <span>Name</span>
@@ -1651,13 +1851,16 @@ export default function TrainingCalendarAdjustDemo({
                             <Fragment key={day.id}>
                               {/* Day Header Row */}
                               <tr className={`border-b border-gray-200 hover:bg-gray-50/60 transition-colors ${isDaySelected ? "bg-indigo-50/30" : "bg-white"}`}>
-                                <td className="w-12 px-3 py-3 text-center">
-                                  <input
-                                    type="checkbox"
-                                    checked={isDaySelected}
-                                    onChange={() => toggleSelectDay(day.id)}
-                                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer"
-                                  />
+                                <td className="w-16 px-3 py-3 text-center">
+                                  <div className="flex items-center justify-center gap-2">
+                                    <Menu className="size-4 text-gray-400 shrink-0 cursor-grab" />
+                                    <input
+                                      type="checkbox"
+                                      checked={isDaySelected}
+                                      onChange={() => toggleSelectDay(day.id)}
+                                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer"
+                                    />
+                                  </div>
                                 </td>
                                 <td className="w-20 px-3 py-3 text-center font-medium text-gray-700">
                                   {day.dayNo || dayIndex + 1}
@@ -1719,7 +1922,7 @@ export default function TrainingCalendarAdjustDemo({
                                     <button
                                       type="button"
                                       title={dayCollapsed ? "Expand activities" : "Collapse activities"}
-                                      className="text-gray-500 hover:text-gray-700 transition-colors p-0.5"
+                                      className="w-6 h-6 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors flex items-center justify-center text-gray-500 hover:text-gray-800"
                                       onClick={() =>
                                         setCollapsedDays((prev) =>
                                           dayCollapsed
@@ -1729,9 +1932,9 @@ export default function TrainingCalendarAdjustDemo({
                                       }
                                     >
                                       {dayCollapsed ? (
-                                        <ChevronDown className="size-5" />
+                                        <ChevronDown className="size-4" />
                                       ) : (
-                                        <ChevronUp className="size-5" />
+                                        <ChevronUp className="size-4" />
                                       )}
                                     </button>
                                   </div>
