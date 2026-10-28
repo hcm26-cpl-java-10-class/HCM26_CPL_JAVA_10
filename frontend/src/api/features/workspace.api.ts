@@ -18,7 +18,7 @@ export const workspaceApi = {
     (await axiosInstance.get<ProjectLogOptions>(`/workspaces/${id}/logs/options`, { signal })).data,
   createProjectLog: async (id: number, input: ProjectLogCreateRequest) =>
     (await axiosInstance.post<ProjectLog>(`/workspaces/${id}/logs`, input, { headers: { "X-Correlation-ID": crypto.randomUUID() } })).data,
-  updateRiskLog: async (id: number, logId: number, input: { mitigationPlan: string; status: string }, version: number, idempotencyKey: string) =>
+  updateRiskLog: async (id: number, logId: number, input: { status: string }, version: number, idempotencyKey: string) =>
     (await axiosInstance.patch<ProjectLog>(`/workspaces/${id}/logs/${logId}/risk`, input, {
       headers: { "If-Match": version, "Idempotency-Key": idempotencyKey, "X-Correlation-ID": crypto.randomUUID() }
     })).data,

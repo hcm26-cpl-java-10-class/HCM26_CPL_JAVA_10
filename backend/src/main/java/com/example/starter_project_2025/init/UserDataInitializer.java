@@ -4,6 +4,7 @@ import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
+import com.example.starter_project_2025.system.rbac.user.StudentUserCodeGenerator;
 import com.example.starter_project_2025.system.project.tenant.Tenant;
 import com.example.starter_project_2025.system.project.tenant.TenantRepository;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,7 @@ public class UserDataInitializer implements CommandLineRunner {
   private static final String DEFAULT_PASSWORD = "password123";
 
   private final UserRepository userRepository;
+  private final StudentUserCodeGenerator studentUserCodeGenerator;
   private final RoleRepository roleRepository;
   private final PasswordEncoder passwordEncoder;
   private final TenantRepository tenantRepository;
@@ -104,6 +106,10 @@ public class UserDataInitializer implements CommandLineRunner {
     }
 
     user.getRoles().add(role);
+
+    if ("STUDENT".equals(role.getName())) {
+      studentUserCodeGenerator.assignIfMissing(user);
+    }
 
     userRepository.save(user);
   }

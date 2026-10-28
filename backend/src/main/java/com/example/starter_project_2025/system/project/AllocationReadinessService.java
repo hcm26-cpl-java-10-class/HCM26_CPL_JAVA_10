@@ -103,7 +103,8 @@ public class AllocationReadinessService {
                         .filter(member -> !assignedMemberIds.contains(member.getId()))
                         .map(member -> new AllocationReadinessResponse.UnassignedStudent(
                                 member.getId(),
-                                member.getUser().getFullName()))
+                                member.getUser().getFullName(),
+                                member.getUser().getUserCode()))
                         .toList();
 
         List<ProjectTeam> teams = teamRepository

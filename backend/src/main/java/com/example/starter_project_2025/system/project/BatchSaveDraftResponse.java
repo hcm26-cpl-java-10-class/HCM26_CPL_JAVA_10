@@ -32,6 +32,7 @@ public record BatchSaveDraftResponse(
     public record MemberResponse(
             Long memberId,
             String fullName,
+            String userCode,
             String role,
             List<String> roles
     ) {

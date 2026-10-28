@@ -45,6 +45,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ProjectLogService {
+    private static final int DECISION_FIELD_MAX_WORDS = 1000;
+
     private final WorkspaceAccessService access;
     private final WorkspaceContextService contexts;
     private final ProjectMemberRepository members;
@@ -229,7 +231,7 @@ public class ProjectLogService {
         requireWrite(context);
         if (idempotencyKey == null || !idempotencyKey.matches("[A-Za-z0-9._-]{8,100}"))
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "A valid Idempotency-Key header is required");
-        String hash = sha256(request.mitigationPlan().trim() + "\n" + request.status().trim());
+        String hash = sha256(request.status().trim());
         var prior = idempotency.findByLogIdAndActorIdAndKey(logId, context.user().getId(), idempotencyKey);
         if (prior.isPresent()) {
             if (!prior.get().getRequestHash().equals(hash))
@@ -245,12 +247,8 @@ public class ProjectLogService {
         String status = request.status().trim().toUpperCase(Locale.ROOT);
         if (!List.of("OPEN", "IN_MITIGATION", "CLOSED").contains(status))
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Risk status is invalid");
-        if (request.mitigationPlan().isBlank())
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Mitigation plan is required");
-
         String before = snapshot(log);
         String oldStatus = log.getStatus();
-        log.setMitigationPlan(request.mitigationPlan().trim());
         log.setStatus(status);
         ProjectLog saved = logs.saveAndFlush(log);
         if (!oldStatus.equals(status)) {
@@ -330,6 +328,10 @@ public class ProjectLogService {
             case DECISION -> {
                 if (request.rationale() == null || request.rationale().isBlank())
                     throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Decision rationale is required");
+                if (wordCount(request.rationale()) > DECISION_FIELD_MAX_WORDS
+                        || wordCount(request.impactAnalysis()) > DECISION_FIELD_MAX_WORDS)
+                    throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                            "Rationale and impact analysis must not exceed 1000 words each");
             }
             case RISK_ISSUE -> {
                 if (!List.of("LOW", "MEDIUM", "HIGH", "CRITICAL").contains(request.severity()))
@@ -345,6 +347,10 @@ public class ProjectLogService {
                 validateAttendees(workspace, request.attendees());
             }
         }
+    }
+
+    private int wordCount(String value) {
+        return value == null || value.isBlank() ? 0 : value.trim().split("\\s+").length;
     }
 
     private void validateAttendees(Workspace workspace, List<Long> attendeeIds) {

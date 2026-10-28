@@ -25,6 +25,6 @@ public record TeamProjectTemplateResponse(
         Long projectId,
         String projectCode
 ) {
-    public record Member(Long memberId, String fullName, List<String> roles) {
+    public record Member(Long memberId, String fullName, String userCode, List<String> roles) {
     }
 }
