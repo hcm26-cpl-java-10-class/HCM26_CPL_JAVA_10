@@ -1,4 +1,4 @@
-package com.example.starter_project_2025.system.location;
+package com.example.starter_project_2025.system.rbac.location;
 
 import lombok.*;
 import java.util.ArrayList;

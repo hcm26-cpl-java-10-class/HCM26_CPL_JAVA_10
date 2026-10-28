@@ -1,4 +1,4 @@
-package com.example.starter_project_2025.system.location;
+package com.example.starter_project_2025.system.rbac.location;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -10,7 +10,6 @@ import java.util.List;
 @RequestMapping("/api/v1/locations")
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*")
-
 public class LocationController {
     private final LocationService locationService;
 
