@@ -622,23 +622,37 @@ export default function ExamManagementPage() {
   return (
       <MainLayout pathName={{ exams: "Exam Management" }}>
         <section className="flex flex-col gap-5">
+
           <header className="flex flex-wrap items-end justify-between gap-4 border-b pb-4">
             <div>
               <p className="text-sm text-muted-foreground">Exam Management</p>
               <h1 className="mt-1 text-2xl font-semibold">Exams List</h1>
             </div>
-            <Button onClick={() => { setEditingExam(null); setNewTitle(""); setNewDuration("60"); setCfg(DEFAULT_CONFIG); setCreateOpen(true); }}>
-              <Plus />
-              Create Exam
-            </Button>
-            <Button
-                variant="outline"
-                onClick={() => navigate("/management/exam/templates")}
-            >
-              <BookmarkPlus className="mr-2 size-4" />
-              Use Template
-            </Button>
+
+            <div className="flex items-center gap-2">
+              <Button
+                  onClick={() => {
+                    setEditingExam(null);
+                    setNewTitle("");
+                    setNewDuration("60");
+                    setCfg(DEFAULT_CONFIG);
+                    setCreateOpen(true);
+                  }}
+              >
+                <Plus className="mr-2 size-4" />
+                Create Exam
+              </Button>
+
+              <Button
+                  variant="outline"
+                  onClick={() => navigate("/management/exam/templates")}
+              >
+                <BookmarkPlus className="mr-2 size-4" />
+                Use Template
+              </Button>
+            </div>
           </header>
+
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="relative w-full max-w-md">
