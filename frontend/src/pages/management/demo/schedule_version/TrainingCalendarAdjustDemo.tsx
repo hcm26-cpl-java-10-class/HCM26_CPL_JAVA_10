@@ -700,17 +700,18 @@ export default function TrainingCalendarAdjustDemo({
   }
 
   function addDay(topic: TrainingTopic) {
-    const slot = SLOTS.find((item) => item.id === topic.slot) ?? SLOTS[0];
+    const baseStart = "08:00";
+    const baseEnd = calculateEndTime(baseStart, topic.sessionHours || 2.5);
     changeTopic(topic.id, {
       days: [
         ...topic.days,
         {
           id: uid(),
-          name: `Training day ${topic.days.length + 1}`,
+          name: `${topic.name} - Buổi ${topic.days.length + 1}`,
           date: learningStart,
           activities: [
             {
-              ...newActivity(slot.start, slot.end, topic.trainer || "Trainer"),
+              ...newActivity(baseStart, baseEnd, topic.trainer || "Trainer"),
             },
           ],
         },
@@ -1005,7 +1006,7 @@ export default function TrainingCalendarAdjustDemo({
               endTime: `${day.date}T${act.end}:00`,
               location: act.format === "Online" ? "Online MS Teams" : "Room A101",
               status: "SCHEDULED",
-              note: `Slot ${topic.slot} · PIC: ${act.pic} · ${act.contribution}`,
+              note: `PIC: ${act.pic} · ${act.contribution}`,
             };
             sessionSaves.push(
               sessionApi.create(sessionPayload).catch((e) => {
@@ -1347,23 +1348,7 @@ export default function TrainingCalendarAdjustDemo({
               {/* Chi tiết Topic */}
               {!collapsed && (
                 <div className="space-y-3.5 p-3.5">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-muted/20 p-2.5 rounded-md border border-border/50">
-                    <label className="space-y-1 text-xs font-medium">
-                      Default slot
-                      <select
-                        className={selectClass}
-                        value={topic.slot}
-                        disabled={isReadOnly}
-                        onChange={(e) => changeTopic(topic.id, { slot: e.target.value })}
-                      >
-                        {SLOTS.map((slot) => (
-                          <option key={slot.id} value={slot.id}>
-                            {slot.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-muted/20 p-2.5 rounded-md border border-border/50">
                     <label className="space-y-1 text-xs font-medium">
                       Prerequisite topic
                       <select
@@ -1687,15 +1672,14 @@ export default function TrainingCalendarAdjustDemo({
                                   size="sm"
                                   className="h-7 text-xs gap-1"
                                   onClick={() => {
-                                    const slot =
-                                      SLOTS.find((item) => item.id === topic.slot) ??
-                                      SLOTS[0];
+                                    const baseStart = day.activities[day.activities.length - 1]?.end || "08:00";
+                                    const baseEnd = calculateEndTime(baseStart, topic.sessionHours || 2.5);
                                     changeDay(topic.id, day.id, {
                                       activities: [
                                         ...day.activities,
                                         newActivity(
-                                          slot.start,
-                                          slot.end,
+                                          baseStart,
+                                          baseEnd,
                                           topic.trainer || "Trainer"
                                         ),
                                       ],
