@@ -18,7 +18,7 @@ export function TeamMilestoneListPage() {
   return <MainLayout pathName={{ teams: "Teams", milestones: "Milestones" }}>
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-4"><CardTitle>Team milestones</CardTitle>
-        <Button asChild variant="outline"><Link to="/milestones">Change team</Link></Button></CardHeader>
+        <Button asChild variant="outline"><Link to="/milestones/teams">Change team</Link></Button></CardHeader>
       <CardContent>
         {query.isPending && <p className="py-8 text-sm text-muted-foreground">Loading milestones...</p>}
         {query.isError && <p className="rounded-md border p-6 text-sm text-destructive">Could not load team milestones.</p>}

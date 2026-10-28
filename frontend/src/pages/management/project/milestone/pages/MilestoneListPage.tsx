@@ -25,7 +25,7 @@ import type {
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, ClipboardCheck, Eye, FolderKanban, Plus, ShieldAlert } from "lucide-react";
 import { useCallback, useEffect, useMemo } from "react";
-import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { MilestoneEmptyState, MilestoneListError } from "../components/MilestoneListStates";
 import { MilestoneTableCard } from "../components/MilestoneTableCard";
 import { milestoneListSchema } from "../milestone-list.schema";
@@ -35,6 +35,7 @@ import {
   serializeMilestoneListParams,
 } from "../milestone-list-query.utils";
 import { getMilestoneApiError } from "../milestone.utils";
+import { MilestoneRiskPage } from "./MilestoneRiskPage";
 interface MilestoneTableFilters {
   status?: MilestoneStatus[];
   mandatory?: boolean;
@@ -57,7 +58,7 @@ function getProjectStatusBadgeVariant(status?: string): "default" | "secondary" 
 
 export function MilestoneListPage() {
   const [params] = useSearchParams();
-  return params.get("view") === "risk" ? <Navigate replace to="/management/alerts?view=MILESTONE"/> : <MilestoneStandardListPage />;
+  return params.get("view") === "risk" ? <MilestoneRiskPage /> : <MilestoneStandardListPage />;
 }
 
 function MilestoneStandardListPage() {
@@ -230,14 +231,20 @@ function MilestoneStandardListPage() {
         <Alert variant={projectOptionsQuery.isError ? "destructive" : "default"}>
           <AlertCircle />
           <AlertTitle>
-            {projectOptions.length === 0 && !projectOptionsQuery.isError
-              ? "No projects available"
-              : "Missing project ID"}
+            {projectOptionsQuery.isError ? "Unable to load projects" : "No projects available"}
           </AlertTitle>
           <AlertDescription>
-            {projectOptions.length === 0 && !projectOptionsQuery.isError
-              ? "No active projects were found in the current workspace. Please create or activate a project first."
-              : "The project for this milestone list could not be determined."}
+            {projectOptionsQuery.isError ? (
+              <>
+                <p>The project list could not be loaded.</p>
+                <Button variant="outline" size="sm" onClick={() => void projectOptionsQuery.refetch()}>Try again</Button>
+              </>
+            ) : (
+              <>
+                <p>No projects are available in your current scope. You can still open milestones assigned directly to a team.</p>
+                <Button variant="outline" size="sm" onClick={() => navigate("/milestones/teams")}>Browse team milestones</Button>
+              </>
+            )}
           </AlertDescription>
         </Alert>
       </MainLayout>
