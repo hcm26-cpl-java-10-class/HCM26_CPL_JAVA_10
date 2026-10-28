@@ -7,9 +7,13 @@ public interface AuthService {
 
     AuthenticationResponse login(LoginRequest request);
 
+ feature/user-profile-update
     AuthenticationResponse login(LoginRequest request, String device);
 
     AuthenticationResponse loginWithGoogle(String email, String firstName, String lastName);
+
+    AuthenticationResponse loginWithGoogle(String email, boolean emailVerified, String firstName, String lastName);
+ dev
 
     AuthenticationResponse loginWithGoogle(String email, String firstName, String lastName, String device);
 

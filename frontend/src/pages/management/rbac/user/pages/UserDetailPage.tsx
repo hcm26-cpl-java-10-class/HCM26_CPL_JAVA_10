@@ -6,45 +6,107 @@ import { PermissionGate } from "@/components/PermissionGate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { USER_STATUS_OPTIONS, type UserStatus } from "@/types";
+import { cn } from "@/lib/utils";
+import { USER_STATUS_HEADER_CLASS, type UserStatus } from "@/types";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, PenSquare } from "lucide-react";
-import type { ReactNode } from "react";
+import {
+  ArrowLeft,
+  AtSign,
+  Building2,
+  CalendarDays,
+  Clock,
+  FileText,
+  Hash,
+  Mail,
+  PenSquare,
+  Phone,
+  ShieldCheck,
+} from "lucide-react";
+import type { ComponentType, ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { UserStatusBadge } from "../components/UserStatusBadge";
 import { extractServerErrors } from "../user-form.utils";
 
 function formatDate(value?: string): string {
-  if (!value) return "-";
+  if (!value) return "";
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? value : d.toLocaleString("vi-VN");
 }
 
-const STATUS_VARIANT: Record<UserStatus, "default" | "secondary" | "destructive"> = {
-  ACTIVE: "default",
-  LOCKED: "destructive",
-  INACTIVE: "secondary",
-};
+const AVATAR_COLORS = [
+  "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300",
+  "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
+  "bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300",
+  "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
+  "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300",
+  "bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300",
+];
 
-function Item({ label, children }: { label: string; children: ReactNode }) {
+/** Màu avatar cố định theo tên để mỗi người một màu. */
+function avatarColor(seed: string): string {
+  let h = 0;
+  for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+
+type IconType = ComponentType<{ className?: string }>;
+
+function InfoRow({
+  icon: Icon,
+  label,
+  children,
+  className,
+}: {
+  icon: IconType;
+  label: string;
+  children?: ReactNode;
+  className?: string;
+}) {
+  const empty = children === null || children === undefined || children === false || children === "";
   return (
-    <div className="grid gap-1">
-      <span className="font-medium text-muted-foreground">{label}</span>
-      <div>{children || "-"}</div>
+    <div className={cn("flex items-start gap-3", className)}>
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="min-w-0">
+        <div className="text-xs text-muted-foreground">{label}</div>
+        <div className="mt-0.5 break-words text-sm font-medium">
+          {empty ? <span className="font-normal text-muted-foreground">Chưa cập nhật</span> : children}
+        </div>
+      </div>
     </div>
   );
 }
 
-function BadgeGroup({ names }: { names: string[] }) {
-  if (names.length === 0) return <span>-</span>;
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="flex flex-wrap gap-1">
+    <section className="rounded-xl border bg-card p-5 shadow-sm">
+      <h3 className="mb-5 text-sm font-semibold">{title}</h3>
+      <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2">{children}</div>
+    </section>
+  );
+}
+
+function BadgeGroup({ names, icon: Icon }: { names: string[]; icon?: IconType }) {
+  if (names.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-2">
       {names.map((n) => (
-        <Badge key={n} variant="secondary">
+        <Badge key={n} variant="outline" className="gap-1.5 px-2.5 py-1 text-xs font-medium">
+          {Icon && <Icon className="h-3 w-3 text-muted-foreground" />}
           {n}
         </Badge>
       ))}
     </div>
+  );
+}
+
+function MetaItem({ icon: Icon, label, value }: { icon: IconType; label: string; value: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Icon className="h-3.5 w-3.5" />
+      {label}: <span className="font-medium text-foreground/80">{value}</span>
+    </span>
   );
 }
 
@@ -77,9 +139,14 @@ export function UserDetailPage() {
 
   const roleNames = nameOf(roleQuery.data?.content ?? roleQuery.data?.items, user?.roleIds);
   const deptNames = nameOf(deptQuery.data?.content ?? deptQuery.data?.items, user?.departmentIds);
+ feature/user-profile-update
   const fullName = user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(" ");
+
+  const fullName = [user?.lastName, user?.firstName].filter(Boolean).join(" ");
+  const displayName = fullName || user?.email || "";
+ dev
   const status: UserStatus = user?.status ?? (user?.isActive === false ? "INACTIVE" : "ACTIVE");
-  const statusLabel = USER_STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status;
+  const initial = (user?.firstName?.[0] ?? user?.email?.[0] ?? "?").toUpperCase();
 
   return (
     <MainLayout pathName={pathName}>
@@ -104,6 +171,7 @@ export function UserDetailPage() {
           </CardContent>
         ) : (
           <CardContent>
+ feature/user-profile-update
             <Tabs defaultValue="general" className="grid gap-5">
               <TabsList className="group-data-[orientation=horizontal]/tabs:h-auto flex-wrap justify-start">
                 <TabsTrigger className="h-auto min-h-9" value="general">Thông tin chung</TabsTrigger>
@@ -142,6 +210,66 @@ export function UserDetailPage() {
               </TabsContent>
               {canInspectLearning && id && <TabsContent value="learning"><LearningRecordsPanel userId={id} /></TabsContent>}
             </Tabs>
+
+            <div className="mx-auto grid w-full max-w-5xl gap-5">
+                <div className={cn("rounded-xl border p-6", USER_STATUS_HEADER_CLASS[status])}>
+                  <div className="flex flex-wrap items-center gap-5">
+                    <div
+                      className={cn(
+                        "flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-2xl font-semibold ring-4 ring-background",
+                        avatarColor(displayName),
+                      )}
+                    >
+                      {initial}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h2 className="truncate text-xl font-semibold">{displayName}</h2>
+                      <p className="mt-0.5 truncate text-sm text-muted-foreground">{user?.email}</p>
+                      {status !== "ACTIVE" && (
+                        <p className="mt-2 text-xs font-medium text-red-700 dark:text-red-400">
+                          {status === "LOCKED"
+                            ? "Tài khoản đang bị khóa, không thể đăng nhập."
+                            : "Tài khoản đã ngưng hoạt động, không thể đăng nhập."}
+                        </p>
+                      )}
+                    </div>
+                    <UserStatusBadge status={status} />
+                  </div>
+                </div>
+
+                <Section title="Thông tin tài khoản">
+                  <InfoRow icon={AtSign} label="Username">
+                    {user?.username}
+                  </InfoRow>
+                  <InfoRow icon={Hash} label="Mã nhân viên">
+                    {user?.employeeCode}
+                  </InfoRow>
+                  <InfoRow icon={Mail} label="Email">
+                    {user?.email}
+                  </InfoRow>
+                  <InfoRow icon={Phone} label="Số điện thoại">
+                    {user?.phone}
+                  </InfoRow>
+                  <InfoRow icon={Building2} label="Phòng ban" className="sm:col-span-2">
+                    {deptNames.length > 0 ? <BadgeGroup names={deptNames} /> : null}
+                  </InfoRow>
+                  <InfoRow icon={ShieldCheck} label="Role" className="sm:col-span-2">
+                    {roleNames.length > 0 ? <BadgeGroup names={roleNames} /> : null}
+                  </InfoRow>
+                  <InfoRow icon={FileText} label="Mô tả" className="sm:col-span-2">
+                    {user?.description ? <p className="whitespace-pre-line font-normal leading-6">{user.description}</p> : null}
+                  </InfoRow>
+                </Section>
+
+                <div className="flex flex-wrap gap-x-6 gap-y-2 px-1 text-xs text-muted-foreground">
+                  <MetaItem icon={CalendarDays} label="Ngày tạo" value={formatDate(user?.createdAt) || "—"} />
+                  <MetaItem icon={Clock} label="Cập nhật lần cuối" value={formatDate(user?.updatedAt) || "—"} />
+                  {user?.lastLoginAt && (
+                    <MetaItem icon={Clock} label="Đăng nhập gần nhất" value={formatDate(user.lastLoginAt)} />
+                  )}
+                </div>
+              </div>
+ dev
           </CardContent>
         )}
 

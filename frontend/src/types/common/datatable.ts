@@ -40,6 +40,45 @@ export type FilterType =
   | "dateRange"
   | "numberRange";
 
+/**
+ * Live validation rules for a form field. Rules are checked while the user is typing
+ * (not only when the form is saved), and `maxLength` / `inputFilter` limit what can be typed.
+ */
+export interface FieldValidation {
+  /** Always required. */
+  required?: boolean;
+
+  /** Required only when creating a record (e.g. password). */
+  requiredOnCreate?: boolean;
+
+  minLength?: number;
+
+  /** Hard limit: extra characters cannot be typed or pasted. */
+  maxLength?: number;
+
+  pattern?: RegExp;
+
+  patternMessage?: string;
+
+  /** Removes characters that are not allowed, while typing. */
+  inputFilter?: (value: string) => string;
+
+  /** Custom rule. Return an error message, or undefined when the value is valid. */
+  validate?: (
+    value: any,
+    form: Record<string, any>,
+    ctx: { isEdit: boolean }
+  ) => string | undefined;
+
+  /** Show the live password requirement checklist under the input. */
+  passwordRules?: boolean;
+
+  /** Helper text shown under the input while there is no error. */
+  hint?: string;
+
+  placeholder?: string;
+}
+
 export interface FieldSchema {
   name: string;
 
@@ -61,7 +100,7 @@ export interface FieldSchema {
 
   hideable?: boolean;
 
-  width?: number;
+  width?: number | string;
 
   minWidth?: number;
 
@@ -75,6 +114,11 @@ export interface FieldSchema {
   };
 
   relation?: RelationConfig;
+
+  validation?: FieldValidation;
+
+  /** Form-only field (e.g. "confirm password"): shown in the form but never sent to the server. */
+  transient?: boolean;
 
   dynamic?: DynamicFieldConfig;
 
@@ -118,7 +162,7 @@ export interface DynamicFieldBuilderOptions {
   editable?: boolean;
   visible?: boolean;
   hideable?: boolean;
-  width?: number;
+  width?: number | string;
   minWidth?: number;
 }
 

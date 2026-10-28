@@ -11,6 +11,8 @@ public interface CourseEnrollmentRepository
 
     boolean existsByUser_IdAndCourse_Id(Long userId, Long courseId);
 
+    boolean existsByUser_Id(Long userId);
+
     List<CourseEnrollment> findAllByUser_IdOrderByCreatedAtDesc(
             Long userId
     );
