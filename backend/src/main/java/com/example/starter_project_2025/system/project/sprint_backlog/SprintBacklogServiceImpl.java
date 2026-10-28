@@ -6,6 +6,8 @@ import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import com.example.starter_project_2025.system.project.ProjectMember;
+import com.example.starter_project_2025.system.project.ProjectMemberRepository;
 import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
 import com.example.starter_project_2025.system.project.milestone.integration.port.MilestoneTenantProvider;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
@@ -92,6 +94,7 @@ public class SprintBacklogServiceImpl
     MilestoneTenantProvider milestoneTenantProvider;
     SprintBacklogAuditService sprintBacklogAuditService;
     SprintBacklogOutboxService sprintBacklogOutboxService;
+    ProjectMemberRepository projectMemberRepository;
 
     @Override
     protected BaseCrudRepository<SprintBacklog, Long> getRepository() {
@@ -377,6 +380,36 @@ public class SprintBacklogServiceImpl
                         milestone.getStatus() == null ? null : milestone.getStatus().name(),
                         milestone.getDeadline(),
                         milestone.isMandatory()
+                ))
+                .toList();
+    }
+
+    /**
+     * Active members of the workspace team, used by the assignee picker of the
+     * backlog create bar instead of a raw project member id.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<BacklogAssigneeOptionDTO> getAssigneeOptions(Long teamId) {
+
+        check("SPRINT_BACKLOG_READ");
+
+        if (teamId == null) {
+            return List.of();
+        }
+
+        List<ProjectMember> members =
+                projectMemberRepository.findAllByTeam_IdAndClassMember_StatusOrderByIdAsc(
+                        teamId,
+                        com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus.ACTIVE);
+
+        return members.stream()
+                .map(member -> new BacklogAssigneeOptionDTO(
+                        member.getId(),
+                        member.getClassMember().getUser().getId(),
+                        member.getClassMember().getUser().getFullName(),
+                        member.getClassMember().getUser().getUserCode(),
+                        member.getRole()
                 ))
                 .toList();
     }

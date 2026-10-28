@@ -19,6 +19,10 @@ import java.util.List;
  * enforces on create: template and version are mandatory, the version label is
  * unique per template, the content must be valid JSON and a version without a
  * status starts as {@link ProjectTemplateVersionStatus#DRAFT}.
+ * <p>
+ * The owner columns come in pairs ({@code Template Id} / {@code Template Name}
+ * and {@code Project Id} / {@code Project Name}): a row may use either form, the
+ * readable name wins when both are filled.
  */
 @Component
 public class ProjectTemplateVersionImportTemplateProvider implements ImportTemplateProvider {
@@ -40,14 +44,22 @@ public class ProjectTemplateVersionImportTemplateProvider implements ImportTempl
 
         return ImportTemplateBuilder.forEntity(entityClass, "Project Template Version")
                 .column(ImportTemplateColumn.integer(
-                        "Template Id", true,
-                        "ID của Project Template sở hữu phiên bản này", "1"))
+                        "Template Id", false,
+                        "ID của Project Template sở hữu phiên bản này (bỏ trống nếu dùng Template Name)", "1"))
+                .column(ImportTemplateColumn.lookup(
+                        "Template Name", false, "Project Template",
+                        "Tên Project Template sở hữu phiên bản này (thay thế cho Template Id)",
+                        "Capstone Template"))
                 .column(ImportTemplateColumn.integer(
                         "Project Id", false,
                         "ID dự án gắn với phiên bản (có thể để trống)", "1"))
+                .column(ImportTemplateColumn.lookup(
+                        "Project Name", false, "Project",
+                        "Tên dự án gắn với phiên bản (thay thế cho Project Id)",
+                        "Capstone Project"))
                 .column(ImportTemplateColumn.text(
                         "Version", true,
-                        "Tối đa 50 ký tự, duy nhất trong cùng Template Id", "v1.0"))
+                        "Tối đa 50 ký tự, duy nhất trong cùng Template Id / Template Name", "v1.0"))
                 .column(ImportTemplateColumn.integer(
                         "Parent Template Id", false,
                         "ID phiên bản gốc (có thể để trống)", "1"))
@@ -60,13 +72,13 @@ public class ProjectTemplateVersionImportTemplateProvider implements ImportTempl
                         "JSON hợp lệ mô tả nội dung snapshot",
                         "{\"milestones\":[],\"backlog\":[]}"))
                 .rule(
-                        "Template Id và Version là bắt buộc",
-                        "Version tối đa 50 ký tự và không được trùng trong cùng Template Id",
+                        "Template Id hoặc Template Name là bắt buộc (Template Name được ưu tiên khi cả hai cùng có)",
+                        "Version là bắt buộc, tối đa 50 ký tự và không được trùng trong cùng Template",
                         "Content JSON là bắt buộc và phải là JSON hợp lệ",
                         "Status mặc định " + ProjectTemplateVersionStatus.DRAFT
                                 + " (" + String.join(" / ", statuses) + ")",
                         "Parent Template Id chỉ dùng để ghi nhận phiên bản gốc, có thể để trống",
-                        "Project Id có thể để trống")
+                        "Project Id / Project Name có thể để trống (Project Name được ưu tiên khi cả hai cùng có)")
                 .build();
     }
 }

@@ -102,6 +102,27 @@ export default function ProjectTemplateVersionWorkspacePage() {
     [versionsQuery.data],
   );
 
+  /**
+   * Options of the `templateId` relation field used by the create / edit
+   * dialogs: derived from the versions already loaded, so the workspace does
+   * not depend on the `PROJECT_TEMPLATE_READ` permission of the template
+   * catalogue endpoint.
+   */
+  const relationOptions = useMemo(() => {
+    const byId = new Map<number, { id: number; name: string }>();
+
+    versions.forEach((version) => {
+      if (version.templateId == null || byId.has(version.templateId)) return;
+
+      byId.set(version.templateId, {
+        id: version.templateId,
+        name: version.templateName?.trim() || `TPL-${version.templateId}`,
+      });
+    });
+
+    return { templateId: [...byId.values()] };
+  }, [versions]);
+
   /** Default to the newest active version. */
   useEffect(() => {
     if (versions.length === 0) return;
@@ -439,6 +460,7 @@ export default function ProjectTemplateVersionWorkspacePage() {
         schema={projectTemplateVersionSchema}
         title="Create Project Template Version"
         initial={createInitial}
+        relationOptions={relationOptions}
         onSubmit={handleCreateVersion}
         isSubmitting={submitting}
       />
@@ -449,6 +471,7 @@ export default function ProjectTemplateVersionWorkspacePage() {
         schema={projectTemplateVersionSchema}
         title="Edit Project Template Version"
         initial={selectedVersion ? { ...selectedVersion } : null}
+        relationOptions={relationOptions}
         onSubmit={handleUpdateVersion}
         isSubmitting={submitting}
       />

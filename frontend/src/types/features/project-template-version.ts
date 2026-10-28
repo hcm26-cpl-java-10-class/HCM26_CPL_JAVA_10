@@ -12,13 +12,16 @@ export type ProjectTemplateVersionStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
  * <p>
  * `templateId` is the raw owner identifier; `templateName` is resolved by the
  * backend from the `project_templates` row so the UI can render a readable
- * label instead of a raw id.
+ * label instead of a raw id. `projectName` plays the same role for the optional
+ * `projectId`.
  */
 export interface ProjectTemplateVersionDTO extends BaseDTO {
   templateId?: number;
   /** Name of the owning Project Template (read-only, resolved by the API). */
   templateName?: string | null;
   projectId?: number;
+  /** Name of the referenced project (read-only, resolved by the API). */
+  projectName?: string | null;
   /**
    * Id of the version this one was cloned from (`parent_template_id`), kept for
    * historical traceability only.

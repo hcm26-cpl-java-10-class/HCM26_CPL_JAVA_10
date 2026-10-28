@@ -59,6 +59,8 @@ import {
 const SPRINTS_QUERY_KEY = ["sprints", "backlog"] as const;
 const BACKLOG_ITEMS_QUERY_KEY = ["sprint-backlogs", "backlog-page"] as const;
 const MILESTONE_OPTIONS_QUERY_KEY = ["milestones", "backlog-options"] as const;
+/** Team members offered by the assignee picker of the create bar. */
+const ASSIGNEE_OPTIONS_QUERY_KEY = ["sprint-backlogs", "assignee-options"] as const;
 /** Team-scoped board of a workspace (only its own sprints and items). */
 const TEAM_BOARD_QUERY_KEY = ["team-backlog-board"] as const;
 
@@ -324,6 +326,23 @@ export function BacklogBoard({
     queryFn: () => milestoneApi.getBacklogOptions(teamId),
     staleTime: 60_000,
   });
+
+  /**
+   * Active members of the workspace team, so the assignee picker of a work
+   * item offers the people of that team instead of a raw member id. The
+   * `/backlogs` route page is not scoped to a team, so it keeps no options.
+   */
+  const assigneesQuery = useQuery({
+    queryKey: [...ASSIGNEE_OPTIONS_QUERY_KEY, teamId ?? "none"],
+    queryFn: () => sprintBacklogApi.getAssigneeOptions(teamId),
+    enabled: teamId != null,
+    staleTime: 60_000,
+  });
+
+  const assignees = useMemo(
+    () => assigneesQuery.data ?? [],
+    [assigneesQuery.data],
+  );
 
   const milestones = useMemo<MilestoneOption[]>(
     () => milestonesQuery.data ?? [],
@@ -926,22 +945,6 @@ export function BacklogBoard({
     : null;
 
   /**
-   * Member ids already used on the board, offered as quick picks by the
-   * assignee picker of the inline create bar.
-   */
-  const assigneeOptions = useMemo(() => {
-    const ids = new Set<number>();
-
-    items.forEach((dto) => {
-      if (dto.assigneeProjectMemberId != null) {
-        ids.add(dto.assigneeProjectMemberId);
-      }
-    });
-
-    return [...ids].sort((left, right) => left - right).slice(0, 8);
-  }, [items]);
-
-  /**
    * Milestones a box may link: the ones of its project. The product backlog box
    * has no project, so it offers every active milestone and the backend derives
    * the project of the item from the chosen milestone.
@@ -1110,7 +1113,7 @@ export function BacklogBoard({
                           : "Create a work item in the product backlog."
                       }
                       creating={creatingKey === section.key}
-                      assigneeOptions={assigneeOptions}
+                      assignees={assignees}
                       milestones={milestonesFor(section.projectId)}
                       onCreate={(values) =>
                         handleCreateItem(
@@ -1210,6 +1213,7 @@ export function BacklogBoard({
         milestones={milestonesFor(
           detailItem?.projectId ?? detailSection?.projectId ?? null,
         )}
+        assignees={assignees}
         canEdit={canEditTask && !detailSection?.locked}
         canMove={canEditBoard && !detailSection?.locked}
         canDelete={canDelete}
