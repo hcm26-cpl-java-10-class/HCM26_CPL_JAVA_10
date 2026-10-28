@@ -83,6 +83,9 @@ export interface ExamDTO {
   requireFullscreen?: boolean;
   singleSession?: boolean;
   flagThreshold?: number | null;
+  // NEW (anti-cheat nang cao)
+  fastSubmitPercent?: number | null;
+  similarityPercent?: number | null;
 }
 
 export interface ExamFilter {
