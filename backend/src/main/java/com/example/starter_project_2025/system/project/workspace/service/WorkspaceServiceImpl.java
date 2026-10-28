@@ -21,6 +21,7 @@ import com.example.starter_project_2025.system.project.ProjectMemberRepository;
 import com.example.starter_project_2025.system.project.ProjectTeam;
 import com.example.starter_project_2025.system.project.ProjectTeamRepository;
 import com.example.starter_project_2025.system.project.ProjectTeamStatus;
+import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -84,6 +85,14 @@ public class WorkspaceServiceImpl implements WorkspaceService {
     private WorkspaceCandidateItem toCandidateItem(ProjectTeam team) {
         TrainingClass trainingClass = team.getTrainingClass();
         Project project = team.getProject();
+        // Team allocation (US-10) assigns a project template, not a Project row.
+        // Fall back to the template so the candidate list still shows the assigned brief.
+        ProjectTemplate template = project == null ? team.getProjectTemplate() : null;
+        String projectName = project != null ? project.getName() : template != null ? template.getName() : null;
+        String projectCode = project != null ? project.getCode()
+                : template == null ? null
+                : template.getCode() != null && !template.getCode().isBlank() ? template.getCode()
+                : "Template #" + template.getId();
         Workspace existing = workspaceRepository.findFirstByTeamIdOrderByIdAsc(team.getId()).orElse(null);
         long memberCount = memberRepository.findAllByTeam_IdAndClassMember_StatusOrderByIdAsc(
                 team.getId(), com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus.ACTIVE).size();
@@ -97,8 +106,8 @@ public class WorkspaceServiceImpl implements WorkspaceService {
 
         return WorkspaceCandidateItem.builder()
                 .projectId(project != null ? project.getId() : null)
-                .projectName(project != null ? project.getName() : null)
-                .projectCode(project != null ? project.getCode() : null)
+                .projectName(projectName)
+                .projectCode(projectCode)
                 .projectStatus(project != null ? project.getStatus() : null)
                 .teamId(team.getId())
                 .teamName(team.getTeamName())
@@ -124,10 +133,12 @@ public class WorkspaceServiceImpl implements WorkspaceService {
         var chosen = selection.resolve(user, request, false);
         var result = toCandidateItem(chosen.team());
         Project project = chosen.project();
-        result.setProjectId(project == null ? null : project.getId());
-        result.setProjectName(project == null ? null : project.getName());
-        result.setProjectCode(project == null ? null : project.getCode());
-        result.setProjectStatus(project == null ? null : project.getStatus());
+        if (project != null) {
+            result.setProjectId(project.getId());
+            result.setProjectName(project.getName());
+            result.setProjectCode(project.getCode());
+            result.setProjectStatus(project.getStatus());
+        }
         result.setEligibleForWorkspace(true);
         result.setIneligibleReason(null);
         return result;
