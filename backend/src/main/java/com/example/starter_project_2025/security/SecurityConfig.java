@@ -60,7 +60,9 @@ public class SecurityConfig {
             "/login/oauth2/**",
             "/verify/**",
             "/api/auth/**",
-            "/h2-console/**"
+            "/h2-console/**",
+            // Public certificate verification API
+            "/api/certificates/verify/**",
     };
 
     @Bean
