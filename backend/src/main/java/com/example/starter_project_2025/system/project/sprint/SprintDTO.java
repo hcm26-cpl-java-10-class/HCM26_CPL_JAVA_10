@@ -29,6 +29,12 @@ public class SprintDTO extends BaseDTO {
      */
     Long projectId;
 
+    /**
+     * Owning team: set when the sprint is created from a team workspace, so the
+     * Backlog tab of that workspace keeps showing it.
+     */
+    Long teamId;
+
     String name;
 
     String sprintGoal;

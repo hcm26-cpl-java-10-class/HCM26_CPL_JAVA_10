@@ -349,16 +349,24 @@ public class SprintBacklogServiceImpl
      * Active milestones the student can link a backlog item to
      * (UFR-PRJ-003-02). Used by the milestone picker of the backlog form and of
      * the work item detail panel.
+     * <p>
+     * When {@code teamId} is set (Backlog tab of a team workspace) the picker is
+     * limited to the milestones of that team, so a workspace never offers the
+     * milestones of another team that happens to work on the same project.
      */
     @Override
     @Transactional(readOnly = true)
-    public List<BacklogMilestoneOptionDTO> getMilestoneOptions() {
+    public List<BacklogMilestoneOptionDTO> getMilestoneOptions(Long teamId) {
 
         check("SPRINT_BACKLOG_READ");
 
         Long tenantId = milestoneTenantProvider.requireCurrentTenantId();
 
-        return milestoneRepository.findByTenantIdAndActiveTrueOrderByDeadlineAscIdAsc(tenantId)
+        List<Milestone> candidates = teamId == null
+                ? milestoneRepository.findByTenantIdAndActiveTrueOrderByDeadlineAscIdAsc(tenantId)
+                : milestoneRepository.findByTenantIdAndTeamIdAndActiveTrueOrderByDeadlineAscIdAsc(tenantId, teamId);
+
+        return candidates
                 .stream()
                 .map(milestone -> new BacklogMilestoneOptionDTO(
                         milestone.getId(),
