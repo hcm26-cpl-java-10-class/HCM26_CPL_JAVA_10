@@ -524,7 +524,7 @@ export default function EssayAttemptDetailPage() {
                                                                         <td className="py-2 px-3 text-center font-semibold text-purple-900 dark:text-purple-300">
                                                                             {c.awardedPoints} / {c.maxPoints}
                                                                         </td>
-                                                                        <td className="py-2 px-3 text-muted-foreground">{c.comment}</td>
+<td className="py-2 px-3 text-muted-foreground">{c.explanation || c.comment}</td>
                                                                     </tr>
                                                                 ))}
                                                             </tbody>
