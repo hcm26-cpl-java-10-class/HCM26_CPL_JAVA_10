@@ -7,6 +7,8 @@ export type SprintStatus = "PLANNED" | "ACTIVE" | "COMPLETED" | "CANCELLED";
 export interface SprintDTO extends BaseDTO {
   /** Owning project (used to scope the milestone picker). */
   projectId?: number | null;
+  /** Owning team when the sprint was created from a team workspace board. */
+  teamId?: number | null;
   name?: string;
   sprintGoal?: string;
   startDate?: string;
@@ -17,6 +19,8 @@ export interface SprintDTO extends BaseDTO {
 }
 
 export interface SprintFilter extends BaseFilter {
+  /** Owning project, used to show only the sprints of the open workspace. */
+  projectId?: number;
   status?: SprintStatus;
   startFrom?: string;
   endTo?: string;

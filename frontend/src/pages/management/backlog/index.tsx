@@ -1,4 +1,4 @@
-import { milestoneApi, sprintApi, sprintBacklogApi } from "@/api";
+import { milestoneApi, sprintApi, sprintBacklogApi, teamBacklogApi } from "@/api";
 import Loading from "@/components/datatable/common/Loading";
 import { ConfirmDeleteModal } from "@/components/datatable/modal/ConfirmDeleteModal";
 import { FormModal } from "@/components/datatable/modal/form/FormModal";
@@ -59,6 +59,8 @@ import {
 const SPRINTS_QUERY_KEY = ["sprints", "backlog"] as const;
 const BACKLOG_ITEMS_QUERY_KEY = ["sprint-backlogs", "backlog-page"] as const;
 const MILESTONE_OPTIONS_QUERY_KEY = ["milestones", "backlog-options"] as const;
+/** Team-scoped board of a workspace (only its own sprints and items). */
+const TEAM_BOARD_QUERY_KEY = ["team-backlog-board"] as const;
 
 const MILESTONE_CHANGED_MESSAGE =
   "Milestone không tồn tại hoặc đã bị thay đổi";
@@ -206,8 +208,32 @@ interface BoardSection {
   dueDate: string | null;
 }
 
+export interface BacklogBoardProps {
+  /**
+   * `true` when the board is mounted inside a page section (workspace Backlog
+   * tab) instead of being the whole route page, so it must not claim the full
+   * viewport height.
+   */
+  embedded?: boolean;
+  /**
+   * Project the board is scoped to. The value comes from the workspace of the
+   * open team, so every workspace lists only the sprints and work items of its
+   * own project instead of the whole database (`null` = unscoped, the
+   * `/backlogs` route page).
+   */
+  projectId?: number | null;
+  /**
+   * Team of the open workspace. When it is set the board reads the team-scoped
+   * endpoint (`/teams/{teamId}/backlog-board`), so a team workspace lists only
+   * its own sprints and work items instead of every record of the tenant
+   * (`null` = tenant-wide, the `/backlogs` route page).
+   */
+  teamId?: number | null;
+}
+
 /**
- * Student backlog page (`/backlogs`, also served by `/sprints`).
+ * Student backlog board (`/backlogs`, also served by `/sprints` and by the
+ * Backlog tab of a workspace).
  * <p>
  * Every sprint is rendered as its own collapsible box and the product backlog
  * (items without a sprint) gets a box of its own at the bottom. Each box has a
@@ -215,7 +241,11 @@ interface BoardSection {
  * be moved between boxes by drag and drop or by selection. Their status moves
  * one step along the UFR-PRJ-003-02 workflow.
  */
-export default function BacklogPage() {
+export function BacklogBoard({
+  embedded = false,
+  projectId = null,
+  teamId = null,
+}: BacklogBoardProps) {
   const queryClient = useQueryClient();
   const { hasAllPermissions, user } = usePermissions();
 
@@ -252,15 +282,36 @@ export default function BacklogPage() {
   );
   const [dragTarget, setDragTarget] = useState<string | null>(null);
 
+  /**
+   * Team-scoped data of the open workspace. It replaces the tenant-wide page
+   * queries below whenever the board is mounted for a team workspace.
+   */
+  const teamQuery = useQuery({
+    queryKey: [...TEAM_BOARD_QUERY_KEY, teamId ?? "none"],
+    queryFn: () => teamBacklogApi.getBoard(teamId as number),
+    enabled: teamId != null,
+  });
+
   const sprintsQuery = useQuery({
-    queryKey: SPRINTS_QUERY_KEY,
-    queryFn: () => sprintApi.getPage({ page: 0, size: 100, sort: ["id,asc"] }),
+    queryKey: [...SPRINTS_QUERY_KEY, projectId ?? "all"],
+    queryFn: () =>
+      sprintApi.getPage(
+        { page: 0, size: 100, sort: ["id,asc"] },
+        undefined,
+        projectId == null ? undefined : { ids: [], projectId },
+      ),
+    enabled: teamId == null,
   });
 
   const itemsQuery = useQuery({
-    queryKey: BACKLOG_ITEMS_QUERY_KEY,
+    queryKey: [...BACKLOG_ITEMS_QUERY_KEY, projectId ?? "all"],
     queryFn: () =>
-      sprintBacklogApi.getPage({ page: 0, size: 500, sort: ["id,asc"] }),
+      sprintBacklogApi.getPage(
+        { page: 0, size: 500, sort: ["id,asc"] },
+        undefined,
+        projectId == null ? undefined : { ids: [], projectId },
+      ),
+    enabled: teamId == null,
   });
 
   /** Active milestones the user can link a backlog item to (UFR-PRJ-003-02). */
@@ -275,9 +326,27 @@ export default function BacklogPage() {
     [milestonesQuery.data],
   );
 
+  /**
+   * Project that owns new sprints / work items. Inside a team workspace the
+   * scope comes from the team itself when the workspace has no project.
+   */
+  const scopedProjectId = projectId ?? teamQuery.data?.projectId ?? null;
+
   const sprints = useMemo<SprintDTO[]>(
-    () => sprintsQuery.data?.content ?? [],
-    [sprintsQuery.data],
+    () =>
+      teamId != null
+        ? (teamQuery.data?.sprints ?? [])
+        : (sprintsQuery.data?.content ?? []),
+    [sprintsQuery.data, teamId, teamQuery.data],
+  );
+
+  /** Work items of the board (already team-scoped inside a workspace). */
+  const items = useMemo<SprintBacklogDTO[]>(
+    () =>
+      teamId != null
+        ? (teamQuery.data?.items ?? [])
+        : (itemsQuery.data?.content ?? []),
+    [itemsQuery.data, teamId, teamQuery.data],
   );
 
   /** Work items grouped by sprint id (`null` = product backlog). */
@@ -289,7 +358,7 @@ export default function BacklogPage() {
     );
     const grouped = new Map<number | null, SprintPlanningItem[]>();
 
-    (itemsQuery.data?.content ?? []).forEach((dto) => {
+    items.forEach((dto) => {
       if (dto.id == null) return;
 
       const key =
@@ -303,7 +372,7 @@ export default function BacklogPage() {
     });
 
     return grouped;
-  }, [itemsQuery.data, sprints]);
+  }, [items, sprints]);
 
   const itemIdsOf = useCallback(
     (sprintId: number | null) =>
@@ -351,7 +420,7 @@ export default function BacklogPage() {
         key: sprint?.id != null ? sprintSectionKey(sprint.id) : BACKLOG_SECTION_KEY,
         sprint,
         sprintId: sprint?.id ?? null,
-        projectId: sprint?.projectId ?? null,
+        projectId: sprint?.projectId ?? scopedProjectId ?? null,
         title:
           sprint?.name?.trim() ||
           (sprint?.id != null ? `Sprint ${sprint.id}` : "Backlog"),
@@ -371,17 +440,19 @@ export default function BacklogPage() {
       .map((sprint) => build(sprint, groupedItems.get(sprint.id as number) ?? []));
 
     return [...sprintSections, build(null, groupedItems.get(null) ?? [])];
-  }, [groupedItems, matchesFilters, sprints]);
+  }, [groupedItems, matchesFilters, scopedProjectId, sprints]);
 
   const allCollapsed =
     sections.length > 0 && sections.every((section) => !!collapsed[section.key]);
 
   const refreshBoard = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: BACKLOG_ITEMS_QUERY_KEY });
+    await queryClient.invalidateQueries({ queryKey: TEAM_BOARD_QUERY_KEY });
   }, [queryClient]);
 
   const refreshSprints = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: SPRINTS_QUERY_KEY });
+    await queryClient.invalidateQueries({ queryKey: TEAM_BOARD_QUERY_KEY });
   }, [queryClient]);
 
   const selectedIdsOf = (key: string, items: SprintPlanningItem[]) => {
@@ -423,7 +494,13 @@ export default function BacklogPage() {
     setSubmitting(true);
 
     try {
-      await sprintApi.create(values as SprintDTO);
+      await sprintApi.create({
+        ...values,
+        projectId:
+          scopedProjectId ?? (values.projectId as number | null | undefined) ?? null,
+        // Keeps the new sprint inside the team workspace that created it.
+        teamId,
+      } as SprintDTO);
       setCreateSprintOpen(false);
       await refreshSprints();
 
@@ -540,6 +617,7 @@ export default function BacklogPage() {
     boxKey: string,
     sprintId: number | null,
     values: BacklogCreateValues,
+    boxProjectId: number | null,
   ): Promise<BacklogCreateResult> => {
     if (creatingKey !== null) {
       return { ok: false, message: "Another backlog item is being saved." };
@@ -550,7 +628,7 @@ export default function BacklogPage() {
     try {
       await sprintBacklogApi.create({
         sprintId,
-        projectId: milestoneProjectIdOf(values.milestoneId),
+        projectId: milestoneProjectIdOf(values.milestoneId) ?? boxProjectId,
         milestoneId: values.milestoneId,
         title: values.title,
         description: values.description,
@@ -850,14 +928,14 @@ export default function BacklogPage() {
   const assigneeOptions = useMemo(() => {
     const ids = new Set<number>();
 
-    (itemsQuery.data?.content ?? []).forEach((dto) => {
+    items.forEach((dto) => {
       if (dto.assigneeProjectMemberId != null) {
         ids.add(dto.assigneeProjectMemberId);
       }
     });
 
     return [...ids].sort((left, right) => left - right).slice(0, 8);
-  }, [itemsQuery.data]);
+  }, [items]);
 
   /**
    * Milestones a box may link: the ones of its project. The product backlog box
@@ -875,22 +953,39 @@ export default function BacklogPage() {
     [milestones],
   );
 
-  const loading = sprintsQuery.isLoading || itemsQuery.isLoading;
-  const loadError = sprintsQuery.isError
-    ? extractErrorMessage(
-        sprintsQuery.error,
-        "The sprint service did not answer. Please try again.",
-      )
-    : itemsQuery.isError
-      ? extractErrorMessage(
-          itemsQuery.error,
-          "The backlog service did not answer. Please try again.",
-        )
-      : null;
+  const loading =
+    teamId != null
+      ? teamQuery.isLoading
+      : sprintsQuery.isLoading || itemsQuery.isLoading;
+  const loadError =
+    teamId != null
+      ? teamQuery.isError
+        ? extractErrorMessage(
+            teamQuery.error,
+            "The team backlog service did not answer. Please try again.",
+          )
+        : null
+      : sprintsQuery.isError
+        ? extractErrorMessage(
+            sprintsQuery.error,
+            "The sprint service did not answer. Please try again.",
+          )
+        : itemsQuery.isError
+          ? extractErrorMessage(
+              itemsQuery.error,
+              "The backlog service did not answer. Please try again.",
+            )
+          : null;
 
   return (
-    <MainLayout pathName={{ backlogs: "Backlogs", sprints: "Sprints" }}>
-      <div className="flex min-h-0 flex-1 flex-col gap-3">
+    <>
+      <div
+        className={
+          embedded
+            ? "flex flex-col gap-3"
+            : "flex min-h-0 flex-1 flex-col gap-3"
+        }
+      >
         <BacklogToolbar
           keyword={keyword}
           onKeywordChange={setKeyword}
@@ -932,6 +1027,11 @@ export default function BacklogPage() {
                 size="sm"
                 className="w-fit"
                 onClick={() => {
+                  if (teamId != null) {
+                    void teamQuery.refetch();
+                    return;
+                  }
+
                   void sprintsQuery.refetch();
                   void itemsQuery.refetch();
                 }}
@@ -942,7 +1042,13 @@ export default function BacklogPage() {
             </AlertDescription>
           </Alert>
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+          <div
+            className={
+              embedded
+                ? "flex flex-col gap-3"
+                : "flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto"
+            }
+          >
             {sprints.length === 0 && (
               <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-muted/20 px-6 py-10 text-center">
                 <span className="rounded-full bg-muted p-3 text-muted-foreground">
@@ -1003,7 +1109,12 @@ export default function BacklogPage() {
                       assigneeOptions={assigneeOptions}
                       milestones={milestonesFor(section.projectId)}
                       onCreate={(values) =>
-                        handleCreateItem(section.key, section.sprintId, values)
+                        handleCreateItem(
+                          section.key,
+                          section.sprintId,
+                          values,
+                          section.projectId,
+                        )
                       }
                     />
                   }
@@ -1104,6 +1215,17 @@ export default function BacklogPage() {
           await refreshBoard();
         }}
       />
+    </>
+  );
+}
+
+/**
+ * Route page of the backlog board (`/backlogs`).
+ */
+export default function BacklogPage() {
+  return (
+    <MainLayout pathName={{ backlogs: "Backlogs", sprints: "Sprints" }}>
+      <BacklogBoard />
     </MainLayout>
   );
 }
