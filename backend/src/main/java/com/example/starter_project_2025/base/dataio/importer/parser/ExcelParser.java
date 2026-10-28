@@ -19,7 +19,7 @@ public class ExcelParser implements FileParser {
 
     @Override
     public boolean supports(String filename) {
-        return filename.endsWith(".xlsx");
+        return filename != null && filename.toLowerCase(java.util.Locale.ROOT).endsWith(".xlsx");
     }
 
     @Override
@@ -30,9 +30,14 @@ public class ExcelParser implements FileParser {
             Sheet sheet = workbook.getSheetAt(0);
 
             Row headerRow = sheet.getRow(0);
+            if (headerRow == null) {
+                return rows;
+            }
             List<String> headers = new ArrayList<>();
 
-            headerRow.forEach(cell -> headers.add(cell.getStringCellValue()));
+            for (Cell cell : headerRow) {
+                headers.add(getCellValue(cell));
+            }
 
             for (int i = 1; i <= sheet.getLastRowNum(); i++) {
                 Row row = sheet.getRow(i);
@@ -40,7 +45,7 @@ public class ExcelParser implements FileParser {
                 Map<String, String> map = new HashMap<>();
 
                 for (int j = 0; j < headers.size(); j++) {
-                    Cell cell = row.getCell(j);
+                    Cell cell = row == null ? null : row.getCell(j);
                     map.put(headers.get(j), getCellValue(cell));
                 }
 

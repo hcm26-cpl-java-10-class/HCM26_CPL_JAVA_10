@@ -236,13 +236,7 @@ export function FormFieldRenderer({
             onChange={(e) => onChange(field.name, e.target.value)}
             placeholder={`Enter ${field.label.toLowerCase()}...`}
             rows={4}
-            maxLength={field.maxLength}
           />
-          {field.maxLength ? (
-            <p className="text-xs text-muted-foreground text-right">
-              {String(value || "").length}/{field.maxLength} ký tự
-            </p>
-          ) : null}
           <FieldError errors={fieldErrors} />
         </div>
       );
@@ -254,12 +248,10 @@ export function FormFieldRenderer({
           <Label htmlFor={field.name}>{field.label}</Label>
           <Input
             id={field.name}
-            type={field.name === "email" ? "email" : "text"}
             className={errorClass}
             value={value || ""}
-            maxLength={field.maxLength}
             onChange={(e) => onChange(field.name, e.target.value)}
-            placeholder={field.name === "email" ? "name@gmail.com" : `Enter ${field.label.toLowerCase()}...`}
+            placeholder={`Enter ${field.label.toLowerCase()}...`}
           />
           <FieldError errors={fieldErrors} />
         </div>

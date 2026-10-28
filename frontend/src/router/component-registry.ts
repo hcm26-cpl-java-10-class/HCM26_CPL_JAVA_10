@@ -6,13 +6,13 @@ import RegisterPage from "@/pages/auth/RegisterPage";
 import NotFoundPage from "@/pages/error/NotFoundPage";
 import { Unauthorized } from "@/pages/error/Unauthorized";
 import { Dashboard } from "@/pages/management/dashboard";
-import RolePermissionMatrixPage from "@/pages/management/rbac/permission/RolePermissionMatrixPage";
 import ExamManagementPage from "@/pages/management/exam";
 import InvitationManagementPage from "@/pages/management/invitation";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
 import StudentExamList from "@/pages/student/StudentExamList";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
+import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 
@@ -26,8 +26,9 @@ export interface RouteConfig {
 }
 
 export const routes: RouteConfig[] = [
+  { path: "/fams/module-group-module", component: ModuleGroupModulePage, isPublic: true },
+  { path: "/module-group-module", component: ModuleGroupModulePage, isPublic: true },
   { path: "/dashboard", component: Dashboard, isModuleDriven: true },
-  { path: "/role-permissions", component: RolePermissionMatrixPage, requiredPermission: "ROLE_UPDATE" },
   { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
   {
     path: "/invitations",

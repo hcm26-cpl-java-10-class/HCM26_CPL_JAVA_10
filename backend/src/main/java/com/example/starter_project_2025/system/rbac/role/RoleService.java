@@ -1,11 +1,19 @@
 package com.example.starter_project_2025.system.rbac.role;
 
 import com.example.starter_project_2025.base.crud.service.BaseCrudService;
+import com.example.starter_project_2025.base.dataio.importer.result.ImportResult;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.web.multipart.MultipartFile;
 
-import java.util.Set;
+public interface RoleService
+        extends BaseCrudService<Long, RoleDTO, RoleFilter> {
 
-public interface RoleService extends BaseCrudService<Long, RoleDTO, RoleFilter> {
-    Set<Long> getPermissionIds(Long roleId);
-    RoleDTO updatePermissions(Long roleId, Set<Long> permissionIds);
-    RoleDTO setSystemRole(Long roleId, boolean isSystem);
+    Page<RoleDTO> searchRoles(String keyword, Pageable pageable);
+
+    RoleDTO updateRoleStatus(Long id, boolean isActive);
+
+    void deleteRole(Long id);
+
+    ImportResult importRoles(MultipartFile file);
 }

@@ -72,6 +72,9 @@ interface ProTableProps<TData = any> {
         schema: any;
         initial: TData | null;
         onSubmit: (data: any) => void;
+        isSubmitting: boolean;
+        relationOptions: Record<string, any[]>;
+        fieldErrors: Record<string, string[]>;
     }) => React.ReactNode;
 
     /** Optional: Handle row click */
@@ -169,8 +172,8 @@ export function ProTable<TData = any>({
     }, []);
 
     // Column widths state for resizing
-    const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
-        const widths: Record<string, number> = {};
+    const [columnWidths, setColumnWidths] = useState<Record<string, number | string>>(() => {
+        const widths: Record<string, number | string> = {};
         schema.fields.forEach((f: any) => {
             widths[f.name] = f.width || 150;
         });
@@ -184,7 +187,11 @@ export function ProTable<TData = any>({
             e.preventDefault();
             e.stopPropagation();
             const startX = e.clientX;
-            const startWidth = columnWidths[fieldName] || 150;
+            const configuredWidth = columnWidths[fieldName] || 150;
+            const startWidth =
+                typeof configuredWidth === "number"
+                    ? configuredWidth
+                    : e.currentTarget.getBoundingClientRect().width;
             resizingRef.current = { field: fieldName, startX, startWidth };
 
             const onMouseMove = (ev: MouseEvent) => {
@@ -228,7 +235,7 @@ export function ProTable<TData = any>({
     const hasRowActions = canViewRow || canEditRow || canDeleteRow;
 
     const showActionsColumn = !hideActions && hasRowActions;
-    const ACTION_COLUMN_WIDTH = 152;
+    const ACTION_COLUMN_WIDTH = 140;
 
     // Default row actions renderer (uses internal modal system or custom overrides)
     const defaultRenderRowActions = (row: TData) => (
@@ -250,7 +257,7 @@ export function ProTable<TData = any>({
         onRowClick || (isBrowseMode ? ((onView || setDetailRow) as (row: TData) => void) : undefined);
 
     return (
-        <div className="grid gap-4 h-full font-inter grid-rows-[auto_1fr_auto]">
+        <div className="grid h-full w-full min-w-0 max-w-full grid-rows-[auto_1fr_auto] gap-4 overflow-x-hidden font-inter">
             <Toolbar
                 table={table}
                 headerActions={headerActions}
@@ -263,13 +270,16 @@ export function ProTable<TData = any>({
 
             <div
                 ref={containerRef}
-                className={`h-full rounded-md bg-card text-foreground flex flex-col overflow-hidden w-full ${
+                className={`h-full min-w-0 max-w-full rounded-md bg-card text-foreground flex flex-col overflow-hidden w-full ${
                     effectiveViewMode === "card" ? "border-0" : "border"
                 }`}
             >
                 {effectiveViewMode === "table" ? (
                     <>
-                        <Table className="table-fixed">
+                        <Table
+                            className="w-full border-separate border-spacing-0 table-fixed"
+                            containerClassName="w-full overflow-auto max-h-[600px] relative border rounded-lg"
+                        >
                             <colgroup>
                                 {isExpandable && <col style={{ width: 40 }} />}
                                 <col style={{ width: 20 }} />
@@ -303,7 +313,7 @@ export function ProTable<TData = any>({
                                     {showActionsColumn && (
                                         <TableHead
                                             style={{ width: ACTION_COLUMN_WIDTH }}
-                                            className="sticky right-0 z-30 bg-background border-l border-border/70 shadow-[-8px_0_10px_-10px_rgba(0,0,0,0.45)]"
+                                            className="sticky top-0 right-0 z-30 h-12 px-4 py-3 align-middle text-left font-semibold text-gray-900 border-b border-l border-gray-200 bg-gray-50 shadow-sm dark:bg-gray-800"
                                         >
                                             <div className="flex items-center justify-between gap-2">
                                                 <span className="whitespace-nowrap">Actions</span>
@@ -391,10 +401,7 @@ export function ProTable<TData = any>({
                                                             field={f}
                                                             value={row[f.name]}
                                                             relationOptions={table.relationOptions}
-                                                            disableBooleanToggle={
-                                                                !(table.permission?.canUpdate ?? true) ||
-                                                                (f.name === "isSystem" && ["ADMIN", "STUDENT", "TEACHER"].includes(String(row.name ?? "").toUpperCase()))
-                                                            }
+                                                            disableBooleanToggle={!(table.permission?.canUpdate ?? true)}
                                                             onBooleanToggle={(fieldName, newValue) => {
                                                                 if (!(table.permission?.canUpdate ?? true)) return;
                                                                 table.patchField(id, fieldName, newValue);
@@ -410,9 +417,7 @@ export function ProTable<TData = any>({
                                                     {showActionsColumn && (
                                                         <TableCell
                                                             style={{ width: ACTION_COLUMN_WIDTH }}
-                                                            className={`sticky right-0 z-20 border-l border-border/70 ${
-                                                                index % 2 === 0 ? "bg-accent" : "bg-background"
-                                                            } group-hover:bg-muted/50 shadow-[-8px_0_10px_-10px_rgba(0,0,0,0.35)]`}
+                                                            className="sticky right-0 z-10 h-16 px-4 py-3 align-middle border-b border-l border-gray-200 bg-white dark:bg-gray-900"
                                                         >
                                                             <div className="flex items-center gap-1 overflow-hidden">
                                                                 {finalRenderRowActions(row)}
@@ -551,6 +556,9 @@ export function ProTable<TData = any>({
                     },
                     schema,
                     initial: table.editingRow,
+                    isSubmitting: table.isSubmitting,
+                    relationOptions: table.relationOptions,
+                    fieldErrors: table.fieldErrors,
                     onSubmit: (data) => {
                         if (table.editingRow) {
                             table.update({ id: table.editingRow[schema.idField], data });

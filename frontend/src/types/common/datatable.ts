@@ -61,7 +61,7 @@ export interface FieldSchema {
 
   hideable?: boolean;
 
-  width?: number;
+  width?: number | string;
 
   minWidth?: number;
 
@@ -81,12 +81,6 @@ export interface FieldSchema {
   dynamicChild?: DynamicChildMeta;
 
   bold?: boolean;
-
-  /** Required input in the create/edit form. */
-  required?: boolean;
-
-  /** Maximum text length for text/textarea inputs. */
-  maxLength?: number;
 
   expandable?: boolean;
 
@@ -121,7 +115,7 @@ export interface DynamicFieldBuilderOptions {
   editable?: boolean;
   visible?: boolean;
   hideable?: boolean;
-  width?: number;
+  width?: number | string;
   minWidth?: number;
 }
 
