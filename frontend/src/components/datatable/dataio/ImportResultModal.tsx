@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { GeneratedCredential, ImportResult } from "@/types";
-import { ArrowLeft, CheckCircle2, Download, KeyRound, ListChecks, Mail, RefreshCw, SkipForward, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Download, KeyRound, Mail, RefreshCw, SkipForward, XCircle } from "lucide-react";
 
 interface ImportResultContentProps {
   result: ImportResult;

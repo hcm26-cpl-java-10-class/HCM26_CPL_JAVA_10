@@ -165,9 +165,6 @@ public class ExamEssayGradingService {
         attempt.setStatus(ExamAttemptStatus.SUBMITTED);
         attemptRepository.save(attempt);
 
-        // Thí sinh tự do (không có account) chỉ nhận được điểm chính thức qua email ở bước này.
-        anonymousExamService.sendFinalResultToGuest(attemptId);
-
         return getDetail(examId, attemptId);
     }
 

@@ -6,7 +6,7 @@ import { normalizeEntityActionPath, resolveEntityActionPath } from "@/router/ent
 import type { EntityConfig } from "@/types";
 import { useProTable } from "@/components/datatable/hook/useProTable";
 import { usePermissions } from "@/hooks/usePermissions";
-import { ADMIN_ROLE, normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
+import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
 import { Plus } from "lucide-react";
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
@@ -140,6 +140,7 @@ const headerActions = useMemo(() => {
         };
     }, [detailPage, entity.schema.idField, navigate]);
 
+    const isStudentRole = normalizeRole(activeRole) === STUDENT_ROLE;
     const isReadOnlyLikeRole =
         !!table.permission?.canRead &&
         !table.permission?.canCreate &&

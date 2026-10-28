@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 @ResourcePermission("INVITATION")
 @ResourceMenu(
         title = "Invitations",
-        group = "Exam",
+        group = "Exam Management",
         icon = "mail",
         url = "/invitations",
         order = 2,

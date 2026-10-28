@@ -25,7 +25,6 @@ import {
     ChevronUp,
     Info,
     Loader2,
-    Mail,
     Save,
     Sparkles,
 } from "lucide-react";
@@ -139,20 +138,6 @@ export default function EssayAttemptDetailPage() {
         },
         onError: (error) => {
             toast.error(getErrorMessage(error, "Failed to save official grades."));
-        },
-    });
-
-    const resendEmailMutation = useMutation({
-        mutationFn: () => examApi.resendResultEmail(numericAttemptId),
-        onSuccess: (result) => {
-            if (result.sent) {
-                toast.success("Result email sent to the student.");
-            } else {
-                toast.error(result.message);
-            }
-        },
-        onError: (error) => {
-            toast.error(getErrorMessage(error, "Failed to resend result email."));
         },
     });
 
@@ -292,23 +277,6 @@ export default function EssayAttemptDetailPage() {
                                 <Sparkles className="mr-2 size-4 text-purple-600" />
                             )}
                             {aiSuggestMutation.isPending ? "Generating Suggestions..." : "Request AI Suggestions"}
-                        </Button>
-                        <Button
-                            variant="outline"
-                            onClick={() => resendEmailMutation.mutate()}
-                            disabled={resendEmailMutation.isPending || !detail?.studentEmail}
-                            title={
-                                detail?.studentEmail
-                                    ? "Send the result email again"
-                                    : "This attempt has no student email"
-                            }
-                        >
-                            {resendEmailMutation.isPending ? (
-                                <Loader2 className="mr-2 size-4 animate-spin" />
-                            ) : (
-                                <Mail className="mr-2 size-4" />
-                            )}
-                            {resendEmailMutation.isPending ? "Sending..." : "Resend Result Email"}
                         </Button>
                         <Button
                             onClick={handleInitiateSave}

@@ -35,7 +35,6 @@ public class AnonymousExamService {
     private final ExamAttemptRepository attemptRepository;
     private final EmailService emailService;
     private final ExamIntegrityService integrityService; // NEW (anti-cheat)
-    private final GuestEmailResolver guestEmailResolver;
 
     @Transactional(readOnly = true)
     private AnonymousSession requireSession(String sessionToken) {
@@ -100,8 +99,6 @@ public class AnonymousExamService {
     private void sendResultEmailIfJustSubmitted(AnonymousSession session, Long attemptId) {
         ExamAttempt attempt = attemptRepository.findById(attemptId).orElse(null);
         if (attempt == null) {
-            log.warn("Skip anonymous result email: attempt {} not found (session {})",
-                    attemptId, session.getId());
             return;
         }
 
@@ -110,21 +107,10 @@ public class AnonymousExamService {
                 || attempt.getStatus() == ExamAttemptStatus.EXPIRED;
 
         if (!finished) {
-            log.warn("Skip anonymous result email: attempt {} status {} not finished (session {})",
-                    attemptId, attempt.getStatus(), session.getId());
             return;
         }
 
         if (session.getCompletedAt() != null) {
-            log.warn("Skip anonymous result email: session {} already completed (attempt {})",
-                    session.getId(), attemptId);
-            return;
-        }
-
-        if (session.getGuestEmail() == null || session.getGuestEmail().isBlank()) {
-            log.warn("Skip anonymous result email: session {} has no guest email (attempt {}, examId {})",
-                    session.getId(), attemptId,
-                    attempt.getExam() != null ? attempt.getExam().getId() : null);
             return;
         }
 
@@ -144,7 +130,7 @@ public class AnonymousExamService {
                 LocalDateTime.ofInstant(attempt.getSubmittedAt(), ZoneId.systemDefault()));
 
         try {
-            boolean sent = emailService.sendAnonymousExamResult(
+            emailService.sendAnonymousExamResult(
                     session.getGuestEmail(),
                     session.getGuestName(),
                     attempt.getExam().getTitle(),
@@ -153,22 +139,9 @@ public class AnonymousExamService {
                     submittedAt,
                     pendingReview
             );
-            if (sent) {
-                log.info("Anonymous result email dispatched to {} for examId {} attempt {} (pendingReview={})",
-                        session.getGuestEmail(),
-                        attempt.getExam() != null ? attempt.getExam().getId() : null,
-                        attemptId, pendingReview);
-            } else {
-                log.error("Anonymous result email FAILED for examId {} attempt {} (session {}). "
-                                + "Check SMTP config: spring.mail.username / MAIL_APP_PASSWORD (Gmail app password).",
-                        attempt.getExam() != null ? attempt.getExam().getId() : null,
-                        attemptId, session.getId());
-            }
         } catch (Exception e) {
-            log.error("Failed to send anonymous exam result email to {} for examId {} attempt {} session {}: {}",
-                    session.getGuestEmail(),
-                    attempt.getExam() != null ? attempt.getExam().getId() : null,
-                    attemptId, session.getId(), e.getMessage());
+            log.error("Failed to send anonymous exam result email for session {}: {}",
+                    session.getId(), e.getMessage());
         }
     }
 
@@ -184,67 +157,10 @@ public class AnonymousExamService {
         }
     }
 
-    /**
-     * Gui lai email ket qua cho thi sinh tu do (guest).
-     * emailOverride cho phep giao vien gui vao dia chi khac khi thieu sinh nhieu tai khoang.
-     */
-    @Transactional(readOnly = true)
-    public boolean resendResultEmailToGuest(Long attemptId, String emailOverride) {
-        ExamAttempt attempt = attemptRepository.findById(attemptId).orElse(null);
-        if (attempt == null) {
-            log.warn("Resend guest result email failed: attempt {} not found", attemptId);
-            return false;
-        }
-
-        if (attempt.getStudent() == null
-                || !Boolean.TRUE.equals(attempt.getStudent().getIsGuest())) {
-            log.warn("Resend guest result email failed: attempt {} is not a guest attempt", attemptId);
-            return false;
-        }
-
-        String recipientEmail = emailOverride != null && !emailOverride.isBlank()
-                ? emailOverride.trim()
-                : guestEmailResolver.resolveGuestEmail(attempt);
-
-        if (recipientEmail == null || recipientEmail.isBlank()) {
-            log.warn("Resend guest result email failed: attempt {} has no recipient email", attemptId);
-            return false;
-        }
-
-        BigDecimal score = attempt.getFinalScore() != null
-                ? attempt.getFinalScore()
-                : attempt.getObjectiveScore();
-        boolean pendingReview = attempt.getFinalScore() == null;
-
-        String submittedAt = attempt.getSubmittedAt() == null
-                ? ""
-                : SUBMITTED_AT_FORMAT.format(
-                LocalDateTime.ofInstant(attempt.getSubmittedAt(), ZoneId.systemDefault()));
-
-        boolean sent = emailService.sendAnonymousExamResult(
-                recipientEmail,
-                attempt.getStudent().getFullName(),
-                attempt.getExam().getTitle(),
-                score,
-                ExamScoring.effectiveMax(attempt.getMaxScore()),
-                submittedAt,
-                pendingReview
-        );
-
-        log.info("Resend guest result email for attempt {} to {} -> sent={}",
-                attemptId, recipientEmail, sent);
-        return sent;
-    }
-
-    /**
-     * Gui mail ket qua chinh thuc cho thi sinh tu do (guest).
-     * Called sau khi giao vien cham xong cau tu luan, vi luc submit bai finalScore con null.
-     */
     @Transactional(readOnly = true)
     public void sendFinalResultToGuest(Long attemptId) {
         ExamAttempt attempt = attemptRepository.findById(attemptId).orElse(null);
         if (attempt == null || attempt.getFinalScore() == null || attempt.getStudent() == null) {
-            log.warn("Skip final guest result email: attempt {} missing or not graded yet", attemptId);
             return;
         }
 
@@ -252,41 +168,19 @@ public class AnonymousExamService {
             return;
         }
 
-        String recipientEmail = guestEmailResolver.resolveGuestEmail(attempt);
-        if (recipientEmail == null || recipientEmail.isBlank()) {
-            log.warn("Skip final guest result email: attempt {} guest has no email", attemptId);
-            return;
-        }
-
         String submittedAt = attempt.getSubmittedAt() == null
                 ? ""
                 : SUBMITTED_AT_FORMAT.format(
                 LocalDateTime.ofInstant(attempt.getSubmittedAt(), ZoneId.systemDefault()));
 
-        try {
-            boolean sent = emailService.sendAnonymousExamResult(
-                    recipientEmail,
-                    attempt.getStudent().getFullName(),
-                    attempt.getExam().getTitle(),
-                    attempt.getFinalScore(),
-                    ExamScoring.effectiveMax(attempt.getMaxScore()),
-                    submittedAt,
-                    false
-            );
-            if (sent) {
-                log.info("Final guest result email dispatched to {} for examId {} attempt {}",
-                        recipientEmail,
-                        attempt.getExam() != null ? attempt.getExam().getId() : null,
-                        attemptId);
-            } else {
-                log.error("Final guest result email FAILED for attempt {} (examId {}). "
-                                + "Check SMTP config: spring.mail.username / MAIL_APP_PASSWORD (Gmail app password).",
-                        attemptId,
-                        attempt.getExam() != null ? attempt.getExam().getId() : null);
-            }
-        } catch (Exception e) {
-            log.error("Failed to send final guest result email to {} for attempt {}: {}",
-                    recipientEmail, attemptId, e.getMessage());
-        }
+        emailService.sendAnonymousExamResult(
+                attempt.getStudent().getEmail(),
+                attempt.getStudent().getFullName(),
+                attempt.getExam().getTitle(),
+                attempt.getFinalScore(),
+                ExamScoring.effectiveMax(attempt.getMaxScore()),
+                submittedAt,
+                false
+        );
     }
 }

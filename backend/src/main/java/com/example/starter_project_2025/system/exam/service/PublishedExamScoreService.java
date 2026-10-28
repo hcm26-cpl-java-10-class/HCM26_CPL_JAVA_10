@@ -58,15 +58,13 @@ public class PublishedExamScoreService {
                 .map(attempt -> new PublishedExamScoreDTO(
                         attempt.getExam().getId(),
                         attempt.getExam().getTitle(),
-                        attempt.getId(),
                         attempt.getAttemptNumber(),
                         attempt.getObjectiveScore(),
                         attempt.getFinalScore(),
                         ExamScoring.effectiveMax(attempt.getMaxScore()),
                         attempt.getFirstScore(),
                         attempt.getFirstScore() == null ? null : attempt.getFinalScore(),
-                        attempt.getSubmittedAt(),
-                        resultAccessService.isScorePublished(attempt.getExam())
+                        attempt.getSubmittedAt()
                 ))
                 .toList();
     }

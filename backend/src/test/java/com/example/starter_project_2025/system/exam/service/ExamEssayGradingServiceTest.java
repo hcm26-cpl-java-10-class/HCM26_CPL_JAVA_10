@@ -37,9 +37,6 @@ class ExamEssayGradingServiceTest {
     @Mock
     private AiEssayGradingClient aiClient;
 
-    @Mock
-    private AnonymousExamService anonymousExamService;
-
     @InjectMocks
     private ExamEssayGradingService gradingService;
 

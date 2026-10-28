@@ -119,13 +119,12 @@ Cả hai kênh dùng chung **một entity duy nhất** (`Invitation`), phân bi�
 |------|--------|
 | `InvitationDTO.java` | Response chính, extends `BaseDTO` (id, isActive, createdAt…) |
 | `InvitationCreateRequest.java` | Input tạo 1 lời mời có tài khoản: `{userId, note, expiresAt}` |
-| `BatchInvitationRequest.java` | Input tạo nhiều: `{invitations[]}` |
+| `BatchInvitationRequest.java` | Input tạo nhiều: `{invitations[], sendEmail}` |
 | `BatchInvitationResponse.java` | Kết quả batch: `{totalRequested, successCount, failureCount, successfulInvitations[], errors[]}` |
-| `AnonymousInvitationRequest.java` | Input tạo lời mỏi ẩn danh: `{studentName, studentEmail, note, expiresAt, maxAccessTime, maxAccessAttempts}` — **validate dùng group mặc định** (`@NotBlank` + `@Email`), nên `@Valid` ở controller thực sự có hiệu lực |
+| `AnonymousInvitationRequest.java` | Input tạo lời mỏi ẩn danh: `{studentName, studentEmail, note, expiresAt, maxAccessTime, maxAccessAttempts}` |
 | `AnonymousAccessResponse.java` | Kết quả verify mã: `{valid, accessCode, examTitle, studentName, accessAttemptsRemaining, message}` |
-| `AnonymousSessionRequest.java` | Input tạo session: `{accessCode, studentName, studentEmail, fingerprint}` — tên/email **bắt buộc** và phải khớp lời mời |
-| `AnonymousSessionResponse.java` | Kết quả tạo session: `{valid, sessionToken, examId, examTitle, durationMinutes, studentName, studentEmail, message}` |
-| `AnonymousAttemptRequest.java` | Input bắt đầu làm bài ẩn danh: `{sessionToken, password}` |
+| `AnonymousSessionRequest.java` | Input tạo session: `{accessCode, fingerprint}` |
+| `AnonymousSessionResponse.java` | Kết quả tạo session: `{valid, sessionToken, examTitle, durationMinutes, message}` |
 | `InvitationFilter.java` | Bộ lọc query: `{status, anonymous, userId, userIds[]}` |
 
 **Điểm thiết kế quan trọng — `@JsonProperty(access = READ_ONLY)`:**
@@ -144,7 +143,7 @@ private Integer accessAttemptCount;
 ```
 Các field `token`, `accessCode`, `oneTimeToken`, `accessAttemptCount`… được đánh dấu **READ_ONLY** → Jackson sẽ serialize ra response nhưng **không deserialize** vào request. Ý nghĩa: client có thể đọc mã truy cập để hiển thị/copy, nhưng **không thể giả mạo token/accessCode** từ phía client khi POST/PATCH lên server. Đây là lớp chống giả mạo ở tầng DTO.
 
-**Mỗi lời mời luôn gửi email**: Service `createBatchInvitations` gọi `createInvitation` cho từng phần tử, và `createInvitation` luôn gọi `emailService.sendExamInvitation`. Field `sendEmail` từng tồn tại trong `BatchInvitationRequest` là dead-field (service không đọc) nên đã được xoá khỏi DTO.
+**`sendEmail` trong BatchInvitationRequest là dead-field**: Service `createBatchInvitations` **không hề đọc** field này — mỗi lời mời luôn gửi email qua `createInvitation`.
 
 ---
 
@@ -1095,7 +1094,7 @@ export type InvitationStatus = "PENDING" | "SENT" | "ACCEPTED" | "REJECTED" | "E
 
 export interface InvitationDTO extends BaseDTO { ... }
 export interface InvitationCreateRequest { userId, note?, expiresAt? }
-export interface BatchInvitationRequest { invitations[] }
+export interface BatchInvitationRequest { invitations[], sendEmail? }
 export interface AnonymousInvitationRequest { studentName, studentEmail, ... }
 export interface AnonymousAccessResponse { valid, accessCode?, examTitle?, ... }
 export interface AnonymousSessionRequest { accessCode, fingerprint? }
@@ -1187,72 +1186,8 @@ export interface ReminderRequest { reminderType, scheduledAt?, invitationId? }
 │ → sessionStorage.setItem("anonymous_session_token", token)      │
 └──────────────────────────┬──────────────────────────────────────┘
                            ▼
-              Nút "Vào phòng thi" → /anonymous-exam/take
+              Nút "Vào phòng thi" → /anonymous-exam
 ```
-
-### Flow B2: Học sinh ẩn danh làm bài + nhận kết quả qua email
-
-> Đây là phần mở rộng mới: học sinh **không có tài khoản RBAC** vẫn làm bài được và
-> nhận kết quả thẳng về email.
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ GV tạo link share: nhập "Họ tên" + "Email" học sinh (bắt buộc)  │
-│ → POST /api/exams/{id}/invitations/anonymous                     │
-│ → validate: @NotBlank studentName + @NotBlank @Email studentEmail│
-│ → lưu guestName / guestEmail vào Invitation                      │
-└──────────────────────────┬──────────────────────────────────────┘
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ HS mở /anonymous-exam?code=XXXXXXXX                              │
-│ → nhập TÊN + EMAIL (phải khớp lời mời)                         │
-│ → POST /api/exams/anonymous-session                              │
-│   • validateGuestIdentity: tên/email lệch → 400                 │
-│   • GuestUserService.findOrCreateGuest(email, tên)              │
-│       – email đã có user → dùng lại (idempotent)                │
-│       – chưa có → tạo User {isGuest=true, locked=true,          │
-│         username=guest_<hash>, password=random, role=STUDENT}   │
-│   • lưu guestUserId vào Invitation + AnonymousSession            │
-│   • trả sessionToken → sessionStorage                           │
-└──────────────────────────┬──────────────────────────────────────┘
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ POST /api/exams/anonymous/attempt  {sessionToken}                │
-│ → ExamAttemptService.startOrResumeForGuest(examId, guestUserId) │
-│ → BỎ QUA ensureInvitationAccepted (guest không có lời mời RBAC)  │
-│ → tạo ExamAttempt gắn với guestUser                             │
-└──────────────────────────┬──────────────────────────────────────┘
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ Trang /anonymous-exam/take                                        │
-│ → chọn đáp án → auto-save (debounce 400ms)                       │
-│   PUT /api/exams/anonymous/attempts/{id}/answers                 │
-│   (header X-Anonymous-Session)                                   │
-│ → Nộp bài: POST /api/exams/anonymous/attempts/{id}/submit        │
-│ → AnonymousExamService.submit:                                   │
-│   • assertAttemptBelongsToSession (đúng phiên + đúng guest)      │
-│   • attemptService.submit → chấm điểm (objective + penalty)      │
-│   • sendResultEmailIfJustSubmitted → email kết quả               │
-│   • session.isValid = false (chống nộp trùng)                    │
-└──────────────────────────┬──────────────────────────────────────┘
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ EmailService.sendAnonymousExamResult → template email/exam_result│
-│ • Không phụ thuộc ExamResultPublication (học sinh không có TK)  │
-│ • Có câu tự luận → finalScore=null → "đang chờ GV chấm"          │
-│ • GV chấm xong (ExamEssayGradingService.notifyGuestIfNeeded)     │
-│   → gửi BỔ SUNG email kết quả cuối cùng                          │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-**Vì sao cần "User khách" (`is_guest`) thay vì cho `ExamAttempt.student` nullable?**
-Vì `ExamAttempt.student` là `optional = false` — bắt buộc phải có User. Thay vì
-migration DB (rủi ro cao, cần script cho mọi môi trường), ta tạo sẵn một User
-"khách" ở tầng ứng dụng. User này:
-- `isGuest = true` → lọc được khỏi danh sách user RBAC nếu cần
-- `locked = true` → không đăng nhập được (đúng bản chất: học sinh không có TK)
-- `username = guest_<hash>` + `passwordHash` random → không ai đoán được để đăng nhập
-- Role `STUDENT` → có `EXAM_TAKE` để gắn attempt
 
 ### Flow C: Thu hồi & Hết hạn
 
@@ -1293,11 +1228,6 @@ AnonymousSessionCleanupJob
 | 11 | POST | `/api/exams/{examId}/invitations/anonymous` | JWT | `INVITATION_CREATE` | CreateInvitationModal tab 2 |
 | 12 | GET | `/api/exams/verify-access/{code}` | **PUBLIC** | — | AnonymousAccessPage |
 | 13 | POST | `/api/exams/anonymous-session` | **PUBLIC** | — | AnonymousAccessPage |
-| 14 | POST | `/api/exams/anonymous/attempt` | **PUBLIC** + `sessionToken` | — | AnonymousExamTakingPage |
-| 15 | PUT | `/api/exams/anonymous/attempts/{id}/answers` | **PUBLIC** + header `X-Anonymous-Session` | — | AnonymousExamTakingPage |
-| 16 | POST | `/api/exams/anonymous/attempts/{id}/submit` | **PUBLIC** + header `X-Anonymous-Session` | — | AnonymousExamTakingPage |
-
-> Các endpoint #14–#16 nằm trong `PUBLIC_ENDPOINTS` của `SecurityConfig` (pattern `/api/exams/anonymous/**`), nên không cần JWT. Thay vào đó, mọi thao tác đều xác thực bằng `sessionToken` do backend cấp lúc đổi access code — token này gắn với đúng 1 `AnonymousSession` + 1 `guestUserId`.
 
 ---
 
@@ -1344,18 +1274,6 @@ Backend có logic chống copy-link-sang-máy-khác qua fingerprint, nhưng fron
 
 **Fix đề xuất:** FE sinh fingerprint từ `navigator.userAgent + screen.width + ...` hoặc dùng thư viện FingerprintJS, truyền vào body.
 
-### 6.3b Email trùng với tài khoản RBAC thật
-
-`GuestUserService.findOrCreateGuest()` tìm user theo email → nếu email đó **đã là tài khoản RBAC thật** (student có sẵn account) thì hệ thống dùng lại user đó. Hệ quả: **ai giữ link cũng có thể nộp bài thay account đó** và nhận email kết quả.
-
-**Đánh giá rủi ro:** Trong luồng này giáo viên chủ động nhập email của học sinh, và link được gửi riêng cho học sinh đó → rủi ro thấp trong môi trường nội bộ. Nếu cần siết chặt: khi email trùng user thật, từ chối tạo session và bắt học sinh đăng nhập bình thường, hoặc dùng cơ chế xác thực OTP qua email.
-
-### 6.3c Guest user xuất hiện trong danh sách Users của RBAC
-
-`User.isGuest = true` cho phép nhận biết, nhưng `UserController` hiện **chưa lọc** guest ra khỏi danh sách → tài khoản khách sẽ xuất hiện trong trang quản lý user (đã `locked = true` nên hiển thị là "Bị khóa").
-
-**Fix đề xuất:** thêm điều kiện `isGuest = false` vào query của `UserService.list()` / trang `/users`.
-
 ### 6.4 `maxAccessTime` lưu nhưng không dùng
 
 `Invitation.maxAccessTime` được set khi tạo anonymous invitation, expose trong DTO, nhưng **không có logic nào check nó** trong `validateInvitationForAction()` hay `createAnonymousSession()`.
@@ -1366,6 +1284,7 @@ Backend có logic chống copy-link-sang-máy-khác qua fingerprint, nhưng fron
 
 | Item | Vấn đề |
 |------|--------|
+| `BatchInvitationRequest.sendEmail` | Service không đọc → mỗi lời mời luôn gửi email |
 | `StudentInvitationDTO` | Interface FE không dùng, BE không trả các field |
 | `InvitationFilter.userId` (singular) | Service chỉ check `userIds` (plural) |
 | Endpoint #2 (batch), #4 (getById), #10 (reject) | Có API + service method, frontend không gọi |

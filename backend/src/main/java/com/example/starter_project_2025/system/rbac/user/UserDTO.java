@@ -27,12 +27,6 @@ public class UserDTO extends BaseDTO {
     @Size(max = 100, groups = {OnCreate.class, OnUpdate.class}, message = "Email must not exceed 100 characters")
     String email;
 
-    @Size(max = 50, groups = {OnCreate.class, OnUpdate.class}, message = "Username must not exceed 50 characters")
-    String username;
-
-    @Size(max = 50, groups = {OnCreate.class, OnUpdate.class}, message = "Employee code must not exceed 50 characters")
-    String employeeCode;
-
     @Size(max = 30, groups = {OnCreate.class, OnUpdate.class}, message = "Phone must not exceed 30 characters")
     String phone;
 

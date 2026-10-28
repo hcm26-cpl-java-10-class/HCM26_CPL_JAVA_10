@@ -197,7 +197,7 @@ export default function ExamSimilarityPage() {
                                         </Badge>
                                     )}
                                 </div>
-                                <p className="text-xs text-muted-foreground mt-1 truncate" title={report.aiMessage ?? undefined}>
+                                <p className="text-xs text-muted-foreground mt-1 truncate" title={report.aiMessage}>
                                     {report.aiMessage || "Ready"}
                                 </p>
                             </CardContent>
