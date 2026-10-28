@@ -58,4 +58,36 @@ public class AuditLogController {
                 )
         );
     }
+
+    @GetMapping("/entity/{entityType}/{entityId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Page<AuditLogDTO>> getEntityHistory(
+            @PathVariable String entityType,
+            @PathVariable String entityId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        if (entityType.isBlank()
+                || entityId.isBlank()
+                || page < 0
+                || size < 1
+                || size > 100) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        PageRequest pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(Sort.Direction.DESC, "createdAt")
+                        .and(Sort.by(Sort.Direction.DESC, "id"))
+        );
+
+        return ResponseEntity.ok(
+                queryService.getEntityHistory(
+                        entityType,
+                        entityId,
+                        pageable
+                )
+        );
+    }
 }

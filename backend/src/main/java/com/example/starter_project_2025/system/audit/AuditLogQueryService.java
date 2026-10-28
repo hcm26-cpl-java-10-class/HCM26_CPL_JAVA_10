@@ -1,4 +1,3 @@
-
 package com.example.starter_project_2025.system.audit;
 
 import lombok.RequiredArgsConstructor;
@@ -65,6 +64,17 @@ public class AuditLogQueryService {
         }
 
         return repository.findAll(spec, pageable)
+                .map(AuditLogDTO::fromEntity);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<AuditLogDTO> getEntityHistory(
+            String entityType,
+            String entityId,
+            Pageable pageable
+    ) {
+        return repository
+                .findByEntityTypeAndEntityId(entityType, entityId, pageable)
                 .map(AuditLogDTO::fromEntity);
     }
 }
