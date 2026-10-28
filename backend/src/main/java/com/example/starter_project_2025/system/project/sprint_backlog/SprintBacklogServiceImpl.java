@@ -87,10 +87,10 @@ public class SprintBacklogServiceImpl
 
     private static final Map<SprintBacklogStatus, Set<SprintBacklogStatus>> STATUS_TRANSITIONS = Map.of(
             SprintBacklogStatus.TODO, Set.of(SprintBacklogStatus.IN_PROGRESS),
-            SprintBacklogStatus.IN_PROGRESS, Set.of(SprintBacklogStatus.REVIEW, SprintBacklogStatus.BLOCKED),
+            SprintBacklogStatus.IN_PROGRESS, Set.of(SprintBacklogStatus.REVIEW, SprintBacklogStatus.BLOCKED, SprintBacklogStatus.TODO),
             SprintBacklogStatus.REVIEW, Set.of(SprintBacklogStatus.DONE, SprintBacklogStatus.IN_PROGRESS),
             SprintBacklogStatus.BLOCKED, Set.of(SprintBacklogStatus.IN_PROGRESS),
-            SprintBacklogStatus.DONE, Set.of()
+            SprintBacklogStatus.DONE, Set.of(SprintBacklogStatus.IN_PROGRESS)
     );
 
     static final String MILESTONE_NOT_FOUND_MESSAGE =

@@ -14,10 +14,12 @@ import { toast } from "sonner";
 
 type BoardColumnKey = "BACKLOG" | Exclude<SprintBacklogStatus, "BLOCKED">;
 const allowedStatusTransitions: Record<SprintBacklogStatus, SprintBacklogStatus[]> = {
-  TODO: ["IN_PROGRESS", "BLOCKED"],
+  // Keep the UI options identical to SprintBacklogServiceImpl's transition
+  // matrix so the board never offers a change that the API will reject.
+  TODO: ["IN_PROGRESS"],
   IN_PROGRESS: ["REVIEW", "BLOCKED", "TODO"],
-  REVIEW: ["DONE", "BLOCKED", "IN_PROGRESS"],
-  BLOCKED: ["TODO", "IN_PROGRESS"],
+  REVIEW: ["DONE", "IN_PROGRESS"],
+  BLOCKED: ["IN_PROGRESS"],
   DONE: ["IN_PROGRESS"],
 };
 const columns: Array<{ key: BoardColumnKey; label: string; icon: typeof Circle; color: string }> = [
