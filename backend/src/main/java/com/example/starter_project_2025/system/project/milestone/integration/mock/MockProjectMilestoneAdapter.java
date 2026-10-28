@@ -95,12 +95,7 @@ public class MockProjectMilestoneAdapter implements ProjectMilestonePort {
                 .filter(project -> project.getStatus() != null)
                 .toList();
 
-        List<Project> realProjects = activeProjects.stream()
-                .filter(project -> project.getCode() == null || !project.getCode().startsWith("DEMO-"))
-                .toList();
-
-        List<Project> candidates = realProjects.isEmpty() ? activeProjects : realProjects;
-        return candidates.stream()
+        return activeProjects.stream()
                 .sorted(Comparator
                         .comparingInt((Project p) -> statusPriority(mapStatus(p.getStatus())))
                         .thenComparing(p -> p.getName() == null ? "" : p.getName().toLowerCase(Locale.ROOT))

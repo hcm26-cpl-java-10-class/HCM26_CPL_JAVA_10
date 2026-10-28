@@ -20,6 +20,7 @@ import java.util.*;
 
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice(assignableTypes = {MilestoneController.class,
+        com.example.starter_project_2025.system.project.milestone.controller.TeamMilestoneController.class,
         com.example.starter_project_2025.system.project.milestone.submission.controller.ArtifactSubmissionController.class,
         com.example.starter_project_2025.system.project.milestone.submission.controller.TeamArtifactSubmissionController.class,
         com.example.starter_project_2025.system.project.milestone.risk.MilestoneRiskController.class})
@@ -54,6 +55,12 @@ public class MilestoneExceptionHandler {
     @ExceptionHandler(MilestoneConflictException.class)
     public ResponseEntity<MilestoneErrorResponse> handleConflict(MilestoneConflictException ex) {
         return error(HttpStatus.CONFLICT, "CONFLICT", ex.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler({org.springframework.orm.ObjectOptimisticLockingFailureException.class,
+            jakarta.persistence.OptimisticLockException.class})
+    public ResponseEntity<MilestoneErrorResponse> handleStaleVersion(Exception ex) {
+        return error(HttpStatus.CONFLICT, "CONFLICT", "Milestone changed; reload and retry", Map.of());
     }
 
     @ExceptionHandler(AccessDeniedException.class)

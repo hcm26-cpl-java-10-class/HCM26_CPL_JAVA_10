@@ -85,7 +85,7 @@ export function SubmissionReviewPage() {
           </CardContent>
         </Card>
         {item.status === "SUBMITTED" ? <SubmissionReviewForm key={`${item.id}-${item.currentVersionNumber}`} submission={item} pending={mutation.isPending} apiError={mutation.isError ? errorOf(mutation.error) : null} onReview={review} /> : <Alert><AlertCircle /><AlertTitle>This submission is not awaiting review</AlertTitle><AlertDescription>The review form is read-only because its current status is {item.status.replace("_", " ")}.</AlertDescription></Alert>}
-        {item.status === "SUBMITTED" && !item.availableActions.requestChanges ? <Alert><AlertCircle /><AlertTitle>Student revision unavailable</AlertTitle><AlertDescription>The late-policy window or attempt limit has been reached. Accept and Reject remain available.</AlertDescription></Alert> : null}
+        {item.status === "SUBMITTED" && !item.availableActions.requestChanges ? <Alert><AlertCircle /><AlertTitle>Không thể yêu cầu nộp lại</AlertTitle><AlertDescription>Không thể yêu cầu nộp lại do Milestone đã hết hạn theo Late Policy</AlertDescription></Alert> : null}
         <ReviewHistory reviews={item.reviews} />
       </div>
     </MainLayout>

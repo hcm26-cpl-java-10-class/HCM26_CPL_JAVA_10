@@ -1,10 +1,10 @@
 import type { MilestoneStatus } from "@/types";
 import { formatMilestoneStatus } from "../milestone.utils";
 
-export function MilestoneStatusBadge({ status }: { status: MilestoneStatus }) {
+export function MilestoneStatusBadge({ status, executionStatus }: { status: MilestoneStatus; executionStatus?: string | null }) {
   return (
     <span className="uppercase text-foreground">
-      {formatMilestoneStatus(status)}
+      {status === "OPEN" && executionStatus ? executionStatus.replaceAll("_", " ") : formatMilestoneStatus(status)}
     </span>
   );
 }

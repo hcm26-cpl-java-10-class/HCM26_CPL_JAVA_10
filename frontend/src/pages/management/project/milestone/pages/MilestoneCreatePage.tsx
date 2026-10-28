@@ -51,7 +51,7 @@ function CreatePageSkeleton() {
 }
 
 export function MilestoneCreatePage() {
-  const { projectId, teamId: routeTeamId } = useParams<{ projectId?: string; teamId?: string }>();
+  const { projectId, teamId: routeTeamId, milestoneId } = useParams<{ projectId?: string; teamId?: string; milestoneId?: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const teamId = Number(routeTeamId ?? searchParams.get("teamId"));
@@ -83,14 +83,31 @@ export function MilestoneCreatePage() {
     enabled: teamScoped || !!projectId,
     retry: false,
   });
+  const existingQuery = useQuery({
+    queryKey: ["milestone-edit", projectId, scopedTeamId, milestoneId],
+    queryFn: () => teamScoped || !projectId
+      ? milestoneApi.getTeamDetail(scopedTeamId!, milestoneId!)
+      : milestoneApi.getDetail(projectId, milestoneId!, scopedTeamId),
+    enabled: !!milestoneId && (teamScoped || !!projectId),
+  });
 
   const defaultValues = useMemo<MilestoneFormValues>(() => ({
     ...milestoneDefaultValues,
     checklist: milestoneDefaultValues.checklist.map((item) => ({ ...item })),
     latePolicy: { ...milestoneDefaultValues.latePolicy },
     resubmissionPolicy: { ...milestoneDefaultValues.resubmissionPolicy },
-    rubricSnapshotId: optionsQuery.data?.rubrics.length === 1 ? optionsQuery.data.rubrics[0].id : "",
-  }), [optionsQuery.data]);
+    ...(existingQuery.data ? {
+      title: existingQuery.data.title,
+      description: existingQuery.data.description ?? "",
+      deadline: existingQuery.data.deadline ? new Date(existingQuery.data.deadline).toISOString().slice(0, 16) : "",
+      mandatory: existingQuery.data.mandatory,
+      checklist: existingQuery.data.checklist.map(item => ({ content: item.content, mandatory: item.mandatory })),
+      rubricSnapshotId: existingQuery.data.rubric?.snapshotId ?? "",
+      latePolicy: { type: existingQuery.data.latePolicy.type ?? "NO_LATE", lateUntil: existingQuery.data.latePolicy.lateUntil ?? undefined, penaltyPercent: existingQuery.data.latePolicy.penaltyPercent ?? undefined },
+      resubmissionPolicy: { allowed: existingQuery.data.resubmissionPolicy.allowed, maxAttempts: existingQuery.data.resubmissionPolicy.maxAttempts ?? undefined },
+    } : {}),
+    rubricSnapshotId: existingQuery.data?.rubric?.snapshotId ?? (optionsQuery.data?.rubrics.length === 1 ? optionsQuery.data.rubrics[0].id : ""),
+  }), [optionsQuery.data, existingQuery.data]);
 
   const createMutation = useMutation({
     mutationFn: (attempt: SubmissionAttempt) =>
@@ -128,6 +145,31 @@ export function MilestoneCreatePage() {
 
       toast.error(uncertain ? "The connection was interrupted. You can retry safely." : normalized.message || "Could not create milestone.");
     },
+  });
+
+  const draftMutation = useMutation({
+    mutationFn: (values: MilestoneFormValues) => {
+      const parseDate = (value?: string) => value && !Number.isNaN(new Date(value).getTime()) ? new Date(value).toISOString() : null;
+      const payload = {
+        teamId: scopedTeamId,
+        title: values.title.trim(), description: values.description.trim(),
+        deadline: parseDate(values.deadline), mandatory: values.mandatory,
+        rubricSnapshotId: values.rubricSnapshotId || null,
+        checklist: values.checklist.filter(item => item.content.trim()).map((item, orderIndex) => ({ ...item, content: item.content.trim(), orderIndex })),
+        latePolicyType: values.latePolicy.type,
+        lateUntil: parseDate(values.latePolicy.lateUntil), latePenaltyPercent: values.latePolicy.penaltyPercent ?? null,
+        allowResubmission: values.resubmissionPolicy.allowed, maxSubmissionAttempts: values.resubmissionPolicy.maxAttempts ?? null,
+        expectedVersion: existingQuery.data?.version,
+      };
+      return milestoneId
+        ? milestoneApi.editDraft(teamScoped ? undefined : projectId, scopedTeamId!, milestoneId, payload)
+        : milestoneApi.saveDraft(teamScoped ? undefined : projectId, scopedTeamId!, payload);
+    },
+    onSuccess: (milestone) => {
+      toast.success("Draft saved.");
+      navigate(teamScoped && scopedWorkspaceId ? listUrl : teamScoped ? `/teams/${scopedTeamId}/milestones` : `/projects/${projectId}/milestones/${milestone.id}`);
+    },
+    onError: (error) => setApiError(getMilestoneApiError(error)),
   });
 
   useEffect(() => {
@@ -168,11 +210,11 @@ export function MilestoneCreatePage() {
     );
   }
 
-  if (optionsQuery.isLoading) {
+  if (optionsQuery.isLoading || (milestoneId && existingQuery.isLoading)) {
     return <MainLayout pathName={{ projects: "Projects", milestones: "Milestones", new: "Create" }}><CreatePageSkeleton /></MainLayout>;
   }
 
-  if (optionsQuery.isError || !optionsQuery.data) {
+  if (optionsQuery.isError || !optionsQuery.data || (milestoneId && (existingQuery.isError || !existingQuery.data))) {
     const error = getMilestoneApiError(optionsQuery.error);
     const description = error.status === 403
       ? "You no longer have permission or an active assignment for this project."
@@ -211,10 +253,12 @@ export function MilestoneCreatePage() {
         <MilestoneForm
           options={optionsQuery.data}
           defaultValues={defaultValues}
-          submitting={createMutation.isPending}
+          submitting={createMutation.isPending || draftMutation.isPending}
           apiError={apiError}
           networkUncertain={networkUncertain}
-          onSubmit={handleSubmit}
+          onSubmit={milestoneId ? (values) => draftMutation.mutate(values) : handleSubmit}
+          onSaveDraft={(values) => draftMutation.mutate(values)}
+          submitLabel={milestoneId ? "Save changes" : undefined}
           onCancel={requestCancel}
           onDirtyChange={handleDirtyChange}
         />

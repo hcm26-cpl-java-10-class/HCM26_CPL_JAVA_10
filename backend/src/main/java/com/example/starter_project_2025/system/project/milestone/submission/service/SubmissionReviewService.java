@@ -104,6 +104,7 @@ public class SubmissionReviewService {
         version.applyChecklistReview(checklist);
         version.applyDecision(request.decision());
         submission.reviewed(request.decision(), now);
+        submission.getMilestone().setExecutionStatus(submission.getExecutionStatus(), actorId, now);
         versions.save(version);
         submissions.save(submission);
         audits.save(SubmissionAuditLog.create(submissionId, version.getId(), action, actorId,

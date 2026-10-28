@@ -37,7 +37,7 @@ export function MilestoneTableCard({
       <CardHeader className="relative gap-3 pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1.5">
-            <MilestoneStatusBadge status={milestone.status} />
+            <MilestoneStatusBadge status={milestone.status} executionStatus={milestone.executionStatus} />
             <Badge variant={milestone.mandatory ? "secondary" : "outline"}>
               {milestone.mandatory ? "Mandatory" : "Optional"}
             </Badge>
@@ -55,6 +55,7 @@ export function MilestoneTableCard({
           </div>
           <div className="min-w-0">
             <CardTitle className="line-clamp-1 text-base leading-tight">{milestone.title}</CardTitle>
+            {milestone.projectName ? <p className="text-xs font-medium text-muted-foreground">{milestone.projectName}</p> : null}
             <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
               {milestone.description || "No description available."}
             </p>
