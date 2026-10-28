@@ -17,8 +17,8 @@ export type SprintBacklogWorkType = "STORY" | "BUG" | "TASK";
 
 /**
  * One task of a sprint, served by the `sprint_backlog` backend module.
- * The assignee is a plain identifier because the project member module is not
- * implemented yet.
+ * The assignee is the id of a `project_members` row, picked from the member
+ * list of the team that owns the workspace.
  */
 export interface SprintBacklogDTO extends BaseDTO {
   /** Owning sprint (mandatory): write it to create / move the item. */
@@ -49,6 +49,20 @@ export interface SprintBacklogDTO extends BaseDTO {
   estimatedHours?: number | null;
   /** Optimistic locking token (read-only). */
   version?: number;
+}
+
+/**
+ * Member of the team that owns the workspace, offered by the assignee picker
+ * of the backlog create bar.
+ */
+export interface BacklogAssigneeOption {
+  /** `project_members.id`, written back as `assigneeProjectMemberId`. */
+  id: number;
+  userId: number;
+  fullName: string;
+  userCode?: string | null;
+  /** Canonical team role list, for example `"PM,BA"`. */
+  role?: string | null;
 }
 
 export interface SprintBacklogFilter extends BaseFilter {

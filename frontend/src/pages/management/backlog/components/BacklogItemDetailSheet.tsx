@@ -19,6 +19,7 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type {
+  BacklogAssigneeOption,
   BacklogPriority,
   MilestoneOption,
   SprintBacklogDTO,
@@ -68,6 +69,8 @@ interface BacklogItemDetailSheetProps {
   sprints?: SprintDTO[];
   /** Milestone options of the "Milestone" field (UFR-PRJ-003-02). */
   milestones?: MilestoneOption[];
+  /** Active members of the workspace team (assignee picker). */
+  assignees?: BacklogAssigneeOption[];
   /** SPRINT_BACKLOG_UPDATE (title, description, status, priority, dates, estimate). */
   canEdit: boolean;
   /** SPRINT_UPDATE (moving the item to another sprint / back to the backlog). */
@@ -87,7 +90,7 @@ interface Draft {
   priority: BacklogPriority;
   /** Linked milestone UUID, empty when the item has no milestone. */
   milestoneId: string;
-  /** Temporary assignee id: the project member module is not implemented yet. */
+  /** `project_members.id` of the assignee, empty when unassigned. */
   assignee: string;
   /** `yyyy-MM-dd`, converted to ISO date-time when saved. */
   startDate: string;
@@ -97,6 +100,16 @@ interface Draft {
 
 const toDateInput = (value?: string | null) =>
   value && value.length >= 10 ? value.slice(0, 10) : "";
+
+/** `Nguyen Van An` -> `NA` (avatar bubble of the assignee picker). */
+const initialsOf = (name: string) =>
+  name
+    .trim()
+    .split(/\s+/)
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase() || "?";
 
 const toDraft = (detail: SprintBacklogDTO): Draft => ({
   title: detail.title ?? "",
@@ -166,6 +179,7 @@ export function BacklogItemDetailSheet({
   sprintName,
   sprints = [],
   milestones = [],
+  assignees = [],
   canEdit,
   canMove,
   canDelete,
@@ -339,34 +353,20 @@ export function BacklogItemDetailSheet({
     void save({ workType: value } as Partial<SprintBacklogDTO>);
   };
 
-  /**
-   * TEMPORARY assignee: a raw project member id until that module exists.
-   * The backend keeps the stored id when the request sends `null`, so an empty
-   * input simply restores the current value.
-   */
-  const commitAssignee = () => {
-    const raw = (draft?.assignee ?? "").trim();
+  /** The assignee is picked from the active members of the workspace team. */
+  const commitAssignee = (value: string) => {
     const current = detail?.assigneeProjectMemberId ?? null;
+    const next = Number(value);
 
-    if (!raw) {
-      setDraft((previous) =>
-        previous
-          ? { ...previous, assignee: current != null ? String(current) : "" }
-          : previous,
-      );
+    if (!value || !Number.isFinite(next) || next <= 0 || next === current) {
       return;
     }
 
-    const value = Number(raw);
+    setDraft((previous) =>
+      previous ? { ...previous, assignee: value } : previous,
+    );
 
-    if (!Number.isFinite(value) || value <= 0 || value === current) {
-      if (detail) {
-        setDraft(toDraft(detail));
-      }
-      return;
-    }
-
-    void save({ assigneeProjectMemberId: value } as Partial<SprintBacklogDTO>);
+    void save({ assigneeProjectMemberId: next } as Partial<SprintBacklogDTO>);
   };
 
   /** Moves the item to another sprint (`null` = product backlog). */
@@ -709,32 +709,48 @@ export function BacklogItemDetailSheet({
                 </DetailRow>
 
                 <DetailRow label="Assignee">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border bg-muted text-[10px] font-semibold text-muted-foreground">
-                      {draft.assignee || <User className="h-3 w-3" />}
-                    </span>
-                    <Input
-                      type="number"
-                      min={1}
-                      value={draft.assignee}
-                      disabled={!canEdit || saving}
-                      placeholder="Member id (temporary)"
-                      className={inlineFieldClass}
-                      onChange={(event) =>
-                        setDraft((previous) =>
-                          previous
-                            ? { ...previous, assignee: event.target.value }
-                            : previous,
-                        )
-                      }
-                      onBlur={commitAssignee}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.currentTarget.blur();
-                        }
-                      }}
-                    />
-                  </div>
+                  <Select
+                    value={draft.assignee || undefined}
+                    disabled={!canEdit || saving}
+                    onValueChange={(value) => commitAssignee(value)}
+                  >
+                    <SelectTrigger size="sm" className={inlineFieldClass}>
+                      <SelectValue placeholder="Unassigned" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {assignees.map((member) => (
+                        <SelectItem
+                          key={member.id}
+                          value={String(member.id)}
+                        >
+                          <span className="flex items-center gap-2">
+                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-100 text-[9px] font-semibold text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
+                              {initialsOf(member.fullName)}
+                            </span>
+                            <span className="truncate">{member.fullName}</span>
+                            {member.role && (
+                              <span className="text-xs text-muted-foreground">
+                                {member.role}
+                              </span>
+                            )}
+                          </span>
+                        </SelectItem>
+                      ))}
+                      {/* Legacy / out-of-scope id: keep it visible instead of
+                          silently dropping the stored assignee. */}
+                      {draft.assignee !== "" &&
+                        !assignees.some(
+                          (member) => String(member.id) === draft.assignee,
+                        ) && (
+                          <SelectItem value={draft.assignee}>
+                            <span className="flex items-center gap-2">
+                              <User className="h-4 w-4" />
+                              Member #{draft.assignee}
+                            </span>
+                          </SelectItem>
+                        )}
+                    </SelectContent>
+                  </Select>
                 </DetailRow>
 
                 <DetailRow label="Sprint">
