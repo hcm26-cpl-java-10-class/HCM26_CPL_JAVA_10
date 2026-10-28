@@ -53,7 +53,13 @@ export function ImportModal({
       const result = await table.importFile(file);
       onImportSuccess?.(result);
       onOpenChange(false);
-      toast.success("Import successful!");
+      if (result.rolledBack || result.failureCount > 0) {
+        toast.error(
+          `Import cancelled: ${result.failureCount} row(s) have errors, nothing was imported.`,
+        );
+      } else {
+        toast.success("Import successful!");
+      }
     } catch (err: any) {
       if (err?.response?.data) {
         onImportSuccess?.(err.response.data);

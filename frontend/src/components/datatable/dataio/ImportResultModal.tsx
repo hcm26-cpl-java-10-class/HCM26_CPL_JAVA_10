@@ -19,6 +19,14 @@ interface ImportResultContentProps {
 export const ImportResultContent = ({ result }: ImportResultContentProps) => {
   return (
     <div className="space-y-4">
+      {result.rolledBack && (
+        <div
+          role="alert"
+          className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
+        >
+          Nothing was imported. Fix the errors below and upload the file again.
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-4">
         <div className="rounded-lg border p-4">
           <div className="flex items-center gap-2 mb-2">

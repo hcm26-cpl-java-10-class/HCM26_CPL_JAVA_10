@@ -13,5 +13,6 @@ public class ImportResult {
 
     int successCount;
     int failureCount;
+    boolean rolledBack;
     List<RowError> errors = new ArrayList<>();
 }

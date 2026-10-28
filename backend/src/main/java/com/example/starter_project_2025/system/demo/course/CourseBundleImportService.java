@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.demo.course;
 
 import com.example.starter_project_2025.base.dataio.importer.result.ImportResult;
+import com.example.starter_project_2025.base.dataio.importer.result.ImportRolledBackException;
 import com.example.starter_project_2025.base.dataio.importer.result.RowError;
 import com.example.starter_project_2025.system.demo.category.Category;
 import com.example.starter_project_2025.system.demo.category.CategoryRepository;
@@ -51,17 +52,28 @@ public class CourseBundleImportService {
         }
     }
 
+    /**
+     * Import tất cả hoặc không gì cả. Các sheet phụ thuộc nhau (Sections cần Courses, Lessons cần Sections),
+     * nên sau khi một sheet có lỗi thì dừng, tránh sinh ra các lỗi dây chuyền gây hiểu nhầm.
+     */
     @Transactional
     public ImportResult importBundle(MultipartFile file) {
         ImportResult result = new ImportResult();
         try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
             importCourses(workbook.getSheet("Courses"), result);
-            importSections(workbook.getSheet("Sections"), result);
-            importLessons(workbook.getSheet("Lessons"), result);
-            return result;
+            if (result.getFailureCount() == 0) {
+                importSections(workbook.getSheet("Sections"), result);
+            }
+            if (result.getFailureCount() == 0) {
+                importLessons(workbook.getSheet("Lessons"), result);
+            }
         } catch (Exception exception) {
             throw new RuntimeException("Course bundle import failed: " + exception.getMessage(), exception);
         }
+        if (result.getFailureCount() > 0) {
+            throw new ImportRolledBackException(result);
+        }
+        return result;
     }
 
     private void importCourses(Sheet sheet, ImportResult result) {
@@ -104,10 +116,11 @@ public class CourseBundleImportService {
                 course.setLevel(enumValue(value(row, columns, "Level"), CourseLevel.class, CourseLevel.BEGINNER));
                 course.setIsActive(booleanValue(row, columns, "Active", true));
 
-                courseRepository.save(course);
+                courseRepository.saveAndFlush(course);
                 success(result);
             } catch (Exception exception) {
-                failure(result, index + 1, "Courses: " + exception.getMessage());
+                failure(result, index + 1, "Courses: " + ImportRolledBackException.describe(exception));
+                if (ImportRolledBackException.isPersistenceFailure(exception)) return;
             }
         }
     }
@@ -131,10 +144,11 @@ public class CourseBundleImportService {
                 section.setTitle(title);
                 section.setOrderIndex(integerValue(row, columns, "Order Index", 0));
                 section.setIsActive(booleanValue(row, columns, "Active", true));
-                sectionRepository.save(section);
+                sectionRepository.saveAndFlush(section);
                 success(result);
             } catch (Exception exception) {
-                failure(result, index + 1, "Sections: " + exception.getMessage());
+                failure(result, index + 1, "Sections: " + ImportRolledBackException.describe(exception));
+                if (ImportRolledBackException.isPersistenceFailure(exception)) return;
             }
         }
     }
@@ -170,10 +184,11 @@ public class CourseBundleImportService {
                 lesson.setOrderIndex(integerValue(row, columns, "Order Index", 0));
                 lesson.setIsActive(booleanValue(row, columns, "Active", true));
 
-                lessonRepository.save(lesson);
+                lessonRepository.saveAndFlush(lesson);
                 success(result);
             } catch (Exception exception) {
-                failure(result, index + 1, "Lessons: " + exception.getMessage());
+                failure(result, index + 1, "Lessons: " + ImportRolledBackException.describe(exception));
+                if (ImportRolledBackException.isPersistenceFailure(exception)) return;
             }
         }
     }

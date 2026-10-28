@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.exception;
 
+import com.example.starter_project_2025.base.dataio.importer.result.ImportResult;
+import com.example.starter_project_2025.base.dataio.importer.result.ImportRolledBackException;
 import com.example.starter_project_2025.exception.error.ErrorResponse;
 import com.example.starter_project_2025.exception.error.ValidationErrorResponse;
 import jakarta.validation.ConstraintViolation;
@@ -14,7 +16,6 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.security.authentication.LockedException;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -34,6 +35,12 @@ public class GlobalExceptionHandler {
                 ex.getMessage(),
                 LocalDateTime.now());
         return new ResponseEntity<>(error, HttpStatus.NOT_FOUND);
+    }
+
+    /** Import bị hủy toàn bộ: trả 200 kèm danh sách lỗi từng dòng để giao diện hiển thị như cũ. */
+    @ExceptionHandler(ImportRolledBackException.class)
+    public ResponseEntity<ImportResult> handleImportRolledBack(ImportRolledBackException ex) {
+        return ResponseEntity.ok(ex.getResult());
     }
 
     @ExceptionHandler(BadRequestException.class)
@@ -56,21 +63,6 @@ public class GlobalExceptionHandler {
                 LocalDateTime.now());
         return new ResponseEntity<>(error, ex.getStatusCode());
     }
-
-
-    @ExceptionHandler(LockedException.class)
-    public ResponseEntity<ErrorResponse> handleLockedException(
-            LockedException ex) {
-
-        ErrorResponse error = new ErrorResponse(
-                HttpStatus.FORBIDDEN.value(),
-                "Account is locked",
-                LocalDateTime.now()
-        );
-
-        return new ResponseEntity<>(error, HttpStatus.FORBIDDEN);
-    }
-
 
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleBadCredentialsException(BadCredentialsException ex) {
@@ -166,23 +158,5 @@ public class GlobalExceptionHandler {
                 ex.getMessage(),
                 LocalDateTime.now());
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
-    }
-
-    @ExceptionHandler(com.example.starter_project_2025.system.external_api.exception.ExternalApiException.class)
-    public ResponseEntity<ErrorResponse> handleExternalApiException(
-            com.example.starter_project_2025.system.external_api.exception.ExternalApiException ex) {
-        log.error("[ExternalAPI] {}", ex.getMessage());
-
-        int status = ex.getStatusCode() > 0 ? ex.getStatusCode() : HttpStatus.SERVICE_UNAVAILABLE.value();
-        HttpStatus httpStatus = HttpStatus.resolve(status);
-        if (httpStatus == null) {
-            httpStatus = HttpStatus.SERVICE_UNAVAILABLE;
-        }
-
-        ErrorResponse error = new ErrorResponse(
-                httpStatus.value(),
-                ex.getMessage(),
-                LocalDateTime.now());
-        return new ResponseEntity<>(error, httpStatus);
     }
 }
