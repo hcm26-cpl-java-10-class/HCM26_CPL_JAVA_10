@@ -57,7 +57,6 @@ export const routes: RouteConfig[] = [
     path: "/calendar/preview",
     component: WeeklyCalendarPage,
     requiredPermission: "SESSION_READ",
-    isModuleDriven: true,
   },
   {
     path: "/schedule-versions",
