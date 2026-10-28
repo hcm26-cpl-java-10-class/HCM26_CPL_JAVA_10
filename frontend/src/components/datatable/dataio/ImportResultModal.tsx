@@ -10,16 +10,29 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { ImportResult } from "@/types";
-import { ArrowLeft, CheckCircle2, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ListChecks, XCircle } from "lucide-react";
 
 interface ImportResultContentProps {
   result: ImportResult;
 }
 
 export const ImportResultContent = ({ result }: ImportResultContentProps) => {
+  const totalCount =
+    result.totalCount && result.totalCount > 0
+      ? result.totalCount
+      : result.successCount + result.failureCount;
+
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
+        <div className="rounded-lg border p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <ListChecks className="h-5 w-5 text-primary" />
+            <h4 className="font-semibold">Total</h4>
+          </div>
+          <p className="text-3xl font-bold text-center">{totalCount}</p>
+        </div>
+
         <div className="rounded-lg border p-4">
           <div className="flex items-center gap-2 mb-2">
             <CheckCircle2 className="h-5 w-5 text-green-600" />
@@ -95,7 +108,7 @@ export function ImportResultModal({
 }: ImportResultModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
         {!result ? (
           <div className="p-8 text-center text-muted-foreground">
             No result data

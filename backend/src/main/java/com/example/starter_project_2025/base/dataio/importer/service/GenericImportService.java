@@ -28,16 +28,16 @@ public class GenericImportService implements ImportService {
     public <T, ID> ImportResult importFile(
             MultipartFile file,
             Class<T> entityClass,
-            JpaRepository<T, ID> repository
-    ) {
+            JpaRepository<T, ID> repository) {
 
         ImportResult result = new ImportResult();
 
         try {
             FileParser parser = parserFactory.getParser(file.getOriginalFilename());
 
-            List<Map<String, String>> rows =
-                    parser.parse(file.getInputStream());
+            List<Map<String, String>> rows = parser.parse(file.getInputStream());
+
+            result.setTotalCount(rows.size());
 
             int rowIndex = 2;
 
@@ -75,7 +75,8 @@ public class GenericImportService implements ImportService {
         for (Field field : entity.getClass().getDeclaredFields()) {
 
             ImportHash ann = field.getAnnotation(ImportHash.class);
-            if (ann == null) continue;
+            if (ann == null)
+                continue;
 
             field.setAccessible(true);
 
