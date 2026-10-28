@@ -109,12 +109,15 @@ public class SprintController
 
     /**
      * Import requires the create permission of the resource.
+     * <p>
+     * The import is atomic: the file is imported completely or not at all
+     * (a failing row rolls the whole import back).
      */
     @Override
     @PostMapping(value = "/import", consumes = "multipart/form-data")
     @PreAuthorize("hasAuthority('SPRINT_CREATE')")
     public ImportResult importFile(@RequestParam("file") MultipartFile file) {
-        return super.importFile(file);
+        return importService.importFileAtomic(file, getEntityClass(), getRepository());
     }
 
     // ---------------------------------------------------------------------

@@ -13,6 +13,7 @@ import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
+import com.example.starter_project_2025.system.rbac.user.StudentUserCodeGenerator;
 import com.example.starter_project_2025.system.project.tenant.Tenant;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -100,6 +101,7 @@ public class TeamAllocationDemoDataInitializer implements CommandLineRunner {
     private final ClassMemberRepository classMemberRepository;
     private final ClassStaffAssignmentRepository classStaffAssignmentRepository;
     private final UserRepository userRepository;
+    private final StudentUserCodeGenerator studentUserCodeGenerator;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final com.example.starter_project_2025.system.project.workspace.config.LegacyH2ProjectSchemaMigration legacyMigration;
@@ -111,6 +113,7 @@ public class TeamAllocationDemoDataInitializer implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
         var admin=userRepository.findByEmail(adminEmail).orElseThrow();
+        backfillExistingSampleStudentCodes();
         if (legacyMigration.isMigratedDatabase()) {
             log.info("Team-allocation demo seed skipped to preserve imported class/tenant data.");
             return;
@@ -169,7 +172,12 @@ public class TeamAllocationDemoDataInitializer implements CommandLineRunner {
                     user = userRepository.saveAndFlush(user);
                     createdUsers++;
                 }
-                if(user.getTenantId()==null){user.setTenant(admin.getTenant());userRepository.saveAndFlush(user);}
+                boolean changed = studentUserCodeGenerator.assignIfMissing(user);
+                if (user.getTenantId() == null) {
+                    user.setTenant(admin.getTenant());
+                    changed = true;
+                }
+                if (changed) userRepository.saveAndFlush(user);
 
                 if (!classMemberRepository.existsByTrainingClass_IdAndUser_Id(
                         trainingClass.getId(), user.getId())) {
@@ -201,6 +209,18 @@ public class TeamAllocationDemoDataInitializer implements CommandLineRunner {
                 createdMemberships,
                 CLASSES.size()
         );
+    }
+
+    private void backfillExistingSampleStudentCodes() {
+        int updated = 0;
+        for (User user : userRepository.findByEmailEndingWithIgnoreCase("@" + EMAIL_DOMAIN)) {
+            boolean isStudent = user.getRoles().stream().anyMatch(role -> "STUDENT".equals(role.getName()));
+            if (isStudent && studentUserCodeGenerator.assignIfMissing(user)) {
+                userRepository.saveAndFlush(user);
+                updated++;
+            }
+        }
+        if (updated > 0) log.info("Assigned user codes to {} existing demo students.", updated);
     }
 
     private User ensureMentor(MentorSeed seed, Role mentorRole) {

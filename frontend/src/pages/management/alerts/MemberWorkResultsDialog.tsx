@@ -46,7 +46,7 @@ export function MemberWorkResultsDialog({row,owner,onClose,onAccessChanged}:{
           {item.deadlineStatus==="OVERDUE"&&["TODO","IN_PROGRESS"].includes(item.status)&&<Badge variant="destructive">Overdue</Badge>}</TableCell>
       </TableRow>)}</TableBody></Table>}
       {data.summary.withoutDeadline>0&&<p className="text-sm text-muted-foreground">{data.summary.withoutDeadline} item(s) have no deadline and are excluded from the overdue count.</p>}
-      <p className="text-xs text-muted-foreground">Completion = Done / all assigned backlog items × 100. Overdue counts To do / In progress items past their deadline. In-review work is shown separately. Done does not confirm review acceptance or on-time completion. The 80% milestone risk threshold applies to the team, not to individual members.</p>
+      <p className="text-xs text-muted-foreground">Completion = Done / all assigned backlog items × 100. Overdue counts To do / In progress items past their deadline. In-review work is shown separately. Done does not confirm review acceptance or on-time completion. Inactivity is assessed separately from completion, using task starts and pending Todo assignments.</p>
     </>}
   </DialogContent></Dialog>;
 }
