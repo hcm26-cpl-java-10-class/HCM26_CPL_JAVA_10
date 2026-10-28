@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ConfirmDialog } from "@/components/ui/confirmdialog";
 import { Input } from "@/components/ui/input";
+import { StudentCheckboxList } from "@/pages/student/StudentCheckboxList";
 import {
   Select,
   SelectContent,
@@ -14,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { CourseDetail, CourseDetailLesson, CourseDetailSection, LessonContentType } from "@/types";
+import type { CourseDetail, CourseDetailLesson, CourseDetailSection, DepartmentMember, LessonContentType } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -328,7 +329,7 @@ function CourseActionCard({ course }: { course: CourseDetail }) {
 function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
   const [targetType, setTargetType] = useState<"department" | "student">("department");
   const [departmentId, setDepartmentId] = useState("");
-  const [studentId, setStudentId] = useState("");
+  const [selectedStudents, setSelectedStudents] = useState<DepartmentMember[]>([]);
   const [studentSearch, setStudentSearch] = useState("");
   const [studentPage, setStudentPage] = useState(0);
   const queryClient = useQueryClient();
@@ -384,7 +385,7 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
         queryClient.invalidateQueries({ queryKey: ["course-detail"] }),
       ]);
       setDepartmentId("");
-      setStudentId("");
+      setSelectedStudents([]);
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : "Department enrollment failed.");
@@ -392,19 +393,29 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
   });
 
   const studentEnrollMutation = useMutation({
-    mutationFn: () =>
-      enrollmentApi.enrollStudent({
-        studentId: Number(studentId),
-        courseId,
-      }),
-    onSuccess: async () => {
-      toast.success("Student enrolled in this course.");
+    mutationFn: async () => {
+      const results = await Promise.allSettled(
+        selectedStudents.map((student) =>
+          enrollmentApi.enrollStudent({ studentId: student.id, courseId }),
+        ),
+      );
+      const failed = results.filter((result) => result.status === "rejected");
+      return { total: results.length, failed: failed.length };
+    },
+    onSuccess: async ({ total, failed }) => {
+      const succeeded = total - failed;
+      if (succeeded > 0) {
+        toast.success(`${succeeded} student${succeeded === 1 ? "" : "s"} enrolled in this course.`);
+      }
+      if (failed > 0) {
+        toast.error(`${failed} student${failed === 1 ? "" : "s"} could not be enrolled.`);
+      }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["department-overview"] }),
         queryClient.invalidateQueries({ queryKey: ["course-catalog"] }),
         queryClient.invalidateQueries({ queryKey: ["course-detail"] }),
       ]);
-      setStudentId("");
+      setSelectedStudents([]);
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : "Student enrollment failed.");
@@ -415,9 +426,6 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
     (department) => department.id === Number(departmentId),
   );
   const preview = previewQuery.data;
-  const selectedStudent = studentsQuery.data?.content.find(
-    (student) => student.id === Number(studentId),
-  );
   const enrollmentPending =
     departmentEnrollMutation.isPending || studentEnrollMutation.isPending;
 
@@ -432,7 +440,7 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
           if (value !== "department" && value !== "student") return;
           setTargetType(value);
           setDepartmentId("");
-          setStudentId("");
+          setSelectedStudents([]);
           setStudentSearch("");
           setStudentPage(0);
         }}
@@ -526,7 +534,6 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
             onChange={(event) => {
               setStudentSearch(event.target.value);
               setStudentPage(0);
-              setStudentId("");
             }}
           />
           {studentsQuery.isLoading ? (
@@ -546,22 +553,12 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
             </div>
           ) : studentsQuery.data?.content.length ? (
             <>
-              <Select
-                value={studentId}
-                onValueChange={setStudentId}
+              <StudentCheckboxList
+                students={studentsQuery.data.content}
+                selected={selectedStudents}
+                onChange={setSelectedStudents}
                 disabled={enrollmentPending}
-              >
-                <SelectTrigger id="course-enrollment-student" className="w-full">
-                  <SelectValue placeholder="Choose a student" />
-                </SelectTrigger>
-                <SelectContent>
-                  {studentsQuery.data.content.map((student) => (
-                    <SelectItem key={student.id} value={String(student.id)}>
-                      {student.firstName} {student.lastName || ""} ({student.email})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              />
               {studentsQuery.data.totalPages > 1 && (
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>
@@ -573,7 +570,6 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
                       size="sm"
                       disabled={studentPage === 0}
                       onClick={() => {
-                        setStudentId("");
                         setStudentPage((page) => page - 1);
                       }}
                     >
@@ -584,7 +580,6 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
                       size="sm"
                       disabled={studentPage >= studentsQuery.data.totalPages - 1}
                       onClick={() => {
-                        setStudentId("");
                         setStudentPage((page) => page + 1);
                       }}
                     >
@@ -593,7 +588,7 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
                   </div>
                 </div>
               )}
-              {studentId && (
+              {selectedStudents.length > 0 && (
                 <Button
                   size="sm"
                   className="w-full"
@@ -603,7 +598,7 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
                   {studentEnrollMutation.isPending && (
                     <LoaderCircle className="size-4 animate-spin" />
                   )}
-                  Enroll {selectedStudent?.firstName || "student"}
+                  Enroll {selectedStudents.length} student{selectedStudents.length === 1 ? "" : "s"}
                 </Button>
               )}
             </>

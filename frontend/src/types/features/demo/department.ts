@@ -4,11 +4,14 @@ export interface DepartmentDTO extends BaseDTO {
   name?: string;
   code?: string;
   description?: string;
+  parentDepartmentId?: string | number | null;
+  status?: string;
 }
 
 export interface DepartmentFilter extends BaseFilter {
   name?: string;
   code?: string;
+  parentDepartmentId?: string | number;
 }
 
 export interface DepartmentStats {

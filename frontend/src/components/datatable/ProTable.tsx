@@ -391,7 +391,10 @@ export function ProTable<TData = any>({
                                                             field={f}
                                                             value={row[f.name]}
                                                             relationOptions={table.relationOptions}
-                                                            disableBooleanToggle={!(table.permission?.canUpdate ?? true)}
+                                                            disableBooleanToggle={
+                                                                !(table.permission?.canUpdate ?? true) ||
+                                                                (f.name === "isSystem" && ["ADMIN", "STUDENT", "TEACHER"].includes(String(row.name ?? "").toUpperCase()))
+                                                            }
                                                             onBooleanToggle={(fieldName, newValue) => {
                                                                 if (!(table.permission?.canUpdate ?? true)) return;
                                                                 table.patchField(id, fieldName, newValue);

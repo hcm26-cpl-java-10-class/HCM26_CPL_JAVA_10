@@ -47,6 +47,14 @@ public class Role extends BaseEntity {
     @ExportField(name = "Description")
     String description;
 
+    /**
+     * Marks built-in roles (ADMIN, STUDENT, TEACHER) that must not be deleted.
+     * This value is controlled by the backend, not by CRUD requests.
+     */
+    @Builder.Default
+    @Column(name = "is_system", nullable = false)
+    Boolean isSystem = false;
+
     @Builder.Default
     @ManyToMany(fetch = FetchType.LAZY)
     @ExportField(name = "Permissions", relation = true, path = "name")

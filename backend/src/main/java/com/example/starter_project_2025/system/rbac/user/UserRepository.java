@@ -126,4 +126,8 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
             @Param("search") String search,
             Pageable pageable
     );
+
+    boolean existsByRoles_Id(Long roleId);
+
+    long countByRoles_Id(Long roleId);
 }

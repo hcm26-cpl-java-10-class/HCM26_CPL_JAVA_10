@@ -58,6 +58,10 @@ public class User extends BaseEntity {
     String lastName;
 
     @Builder.Default
+    @Column(nullable = false)
+    Boolean locked = false;
+
+    @Builder.Default
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "user_departments",

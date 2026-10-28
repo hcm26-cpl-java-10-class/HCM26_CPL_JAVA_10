@@ -3,12 +3,12 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/hooks/usePermissions";
+import { EnrollmentProgressBar } from "@/pages/management/demo/progress/EnrollmentProgressBar";
 import { formatRoleLabel } from "@/utils/rbac.utils";
-import { motion } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
+import { motion } from "motion/react";
 import { ArrowRight, BookOpen, CalendarDays, CheckCircle2, GraduationCap, UserRound } from "lucide-react";
 import { Link } from "react-router-dom";
-import { EnrollmentProgressBar } from "../management/demo/progress/EnrollmentProgressBar";
 import { AdminDepartmentStudentCourses } from "./AdminDepartmentStudentCourses";
 import { useAdminStudentPreview } from "./useAdminStudentPreview";
 
@@ -18,8 +18,8 @@ const checklistItems = [
     text: "Mo lai cac khoa hoc ban da dang ky, bao gom khoa hoc duoc them boi quan tri vien.",
   },
   {
-    title: "Danh sach books",
-    text: "Xem thong tin sach trong he thong o che do chi doc.",
+    title: "Lich thi sinh vien",
+    text: "Theo doi danh sach va thoi gian cac ky thi duoc xep lich.",
   },
 ];
 
@@ -30,7 +30,6 @@ const formatEnrollmentDate = (value: string) => {
 
 export default function StudentLandingPage() {
   const { user, activeRole, hasPermission } = usePermissions();
-
   const displayName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email;
   const canReadBooks = hasPermission("BOOK_READ");
   const canReadEnrollments = hasPermission("ENROLLMENT_READ");
@@ -44,9 +43,8 @@ export default function StudentLandingPage() {
   return (
     <MainLayout>
       <section className="relative overflow-hidden rounded-3xl border border-sky-100 bg-gradient-to-br from-sky-50 via-cyan-50 to-emerald-50 p-6 sm:p-8">
-        <div className="pointer-events-none absolute -top-16 -right-10 h-40 w-40 rounded-full bg-cyan-200/50 blur-3xl" />
+        <div className="pointer-events-none absolute -right-10 -top-16 h-40 w-40 rounded-full bg-cyan-200/50 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-16 -left-8 h-44 w-44 rounded-full bg-emerald-200/50 blur-3xl" />
-
         <motion.div
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
@@ -62,15 +60,19 @@ export default function StudentLandingPage() {
               Student view
             </Badge>
           </div>
-
           <h1 className="max-w-3xl text-3xl font-bold leading-tight text-slate-900 sm:text-4xl">
             Chao mung tro lai, {displayName}
           </h1>
           <p className="mt-3 max-w-2xl text-sm text-slate-700 sm:text-base">
-            Day la landing toi gian cho STUDENT. Ban chi duoc truy cap danh sach books de xem thong tin.
+            Xem cac khoa hoc da dang ky, danh sach sach va lich thi sap toi.
           </p>
-
           <div className="mt-6 flex flex-wrap gap-3">
+            <Button asChild className="bg-cyan-600 text-white hover:bg-cyan-500">
+              <Link to="/student/exams">
+                <CalendarDays className="mr-2 size-4" />
+                Xem lich thi
+              </Link>
+            </Button>
             {canReadBooks ? (
               <Button asChild className="bg-slate-900 text-white hover:bg-slate-800">
                 <Link to="/books">
@@ -186,7 +188,6 @@ export default function StudentLandingPage() {
               <p className="mt-2 text-sm leading-6 text-slate-600">{item.text}</p>
             </>
           );
-
           return (
             <motion.article
               key={item.title}
@@ -205,26 +206,14 @@ export default function StudentLandingPage() {
                   {content}
                 </Link>
               ) : (
-                content
+                <Link to="/student/exams" className="block h-full rounded-lg">
+                  {content}
+                </Link>
               )}
             </motion.article>
           );
         })}
       </section>
-
-      <motion.section
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.3, duration: 0.45 }}
-        className="mt-6 rounded-2xl border border-slate-200 bg-white p-5"
-      >
-        <div className="flex items-center gap-3 text-slate-700">
-          <BookOpen className="size-5" />
-          <p className="text-sm">
-            Neu can chinh sua noi dung sach, vui long lien he TEACHER hoac ADMIN.
-          </p>
-        </div>
-      </motion.section>
     </MainLayout>
   );
 }

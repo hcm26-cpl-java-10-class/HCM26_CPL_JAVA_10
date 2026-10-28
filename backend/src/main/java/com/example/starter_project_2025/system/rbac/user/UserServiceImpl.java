@@ -144,4 +144,29 @@ public class UserServiceImpl
     private Set<Role> getRoles(Set<Long> roleIds) {
         return new HashSet<>(roleRepository.findAllById(roleIds));
     }
+
+
+    @Override
+    public void lockUser(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() ->
+                        new com.example.starter_project_2025.exception.ResourceNotFoundException(
+                                "User not found with id: " + userId
+                        ));
+
+        user.setLocked(true);
+        userRepository.save(user);
+    }
+
+    @Override
+    public void unlockUser(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() ->
+                        new com.example.starter_project_2025.exception.ResourceNotFoundException(
+                                "User not found with id: " + userId
+                        ));
+
+        user.setLocked(false);
+        userRepository.save(user);
+    }
 }

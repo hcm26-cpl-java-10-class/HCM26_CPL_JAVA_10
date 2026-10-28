@@ -5,14 +5,21 @@ export type LessonContentType = "VIDEO" | "AUDIO" | "TEXT" | "DOCUMENT" | "LINK"
 export interface LessonDTO extends BaseDTO {
   sectionId?: number;
   title?: string;
+  description?: string;
+  videoUrl?: string;
+  durationMinutes?: number;
   contentType?: LessonContentType;
   contentUrl?: string;
   textContent?: string;
   duration?: number;
   orderIndex?: number;
+  courseId?: number | string;
+  courseName?: string;
 }
 
 export interface LessonFilter extends Partial<BaseFilter> {
+  courseId?: number | string;
+  title?: string;
   sectionId?: number;
   contentType?: LessonContentType;
 }

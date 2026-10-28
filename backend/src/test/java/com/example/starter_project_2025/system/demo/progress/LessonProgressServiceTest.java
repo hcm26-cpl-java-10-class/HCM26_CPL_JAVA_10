@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.demo.progress;
 
 import com.example.starter_project_2025.system.demo.course.Course;
+import com.example.starter_project_2025.system.demo.certificate.CertificateService;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollment;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentRepository;
 import com.example.starter_project_2025.system.demo.lesson.Lesson;
@@ -33,6 +34,8 @@ class LessonProgressServiceTest {
     LessonRepository lessonRepository;
     @Mock
     NotificationService notificationService;
+    @Mock
+    CertificateService certificateService;
 
     @InjectMocks
     LessonProgressService service;
