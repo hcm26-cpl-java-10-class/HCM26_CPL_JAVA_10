@@ -82,7 +82,6 @@ export interface ExamDTO {
   blockCopyPaste?: boolean;
   requireFullscreen?: boolean;
   singleSession?: boolean;
-  flagThreshold?: number | null;
 }
 
 export interface ExamFilter {

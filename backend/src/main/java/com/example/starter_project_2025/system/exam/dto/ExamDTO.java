@@ -89,10 +89,6 @@ public class ExamDTO extends BaseDTO {
     private Boolean requireFullscreen;
     private Boolean singleSession;
 
-    @Min(value = 0, groups = {OnCreate.class, OnUpdate.class}, message = "flagThreshold phải >= 0")
-    @Max(value = 1000, groups = {OnCreate.class, OnUpdate.class}, message = "flagThreshold tối đa 1000")
-    private Integer flagThreshold;
-
     @JsonProperty(access = READ_ONLY)
     private Boolean hasPassword;
 }

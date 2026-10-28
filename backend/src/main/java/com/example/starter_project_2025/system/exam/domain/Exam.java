@@ -101,9 +101,6 @@ public class Exam extends BaseEntity {
     @Column(nullable = false)
     private Boolean singleSession = false;
 
-    /** So vi pham de danh dau "nghi van" trong bao cao (null/0 = khong danh dau). */
-    private Integer flagThreshold;
-
     @ManyToMany
     @JoinTable(name = "exam_question",
             joinColumns = @JoinColumn(name = "exam_id"),

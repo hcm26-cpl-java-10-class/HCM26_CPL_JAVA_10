@@ -64,7 +64,6 @@ interface ExamConfigForm {
   blockCopyPaste: boolean;
   requireFullscreen: boolean;
   singleSession: boolean;
-  flagThreshold: string;
 }
 
 const DEFAULT_CONFIG: ExamConfigForm = {
@@ -88,7 +87,6 @@ const DEFAULT_CONFIG: ExamConfigForm = {
   blockCopyPaste: true,
   requireFullscreen: false,
   singleSession: true,
-  flagThreshold: "1",
 };
 
 const LATE_POLICY_LABEL: Record<LatePolicy, string> = {
@@ -134,7 +132,6 @@ const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   blockCopyPaste: exam.blockCopyPaste ?? false,
   requireFullscreen: exam.requireFullscreen ?? false,
   singleSession: exam.singleSession ?? false,
-  flagThreshold: exam.flagThreshold != null ? String(exam.flagThreshold) : "",
 });
 
 function validateConfig(
@@ -303,7 +300,6 @@ export default function ExamManagementPage() {
         blockCopyPaste: cfg.blockCopyPaste,
         requireFullscreen: cfg.requireFullscreen,
         singleSession: cfg.singleSession,
-        flagThreshold: cfg.flagThreshold !== "" ? Number(cfg.flagThreshold) : 0,
       };
       return editingExam?.id
           ? examApi.update(String(editingExam.id), request)
@@ -990,10 +986,6 @@ export default function ExamManagementPage() {
                         <label className="flex items-center gap-2 text-sm">
                           <input type="checkbox" className="size-4 accent-primary" checked={cfg.singleSession} onChange={(event) => setCfg((c) => ({ ...c, singleSession: event.target.checked }))} />
                           Detect multiple tabs / devices
-                        </label>
-                        <label className="grid gap-1 text-sm sm:col-span-2">
-                          Flag an attempt after N violations (empty = 1)
-                          <Input type="number" min={0} max={1000} value={cfg.flagThreshold} onChange={(event) => setCfg((c) => ({ ...c, flagThreshold: event.target.value }))} />
                         </label>
                       </div>
                   )}

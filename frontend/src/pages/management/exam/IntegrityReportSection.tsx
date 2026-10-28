@@ -200,10 +200,9 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
 
             {report && (
                 <>
-                    <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
                         <StatCard label="Lượt thi" value={report.totalAttempts} />
-                        <StatCard label="Có vi phạm" value={report.attemptsWithViolations} tone="amber" />
-                        <StatCard label="Bị gắn cờ" value={report.flaggedAttempts} tone="red" />
+                        <StatCard label="Bị gắn cờ (có vi phạm)" value={report.flaggedAttempts} tone="red" />
                         <StatCard label="Tổng vi phạm" value={report.totalViolations} />
                     </div>
 
@@ -218,7 +217,7 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
                             ))}
                         </div>
                         <p className="mt-3 text-xs text-muted-foreground">
-                            Cờ: lượt thi có từ {report.flagThreshold && report.flagThreshold > 1 ? report.flagThreshold : 1} vi phạm trở lên.
+                            Cờ: lượt thi có ít nhất 1 vi phạm.
                         </p>
                     </div>
 

@@ -16,10 +16,8 @@ public class ExamIntegrityReportDTO {
     private Long examId;
     private String examTitle;
     private boolean antiCheatEnabled;
-    private Integer flagThreshold;
 
     private int totalAttempts;
-    private int attemptsWithViolations;
     private int flaggedAttempts;
     private int totalViolations;
     private Map<String, Integer> totalsByType;

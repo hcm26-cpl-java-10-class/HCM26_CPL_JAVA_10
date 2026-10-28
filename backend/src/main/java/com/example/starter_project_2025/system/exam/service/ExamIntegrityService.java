@@ -111,19 +111,17 @@ public class ExamIntegrityService {
         for (ExamIntegrityEvent e : eventRepository.findAllByExamIdOrderByOccurredAtAsc(examId)) {
             byAttempt.computeIfAbsent(e.getAttemptId(), k -> new ArrayList<>()).add(e);
         }
-        Integer threshold = exam.getFlagThreshold();
 
         ExamIntegrityReportDTO dto = new ExamIntegrityReportDTO();
         dto.setExamId(examId);
         dto.setExamTitle(exam.getTitle());
         dto.setAntiCheatEnabled(Boolean.TRUE.equals(exam.getAntiCheatEnabled()));
-        dto.setFlagThreshold(threshold);
 
         Map<String, Integer> totals = new LinkedHashMap<>();
         for (IntegrityEventType t : IntegrityEventType.values()) totals.put(t.name(), 0);
 
         List<ExamIntegrityReportDTO.Row> rows = new ArrayList<>();
-        int withViolations = 0, flagged = 0, totalViolations = 0;
+        int flagged = 0, totalViolations = 0;
 
         List<ExamAttempt> sorted = new ArrayList<>(attempts);
         sorted.sort(Comparator.comparing((ExamAttempt a) -> a.getStudent().getFullName(),
@@ -132,9 +130,8 @@ public class ExamIntegrityService {
 
         for (ExamAttempt a : sorted) {
             List<ExamIntegrityEvent> events = byAttempt.getOrDefault(a.getId(), List.of());
-            ExamIntegrityReportDTO.Row r = toRow(a, events, threshold);
+            ExamIntegrityReportDTO.Row r = toRow(a, events);
             for (ExamIntegrityEvent e : events) totals.merge(e.getType().name(), 1, Integer::sum);
-            if (r.getTotalViolations() > 0) withViolations++;
             if (r.isFlagged()) flagged++;
             totalViolations += r.getTotalViolations();
             rows.add(r);
@@ -146,7 +143,6 @@ public class ExamIntegrityService {
         });
 
         dto.setTotalAttempts(attempts.size());
-        dto.setAttemptsWithViolations(withViolations);
         dto.setFlaggedAttempts(flagged);
         dto.setTotalViolations(totalViolations);
         dto.setTotalsByType(totals);
@@ -154,7 +150,7 @@ public class ExamIntegrityService {
         return dto;
     }
 
-    static ExamIntegrityReportDTO.Row toRow(ExamAttempt a, List<ExamIntegrityEvent> events, Integer threshold) {
+    static ExamIntegrityReportDTO.Row toRow(ExamAttempt a, List<ExamIntegrityEvent> events) {
         User s = a.getStudent();
         ExamIntegrityReportDTO.Row r = new ExamIntegrityReportDTO.Row();
         r.setStudentId(s.getId());
@@ -192,10 +188,9 @@ public class ExamIntegrityService {
         r.setTotalViolations(events.size());
         r.setTotalAwaySeconds(away);
         r.setLastViolationAt(last);
-        // CHANGED: chi con 1 co duy nhat = "co vi pham" (>= nguong, nguong mac dinh 1).
+        // CHANGED: chi con 1 co duy nhat: luot thi co it nhat 1 vi pham thi bi gan co.
         // Co nay dung de sau nay lam tinh nang sua diem sinh vien bi gan co.
-        int minViolations = threshold == null || threshold < 1 ? 1 : threshold;
-        r.setFlagged(events.size() >= minViolations);
+        r.setFlagged(!events.isEmpty());
         if (a.getStartedAt() != null && a.getSubmittedAt() != null) {
             r.setDurationSeconds(Math.max(0, Duration.between(a.getStartedAt(), a.getSubmittedAt()).getSeconds()));
         }

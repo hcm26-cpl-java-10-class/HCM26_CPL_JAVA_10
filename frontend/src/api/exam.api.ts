@@ -289,9 +289,7 @@ export interface IntegrityReport {
     examId: number;
     examTitle: string;
     antiCheatEnabled: boolean;
-    flagThreshold: number | null;
     totalAttempts: number;
-    attemptsWithViolations: number;
     flaggedAttempts: number;
     totalViolations: number;
     totalsByType: Record<string, number>;

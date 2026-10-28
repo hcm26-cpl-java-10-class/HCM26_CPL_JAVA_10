@@ -70,7 +70,6 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setBlockCopyPaste(Boolean.TRUE.equals(e.getBlockCopyPaste()));
         d.setRequireFullscreen(Boolean.TRUE.equals(e.getRequireFullscreen()));
         d.setSingleSession(Boolean.TRUE.equals(e.getSingleSession()));
-        d.setFlagThreshold(e.getFlagThreshold());
         d.setHasPassword(e.getAccessCode() != null && !e.getAccessCode().trim().isEmpty());
         return d;
     }
@@ -113,7 +112,6 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         if (d.getBlockCopyPaste() != null) e.setBlockCopyPaste(d.getBlockCopyPaste());
         if (d.getRequireFullscreen() != null) e.setRequireFullscreen(d.getRequireFullscreen());
         if (d.getSingleSession() != null) e.setSingleSession(d.getSingleSession());
-        if (d.getFlagThreshold() != null) e.setFlagThreshold(d.getFlagThreshold() == 0 ? null : d.getFlagThreshold());
         if (d.getAccessCode() != null) {
             String trimmed = d.getAccessCode().trim();
             e.setAccessCode(trimmed.isEmpty() ? null : trimmed);
