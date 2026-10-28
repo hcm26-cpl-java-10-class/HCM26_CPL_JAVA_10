@@ -18,7 +18,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class MockArtifactSubmissionScopeAdapterTest {
 
     private final MockArtifactSubmissionScopeAdapter scope =
-            new MockArtifactSubmissionScopeAdapter("student@example.com=1", "student@example.com=1");
+            new MockArtifactSubmissionScopeAdapter(
+                    "student@example.com=1",
+                    "student@example.com=1",
+                    "teacher@example.com=1+3");
 
     @AfterEach
     void clearSecurityContext() {
@@ -32,6 +35,7 @@ class MockArtifactSubmissionScopeAdapterTest {
 
         assertDoesNotThrow(() -> scope.requireStudentProjectAccess(99L, adminId, MockMilestoneData.TENANT_ID));
         assertDoesNotThrow(() -> scope.requireStudentTeamAccess(99L, adminId, MockMilestoneData.TENANT_ID));
+        assertDoesNotThrow(() -> scope.requireReviewerTeamAccess(3L, adminId, MockMilestoneData.TENANT_ID));
     }
 
     @Test
@@ -45,6 +49,16 @@ class MockArtifactSubmissionScopeAdapterTest {
                 () -> scope.requireStudentProjectAccess(2L, studentId, MockMilestoneData.TENANT_ID));
         assertThrows(AccessDeniedException.class,
                 () -> scope.requireStudentTeamAccess(2L, studentId, MockMilestoneData.TENANT_ID));
+    }
+
+    @Test
+    void reviewerNeedsExplicitTeamAssignment() {
+        authenticate("ROLE_TEACHER");
+        UUID reviewerId = UUID.nameUUIDFromBytes("teacher@example.com".getBytes(StandardCharsets.UTF_8));
+
+        assertDoesNotThrow(() -> scope.requireReviewerTeamAccess(3L, reviewerId, MockMilestoneData.TENANT_ID));
+        assertThrows(AccessDeniedException.class,
+                () -> scope.requireReviewerTeamAccess(2L, reviewerId, MockMilestoneData.TENANT_ID));
     }
 
     private void authenticate(String authority) {
