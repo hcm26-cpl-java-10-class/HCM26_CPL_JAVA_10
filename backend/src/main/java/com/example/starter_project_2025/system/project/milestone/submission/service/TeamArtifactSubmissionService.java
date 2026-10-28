@@ -172,6 +172,23 @@ public class TeamArtifactSubmissionService {
         }).toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<MyArtifactSubmissionView> mySubmissions(Long teamId, UUID milestoneId) {
+        Scope s = studentScope(teamId);
+        milestoneRepository.findByIdAndTeamIdAndTenantId(milestoneId, teamId, s.tenantId)
+                .filter(com.example.starter_project_2025.system.project.milestone.domain.Milestone::isActive)
+                .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
+        return submissionRepository
+                .findByTenantIdAndTeamIdAndMilestoneIdAndSubmitterIdOrderByVersionDesc(
+                        s.tenantId, teamId, milestoneId, s.actorId)
+                .stream().map(row -> {
+                    var review = reviewSyncService.persistedReviewFor(row);
+                    return new MyArtifactSubmissionView(
+                            submissionResponse(row, reviewSyncService.persistedStatusFor(row)),
+                            review.feedback(), review.reviewedAt());
+                }).toList();
+    }
+
     private Scope studentScope(Long teamId) {
         UUID actor = actorProvider.requireCurrentActorId(); Long tenant = tenantProvider.requireCurrentTenantId();
         var milestoneScope = milestoneScopeService.requireTeamScope(null, teamId, tenant);
@@ -192,12 +209,17 @@ public class TeamArtifactSubmissionService {
                         new ResourceNotFoundException("Team workspace not found"));
 
         if (team.getStatus()
-                != com.example.starter_project_2025.system.project.ProjectTeamStatus.ACTIVE
-                || team.getProject() == null
-                || team.getProject().getStatus()
+                != com.example.starter_project_2025.system.project.ProjectTeamStatus.ACTIVE) {
+            throw new MilestoneConflictException(
+                    "Team workspace is not active");
+        }
+        // Team-only workspaces are valid submission scopes and intentionally have no Project.
+        // If the team is linked to a Project, that Project must also be active.
+        if (team.getProject() != null
+                && team.getProject().getStatus()
                 != com.example.starter_project_2025.system.project.domain.ProjectStatus.ACTIVE) {
             throw new MilestoneConflictException(
-                    "Team workspace or its project is not active");
+                    "The team project is not active");
         }
     }
     private Map<UUID, Boolean> validateChecklist(com.example.starter_project_2025.system.project.milestone.domain.Milestone m, Map<UUID, Boolean> requested) {
@@ -226,4 +248,6 @@ public class TeamArtifactSubmissionService {
     private record Scope(UUID actorId, Long tenantId, Long projectId) { }
     public record TeamSubmissionView(ArtifactSubmissionResponse submission, UUID reviewSubmissionId,
                                      UUID submitterId, String submitterName, String submitterEmail) { }
+    public record MyArtifactSubmissionView(ArtifactSubmissionResponse submission, String reviewFeedback,
+                                          Instant reviewedAt) { }
 }

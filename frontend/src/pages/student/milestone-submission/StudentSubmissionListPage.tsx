@@ -47,7 +47,7 @@ export function StudentSubmissionListPage() {
             <CardHeader className="p-4 pb-2"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><CardTitle className="truncate text-base">{item.milestoneTitle}</CardTitle><p className="mt-1 text-xs text-muted-foreground">{item.teamName} · Version {item.currentVersionNumber} · Lần nộp {item.submissionAttempts}</p></div><SubmissionStatusBadge status={item.status} /></div></CardHeader>
             <CardContent className="flex flex-col gap-3 p-4 pt-1 sm:flex-row sm:items-center sm:justify-between">
               <div className="grid gap-1 text-sm"><span className="flex items-center gap-2 text-muted-foreground"><CalendarClock className="size-4" /> Hạn: {new Date(item.deadline).toLocaleString("vi-VN")}</span>{needsRevision ? <span className="flex items-center gap-2 font-medium text-amber-700 dark:text-amber-300"><RotateCcw className="size-4" /> Reviewer đang yêu cầu bạn nộp Version {item.currentVersionNumber + 1}</span> : null}</div>
-              <Button onClick={() => navigate(`/student/milestone-submissions/${item.id}`)}><Eye className="size-4" /> {needsRevision ? "Xem feedback" : "Xem bài nộp"}</Button>
+              <Button onClick={() => navigate(`/student/milestone-submissions/${item.id}`)}><Eye className="size-4" /> {needsRevision ? "Xem feedback" : item.currentVersionNumber > 1 ? `Xem ${item.currentVersionNumber} phiên bản` : "Xem bài nộp"}</Button>
             </CardContent>
           </Card>;
         })}</div>}

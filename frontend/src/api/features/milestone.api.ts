@@ -183,6 +183,10 @@ export const milestoneApi = {
     const response = await axiosInstance.get<Array<{ submission: ArtifactSubmission; reviewSubmissionId?: string | null; submitterId: string; submitterName?: string | null; submitterEmail?: string | null }>>(`/teams/${teamId}/milestones/submissions`, { params: milestoneId ? { milestoneId } : undefined });
     return response.data;
   },
+  async getMyTeamArtifactSubmissions(teamId: number, milestoneId: string): Promise<Array<{ submission: ArtifactSubmission; reviewFeedback?: string | null; reviewedAt?: string | null }>> {
+    const response = await axiosInstance.get<Array<{ submission: ArtifactSubmission; reviewFeedback?: string | null; reviewedAt?: string | null }>>(`/teams/${teamId}/milestones/${milestoneId}/my-submissions`);
+    return response.data;
+  },
 
   async getArtifactWorkspace(projectId: string, milestoneId: string): Promise<ArtifactSubmissionWorkspace> {
     const response = await axiosInstance.get<ArtifactSubmissionWorkspace>(
