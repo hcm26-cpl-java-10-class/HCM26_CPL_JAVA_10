@@ -4,16 +4,25 @@ import com.example.starter_project_2025.base.crud.dto.BaseDTO;
 import com.example.starter_project_2025.base.crud.dto.OnCreate;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import lombok.*;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
 import java.util.Set;
 
+@Data
 @Getter
 @Setter
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
+@EqualsAndHashCode(callSuper = false)
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class RoleDTO extends BaseDTO {
 
@@ -21,14 +30,9 @@ public class RoleDTO extends BaseDTO {
     @Size(max = 100, message = "Name must not exceed 100 characters")
     String name;
 
-    @Size(max = 255, message = "Description must not exceed 255 characters")
+    @Size(max = 1000, message = "Description must not exceed 1000 characters")
     String description;
-
-    Set<Long> permissionIds;
-
     Boolean isSystem;
-
-    Boolean isActive;
-
     Long userCount;
+    Set<Long> permissionIds;
 }

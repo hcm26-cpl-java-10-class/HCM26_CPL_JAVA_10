@@ -72,7 +72,7 @@ export function CardItem({
   return (
     <Card
       className={cn(
-        "relative group transition-all hover:shadow-md",
+        "relative group w-full min-w-0 max-w-full transition-all hover:shadow-md",
         isClickable ? "cursor-pointer" : "cursor-default",
         isSelected ? "ring-2 ring-primary" : "",
       )}
@@ -83,8 +83,8 @@ export function CardItem({
       }}
     >
       {hasHeader && (
-        <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2 space-y-0">
-          <div className="flex items-center gap-2">
+        <CardHeader className="flex min-w-0 flex-row items-center justify-between gap-2 pb-2 space-y-0">
+          <div className="flex min-w-0 items-center gap-2">
             {selectable && (
               <Checkbox
                 checked={isSelected}
@@ -101,7 +101,7 @@ export function CardItem({
           </div>
 
           {showActions && (
-            <div className="flex gap-1">
+            <div className="flex min-w-0 flex-wrap justify-end gap-1">
               {renderRowActions ? renderRowActions(row) : defaultActions}
             </div>
           )}
@@ -112,8 +112,8 @@ export function CardItem({
         {visibleFields
           .filter((f) => f.type !== "password")
           .map((f) => (
-            <div key={f.name} className="flex items-start gap-2 min-w-0">
-              <span className="text-xs font-medium text-muted-foreground min-w-[80px] shrink-0 pt-0.5">
+            <div key={f.name} className="flex min-w-0 items-start gap-2">
+              <span className="max-w-[35%] shrink-0 pt-0.5 text-xs font-medium text-muted-foreground">
                 {f.label}
               </span>
               <div className="min-w-0 flex-1">

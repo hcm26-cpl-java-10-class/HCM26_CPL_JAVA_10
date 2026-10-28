@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.base.dataio.importer.service;
 
 import com.example.starter_project_2025.base.dataio.importer.annotation.ImportHash;
+import com.example.starter_project_2025.base.dataio.importer.hook.ImportHandler;
 import com.example.starter_project_2025.base.dataio.importer.mapper.GenericImportMapper;
 import com.example.starter_project_2025.base.dataio.importer.parser.FileParser;
 import com.example.starter_project_2025.base.dataio.importer.parser.ParserFactory;
@@ -23,6 +24,7 @@ public class GenericImportService implements ImportService {
     private final ParserFactory parserFactory;
     private final GenericImportMapper mapper;
     private final PasswordEncoder passwordEncoder;
+    private final List<ImportHandler<?>> handlers;
 
     @Override
     public <T, ID> ImportResult importFile(
@@ -39,28 +41,63 @@ public class GenericImportService implements ImportService {
 
             result.setTotalCount(rows.size());
 
-            int rowIndex = 2;
+            ImportHandler<T> handler = findHandler(entityClass);
 
-            for (Map<String, String> row : rows) {
+            if (handler != null) {
+                handler.beforeImport(rows);
+            }
 
-                try {
-                    T entity = mapper.map(row, entityClass);
+            try {
+                int rowIndex = 2;
 
-                    applyHash(entity);
+                for (Map<String, String> row : rows) {
 
-                    repository.save(entity);
+                    rowIndex = FileParser.rowNumberOf(row, rowIndex);
 
-                    result.setSuccessCount(result.getSuccessCount() + 1);
+                    try {
+                        if (handler != null && handler.shouldSkip(row)) {
+                            result.setSkippedCount(result.getSkippedCount() + 1);
+                            rowIndex++;
+                            continue;
+                        }
 
-                } catch (Exception e) {
+                        T entity = handler != null
+                                ? handler.resolveExisting(row).orElse(null)
+                                : null;
 
-                    result.getErrors().add(
-                            new RowError(rowIndex, e.getMessage()));
+                        if (entity == null) {
+                            entity = mapper.map(row, entityClass);
+                        }
 
-                    result.setFailureCount(result.getFailureCount() + 1);
+                        if (handler != null) {
+                            handler.beforeSave(entity, row);
+                        }
+
+                        applyHash(entity);
+
+                        repository.save(entity);
+
+                        result.setSuccessCount(result.getSuccessCount() + 1);
+
+                        if (handler != null) {
+                            handler.afterSave(entity, row, rowIndex, result);
+                        }
+
+                    } catch (Exception e) {
+
+                        result.getErrors().add(
+                                new RowError(rowIndex, e.getMessage()));
+
+                        result.setFailureCount(result.getFailureCount() + 1);
+                    }
+
+                    rowIndex++;
                 }
 
-                rowIndex++;
+            } finally {
+                if (handler != null) {
+                    handler.afterImport();
+                }
             }
 
         } catch (Exception e) {
@@ -68,6 +105,16 @@ public class GenericImportService implements ImportService {
         }
 
         return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> ImportHandler<T> findHandler(Class<T> entityClass) {
+        for (ImportHandler<?> handler : handlers) {
+            if (handler.entityType().equals(entityClass)) {
+                return (ImportHandler<T>) handler;
+            }
+        }
+        return null;
     }
 
     private void applyHash(Object entity) throws IllegalAccessException {

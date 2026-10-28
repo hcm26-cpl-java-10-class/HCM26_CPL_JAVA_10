@@ -9,12 +9,26 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { ImportResult } from "@/types";
-import { ArrowLeft, CheckCircle2, ListChecks, XCircle } from "lucide-react";
+import type { GeneratedCredential, ImportResult } from "@/types";
+import { ArrowLeft, CheckCircle2, Download, KeyRound, Mail, RefreshCw, SkipForward, XCircle } from "lucide-react";
 
 interface ImportResultContentProps {
   result: ImportResult;
 }
+
+/** Saves the generated temporary passwords as a CSV file (BOM so Excel opens it correctly). */
+const downloadCredentials = (credentials: GeneratedCredential[]) => {
+  const lines = ["email,temporary_password,excel_row"];
+  credentials.forEach((c) => lines.push(`${c.email},${c.temporaryPassword},${c.rowNumber}`));
+
+  const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "temporary-passwords.csv";
+  link.click();
+  URL.revokeObjectURL(url);
+};
 
 export const ImportResultContent = ({ result }: ImportResultContentProps) => {
   const totalCount =
@@ -54,7 +68,77 @@ export const ImportResultContent = ({ result }: ImportResultContentProps) => {
         </div>
       </div>
 
-      {result.errors.length > 0 && (
+      {((result.updatedCount ?? 0) > 0 ||
+        (result.skippedCount ?? 0) > 0 ||
+        (result.emailsSent ?? 0) > 0 ||
+        (result.emailsFailed ?? 0) > 0) && (
+        <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+          <div className="rounded-lg border p-3">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <RefreshCw className="h-4 w-4" />
+              Existing, updated
+            </div>
+            <p className="mt-1 text-xl font-semibold">{result.updatedCount ?? 0}</p>
+          </div>
+          <div className="rounded-lg border p-3">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <SkipForward className="h-4 w-4" />
+              Existing, unchanged
+            </div>
+            <p className="mt-1 text-xl font-semibold">{result.skippedCount ?? 0}</p>
+          </div>
+          <div className="rounded-lg border p-3">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <Mail className="h-4 w-4" />
+              Notices sent
+            </div>
+            <p className="mt-1 text-xl font-semibold">{result.emailsSent ?? 0}</p>
+          </div>
+          <div className="rounded-lg border p-3">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <Mail className="h-4 w-4" />
+              Notices failed
+            </div>
+            <p className="mt-1 text-xl font-semibold text-red-700 dark:text-red-300">
+              {result.emailsFailed ?? 0}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {(result.credentials?.length ?? 0) > 0 && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-500/40 dark:bg-amber-500/10">
+          <div className="flex items-center gap-1.5 font-medium">
+            <KeyRound className="h-4 w-4" />
+            {result.credentials!.length} temporary password(s) generated
+          </div>
+          <p className="mt-1 text-muted-foreground">
+            These accounts had no password in the file. Each person got their own random temporary
+            password and must create their own at the first sign-in. No email was sent for them.
+            <strong> This list is shown only once</strong>: download it now, hand the passwords out
+            securely, then delete the file.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-2"
+            onClick={() => downloadCredentials(result.credentials!)}
+          >
+            <Download className="mr-1.5 h-4 w-4" />
+            Download passwords (CSV)
+          </Button>
+        </div>
+      )}
+
+      {(result.emailsSkipped ?? 0) > 0 && (
+        <p className="text-sm text-amber-700 dark:text-amber-300">
+          {result.emailsSkipped} notice email(s) were not sent because the limit per import was reached.
+          The passwords were still updated.
+        </p>
+      )}
+
+      {(result.errors ?? []).length > 0 && (
         <ScrollArea className="rounded-md border h-[250px]">
           <table className="w-full text-sm table-fixed">
             <thead className="bg-muted/50 sticky top-0 z-10">
@@ -68,7 +152,7 @@ export const ImportResultContent = ({ result }: ImportResultContentProps) => {
               </tr>
             </thead>
             <tbody>
-              {result.errors.map((err, index) => (
+              {(result.errors ?? []).map((err, index) => (
                 <tr
                   key={index}
                   className="border-b hover:bg-muted/50 transition-colors"

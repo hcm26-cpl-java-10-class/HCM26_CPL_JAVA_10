@@ -123,6 +123,24 @@ export function CellRenderer({
     );
   }
 
+  if (
+    field.type === "select" &&
+    field.options &&
+    value !== undefined &&
+    value !== null &&
+    value !== ""
+  ) {
+    const label =
+      field.options.find((o) => o.value?.toString() === value?.toString())
+        ?.label ?? String(value);
+    return (
+      <TableCell>
+        <TruncatedText content={label} bold={field.bold} />
+      </TableCell>
+    );
+  }
+
+  // Handle arrays (like question options)
   if (Array.isArray(value)) {
     if (value.length === 0) {
       return (

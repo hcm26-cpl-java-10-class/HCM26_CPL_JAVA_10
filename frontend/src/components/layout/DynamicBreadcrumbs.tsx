@@ -18,6 +18,7 @@ type Props = {
     hasPage?: boolean;
     ignorePaths?: string[];
     variant?: "default" | "student";
+    plain?: boolean;
 };
 
 type BreadcrumbNode = {
@@ -72,6 +73,7 @@ export default function DynamicBreadcrumbs({
     hasPage = true,
     ignorePaths = [],
     variant = "default",
+    plain = false,
 }: Props) {
     const location = useLocation();
     const { data: moduleGroups } = useActiveModuleGroups();
@@ -179,17 +181,17 @@ export default function DynamicBreadcrumbs({
             <BreadcrumbList className="min-w-0">
                 <BreadcrumbItem>
                     {showHomeAsPage ? (
-                        <BreadcrumbPage className="inline-flex max-w-[50vw] items-center gap-1.5 truncate rounded-md bg-accent px-2.5 py-1 font-semibold">
-                            <HomeIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                            <span className="truncate">{homeLabel}</span>
+                        <BreadcrumbPage className={plain ? "text-foreground" : "inline-flex max-w-[50vw] items-center gap-1.5 truncate rounded-md bg-accent px-2.5 py-1 font-semibold"}>
+                            {!plain && <HomeIcon className="size-3.5 shrink-0 text-muted-foreground" />}
+                            <span className={plain ? undefined : "truncate"}>{homeLabel}</span>
                         </BreadcrumbPage>
                     ) : (
                         <BreadcrumbLink
                             asChild
-                            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-muted-foreground hover:bg-accent"
+                            className={plain ? "text-muted-foreground hover:text-foreground" : "inline-flex items-center gap-1 rounded-md px-2 py-1 text-muted-foreground hover:bg-accent"}
                         >
                             <Link to={homePath}>
-                                <HomeIcon className="size-3.5" />
+                                {!plain && <HomeIcon className="size-3.5" />}
                                 {homeLabel}
                             </Link>
                         </BreadcrumbLink>
@@ -208,9 +210,9 @@ export default function DynamicBreadcrumbs({
                                 {node.type === "ellipsis" ? (
                                     <BreadcrumbEllipsis className="size-7" />
                                 ) : node.crumb.isLast || !hasPage ? (
-                                    <BreadcrumbPage className="inline-flex max-w-[44vw] items-center gap-1.5 truncate rounded-md bg-accent px-2.5 py-1 font-semibold">
-                                        <ActiveIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                                        <span className="truncate">{node.crumb.title}</span>
+                                    <BreadcrumbPage className={plain ? "text-foreground font-normal" : "inline-flex max-w-[44vw] items-center gap-1.5 truncate rounded-md bg-accent px-2.5 py-1 font-semibold"}>
+                                        {!plain && <ActiveIcon className="size-3.5 shrink-0 text-muted-foreground" />}
+                                        <span className={plain ? undefined : "truncate"}>{node.crumb.title}</span>
                                     </BreadcrumbPage>
                                 ) : (
                                     <BreadcrumbLink
