@@ -17,10 +17,9 @@ export interface LessonDTO extends BaseDTO {
   courseName?: string;
 }
 
-export interface LessonFilter extends BaseFilter {
+export interface LessonFilter extends Partial<BaseFilter> {
   courseId?: number | string;
   title?: string;
-export interface LessonFilter extends Partial<BaseFilter> {
   sectionId?: number;
   contentType?: LessonContentType;
 }

@@ -6,10 +6,8 @@ const path = "/lessons";
 
 const base = createBaseApiService<LessonDTO, LessonFilter>({
   path,
-  path: path,
 });
 
-export const lessonApi = Object.assign({}, base, {});
 export const lessonApi = Object.assign({}, base, {
   /** Toàn bộ bài học của một section, sắp xếp theo orderIndex tăng dần. */
   getBySection: async (sectionId: number): Promise<LessonDTO[]> => {

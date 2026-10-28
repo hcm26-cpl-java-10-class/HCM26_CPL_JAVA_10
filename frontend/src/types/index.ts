@@ -24,12 +24,10 @@ export * from "./features/exam";
 export * from "./features/invitation";
 export * from "./features/menu/module";
 export * from "./features/menu/module_group";
-export * from "./features/rbac/department";
 export * from "./features/rbac/permission";
 export * from "./features/rbac/role";
 export * from "./features/rbac/user";
 export * from "./features/demo/session";
-export * from "./features/demo/lesson";
 
 export * from "./features/student";
 export * from "./features/demo/course-report";

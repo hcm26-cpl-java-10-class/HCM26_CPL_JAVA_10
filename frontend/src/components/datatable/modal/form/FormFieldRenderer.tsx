@@ -297,7 +297,6 @@ export function FormFieldRenderer({
             rows={4}
             maxLength={rule.maxLength}
             style={FIXED_TEXTAREA_STYLE}
-            maxLength={field.maxLength}
           />
           {rule.maxLength ? (
             <p className="text-xs text-muted-foreground text-right">
@@ -324,9 +323,7 @@ export function FormFieldRenderer({
             type={field.name === "email" ? "email" : "text"}
             className={errorClass}
             value={value || ""}
-            maxLength={field.maxLength}
             onChange={(e) => onChange(field.name, e.target.value)}
-            placeholder={`Enter ${field.label.toLowerCase()}...`}
             maxLength={rule.maxLength}
             placeholder={field.name === "email" ? "name@gmail.com" : `Enter ${field.label.toLowerCase()}...`}
           />

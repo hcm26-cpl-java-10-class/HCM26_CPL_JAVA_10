@@ -111,9 +111,7 @@ export function FormModal({
 }: FormModalProps) {
   const [form, setForm] = useState<Record<string, any>>({});
   const [clientErrors, setClientErrors] = useState<Record<string, string[]>>({});
-  // Field đã được người dùng rời khỏi (blur) -> từ đó validate trực tiếp khi gõ
   const [touched, setTouched] = useState<Record<string, boolean>>({});
-  const [clientErrors, setClientErrors] = useState<Record<string, string[]>>({});
 
   const editableFields: FieldSchema[] = schema.fields.filter(
     (f: FieldSchema) =>
@@ -175,8 +173,6 @@ export function FormModal({
   };
 
   const updateField = (name: string, value: any) => {
-    setForm((prev) => ({ ...prev, [name]: value }));
-    if (name === "email") setClientErrors((prev) => ({ ...prev, email: [] }));
     const nextForm = { ...form, [name]: value };
     setForm(nextForm);
 
@@ -207,7 +203,7 @@ export function FormModal({
   const handleSubmit = () => {
     if (schema.entityName === "student") {
       const errors: Record<string, string[]> = {};
-      schema.fields.filter((field) => field.required).forEach((field) => {
+      schema.fields.filter((field: FieldSchema) => field.required).forEach((field: FieldSchema) => {
         const value = form[field.name];
         if (value === undefined || value === null || String(value).trim() === "") {
           errors[field.name] = [`${field.label} là bắt buộc.`];
@@ -247,8 +243,7 @@ export function FormModal({
     clientErrors[fieldName]?.length ? clientErrors[fieldName] : fieldErrors[fieldName];
 
   const hasError = (fieldName: string) =>
-    mergedErrors[fieldName] && mergedErrors[fieldName].length > 0;
-    (clientErrors[fieldName]?.length ?? 0) > 0 || (fieldErrors[fieldName]?.length ?? 0) > 0;
+    Boolean(mergedErrors[fieldName]?.length);
 
   const renderField = (field: FieldSchema) => (
     <div key={field.name} onBlur={() => handleFieldBlur(field)}>
@@ -260,7 +255,6 @@ export function FormModal({
           ? "border-destructive focus-visible:ring-destructive"
           : ""
       }
-      fieldErrors={mergedErrors[field.name]}
       fieldErrors={getFieldErrors(field.name)}
       relationOptions={relationOptions}
       initial={initial}

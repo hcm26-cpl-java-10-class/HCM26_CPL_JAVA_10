@@ -26,16 +26,13 @@ export interface UserDTO extends BaseDTO {
   lastLoginAt?: string;
   departmentId?: number | null;
   departmentName?: string | null;
-  departmentIds?: number[];
   departmentNames?: string[];
   clearDepartment?: boolean;
-  roleIds?: number[];
 }
 
 export interface UserFilter extends BaseFilter {
   departmentId?: number;
-  roleIds?: number[];
-  roleIds?: string[];
-  departmentIds?: string[];
+  roleIds?: Array<string | number>;
+  departmentIds?: Array<string | number>;
   status?: UserStatus;
 }
