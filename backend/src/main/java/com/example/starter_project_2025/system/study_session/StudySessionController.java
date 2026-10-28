@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
 
+import org.springframework.http.ResponseEntity;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -123,5 +124,23 @@ public class StudySessionController
             CompleteSessionRequest request
     ) {
         return studySessionService.complete(id, request);
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/bulk")
+    public ResponseEntity<Map<String, Object>> deleteBulk(@RequestBody java.util.List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Session IDs list cannot be empty"));
+        }
+        studySessionRepository.deleteAllById(ids);
+        return ResponseEntity.ok(Map.of("message", "Deleted " + ids.size() + " sessions successfully", "count", ids.size()));
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/classes/{classId}")
+    public ResponseEntity<Map<String, Object>> deleteByClass(@PathVariable Long classId) {
+        var sessions = studySessionRepository.findAll().stream()
+                .filter(s -> java.util.Objects.equals(s.getClassId(), classId))
+                .toList();
+        studySessionRepository.deleteAll(sessions);
+        return ResponseEntity.ok(Map.of("message", "Deleted " + sessions.size() + " sessions for class " + classId, "count", sessions.size()));
     }
 }
