@@ -12,6 +12,7 @@ export interface TeamBacklogBoard {
   projectId?: number | null;
   sprints: SprintDTO[];
   items: SprintBacklogDTO[];
+  members: Array<{ projectMemberId: number; displayName: string }>;
 }
 
 export const teamBacklogApi = {
@@ -22,6 +23,13 @@ export const teamBacklogApi = {
   getBoard: async (teamId: number): Promise<TeamBacklogBoard> => {
     const response = await axiosInstance.get<TeamBacklogBoard>(
       `/teams/${teamId}/backlog-board`,
+    );
+    return response.data;
+  },
+  assign: async (teamId: number, itemId: number, projectMemberId: number | null): Promise<SprintBacklogDTO> => {
+    const response = await axiosInstance.put<SprintBacklogDTO>(
+      `/teams/${teamId}/backlog-board/items/${itemId}/assignee`,
+      { projectMemberId },
     );
     return response.data;
   },

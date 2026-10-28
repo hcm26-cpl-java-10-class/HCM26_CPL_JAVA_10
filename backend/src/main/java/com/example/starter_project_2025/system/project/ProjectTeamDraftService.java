@@ -389,7 +389,6 @@ public class ProjectTeamDraftService {
             ).add(new BatchSaveDraftResponse.MemberResponse(
                     member.getClassMember().getId(),
                     member.getClassMember().getUser().getFullName(),
-                    member.getClassMember().getUser().getUserCode(),
                     member.getRole(),
                     ProjectMemberRole.parseRoles(member.getRole())
             ));

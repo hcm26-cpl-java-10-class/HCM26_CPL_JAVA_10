@@ -8,7 +8,6 @@ export interface InvitationDTO extends BaseDTO {
   examTitle?: string;
   userEmail?: string;
   userFullName?: string;
-  userCode?: string | null;
   status?: InvitationStatus;
   sentAt?: string;
   resendCount?: number;

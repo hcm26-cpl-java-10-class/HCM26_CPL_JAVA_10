@@ -25,8 +25,6 @@ public class UserDTO extends BaseDTO {
     @Email(groups = {OnCreate.class, OnUpdate.class}, message = "Email should be valid")
     String email;
 
-    String userCode;
-
     @JsonProperty(access = WRITE_ONLY)
     @Size(min = 8, groups = {OnCreate.class, OnUpdate.class}, message = "Password must be at least 8 characters long")
     String password;

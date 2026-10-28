@@ -17,23 +17,12 @@ public interface ProjectTemplateRepository
 
     Optional<ProjectTemplate> findByIdAndTenantIdAndIsActiveTrue(Long id, Long tenantId);
 
-    /**
-     * Read-only lookup that also resolves the shared catalogue: rows without a
-     * tenant ({@code tenant_id is null}, e.g. the demo/sample templates seeded
-     * by {@code ProjectTeamTemplateDemoDataInitializer}) are readable by every
-     * tenant. Mutations keep using {@link #findByIdAndTenantIdAndIsActiveTrue}.
-     */
-    @Query("select t from ProjectTemplate t where t.id = :id and t.isActive = true "
-            + "and (t.tenantId = :tenantId or t.tenantId is null)")
-    Optional<ProjectTemplate> findReadableById(Long id, Long tenantId);
-
     boolean existsByTenantIdAndCodeAndTemplateVersion(Long tenantId, String code, Integer templateVersion);
 
     boolean existsByTenantIdAndCodeAndTemplateVersionAndIdNot(
             Long tenantId, String code, Integer templateVersion, Long id);
 
-    @Query("select distinct t.category from ProjectTemplate t "
-            + "where (t.tenantId = :tenantId or t.tenantId is null) "
+    @Query("select distinct t.category from ProjectTemplate t where t.tenantId = :tenantId "
             + "and t.isActive = true and t.category is not null order by t.category")
     List<String> findCategories(Long tenantId);
 }

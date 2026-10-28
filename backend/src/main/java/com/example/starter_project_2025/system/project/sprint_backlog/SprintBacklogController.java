@@ -2,8 +2,6 @@ package com.example.starter_project_2025.system.project.sprint_backlog;
 
 import com.example.starter_project_2025.base.crud.controller.BaseCrudController;
 import com.example.starter_project_2025.base.crud.service.BaseCrudService;
-import com.example.starter_project_2025.base.dataio.importer.result.ImportResult;
-import com.example.starter_project_2025.base.dataio.importer.service.ImportService;
 import com.example.starter_project_2025.exception.error.ErrorResponse;
 import com.example.starter_project_2025.exception.error.ValidationErrorResponse;
 import com.example.starter_project_2025.system.project.sprint_backlog.audit.SprintBacklogAuditLogDTO;
@@ -16,15 +14,12 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -45,8 +40,6 @@ public class SprintBacklogController
         extends BaseCrudController<Long, SprintBacklogDTO, SprintBacklogFilter> {
 
     SprintBacklogService sprintBacklogService;
-    SprintBacklogRepository sprintBacklogRepository;
-    ImportService importService;
 
     @Override
     protected BaseCrudService<Long, SprintBacklogDTO, SprintBacklogFilter> getService() {
@@ -84,19 +77,6 @@ public class SprintBacklogController
     public ResponseEntity<List<BacklogMilestoneOptionDTO>> getMilestoneOptions(
             @RequestParam(required = false) Long teamId) {
         return ResponseEntity.ok(sprintBacklogService.getMilestoneOptions(teamId));
-    }
-
-    /**
-     * Bulk import of backlog items (create permission of the resource).
-     * <p>
-     * The import is atomic: every row is validated first and the rows are only
-     * stored when the whole file is valid, so a failure never leaves a partial
-     * import behind.
-     */
-    @PostMapping(value = "/import", consumes = "multipart/form-data")
-    @PreAuthorize("hasAuthority('SPRINT_BACKLOG_CREATE')")
-    public ImportResult importFile(@RequestParam("file") MultipartFile file) {
-        return importService.importFileAtomic(file, SprintBacklog.class, sprintBacklogRepository);
     }
 
     // ---------------------------------------------------------------------

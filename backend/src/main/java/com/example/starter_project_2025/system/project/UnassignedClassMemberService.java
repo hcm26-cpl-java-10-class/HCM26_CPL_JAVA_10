@@ -55,8 +55,7 @@ public class UnassignedClassMemberService {
                 .filter(member -> !assignedMemberIds.contains(member.getId()))
                 .map(member -> new UnassignedClassMemberResponse(
                         member.getId(),
-                        member.getUser().getFullName(),
-                        member.getUser().getUserCode()
+                        member.getUser().getFullName()
                 ))
                 .collect(Collectors.toList());
     }
@@ -91,7 +90,6 @@ public class UnassignedClassMemberService {
                 .map(member -> new ClassMemberRosterResponse(
                         member.getId(),
                         member.getUser().getFullName(),
-                        member.getUser().getUserCode(),
                         assignedMemberIds.contains(member.getId())
                 ))
                 .toList();

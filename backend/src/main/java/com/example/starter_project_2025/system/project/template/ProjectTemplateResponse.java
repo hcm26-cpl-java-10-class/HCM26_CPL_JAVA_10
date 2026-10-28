@@ -17,20 +17,15 @@ public record ProjectTemplateResponse(
         TemplateTeamConstraints teamConstraints,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
-        boolean editable,
-        boolean readOnly
+        boolean editable
 ) {
     public static ProjectTemplateResponse from(ProjectTemplate template, boolean canUpdate,
             TemplateTeamConstraints teamConstraints) {
-        // tenant_id == null marks the shared catalogue (sample/demo templates):
-        // every tenant can read it, nobody can mutate it.
-        boolean shared = template.getTenantId() == null;
         return new ProjectTemplateResponse(
                 template.getId(), template.getCode(), template.getName(), template.getDescription(),
                 template.getCategory(), template.getLevel(), template.getEstimatedDurationWeeks(),
                 template.getTemplateVersion(), template.getStatus(), template.getLockVersion(), teamConstraints,
                 template.getCreatedAt(), template.getUpdatedAt(),
-                !shared && canUpdate && template.getStatus() == ProjectTemplateStatus.DRAFT,
-                shared);
+                canUpdate && template.getStatus() == ProjectTemplateStatus.DRAFT);
     }
 }

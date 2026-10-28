@@ -5,7 +5,6 @@ import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
 import com.example.starter_project_2025.system.project.trainingclass.ScopeAuthorizationService;
-import com.example.starter_project_2025.system.project.template.assignment.TemplateAssignmentProvisioningService;
 import com.example.starter_project_2025.web.CorrelationIdFilter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -56,7 +55,6 @@ public class ProjectTeamTemplateService {
     private final ProjectTeamAuditRepository auditRepository;
     private final ProjectTeamOutboxRepository outboxRepository;
     private final ScopeAuthorizationService scopeAuthorizationService;
-    private final TemplateAssignmentProvisioningService provisioningService;
     private final ObjectMapper objectMapper;
 
     // ------------------------------------------------------------------
@@ -211,11 +209,6 @@ public class ProjectTeamTemplateService {
             correlationId = UUID.randomUUID().toString();
         }
 
-        // US-13: assigning the brief also activates the workspace creation flow:
-        // snapshot the active template version, insert the project silently and
-        // fan the brief out into workspace components.
-        provisioningService.provision(team, template, actorId, correlationId);
-
         TeamTemplateAuditState before = new TeamTemplateAuditState(
                 team.getId(),
                 team.getTeamName(),
@@ -312,7 +305,6 @@ public class ProjectTeamTemplateService {
                 .map(assignment -> new TeamProjectTemplateResponse.Member(
                         assignment.getClassMember().getId(),
                         assignment.getClassMember().getUser().getFullName(),
-                        assignment.getClassMember().getUser().getUserCode(),
                         ProjectMemberRole.parseRoles(assignment.getRole())))
                 .toList();
 
@@ -331,9 +323,7 @@ public class ProjectTeamTemplateService {
                 memberCount,
                 policy.allowMultiRole(),
                 policy.quotas(),
-                members,
-                team.getProjectId(),
-                team.getProject() == null ? null : team.getProject().getCode());
+                members);
     }
 
     private Long currentUserId(Authentication authentication) {

@@ -24,17 +24,20 @@ public final class ProjectAlertDtos {
                              String assigneeName, boolean canSend) { }
     public record Progress(boolean configured, long done, long total, BigDecimal percentage,
                            String source, boolean atRisk) { }
+    public record MemberProgress(Long userId, String userCode, String displayName, String projectRole,
+                                 long assigned, long done, BigDecimal percentage) { }
     public record SubmissionSummary(String status, long versionCount, Long latestVersion, Instant submittedAt,
                                     boolean submittedLate, String acceptanceStatus) {
         public static SubmissionSummary none() { return new SubmissionSummary("NOT_SUBMITTED",0,null,null,false,"NOT_AVAILABLE"); }
     }
     public record MilestoneRow(String id, TeamInfo team, String title, String status, Instant deadline,
-                               String deadlineStatus, long version, Progress progress,
-                               boolean canSend, boolean mandatory, String alertReason) { }
+                               String deadlineStatus, long version, boolean flagged, Progress progress,
+                               boolean canSend, boolean canConfigure, boolean mandatory, SubmissionSummary submission, String alertReason,
+                               boolean canViewMemberProgress, List<MemberProgress> memberProgress, Long workWithoutCurrentStudent) { }
     public record MemberRow(String id, TeamInfo team, String userCode, String displayName, String projectRole,
-                            Instant joinedAt, Instant lastTaskStartedAt, String activityStatus, boolean inactive,
+                            Instant joinedAt, Instant lastContributionAt, String activityStatus, boolean inactive,
                             Instant lastReminderAt, Instant nextReminderAt, boolean coolingDown, boolean canSend,
-                            MemberWorkSummary workResults, Instant pendingSince) { }
+                            MemberWorkSummary workResults) { }
     public record MemberWorkSummary(long assigned,long done,long overdue,long inReview,long withoutDeadline,
                                     BigDecimal percentage) { }
     public record MemberWorkDetail(Long userId,String displayName,TeamInfo team,MemberWorkSummary summary,

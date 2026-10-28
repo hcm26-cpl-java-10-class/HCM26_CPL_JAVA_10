@@ -74,7 +74,7 @@ export default function ProjectTemplateListPage() {
               renderCell={(template, field) => {
                 if (field.name === "status") return <ProjectTemplateStatusBadge status={template.status} />;
                 if (field.name === "level") return templateLevelLabel(template.level);
-                if (field.name === "estimatedDurationWeeks") return template.estimatedDurationWeeks == null ? "—" : `${template.estimatedDurationWeeks} weeks`;
+                if (field.name === "estimatedDurationWeeks") return `${template.estimatedDurationWeeks} weeks`;
                 if (field.name === "code") return <span className="font-mono text-xs">{template.code}</span>;
                 if (field.name === "name") return (
                   <button className="block w-full truncate text-left font-medium hover:text-primary hover:underline" onClick={() => view(template)}>

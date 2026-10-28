@@ -40,11 +40,9 @@ export function ProjectTemplateDetailPage() {
   const canEdit = options.isSuccess && options.data?.canUpdate === true && !query.isError && !!template?.editable
     && options.hasPermission("PROJECT_TEMPLATE_UPDATE");
   const canActivate = options.isSuccess && options.data?.canActivate === true && !query.isError
-    && template?.readOnly !== true
     && template?.status === "DRAFT" && (options.activeRole === "ADMIN" || options.activeRole === "PROGRAM_MANAGER")
     && options.hasPermission("PROJECT_TEMPLATE_ACTIVATE");
   const canArchive = options.isSuccess && options.data?.canArchive === true && !query.isError
-    && template?.readOnly !== true
     && template?.status === "ACTIVE" && options.hasPermission("PROJECT_TEMPLATE_ARCHIVE");
   const formatDate = (value: string) => new Date(value).toLocaleString("en-GB");
   const selectTab = (value: string) => setSearchParams((current) => {
@@ -93,9 +91,6 @@ export function ProjectTemplateDetailPage() {
                   ? "This template is archived and cannot be selected for new classes or cohorts. Its saved configuration remains available below."
                   : "This template is read-only. Only draft templates can be edited."}</AlertDescription></Alert>
               )}
-              {template.readOnly && (
-                <Alert><LockKeyhole /><AlertDescription>This template comes from the shared catalogue and is read-only. Duplicate-free sample data stays owned by the platform.</AlertDescription></Alert>
-              )}
               <Tabs value={tab} onValueChange={selectTab} className="min-w-0 gap-4">
                 <TabsList aria-label="Template configuration"
                   className="grid w-full max-w-3xl grid-cols-2 group-data-[orientation=horizontal]/tabs:h-auto sm:grid-cols-5">
@@ -124,7 +119,7 @@ export function ProjectTemplateDetailPage() {
                         {[
                           ["Domain / category", template.category],
                           ["Level", templateLevelLabel(template.level)],
-                          ["Estimated duration", template.estimatedDurationWeeks == null ? "—" : `${template.estimatedDurationWeeks} weeks`],
+                          ["Estimated duration", `${template.estimatedDurationWeeks} weeks`],
                           ["Tenant", options.data?.tenantName],
                           ["Created at", formatDate(template.createdAt)],
                           ["Updated at", formatDate(template.updatedAt)],

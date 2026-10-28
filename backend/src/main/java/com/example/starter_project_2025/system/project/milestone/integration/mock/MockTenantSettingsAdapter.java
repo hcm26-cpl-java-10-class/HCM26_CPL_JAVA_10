@@ -9,7 +9,7 @@ import java.time.ZoneId;
 import java.util.UUID;
 
 @Component
-@Profile("!milestone-mock")
+@Profile("!milestone-real-integrations")
 public class MockTenantSettingsAdapter implements TenantSettingsPort {
 
     private final ZoneId timeZone;

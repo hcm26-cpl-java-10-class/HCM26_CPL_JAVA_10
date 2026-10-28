@@ -132,8 +132,8 @@ export function useActiveModuleGroups(enabled = true) {
                 const allocationModule: SidebarModule = {
                     id: 100001,
                     moduleGroupId: String(moduleGroup?.id ?? 100000),
-                    title: "Project Team Allocation",
-                    name: "Project Team Allocation",
+                    title: "Phân nhóm dự án",
+                    name: "Phân nhóm dự án",
                     url: "/team-allocation",
                     icon: "users",
                     displayOrder: 1,

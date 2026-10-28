@@ -33,9 +33,6 @@ public class InvitationDTO extends BaseDTO {
     @JsonProperty(access = READ_ONLY)
     private String userFullName;
 
-    @JsonProperty(access = READ_ONLY)
-    private String userCode;
-
     private InvitationStatus status;
 
     private LocalDateTime sentAt;

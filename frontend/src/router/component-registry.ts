@@ -47,6 +47,7 @@ import ProjectTemplateListPage from "@/pages/management/project-template";
 import { ProjectTemplateFormPage } from "@/pages/management/project-template/pages/ProjectTemplateFormPage";
 import { ProjectTemplateDetailPage } from "@/pages/management/project-template/pages/ProjectTemplateDetailPage";
 import ArtifactDraftPage from "@/pages/student/ArtifactDraftPage";
+import StudentTeamMilestoneSubmissionsPage from "@/pages/student/StudentTeamMilestoneSubmissionsPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 
@@ -148,6 +149,7 @@ export const routes: RouteConfig[] = [
   { path: "/teams/:teamId/milestones/:milestoneId", component: TeamMilestoneDetailPage, requiredPermission: "MILESTONE_READ" },
   { path: "/teams/:teamId/milestones/:milestoneId/submit", component: TeamArtifactSubmissionPage, requiredPermission: "ARTIFACT_READ" },
   { path: "/teams/:teamId/milestones/:milestoneId/submissions", component: TeamMilestoneSubmissionsPage },
+  { path: "/student/teams/:teamId/milestones/:milestoneId/submissions", component: StudentTeamMilestoneSubmissionsPage, requiredPermission: "ARTIFACT_READ" },
   {
     path: "/projects/:projectId/milestones/new",
     component: MilestoneCreatePage,

@@ -64,14 +64,14 @@ public class TemplateMilestoneService {
 
     public TemplateMilestoneOptions getOptions(Long templateId) {
         User user = access.requireUser("READ");
-        findReadableTemplate(templateId, user);
+        findTemplate(templateId, user);
         return new TemplateMilestoneOptions(rubricCatalog.findPublished(user.getTenantId()).stream()
                 .map(RubricCatalogService::snapshot).map(RubricOptionResponse::from).toList());
     }
 
     public TemplateMilestonePlanResponse getPlan(Long templateId) {
         User user = access.requireUser("READ");
-        ProjectTemplate template = findReadableTemplate(templateId, user);
+        ProjectTemplate template = findTemplate(templateId, user);
         return TemplateMilestonePlanResponse.from(template,
                 loadMilestones(templateId), access.can(user, "UPDATE"));
     }
@@ -178,12 +178,6 @@ public class TemplateMilestoneService {
 
     private ProjectTemplate findTemplate(Long templateId, User user) {
         return templates.findByIdAndTenantIdAndIsActiveTrue(templateId, user.getTenantId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project template was not found"));
-    }
-
-    /** Read-only: also resolves the shared catalogue ({@code tenant_id is null}). */
-    private ProjectTemplate findReadableTemplate(Long templateId, User user) {
-        return templates.findReadableById(templateId, user.getTenantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project template was not found"));
     }
 

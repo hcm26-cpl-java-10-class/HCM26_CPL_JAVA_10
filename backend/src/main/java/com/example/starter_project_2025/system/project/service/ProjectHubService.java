@@ -123,8 +123,7 @@ public class ProjectHubService {
                 team.getId(), com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus.ACTIVE);
         var memberViews = teamMembers.stream().map(ProjectMember::getClassMember)
                 .map(member -> member.getUser())
-                .map(user -> new ProjectHubDtos.Member(
-                        user.getId(), user.getFullName(), user.getEmail(), user.getUserCode()))
+                .map(user -> new ProjectHubDtos.Member(user.getId(), user.getFullName(), user.getEmail()))
                 .sorted(Comparator.comparing(ProjectHubDtos.Member::name)).toList();
         String mentorName = team.getAssignedMentorId() == null ? null :
                 users.findById(team.getAssignedMentorId()).map(User::getFullName).orElse(null);

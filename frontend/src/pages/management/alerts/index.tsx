@@ -16,8 +16,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { usePermissions } from "@/hooks/usePermissions";
 import { projectAlertApi } from "@/api/features/project-alert.api";
 import { alertRowKey, alertRowName, type AlertFilters, type AlertKind, type AlertOptions, type AlertPage,
-  type AlertRow, type InactiveAlert } from "@/types/features/project-alert";
+  type AlertRow, type MilestoneAlert, type InactiveAlert } from "@/types/features/project-alert";
 import { AlertSendDialog } from "./AlertSendDialog";
+import { MilestoneWorkItemsDialog } from "./MilestoneWorkItemsDialog";
+import { MilestoneMemberProgressDialog } from "./MilestoneMemberProgressDialog";
 import { MemberWorkResultsDialog } from "./MemberWorkResultsDialog";
 import { getAlertError } from "./alert-errors";
 
@@ -58,7 +60,8 @@ interface ResultsProps {
 }
 function AlertResults({ kind,owner,data,loading,fetching,error,options,page,teamId,inactiveOnly,busy,onBusy,onPage,reload,onChanged }:ResultsProps) {
   const [selected,setSelected]=useState<Map<string,AlertRow>>(new Map()),[note,setNote]=useState(""),[open,setOpen]=useState(false);
-  const [historyTeam,setHistoryTeam]=useState<number>();
+  const [linking,setLinking]=useState<MilestoneAlert>(),[historyTeam,setHistoryTeam]=useState<number>();
+  const [progressId,setProgressId]=useState<string>();
   const [workMember,setWorkMember]=useState<InactiveAlert>();
   const request=useRef<{fingerprint:string;key:string}|null>(null),draftScope=useRef("");
   const failure=error?getAlertError(error):undefined,denied=[401,403].includes(failure?.status??0);
@@ -66,6 +69,7 @@ function AlertResults({ kind,owner,data,loading,fetching,error,options,page,team
   const selectedContext=options.teams.find(team=>team.id===(teamId??selectedTeam));
   const projectClosed=closedProject(selectedContext?.projectStatus);
   const canSend=!!options.permissions[kind+"_SEND"]&&!projectClosed;
+  const progressRow=rows.find((row):row is MilestoneAlert=>"progress"in row&&row.id===progressId);
   function showSend(values:AlertRow[]) {
     if(!values.length)return;
     const scope=`${kind}:${values[0].team.id}:${kind==="MILESTONE"?values[0].id:"batch"}`;
@@ -80,10 +84,10 @@ function AlertResults({ kind,owner,data,loading,fetching,error,options,page,team
     <div className="flex flex-wrap gap-2">{teamId!==undefined&&<Button variant="outline" disabled={busy} onClick={()=>setHistoryTeam(teamId)}>Team alert history</Button>}
       <Button variant="outline" disabled={busy||fetching} onClick={()=>void refresh()}><RefreshCw className={fetching?"size-4 animate-spin":"size-4"}/>Refresh</Button>
       {kind!=="MILESTONE"&&canSend&&<Button disabled={busy||fetching||!selected.size} onClick={()=>showSend(selectedRows)}>Send alert</Button>}</div></div>
-    <p className="text-sm text-muted-foreground">{kind==="BACKLOG"?"Overdue top-level backlog items that are not Done. Alerts go to their current assignees. Subtasks are excluded."
-      :kind==="MILESTONE"?"Milestones due within the next 48 hours with fewer than 80% of their backlog items Done. Progress is calculated automatically. Completed, cancelled and past-deadline milestones are excluded."
-      :`Members with assigned Todo work who have not started any task for ${options.inactiveHours/24} days. New assignments and team joins receive the same grace period. Cooldown: ${options.cooldownSeconds/3600} hours.`}</p>
-    {kind==="INACTIVE"&&<p className="text-xs text-muted-foreground">Starting any task resets the inactivity window, even if older Todo tasks remain. Editing descriptions or submitting artifacts does not reset it.</p>}
+    <p className="text-sm text-muted-foreground">{kind==="BACKLOG"?"Top-level stories, bugs and tasks approaching or past their deadline. Only overdue To Do / In Progress items can receive an overdue alert. Subtasks are excluded."
+      :kind==="MILESTONE"?"Work progress counts linked backlog items marked Done. Without a valid submission, Open milestones with less than 48 hours left and progress below 80% are at risk; past-deadline milestones are overdue. Received submissions await review and do not trigger team deadline alerts."
+      :`Members with no recorded contribution for at least ${options.inactiveHours/24} days. For members with no contributions, the window starts when they join the team. Only actions performed by the member count. Cooldown: ${options.cooldownSeconds/3600} hours.`}</p>
+    {kind==="INACTIVE"&&<p className="text-xs text-muted-foreground">Recent activity does not confirm completed or accepted work. Review assigned work, Done items and overdue items separately. The 80% milestone risk threshold applies to the team.</p>}
   </CardHeader><CardContent className="space-y-4">
     {projectClosed&&<p role="status" className="rounded border p-3 text-sm">This project is {label(selectedContext!.projectStatus!).toLowerCase()}. New alerts are disabled. You can still view team alert history.</p>}
     {!denied&&selected.size>0&&<div className="flex flex-wrap gap-2" aria-label="Selected items">{selectedRows.map(row=><Button size="sm" variant="secondary" key={alertRowKey(row)} disabled={busy}
@@ -92,11 +96,11 @@ function AlertResults({ kind,owner,data,loading,fetching,error,options,page,team
       {kind==="BACKLOG"&&" Items need a team sprint or an active team assignee to appear here."}</p>}
     {loading?<p role="status">Loading {titles[kind].toLowerCase()}...</p>:failure?<div className="space-y-3"><p role="alert" className="text-destructive">{failure.message}</p>
       <Button variant="outline" onClick={()=>void refresh()}>Try again</Button></div>:!rows.length?<div className="py-10 text-center text-muted-foreground">
-        {kind==="INACTIVE"?(inactiveOnly?"No inactive members match these filters.":"No current student members match these filters."):kind==="MILESTONE"?"No milestones are below 80% within the next 48 hours.":"No overdue backlog items match these filters."}</div>
+        {kind==="INACTIVE"?(inactiveOnly?"No inactive members match these filters.":"No current student members match these filters."):"No upcoming or overdue items match these filters."}</div>
       :<Table><TableHeader><TableRow>{kind!=="MILESTONE"&&<TableHead>Select</TableHead>}<TableHead>{kind==="INACTIVE"?"Member":"Item"}</TableHead>
-        <TableHead>Class / Team</TableHead><TableHead>{kind==="INACTIVE"?"Last task started":"Deadline"}</TableHead>
+        <TableHead>Class / Team</TableHead><TableHead>{kind==="INACTIVE"?"Last contribution":"Deadline"}</TableHead>
         <TableHead>{kind==="MILESTONE"?"Work progress":kind==="INACTIVE"?"Activity status":"Status"}</TableHead>
-        {kind==="INACTIVE"&&<TableHead>Work results</TableHead>}<TableHead>Actions</TableHead></TableRow></TableHeader>
+        {kind==="INACTIVE"&&<TableHead>Work results</TableHead>}{kind==="MILESTONE"&&<TableHead>Submission</TableHead>}<TableHead>Actions</TableHead></TableRow></TableHeader>
       <TableBody>{rows.map(row=>{
         const member="displayName"in row?row:undefined,milestone="progress"in row?row:undefined,backlog="workType"in row?row:undefined;
         const selectable=canSend&&(member?member.inactive:row.canSend);
@@ -108,10 +112,10 @@ function AlertResults({ kind,owner,data,loading,fetching,error,options,page,team
             <p className="mt-1 text-xs text-muted-foreground">{member?`${member.userCode??"No member code"} · ${member.projectRole??"Unassigned role"}`:backlog?`${label(backlog.workType)} · ${backlog.assigneeName??"Unassigned"}`:label(milestone!.status)}</p>
             {milestone&&<Badge variant="outline" className="mt-2">{milestone.mandatory?"Mandatory":"Optional"}</Badge>}</TableCell>
           <TableCell className="whitespace-normal"><p>{row.team.className}</p><p className="text-xs text-muted-foreground">{row.team.name}</p></TableCell>
-          <TableCell>{member?<><p>{member.lastTaskStartedAt?date(member.lastTaskStartedAt):"No task started"}</p><p className="text-xs text-muted-foreground">Todo work assigned since: {date(member.pendingSince)}</p></>
+          <TableCell>{member?<><p>{member.lastContributionAt?date(member.lastContributionAt):"No contribution since joining"}</p><p className="text-xs text-muted-foreground">Joined: {date(member.joinedAt)}</p></>
             :<><p>{date((backlog??milestone!).deadline)}</p><Badge variant={(backlog??milestone!).deadlineStatus==="OVERDUE"?"destructive":"outline"}>{label((backlog??milestone!).deadlineStatus)}</Badge></>}</TableCell>
-          <TableCell>{milestone?<div className="space-y-1"><p>{milestone.progress.percentage}% · {milestone.progress.done}/{milestone.progress.total} Done</p>
-              <Badge variant="destructive">Below 80%</Badge></div>
+          <TableCell>{milestone?<div className="space-y-1">{milestone.progress.configured?<><p>{milestone.progress.percentage}% · {milestone.progress.done}/{milestone.progress.total} Done</p>
+              <Badge variant={milestone.progress.atRisk||milestone.alertReason==="OVERDUE"?"destructive":"outline"}>{milestone.alertReason==="OVERDUE"?"Overdue submission":milestone.progress.atRisk?"Work at risk":"No work-risk flag"}</Badge></>:<><Badge variant="outline">Not linked</Badge>{milestone.alertReason==="OVERDUE"&&<Badge variant="destructive">Overdue submission</Badge>}</>}</div>
             :member?<div className="space-y-1"><Badge variant={member.inactive?"destructive":"outline"}>{label(member.activityStatus)}</Badge>
               {member.coolingDown&&<p className="text-xs text-muted-foreground">Cooldown until {date(member.nextReminderAt)}</p>}</div>
             :<Badge variant="outline">{label(backlog!.status)}</Badge>}</TableCell>
@@ -121,10 +125,20 @@ function AlertResults({ kind,owner,data,loading,fetching,error,options,page,team
               <p className="text-xs text-muted-foreground">{member.workResults.overdue} overdue · {member.workResults.inReview} in review</p>
             </>}
           </div>:<p className="text-xs text-muted-foreground">Work results require permission to view backlog items and member details.</p>}</TableCell>}
+          {milestone&&<TableCell className="min-w-48 whitespace-normal"><div className="space-y-1">
+            {milestone.submission?.status==="SUBMITTED"?<><Badge variant="outline">Submitted</Badge>
+              {milestone.alertReason==="AWAITING_REVIEW"&&<p className="text-xs">Awaiting review</p>}
+              <p className="text-xs">Latest submission v{milestone.submission.latestVersion} · {milestone.submission.versionCount} version(s) received</p>
+              <p className="text-xs text-muted-foreground">{date(milestone.submission.submittedAt)}</p>
+              {milestone.submission.submittedLate&&<Badge variant="secondary">Late submission</Badge>}
+              <p className="text-xs text-muted-foreground">Acceptance is handled separately.</p></>:<Badge variant="outline">Not submitted</Badge>}
+          </div></TableCell>}
           <TableCell><div className="flex flex-wrap gap-2">
             {member&&member.workResults&&<Button size="sm" variant="outline" aria-label={"Work results for "+member.displayName}
               disabled={busy||fetching} onClick={()=>setWorkMember(member)}>Work results</Button>}
-            {milestone&&canSend&&<Button size="sm" disabled={busy||fetching||!row.canSend} onClick={()=>showSend([row])}>{"Send risk alert"}</Button>}
+            {milestone&&milestone.canConfigure&&!projectClosed&&<Button size="sm" variant="outline" disabled={busy} onClick={()=>setLinking(milestone)}>Link backlog items</Button>}
+            {milestone&&milestone.canViewMemberProgress&&<Button size="sm" variant="outline" disabled={busy||fetching||!milestone.progress.configured} onClick={()=>setProgressId(milestone.id)}>Member progress</Button>}
+            {milestone&&canSend&&<Button size="sm" disabled={busy||fetching||!row.canSend} onClick={()=>showSend([row])}>{milestone.alertReason==="OVERDUE"?"Send overdue alert":"Send risk alert"}</Button>}
             <Button size="sm" variant="outline" disabled={busy} onClick={()=>setHistoryTeam(row.team.id)}>History</Button>
           </div></TableCell>
         </TableRow>;
@@ -135,6 +149,8 @@ function AlertResults({ kind,owner,data,loading,fetching,error,options,page,team
     {open&&!denied&&<AlertSendDialog kind={kind} rows={selectedRows} owner={owner} note={note} setNote={setNote} request={request} onBusy={onBusy}
       onClose={()=>{setOpen(false);if(kind==="MILESTONE")setSelected(new Map());}} onReload={refresh}
       onSent={()=>{setOpen(false);setSelected(new Map());setNote("");request.current=null;onChanged();}}/>}
+    {linking&&!denied&&<MilestoneWorkItemsDialog row={linking} owner={owner} onClose={()=>setLinking(undefined)} onSaved={()=>{setLinking(undefined);onChanged();}}/>}
+    {progressRow&&!denied&&<MilestoneMemberProgressDialog row={progressRow} onClose={()=>setProgressId(undefined)}/>}
     {workMember&&!denied&&<MemberWorkResultsDialog key={`${workMember.team.id}:${workMember.id}`} row={workMember} owner={owner}
       onClose={()=>setWorkMember(undefined)} onAccessChanged={onChanged}/>}
     {historyTeam!==undefined&&!denied&&<TeamHistory teamId={historyTeam} kind={kind} owner={owner} onClose={()=>setHistoryTeam(undefined)}/>}
@@ -150,7 +166,7 @@ function AlertConsole() {
     deadlineStatus:search.get("deadlineStatus")??"ALL",windowHours:numeric(search.get("windowHours"))??48,
     page:Number(search.get("page"))>=0?Number(search.get("page")):0,size:20,inactiveOnly:search.get("inactiveOnly")!=="false"};
   const queries=useQueries({queries:kinds.map(source=>({queryKey:["project-alerts",owner,source,filters],
-    queryFn:({signal}:{signal:AbortSignal})=>projectAlertApi.list(source,{...filters, deadlineStatus:source==="MILESTONE"?"UPCOMING":source==="BACKLOG"?"OVERDUE":filters.deadlineStatus,windowHours:48},signal),
+    queryFn:({signal}:{signal:AbortSignal})=>projectAlertApi.list(source,filters,signal),
     enabled:!!options.data?.permissions[source+"_READ"],retry:false,gcTime:0,refetchInterval:60000}))});
   const query=queries[kinds.indexOf(kind)];
   const accessChanged=queries.some(result=>result.isError&&[401,403].includes(getAlertError(result.error).status??0));
@@ -188,16 +204,18 @@ function AlertConsole() {
           onChange={value=>update("teamId",value,["teamSearch"])}/>
       </div><div className="grid gap-4 sm:grid-cols-3"><div className="space-y-2"><Label htmlFor="alert-team-search">Search teams</Label>
         <Input id="alert-team-search" placeholder="Team name or code..." disabled={busy} value={filters.teamSearch} onChange={event=>update("teamSearch",event.target.value,["teamId"])}/></div>
-        {kind==="INACTIVE"?<>
-          <div className="space-y-2"><Label>Activity status</Label><Select value={String(filters.inactiveOnly)} disabled={busy} onValueChange={value=>update("inactiveOnly",value)}>
-            <SelectTrigger aria-label="Activity status" className="w-full"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="true">Inactive members only</SelectItem><SelectItem value="false">All current members</SelectItem></SelectContent>
-          </Select></div><div className="space-y-2"><Label>Inactivity window</Label><p className="rounded-md border px-3 py-2 text-sm">{options.data.inactiveHours/24} days without starting a task</p></div>
-        </>:<div className="space-y-2"><Label>Alert criteria</Label><p className="rounded-md border px-3 py-2 text-sm">{kind==="MILESTONE"?"Due within 48 hours · Below 80% Done":"Overdue · Not Done"}</p></div>}
+        {kind==="INACTIVE"?<div className="space-y-2"><Label>Activity status</Label><Select value={String(filters.inactiveOnly)} disabled={busy} onValueChange={value=>update("inactiveOnly",value)}>
+          <SelectTrigger aria-label="Activity status" className="w-full"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="true">Inactive members only</SelectItem><SelectItem value="false">All current members</SelectItem></SelectContent>
+        </Select></div>:<div className="space-y-2"><Label>Deadline</Label><Select value={filters.deadlineStatus} disabled={busy} onValueChange={value=>update("deadlineStatus",value)}>
+          <SelectTrigger aria-label="Deadline filter" className="w-full"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="ALL">Upcoming and overdue</SelectItem>
+            <SelectItem value="UPCOMING">Upcoming</SelectItem><SelectItem value="OVERDUE">Overdue</SelectItem></SelectContent></Select></div>}
+        {kind==="INACTIVE"?<div className="space-y-2"><Label>Inactivity window</Label><p className="rounded-md border px-3 py-2 text-sm">{options.data.inactiveHours/24} days without a contribution</p></div>:<div className="space-y-2"><Label>Upcoming window</Label><Select value={String(filters.windowHours)} disabled={busy} onValueChange={value=>update("windowHours",value)}>
+          <SelectTrigger aria-label="Upcoming window" className="w-full"><SelectValue/></SelectTrigger><SelectContent>{[24,48,72,168].map(hours=><SelectItem key={hours} value={String(hours)}>{hours} hours</SelectItem>)}</SelectContent></Select></div>}
       </div><div className="flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-muted-foreground">Times shown in your browser's local time. Deadline calculations use {options.data.timeZone}.</p>
         <Button variant="ghost" disabled={busy} onClick={()=>setSearch({view:kind})}>Clear filters</Button></div></CardContent></Card>
       {selectedClass&&selectedClass.teamCount===0&&<Card><CardContent className="space-y-3 pt-6">
         <p role="status">{selectedClass.studentCount} enrolled student(s). This class has no active published teams yet.</p>
-        <p className="text-sm text-muted-foreground">Publish teams using the existing class roster. Alerts will use their actual backlog items, milestones and task status history.</p>
+        <p className="text-sm text-muted-foreground">Publish teams using the existing class roster. Alerts will use their actual backlog items, milestones and contribution history.</p>
         {(hasPermission("PEO_TEAM_ALLOCATE")||hasPermission("PRJ_WORKSPACE_MANAGE"))&&<Button asChild variant="outline"><Link to={`/team-allocation/classes/${selectedClass.id}`}>Open team allocation</Link></Button>}
       </CardContent></Card>}
       {!teams.length&&!catalog.length?<Card><CardContent className="py-10 text-center text-muted-foreground">No classes or active teams are assigned to you for monitoring.</CardContent></Card>:<>

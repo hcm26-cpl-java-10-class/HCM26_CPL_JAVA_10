@@ -15,13 +15,6 @@ public interface ProjectTemplateSnapshotRepository
     Optional<ProjectTemplateSnapshot> findFirstByTemplateIdAndIsActiveTrueOrderByCreatedAtDesc(Long templateId);
 
     /**
-     * Resolves the version that is currently published/active for a template.
-     * Used by the team-assignment flow (US-13) before it copies the brief.
-     */
-    Optional<ProjectTemplateSnapshot> findFirstByTemplateIdAndStatusAndIsActiveTrueOrderByCreatedAtDesc(
-            Long templateId, ProjectTemplateVersionStatus status);
-
-    /**
      * Used by the sample data seeder to upsert a version per template without
      * duplicating rows (mirrors {@code SprintRepository#findByName}).
      */
