@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Lock,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { ScheduleVersionDTO, SubjectDTO, SessionDTO } from "@/types";
@@ -65,10 +67,20 @@ export type TrainingTopic = {
   days: TrainingDay[];
 };
 
+export const PRESET_CLASSES = [
+  { id: "HCM26_FR_FU_KS_JAVA_01", name: "HCM26_FR_FU_KS_JAVA_01 (FAMS Reference Class)" },
+  { id: "CLASS-01", name: "CLASS-01 (Kỳ 1 Chuyên sâu SE)" },
+  { id: "CLASS-02", name: "CLASS-02 (Java 10 OJT Web)" },
+  { id: "CLASS-03", name: "CLASS-03 (Mobile App)" },
+  { id: "SE-01", name: "SE-01 (Kỹ thuật phần mềm)" },
+  { id: "Java-10", name: "Java-10 (Lập trình Java core)" },
+];
+
 type Props = {
-  version: ScheduleVersionDTO;
-  onBack: () => void;
+  version?: ScheduleVersionDTO;
+  onBack?: () => void;
   onSave?: (savedVersion?: ScheduleVersionDTO) => void;
+  defaultClassId?: string;
 };
 
 type Removal = {
@@ -278,11 +290,31 @@ function getTopicConflict(
 }
 
 export default function TrainingCalendarAdjustDemo({
-  version,
+  version: initialVersion,
   onBack,
   onSave,
+  defaultClassId = "HCM26_FR_FU_KS_JAVA_01",
 }: Props) {
-  const isReadOnly = version.status !== "DRAFT" || version.isEditable === false;
+  const [selectedClassId, setSelectedClassId] = useState<string>(
+    initialVersion?.classId ? String(initialVersion.classId) : defaultClassId
+  );
+  const [customClassInput, setCustomClassInput] = useState<string>("");
+
+  const version: ScheduleVersionDTO = useMemo(() => {
+    if (initialVersion && String(initialVersion.classId) === selectedClassId) {
+      return initialVersion;
+    }
+    return {
+      id: typeof initialVersion?.id === "number" ? initialVersion.id : 1,
+      classId: selectedClassId,
+      versionNumber: initialVersion?.versionNumber ?? 1,
+      status: "DRAFT",
+      note: initialVersion?.note ?? "Training calendar schedule",
+      isEditable: true,
+    };
+  }, [initialVersion, selectedClassId]);
+
+  const isReadOnly = false;
   const [topics, setTopics] = useState<TrainingTopic[]>(makeDefaultTopics);
   const [classStart, setClassStart] = useState("2026-10-19");
   const [learningStart, setLearningStart] = useState("2026-10-19");
@@ -316,6 +348,25 @@ export default function TrainingCalendarAdjustDemo({
   } | null>(null);
 
   const [error, setError] = useState<string | null>(null);
+
+  function handleSelectClass(classId: string) {
+    if (classId === selectedClassId) return;
+    setSelectedClassId(classId);
+    setDirty(false);
+    toast.info(`Đã chuyển sang lớp ${classId}`);
+  }
+
+  function handleApplyCustomClass() {
+    if (!customClassInput.trim()) {
+      toast.error("Vui lòng nhập mã lớp học");
+      return;
+    }
+    const target = customClassInput.trim();
+    setSelectedClassId(target);
+    setCustomClassInput("");
+    setDirty(false);
+    toast.success(`Đã chọn lớp ${target}`);
+  }
 
   // 1. Tự động tải danh sách môn học active từ API của Hoàng khi mở màn hình
   useEffect(() => {
@@ -793,7 +844,7 @@ export default function TrainingCalendarAdjustDemo({
       await Promise.allSettled(sessionSaves);
 
       toast.success(
-        `Calendar version v${version.versionNumber} and ${activityCount} study sessions saved successfully!`
+        `Đã lưu thành công lịch đào tạo cho lớp ${selectedClassId} (${activityCount} buổi học)!`
       );
       setDirty(false);
       setSaveOpen(false);
@@ -802,7 +853,7 @@ export default function TrainingCalendarAdjustDemo({
       }
     } catch (err: any) {
       console.error("Save error:", err);
-      toast.error(err?.response?.data?.message || "Failed to save calendar version updates.");
+      toast.error(err?.response?.data?.message || "Failed to save calendar updates.");
     } finally {
       setIsSaving(false);
     }
@@ -811,40 +862,78 @@ export default function TrainingCalendarAdjustDemo({
   return (
     <MainLayout pathName={{ "schedule-versions": "Training Calendar", adjust: "Adjust" }}>
       <div className="mx-auto w-full max-w-7xl space-y-4 pb-12">
-        {/* Header điều hướng */}
+        {/* Header điều hướng & Bộ chọn lớp học */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <CalendarDays className="size-5 text-primary" />
-              <h1 className="text-xl font-semibold">
-                Adjust Training Calendar: {version.classId}
-              </h1>
-              <Badge variant="outline" className="text-xs font-mono">
-                v{version.versionNumber} ({version.status})
-              </Badge>
-              {systemSubjects.length > 0 ? (
-                <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 text-[11px]">
-                  Connected to Subject API ({systemSubjects.length} subjects)
-                </Badge>
-              ) : (
-                <Badge variant="secondary" className="text-[11px]">
-                  Standard Curriculum Mode
-                </Badge>
-              )}
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-primary/10 p-2 text-primary">
+              <CalendarDays className="size-5" />
             </div>
-            <p className="text-xs text-muted-foreground">
-              Define, sequence, and schedule curriculum topics, slots, and activities.
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold tracking-tight">
+                  Adjust calendar : {selectedClassId}
+                </h1>
+                <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 text-xs font-semibold">
+                  Active Workspace
+                </Badge>
+                {systemSubjects.length > 0 ? (
+                  <Badge className="bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30 text-[11px]">
+                    {systemSubjects.length} môn học từ DB
+                  </Badge>
+                ) : null}
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Thiết lập chủ đề (Topic), ngày học (Day) và các hoạt động chi tiết (Activities) cho lớp học.
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => (dirty ? setLeaveOpen(true) : onBack())}
-            >
-              <ArrowLeft className="size-4" /> Back to calendar versions
-            </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 rounded-lg border bg-card px-2.5 py-1 shadow-xs">
+              <Label htmlFor="class-selector" className="text-xs text-muted-foreground font-medium">Lớp:</Label>
+              <select
+                id="class-selector"
+                value={selectedClassId}
+                onChange={(e) => handleSelectClass(e.target.value)}
+                className="h-7 rounded-md border-0 bg-transparent text-xs font-semibold focus-visible:outline-none"
+              >
+                {PRESET_CLASSES.map((cls) => (
+                  <option key={cls.id} value={cls.id}>
+                    {cls.name}
+                  </option>
+                ))}
+                {!PRESET_CLASSES.some((cls) => cls.id === selectedClassId) && (
+                  <option value={selectedClassId}>{selectedClassId}</option>
+                )}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <Input
+                placeholder="Mã lớp khác..."
+                value={customClassInput}
+                onChange={(e) => setCustomClassInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleApplyCustomClass();
+                }}
+                className="h-8 w-28 text-xs"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                onClick={handleApplyCustomClass}
+              >
+                Chọn
+              </Button>
+            </div>
+
+            <Link to="/calendar/preview">
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs font-medium">
+                <CalendarDays className="size-3.5 text-primary" />
+                Xem thời khóa biểu (Timetable)
+              </Button>
+            </Link>
           </div>
         </div>
 
@@ -1505,11 +1594,12 @@ export default function TrainingCalendarAdjustDemo({
                   const err = validateScheduleLogic();
                   setError(err);
                   if (!err) {
+                    setChangeNote((prev) => prev || `Cập nhật lịch đào tạo lớp ${selectedClassId}`);
                     setSaveOpen(true);
                   }
                 }}
               >
-                <Save className="size-4" /> Save Schedule Version
+                <Save className="size-4" /> Save Schedule
               </Button>
             )}
           </div>
@@ -1610,9 +1700,9 @@ export default function TrainingCalendarAdjustDemo({
       <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Save Calendar Version v{version.versionNumber}</DialogTitle>
+            <DialogTitle>Save Training Calendar : {selectedClassId}</DialogTitle>
             <DialogDescription className="text-xs">
-              Provide a change note explaining this version update for auditing and tracking.
+              Provide an optional change note explaining the schedule adjustments for class {selectedClassId}.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2 text-xs">
@@ -1623,7 +1713,7 @@ export default function TrainingCalendarAdjustDemo({
                 className="h-9 text-xs"
                 value={changeNote}
                 onChange={(e) => setChangeNote(e.target.value)}
-                placeholder="e.g. Updated topic sequence and adjusted practice slot times."
+                placeholder={`e.g. Điều chỉnh thời gian các buổi học cho lớp ${selectedClassId}`}
               />
             </label>
           </div>
@@ -1638,7 +1728,7 @@ export default function TrainingCalendarAdjustDemo({
             </Button>
             <Button
               size="sm"
-              disabled={!changeNote.trim() || isSaving}
+              disabled={isSaving}
               onClick={handleSaveVersion}
             >
               {isSaving ? "Saving..." : "Confirm & Save"}

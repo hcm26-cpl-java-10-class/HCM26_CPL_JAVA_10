@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.calendar;
 
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.demo.session.Session;
+import com.example.starter_project_2025.system.demo.session.Session.SessionStatus;
 import com.example.starter_project_2025.system.demo.session.SessionDTO;
 import com.example.starter_project_2025.system.demo.session.SessionFilter;
 import com.example.starter_project_2025.system.demo.session.SessionService;
@@ -83,7 +84,7 @@ public class CalendarController {
             LocalDateTime to,
 
             @RequestParam(value = "status", required = false)
-            Session.SessionStatus status,
+            SessionStatus status,
 
             @RequestParam(value = "classId", required = false)
             Long classId,
@@ -137,7 +138,7 @@ public class CalendarController {
             LocalDateTime to,
 
             @RequestParam(value = "status", required = false)
-            Session.SessionStatus status,
+            SessionStatus status,
 
             @RequestParam(value = "classId", required = false)
             Long classId,

@@ -92,6 +92,33 @@ export function useActiveModuleGroups(enabled = true) {
                 });
             }
 
+            // Ensure Adjust Calendar menu under Training Operations if permitted
+            const hasAdjustInDb = modules.some((m) => m.url === "/calendar/adjust" || m.url === "/schedule-versions");
+            if (!hasAdjustInDb && canAccessByPermission("SESSION_READ", hasPermission)) {
+                let trainingGroup = groups.find(
+                    (g) => (g.name || "").toLowerCase() === "training operations",
+                );
+
+                if (trainingGroup) {
+                    const groupId = String(trainingGroup.id ?? "");
+                    if (!groupedModules[groupId]) {
+                        groupedModules[groupId] = [];
+                    }
+
+                    groupedModules[groupId].push({
+                        id: 99998,
+                        moduleGroupId: groupId,
+                        title: "Adjust Calendar",
+                        name: "Adjust Calendar",
+                        url: "/calendar/adjust",
+                        icon: "calendar",
+                        displayOrder: 5,
+                        requiredPermission: "SESSION_READ",
+                        isActive: true,
+                    });
+                }
+            }
+
             return groups
                 .map((group) => {
                     const groupId = String(group.id ?? "");

@@ -18,7 +18,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import {
   Calendar as CalendarIcon,
   CalendarDays,
@@ -35,6 +35,7 @@ import {
   Users,
   GraduationCap,
   Eye,
+  FileEdit,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -575,6 +576,17 @@ export default function WeeklyCalendarPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <Link to="/calendar/adjust">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs font-medium"
+              >
+                <FileEdit className="h-4 w-4 text-primary" />
+                Điều chỉnh lịch (Adjust Calendar)
+              </Button>
+            </Link>
             <Button
               type="button"
               variant="outline"
