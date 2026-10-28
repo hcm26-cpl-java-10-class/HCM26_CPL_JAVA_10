@@ -10,7 +10,7 @@ export interface SessionDTO extends BaseDTO {
     classId?: number;
     topicId?: number;
     trainerId?: number;
-    teachingAssignmentId?: number;
+    teachingAssignmentId?: number | null;
     roomId?: number;
     meetingUrl?: string;
     title?: string;

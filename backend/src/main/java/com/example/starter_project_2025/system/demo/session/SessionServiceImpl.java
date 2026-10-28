@@ -57,6 +57,27 @@ public class SessionServiceImpl
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public ScheduleValidationResult previewValidatedBatch(List<SessionDTO> requests) {
+        checkPermission(CrudAction.CREATE);
+        checkPermission(CrudAction.READ);
+        var candidates = requests.stream().map(request -> candidate(null, request)).toList();
+        var validation = conflicts.validate(candidates);
+        var issues = new java.util.ArrayList<>(validation.issues());
+        for (int index = 0; index < candidates.size(); index++) {
+            try {
+                assignmentGuard.checkCompatible(candidates.get(index));
+            } catch (com.example.starter_project_2025.exception.BusinessValidationException error) {
+                int rowIndex = index;
+                error.getErrors().forEach((field, messages) -> messages.forEach(message ->
+                        issues.add(new ScheduleIssue("ASSIGNMENT_INVALID", field, message, rowIndex,
+                                null, null, null, null, null))));
+            }
+        }
+        return new ScheduleValidationResult(issues.isEmpty(), validation.timezone(), List.copyOf(issues));
+    }
+
+    @Override
     public void delete(Long id) {
         checkPermission(CrudAction.DELETE);
         conflicts.lockForWrite();
