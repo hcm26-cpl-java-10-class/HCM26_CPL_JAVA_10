@@ -2,7 +2,7 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, useSidebar } fro
 import { NavMain } from "@/components/layout/NavMain";
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { Button } from "@/components/ui/button";
-import { LogOutIcon } from "lucide-react";
+import { LogOutIcon, MapPin } from "lucide-react";
 import { useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { authApi } from "@/api/features/auth.api";
@@ -24,15 +24,14 @@ export function SidebarMenu() {
         };
 
         return moduleGroups
-            .map((group) => ({
-                id: group.id ?? group.name ?? "group",
-                name: group.name ?? "Menu",
-                items: group.modules
+            .map((group) => {
+                const groupNameLower = (group.name || "").toLowerCase();
+                const isRbacGroup = groupNameLower.includes("rbac");
+
+                const items = group.modules
                     .filter((module) => !!module.url)
-                    // Temporarily hide standalone "Modules" navigation item under "System Management"
                     .filter((module) => {
-                        const isUnderSystemManagement =
-                            (group.name || "").toLowerCase().includes("system");
+                        const isUnderSystemManagement = groupNameLower.includes("system");
                         const isModulesMenu =
                             module.url === "/menus" || (module.title || "").toLowerCase() === "modules";
 
@@ -48,14 +47,35 @@ export function SidebarMenu() {
                         isActive:
                             !!module.url &&
                             (location.pathname === module.url || location.pathname.startsWith(`${module.url}/`)),
-                    })),
-            }))
+                    }));
+
+                if (isRbacGroup) {
+                    const hasLocation = items.some(
+                        (item) => item.url.includes("location")
+                    );
+                    if (!hasLocation) {
+                        items.push({
+                            title: "Locations",
+                            url: "/locations",
+                            icon: MapPin,
+                            isActive:
+                                location.pathname === "/locations" ||
+                                location.pathname.startsWith("/locations/"),
+                        });
+                    }
+                }
+
+                return {
+                    id: group.id ?? group.name ?? "group",
+                    name: group.name ?? "Menu",
+                    items,
+                };
+            })
             .filter((group) => group.items.length > 0);
     }, [location.pathname, moduleGroups]);
 
     return (
         <Sidebar variant="inset" collapsible="icon">
-            {/* Header */}
             <SidebarHeader className="py-3 px-0">
                 <Button
                     type="button"
@@ -77,7 +97,6 @@ export function SidebarMenu() {
                 </Button>
             </SidebarHeader>
 
-            {/* Content */}
             <SidebarContent>
                 {navGroups.map((group) =>
                     group ? (
@@ -86,7 +105,6 @@ export function SidebarMenu() {
                 )}
             </SidebarContent>
 
-            {/* Footer */}
             <SidebarFooter className="p-4 text-xs flex flex-row items-center gap-2 text-muted-foreground group-data-[collapsible=icon]:justify-center">
                 {state === "expanded" && <span className="flex-1 truncate">RBAC System v1.0</span>}
 

@@ -15,7 +15,7 @@ import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
-
+import { LocationPage } from "@/pages/management/rbac/location";
 
 export interface RouteConfig {
   path: string;
@@ -30,6 +30,16 @@ export const routes: RouteConfig[] = [
   { path: "/module-group-module", component: ModuleGroupModulePage, isPublic: true },
   { path: "/dashboard", component: Dashboard, isModuleDriven: true },
   { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
+ { 
+    path: "/locations", 
+    component: LocationPage, 
+    isPublic: true
+  },
+  { 
+    path: "/management/rbac/locations", 
+    component: LocationPage, 
+    isPublic: true
+  },
   {
     path: "/invitations",
     component: InvitationManagementPage,
