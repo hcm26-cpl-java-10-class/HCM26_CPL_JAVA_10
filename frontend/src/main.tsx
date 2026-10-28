@@ -1,3 +1,4 @@
+import { isolateQuerySession } from "./lib/query-session";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 import ReactDOM from "react-dom/client";
@@ -7,6 +8,7 @@ import "./index.css";
 import { store } from "./store/store";
 
 export const queryClient = new QueryClient();
+isolateQuerySession(queryClient, store);
 
 const THEME_STORAGE_KEY = "theme";
 const SYSTEM_THEME_QUERY = "(prefers-color-scheme: dark)";

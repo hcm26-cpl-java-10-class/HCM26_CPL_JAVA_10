@@ -1,3 +1,4 @@
+import { usePermissions } from "@/hooks/usePermissions";
 import ToggleTheme from "@/components/ToggleTheme";
 import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge.tsx";
@@ -9,7 +10,6 @@ import {
   formatRoleLabel,
   getHomePathByRole,
   normalizeRole,
-  uniqueRoles,
 } from "@/utils/rbac.utils";
 import { useNavigate } from "react-router-dom";
 import { authApi } from "@/api/features/auth.api";
@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export default function HeaderRight() {
+  const { canLearn } = usePermissions();
   const dispatch = useDispatch();
   const auth = useSelector((state: RootState) => state.auth);
   const { role, roles, isAuthenticated } = auth;
@@ -34,7 +35,7 @@ export default function HeaderRight() {
   const navigate = useNavigate();
 
   const primaryRole = normalizeRole(role);
-  const assignedRoles = uniqueRoles(roles, primaryRole);
+  void roles;
   const canSwitchRole = availableRoles.length > 1;
   const currentRole = activeRole ?? primaryRole;
   const isStudentRole = currentRole === "STUDENT";
@@ -55,7 +56,7 @@ export default function HeaderRight() {
   const userName = authFullName.trim() || initialProfileData.fullName;
   const userEmail = auth.email || initialProfileData.email;
   const userInitials = computeInitials(userName);
-  const userRoleDisplay = role ? formatRoleLabel(currentRole) : initialProfileData.role;
+  const userRoleDisplay = role ? formatRoleLabel(primaryRole) : initialProfileData.role;
 
   const handleLogout = async () => {
     if (isAuthenticated) {
@@ -84,9 +85,9 @@ export default function HeaderRight() {
 
   const switchRole = (nextRole: string) => {
     const normalizedRole = normalizeRole(nextRole);
-    setViewRole(normalizedRole === primaryRole ? null : normalizedRole);
+    setViewRole(normalizedRole);
     setOpen(false);
-    navigate(getHomePathByRole(normalizedRole));
+    navigate(getHomePathByRole(normalizedRole, auth.permissions));
   };
 
   const renderUserAccountMenu = () => (
@@ -129,13 +130,13 @@ export default function HeaderRight() {
           <span>My Profile</span>
         </DropdownMenuItem>
 
-        <DropdownMenuItem
+        {canLearn && <DropdownMenuItem
           onClick={() => navigate("/my-learning")}
           className="cursor-pointer gap-2.5 py-2"
         >
           <GraduationCap className="size-4 text-blue-600 dark:text-blue-400" />
           <span>My Learning</span>
-        </DropdownMenuItem>
+        </DropdownMenuItem>}
 
         <DropdownMenuSeparator />
 
@@ -164,9 +165,9 @@ export default function HeaderRight() {
       <div className="flex items-center gap-3">
         <Badge
           variant="secondary"
-          className="text-sm text-blue-500 bg-blue-100"
+          className="text-sm text-blue-700 bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300"
         >
-          {formatRoleLabel(currentRole)}
+          {formatRoleLabel(currentRole)} View
         </Badge>
         {renderUserAccountMenu()}
         <ToggleTheme />
@@ -180,7 +181,7 @@ export default function HeaderRight() {
       <div className="relative">
         <button
           onClick={() => setOpen((o) => !o)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors cursor-pointer ${isStudentRole
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors cursor-pointer dark:bg-card dark:border-border dark:text-foreground ${isStudentRole
             ? "bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
             : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
             }`}
@@ -198,21 +199,21 @@ export default function HeaderRight() {
         </button>
 
         {open && (
-          <div className="absolute right-0 top-full mt-1.5 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50 overflow-hidden">
+          <div className="absolute right-0 top-full mt-1.5 w-44 bg-card text-card-foreground border border-border rounded-lg shadow-lg z-50 overflow-hidden">
             {availableRoles.map((availableRole) => {
               const selected = normalizeRole(availableRole) === currentRole;
-              const isAssignedRole = assignedRoles.includes(normalizeRole(availableRole));
+              const isAssignedRole = true;
               const studentRow = normalizeRole(availableRole) === "STUDENT";
 
               return (
                 <button
                   key={availableRole}
                   onClick={() => switchRole(availableRole)}
-                  className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-gray-50 transition-colors cursor-pointer ${selected
+                  className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-muted transition-colors cursor-pointer ${selected
                     ? studentRow
-                      ? "text-green-700 font-medium bg-green-50"
-                      : "text-blue-700 font-medium bg-blue-50"
-                    : "text-gray-700"
+                      ? "text-green-700 font-medium bg-green-50 dark:bg-green-950/60 dark:text-green-300"
+                      : "text-blue-700 font-medium bg-blue-50 dark:bg-blue-950/60 dark:text-blue-300"
+                    : "text-gray-700 dark:text-foreground"
                     }`}
                 >
                   {studentRow ? <GraduationCap size={15} /> : <ShieldCheck size={15} />}

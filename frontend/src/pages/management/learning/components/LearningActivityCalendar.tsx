@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import type { DailyActivity } from "../learning.types";
 
 interface LearningActivityCalendarProps {
-  activityData: Record<string, DailyActivity>;
+  activityData: Record<string, DailyActivity> | null;
 }
 
 const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
@@ -13,8 +13,8 @@ export const LearningActivityCalendar: React.FC<LearningActivityCalendarProps> =
   activityData,
 }) => {
   // Reference date: current date is October 2026 matching screenshots
-  const [currentDate, setCurrentDate] = useState(() => new Date(2026, 9, 27)); // month index 9 is October
-  const [selectedDateStr, setSelectedDateStr] = useState<string>("2026-10-27");
+  const [currentDate, setCurrentDate] = useState(() => new Date()); // month index 9 is October
+  const [selectedDateStr, setSelectedDateStr] = useState<string>("");
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -40,7 +40,12 @@ export const LearningActivityCalendar: React.FC<LearningActivityCalendarProps> =
   if (startOffset === -1) startOffset = 6;
 
   // Selected date info
-  const selectedDayActivity = selectedDateStr ? activityData[selectedDateStr] : null;
+  const selectedDayActivity = selectedDateStr ? activityData?.[selectedDateStr] : null;
+
+  if (activityData === null) return <div className="rounded-xl border bg-card p-5 text-card-foreground shadow-xs">
+    <h4 className="mb-4 text-sm font-bold">Learning activity</h4>
+    <p className="text-sm text-muted-foreground">Learning activity records are not available.</p>
+  </div>;
 
   return (
     <div className="bg-white dark:bg-[#141414] rounded-xl border border-gray-200 dark:border-[#262626] p-5 shadow-xs">

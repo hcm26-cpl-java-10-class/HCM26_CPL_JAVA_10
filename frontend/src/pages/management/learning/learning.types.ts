@@ -1,4 +1,4 @@
-export type CourseStatus = "in_progress" | "completed" | "saved";
+export type CourseStatus = "in_progress" | "completed" | "saved" | "enrolled";
 
 export interface NextItemInfo {
   title: string;
@@ -25,7 +25,8 @@ export interface LearningCourse {
   skill: string;
   provider: string;
   lastAccessed: string;
-  progress: number;
+  progress: number | null;
+  enrolledAt?: string | null;
   status: CourseStatus;
   estimatedCompletion?: string;
   completedDate?: string;

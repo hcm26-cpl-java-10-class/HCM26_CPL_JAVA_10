@@ -8,6 +8,7 @@ import type { UserProfileData, ProfileFormValues, ProfileFormErrors } from "../t
 interface PersonalInfoCardProps {
   profile: UserProfileData;
   isEditing: boolean;
+  disabled?: boolean;
   onStartEditing: () => void;
   onCancelEditing: () => void;
   onSaveProfile: (updatedValues: ProfileFormValues) => Promise<void>;
@@ -16,6 +17,7 @@ interface PersonalInfoCardProps {
 export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
   profile,
   isEditing,
+  disabled = false,
   onStartEditing,
   onCancelEditing,
   onSaveProfile,
@@ -96,6 +98,7 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
             type="button"
             variant="ghost"
             size="sm"
+            disabled={disabled}
             onClick={onStartEditing}
             className="text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer font-medium"
           >

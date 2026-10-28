@@ -3,7 +3,7 @@ import { Award } from "lucide-react";
 import type { CertificateInfo } from "../learning.types";
 
 interface RecentCertificatesSidebarProps {
-  certificates: CertificateInfo[];
+  certificates: CertificateInfo[] | null;
   onViewCertificate: (cert: CertificateInfo) => void;
 }
 
@@ -11,7 +11,7 @@ export const RecentCertificatesSidebar: React.FC<RecentCertificatesSidebarProps>
   certificates,
   onViewCertificate,
 }) => {
-  const displayCerts = certificates.slice(0, 3);
+  const displayCerts = certificates?.slice(0, 3) ?? [];
 
   const handleAddToLinkedIn = (cert: CertificateInfo) => {
     const url = `https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&name=${encodeURIComponent(
@@ -31,9 +31,9 @@ export const RecentCertificatesSidebar: React.FC<RecentCertificatesSidebarProps>
       {displayCerts.length === 0 ? (
         <div className="text-center py-6 px-3 bg-gray-50 dark:bg-[#1a1a1a] rounded-lg border border-dashed border-gray-300 dark:border-[#2e2e2e]">
           <Award className="size-8 text-gray-400 dark:text-neutral-500 mx-auto mb-2" />
-          <p className="text-xs font-medium text-gray-700 dark:text-neutral-300">No certificates issued yet</p>
+          <p className="text-xs font-medium text-gray-700 dark:text-neutral-300">{certificates === null ? "Certificate records are not available." : "No certificates issued yet"}</p>
           <p className="text-[11px] text-gray-500 dark:text-neutral-500 mt-1">
-            Complete enrolled courses with 80%+ passing score to earn verified certificates.
+            {certificates === null ? "Certificates will appear when supported records are available." : "Complete eligible courses to earn certificates."}
           </p>
         </div>
       ) : (

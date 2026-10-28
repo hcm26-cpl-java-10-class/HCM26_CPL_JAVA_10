@@ -2,7 +2,7 @@ import React from "react";
 import type { LearningStatsSummary } from "../learning.types";
 
 interface LearningStatisticsCardProps {
-  stats: LearningStatsSummary;
+  stats: LearningStatsSummary | null;
 }
 
 export const LearningStatisticsCard: React.FC<LearningStatisticsCardProps> = ({ stats }) => {
@@ -12,7 +12,7 @@ export const LearningStatisticsCard: React.FC<LearningStatisticsCardProps> = ({ 
         Last 4 weeks
       </h4>
 
-      <div className="grid grid-cols-3 gap-2 text-left">
+      {stats === null ? <p className="text-sm text-muted-foreground">Learning statistics are not available.</p> : <div className="grid grid-cols-3 gap-2 text-left">
         {/* Metric 1 */}
         <div className="flex flex-col">
           <span className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">
@@ -42,7 +42,7 @@ export const LearningStatisticsCard: React.FC<LearningStatisticsCardProps> = ({ 
             Minutes learned
           </span>
         </div>
-      </div>
+      </div>}
     </div>
   );
 };

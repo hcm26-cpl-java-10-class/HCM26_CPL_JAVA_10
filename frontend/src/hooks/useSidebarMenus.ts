@@ -1,7 +1,7 @@
 import { moduleApi, moduleGroupApi } from "@/api";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { ModuleDTO, ModuleGroupDTO, Pagination } from "@/types";
-import { canAccessByPermission } from "@/utils/rbac.utils";
+import { canAccessPath, canAccessByPermission } from "@/utils/rbac.utils";
 import { useQuery } from "@tanstack/react-query";
 
 export type SidebarModule = ModuleDTO & {
@@ -25,10 +25,10 @@ const modulePagination: Pagination = {
 };
 
 export function useActiveModuleGroups(enabled = true) {
-    const { activeRole, hasPermission } = usePermissions();
+    const { activeRole, hasPermission, user } = usePermissions();
 
     return useQuery<SidebarModuleGroup[]>({
-        queryKey: ["sidebar-menu", "active-module-groups", activeRole],
+        queryKey: ["sidebar-menu", "active-module-groups", activeRole, user.email, user.permissions],
         enabled,
         queryFn: async () => {
             const [groupPage, modulePage] = await Promise.all([
@@ -38,7 +38,7 @@ export function useActiveModuleGroups(enabled = true) {
 
             const groups = groupPage.content ?? groupPage.items ?? [];
             const modules = (modulePage.content ?? modulePage.items ?? []).filter((module) =>
-                canAccessByPermission(module.requiredPermission, hasPermission),
+                canAccessByPermission(module.requiredPermission, hasPermission) && canAccessPath(module.url ?? "", activeRole, user.permissions),
             );
 
             const groupedModules = modules.reduce<Record<string, SidebarModule[]>>((acc, module) => {

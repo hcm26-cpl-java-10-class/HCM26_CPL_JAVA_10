@@ -29,6 +29,7 @@ public class UserPrincipal implements UserDetails {
         Set<GrantedAuthority> authorities = new HashSet<>();
 
         for (Role role : from.getRoles()) {
+            if (!Boolean.TRUE.equals(role.getIsActive())) continue;
 
             authorities.add(
                     new SimpleGrantedAuthority("ROLE_" + role.getName())

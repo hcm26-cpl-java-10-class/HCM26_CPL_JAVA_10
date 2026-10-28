@@ -1,7 +1,9 @@
+import { usePermissions } from "@/hooks/usePermissions";
 import React, { useState, useMemo, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { toast } from "sonner";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { store } from "@/store/store";
 import type { RootState } from "@/store/store";
 import { initialProfileData } from "./mockData";
 import { ProfileHeader } from "./components/ProfileHeader";
@@ -19,6 +21,7 @@ import { profileApi } from "@/api/features/profile.api";
 import { updateUserProfile } from "@/store/slices/auth/authSlice";
 
 export const PersonalProfilePage: React.FC = () => {
+  const { canLearn } = usePermissions();
   const dispatch = useDispatch();
   const auth = useSelector((state: RootState) => state.auth);
 
@@ -54,7 +57,10 @@ export const PersonalProfilePage: React.FC = () => {
   const [profile, setProfile] = useState<UserProfileData>(initialData);
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [profileError, setProfileError] = useState(false);
+  const [reload, setReload] = useState(0);
+  const displayedProfile = profile.email === auth.email ? profile : initialData;
 
   // Optional preview states for edge-case verification requested by SRS note
   // (normal, loading, empty, permission_denied, conflict)
@@ -62,13 +68,17 @@ export const PersonalProfilePage: React.FC = () => {
 
   // Fetch real profile from backend when authenticated
   useEffect(() => {
+    let cancelled = false;
     const fetchProfile = async () => {
       if (!auth.isAuthenticated && !localStorage.getItem("token")) {
         return;
       }
       try {
         setIsLoading(true);
+        setProfileError(false);
         const data = await profileApi.getProfile();
+        if (cancelled) return;
+        if (data.email !== auth.email) throw new Error("Profile identity does not match the session");
         setProfile(data);
         // Synchronize Redux user name with backend profile
         dispatch(
@@ -79,15 +89,20 @@ export const PersonalProfilePage: React.FC = () => {
           })
         );
       } catch (err: any) {
+        if (!cancelled) setProfileError(true);
         // Fallback to initial local profile if backend is not reachable or unauthenticated
         console.warn("Could not fetch profile from backend, using current session profile:", err?.message);
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
 
+    setProfile(initialData);
+    setIsEditing(false);
+    setIsChangePasswordOpen(false);
     fetchProfile();
-  }, [auth.isAuthenticated, dispatch]);
+    return () => { cancelled = true; };
+  }, [auth.isAuthenticated, auth.email, dispatch, reload]);
 
   // Save profile handler
   const handleSaveProfile = async (values: ProfileFormValues) => {
@@ -104,6 +119,8 @@ export const PersonalProfilePage: React.FC = () => {
           fullName: values.fullName.trim(),
           phoneNumber: values.phoneNumber.trim(),
         });
+        if (store.getState().auth.email !== auth.email) return;
+        if (updated.email !== auth.email) throw new Error("Profile identity does not match the session");
         setProfile(updated);
         // Synchronize Redux user and header with updated name
         dispatch(
@@ -114,15 +131,7 @@ export const PersonalProfilePage: React.FC = () => {
           })
         );
       } else {
-        // Local simulation if offline
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        setProfile((prev) => ({
-          ...prev,
-          fullName: values.fullName.trim(),
-          phoneNumber: values.phoneNumber.trim(),
-          initials: computeInitials(values.fullName),
-        }));
-        dispatch(updateUserProfile({ fullName: values.fullName.trim() }));
+        throw new Error("Please sign in before updating your profile.");
       }
 
       setIsEditing(false);
@@ -157,10 +166,17 @@ export const PersonalProfilePage: React.FC = () => {
         {/* Header with Breadcrumb, Title & Top Action Buttons */}
         <ProfileHeader
           isEditing={isEditing}
+          disabled={isLoading || profileError}
           onOpenChangePassword={() => setIsChangePasswordOpen(true)}
           onTriggerUpdateProfile={() => setIsEditing(true)}
         />
 
+        {profileError && <Alert variant="destructive">
+          <AlertTitle>Profile could not be loaded</AlertTitle>
+          <AlertDescription>Your session information is shown. Retry before editing your profile.
+            <Button variant="outline" size="sm" onClick={() => setReload(value => value + 1)}>Retry</Button>
+          </AlertDescription>
+        </Alert>}
         {/* Permission Denied Demo State */}
         {demoState === "permission_denied" && (
           <Alert variant="destructive" className="bg-red-50 border-red-200 text-red-900 dark:bg-red-950/40 dark:border-red-900">
@@ -221,27 +237,30 @@ export const PersonalProfilePage: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* Left Column: Profile Summary & Personal Information */}
             <div className="lg:col-span-8 flex flex-col gap-6">
-              <ProfileSummaryCard profile={profile} />
+              <ProfileSummaryCard profile={displayedProfile} />
               <PersonalInfoCard
-                profile={profile}
+                key={auth.email}
+                disabled={isLoading || profileError}
+                profile={displayedProfile}
                 isEditing={isEditing}
-                onStartEditing={() => setIsEditing(true)}
+                onStartEditing={() => { if (!profileError) setIsEditing(true); }}
                 onCancelEditing={() => setIsEditing(false)}
                 onSaveProfile={handleSaveProfile}
               />
-              <LearningOverviewCard />
+              {canLearn && <LearningOverviewCard />}
             </div>
 
             {/* Right Column: Account Security & Skills */}
             <div className="lg:col-span-4 flex flex-col gap-6">
-              <AccountSecurityCard profile={profile} />
-              <SkillsCard skills={profile.skills} />
+              <AccountSecurityCard profile={displayedProfile} />
+              <SkillsCard skills={displayedProfile.skills} />
             </div>
           </div>
         ) : null}
 
         {/* Change Password Modal */}
         <ChangePasswordModal
+          key={auth.email}
           open={isChangePasswordOpen}
           onOpenChange={setIsChangePasswordOpen}
         />

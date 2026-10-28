@@ -18,7 +18,7 @@ public class ExamTakerController {
     private final ExamTakerService service;
 
     @GetMapping("/{id}/take")
-    @PreAuthorize("hasAuthority('EXAM_TAKE')")
+    @PreAuthorize("hasAuthority('LEARNER_ACCESS') and hasAuthority('EXAM_TAKE')")
     public ResponseEntity<ExamTakerDTO> take(@PathVariable Long id) {
         return ResponseEntity.ok(service.getForTaking(id));
     }

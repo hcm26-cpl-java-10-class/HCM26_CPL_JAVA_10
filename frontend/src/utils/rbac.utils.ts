@@ -115,61 +115,45 @@ export const resolveEffectivePermissions = (
   rolePermissions: RolePermissionsMap,
   allPermissions: string[],
 ): string[] => {
-  const role = normalizeRole(activeRole);
-
-  if (role && rolePermissions[role]?.length) {
-    return uniquePermissions(rolePermissions[role]);
-  }
-
-  if (role === STUDENT_ROLE) {
-    return uniquePermissions(
-      allPermissions.filter(
-        (permission) =>
-          permission.endsWith("_READ") || permission === "ENROLL_COURSE",
-      ),
-    );
-  }
-
-  if (role === TEACHER_ROLE) {
-    const teacherDefaults = new Set([
-      "MENU_READ",
-      "BOOK_CREATE",
-      "BOOK_READ",
-      "BOOK_UPDATE",
-      "BOOK_DELETE",
-      "EXAM_CREATE",
-      "EXAM_READ",
-      "EXAM_UPDATE",
-      "EXAM_DELETE",
+  // Views only narrow real account permissions; they never add authorities.
+  const granted = uniquePermissions(allPermissions);
+  void rolePermissions;
+  if (normalizeRole(activeRole) === STUDENT_ROLE) {
+    const learnerPermissions = new Set([
+      "MENU_READ", "BOOK_READ", "COURSE_READ", "LESSON_READ", "EXAM_TAKE",
+      "ENROLLMENT_READ", "ENROLLMENT_CREATE", "ENROLLMENT_DELETE",
+      "LEARNER_ACCESS", "LEARNING_SELF_READ",
     ]);
-
-    return uniquePermissions(
-      allPermissions.filter((permission) => teacherDefaults.has(permission)),
-    );
+    return granted.filter(p => learnerPermissions.has(p));
   }
+  return granted;
 
-  return uniquePermissions(allPermissions);
 };
 
 export const formatRoleLabel = (role: string): string =>
-  normalizeRole(role)
+  (normalizeRole(role) === STUDENT_ROLE ? "LEARNER" : normalizeRole(role))
     .toLowerCase()
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 
-export const getHomePathByRole = (role?: string | null): string => {
+export const getHomePathByRole = (role?: string | null, permissions?: string[]): string => {
   const normalizedRole = normalizeRole(role);
+  if (!normalizedRole) return "/profile";
 
   if (normalizedRole === STUDENT_ROLE) {
-    return "/student";
+    return !permissions || permissions.includes("LEARNING_SELF_READ") ? "/my-learning" : permissions.includes("COURSE_READ") ? "/courses" : "/profile";
   }
 
   if (normalizedRole === TEACHER_ROLE) {
     return "/teacher";
   }
 
-  return "/dashboard";
+  if (!permissions || permissions.includes("USER_READ")) return "/dashboard";
+  if (permissions.includes("BOOK_UPDATE")) return "/teacher";
+  const landing = [["COURSE_READ", "/courses"], ["BOOK_READ", "/books"], ["EXAM_READ", "/exams"], ["ROLE_READ", "/roles"]]
+    .find(([permission]) => permissions.includes(permission));
+  return landing?.[1] ?? "/profile";
 };
 
 export const canAccessByPermission = (
@@ -181,4 +165,28 @@ export const canAccessByPermission = (
   }
 
   return hasPermission(requiredPermission);
+};
+
+// Shared by navigation and route guards, independent of server-provided menu labels.
+export const canAccessPath = (path: string, activeRole: string | null, permissions: string[]): boolean => {
+  const granted = new Set(uniquePermissions(permissions));
+  path = path.replace(/\/+$/, "") || "/";
+  if (["/profile", "/fams/profile", "/fams/ho-so-ca-nhan-oi-mat-khau", "/fams/ho-so-ca-nhan-doi-mat-khau"].includes(path)) return true;
+  if (path === "/dashboard") return activeRole !== STUDENT_ROLE && granted.has("ADMIN_ACCESS") && granted.has("USER_READ");
+  if (path === "/student" || path === "/student/exams") return activeRole === STUDENT_ROLE && granted.has("LEARNER_ACCESS");
+  if (["/my-learning", "/fams/my-learning", "/learning", "/enrollments"].includes(path)) {
+    return granted.has("LEARNER_ACCESS") && granted.has("LEARNING_SELF_READ");
+  }
+  if (["/courses", "/books"].some(p => path === p)) {
+    return activeRole === STUDENT_ROLE ? granted.has("LEARNER_ACCESS") : granted.has("ADMIN_ACCESS");
+  }
+  return activeRole !== STUDENT_ROLE && granted.has("ADMIN_ACCESS");
+};
+
+export const availableAccountViews = (permissions: string[]): string[] => {
+  const granted = new Set(uniquePermissions(permissions));
+  return [
+    ...(granted.has("ADMIN_ACCESS") ? [ADMIN_ROLE] : []),
+    ...(granted.has("LEARNER_ACCESS") ? [STUDENT_ROLE] : []),
+  ];
 };

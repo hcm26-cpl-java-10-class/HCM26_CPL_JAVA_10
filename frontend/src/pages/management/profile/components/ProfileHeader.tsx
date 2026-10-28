@@ -4,12 +4,14 @@ import { KeyRound, UserCheck } from "lucide-react";
 
 interface ProfileHeaderProps {
   isEditing: boolean;
+  disabled?: boolean;
   onOpenChangePassword: () => void;
   onTriggerUpdateProfile: () => void;
 }
 
 export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   isEditing,
+  disabled = false,
   onOpenChangePassword,
   onTriggerUpdateProfile,
 }) => {
@@ -48,6 +50,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
 
           <Button
             type="button"
+            disabled={disabled}
             onClick={onTriggerUpdateProfile}
             className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-xs transition-colors cursor-pointer"
           >

@@ -10,7 +10,7 @@ import { setLogin } from "@/store/slices/auth/authSlice";
 import { authApi } from "@/api/features/auth.api";
 import axios from "axios";
 import { Eye, EyeOff } from "lucide-react";
-import { getHomePathByRole } from "@/utils/rbac.utils";
+import { availableAccountViews, getHomePathByRole } from "@/utils/rbac.utils";
 
 const URL_LOGIN_WITH_GOOGLE =
     import.meta.env.VITE_API_URL_FOR_GOOGLE || "http://localhost:8080/oauth2/authorization/google";
@@ -57,7 +57,7 @@ export const Login: React.FC = () => {
         try {
             const res = await authApi.login({ email: cleanEmail, password: cleanPassword, isRememberedMe });
             dispatch(setLogin(res));
-            navigate(getHomePathByRole(res.role), { replace: true });
+            navigate(getHomePathByRole(availableAccountViews(res.permissions ?? [])[0], res.permissions), { replace: true });
         } catch (err) {
             if (axios.isAxiosError(err)) {
                 const backendMsg = err.response?.data?.message;

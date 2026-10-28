@@ -1,20 +1,8 @@
 import type { UserProfileData } from "./types";
 
+// Blank shell until the authenticated account profile is loaded.
 export const initialProfileData: UserProfileData = {
-  fullName: "Trần Minh Anh",
-  email: "anh.tm@fams.vn",
-  employeeCode: "EMP10014",
-  phoneNumber: "0903 221 879",
-  role: "PROGRAM MANAGER",
-  department: "FHN.G2",
-  status: "Active",
-  initials: "TA",
-  lastLogin: null,
-  lastLoginAt: null,
-  device: null,
-  skills: [
-    { name: "Java", color: "blue" },
-    { name: "Curriculum", color: "blue" },
-    { name: "Agile", color: "blue" },
-  ],
+  fullName: "", email: "", employeeCode: "", phoneNumber: "", role: "",
+  department: "", status: "Active", initials: "", lastLogin: null,
+  lastLoginAt: null, device: null, skills: [],
 };

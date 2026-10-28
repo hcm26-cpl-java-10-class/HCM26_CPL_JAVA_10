@@ -29,25 +29,25 @@ export interface RouteConfig {
 }
 
 export const routes: RouteConfig[] = [
-  { path: "/fams/ho-so-ca-nhan-oi-mat-khau", component: PersonalProfilePage, isPublic: true },
-  { path: "/fams/ho-so-ca-nhan-doi-mat-khau", component: PersonalProfilePage, isPublic: true },
-  { path: "/fams/profile", component: PersonalProfilePage, isPublic: true },
-  { path: "/profile", component: PersonalProfilePage, isPublic: true },
+  { path: "/fams/ho-so-ca-nhan-oi-mat-khau", component: PersonalProfilePage },
+  { path: "/fams/ho-so-ca-nhan-doi-mat-khau", component: PersonalProfilePage },
+  { path: "/fams/profile", component: PersonalProfilePage },
+  { path: "/profile", component: PersonalProfilePage },
   // My Learning routes
-  { path: "/my-learning", component: MyLearningPage, isPublic: true },
-  { path: "/fams/my-learning", component: MyLearningPage, isPublic: true },
-  { path: "/learning", component: MyLearningPage, isPublic: true },
+  { path: "/my-learning", component: MyLearningPage },
+  { path: "/fams/my-learning", component: MyLearningPage },
+  { path: "/learning", component: MyLearningPage },
   { path: "/enrollments", component: MyLearningPage, isModuleDriven: true },
 
   // Compatibility routes for old combined page
-  { path: "/menu-groups", component: ModuleGroupsPage, isPublic: true },
-  { path: "/menus", component: ModulesPage, isPublic: true },
-  { path: "/fams/module-group-module", component: ModuleGroupsPage, isPublic: true },
-  { path: "/module-group-module", component: ModuleGroupsPage, isPublic: true },
+  { path: "/menu-groups", component: ModuleGroupsPage, requiredPermission: "MENU_READ" },
+  { path: "/menus", component: ModulesPage, requiredPermission: "MENU_READ" },
+  { path: "/fams/module-group-module", component: ModuleGroupsPage, requiredPermission: "MENU_READ" },
+  { path: "/module-group-module", component: ModuleGroupsPage, requiredPermission: "MENU_READ" },
 
   // Independent Module Groups & Modules routes
-  { path: "/module-groups", component: ModuleGroupsPage, isPublic: true },
-  { path: "/modules", component: ModulesPage, isPublic: true },
+  { path: "/module-groups", component: ModuleGroupsPage, requiredPermission: "MENU_READ" },
+  { path: "/modules", component: ModulesPage, requiredPermission: "MENU_READ" },
 
   { path: "/dashboard", component: Dashboard, isModuleDriven: true },
   { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
@@ -63,9 +63,9 @@ export const routes: RouteConfig[] = [
     requiredPermission: "STUDENT_SCORE_READ",
     isModuleDriven: true,
   },
-  { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
+  { path: "/student", component: StudentLandingPage, requiredPermission: "LEARNER_ACCESS" },
   { path: "/student/exams", component: StudentExamList,requiredPermission: "EXAM_READ", isModuleDriven: true },
-  { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
+  { path: "/teacher", component: TeacherLandingPage, requiredPermission: "ADMIN_ACCESS" },
   ...buildEntityRoutes(),
 
   { path: "/not-found-page", component: NotFoundPage, isPublic: true },

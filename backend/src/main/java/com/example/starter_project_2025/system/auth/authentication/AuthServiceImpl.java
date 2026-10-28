@@ -317,6 +317,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         return user.getRoles().stream()
+                .filter(role -> Boolean.TRUE.equals(role.getIsActive()))
                 .map(Role::getName)
                 .filter(StringUtils::hasText)
                 .map(this::normalizeRoleName)
@@ -330,6 +331,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         return user.getRoles().stream()
+                .filter(role -> Boolean.TRUE.equals(role.getIsActive()))
                 .filter(role -> role.getPermissions() != null)
                 .flatMap(role -> role.getPermissions().stream())
                 .map(permission -> permission.getName())
@@ -344,6 +346,7 @@ public class AuthServiceImpl implements AuthService {
 
         if (user.getRoles() != null) {
             Map<String, Role> rolesByName = user.getRoles().stream()
+                    .filter(role -> Boolean.TRUE.equals(role.getIsActive()))
                     .filter(role -> StringUtils.hasText(role.getName()))
                     .collect(Collectors.toMap(
                             role -> normalizeRoleName(role.getName()),
@@ -360,21 +363,7 @@ public class AuthServiceImpl implements AuthService {
             }
         }
 
-        if (sortedRoles.contains("ADMIN")) {
-            includePreviewRolePermissions(rolePermissions, "STUDENT");
-            includePreviewRolePermissions(rolePermissions, "TEACHER");
-        }
-
         return rolePermissions;
-    }
-
-    private void includePreviewRolePermissions(Map<String, Set<String>> rolePermissions, String roleName) {
-        if (rolePermissions.containsKey(roleName)) {
-            return;
-        }
-
-        roleRepository.findByName(roleName)
-                .ifPresent(role -> rolePermissions.put(roleName, mapRolePermissions(role)));
     }
 
     private Set<String> mapRolePermissions(Role role) {

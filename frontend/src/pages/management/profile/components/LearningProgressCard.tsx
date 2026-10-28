@@ -19,73 +19,22 @@ interface CompletedCourse {
   score: number;
 }
 
-const IN_PROGRESS_COURSES: InProgressCourse[] = [
-  {
-    id: "c-1",
-    title: "Advanced Java Microservices",
-    skill: "Java",
-    lastAccessed: "2 hours ago",
-    progress: 65,
-  },
-  {
-    id: "c-2",
-    title: "Agile Leadership & Scrum Master",
-    skill: "Agile",
-    lastAccessed: "Yesterday",
-    progress: 40,
-  },
-  {
-    id: "c-3",
-    title: "Modern Curriculum Design & Assessment",
-    skill: "Curriculum",
-    lastAccessed: "3 days ago",
-    progress: 85,
-  },
-];
-
-const COMPLETED_COURSES: CompletedCourse[] = [
-  {
-    id: "c-4",
-    title: "Java Core & Spring Boot 3 Deep Dive",
-    skill: "Java",
-    completedDate: "Completed on Oct 15, 2026",
-    score: 95,
-  },
-  {
-    id: "c-5",
-    title: "Agile Project Delivery & Kanban Workshop",
-    skill: "Agile",
-    completedDate: "Completed on Sep 28, 2026",
-    score: 92,
-  },
-  {
-    id: "c-6",
-    title: "Instructional Design & Curriculum Standard",
-    skill: "Curriculum",
-    completedDate: "Completed on Aug 19, 2026",
-    score: 88,
-  },
-  {
-    id: "c-7",
-    title: "Enterprise Java Concurrency & Reactive Systems",
-    skill: "Java",
-    completedDate: "Completed on Jul 04, 2026",
-    score: 94,
-  },
-];
-
-export const LearningProgressCard: React.FC = () => {
+// Legacy component stays reusable, but receives actual records from its caller.
+export const LearningProgressCard: React.FC<{
+  inProgressCourses?: InProgressCourse[];
+  completedCourses?: CompletedCourse[];
+}> = ({ inProgressCourses: IN_PROGRESS_COURSES = [], completedCourses: COMPLETED_COURSES = [] }) => {
   const [activeTab, setActiveTab] = useState<"in_progress" | "completed">("in_progress");
 
   return (
-    <div className="bg-[#141414] dark:bg-[#141414] rounded-xl border border-[#262626] dark:border-[#262626] shadow-xs p-6 transition-all">
+    <div className="bg-white dark:bg-[#141414] rounded-xl border border-gray-200 dark:border-[#262626] shadow-xs p-6 transition-all">
       {/* 1. Card Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#262626] dark:border-[#262626] mb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-200 dark:border-[#262626] mb-5">
         <div>
-          <h3 className="text-base font-bold text-white">
+          <h3 className="text-base font-bold text-gray-900 dark:text-white">
             Learning Progress
           </h3>
-          <p className="text-xs text-neutral-400 mt-0.5">
+          <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5">
             Quick summary of your current and completed courses.
           </p>
         </div>
@@ -100,14 +49,14 @@ export const LearningProgressCard: React.FC = () => {
       </div>
 
       {/* 2. Interactive Sub-tabs (Filter Pills) */}
-      <div className="flex items-center gap-2 mb-4 p-1 bg-[#1a1a1a] rounded-lg w-fit border border-[#262626]">
+      <div className="flex items-center gap-2 mb-4 p-1 bg-gray-50 dark:bg-[#1a1a1a] rounded-lg w-fit border border-[#262626]">
         <button
           type="button"
           onClick={() => setActiveTab("in_progress")}
           className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
             activeTab === "in_progress"
-              ? "bg-[#2563eb] text-white shadow-xs"
-              : "text-neutral-400 hover:text-neutral-200"
+              ? "bg-[#2563eb] text-gray-900 dark:text-white shadow-xs"
+              : "text-gray-500 dark:text-neutral-400 hover:text-neutral-200"
           }`}
         >
           In Progress ({IN_PROGRESS_COURSES.length})
@@ -118,8 +67,8 @@ export const LearningProgressCard: React.FC = () => {
           onClick={() => setActiveTab("completed")}
           className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
             activeTab === "completed"
-              ? "bg-[#2563eb] text-white shadow-xs"
-              : "text-neutral-400 hover:text-neutral-200"
+              ? "bg-[#2563eb] text-gray-900 dark:text-white shadow-xs"
+              : "text-gray-500 dark:text-neutral-400 hover:text-neutral-200"
           }`}
         >
           Completed ({COMPLETED_COURSES.length})
@@ -137,14 +86,14 @@ export const LearningProgressCard: React.FC = () => {
               {/* Left: Course Title, Skill badge, last accessed */}
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                  <span className="text-sm font-semibold text-white truncate max-w-full">
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white truncate max-w-full">
                     {course.title}
                   </span>
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#1e3a8a]/30 text-[#60a5fa] border border-[#1e3a8a]/50">
                     {course.skill}
                   </span>
                 </div>
-                <p className="text-xs text-neutral-400">
+                <p className="text-xs text-gray-500 dark:text-neutral-400">
                   Last accessed: {course.lastAccessed}
                 </p>
               </div>
@@ -152,8 +101,8 @@ export const LearningProgressCard: React.FC = () => {
               {/* Middle/Right: Progress bar with % */}
               <div className="w-full md:w-56 shrink-0 flex flex-col gap-1.5">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-neutral-400">Progress</span>
-                  <span className="font-semibold text-white">{course.progress}%</span>
+                  <span className="text-gray-500 dark:text-neutral-400">Progress</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">{course.progress}%</span>
                 </div>
                 <div className="w-full h-2 rounded-full bg-[#262626] overflow-hidden">
                   <div
@@ -169,7 +118,7 @@ export const LearningProgressCard: React.FC = () => {
                   asChild
                   size="sm"
                   variant="outline"
-                  className="h-8 px-3 text-xs bg-transparent border-neutral-700 text-neutral-200 hover:bg-neutral-800 hover:text-white cursor-pointer"
+                  className="h-8 px-3 text-xs bg-transparent border-neutral-700 text-neutral-200 hover:bg-neutral-800 hover:text-gray-900 dark:text-white cursor-pointer"
                 >
                   <Link to={`/courses`} className="inline-flex items-center gap-1.5">
                     <Play className="size-3 fill-current" />
@@ -188,14 +137,14 @@ export const LearningProgressCard: React.FC = () => {
               {/* Left: Course Title, Skill badge, completion date */}
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                  <span className="text-sm font-semibold text-white truncate max-w-full">
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white truncate max-w-full">
                     {course.title}
                   </span>
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#1e3a8a]/30 text-[#60a5fa] border border-[#1e3a8a]/50">
                     {course.skill}
                   </span>
                 </div>
-                <p className="text-xs text-neutral-400">
+                <p className="text-xs text-gray-500 dark:text-neutral-400">
                   {course.completedDate}
                 </p>
               </div>
@@ -216,7 +165,7 @@ export const LearningProgressCard: React.FC = () => {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-8 px-3 text-xs bg-transparent border-neutral-700 text-neutral-200 hover:bg-neutral-800 hover:text-white cursor-pointer"
+                  className="h-8 px-3 text-xs bg-transparent border-neutral-700 text-neutral-200 hover:bg-neutral-800 hover:text-gray-900 dark:text-white cursor-pointer"
                   onClick={() => alert(`Certificate for "${course.title}"`)}
                 >
                   <Award className="size-3.5 mr-1.5 text-amber-400" />

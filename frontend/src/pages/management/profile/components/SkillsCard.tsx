@@ -29,6 +29,7 @@ export const SkillsCard: React.FC<SkillsCardProps> = ({ skills }) => {
       </div>
 
       <div className="flex flex-wrap gap-2">
+        {skills.length === 0 && <p className="text-sm text-muted-foreground">No skill records are available.</p>}
         {skills.map((skill, index) => (
           <span
             key={index}

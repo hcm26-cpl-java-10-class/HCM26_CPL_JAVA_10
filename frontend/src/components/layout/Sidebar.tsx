@@ -1,3 +1,5 @@
+import { useDispatch } from "react-redux";
+import { setLogout } from "@/store/slices/auth/authSlice";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, useSidebar } from "@/components/ui/sidebar";
 import { NavMain } from "@/components/layout/NavMain";
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
@@ -10,6 +12,7 @@ import { useActiveModuleGroups } from "@/hooks/useSidebarMenus";
 import { iconMap } from "@/components/datatable/iconMap";
 
 export function SidebarMenu() {
+    const dispatch = useDispatch();
     const location = useLocation();
     const navigate = useNavigate();
     const { toggleSidebar, state } = useSidebar();
@@ -74,7 +77,7 @@ export function SidebarMenu() {
                     </div>
 
                     {state === "expanded" && (
-                        <span className="text-lg font-bold text-blue-800 truncate">RBAC System</span>
+                        <span className="text-lg font-bold text-blue-800 dark:text-blue-400 truncate">RBAC System</span>
                     )}
                 </Button>
             </SidebarHeader>
@@ -97,8 +100,7 @@ export function SidebarMenu() {
                         size="icon"
                         variant="ghost"
                         onClick={async () => {
-                            await authApi.logout();
-                            navigate("/login");
+                            try { await authApi.logout(); } finally { dispatch(setLogout()); navigate("/login"); }
                         }}
                     >
                         <LogOutIcon className="size-4" />

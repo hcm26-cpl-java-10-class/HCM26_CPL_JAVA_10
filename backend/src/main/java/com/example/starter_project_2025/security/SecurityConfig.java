@@ -81,6 +81,9 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> {
                     auth.requestMatchers(PUBLIC_ENDPOINTS).permitAll();
+                    auth.requestMatchers("/api/users/**", "/api/roles/**", "/api/permissions/**",
+                            "/api/departments/**", "/api/dashboard/**")
+                            .hasAuthority("ADMIN_ACCESS");
                     auth.anyRequest().authenticated();
                 })
                 .exceptionHandling(ex -> ex

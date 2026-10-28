@@ -115,7 +115,7 @@ public class ProfileServiceImpl implements ProfileService {
                 .lastLogin(user.getLastLoginAt() != null ? user.getLastLoginAt().toString() : null)
                 .lastLoginAt(user.getLastLoginAt())
                 .device(user.getLastLoginDevice())
-                .skills(List.of("Java", "Curriculum", "Agile"))
+                .skills(List.of())
                 .build();
     }
 

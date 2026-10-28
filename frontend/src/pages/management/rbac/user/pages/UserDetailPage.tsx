@@ -1,3 +1,5 @@
+import { LearningRecordsPanel } from "@/pages/management/learning/components/LearningRecordsPanel";
+import { usePermissions } from "@/hooks/usePermissions";
 import { departmentApi, roleApi, userApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { PermissionGate } from "@/components/PermissionGate";
@@ -47,22 +49,26 @@ function BadgeGroup({ names }: { names: string[] }) {
 }
 
 export function UserDetailPage() {
+  const { hasAllPermissions, hasPermission, user: account } = usePermissions();
+  const canInspectLearning = hasAllPermissions(["ADMIN_ACCESS", "USER_READ", "USER_LEARNING_READ"]);
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const pathName = { users: "Người dùng", detail: "Chi tiết" };
 
   const userQuery = useQuery({
-    queryKey: ["user", "detail", id],
+    queryKey: ["user", "detail", account.email, id],
     queryFn: () => userApi.getById(id as string),
     enabled: !!id,
   });
   const roleQuery = useQuery({
-    queryKey: ["role", "options"],
+    queryKey: ["role", "options", account.email],
     queryFn: () => roleApi.getPage({ page: 0, size: 200 }),
+    enabled: hasPermission("ROLE_READ"),
   });
   const deptQuery = useQuery({
-    queryKey: ["department", "options"],
+    queryKey: ["department", "options", account.email],
     queryFn: () => departmentApi.getPage({ page: 0, size: 500 }),
+    enabled: hasPermission("DEPARTMENT_READ"),
   });
 
   const user = userQuery.data;
@@ -71,7 +77,7 @@ export function UserDetailPage() {
 
   const roleNames = nameOf(roleQuery.data?.content ?? roleQuery.data?.items, user?.roleIds);
   const deptNames = nameOf(deptQuery.data?.content ?? deptQuery.data?.items, user?.departmentIds);
-  const fullName = [user?.lastName, user?.firstName].filter(Boolean).join(" ");
+  const fullName = user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(" ");
   const status: UserStatus = user?.status ?? (user?.isActive === false ? "INACTIVE" : "ACTIVE");
   const statusLabel = USER_STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status;
 
@@ -93,14 +99,16 @@ export function UserDetailPage() {
           </CardContent>
         ) : userQuery.isError ? (
           <CardContent>
-            <p className="text-sm text-destructive">{extractServerErrors(userQuery.error).message}</p>
+            <p role="alert" className="text-sm text-destructive">{extractServerErrors(userQuery.error).message}</p>
+            <Button className="mt-3" variant="outline" onClick={() => void userQuery.refetch()}>Retry</Button>
           </CardContent>
         ) : (
           <CardContent>
             <Tabs defaultValue="general" className="grid gap-5">
-              <TabsList>
-                <TabsTrigger value="general">Thông tin chung</TabsTrigger>
-                <TabsTrigger value="authorization">Phân quyền</TabsTrigger>
+              <TabsList className="group-data-[orientation=horizontal]/tabs:h-auto flex-wrap justify-start">
+                <TabsTrigger className="h-auto min-h-9" value="general">Thông tin chung</TabsTrigger>
+                <TabsTrigger className="h-auto min-h-9" value="authorization">Phân quyền</TabsTrigger>
+                {canInspectLearning && <TabsTrigger className="h-auto min-h-9" value="learning">Learning</TabsTrigger>}
               </TabsList>
 
               <TabsContent value="general" className="grid gap-4 text-sm md:grid-cols-2">
@@ -132,6 +140,7 @@ export function UserDetailPage() {
                   <BadgeGroup names={roleNames} />
                 </Item>
               </TabsContent>
+              {canInspectLearning && id && <TabsContent value="learning"><LearningRecordsPanel userId={id} /></TabsContent>}
             </Tabs>
           </CardContent>
         )}

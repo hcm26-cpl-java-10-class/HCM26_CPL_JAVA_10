@@ -1,3 +1,5 @@
+import { useSelector } from "react-redux";
+import type { RootState } from "@/store/store";
 import { courseApi, enrollmentApi } from "@/api";
 import { AutoCrudPage } from "@/pages/management/AutoCrudPage";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -62,6 +64,7 @@ export default function CourseManagementPage() {
 }
 
 function StudentCourseCatalog() {
+  const email = useSelector((state: RootState) => state.auth.email);
   const [search, setSearch] = useState("");
   const queryClient = useQueryClient();
   const coursesQuery = useQuery({
@@ -69,7 +72,7 @@ function StudentCourseCatalog() {
     queryFn: () => courseApi.getPage({ page: 0, size: 200 }, search.trim() || undefined),
   });
   const enrollmentsQuery = useQuery({
-    queryKey: ["my-enrollments"],
+    queryKey: ["my-enrollments", email],
     queryFn: enrollmentApi.getMyCourses,
   });
   const enrollments = enrollmentsQuery.data ?? [];
@@ -78,6 +81,7 @@ function StudentCourseCatalog() {
   const enrollMutation = useMutation({
     mutationFn: enrollmentApi.enroll,
     onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["personal-learning", email] });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["my-enrollments"] }),
         queryClient.invalidateQueries({ queryKey: ["course-catalog"] }),
