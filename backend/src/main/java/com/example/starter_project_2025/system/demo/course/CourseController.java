@@ -42,6 +42,7 @@ public class CourseController
 
     CourseService courseService;
     CourseRepository courseRepository;
+    CourseBundleImportService courseBundleImportService;
 
     @Override
     protected BaseCrudService<Long, CourseDTO, CourseFilter> getService() {
@@ -116,6 +117,9 @@ public class CourseController
     @PostMapping(value = "/import", consumes = "multipart/form-data")
     @PreAuthorize("hasAuthority('COURSE_CREATE')")
     public ImportResult importFile(@RequestParam("file") MultipartFile file) {
+        if (courseBundleImportService.supports(file)) {
+            return courseBundleImportService.importBundle(file);
+        }
         return super.importFile(file);
     }
 }

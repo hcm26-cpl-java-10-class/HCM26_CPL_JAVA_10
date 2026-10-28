@@ -4,6 +4,7 @@ export type FieldType =
   | "password"
   | "number"
   | "date"
+  | "datetime-local"
   | "icon"
   | "select"
   | "boolean"
@@ -39,6 +40,29 @@ export type FilterType =
   | "boolean"
   | "dateRange"
   | "numberRange";
+
+export interface FieldValidation {
+  required?: boolean;
+  requiredMessage?: string;
+  minLength?: number;
+  /** Overrides the default limit for the field type; `null` = no limit. */
+  maxLength?: number | null;
+  /** number: minimum / maximum value. */
+  min?: number;
+  max?: number;
+  /** Force http/https URL check (auto-enabled for fields named *Url). */
+  url?: boolean;
+  /** Force email check (auto-enabled for fields named email). */
+  email?: boolean;
+  /** Custom regex + its error message. */
+  pattern?: { regex: RegExp; message: string };
+  /** Custom validation: return an error message, or null/undefined if valid. */
+  custom?: (
+    value: any,
+    form: Record<string, any>,
+    ctx: { isEdit: boolean; initial?: any }
+  ) => string | null | undefined;
+}
 
 export interface FieldSchema {
   name: string;
@@ -82,6 +106,11 @@ export interface FieldSchema {
 
   bold?: boolean;
 
+  validation?: FieldValidation;
+
+  /** Gợi ý hiển thị dưới ô nhập (vd: "Ví dụ: Java Basics"). Tự động ghép thêm với các rule validation. */
+  hint?: string;
+
   /** Required input in the create/edit form. */
   required?: boolean;
 
@@ -107,6 +136,12 @@ export interface RelationConfig {
   labelField: string;
 
   multiple?: boolean;
+
+  /**
+   * Lọc danh sách lựa chọn trong form trước khi hiển thị
+   * (vd: loại chính nó và con cháu khi chọn danh mục cha).
+   */
+  filterItems?: (items: any[], ctx: { initial?: any; isEdit: boolean }) => any[];
 }
 
 export interface DynamicFieldBuilderOptions {

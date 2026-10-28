@@ -18,7 +18,21 @@ export function getFilenameFromHeader(
 ) {
   if (!contentDisposition) return null;
 
-  const match = contentDisposition.match(/filename="?(.+?)"?$/);
+  // Try filename*= (RFC 5987, e.g. filename*=UTF-8''course-template.xlsx)
+  const encodedMatch = contentDisposition.match(/filename\*\s*=\s*(?:UTF-8'')?([^;\r\n]+)/i);
+  if (encodedMatch) {
+    try {
+      return decodeURIComponent(encodedMatch[1].trim().replace(/"/g, ""));
+    } catch {
+      // fall through to plain filename
+    }
+  }
 
-  return match ? match[1] : null;
+  // Try filename="..." or filename=...
+  const plainMatch = contentDisposition.match(/filename\s*=\s*"([^"]+)"|filename\s*=\s*([^;\r\n]+)/i);
+  if (plainMatch) {
+    return (plainMatch[1] ?? plainMatch[2] ?? "").trim();
+  }
+
+  return null;
 }

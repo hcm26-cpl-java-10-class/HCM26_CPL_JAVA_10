@@ -9,10 +9,17 @@ export * from "./common/registry";
 // Feature-specific types
 export * from "./features/auth";
 export * from "./features/demo/book";
+export * from "./features/demo/category";
 export * from "./features/demo/course";
+export * from "./features/demo/department";
 export * from "./features/demo/enrollment";
+export * from "./features/demo/lesson";
+export * from "./features/demo/progress";
+export * from "./features/demo/section";
 export * from "./features/demo/student_score";
 export * from "./features/demo/topic_mark_gradebook";
+export * from "./features/demo/certificate";
+export * from "./features/notification";
 export * from "./features/exam";
 export * from "./features/invitation";
 export * from "./features/menu/module";
@@ -25,3 +32,5 @@ export * from "./features/demo/session";
 export * from "./features/demo/lesson";
 
 export * from "./features/student";
+export * from "./features/demo/course-report";
+export * from "./features/demo/qna";

@@ -279,7 +279,7 @@ export function ProTable<TData = any>({
                                 ))}
                                 {showActionsColumn && <col style={{ width: ACTION_COLUMN_WIDTH }} />}
                             </colgroup>
-                            <TableHeader className="bg-background z-10 sticky top-0 shadow-xs">
+                            <TableHeader className="bg-background z-40 sticky top-0 shadow-xs">
                                 <TableRow>
                                     {isExpandable && <TableHead style={{ width: 40 }} />}
                                     <TableHead style={{ width: 20 }}>
@@ -303,7 +303,7 @@ export function ProTable<TData = any>({
                                     {showActionsColumn && (
                                         <TableHead
                                             style={{ width: ACTION_COLUMN_WIDTH }}
-                                            className="sticky right-0 z-30 bg-background border-l border-border/70 shadow-[-8px_0_10px_-10px_rgba(0,0,0,0.45)]"
+                                            className="sticky right-0 z-50 bg-background border-l border-border/70 shadow-[-8px_0_10px_-10px_rgba(0,0,0,0.45)]"
                                         >
                                             <div className="flex items-center justify-between gap-2">
                                                 <span className="whitespace-nowrap">Actions</span>
@@ -412,7 +412,7 @@ export function ProTable<TData = any>({
                                                             style={{ width: ACTION_COLUMN_WIDTH }}
                                                             className={`sticky right-0 z-20 border-l border-border/70 ${
                                                                 index % 2 === 0 ? "bg-accent" : "bg-background"
-                                                            } group-hover:bg-muted/50 shadow-[-8px_0_10px_-10px_rgba(0,0,0,0.35)]`}
+                                                            } group-hover:bg-muted shadow-[-8px_0_10px_-10px_rgba(0,0,0,0.35)]`}
                                                         >
                                                             <div className="flex items-center gap-1 overflow-hidden">
                                                                 {finalRenderRowActions(row)}

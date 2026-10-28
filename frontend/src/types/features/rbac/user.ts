@@ -24,9 +24,17 @@ export interface UserDTO extends BaseDTO {
   /** Quan hệ N-N user_departments. */
   departmentIds?: Array<string | number>;
   lastLoginAt?: string;
+  departmentId?: number | null;
+  departmentName?: string | null;
+  departmentIds?: number[];
+  departmentNames?: string[];
+  clearDepartment?: boolean;
+  roleIds?: number[];
 }
 
 export interface UserFilter extends BaseFilter {
+  departmentId?: number;
+  roleIds?: number[];
   roleIds?: string[];
   departmentIds?: string[];
   status?: UserStatus;

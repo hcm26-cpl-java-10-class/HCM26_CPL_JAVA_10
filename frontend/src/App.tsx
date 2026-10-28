@@ -7,7 +7,7 @@ import { RoleSwitchProvider } from "./contexts/RoleSwitchContext";
 import { usePermissions } from "./hooks/usePermissions";
 import { useActiveModuleGroups } from "./hooks/useSidebarMenus";
 import { NotFoundRedirect } from "./pages/error/NotFoundRedirect";
-import { routes } from "./router/component-registry";
+import { ROLE_HOME_PATHS, routes } from "./router/component-registry";
 import type { RootState } from "./store/store";
 import { getHomePathByRole } from "./utils/rbac.utils";
 
@@ -35,6 +35,9 @@ function AppRoutes() {
             {moduleGroups.flatMap((group) =>
                 group.modules.map((m) => {
                     if (!m.url) return null;
+                    if ((ROLE_HOME_PATHS as readonly string[]).includes(m.url)) {
+                        return null;
+                    }
                     const Component = componentRegistry[m.url];
 
                     if (!Component) {

@@ -1,6 +1,11 @@
 export * from "./features/auth.api";
 export * from "./features/demo/book.api";
+export * from "./features/demo/category.api";
 export * from "./features/demo/course.api";
+export * from "./features/demo/department.api";
+export * from "./features/demo/enrollment.api";
+export * from "./features/demo/lesson.api";
+export * from "./features/demo/progress.api";
 export * from "./features/demo/student_score.api";
 export * from "./features/demo/topic_mark_gradebook.api";
 export * from "./features/exam.api";
@@ -14,3 +19,9 @@ export * from "./features/demo/enrollment.api";
 export * from "./features/demo/lesson.api";export * from "./features/rbac/department.api";
 
 export * from "./features/student.api";
+
+export * from "./features/demo/category.api";
+export * from "./features/demo/progress.api";
+export * from "./features/demo/certificate.api";
+export * from "./features/notification.api";
+export * from "./features/demo/qna.api";

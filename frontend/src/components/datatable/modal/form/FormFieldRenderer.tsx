@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -12,7 +13,12 @@ import {
 import { iconMap } from "@/components/datatable/iconMap";
 import type { FieldSchema } from "@/types";
 import { FieldError } from "./FieldError";
+import { getEffectiveRule } from "./validateForm";
+import { FieldHint } from "./FieldHint";
 import { MultiRelationSelect } from "./MultiRelationSelect";
+
+// Textarea mặc định có field-sizing: content (tự giãn theo nội dung) -> ép về kích thước cố định, nội dung dài sẽ cuộn.
+const FIXED_TEXTAREA_STYLE = { fieldSizing: "fixed" } as CSSProperties;
 
 interface FormFieldRendererProps {
   field: FieldSchema;
@@ -20,6 +26,8 @@ interface FormFieldRendererProps {
   errorClass: string;
   fieldErrors?: string[];
   relationOptions?: Record<string, any[]>;
+  /** Bản ghi đang sửa (undefined khi tạo mới) - dùng cho relation.filterItems. */
+  initial?: any;
   onChange: (name: string, value: any) => void;
 }
 
@@ -32,8 +40,15 @@ export function FormFieldRenderer({
   errorClass,
   fieldErrors,
   relationOptions = {},
+  initial,
   onChange,
 }: FormFieldRendererProps) {
+  const rule = getEffectiveRule(field);
+  const noNegative = rule.min !== undefined && rule.min >= 0;
+  const requiredMark = rule.required ? (
+    <span className="text-destructive"> *</span>
+  ) : null;
+
   switch (field.type) {
     case "boolean":
       return (
@@ -68,12 +83,12 @@ export function FormFieldRenderer({
 
       return (
         <div className="grid gap-2">
-          <Label htmlFor={field.name}>{field.label}</Label>
+          <Label htmlFor={field.name}>{field.label}{requiredMark}</Label>
           <Select
             value={value?.toString() || ""}
             onValueChange={(val) => onChange(field.name, val)}
           >
-            <SelectTrigger className={errorClass}>
+            <SelectTrigger className={`w-full ${errorClass}`}>
               <SelectValue
                 placeholder={`Select ${field.label.toLowerCase()}...`}
               >
@@ -85,7 +100,11 @@ export function FormFieldRenderer({
                 ) : null}
               </SelectValue>
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent
+              position="popper"
+              sideOffset={4}
+              className="max-h-60 w-(--radix-select-trigger-width)"
+            >
               {options.map((opt) => {
                 const optionIconKey = opt.value?.toString();
                 const OptionIcon =
@@ -104,6 +123,7 @@ export function FormFieldRenderer({
               })}
             </SelectContent>
           </Select>
+          <FieldHint field={field} rule={rule} />
           <FieldError errors={fieldErrors} />
         </div>
       );
@@ -111,7 +131,10 @@ export function FormFieldRenderer({
     case "relation": {
       const rel = field.relation;
       if (!rel) return null;
-      const items: any[] = relationOptions[field.name] ?? [];
+      const allItems: any[] = relationOptions[field.name] ?? [];
+      const items: any[] = rel.filterItems
+        ? rel.filterItems(allItems, { initial, isEdit: initial?.id != null })
+        : allItems;
 
       // Multiple select with checkboxes
       if (rel.multiple) {
@@ -131,17 +154,21 @@ export function FormFieldRenderer({
       // Single select
       return (
         <div className="grid gap-2">
-          <Label htmlFor={field.name}>{field.label}</Label>
+          <Label htmlFor={field.name}>{field.label}{requiredMark}</Label>
           <Select
             value={value?.toString() || ""}
             onValueChange={(val) => onChange(field.name, val)}
           >
-            <SelectTrigger className={errorClass}>
+            <SelectTrigger className={`w-full ${errorClass}`}>
               <SelectValue
                 placeholder={`Select ${field.label.toLowerCase()}...`}
               />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent
+              position="popper"
+              sideOffset={4}
+              className="max-h-60 w-(--radix-select-trigger-width)"
+            >
               {items.map((item) => (
                 <SelectItem
                   key={item[rel.valueField]}
@@ -152,6 +179,7 @@ export function FormFieldRenderer({
               ))}
             </SelectContent>
           </Select>
+          <FieldHint field={field} rule={rule} />
           <FieldError errors={fieldErrors} />
         </div>
       );
@@ -160,20 +188,32 @@ export function FormFieldRenderer({
     case "number":
       return (
         <div className="grid gap-2">
-          <Label htmlFor={field.name}>{field.label}</Label>
+          <Label htmlFor={field.name}>{field.label}{requiredMark}</Label>
           <Input
             id={field.name}
             type="number"
             className={errorClass}
             value={value ?? ""}
-            onChange={(e) =>
-              onChange(
-                field.name,
-                e.target.value === "" ? "" : Number(e.target.value)
-              )
-            }
+            min={rule.min}
+            max={rule.max}
+            onKeyDown={(e) => {
+              // Không cho gõ dấu âm / số mũ khi field không cho phép số âm
+              if (noNegative && ["-", "+", "e", "E"].includes(e.key)) {
+                e.preventDefault();
+              }
+            }}
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw === "") return onChange(field.name, "");
+              const n = Number(raw);
+              // Chặn luôn số âm (kể cả dán vào) / vượt min, max
+              if (rule.min !== undefined && n < rule.min && noNegative) return;
+              if (rule.max !== undefined && n > rule.max) return;
+              onChange(field.name, n);
+            }}
             placeholder={`Enter ${field.label.toLowerCase()}...`}
           />
+          <FieldHint field={field} rule={rule} />
           <FieldError errors={fieldErrors} />
         </div>
       );
@@ -181,7 +221,7 @@ export function FormFieldRenderer({
     case "date":
       return (
         <div className="grid gap-2">
-          <Label htmlFor={field.name}>{field.label}</Label>
+          <Label htmlFor={field.name}>{field.label}{requiredMark}</Label>
           <Input
             id={field.name}
             type="date"
@@ -189,6 +229,23 @@ export function FormFieldRenderer({
             value={value || ""}
             onChange={(e) => onChange(field.name, e.target.value)}
           />
+          <FieldHint field={field} rule={rule} />
+          <FieldError errors={fieldErrors} />
+        </div>
+      );
+
+    case "datetime-local":
+      return (
+        <div className="grid gap-2">
+          <Label htmlFor={field.name}>{field.label}</Label>
+          <Input
+            id={field.name}
+            type="datetime-local"
+            className={errorClass}
+            value={value || ""}
+            onChange={(e) => onChange(field.name, e.target.value)}
+          />
+          <FieldHint field={field} rule={rule} />
           <FieldError errors={fieldErrors} />
         </div>
       );
@@ -211,7 +268,7 @@ export function FormFieldRenderer({
     case "password":
       return (
         <div className="grid gap-2">
-          <Label htmlFor={field.name}>{field.label}</Label>
+          <Label htmlFor={field.name}>{field.label}{requiredMark}</Label>
           <Input
             id={field.name}
             type="password"
@@ -220,7 +277,9 @@ export function FormFieldRenderer({
             onChange={(e) => onChange(field.name, e.target.value)}
             placeholder={`Enter ${field.label.toLowerCase()}...`}
             autoComplete="new-password"
+            maxLength={rule.maxLength}
           />
+          <FieldHint field={field} rule={rule} />
           <FieldError errors={fieldErrors} />
         </div>
       );
@@ -228,16 +287,24 @@ export function FormFieldRenderer({
     case "textarea":
       return (
         <div className="grid gap-2">
-          <Label htmlFor={field.name}>{field.label}</Label>
+          <Label htmlFor={field.name}>{field.label}{requiredMark}</Label>
           <Textarea
             id={field.name}
-            className={errorClass}
+            className={`h-32 resize-none overflow-y-auto ${errorClass}`}
             value={value || ""}
             onChange={(e) => onChange(field.name, e.target.value)}
             placeholder={`Enter ${field.label.toLowerCase()}...`}
             rows={4}
+            maxLength={rule.maxLength}
+            style={FIXED_TEXTAREA_STYLE}
             maxLength={field.maxLength}
           />
+          {rule.maxLength ? (
+            <p className="text-xs text-muted-foreground text-right">
+              {(value || "").length}/{rule.maxLength}
+            </p>
+          ) : null}
+          <FieldHint field={field} rule={rule} />
           {field.maxLength ? (
             <p className="text-xs text-muted-foreground text-right">
               {String(value || "").length}/{field.maxLength} ký tự
@@ -251,7 +318,7 @@ export function FormFieldRenderer({
     default:
       return (
         <div className="grid gap-2">
-          <Label htmlFor={field.name}>{field.label}</Label>
+          <Label htmlFor={field.name}>{field.label}{requiredMark}</Label>
           <Input
             id={field.name}
             type={field.name === "email" ? "email" : "text"}
@@ -259,8 +326,11 @@ export function FormFieldRenderer({
             value={value || ""}
             maxLength={field.maxLength}
             onChange={(e) => onChange(field.name, e.target.value)}
+            placeholder={`Enter ${field.label.toLowerCase()}...`}
+            maxLength={rule.maxLength}
             placeholder={field.name === "email" ? "name@gmail.com" : `Enter ${field.label.toLowerCase()}...`}
           />
+          <FieldHint field={field} rule={rule} />
           <FieldError errors={fieldErrors} />
         </div>
       );

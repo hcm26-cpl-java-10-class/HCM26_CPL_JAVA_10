@@ -1,0 +1,464 @@
+import { departmentApi } from "@/api/features/demo/department.api";
+import { PermissionGate } from "@/components/PermissionGate";
+import { MainLayout } from "@/components/layout/MainLayout";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { auditableFieldsSchema, type DepartmentDTO, type EntityConfig, type EntitySchema, type FieldSchema } from "@/types";
+import axios from "axios";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Building2, LoaderCircle, Pencil, Plus, Power, Search, Trash2, Users } from "lucide-react";
+import { type FormEvent, useEffect, useState } from "react";
+import { toast } from "sonner";
+import { DepartmentEnrollmentDialog } from "./DepartmentEnrollmentDialog";
+import { DepartmentMembersDialog } from "./DepartmentMembersDialog";
+
+const departmentSchema: EntitySchema = {
+    entityName: "department",
+    idField: "id",
+    fields: [
+        {
+            name: "name", label: "Department Name", type: "text", sortable: true, bold: true,
+            validation: { required: true, requiredMessage: "Department name is required", maxLength: 150 },
+        },
+        {
+            name: "code", label: "Department Code", type: "text", sortable: true,
+            validation: { required: true, requiredMessage: "Department code is required", maxLength: 50 },
+        },
+        {
+            name: "description", label: "Description", type: "textarea", sortable: false,
+            validation: { maxLength: 500 },
+        },
+        ...(auditableFieldsSchema as FieldSchema[]),
+    ],
+};
+
+export const entityConfig: EntityConfig = {
+    name: "Department",
+    path: "/departments",
+    api: departmentApi,
+    schema: departmentSchema,
+};
+
+export default function DepartmentManagementPage() {
+    const queryClient = useQueryClient();
+    const [editorOpen, setEditorOpen] = useState(false);
+    const [editingDepartment, setEditingDepartment] = useState<DepartmentDTO | null>(null);
+    const [membersDepartment, setMembersDepartment] = useState<DepartmentDTO | null>(null);
+    const [enrollDepartment, setEnrollDepartment] = useState<DepartmentDTO | null>(null);
+    const [name, setName] = useState("");
+    const [code, setCode] = useState("");
+    const [description, setDescription] = useState("");
+    const [errors, setErrors] = useState<Partial<Record<"name" | "code" | "description", string>>>({});
+    const [departmentPage, setDepartmentPage] = useState(0);
+    const [departmentSearch, setDepartmentSearch] = useState("");
+
+    const departmentsQuery = useQuery({
+        queryKey: ["department-overview", departmentPage, departmentSearch],
+        queryFn: async () => {
+            const response = await departmentApi.getPage({
+                page: departmentPage,
+                size: 12,
+                sort: "name,asc",
+            }, departmentSearch.trim() || undefined);
+            const departments = await Promise.all(
+                response.content.map(async (department) => ({
+                    ...department,
+                    stats: department.id
+                        ? await departmentApi.getStats(department.id)
+                        : { members: 0, enrolledCourses: 0 },
+                })),
+            );
+            return { departments, totalPages: response.totalPages };
+        },
+    });
+
+    const saveMutation = useMutation({
+        mutationFn: async (form: DepartmentDTO) => {
+            if (editingDepartment?.id !== undefined) {
+                return departmentApi.update(String(editingDepartment.id), form);
+            }
+            return departmentApi.create(form);
+        },
+        onSuccess: async () => {
+            toast.success(editingDepartment ? "Department updated." : "Department created.");
+            await queryClient.invalidateQueries({ queryKey: ["department-overview"] });
+            setEditorOpen(false);
+        },
+        onError: (error) => {
+            // Backend trả 400 { errors: { field: [msg] } } (vd: "Department code already exists")
+            if (axios.isAxiosError(error)) {
+                const body = error.response?.data as { message?: string; errors?: Record<string, string[] | string> } | undefined;
+                if (body?.errors) {
+                    const mapped: typeof errors = {};
+                    for (const key of ["name", "code", "description"] as const) {
+                        const v = body.errors[key];
+                        const msg = Array.isArray(v) ? v[0] : v;
+                        if (msg) mapped[key] = msg;
+                    }
+                    if (Object.keys(mapped).length > 0) {
+                        setErrors(mapped);
+                        toast.error(body.message || "Please fix the highlighted fields.");
+                        return;
+                    }
+                }
+                toast.error(body?.message || "Could not save department.");
+                return;
+            }
+            toast.error(error instanceof Error ? error.message : "Could not save department.");
+        },
+    });
+
+    const deleteMutation = useMutation({
+        mutationFn: (departmentId: number) => departmentApi.delete(String(departmentId)),
+        onSuccess: async () => {
+            toast.success("Department deleted.");
+            await queryClient.invalidateQueries({ queryKey: ["department-overview"] });
+        },
+        onError: (error) => {
+            toast.error(error instanceof Error ? error.message : "Could not delete department.");
+        },
+    });
+
+    const activeMutation = useMutation({
+        mutationFn: (department: DepartmentDTO) => {
+            if (department.id === undefined) {
+                throw new Error("Cannot update a department without an ID.");
+            }
+            return departmentApi.update(String(department.id), {
+                isActive: department.isActive === false,
+            });
+        },
+        onSuccess: async (_, department) => {
+            toast.success(
+                department.isActive === false ? "Department activated." : "Department deactivated.",
+            );
+            await queryClient.invalidateQueries({ queryKey: ["department-overview"] });
+        },
+        onError: (error) => {
+            toast.error(error instanceof Error ? error.message : "Could not update department status.");
+        },
+    });
+
+    useEffect(() => {
+        if (!editorOpen) return;
+        setName(editingDepartment?.name ?? "");
+        setCode(editingDepartment?.code ?? "");
+        setDescription(editingDepartment?.description ?? "");
+        setErrors({});
+    }, [editorOpen, editingDepartment]);
+
+    const openCreateDialog = () => {
+        setEditingDepartment(null);
+        setEditorOpen(true);
+    };
+
+    const openEditDialog = (department: DepartmentDTO) => {
+        setEditingDepartment(department);
+        setEditorOpen(true);
+    };
+
+    const submitDepartment = (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const trimmedName = name.trim();
+        const trimmedCode = code.trim();
+        const found: typeof errors = {};
+        if (!trimmedName) found.name = "Department name is required";
+        else if (trimmedName.length > 150) found.name = "Name must not exceed 150 characters";
+        if (!trimmedCode) found.code = "Department code is required";
+        else if (trimmedCode.length > 50) found.code = "Code must not exceed 50 characters";
+        if (description.trim().length > 500) found.description = "Description must not exceed 500 characters";
+        setErrors(found);
+        if (Object.keys(found).length > 0) return;
+        saveMutation.mutate({
+            name: trimmedName,
+            code: trimmedCode,
+            description: description.trim(),
+            isActive: editingDepartment?.isActive ?? true,
+        });
+    };
+
+    const confirmDelete = (department: DepartmentDTO) => {
+        if (department.id === undefined) return;
+        if (window.confirm(
+            `Delete department "${department.name}"? Students will only be removed from this department.`,
+        )) {
+            deleteMutation.mutate(department.id);
+        }
+    };
+
+    return (
+        <MainLayout pathName={{ departments: "Departments" }}>
+            <section className="space-y-6">
+                <div className="flex flex-wrap items-end justify-between gap-4">
+                    <div>
+                        <p className="text-sm font-medium text-blue-700 dark:text-blue-400">ORGANIZATION</p>
+                        <h1 className="mt-1 text-3xl font-bold tracking-tight">Department Management</h1>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                            Manage department members and enroll all students in a course at once.
+                        </p>
+                    </div>
+                    <PermissionGate permission="DEPARTMENT_CREATE">
+                        <Button onClick={openCreateDialog}>
+                            <Plus className="size-4" /> Create Department
+                        </Button>
+                    </PermissionGate>
+                </div>
+
+                <div className="relative max-w-md">
+                    <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                        aria-label="Search departments"
+                        className="pl-9"
+                        placeholder="Search department name, code, or description"
+                        value={departmentSearch}
+                        onChange={(event) => {
+                            setDepartmentSearch(event.target.value);
+                            setDepartmentPage(0);
+                        }}
+                    />
+                </div>
+
+                {departmentsQuery.isLoading ? (
+                    <div role="status" className="flex min-h-48 items-center justify-center gap-2 text-sm text-muted-foreground">
+                        <LoaderCircle className="size-4 animate-spin" /> Loading departments...
+                    </div>
+                ) : departmentsQuery.isError ? (
+                    <div role="alert" className="space-y-3 rounded-xl border border-destructive/30 p-5">
+                        <p className="text-sm text-destructive">
+                            {departmentsQuery.error instanceof Error
+                                ? departmentsQuery.error.message
+                                : "Could not load departments."}
+                        </p>
+                        <Button variant="outline" onClick={() => void departmentsQuery.refetch()}>
+                            Try again
+                        </Button>
+                    </div>
+                ) : departmentsQuery.data?.departments.length ? (
+                    <div className="grid gap-5 xl:grid-cols-2">
+                        {departmentsQuery.data.departments.map((department) => (
+                            <article key={department.id} className="flex h-full flex-col rounded-2xl border bg-card p-5 shadow-sm">
+                                <div className="flex items-start gap-4">
+                                    <span className="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                                        <Building2 className="size-8" />
+                                    </span>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <h2 className="text-xl font-semibold">{department.name}</h2>
+                                            <Badge className={department.isActive === false
+                                                ? "border-0 bg-muted text-muted-foreground"
+                                                : "border-0 bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-950 dark:text-green-300"}>
+                                                {department.isActive === false ? "Inactive" : "Active"}
+                                            </Badge>
+                                        </div>
+                                        <p className="mt-1 line-clamp-2 text-sm text-muted-foreground" title={department.description || department.code}>
+                                            {department.description || department.code}
+                                        </p>
+                                        <p className="mt-1 text-xs text-muted-foreground">Code: {department.code}</p>
+                                    </div>
+                                    <PermissionGate permission="DEPARTMENT_UPDATE">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            aria-label={`Edit ${department.name}`}
+                                            onClick={() => openEditDialog(department)}
+                                        >
+                                            <Pencil className="size-4" />
+                                        </Button>
+                                    </PermissionGate>
+                                    <PermissionGate permission="DEPARTMENT_UPDATE">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            aria-label={department.isActive === false ? `Activate ${department.name}` : `Deactivate ${department.name}`}
+                                            disabled={activeMutation.isPending}
+                                            onClick={() => activeMutation.mutate(department)}
+                                        >
+                                            <Power className={`size-4 ${department.isActive === false ? "text-green-700" : "text-muted-foreground"}`} />
+                                        </Button>
+                                    </PermissionGate>
+                                    <PermissionGate permission="DEPARTMENT_DELETE">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            aria-label={`Delete ${department.name}`}
+                                            disabled={deleteMutation.isPending}
+                                            onClick={() => confirmDelete(department)}
+                                        >
+                                            <Trash2 className="size-4 text-destructive" />
+                                        </Button>
+                                    </PermissionGate>
+                                </div>
+
+                                {/* mt-auto: đẩy Members + nút xuống đáy card để các card cùng hàng thẳng hàng */}
+                                <div className="mt-auto">
+                                    <div className="mt-5 grid grid-cols-2 gap-4 border-t pt-5">
+                                        <div>
+                                            <p className="text-sm text-muted-foreground">Members</p>
+                                            <p className="mt-2 text-2xl font-bold">{department.stats.members}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-muted-foreground">Enrolled courses</p>
+                                            <p className="mt-2 text-2xl font-bold">{department.stats.enrolledCourses}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                                        <PermissionGate permission="USER_UPDATE">
+                                            <Button
+                                                variant="outline"
+                                                className="w-full"
+                                                onClick={() => setMembersDepartment(department)}
+                                            >
+                                                <Users className="size-4" /> Manage Members
+                                            </Button>
+                                        </PermissionGate>
+                                        <PermissionGate permission="DEPARTMENT_UPDATE">
+                                            <Button
+                                                className="w-full"
+                                                disabled={department.stats.members === 0 || department.isActive === false}
+                                                onClick={() => setEnrollDepartment(department)}
+                                            >
+                                                Enroll Course
+                                            </Button>
+                                        </PermissionGate>
+                                    </div>
+                                </div>
+                            </article>
+                        ))}
+                        {departmentsQuery.data.totalPages > 1 && (
+                            <div className="col-span-full flex items-center justify-between">
+                                <span className="text-sm text-muted-foreground">
+                                    Page {departmentPage + 1} of {departmentsQuery.data.totalPages}
+                                </span>
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant="outline"
+                                        disabled={departmentPage === 0}
+                                        onClick={() => setDepartmentPage((page) => page - 1)}
+                                    >
+                                        Previous
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        disabled={departmentPage >= departmentsQuery.data.totalPages - 1}
+                                        onClick={() => setDepartmentPage((page) => page + 1)}
+                                    >
+                                        Next
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ) : departmentSearch.trim() ? (
+                    <div className="rounded-2xl border border-dashed px-6 py-14 text-center">
+                        <h2 className="text-lg font-semibold">No matching departments</h2>
+                        <p className="mt-2 text-sm text-muted-foreground">Try another name, code, or description.</p>
+                    </div>
+                ) : (
+                    <div className="rounded-2xl border border-dashed px-6 py-14 text-center">
+                        <Building2 className="mx-auto size-12 text-muted-foreground" />
+                        <h2 className="mt-4 text-lg font-semibold">No departments yet</h2>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                            Create a department to organize students and enroll them in courses in bulk.
+                        </p>
+                    </div>
+                )}
+            </section>
+
+            <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>{editingDepartment ? "Edit Department" : "Create Department"}</DialogTitle>
+                        <DialogDescription>
+                            Add the department name, unique code, and an optional description.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form className="space-y-4" onSubmit={submitDepartment} noValidate>
+                        <div className="space-y-2">
+                            <label htmlFor="department-name" className="text-sm font-medium">Name</label>
+                            <Input
+                                id="department-name"
+                                value={name}
+                                onChange={(event) => {
+                                    setName(event.target.value);
+                                    setErrors((prev) => ({ ...prev, name: undefined }));
+                                }}
+                                maxLength={150}
+                                aria-invalid={!!errors.name}
+                            />
+                            <p className="text-xs text-muted-foreground">Required · unique · max 150 characters, e.g. Software Engineering</p>
+                            {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
+                        </div>
+                        <div className="space-y-2">
+                            <label htmlFor="department-code" className="text-sm font-medium">Code</label>
+                            <Input
+                                id="department-code"
+                                value={code}
+                                onChange={(event) => {
+                                    setCode(event.target.value);
+                                    setErrors((prev) => ({ ...prev, code: undefined }));
+                                }}
+                                maxLength={50}
+                                aria-invalid={!!errors.code}
+                            />
+                            <p className="text-xs text-muted-foreground">Required · unique · max 50 characters, e.g. SE</p>
+                            {errors.code && <p className="text-xs text-destructive">{errors.code}</p>}
+                        </div>
+                        <div className="space-y-2">
+                            <label htmlFor="department-description" className="text-sm font-medium">Description</label>
+                            <Textarea
+                                id="department-description"
+                                value={description}
+                                onChange={(event) => {
+                                    setDescription(event.target.value);
+                                    setErrors((prev) => ({ ...prev, description: undefined }));
+                                }}
+                                maxLength={500}
+                                aria-invalid={!!errors.description}
+                            />
+                            <p className="text-xs text-muted-foreground">Optional · {description.length}/500 characters</p>
+                            {errors.description && <p className="text-xs text-destructive">{errors.description}</p>}
+                        </div>
+                        <div className="flex justify-end gap-2">
+                            <Button type="button" variant="outline" onClick={() => setEditorOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button type="submit" disabled={saveMutation.isPending}>
+                                {saveMutation.isPending && <LoaderCircle className="size-4 animate-spin" />}
+                                {editingDepartment ? "Save changes" : "Create Department"}
+                            </Button>
+                        </div>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {membersDepartment && (
+                <DepartmentMembersDialog
+                    department={membersDepartment}
+                    open={membersDepartment !== null}
+                    onOpenChange={(open) => {
+                        if (!open) setMembersDepartment(null);
+                    }}
+                />
+            )}
+            {enrollDepartment && (
+                <DepartmentEnrollmentDialog
+                    department={enrollDepartment}
+                    open={enrollDepartment !== null}
+                    onOpenChange={(open) => {
+                        if (!open) setEnrollDepartment(null);
+                    }}
+                />
+            )}
+        </MainLayout>
+    );
+}

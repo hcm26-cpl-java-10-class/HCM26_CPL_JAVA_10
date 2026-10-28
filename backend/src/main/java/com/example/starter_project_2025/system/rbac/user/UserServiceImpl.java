@@ -4,6 +4,8 @@ import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.system.demo.department.Department;
+import com.example.starter_project_2025.system.demo.department.DepartmentRepository;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
 import lombok.AccessLevel;
@@ -26,6 +28,7 @@ public class UserServiceImpl
     UserMapper userMapper;
     UserRepository userRepository;
     RoleRepository roleRepository;
+    DepartmentRepository departmentRepository;
     PasswordEncoder passwordEncoder;
 
     @Override
@@ -53,6 +56,7 @@ public class UserServiceImpl
 
         Set<Role> roles = getRoles(request.getRoleIds());
         user.setRoles(roles);
+        assignDepartment(user, request, ctx);
     }
 
     @Override
@@ -77,6 +81,39 @@ public class UserServiceImpl
             user.getRoles().clear();
             user.getRoles().addAll(roles);
         }
+
+        assignDepartment(user, request, ctx);
+    }
+
+    private void assignDepartment(User user, UserDTO request, ValidationContext ctx) {
+        if (request.isClearDepartment()) {
+            user.getDepartments().clear();
+            return;
+        }
+
+        if (request.getDepartmentIds() != null) {
+            Set<Department> departments = new HashSet<>(
+                    departmentRepository.findAllById(request.getDepartmentIds()));
+            if (departments.size() != request.getDepartmentIds().size()) {
+                ctx.add("departmentIds", "One or more departments do not exist");
+                return;
+            }
+            user.setDepartments(departments);
+            return;
+        }
+
+        if (request.getDepartmentId() == null) {
+            return;
+        }
+
+        Department department = departmentRepository.findById(request.getDepartmentId())
+                .orElse(null);
+        if (department == null) {
+            ctx.add("departmentId", "Department does not exist");
+            return;
+        }
+
+        user.setDepartments(new HashSet<>(Set.of(department)));
     }
 
     private void validateEmailUnique(String email, Long currentUserId, ValidationContext ctx) {

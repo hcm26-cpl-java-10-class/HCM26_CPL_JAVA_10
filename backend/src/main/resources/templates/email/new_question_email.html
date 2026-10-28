@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>New question</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6;">
+<h2>Hello <span th:text="${recipientName}">Instructor</span>,</h2>
+<p>
+    <strong th:text="${askerName}">A student</strong> asked a new question in
+    <strong th:text="${courseName}">Course</strong>, lesson
+    <strong th:text="${lessonTitle}">Lesson</strong>:
+</p>
+<blockquote style="margin: 12px 0; padding: 8px 16px; border-left: 4px solid #4CAF50; background: #f6f6f6;"
+            th:text="${questionContent}">Question text</blockquote>
+<a th:href="${link}"
+   style="display:inline-block; background-color:#4CAF50; color:white; padding:10px 20px;
+              text-decoration:none; border-radius:5px;">Answer this question</a>
+<p style="margin-top: 16px;">
+    You can also see every question waiting for an answer in your
+    <a th:href="${inboxLink}">unanswered questions list</a>.
+</p>
+<br>
+<p>Best regards,<br>The Support Team</p>
+</body>
+</html>
