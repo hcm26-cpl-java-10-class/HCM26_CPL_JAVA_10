@@ -30,7 +30,7 @@ class TaskAlertProjectBridgeTest {
         var actor = new User(); actor.setId(20L); actor.setTenant(tenant); actor.setRoles(new HashSet<>());
         var target = new User(); target.setId(21L); target.setTenant(tenant);
         var training = new TrainingClass(); training.setId(30L); training.setTenantId(1L);
-        var team = new ProjectTeam(); team.setId(40L); team.setProjectId(10L); team.setStatus(ProjectTeamStatus.ACTIVE); team.setTrainingClass(training);
+        var team = new ProjectTeam(); team.setId(40L); team.setProject(project); team.setStatus(ProjectTeamStatus.ACTIVE); team.setTrainingClass(training);
         var targetClass = new ClassMember(); targetClass.setId(50L); targetClass.setUser(target); targetClass.setTrainingClass(training); targetClass.setStatus(ClassMemberStatus.ACTIVE);
         var actorClass = new ClassMember(); actorClass.setId(51L); actorClass.setUser(actor); actorClass.setTrainingClass(training); actorClass.setStatus(ClassMemberStatus.ACTIVE);
         var member = new ProjectMember(); member.setId(60L); member.setTeam(team); member.setClassMember(targetClass);

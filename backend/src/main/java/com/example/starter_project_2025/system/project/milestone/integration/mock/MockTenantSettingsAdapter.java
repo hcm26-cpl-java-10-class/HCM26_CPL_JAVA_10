@@ -1,6 +1,5 @@
 package com.example.starter_project_2025.system.project.milestone.integration.mock;
 
-import com.example.starter_project_2025.system.project.milestone.exception.MilestoneDependencyException;
 import com.example.starter_project_2025.system.project.milestone.integration.port.TenantSettingsPort;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
@@ -10,7 +9,7 @@ import java.time.ZoneId;
 import java.util.UUID;
 
 @Component
-@Profile("!milestone-real-integrations")
+@Profile("!milestone-mock")
 public class MockTenantSettingsAdapter implements TenantSettingsPort {
 
     private final ZoneId timeZone;
@@ -23,9 +22,6 @@ public class MockTenantSettingsAdapter implements TenantSettingsPort {
 
     @Override
     public ZoneId requireTimeZone(Long tenantId) {
-        if (!MockMilestoneData.TENANT_ID.equals(tenantId)) {
-            throw new MilestoneDependencyException("Milestone tenant settings could not be loaded");
-        }
         return timeZone;
     }
 }

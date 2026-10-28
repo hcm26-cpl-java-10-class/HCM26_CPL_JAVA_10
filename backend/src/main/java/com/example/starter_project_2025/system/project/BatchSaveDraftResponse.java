@@ -16,11 +16,25 @@ public record BatchSaveDraftResponse(
             String assignedMentorName,
             Long version,
             List<Long> memberIds,
-            List<MemberResponse> members
+            List<MemberResponse> members,
+            /** US-10: template assigned to this DRAFT team (null when unset). */
+            Long projectTemplateId,
+            String projectTemplateName,
+            Integer minMembers,
+            Integer maxMembers,
+            Integer memberCount,
+            /** US-11: template role policy. */
+            boolean allowMultiRole,
+            List<ProjectTemplateConstraints.RoleQuota> roleQuotas
     ) {
     }
 
-    public record MemberResponse(Long memberId, String fullName, String role) {
+    public record MemberResponse(
+            Long memberId,
+            String fullName,
+            String role,
+            List<String> roles
+    ) {
     }
 
     public record DraftWarning(

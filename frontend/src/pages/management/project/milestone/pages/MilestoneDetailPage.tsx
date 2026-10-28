@@ -6,13 +6,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { MilestoneDetailRouteState } from "@/types";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, CalendarClock, Check, Clock, Globe2 } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, CalendarClock, Check, Clock, Globe2, RotateCcw } from "lucide-react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { MilestoneDetailError } from "../components/MilestoneDetailError";
 import { MilestoneRubricCard } from "../components/MilestoneRubricCard";
 import { MilestoneStatusBadge } from "../components/MilestoneStatusBadge";
 import { formatPenalty, formatTenantDateTime, getMilestoneApiError } from "../milestone.utils";
+import { usePermissions } from "@/hooks/usePermissions";
+import { ADMIN_ROLE, normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
 
 function DetailPageSkeleton() {
   return (
@@ -31,6 +33,10 @@ export function MilestoneDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  const queryClient = useQueryClient();
+  const { hasPermission, activeRole } = usePermissions();
+  const normalizedRole = normalizeRole(activeRole);
+  const canPrepareArtifact = normalizedRole === STUDENT_ROLE || normalizedRole === ADMIN_ROLE;
   const teamIdParam = searchParams.get("teamId");
   const teamId = teamIdParam ? Number(teamIdParam) : undefined;
   const routeState = location.state as MilestoneDetailRouteState | null;
@@ -44,6 +50,10 @@ export function MilestoneDetailPage() {
     queryFn: () => milestoneApi.getDetail(projectId as string, milestoneId as string, teamId),
     enabled: Boolean(projectId && milestoneId),
     retry: false,
+  });
+  const openMilestone = useMutation({
+    mutationFn: () => milestoneApi.openForSubmissions(projectId as string, milestoneId as string),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects", projectId, "milestones", milestoneId, teamId] }),
   });
 
   if (detailQuery.isLoading) {
@@ -137,9 +147,19 @@ export function MilestoneDetailPage() {
                   <div className="grid gap-3">
                     <Badge variant="secondary">Late submissions allowed</Badge>
                     <div><p className="text-muted-foreground">Accepted until</p><p className="mt-1 font-semibold">{formatTenantDateTime(milestone.latePolicy.lateUntil, milestone.tenantTimeZone)}</p></div>
-                    <div><p className="text-muted-foreground">Penalty</p><p className="mt-1 font-semibold">{formatPenalty(milestone.latePolicy.penaltyPercent)}</p></div>
+                    <div><p className="text-muted-foreground">Penalty</p><p className="mt-1 font-semibold">{formatPenalty(milestone.latePolicy.penaltyPercent, milestone.latePolicy.penaltyBasis)}</p></div>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle className="flex items-center gap-2"><RotateCcw className="size-5" /> Resubmission policy</CardTitle></CardHeader>
+              <CardContent className="grid gap-2 text-sm">
+                <Badge variant={milestone.resubmissionPolicy.allowed ? "secondary" : "outline"} className="w-fit">
+                  {milestone.resubmissionPolicy.allowed ? "Resubmissions allowed" : "No resubmissions"}
+                </Badge>
+                {milestone.resubmissionPolicy.allowed ? <p>Students may submit up to <strong>{milestone.resubmissionPolicy.maxAttempts ?? "unlimited"}</strong> version(s), subject to the deadline and late policy.</p> : null}
               </CardContent>
             </Card>
 
@@ -153,7 +173,8 @@ export function MilestoneDetailPage() {
           </div>
         </div>
 
-        <div><Button variant="outline" onClick={() => navigate(returnUrl)}><ArrowLeft className="size-4" /> Back to milestones</Button></div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4"><Button variant="outline" onClick={() => navigate(returnUrl)}><ArrowLeft className="size-4" /> Back to milestones</Button>
+          <div className="flex flex-wrap items-center gap-2">{milestone.status === "PLANNED" && hasPermission("MILESTONE_WRITE") && <Button onClick={() => openMilestone.mutate()} disabled={openMilestone.isPending}>{openMilestone.isPending ? "Opening…" : "Open milestone"}</Button>}{milestone.status === "PLANNED" && <span className="text-xs text-muted-foreground">Open it before students can submit.</span>}{openMilestone.isError && <span className="text-xs text-destructive">Could not open milestone. Check that the project is active.</span>}{canPrepareArtifact && hasPermission("ARTIFACT_READ") && <Button onClick={() => navigate(`/projects/${projectId}/milestones/${milestone.id}/submit`)}>Prepare artifact</Button>}</div></div>
       </div>
     </MainLayout>
   );

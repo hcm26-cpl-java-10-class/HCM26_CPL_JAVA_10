@@ -29,7 +29,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
-@Order(4)
+@Order(5)
 @Component
 @RequiredArgsConstructor
 @Profile("!prod")
@@ -102,6 +102,7 @@ public class TeamAllocationDemoDataInitializer implements CommandLineRunner {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final com.example.starter_project_2025.system.project.workspace.config.LegacyH2ProjectSchemaMigration legacyMigration;
 
     @Value("${app.seed.admin.email:admin@example.com}")
     private String adminEmail;
@@ -109,6 +110,11 @@ public class TeamAllocationDemoDataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
+        var admin=userRepository.findByEmail(adminEmail).orElseThrow();
+        if (legacyMigration.isMigratedDatabase()) {
+            log.info("Team-allocation demo seed skipped to preserve imported class/tenant data.");
+            return;
+        }
         long demoTenantId = resolveDemoTenantId();
         Role studentRole = roleRepository.findByName("STUDENT")
                 .orElseThrow(() -> new IllegalStateException(
@@ -163,6 +169,7 @@ public class TeamAllocationDemoDataInitializer implements CommandLineRunner {
                     user = userRepository.saveAndFlush(user);
                     createdUsers++;
                 }
+                if(user.getTenantId()==null){user.setTenant(admin.getTenant());userRepository.saveAndFlush(user);}
 
                 if (!classMemberRepository.existsByTrainingClass_IdAndUser_Id(
                         trainingClass.getId(), user.getId())) {
@@ -201,8 +208,10 @@ public class TeamAllocationDemoDataInitializer implements CommandLineRunner {
         User mentor = userRepository.findByEmail(email)
                 .orElseGet(() -> createMentor(seed, email, mentorRole));
         if (mentor.getId() == null) {
+            mentor.setTenant(userRepository.findByEmail(adminEmail).orElseThrow().getTenant());
             mentor = userRepository.saveAndFlush(mentor);
         } else {
+            if(mentor.getTenantId()==null)mentor.setTenant(userRepository.findByEmail(adminEmail).orElseThrow().getTenant());
             mentor.setIsActive(true);
             mentor.setLocked(true);
             mentor.getRoles().add(mentorRole);

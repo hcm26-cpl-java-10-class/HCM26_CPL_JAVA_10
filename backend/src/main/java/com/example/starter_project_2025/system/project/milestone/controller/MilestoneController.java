@@ -15,7 +15,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
@@ -34,7 +33,6 @@ public class MilestoneController {
 
 
     @GetMapping
-    @PreAuthorize("hasAuthority('MILESTONE_READ')")
     public ResponseEntity<MilestonePageResponse> getList(
             @PathVariable Long projectId,
             @RequestParam(required = false) Long teamId,
@@ -54,13 +52,11 @@ public class MilestoneController {
     }
 
     @GetMapping("/create-options")
-    @PreAuthorize("hasAuthority('MILESTONE_WRITE')")
     public ResponseEntity<MilestoneCreateOptionsResponse> getCreateOptions(@PathVariable Long projectId) {
         return ResponseEntity.ok(optionsService.getOptions(projectId));
     }
 
     @PostMapping
-    @PreAuthorize("hasAuthority('MILESTONE_WRITE')")
     public ResponseEntity<MilestoneResponse> create(
             @PathVariable Long projectId,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
@@ -73,12 +69,16 @@ public class MilestoneController {
     }
 
     @GetMapping("/{milestoneId}")
-    @PreAuthorize("hasAuthority('MILESTONE_READ')")
     public ResponseEntity<MilestoneDetailResponse> getDetail(
             @PathVariable Long projectId,
             @PathVariable UUID milestoneId,
             @RequestParam(required = false) Long teamId
     ) {
         return ResponseEntity.ok(queryService.getDetail(projectId, milestoneId, teamId));
+    }
+
+    @PostMapping("/{milestoneId}/open")
+    public ResponseEntity<MilestoneResponse> openForSubmissions(@PathVariable Long projectId, @PathVariable UUID milestoneId) {
+        return ResponseEntity.ok(commandService.openForSubmissions(projectId, null, milestoneId));
     }
 }

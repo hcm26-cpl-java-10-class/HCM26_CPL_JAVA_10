@@ -1,6 +1,7 @@
 export type LatePolicyType = "NO_LATE" | "ALLOW_LATE";
+export type LatePenaltyBasis = "FIXED" | "PER_DAY";
 export type MilestoneStatus = "PLANNED" | "OPEN" | "CLOSED" | "CANCELLED";
-export type MilestoneProjectStatus = "ACTIVE" | "COMPLETED" | "CANCELLED";
+export type MilestoneProjectStatus = "DRAFT" | "PLANNING" | "ACTIVE" | "COMPLETED" | "CANCELLED";
 
 export interface MilestoneChecklistItemRequest {
   content: string;
@@ -12,9 +13,16 @@ export interface MilestoneLatePolicyRequest {
   type: LatePolicyType;
   lateUntil?: string;
   penaltyPercent?: number;
+  penaltyBasis?: LatePenaltyBasis;
+}
+
+export interface MilestoneResubmissionPolicyRequest {
+  allowed: boolean;
+  maxAttempts?: number;
 }
 
 export interface CreateMilestoneRequest {
+  weight?: number;
   teamId?: number;
   title: string;
   description?: string;
@@ -23,10 +31,12 @@ export interface CreateMilestoneRequest {
   checklist: MilestoneChecklistItemRequest[];
   rubricSnapshotId: string;
   latePolicy: MilestoneLatePolicyRequest;
+  resubmissionPolicy: MilestoneResubmissionPolicyRequest;
 }
 
 export interface MilestoneProjectOption {
-  id: string;
+  id: string | number;
+  code?: string;
   name: string;
   status: MilestoneProjectStatus;
 }
@@ -57,6 +67,8 @@ export interface MilestoneChecklistItemResponse {
 }
 
 export interface MilestoneResponse {
+  weight?: number | null;
+  latePenaltyBasis?: LatePenaltyBasis;
   id: string;
   projectId: string;
   title: string;
@@ -103,12 +115,19 @@ export interface MilestoneReviewerDetail {
 }
 
 export interface MilestoneLatePolicyDetail {
+  penaltyBasis?: LatePenaltyBasis;
   type: LatePolicyType;
   lateUntil?: string | null;
   penaltyPercent?: number | null;
 }
 
+export interface MilestoneResubmissionPolicyDetail {
+  allowed: boolean;
+  maxAttempts?: number | null;
+}
+
 export interface MilestoneDetailResponse {
+  weight?: number | null;
   id: string;
   project: MilestoneProjectOption;
   title: string;
@@ -121,10 +140,82 @@ export interface MilestoneDetailResponse {
   rubric: MilestoneRubricDetail;
   reviewer: MilestoneReviewerDetail;
   latePolicy: MilestoneLatePolicyDetail;
+  resubmissionPolicy: MilestoneResubmissionPolicyDetail;
   version: number;
   createdAt: string;
   createdBy: string;
   teamId?: number;
+}
+
+export interface ArtifactDraft {
+  milestoneId: string;
+  status: "DRAFT";
+  repositoryUrl?: string | null;
+  deploymentUrl?: string | null;
+  releaseNotes?: string | null;
+  checklist: Record<string, boolean>;
+  attachments: ArtifactAttachment[];
+  version: number;
+  createdBy: string;
+  createdAt: string;
+  updatedBy: string;
+  updatedAt: string;
+}
+
+export interface ArtifactAttachment {
+  id: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  scanStatus: "CLEAN";
+  uploadedBy: string;
+  uploadedAt: string;
+  draftVersion: number;
+}
+
+export interface ArtifactDraftRequest {
+  repositoryUrl?: string;
+  deploymentUrl?: string;
+  releaseNotes?: string;
+  checklist: Record<string, boolean>;
+  expectedVersion?: number;
+}
+
+export interface ArtifactSubmissionRequest {
+  repositoryUrl?: string;
+  deploymentUrl?: string;
+  releaseNotes?: string;
+  checklist: Record<string, boolean>;
+  attachmentIds: string[];
+}
+
+export interface ArtifactSubmissionAttachment {
+  id: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+}
+
+export interface ArtifactSubmission {
+  id: string;
+  milestoneId: string;
+  version: number;
+  status: "DRAFT" | "SUBMITTED" | "ACCEPTED" | "REJECTED" | "CHANGES_REQUESTED";
+  repositoryUrl?: string | null;
+  deploymentUrl?: string | null;
+  releaseNotes?: string | null;
+  checklist: Record<string, boolean>;
+  attachments: ArtifactSubmissionAttachment[];
+  submittedAt: string;
+  submittedLate: boolean;
+  latePenaltyPercent?: number | null;
+}
+
+export interface ArtifactSubmissionWorkspace {
+  milestone: MilestoneDetailResponse;
+  draft: ArtifactDraft | null;
+  uploadPolicy: { enabled: boolean; maxBytes: number; allowedMimeTypes: string[] };
+  latestSubmission: ArtifactSubmission | null;
 }
 
 export interface MilestoneApiError {
@@ -145,6 +236,8 @@ export interface MilestoneDetailRouteState {
 }
 
 export interface MilestoneListItem {
+  weight?: number | null;
+  latePenaltyBasis?: LatePenaltyBasis;
   id: string;
   teamId?: number;
   title: string;
@@ -187,22 +280,25 @@ export interface MilestoneListParams {
 }
 
 /**
- * Milestone reference used by the temporary `backlog_temp` backend module.
- * Kept as a compatibility shape while backlog is migrated to the UUID-based
- * milestone module above.
+ * Milestone reference used by the backlog item form / detail panel
+ * (UFR-PRJ-003-02). Served by `GET /api/sprint-backlogs/milestone-options`.
  */
 export type BacklogMilestoneStatus =
   | "PLANNED"
-  | "ACTIVE"
-  | "COMPLETED"
+  | "OPEN"
+  | "CLOSED"
   | "CANCELLED";
 
 export interface MilestoneOption {
-  id: number;
-  projectId: number;
+  /** Milestone UUID, written back in `SprintBacklogDTO.milestoneId`. */
+  id: string;
+  projectId?: number | null;
+  /** Milestone title. */
   name: string;
-  /** Name prefixed with the project, used as the selector label. */
+  /** Display label of the selector (project prefix + title). */
   label: string;
-  status: BacklogMilestoneStatus;
+  status?: BacklogMilestoneStatus | null;
+  /** Milestone deadline (ISO instant). */
   dueDate?: string | null;
+  mandatory?: boolean;
 }

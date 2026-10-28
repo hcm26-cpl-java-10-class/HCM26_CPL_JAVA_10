@@ -17,7 +17,6 @@ public interface ProjectTeamMemberHistoryRepository
                     select history
                     from ProjectTeamMemberHistory history
                     where history.classId in :classIds
-                      and history.activeAtEvent = true
                       and (:memberId is null or history.memberId = :memberId)
                       and (:teamId is null
                            or history.fromTeamId = :teamId
@@ -28,7 +27,6 @@ public interface ProjectTeamMemberHistoryRepository
                     select count(history)
                     from ProjectTeamMemberHistory history
                     where history.classId in :classIds
-                      and history.activeAtEvent = true
                       and (:memberId is null or history.memberId = :memberId)
                       and (:teamId is null
                            or history.fromTeamId = :teamId

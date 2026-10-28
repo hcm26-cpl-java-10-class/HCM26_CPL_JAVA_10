@@ -51,12 +51,13 @@ function CreatePageSkeleton() {
 }
 
 export function MilestoneCreatePage() {
-  const { projectId } = useParams<{ projectId: string }>();
+  const { projectId, teamId: routeTeamId } = useParams<{ projectId?: string; teamId?: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const teamId = Number(searchParams.get("teamId"));
+  const teamId = Number(routeTeamId ?? searchParams.get("teamId"));
   const scopedTeamId = Number.isSafeInteger(teamId) && teamId > 0 ? teamId : undefined;
-  const teamScoped = searchParams.get("scope") === "team" && scopedTeamId !== undefined;
+  const teamScoped = scopedTeamId !== undefined
+    && (routeTeamId !== undefined || searchParams.get("scope") === "team");
   const workspaceId = Number(searchParams.get("workspaceId"));
   const scopedWorkspaceId = Number.isSafeInteger(workspaceId) && workspaceId > 0 ? workspaceId : undefined;
   const listUrl = teamScoped && scopedWorkspaceId
@@ -87,6 +88,7 @@ export function MilestoneCreatePage() {
     ...milestoneDefaultValues,
     checklist: milestoneDefaultValues.checklist.map((item) => ({ ...item })),
     latePolicy: { ...milestoneDefaultValues.latePolicy },
+    resubmissionPolicy: { ...milestoneDefaultValues.resubmissionPolicy },
     rubricSnapshotId: optionsQuery.data?.rubrics.length === 1 ? optionsQuery.data.rubrics[0].id : "",
   }), [optionsQuery.data]);
 
@@ -140,7 +142,7 @@ export function MilestoneCreatePage() {
   const handleDirtyChange = useCallback((dirty: boolean) => setDirty(dirty), []);
 
   const handleSubmit = (values: MilestoneFormValues) => {
-    const payload = { ...buildMilestonePayload(values), teamId };
+    const payload = { ...buildMilestonePayload(values), teamId: scopedTeamId };
     const serializedPayload = stablePayload(payload);
     const existing = attemptRef.current;
     const attempt = existing?.serializedPayload === serializedPayload
@@ -158,7 +160,7 @@ export function MilestoneCreatePage() {
     else navigate(listUrl);
   };
 
-  if (!projectId) {
+  if (!projectId && !teamScoped) {
     return (
       <MainLayout pathName={{ projects: "Projects", milestones: "Milestones", new: "Create" }}>
         <Alert variant="destructive"><AlertCircle /><AlertTitle>Missing project ID</AlertTitle><AlertDescription>The project for this milestone could not be determined.</AlertDescription></Alert>
@@ -191,7 +193,7 @@ export function MilestoneCreatePage() {
   }
 
   return (
-    <MainLayout pathName={{ projects: "Projects", milestones: "Milestones", new: "Create", [projectId]: optionsQuery.data.project?.name ?? "Team workspace" }}>
+    <MainLayout pathName={{ projects: "Projects", milestones: "Milestones", new: "Create", [projectId ?? `team-${scopedTeamId}`]: optionsQuery.data.project?.name ?? "Team workspace" }}>
       <div className="mx-auto grid w-full max-w-7xl gap-6">
         <Card className="border-primary/20 bg-gradient-to-r from-primary/5 via-background to-background">
           <CardHeader className="gap-3">

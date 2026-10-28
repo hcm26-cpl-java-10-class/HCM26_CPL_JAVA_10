@@ -2,7 +2,6 @@ package com.example.starter_project_2025.system.project;
 
 import com.example.starter_project_2025.web.CorrelationIdFilter;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
@@ -10,6 +9,7 @@ import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.project.trainingclass.ScopeAuthorizationService;
 import com.example.starter_project_2025.system.project.trainingclass.TrainingClass;
 import com.example.starter_project_2025.system.project.trainingclass.TrainingClassRepository;
+import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -56,7 +56,7 @@ public class TeamAllocationSessionService {
         ProjectTemplate template;
         if (selectedTemplateId == null) {
             template = projectTemplateRepository
-                    .findByCodeAndIsActiveTrue("MANUAL-GROUPING-DEFAULT")
+                    .findByCodeAndTenantIdIsNullAndIsActiveTrue("MANUAL-GROUPING-DEFAULT")
                     .orElseGet(() -> projectTemplateRepository.saveAndFlush(
                             ProjectTemplate.builder()
                                     .code("MANUAL-GROUPING-DEFAULT")
@@ -68,6 +68,11 @@ public class TeamAllocationSessionService {
                     .findByIdAndIsActiveTrue(selectedTemplateId)
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "Active ProjectTemplate", "id", selectedTemplateId));
+        }
+
+        if (template.getTenantId() != null && (!template.getTenantId().equals(trainingClass.getTenantId())
+                || template.getStatus() != ProjectTemplateStatus.ACTIVE)) {
+            throw new ResourceNotFoundException("Available ProjectTemplate", "id", selectedTemplateId);
         }
 
         int maxMembers = request.maxMembers() != null
@@ -238,31 +243,19 @@ public class TeamAllocationSessionService {
         }
 
         session.setMaxMembers(requestedCapacity);
-        draftTeams.forEach(team -> team.setMaxMembers(requestedCapacity));
+        // US-10: teams that already carry a project template keep the capacity
+        // window of that template; only untemplated drafts follow the session.
+        draftTeams.stream()
+                .filter(team -> team.getProjectTemplateId() == null)
+                .forEach(team -> team.setMaxMembers(requestedCapacity));
         teamRepository.saveAllAndFlush(draftTeams);
         TeamAllocationSession saved = sessionRepository.saveAndFlush(session);
         return AllocationSessionResponse.from(saved);
     }
 
     private int readMaxMembers(ProjectTemplate template) {
-        try {
-            JsonNode constraints = objectMapper.readTree(template.getConstraintsJson());
-            JsonNode maxMembersNode = constraints.get("max_members");
-
-            if (maxMembersNode == null || !maxMembersNode.canConvertToInt()) {
-                throw new BadRequestException(
-                        "Project template constraints must contain integer max_members");
-            }
-
-            int maxMembers = maxMembersNode.asInt();
-            if (maxMembers <= 0) {
-                throw new BadRequestException(
-                        "Project template max_members must be greater than zero");
-            }
-
-            return maxMembers;
-        } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
-            throw new BadRequestException("Project template constraints contain invalid JSON");
-        }
+        // US-10: the capacity window is owned by ProjectTemplateConstraints so
+        // the session and the team assignment share one parser.
+        return ProjectTemplateConstraints.parse(objectMapper, template, null).maxMembers();
     }
 }

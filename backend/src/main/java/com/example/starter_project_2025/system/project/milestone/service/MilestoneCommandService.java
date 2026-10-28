@@ -2,6 +2,8 @@ package com.example.starter_project_2025.system.project.milestone.service;
 
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.project.milestone.audit.MilestoneAuditWriter;
+import com.example.starter_project_2025.system.project.milestone.audit.MilestoneAuditLog;
+import com.example.starter_project_2025.system.project.milestone.audit.MilestoneAuditRepository;
 import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
 import com.example.starter_project_2025.system.project.milestone.dto.request.CreateMilestoneRequest;
 import com.example.starter_project_2025.system.project.milestone.dto.response.MilestoneResponse;
@@ -13,8 +15,7 @@ import com.example.starter_project_2025.system.project.milestone.integration.mod
 import com.example.starter_project_2025.system.project.milestone.integration.port.*;
 import com.example.starter_project_2025.system.project.milestone.outbox.OutboxEventWriter;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
-import com.example.starter_project_2025.system.project.ProjectTeamRepository;
-import com.example.starter_project_2025.system.project.milestone.integration.mock.MockMilestoneData;
+import com.example.starter_project_2025.web.CorrelationIdFilter;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -42,28 +43,59 @@ public class MilestoneCommandService {
     private final MilestoneAccessPolicy accessPolicy;
     private final MilestoneValidator validator;
     private final MilestoneRepository milestoneRepository;
-    private final ProjectTeamRepository projectTeamRepository;
+    private final WorkspaceMilestoneScopeService scopeService;
     private final EntityManager entityManager;
     private final IdempotencyRepository idempotencyRepository;
     private final RequestHashService requestHashService;
     private final MilestoneAuditWriter auditWriter;
+    private final MilestoneAuditRepository auditRepository;
     private final OutboxEventWriter outboxWriter;
     private final MilestoneMapper mapper;
     private final TransactionTemplate transactionTemplate;
     private final Clock milestoneClock;
 
+    @org.springframework.transaction.annotation.Transactional
+    public MilestoneResponse openForSubmissions(Long projectId, Long teamId, UUID milestoneId) {
+        if ((projectId == null) == (teamId == null)) throw new IllegalArgumentException("Exactly one milestone scope is required");
+        UUID actorId = actorProvider.requireCurrentActorId(); Long tenantId = tenantProvider.requireCurrentTenantId();
+        if (projectId != null) {
+            var project = projectPort.requireProjectForRead(projectId, actorId, tenantId);
+            accessPolicy.requireReadAccess(project); accessPolicy.requireSubmittableState(project);
+        } else {
+            var scope = scopeService.requireTeamScope(null, teamId, tenantId);
+            if (scope.projectId() != null) {
+                var project = projectPort.requireProjectForRead(scope.projectId(), actorId, tenantId);
+                accessPolicy.requireReadAccess(project);
+                accessPolicy.requireSubmittableState(project);
+            }
+        }
+        Milestone milestone = projectId != null
+                ? milestoneRepository.lockForProjectOpen(milestoneId, projectId, tenantId).orElseThrow(() -> new ResourceNotFoundException("Milestone not found"))
+                : milestoneRepository.lockForTeamOpen(milestoneId, teamId, tenantId).orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
+        if (milestone.getStatus() == com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN) return mapper.toResponse(milestone);
+        if (milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.PLANNED)
+            throw new MilestoneConflictException("Only a planned milestone can be opened for submissions");
+        Instant now = milestoneClock.instant(); milestone.openForWork(actorId, now); milestoneRepository.saveAndFlush(milestone);
+        auditRepository.save(MilestoneAuditLog.statusEvent(milestoneId, projectId, tenantId, actorId,
+                "MILESTONE_OPENED", CorrelationIdFilter.currentId(), "{\"before\":\"PLANNED\",\"after\":\"OPEN\"}", now));
+        outboxWriter.writeMilestoneOpened(milestone, now);
+        return mapper.toResponse(milestone);
+    }
+
     public MilestoneResponse create(Long projectId, String idempotencyKey, CreateMilestoneRequest request) {
         validateIdempotencyKey(idempotencyKey);
         UUID actorId = actorProvider.requireCurrentActorId();
         Long tenantId = tenantProvider.requireCurrentTenantId();
+        var scope = scopeService.requireTeamScope(projectId, request.teamId(), tenantId);
+        Long resolvedProjectId = scope.projectId();
         String normalizedKey = idempotencyKey.trim();
-        String requestHash = requestHashService.hash(projectId, tenantId, actorId, request);
+        String requestHash = requestHashService.hash(resolvedProjectId, tenantId, actorId, request);
         Object lock = IDEMPOTENCY_LOCKS[Math.floorMod(
                 (tenantId + "|" + actorId + "|" + normalizedKey).hashCode(), LOCK_STRIPES)];
 
         synchronized (lock) {
             MilestoneResponse response = transactionTemplate.execute(status -> createInTransaction(
-                    projectId, tenantId, actorId, normalizedKey, requestHash, request
+                    resolvedProjectId, tenantId, actorId, normalizedKey, requestHash, request
             ));
             if (response == null) {
                 throw new IllegalStateException("Milestone transaction returned no response");
@@ -84,8 +116,6 @@ public class MilestoneCommandService {
         if (project != null) {
             accessPolicy.requireAccess(project);
         }
-        requireTeam(projectId, request.teamId());
-
         var existing = idempotencyRepository
                 .findByTenantIdAndActorIdAndOperationAndIdempotencyKey(
                         tenantId, actorId, OPERATION, idempotencyKey);
@@ -124,6 +154,12 @@ public class MilestoneCommandService {
                 actorId,
                 now
         );
+        if (request.resubmissionPolicy() != null) {
+            milestone.configureResubmission(
+                    request.resubmissionPolicy().allowed(),
+                    request.resubmissionPolicy().maxAttempts());
+        }
+        milestone.configureAssessment(request.weight(), request.latePolicy().penaltyBasis());
         request.checklist().forEach(item -> milestone.addChecklistItem(
                 item.content().trim(), item.mandatory(), item.orderIndex()));
 
@@ -139,15 +175,6 @@ public class MilestoneCommandService {
         ));
 
         return mapper.toResponse(milestone);
-    }
-
-    private void requireTeam(Long projectId, Long teamId) {
-        if (teamId == null || (teamId != MockMilestoneData.TEAM_ID && projectTeamRepository.findById(teamId)
-                .filter(team -> projectId == null || (team.getProject() != null && projectId.equals(team.getProject().getId())))
-                .isEmpty())) {
-            throw new MilestoneValidationException(Map.of("teamId", List.of(projectId == null
-                    ? "Team must exist and be active" : "Team must belong to the project")));
-        }
     }
 
     private void validateIdempotencyKey(String key) {

@@ -20,6 +20,9 @@ export function buildMilestonePayload(values: MilestoneFormValues): CreateMilest
     })),
     rubricSnapshotId: values.rubricSnapshotId,
     latePolicy: { type: values.latePolicy.type },
+    resubmissionPolicy: values.resubmissionPolicy.allowed
+      ? { allowed: true, maxAttempts: values.resubmissionPolicy.maxAttempts }
+      : { allowed: false },
   };
 
   if (values.latePolicy.type === "ALLOW_LATE") {
@@ -122,9 +125,9 @@ export function isPastDeadline(milestone: MilestoneListItem): boolean {
     new Date(milestone.deadline).getTime() < Date.now();
 }
 
-export function formatPenalty(value?: number | null): string {
+export function formatPenalty(value?: number | null, basis?: "FIXED" | "PER_DAY"): string {
   if (value == null) return "—";
-  return `${new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 }).format(value)}%`;
+  return `${new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 }).format(value)}%${basis === "PER_DAY" ? " per day" : ""}`;
 }
 
 export function formatMilestoneStatus(status: MilestoneStatus): string {

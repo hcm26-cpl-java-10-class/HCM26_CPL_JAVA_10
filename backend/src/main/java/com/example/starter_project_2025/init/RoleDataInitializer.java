@@ -39,6 +39,7 @@ public class RoleDataInitializer implements CommandLineRunner {
     public void run(String... args) {
         ensurePermission("PEO", "TEAM_ALLOCATE");
         ensurePermission("EXAM", "TAKE");
+        ensurePermission("ARTIFACT", "DRAFT_WRITE");
         List<Permission> allPermissions = permissionRepository.findAll();
 
         upsertRole(
@@ -60,6 +61,7 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "EXAM_TAKE",
                         "WORKSPACE_READ", "WORKSPACE_MEMBER_READ",
                         "MILESTONE_READ", "SPRINT_READ", "TASK_WRITE", "ARTIFACT_READ", "ARTIFACT_SUBMIT",
+                        "ARTIFACT_DRAFT_WRITE",
                         "FEEDBACK_READ", "WORKSPACE_ACTIVITY_READ"
                 )
         );

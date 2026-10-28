@@ -4,17 +4,28 @@ import ActionButton from "@/components/datatable/common/ActionButton";
 import { useProTable } from "@/components/datatable/hook/useProTable";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type {
   LatePolicyType,
   MilestoneDetailRouteState,
   MilestoneListItem,
   MilestonePageResponse,
+  MilestoneProjectOption,
   MilestoneStatus,
   Pagination,
 } from "@/types";
-import { AlertCircle, Eye, Plus } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { AlertCircle, ClipboardCheck, Eye, FolderKanban, Plus, ShieldAlert } from "lucide-react";
 import { useCallback, useEffect, useMemo } from "react";
-import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { MilestoneEmptyState, MilestoneListError } from "../components/MilestoneListStates";
 import { MilestoneTableCard } from "../components/MilestoneTableCard";
 import { milestoneListSchema } from "../milestone-list.schema";
@@ -24,9 +35,6 @@ import {
   serializeMilestoneListParams,
 } from "../milestone-list-query.utils";
 import { getMilestoneApiError } from "../milestone.utils";
-import { MilestoneRiskPage } from "./MilestoneRiskPage";
-import { Button } from "@/components/ui/button";
-
 interface MilestoneTableFilters {
   status?: MilestoneStatus[];
   mandatory?: boolean;
@@ -34,9 +42,22 @@ interface MilestoneTableFilters {
   deadline?: { from?: string; to?: string };
 }
 
+function getProjectStatusBadgeVariant(status?: string): "default" | "secondary" | "outline" | "destructive" {
+  switch (status) {
+    case "ACTIVE":
+      return "default";
+    case "PLANNING":
+      return "secondary";
+    case "CANCELLED":
+      return "destructive";
+    default:
+      return "outline";
+  }
+}
+
 export function MilestoneListPage() {
   const [params] = useSearchParams();
-  return params.get("view") === "risk" ? <MilestoneRiskPage /> : <MilestoneStandardListPage />;
+  return params.get("view") === "risk" ? <Navigate replace to="/management/alerts?view=MILESTONE"/> : <MilestoneStandardListPage />;
 }
 
 function MilestoneStandardListPage() {
@@ -50,6 +71,41 @@ function MilestoneStandardListPage() {
     [serializedSearchParams],
   );
   const teamId = listParams.teamId;
+
+  const projectOptionsQuery = useQuery({
+    queryKey: ["milestone-project-options"],
+    queryFn: ({ signal }) => milestoneApi.getProjectOptions(signal),
+    retry: false,
+    staleTime: 30_000,
+  });
+
+  const projectOptions: MilestoneProjectOption[] = projectOptionsQuery.data ?? [];
+  const selectedProjectOption = useMemo(
+    () => projectOptions.find((option) => String(option.id) === String(projectId)),
+    [projectId, projectOptions],
+  );
+
+  useEffect(() => {
+    if (projectId || projectOptionsQuery.isPending) return;
+    if (projectOptions.length > 0) {
+      const defaultProject = projectOptions[0];
+      navigate(
+        `/projects/${defaultProject.id}/milestones${location.search}`,
+        { replace: true },
+      );
+    }
+  }, [location.search, navigate, projectId, projectOptions, projectOptionsQuery.isPending]);
+
+  const handleSelectProject = useCallback((nextProjectId: string) => {
+    if (!nextProjectId || nextProjectId === projectId) return;
+    const nextSearch = serializeMilestoneListParams({
+      ...listParams,
+      teamId: undefined,
+      page: 0,
+    });
+    const queryString = nextSearch.toString();
+    navigate(`/projects/${nextProjectId}/milestones${queryString ? `?${queryString}` : ""}`);
+  }, [listParams, navigate, projectId]);
 
   const filters = useMemo<MilestoneTableFilters>(() => ({
     status: listParams.status,
@@ -159,20 +215,41 @@ function MilestoneStandardListPage() {
   }, [listParams.page, response, table.isFetching, updateListParams]);
 
   if (!projectId) {
+    if (projectOptionsQuery.isPending) {
+      return (
+        <MainLayout pathName={breadcrumbs}>
+          <div className="rounded-xl border bg-card p-6 text-sm text-muted-foreground shadow-xs" role="status">
+            Loading projects...
+          </div>
+        </MainLayout>
+      );
+    }
+
     return (
       <MainLayout pathName={breadcrumbs}>
-        <Alert variant="destructive">
+        <Alert variant={projectOptionsQuery.isError ? "destructive" : "default"}>
           <AlertCircle />
-          <AlertTitle>Missing project ID</AlertTitle>
-          <AlertDescription>The project for this milestone list could not be determined.</AlertDescription>
+          <AlertTitle>
+            {projectOptions.length === 0 && !projectOptionsQuery.isError
+              ? "No projects available"
+              : "Missing project ID"}
+          </AlertTitle>
+          <AlertDescription>
+            {projectOptions.length === 0 && !projectOptionsQuery.isError
+              ? "No active projects were found in the current workspace. Please create or activate a project first."
+              : "The project for this milestone list could not be determined."}
+          </AlertDescription>
         </Alert>
       </MainLayout>
     );
   }
 
+  const currentProjectStatus = response?.project?.status ?? selectedProjectOption?.status;
+  const currentProjectName = response?.project?.name ?? selectedProjectOption?.name ?? `Project #${projectId}`;
+
   const openDetail = (row: MilestoneListItem) => {
     const routeState: MilestoneDetailRouteState = {
-      projectName: response?.project?.name,
+      projectName: response?.project?.name ?? selectedProjectOption?.name,
       returnTo,
     };
     navigate(`/projects/${projectId}/milestones/${row.id}${teamId ? `?teamId=${teamId}` : ""}`, { state: routeState });
@@ -182,8 +259,16 @@ function MilestoneStandardListPage() {
     setSearchParams(serializeMilestoneListParams({ page: 0, size: listParams.size }));
   };
 
-  const createAction = table.permission?.canCreate ? (
-    <ActionButton
+  const createAction = (
+    <div className="flex items-center gap-2">
+      <ActionButton
+        onClick={() => navigate(`/milestone-submissions?projectId=${projectId}`)}
+        tooltip="Open milestone review queue"
+        title="Review submissions"
+        variant="outline"
+        icon={<ClipboardCheck size={16} />}
+      />
+      {table.permission?.canCreate ? <ActionButton
       onClick={() => navigate(createUrl)}
       tooltip={projectActive
         ? "Create milestone"
@@ -192,12 +277,68 @@ function MilestoneStandardListPage() {
       variant="default"
       icon={<Plus size={16} />}
       disabled={!projectActive}
-    />
-  ) : undefined;
+      /> : null}
+    </div>
+  );
 
   return (
     <MainLayout pathName={breadcrumbs}>
-      <div className="mb-3 flex justify-end"><Button variant="outline" onClick={() => navigate(`/projects/${projectId}/milestones?view=risk`)}>Risk monitoring</Button></div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3 shadow-xs">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <FolderKanban className="size-4" />
+            </div>
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Project
+            </span>
+          </div>
+          <div className="min-w-[240px] max-w-md flex-1">
+            <Select
+              value={String(projectId)}
+              onValueChange={handleSelectProject}
+              disabled={projectOptionsQuery.isPending}
+            >
+              <SelectTrigger aria-label="Filter by project" className="w-full bg-background">
+                <SelectValue placeholder={currentProjectName} />
+              </SelectTrigger>
+              <SelectContent>
+                {projectOptions.length > 0 ? (
+                  projectOptions.map((project) => (
+                    <SelectItem key={String(project.id)} value={String(project.id)}>
+                      <span className="flex items-center gap-2">
+                        {project.code ? (
+                          <span className="font-mono text-xs text-muted-foreground">
+                            [{project.code}]
+                          </span>
+                        ) : null}
+                        <span className="font-medium">{project.name}</span>
+                      </span>
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value={String(projectId)}>
+                    {currentProjectName}
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+          {currentProjectStatus ? (
+            <Badge variant={getProjectStatusBadgeVariant(currentProjectStatus)}>
+              {currentProjectStatus}
+            </Badge>
+          ) : null}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate(`/projects/${projectId}/milestones?view=risk`)}
+        >
+          <ShieldAlert className="size-4" />
+          Risk monitoring
+        </Button>
+      </div>
       <ProTable<MilestoneListItem>
         table={table}
         headerActions={createAction}

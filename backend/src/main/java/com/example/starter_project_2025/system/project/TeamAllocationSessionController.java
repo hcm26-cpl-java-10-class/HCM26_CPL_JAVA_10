@@ -31,6 +31,8 @@ public class TeamAllocationSessionController {
     private final ProjectTeamMembershipService membershipService;
     private final ProjectTeamMentorService mentorService;
     private final ProjectTeamRoleService roleService;
+    private final ProjectTeamTemplateService teamTemplateService;
+    private final AllocationReadinessService readinessService;
 
     @GetMapping("/mentors")
     @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
@@ -134,6 +136,40 @@ public class TeamAllocationSessionController {
                 classId, sessionId, teamId, request, authentication);
     }
 
+    /** US-10: read the project template currently attached to a team. */
+    @GetMapping("/{sessionId}/teams/{teamId}/project-template")
+    @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
+    public TeamProjectTemplateResponse getTeamProjectTemplate(
+            @PathVariable Long classId,
+            @PathVariable Long sessionId,
+            @PathVariable Long teamId,
+            Authentication authentication
+    ) {
+        return teamTemplateService.getTeamTemplate(
+                classId, sessionId, teamId, authentication);
+    }
+
+    /**
+     * US-10: assign a project template to a DRAFT team.
+     * <p>
+     * Responses: 200 with the updated team on success, 400
+     * {@code ERR_TEAM_CAPACITY_EXCEEDED} when the team size is outside the
+     * template capacity window, 400 {@code ERR_TEAM_NOT_DRAFT} when the team is
+     * no longer a draft.
+     */
+    @PutMapping("/{sessionId}/teams/{teamId}/project-template")
+    @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
+    public TeamProjectTemplateResponse assignTeamProjectTemplate(
+            @PathVariable Long classId,
+            @PathVariable Long sessionId,
+            @PathVariable Long teamId,
+            @Valid @RequestBody AssignProjectTemplateRequest request,
+            Authentication authentication
+    ) {
+        return teamTemplateService.assignTemplate(
+                classId, sessionId, teamId, request.projectTemplateId(), authentication);
+    }
+
     @PutMapping("/{sessionId}/teams/{teamId}/roles")
     @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -218,5 +254,37 @@ public class TeamAllocationSessionController {
     ) {
         return publishCoordinator.publish(
                 classId, sessionId, idempotencyKey, request, authentication);
+    }
+
+    /**
+     * US-12 / BR-UNI-10: read-only strict-mode readiness check. Returns the
+     * class-wide unassigned students (id + name) and per-team template/role
+     * issues without changing any data.
+     */
+    @GetMapping("/{sessionId}/readiness")
+    @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
+    public AllocationReadinessResponse getReadiness(
+            @PathVariable Long classId,
+            @PathVariable Long sessionId,
+            Authentication authentication
+    ) {
+        return readinessService.evaluateForClass(classId, sessionId, authentication);
+    }
+
+    /**
+     * US-12: strict session publish. Publishes every DRAFT team only when the
+     * whole class is ready; otherwise returns HTTP 422 with
+     * {@code ERR_UNASSIGNED_MEMBERS} / {@code ERR_TEAMS_NOT_READY}.
+     */
+    @PostMapping("/{sessionId}/publish-session")
+    @PreAuthorize("hasAuthority('PEO_TEAM_ALLOCATE')")
+    public ResponseEntity<String> publishSession(
+            @PathVariable Long classId,
+            @PathVariable Long sessionId,
+            @RequestHeader("X-Idempotency-Key") String idempotencyKey,
+            Authentication authentication
+    ) {
+        return publishCoordinator.publishSession(
+                classId, sessionId, idempotencyKey, authentication);
     }
 }

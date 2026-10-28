@@ -23,7 +23,7 @@ import java.util.UUID;
 @Slf4j
 @Order(12)
 @Component
-@Profile("!milestone-real-integrations")
+@Profile("milestone-mock | test")
 @RequiredArgsConstructor
 public class MockMilestoneDataInitializer implements CommandLineRunner {
 
@@ -32,14 +32,15 @@ public class MockMilestoneDataInitializer implements CommandLineRunner {
 
     private final MilestoneRepository milestoneRepository;
     private final Clock milestoneClock;
+    private final com.example.starter_project_2025.system.project.workspace.config.LegacyH2ProjectSchemaMigration legacyMigration;
 
-    @Value("${milestone.mock.seed-enabled:true}")
+    @Value("${milestone.mock.seed-enabled:false}")
     private boolean seedEnabled;
 
     @Override
     @Transactional
     public void run(String... args) {
-        if (!seedEnabled) {
+        if (!seedEnabled || legacyMigration.isMigratedDatabase()) {
             log.info("Milestone mock data seed is disabled.");
             return;
         }

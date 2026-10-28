@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.project.sprint_backlog;
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
+import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
 import com.example.starter_project_2025.system.project.sprint.Sprint;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
@@ -63,7 +64,10 @@ import java.time.LocalDateTime;
         indexes = {
                 @Index(name = "idx_sprint_backlog_sprint", columnList = "sprint_id"),
                 @Index(name = "idx_sprint_backlog_status", columnList = "status"),
-                @Index(name = "idx_sprint_backlog_assignee", columnList = "assignee_project_member_id")
+                @Index(name = "idx_sprint_backlog_work_type", columnList = "work_type"),
+                @Index(name = "idx_sprint_backlog_assignee", columnList = "assignee_project_member_id"),
+                @Index(name = "idx_sprint_backlog_project", columnList = "project_id"),
+                @Index(name = "idx_sprint_backlog_milestone", columnList = "milestone_id")
         }
 )
 @FieldDefaults(level = AccessLevel.PRIVATE)
@@ -86,6 +90,28 @@ public class SprintBacklog extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sprint_id")
     Sprint sprint;
+
+    /**
+     * Owning project of the item (UFR-PRJ-003-02: every backlog item belongs
+     * to a project).
+     * <p>
+     * It is derived by the service from the sprint, from the linked milestone
+     * or from the explicit request value, so the UI never has to keep the two
+     * in sync by itself.
+     */
+    @Column(name = "project_id")
+    Long projectId;
+
+    /**
+     * Optional link to a milestone of the project (UFR-PRJ-003-02).
+     * <p>
+     * The milestone module owns the {@code milestones} table, so the relation
+     * is read-only from this side: the service resolves and validates the
+     * milestone (it must exist and still be active) before assigning it.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "milestone_id")
+    Milestone milestone;
 
     /**
      * TEMPORARY assignee: only the raw project member id is stored until the

@@ -12,7 +12,8 @@ import jakarta.persistence.LockModeType;
 import jakarta.persistence.OptimisticLockException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -20,13 +21,31 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.MDC;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * US-11 — configure and validate team member roles.
+ *
+ * <p>Rules:</p>
+ * <ul>
+ *     <li>Every member must hold at least one valid role ({@link ProjectMemberRole}).</li>
+ *     <li>When the assigned project template declares {@code allow_multi_role =
+ *     false}, a member can hold exactly one role.</li>
+ *     <li>The role counts must satisfy the template {@code role_quotas} minimum
+ *     (and maximum, when declared). Missing mandatory seats are reported with
+ *     HTTP 422 {@code ERR_TEAM_ROLE_QUOTA_NOT_MET} and a per-role breakdown.</li>
+ *     <li>Role changes are traced in the append-only team member history plus the
+ *     team audit log / outbox.</li>
+ * </ul>
+ */
 @Service
 @RequiredArgsConstructor
 public class ProjectTeamRoleService {
+
+    private static final String TEAM_LEADER_ROLE = "PM";
 
     private final TeamAllocationSessionRepository sessionRepository;
     private final ProjectTeamRepository teamRepository;
@@ -37,6 +56,10 @@ public class ProjectTeamRoleService {
     private final ProjectTeamMemberHistoryService historyService;
     private final EntityManager entityManager;
     private final ObjectMapper objectMapper;
+
+    // ------------------------------------------------------------------
+    // Mentor / Program Manager
+    // ------------------------------------------------------------------
 
     @Transactional
     public void updateRoles(
@@ -65,6 +88,66 @@ public class ProjectTeamRoleService {
             throw new BadRequestException(
                     "Chỉ có thể cập nhật vai trò cho nhóm DRAFT hoặc ACTIVE");
         }
+
+        applyRoleConfiguration(session, team, request, authentication, null);
+    }
+
+    // ------------------------------------------------------------------
+    // Student (Team Leader)
+    // ------------------------------------------------------------------
+
+    /**
+     * US-11: a student who is the PM (team leader) may configure the roles of
+     * their own DRAFT team. The leader must keep the PM role so the team stays
+     * manageable from the student workspace.
+     */
+    @Transactional
+    public void updateRolesAsTeamLeader(
+            Long teamId,
+            UpdateTeamRolesRequest request,
+            Authentication authentication
+    ) {
+        Long userId = currentUserId(authentication);
+        ProjectTeam team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new ResourceNotFoundException("ProjectTeam", "id", teamId));
+
+        ProjectMember membership = memberRepository
+                .findByTeam_IdAndClassMember_User_Id(teamId, userId)
+                .orElseThrow(() -> new AccessDeniedException(
+                        "Bạn không phải thành viên của nhóm này."));
+        if (!ProjectMemberRole.hasRole(membership.getRole(), TEAM_LEADER_ROLE)) {
+            throw new AccessDeniedException(
+                    "Chỉ Trưởng nhóm (vai trò PM) mới được cấu hình vai trò thành viên.");
+        }
+        if (team.getStatus() != ProjectTeamStatus.DRAFT) {
+            throw new BadRequestException(
+                    "Chỉ có thể cấu hình vai trò khi nhóm còn ở trạng thái DRAFT");
+        }
+        TeamAllocationSession session = team.getAllocationSession();
+        if (session.getStatus() != TeamAllocationSessionStatus.OPEN) {
+            throw new BadRequestException(
+                    "Phiên phân nhóm không còn mở để cấu hình vai trò");
+        }
+
+        applyRoleConfiguration(
+                session,
+                team,
+                request,
+                authentication,
+                membership.getClassMember().getId());
+    }
+
+    // ------------------------------------------------------------------
+    // Core validation + persistence
+    // ------------------------------------------------------------------
+
+    private void applyRoleConfiguration(
+            TeamAllocationSession session,
+            ProjectTeam team,
+            UpdateTeamRolesRequest request,
+            Authentication authentication,
+            Long requiredLeaderMemberId
+    ) {
         if (request == null || request.expectedVersion() == null) {
             throw new TeamRoleAssignmentException(
                     "Version nhóm là bắt buộc", List.of());
@@ -74,14 +157,14 @@ public class ProjectTeamRoleService {
         }
 
         List<ProjectMember> assignments =
-                memberRepository.findAllByTeam_IdOrderByIdAsc(teamId);
+                memberRepository.findAllByTeam_IdOrderByIdAsc(team.getId());
         Map<Long, ProjectMember> assignmentsByMemberId = new HashMap<>();
         assignments.forEach(assignment ->
                 assignmentsByMemberId.put(assignment.getClassMember().getId(), assignment));
 
         List<Long> invalidMemberIds = new ArrayList<>();
-        Map<Long, String> requestedRoles = new HashMap<>();
-        Set<Long> seenMemberIds = new HashSet<>();
+        Map<Long, List<String>> requestedRoles = new LinkedHashMap<>();
+        Set<Long> seenMemberIds = new LinkedHashSet<>();
         List<UpdateTeamRolesRequest.MemberRoleAssignment> requestedMembers =
                 request.members() == null ? List.of() : request.members();
 
@@ -93,15 +176,15 @@ public class ProjectTeamRoleService {
                 }
                 continue;
             }
-            String role = member.role() == null || member.role().isBlank()
-                    ? ProjectMemberRole.DEV.name()
-                    : member.role();
-            if (!assignmentsByMemberId.containsKey(member.memberId())
-                    || !ProjectMemberRole.isValid(role)) {
+            List<String> rawRoles = ProjectMemberRole.rawRoles(member.resolveRoles());
+            List<String> normalizedRoles = ProjectMemberRole.normalizeRoles(rawRoles);
+            if (rawRoles.isEmpty()
+                    || ProjectMemberRole.containsUnknownRole(rawRoles)
+                    || !assignmentsByMemberId.containsKey(member.memberId())) {
                 invalidMemberIds.add(member.memberId());
                 continue;
             }
-            requestedRoles.put(member.memberId(), role);
+            requestedRoles.put(member.memberId(), normalizedRoles);
         }
 
         assignmentsByMemberId.keySet().stream()
@@ -115,9 +198,13 @@ public class ProjectTeamRoleService {
                     invalidMemberIds.stream().distinct().toList());
         }
 
+        validateTemplatePolicy(team, requestedRoles, requiredLeaderMemberId);
+
         List<ProjectMember> changedAssignments = assignments.stream()
-                .filter(assignment -> !requestedRoles.get(
-                        assignment.getClassMember().getId()).equals(assignment.getRole()))
+                .filter(assignment -> !equalsRoleSpec(
+                        ProjectMemberRole.formatRoles(requestedRoles.get(
+                                assignment.getClassMember().getId())),
+                        assignment.getRole()))
                 .toList();
         if (changedAssignments.isEmpty()) {
             return;
@@ -133,26 +220,31 @@ public class ProjectTeamRoleService {
         } catch (OptimisticLockException | OptimisticLockingFailureException conflict) {
             throw new TeamVersionConflictException();
         }
+
         changedAssignments.forEach(assignment -> assignment.setRole(
-                requestedRoles.get(assignment.getClassMember().getId())));
+                ProjectMemberRole.formatRoles(requestedRoles.get(
+                        assignment.getClassMember().getId()))));
         memberRepository.saveAllAndFlush(changedAssignments);
         String afterState = serialize(snapshot(team, assignments));
-        if (team.getStatus() == ProjectTeamStatus.ACTIVE) {
-            for (ProjectMember assignment : changedAssignments) {
-                historyService.record(
-                        session,
-                        assignment.getClassMember(),
-                        team,
-                        team,
-                        previousRoles.get(assignment.getClassMember().getId()),
-                        requestedRoles.get(assignment.getClassMember().getId()),
-                        "ROLE_CHANGED",
-                        null,
-                        authentication);
-            }
+
+        // US-11: history is written for every role change, including DRAFT
+        // teams, so the assignment trail is never lost.
+        for (ProjectMember assignment : changedAssignments) {
+            String newRole = ProjectMemberRole.formatRoles(requestedRoles.get(
+                    assignment.getClassMember().getId()));
+            historyService.record(
+                    session,
+                    assignment.getClassMember(),
+                    team,
+                    team,
+                    previousRoles.get(assignment.getClassMember().getId()),
+                    newRole,
+                    "ROLE_CHANGED",
+                    null,
+                    authentication);
         }
 
-        Long actorId = ((UserPrincipal) authentication.getPrincipal()).getUser().getId();
+        Long actorId = currentUserId(authentication);
         String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
         if (correlationId == null || correlationId.isBlank()) {
             correlationId = UUID.randomUUID().toString();
@@ -160,19 +252,105 @@ public class ProjectTeamRoleService {
         auditRepository.save(ProjectTeamAudit.builder()
                 .action("UPDATE_TEAM_MEMBER_ROLES")
                 .actorId(actorId)
-                .classId(classId)
-                .allocationSessionId(sessionId)
+                .classId(team.getTrainingClass().getId())
+                .allocationSessionId(session.getId())
                 .beforeState(beforeState)
                 .afterState(afterState)
                 .correlationId(correlationId)
                 .build());
         outboxRepository.save(ProjectTeamOutboxEvent.builder()
                 .eventType("PROJECT_TEAM_MEMBER_ROLES_UPDATED")
-                .aggregateId(teamId)
+                .aggregateId(team.getId())
                 .payload(afterState)
                 .correlationId(correlationId)
                 .status("PENDING")
                 .build());
+    }
+
+    private void validateTemplatePolicy(
+            ProjectTeam team,
+            Map<Long, List<String>> requestedRoles,
+            Long requiredLeaderMemberId
+    ) {
+        ProjectTemplate template = team.getProjectTemplate();
+        ProjectTemplateConstraints.RolePolicy policy = template == null
+                ? ProjectTemplateConstraints.RolePolicy.singleRoleDefault()
+                : ProjectTemplateConstraints.parseRolePolicy(objectMapper, template);
+
+        if (!policy.allowMultiRole()) {
+            List<Long> multiRoleMemberIds = requestedRoles.entrySet().stream()
+                    .filter(entry -> entry.getValue().size() > 1)
+                    .map(Map.Entry::getKey)
+                    .toList();
+            if (!multiRoleMemberIds.isEmpty()) {
+                throw TeamRolePolicyException.multiRoleNotAllowed(multiRoleMemberIds);
+            }
+        }
+
+        Map<String, Integer> counts = new HashMap<>();
+        requestedRoles.values().forEach(roles ->
+                roles.forEach(role -> counts.merge(role, 1, Integer::sum)));
+
+        List<TeamRoleQuotaViolation> violations = new ArrayList<>();
+        for (ProjectTemplateConstraints.RoleQuota quota : policy.quotas()) {
+            int actual = counts.getOrDefault(quota.role(), 0);
+            if (actual < quota.min()) {
+                violations.add(new TeamRoleQuotaViolation(
+                        quota.role(),
+                        TeamRoleQuotaViolation.MISSING_REQUIRED_ROLE,
+                        quota.min(),
+                        actual));
+            } else if (quota.hasUpperBound() && actual > quota.max()) {
+                violations.add(new TeamRoleQuotaViolation(
+                        quota.role(),
+                        TeamRoleQuotaViolation.ROLE_QUOTA_EXCEEDED,
+                        quota.max(),
+                        actual));
+            }
+        }
+        if (!violations.isEmpty()) {
+            throw TeamRolePolicyException.quotaNotMet(
+                    buildQuotaMessage(violations), violations);
+        }
+
+        if (requiredLeaderMemberId != null) {
+            List<String> leaderRoles = requestedRoles.get(requiredLeaderMemberId);
+            if (leaderRoles == null || !leaderRoles.contains(TEAM_LEADER_ROLE)) {
+                throw TeamRolePolicyException.leaderRoleRequired(requiredLeaderMemberId);
+            }
+        }
+    }
+
+    private String buildQuotaMessage(List<TeamRoleQuotaViolation> violations) {
+        List<String> missing = violations.stream()
+                .filter(violation -> TeamRoleQuotaViolation.MISSING_REQUIRED_ROLE
+                        .equals(violation.reason()))
+                .map(violation -> violation.role() + " (cần tối thiểu "
+                        + violation.required() + ", hiện có " + violation.actual() + ")")
+                .toList();
+        List<String> exceeded = violations.stream()
+                .filter(violation -> TeamRoleQuotaViolation.ROLE_QUOTA_EXCEEDED
+                        .equals(violation.reason()))
+                .map(violation -> violation.role() + " (tối đa "
+                        + violation.required() + ", hiện có " + violation.actual() + ")")
+                .toList();
+
+        StringBuilder message = new StringBuilder(
+                "Cấu hình vai trò chưa đáp ứng định suất của đề bài");
+        if (!missing.isEmpty()) {
+            message.append(". Còn thiếu vai trò bắt buộc: ")
+                    .append(String.join(", ", missing));
+        }
+        if (!exceeded.isEmpty()) {
+            message.append(". Vượt định suất: ")
+                    .append(String.join(", ", exceeded));
+        }
+        return message.toString();
+    }
+
+    private boolean equalsRoleSpec(String left, String right) {
+        return ProjectMemberRole.parseRoles(left)
+                .equals(ProjectMemberRole.parseRoles(right));
     }
 
     private TeamSnapshot snapshot(ProjectTeam team, List<ProjectMember> assignments) {
@@ -192,6 +370,14 @@ public class ProjectTeamRoleService {
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Unable to serialize team role state", exception);
         }
+    }
+
+    private Long currentUserId(Authentication authentication) {
+        if (authentication == null
+                || !(authentication.getPrincipal() instanceof UserPrincipal principal)) {
+            throw new AccessDeniedException("Yêu cầu đăng nhập để cấu hình vai trò.");
+        }
+        return principal.getUser().getId();
     }
 
     private record TeamSnapshot(

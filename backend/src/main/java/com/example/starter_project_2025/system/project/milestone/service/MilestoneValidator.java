@@ -24,6 +24,17 @@ public class MilestoneValidator {
         validateChecklist(request.checklist(), errors);
         validateRubric(rubric, errors);
         validateLatePolicy(request.latePolicy(), request.deadline(), errors);
+        if (request.resubmissionPolicy() != null
+                && request.resubmissionPolicy().allowed()
+                && request.resubmissionPolicy().maxAttempts() != null
+                && request.resubmissionPolicy().maxAttempts() < 2) {
+            add(errors, "resubmissionPolicy.maxAttempts",
+                    "Maximum submission attempts must be at least 2 when resubmission is allowed");
+        }
+        if (request.weight() != null && (request.weight().signum() < 0
+                || request.weight().compareTo(ONE_HUNDRED) > 0 || request.weight().stripTrailingZeros().scale() > 2)) {
+            add(errors, "weight", "Milestone weight must be between 0 and 100 with up to 2 decimal places");
+        }
         if (!errors.isEmpty()) {
             throw new MilestoneValidationException(errors);
         }
@@ -90,6 +101,12 @@ public class MilestoneValidator {
         if (total.compareTo(ONE_HUNDRED) != 0) {
             add(errors, "rubric.totalWeight", "Rubric total weight must equal exactly 100.00 percent");
         }
+    }
+
+    public void validateRubric(RubricSnapshotData rubric) {
+        Map<String, List<String>> errors = new LinkedHashMap<>();
+        validateRubric(rubric, errors);
+        if (!errors.isEmpty()) throw new MilestoneValidationException(errors);
     }
 
     private void validateLatePolicy(

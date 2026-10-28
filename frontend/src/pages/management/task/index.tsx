@@ -4,7 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { usePermissions } from "@/hooks/usePermissions";
 import { ChevronDown, FolderOpen } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { TaskProjectPicker } from "./components/TaskProjectPicker";
 import { TaskTable } from "./components/TaskTable";
 import { OverdueTaskPanel } from "./components/OverdueTaskPanel";
@@ -35,11 +35,14 @@ export default function TaskManagementPage() {
     setProjectOpen(false);
   };
 
+  if (overdue || inactive) return <Navigate replace to={`/management/alerts?view=${inactive ? "INACTIVE" : "BACKLOG"}`}/>;
+
   return (
     <MainLayout pathName={{ tasks: "Tasks" }}>
       <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-xl font-semibold">Tasks</h1>
+          {hasPermission("PROJECT_ALERT_READ") && <Button variant="outline" onClick={() => navigate("/management/alerts")}>Alerts</Button>}
           {projectSelected && (
             <Popover open={projectOpen} onOpenChange={setProjectOpen}>
               <PopoverTrigger asChild>
@@ -59,10 +62,10 @@ export default function TaskManagementPage() {
           <div className="grid min-h-0 gap-4">
             <div className="flex flex-wrap gap-2" aria-label="Task views">
               <Button variant={overdue || inactive ? "outline" : "default"} onClick={() => setSearchParams({ projectId })}>All tasks</Button>
-              <Button variant={overdue ? "default" : "outline"} onClick={() => setSearchParams({ projectId, overdue: "true" })}>Overdue tasks</Button>
-              <Button variant="outline" onClick={() => navigate(`/projects/${projectId}/milestones?view=risk`)}>Milestone risks</Button>
+              <Button variant="outline" onClick={() => navigate("/management/alerts?view=BACKLOG")}>Backlog alerts</Button>
+              <Button variant="outline" onClick={() => navigate("/management/alerts?view=MILESTONE")}>Milestone risks</Button>
               {hasPermission("INACTIVE_MEMBER_READ") && projects.data?.find(project => project.id===projectId)?.canManage &&
-                <Button variant={inactive ? "default" : "outline"} onClick={() => setSearchParams({ projectId, view: "inactive" })}>Inactive members</Button>}
+                <Button variant="outline" onClick={() => navigate("/management/alerts?view=INACTIVE")}>Inactive members</Button>}
             </div>
             {inactive ? <InactiveMemberPanel key={`${user.email}:${activeRole}:${projectId}`} projectId={projectId} /> : overdue
               ? <OverdueTaskPanel key={`${user.email}:${activeRole}:${projectId}`} projectId={projectId} />

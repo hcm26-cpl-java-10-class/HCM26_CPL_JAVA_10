@@ -1,18 +1,33 @@
 import axiosInstance from "@/api/axios";
 import type {
   CreateMilestoneRequest,
+  ArtifactDraft,
+  ArtifactDraftRequest,
+  ArtifactSubmission,
+  ArtifactSubmissionRequest,
+  ArtifactAttachment,
+  ArtifactSubmissionWorkspace,
   MilestoneCreateOptions,
   MilestoneDetailResponse,
   MilestoneListParams,
   MilestoneOption,
   MilestonePageResponse,
+  MilestoneProjectOption,
   MilestoneResponse,
-  PageResponse,
 } from "@/types";
 
-const backlogMilestoneOptionsPath = "/backlog-items/milestone-options";
+/** Backlog form / detail panel milestone picker (UFR-PRJ-003-02). */
+const backlogMilestoneOptionsPath = "/sprint-backlogs/milestone-options";
 
 export const milestoneApi = {
+  async getProjectOptions(signal?: AbortSignal): Promise<MilestoneProjectOption[]> {
+    const response = await axiosInstance.get<MilestoneProjectOption[]>(
+      "/projects/milestone-options",
+      { signal },
+    );
+    return response.data ?? [];
+  },
+
   async getTeamList(teamId: number, params: MilestoneListParams): Promise<MilestonePageResponse> {
     const response = await axiosInstance.get<MilestonePageResponse>(
       `/teams/${teamId}/milestones`,
@@ -56,6 +71,15 @@ export const milestoneApi = {
     const response = await axiosInstance.get<MilestoneCreateOptions>(
       `/teams/${teamId}/milestones/create-options`,
     );
+    return response.data;
+  },
+
+  async openForSubmissions(projectId: string, milestoneId: string): Promise<MilestoneResponse> {
+    const response = await axiosInstance.post<MilestoneResponse>(`/projects/${projectId}/milestones/${milestoneId}/open`);
+    return response.data;
+  },
+  async openTeamMilestoneForSubmissions(teamId: number, milestoneId: string): Promise<MilestoneResponse> {
+    const response = await axiosInstance.post<MilestoneResponse>(`/teams/${teamId}/milestones/${milestoneId}/open`);
     return response.data;
   },
 
@@ -104,20 +128,63 @@ export const milestoneApi = {
     return response.data;
   },
 
-  /** Compatibility adapter for the temporary backlog relation selector. */
-  getPage: async (): Promise<PageResponse<MilestoneOption>> => {
-    const response = await axiosInstance.get<MilestoneOption[]>(backlogMilestoneOptionsPath);
-    const content = response.data ?? [];
+  /**
+   * Milestones that can be linked to a backlog item (UFR-PRJ-003-02).
+   * Only active milestones of the current tenant are returned.
+   */
+  getBacklogOptions: async (): Promise<MilestoneOption[]> => {
+    const response = await axiosInstance.get<MilestoneOption[]>(
+      backlogMilestoneOptionsPath,
+    );
+    return response.data ?? [];
+  },
 
-    return {
-      content,
-      items: content,
-      page: 0,
-      size: content.length,
-      totalPages: 1,
-      totalElements: content.length,
-      hasNext: false,
-      hasPrevious: false,
-    };
+  async getTeamArtifactWorkspace(teamId: number, milestoneId: string): Promise<ArtifactSubmissionWorkspace> {
+    const response = await axiosInstance.get<ArtifactSubmissionWorkspace>(`/teams/${teamId}/milestones/${milestoneId}/artifact-draft`);
+    return response.data;
+  },
+  async saveTeamArtifactDraft(teamId: number, milestoneId: string, payload: ArtifactDraftRequest): Promise<ArtifactDraft> {
+    const response = await axiosInstance.put<ArtifactDraft>(`/teams/${teamId}/milestones/${milestoneId}/artifact-draft`, payload);
+    return response.data;
+  },
+  async submitTeamArtifact(teamId: number, milestoneId: string, payload: ArtifactSubmissionRequest, key: string): Promise<ArtifactSubmission> {
+    const response = await axiosInstance.post<ArtifactSubmission>(`/teams/${teamId}/milestones/${milestoneId}/artifact-draft/submissions`, payload, { headers: { "Idempotency-Key": key } });
+    return response.data;
+  },
+  async getTeamArtifactSubmissions(teamId: number, milestoneId?: string): Promise<Array<{ submission: ArtifactSubmission; reviewSubmissionId?: string | null; submitterId: string; submitterName?: string | null; submitterEmail?: string | null }>> {
+    const response = await axiosInstance.get<Array<{ submission: ArtifactSubmission; reviewSubmissionId?: string | null; submitterId: string; submitterName?: string | null; submitterEmail?: string | null }>>(`/teams/${teamId}/milestones/submissions`, { params: milestoneId ? { milestoneId } : undefined });
+    return response.data;
+  },
+
+  async getArtifactWorkspace(projectId: string, milestoneId: string): Promise<ArtifactSubmissionWorkspace> {
+    const response = await axiosInstance.get<ArtifactSubmissionWorkspace>(
+      `/projects/${projectId}/milestones/${milestoneId}/artifact-draft`,
+    );
+    return response.data;
+  },
+
+  async saveArtifactDraft(projectId: string, milestoneId: string, payload: ArtifactDraftRequest): Promise<ArtifactDraft> {
+    const response = await axiosInstance.put<ArtifactDraft>(
+      `/projects/${projectId}/milestones/${milestoneId}/artifact-draft`, payload,
+    );
+    return response.data;
+  },
+
+  async uploadArtifact(projectId: string, milestoneId: string, file: File): Promise<ArtifactAttachment> {
+    const payload = new FormData();
+    payload.append("file", file);
+    const response = await axiosInstance.post<ArtifactAttachment>(
+      `/projects/${projectId}/milestones/${milestoneId}/artifact-draft/attachments`, payload,
+    );
+    return response.data;
+  },
+
+  async submitArtifact(projectId: string, milestoneId: string, payload: ArtifactSubmissionRequest,
+    idempotencyKey: string): Promise<ArtifactSubmission> {
+    const response = await axiosInstance.post<ArtifactSubmission>(
+      `/projects/${projectId}/milestones/${milestoneId}/artifact-draft/submissions`, payload,
+      { headers: { "Idempotency-Key": idempotencyKey } },
+    );
+    return response.data;
   },
 };

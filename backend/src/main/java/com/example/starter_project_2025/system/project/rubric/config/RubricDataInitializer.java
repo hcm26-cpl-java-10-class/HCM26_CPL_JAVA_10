@@ -3,6 +3,8 @@ package com.example.starter_project_2025.system.project.rubric.config;
 import com.example.starter_project_2025.system.project.milestone.integration.mock.MockMilestoneData;
 import com.example.starter_project_2025.system.project.rubric.domain.*;
 import com.example.starter_project_2025.system.project.rubric.repository.RubricRepository;
+import com.example.starter_project_2025.system.project.rubric.integration.RubricTenantIdentity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
@@ -24,8 +26,9 @@ public class RubricDataInitializer implements CommandLineRunner {
     private static final UUID ACTOR_ID = UUID.nameUUIDFromBytes("teacher@example.com".getBytes(StandardCharsets.UTF_8));
     private final RubricRepository repository;
     private final Clock milestoneClock;
+    private final JdbcTemplate jdbc;
 
-    @Value("${milestone.mock.seed-enabled:true}")
+    @Value("${rubric.seed-enabled:true}")
     private boolean enabled;
 
     @Override
@@ -51,10 +54,15 @@ public class RubricDataInitializer implements CommandLineRunner {
 
     private void seed(UUID rubricId, UUID versionId, String name, String description,
                       List<RubricVersion.CriterionValue> criteria) {
-        if (repository.existsById(rubricId)) return;
+        if (repository.existsById(rubricId)) {
+            jdbc.update("UPDATE rubrics SET tenant_id = ? WHERE tenant_id = ?",
+                    RubricTenantIdentity.from(MockMilestoneData.TENANT_ID),
+                    UUID.nameUUIDFromBytes(("tenant:" + MockMilestoneData.TENANT_ID).getBytes(StandardCharsets.UTF_8)));
+            return;
+        }
         Instant now = milestoneClock.instant();
-        Rubric rubric = Rubric.create(rubricId, java.util.UUID.nameUUIDFromBytes(("tenant:" + MockMilestoneData.TENANT_ID)
-                .getBytes(java.nio.charset.StandardCharsets.UTF_8)), name, description, ACTOR_ID, now);
+        Rubric rubric = Rubric.create(rubricId, RubricTenantIdentity.from(MockMilestoneData.TENANT_ID),
+                name, description, ACTOR_ID, now);
         RubricVersion version = RubricVersion.draft(versionId, rubric, 1, ACTOR_ID, now);
         version.replaceDraft(name, description, criteria, ACTOR_ID, now);
         version.publish(ACTOR_ID, now);

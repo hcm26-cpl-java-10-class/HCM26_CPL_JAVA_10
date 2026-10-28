@@ -91,7 +91,7 @@ class MilestoneRiskIntegrationTest {
     }
     Milestone milestone(String title,Instant deadline,boolean open) {
         var row=Milestone
-                    .create(MilestoneRiskIdentity.tenant(tenantId),projectAlias,title,null,deadline,true,UUID.randomUUID(),
+                .create(MilestoneRiskIdentity.tenant(tenantId),projectAlias,title,null,deadline,true,UUID.randomUUID(),
                 null,LatePolicyType.NO_LATE,null,null,MilestoneRiskIdentity.actor(mentorId),now);
         if(open)row.openForWork(MilestoneRiskIdentity.actor(mentorId),now);
         return milestones.saveAndFlush(row);
@@ -270,7 +270,7 @@ class MilestoneRiskIntegrationTest {
     void localRiskFixturesSeedSixCasesOnceWithoutResettingEditedMilestones() throws Exception {
         taskDemo.seed();riskDemo.seed();
         var admin=users.findByEmail("admin@example.com").orElseThrow();
-        var project=taskDatasets.findById(admin.getTenant().getId()).orElseThrow().getTaskProjectId();
+        var project=1L;
         var rows=milestones.findByProjectIdAndTenantIdAndActiveTrueOrderByDeadlineAscIdAsc(project,MilestoneRiskIdentity.tenant(admin.getTenant().getId()));
         assertThat(rows).hasSize(6);
         var teacher=users.findByEmail("teacher@example.com").orElseThrow();

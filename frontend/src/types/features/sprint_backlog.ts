@@ -25,6 +25,16 @@ export interface SprintBacklogDTO extends BaseDTO {
   sprintId?: number | null;
   /** Read-only convenience value so the UI can show the sprint name. */
   sprintName?: string | null;
+  /** Owning project (UFR-PRJ-003-02), derived by the backend when omitted. */
+  projectId?: number | null;
+  /** Linked milestone (UFR-PRJ-003-02). */
+  milestoneId?: string | null;
+  /** Read-only convenience value so the UI can show the milestone title. */
+  milestoneName?: string | null;
+  /** Milestone deadline (ISO instant), read-only. */
+  milestoneDueDate?: string | null;
+  /** Set to `true` to remove the milestone link (update only). */
+  clearMilestone?: boolean;
   assigneeProjectMemberId?: number | null;
   title?: string;
   description?: string | null;
@@ -43,6 +53,8 @@ export interface SprintBacklogDTO extends BaseDTO {
 
 export interface SprintBacklogFilter extends BaseFilter {
   sprintId?: number;
+  projectId?: number;
+  milestoneId?: string;
   status?: SprintBacklogStatus;
   workType?: SprintBacklogWorkType;
   priority?: TaskPriority;

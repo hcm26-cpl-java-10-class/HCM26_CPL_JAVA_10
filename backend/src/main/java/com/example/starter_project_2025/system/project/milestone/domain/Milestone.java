@@ -4,15 +4,20 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "milestones")
+@Table(name = "milestones", indexes = {
+        @Index(name = "idx_milestone_tenant_team", columnList = "tenant_id,team_id,is_active,deadline"),
+        @Index(name = "idx_milestone_tenant_project", columnList = "tenant_id,project_id,is_active,deadline")
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Milestone {
@@ -71,6 +76,21 @@ public class Milestone {
     @Column(name = "late_penalty_percent", precision = 5, scale = 2)
     private BigDecimal latePenaltyPercent;
 
+    @Column(name = "allow_resubmission", nullable = false)
+    @ColumnDefault("true")
+    private boolean allowResubmission;
+
+    @Column(name = "max_submission_attempts")
+    @ColumnDefault("3")
+    private Integer maxSubmissionAttempts;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "late_penalty_basis", nullable = false, columnDefinition = "varchar(20) default 'FIXED'")
+    private LatePenaltyBasis latePenaltyBasis = LatePenaltyBasis.FIXED;
+
+    @Column(precision = 5, scale = 2)
+    private BigDecimal weight;
+
     @Version
     @Column(nullable = false)
     private long version;
@@ -121,6 +141,8 @@ public class Milestone {
         milestone.latePolicyType = latePolicyType;
         milestone.lateUntil = lateUntil;
         milestone.latePenaltyPercent = latePenaltyPercent;
+        milestone.allowResubmission = true;
+        milestone.maxSubmissionAttempts = 3;
         milestone.createdAt = now;
         milestone.createdBy = actorId;
         milestone.updatedAt = now;
@@ -128,8 +150,28 @@ public class Milestone {
         return milestone;
     }
 
+    public void configureResubmission(boolean allowed, Integer maxAttempts) {
+        this.allowResubmission = allowed;
+        this.maxSubmissionAttempts = allowed ? maxAttempts : null;
+    }
+
     public void addChecklistItem(String content, boolean mandatory, int orderIndex) {
         checklistItems.add(MilestoneChecklistItem.create(this, content, mandatory, orderIndex));
+    }
+
+    public void configureAssessment(BigDecimal weight, LatePenaltyBasis penaltyBasis) {
+        this.weight = weight;
+        this.latePenaltyBasis = latePolicyType == LatePolicyType.ALLOW_LATE && penaltyBasis != null
+                ? penaltyBasis : LatePenaltyBasis.FIXED;
+    }
+
+    public BigDecimal latePenaltyAt(Instant submittedAt) {
+        if (!submittedAt.isAfter(deadline) || latePolicyType != LatePolicyType.ALLOW_LATE || latePenaltyPercent == null) return null;
+        if (latePenaltyBasis != LatePenaltyBasis.PER_DAY) return latePenaltyPercent;
+        Duration elapsed = Duration.between(deadline, submittedAt);
+        long days = elapsed.toDays();
+        if (!elapsed.minusDays(days).isZero()) days++;
+        return latePenaltyPercent.multiply(BigDecimal.valueOf(days)).min(new BigDecimal("100"));
     }
 
     public void openForWork(UUID actorId, Instant now) {

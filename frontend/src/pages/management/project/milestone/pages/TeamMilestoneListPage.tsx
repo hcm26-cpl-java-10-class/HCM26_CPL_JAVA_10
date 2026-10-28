@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { CalendarClock } from "lucide-react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 import { milestoneApi } from "@/api/features/milestone.api";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +17,8 @@ export function TeamMilestoneListPage() {
   });
   return <MainLayout pathName={{ teams: "Teams", milestones: "Milestones" }}>
     <Card>
-      <CardHeader><CardTitle>Team milestones</CardTitle></CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between gap-4"><CardTitle>Team milestones</CardTitle>
+        <Button asChild variant="outline"><Link to="/milestones">Change team</Link></Button></CardHeader>
       <CardContent>
         {query.isPending && <p className="py-8 text-sm text-muted-foreground">Loading milestones...</p>}
         {query.isError && <p className="rounded-md border p-6 text-sm text-destructive">Could not load team milestones.</p>}

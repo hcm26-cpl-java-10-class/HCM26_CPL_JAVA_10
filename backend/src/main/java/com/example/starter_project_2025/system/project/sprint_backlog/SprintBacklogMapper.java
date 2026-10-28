@@ -9,25 +9,30 @@ import org.mapstruct.MappingTarget;
 import org.mapstruct.NullValuePropertyMappingStrategy;
 
 /**
- * The {@code sprint} association is never mapped from the DTO: it is resolved
- * by {@link SprintBacklogServiceImpl} (existing sprint check) and assigned on
- * the owning side there.
+ * The {@code sprint} and {@code milestone} associations are never mapped from
+ * the DTO: they are resolved by {@link SprintBacklogServiceImpl} (existing
+ * sprint / active milestone check) and assigned on the owning side there.
  */
 @Mapper(componentModel = "spring", config = BaseMapperConfig.class)
 public interface SprintBacklogMapper extends BaseCrudMapper<SprintBacklog, SprintBacklogDTO> {
 
     @Override
     @Mapping(target = "sprint", ignore = true)
+    @Mapping(target = "milestone", ignore = true)
     @Mapping(target = "version", ignore = true)
     SprintBacklog toEntity(SprintBacklogDTO request);
 
     @Override
     @Mapping(target = "sprintId", source = "sprint.id")
     @Mapping(target = "sprintName", source = "sprint.name")
+    @Mapping(target = "milestoneId", source = "milestone.id")
+    @Mapping(target = "milestoneName", source = "milestone.title")
+    @Mapping(target = "milestoneDueDate", source = "milestone.deadline")
     SprintBacklogDTO toResponse(SprintBacklog entity);
 
     @Override
     @Mapping(target = "sprint", ignore = true)
+    @Mapping(target = "milestone", ignore = true)
     @Mapping(target = "version", ignore = true)
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     void update(@MappingTarget SprintBacklog entity, SprintBacklogDTO request);
