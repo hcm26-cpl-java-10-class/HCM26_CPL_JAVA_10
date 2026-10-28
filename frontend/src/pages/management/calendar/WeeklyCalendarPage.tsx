@@ -76,6 +76,9 @@ function SessionCard({ session }: { session: CalendarSessionResponse }) {
         </div>
 
         <div className="space-y-0.5 px-2 py-1 text-[11px] leading-4">
+          <p className="font-semibold text-slate-900 truncate" title={session.title || ""}>
+            {session.title || `Buổi học #${session.id}`}
+          </p>
           <p>
             <span className="text-muted-foreground">ID chủ đề: </span>
             <strong>{session.topicId}</strong>

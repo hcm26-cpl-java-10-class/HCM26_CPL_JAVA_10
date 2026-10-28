@@ -13,10 +13,14 @@ import java.util.Objects;
 /** Standalone development data; never used as a fallback for a failed remote API. */
 @Service
 @Profile("local")
-@lombok.RequiredArgsConstructor
 public class LocalExternalApiService implements ExternalApiService {
     private final ManagedClassDirectory managedClasses;
     private final ManagedTrainerDirectory managedTrainers;
+
+    public LocalExternalApiService(ManagedClassDirectory managedClasses, ManagedTrainerDirectory managedTrainers) {
+        this.managedClasses = managedClasses;
+        this.managedTrainers = managedTrainers;
+    }
 
     @Override
     public boolean isSampleData() {
@@ -56,7 +60,8 @@ public class LocalExternalApiService implements ExternalApiService {
     }
 
     private ExternalClassDTO sampleClass(Long id, String code, String name, String status) {
-        return ExternalClassDTO.builder().id(id).code(code).name(name).status(status).plannedSize(25).build();
+        return ExternalClassDTO.builder().id(id).code(code).name(name).status(status).plannedSize(25)
+                .startDate("2026-01-01").endDate("2027-12-31").build();
     }
 
     private boolean matchesStatus(String requested, String actual) {

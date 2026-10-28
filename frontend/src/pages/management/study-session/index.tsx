@@ -33,22 +33,106 @@ export default function StudySessionPage() {
   const [applied, setApplied] = useState("");
   const [editor, setEditor] = useState<StudySessionRow | "new" | null>(null);
   const [action, setAction] = useState<{ row: StudySessionRow; mode: "cancel" | "complete" } | null>(null);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
   const client = useQueryClient();
   const query = useQuery({ queryKey: ["study-sessions", page, applied], queryFn: ({ signal }) => studySessionApi.list({ page, search: applied }, signal) });
+
   function refresh() {
+    setSelectedIds([]);
     for (const prefix of ["study-sessions", "teaching-assignments", "teaching-assignment-sessions", "teaching-assignment-detail", "teaching-assignment-edit-context", "teaching-assignment-lifecycle", "teaching-assignment-impact", "teaching-assignment-end-impact", "calendar"]) {
       void client.invalidateQueries({ queryKey: [prefix] });
     }
   }
+
+  const handleBulkDelete = async () => {
+    if (!selectedIds.length) return;
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa ${selectedIds.length} buổi học đã chọn?`)) return;
+    try {
+      setIsDeleting(true);
+      await studySessionApi.deleteBulk(selectedIds);
+      toast.success(`Đã xóa thành công ${selectedIds.length} buổi học.`);
+      refresh();
+    } catch (err) {
+      toast.error(errorText(err));
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDeleteSingle = async (id: number) => {
+    if (!window.confirm("Bạn có chắc chắn muốn xóa buổi học này không?")) return;
+    try {
+      await studySessionApi.delete(id);
+      toast.success("Đã xóa buổi học thành công.");
+      refresh();
+    } catch (err) {
+      toast.error(errorText(err));
+    }
+  };
+
+  const allPageIds = query.data?.content.map((r) => r.id) || [];
+  const isAllSelected = allPageIds.length > 0 && allPageIds.every((id) => selectedIds.includes(id));
+
   return <MainLayout><div className="space-y-6 p-4 sm:p-6">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="flex items-center gap-2 text-2xl font-semibold"><CalendarDays />Study Sessions</h1><p className="mt-1 text-muted-foreground">Schedule lessons using the class curriculum and effective teaching assignments.</p></div>
       <div className="flex gap-2"><Button variant="outline" disabled={query.isFetching} onClick={() => void query.refetch()}><RefreshCw className="size-4" />Refresh</Button>{hasPermission("STUDY_SESSION_CREATE") && <Button onClick={() => setEditor("new")}><Plus className="size-4" />New session</Button>}</div></div>
     <Card><CardContent className="space-y-4 pt-6">
-      <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); setApplied(search.trim()); setPage(0); }}><Input aria-label="Search study sessions" placeholder="Search title, room or lecturer" value={search} onChange={(event) => setSearch(event.target.value)} /><Button type="submit">Search</Button></form>
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+        <form className="flex gap-2 flex-1 max-w-md" onSubmit={(event) => { event.preventDefault(); setApplied(search.trim()); setPage(0); }}><Input aria-label="Search study sessions" placeholder="Search title, room or lecturer" value={search} onChange={(event) => setSearch(event.target.value)} /><Button type="submit">Search</Button></form>
+        {selectedIds.length > 0 && (
+          <div className="flex items-center gap-2 p-2 bg-rose-50 border border-rose-200 rounded-lg">
+            <span className="text-xs font-semibold text-rose-800">Đã chọn {selectedIds.length} buổi</span>
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSelectedIds([])}>Bỏ chọn</Button>
+            <Button variant="destructive" size="sm" className="h-7 text-xs font-semibold" disabled={isDeleting} onClick={handleBulkDelete}>
+              {isDeleting ? "Đang xóa..." : `Xóa ${selectedIds.length} buổi đã chọn`}
+            </Button>
+          </div>
+        )}
+      </div>
       {query.isPending ? <p role="status" className="flex gap-2 py-6"><LoaderCircle className="size-4 animate-spin" />Loading sessions...</p> : query.isError ? <Failure error={query.error} /> : <>
-        <Table><TableHeader><TableRow><TableHead>Session</TableHead><TableHead>Date / time</TableHead><TableHead>Trainer</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader><TableBody>
-          {query.data.content.map((row) => <TableRow key={row.id}><TableCell><p className="font-medium">{row.title}</p><p className="text-xs text-muted-foreground">{row.subjectName} · {row.classId ? `Class #${row.classId}` : "Legacy session"}</p></TableCell><TableCell>{row.sessionDate}<p className="text-xs text-muted-foreground">{row.startTime} – {row.endTime}</p></TableCell><TableCell>{row.lecturer}</TableCell><TableCell><Badge variant="secondary">{row.status}</Badge></TableCell><TableCell>{row.status === "SCHEDULED" && hasPermission("STUDY_SESSION_UPDATE") && <div className="flex flex-wrap gap-1"><Button variant="ghost" size="sm" onClick={() => setEditor(row)}>Edit</Button><Button variant="ghost" size="sm" onClick={() => setAction({ row, mode: "cancel" })}>Cancel</Button><Button variant="ghost" size="sm" onClick={() => setAction({ row, mode: "complete" })}>Complete</Button></div>}</TableCell></TableRow>)}
-          {!query.data.content.length && <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">No study sessions found.</TableCell></TableRow>}
+        <Table><TableHeader><TableRow>
+          <TableHead className="w-10 text-center">
+            <input
+              type="checkbox"
+              aria-label="Chọn tất cả buổi học"
+              className="size-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+              checked={isAllSelected}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  setSelectedIds(Array.from(new Set([...selectedIds, ...allPageIds])));
+                } else {
+                  setSelectedIds(selectedIds.filter((id) => !allPageIds.includes(id)));
+                }
+              }}
+            />
+          </TableHead>
+          <TableHead>Session</TableHead><TableHead>Date / time</TableHead><TableHead>Trainer</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader><TableBody>
+          {query.data.content.map((row) => {
+            const isChecked = selectedIds.includes(row.id);
+            return <TableRow key={row.id} className={isChecked ? "bg-rose-50/40" : undefined}>
+              <TableCell className="text-center">
+                <input
+                  type="checkbox"
+                  aria-label={`Chọn buổi ${row.title}`}
+                  className="size-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  checked={isChecked}
+                  onChange={(e) => {
+                    if (e.target.checked) setSelectedIds([...selectedIds, row.id]);
+                    else setSelectedIds(selectedIds.filter((id) => id !== row.id));
+                  }}
+                />
+              </TableCell>
+              <TableCell><p className="font-medium">{row.title}</p><p className="text-xs text-muted-foreground">{row.subjectName} · {row.classId ? `Class #${row.classId}` : "Legacy session"}</p></TableCell><TableCell>{row.sessionDate}<p className="text-xs text-muted-foreground">{row.startTime} – {row.endTime}</p></TableCell><TableCell>{row.lecturer}</TableCell><TableCell><Badge variant="secondary">{row.status}</Badge></TableCell><TableCell><div className="flex flex-wrap gap-1">
+                {row.status === "SCHEDULED" && hasPermission("STUDY_SESSION_UPDATE") && <>
+                  <Button variant="ghost" size="sm" onClick={() => setEditor(row)}>Edit</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setAction({ row, mode: "cancel" })}>Cancel</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setAction({ row, mode: "complete" })}>Complete</Button>
+                </>}
+                <Button variant="ghost" size="sm" className="text-rose-600 hover:text-rose-700 hover:bg-rose-50" onClick={() => handleDeleteSingle(row.id)}>Delete</Button>
+              </div></TableCell></TableRow>;
+          })}
+          {!query.data.content.length && <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">No study sessions found.</TableCell></TableRow>}
         </TableBody></Table>
         <div className="flex items-center justify-end gap-3"><span className="text-sm">{query.data.totalElements} sessions · Page {page + 1} / {Math.max(1, query.data.totalPages)}</span><Button variant="outline" size="icon" aria-label="Previous session page" disabled={page === 0 || query.isFetching} onClick={() => setPage((p) => p - 1)}><ChevronLeft className="size-4" /></Button><Button variant="outline" size="icon" aria-label="Next session page" disabled={page + 1 >= query.data.totalPages || query.isFetching} onClick={() => setPage((p) => p + 1)}><ChevronRight className="size-4" /></Button></div>
       </>}

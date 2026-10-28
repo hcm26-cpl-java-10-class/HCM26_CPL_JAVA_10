@@ -16,4 +16,7 @@ export const studySessionApi = {
   update: async (id: number, body: StudySessionWrite) => (await axios.put<StudySessionRow>(`/study-sessions/${id}`, body)).data,
   cancel: async (id: number, reason: string) => (await axios.patch(`/study-sessions/${id}/cancel`, { reason })).data,
   complete: async (id: number, notes: string) => (await axios.patch(`/study-sessions/${id}/complete`, { notes })).data,
+  delete: async (id: number) => (await axios.delete(`/study-sessions/${id}`)).data,
+  deleteBulk: async (ids: number[]) => (await axios.delete<{ message: string; count: number }>("/study-sessions/bulk", { data: ids })).data,
+  deleteByClass: async (classId: number) => (await axios.delete<{ message: string; count: number }>(`/study-sessions/classes/${classId}`)).data,
 };
