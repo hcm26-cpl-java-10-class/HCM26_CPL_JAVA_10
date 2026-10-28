@@ -37,7 +37,7 @@ public record AllocationReadinessResponse(
 ) {
 
     /** A free student that has no team in the session yet. */
-    public record UnassignedStudent(Long memberId, String fullName) {
+    public record UnassignedStudent(Long memberId, String fullName, String userCode) {
     }
 
     /**

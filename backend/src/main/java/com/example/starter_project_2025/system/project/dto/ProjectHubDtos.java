@@ -13,7 +13,7 @@ import java.util.List;
 public final class ProjectHubDtos {
     private ProjectHubDtos() { }
 
-    public record Member(Long id, String name, String email) { }
+    public record Member(Long id, String name, String email, String userCode) { }
     public record Mentor(Long id, String name, String email) { }
     public record MentorAssignment(Long mentorId) { }
     public record ManagedMember(Long userId, String userCode, String displayName,

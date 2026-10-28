@@ -110,6 +110,7 @@ export function UserDetailPage() {
                 <Item label="Username">{user?.username}</Item>
                 <Item label="Email">{user?.email}</Item>
                 <Item label="Mã nhân viên">{user?.employeeCode}</Item>
+                <Item label="Mã sinh viên">{user?.userCode || "Chưa được gán"}</Item>
                 <Item label="Số điện thoại">{user?.phone}</Item>
                 <Item label="Trạng thái">
                   <Badge variant={STATUS_VARIANT[status]}>{statusLabel}</Badge>

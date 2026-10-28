@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { workspaceApi } from "@/api/features/workspace.api";
 import type { ProjectLog, ProjectLogAuthorOption, ProjectLogAttendeeOption, ProjectLogTargetType, ProjectLogType, ProjectLogOption } from "@/types/features/workspace";
@@ -8,7 +8,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { WorkspaceEmptyState, getWorkspaceError } from "./workspace.shared";
-import { FileText, RefreshCw } from "lucide-react";
+import { FileText } from "lucide-react";
+
+const LOG_TITLE_MAX_LENGTH = 100;
+const LOG_TEXT_MAX_LENGTH = 2000;
+const DECISION_FIELD_MAX_WORDS = 1000;
+const ACTIVITY_PAGE_SIZE = 5;
+
+function countWords(value: string) {
+  return value.trim() ? value.trim().split(/\s+/).length : 0;
+}
 
 type LogForm = {
   type: ProjectLogType; title: string; content: string; rationale: string; impactAnalysis: string;
@@ -58,10 +67,10 @@ export function WorkspaceProjectLogsPanel({ workspaceId }: { workspaceId: number
   const [attendeeId, setAttendeeId] = useState("");
   const [hasActionItems, setHasActionItems] = useState("");
   const [page, setPage] = useState(0);
+  const [activityPage, setActivityPage] = useState(0);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<LogForm>(emptyForm);
   const [attendeeSearch, setAttendeeSearch] = useState("");
-  const [historyId, setHistoryId] = useState<number>();
   const query = useQuery({
     queryKey: ["project-logs", workspaceId, type, search, createdBy, createdFrom, createdTo, linkedTarget,
       decisionStatus, decisionLinkType, riskCategory, riskSeverity, riskStatus, riskTarget,
@@ -98,6 +107,15 @@ export function WorkspaceProjectLogsPanel({ workspaceId }: { workspaceId: number
     queryFn: ({ signal }) => workspaceApi.section(workspaceId, "activity", signal),
     retry: false
   });
+  const activityItems = activity.data?.items ?? [];
+  const activityPageCount = Math.ceil(activityItems.length / ACTIVITY_PAGE_SIZE);
+  const visibleActivityItems = activityItems.slice(
+    activityPage * ACTIVITY_PAGE_SIZE,
+    (activityPage + 1) * ACTIVITY_PAGE_SIZE
+  );
+  useEffect(() => {
+    setActivityPage(0);
+  }, [activityItems.length]);
   const createMutation = useMutation({
     mutationFn: () => workspaceApi.createProjectLog(workspaceId, {
       ...form,
@@ -116,8 +134,8 @@ export function WorkspaceProjectLogsPanel({ workspaceId }: { workspaceId: number
     }
   });
   const riskMutation = useMutation({
-    mutationFn: ({ item, mitigationPlan, status }: { item: ProjectLog; mitigationPlan: string; status: string }) =>
-      workspaceApi.updateRiskLog(workspaceId, item.id, { mitigationPlan, status }, item.version, crypto.randomUUID()),
+    mutationFn: ({ item, status }: { item: ProjectLog; status: string }) =>
+      workspaceApi.updateRiskLog(workspaceId, item.id, { status }, item.version, crypto.randomUUID()),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["project-logs", workspaceId] });
       await queryClient.invalidateQueries({ queryKey: ["workspace-section", workspaceId, "activity"] });
@@ -186,7 +204,6 @@ export function WorkspaceProjectLogsPanel({ workspaceId }: { workspaceId: number
       <CardHeader><div className="flex flex-wrap items-center justify-between gap-3">
         <CardTitle>Risks, Decisions & Logs</CardTitle>
         <div className="flex gap-2">
-          <Button type="button" variant="outline" disabled={query.isFetching} onClick={() => void query.refetch()}><RefreshCw />Refresh</Button>
           <Button type="button" onClick={() => {
             setCreating(value => !value);
             createMutation.reset();
@@ -206,42 +223,59 @@ export function WorkspaceProjectLogsPanel({ workspaceId }: { workspaceId: number
               </select>
             </label>
             <label className="space-y-1 text-sm">Title
-              <Input value={form.title} maxLength={255} required onChange={event => setForm({ ...form, title: event.target.value })} />
+              <Input value={form.title} maxLength={LOG_TITLE_MAX_LENGTH} required onChange={event => setForm({ ...form, title: event.target.value })} />
             </label>
           </div>
           <label className="block space-y-1 text-sm">Content
-            <Textarea value={form.content} required rows={3} onChange={event => setForm({ ...form, content: event.target.value })} />
+            <Textarea value={form.content} maxLength={LOG_TEXT_MAX_LENGTH} required rows={3} onChange={event => setForm({ ...form, content: event.target.value })} />
           </label>
-          {form.type === "DECISION" && <div className="grid gap-3 md:grid-cols-2">
-            <label className="space-y-1 text-sm">Rationale
-              <Textarea required value={form.rationale} onChange={event => setForm({ ...form, rationale: event.target.value })} />
+          {form.type === "DECISION" && <div className="space-y-3">
+            <label className="block space-y-1 text-sm">Rationale
+              <Textarea required rows={3} value={form.rationale} onChange={event => {
+                const value = event.target.value;
+                if (countWords(value) <= DECISION_FIELD_MAX_WORDS)
+                  setForm(current => ({ ...current, rationale: value }));
+              }} />
+              <span className="block text-xs text-muted-foreground">
+                {countWords(form.rationale).toLocaleString()} / {DECISION_FIELD_MAX_WORDS.toLocaleString()} words
+              </span>
             </label>
-            <label className="space-y-1 text-sm">Impact analysis
-              <Textarea value={form.impactAnalysis} onChange={event => setForm({ ...form, impactAnalysis: event.target.value })} />
-            </label>
-          </div>}
-          {form.type === "RISK_ISSUE" && <div className="grid gap-3 md:grid-cols-3">
-            <label className="space-y-1 text-sm">Category
-              <select className="w-full rounded-md border bg-background px-3 py-2" value={form.category}
-                onChange={event => setForm({ ...form, category: event.target.value as LogForm["category"] })}>
-                <option value="RISK">Risk</option><option value="ISSUE">Issue</option>
-              </select>
-            </label>
-            <label className="space-y-1 text-sm">Severity
-              <select className="w-full rounded-md border bg-background px-3 py-2" value={form.severity}
-                onChange={event => setForm({ ...form, severity: event.target.value as LogForm["severity"] })}>
-                <option>LOW</option><option>MEDIUM</option><option>HIGH</option><option>CRITICAL</option>
-              </select>
-            </label>
-            <label className="space-y-1 text-sm">Mitigation plan
-              <Textarea value={form.mitigationPlan} onChange={event => setForm({ ...form, mitigationPlan: event.target.value })} />
+            <label className="block space-y-1 text-sm">Impact analysis
+              <Textarea rows={3} value={form.impactAnalysis} onChange={event => {
+                const value = event.target.value;
+                if (countWords(value) <= DECISION_FIELD_MAX_WORDS)
+                  setForm(current => ({ ...current, impactAnalysis: value }));
+              }} />
+              <span className="block text-xs text-muted-foreground">
+                {countWords(form.impactAnalysis).toLocaleString()} / {DECISION_FIELD_MAX_WORDS.toLocaleString()} words
+              </span>
             </label>
           </div>}
+          {form.type === "RISK_ISSUE" && <>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="space-y-1 text-sm">Category
+                <select className="w-full rounded-md border bg-background px-3 py-2" value={form.category}
+                  onChange={event => setForm({ ...form, category: event.target.value as LogForm["category"] })}>
+                  <option value="RISK">Risk</option><option value="ISSUE">Issue</option>
+                </select>
+              </label>
+              <label className="space-y-1 text-sm">Severity
+                <select className="w-full rounded-md border bg-background px-3 py-2" value={form.severity}
+                  onChange={event => setForm({ ...form, severity: event.target.value as LogForm["severity"] })}>
+                  <option>LOW</option><option>MEDIUM</option><option>HIGH</option><option>CRITICAL</option>
+                </select>
+              </label>
+            </div>
+            <label className="block space-y-1 text-sm">Mitigation plan
+              <Textarea value={form.mitigationPlan} maxLength={LOG_TEXT_MAX_LENGTH} rows={3}
+                onChange={event => setForm({ ...form, mitigationPlan: event.target.value })} />
+            </label>
+          </>}
           {form.type === "MEETING_NOTE" && <div className="grid gap-3 md:grid-cols-3">
             <label className="space-y-1 text-sm">Meeting date
               <Input type="datetime-local" required value={form.meetingDate} onChange={event => setForm({ ...form, meetingDate: event.target.value })} />
             </label>
-            <fieldset className="space-y-2 md:col-span-2">
+            <fieldset className="space-y-2 md:col-span-3">
               <legend className="text-sm font-medium">Attendees <span className="text-destructive">*</span></legend>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs text-muted-foreground">Select who participated. {selectedAttendeeIds.length} selected.</p>
@@ -281,8 +315,9 @@ export function WorkspaceProjectLogsPanel({ workspaceId }: { workspaceId: number
                   </p>}
               </div>
             </fieldset>
-            <label className="space-y-1 text-sm">Action items
-              <Textarea value={form.actionItems} onChange={event => setForm({ ...form, actionItems: event.target.value })} />
+            <label className="space-y-1 text-sm md:col-span-3">Action items
+              <Textarea value={form.actionItems} maxLength={LOG_TEXT_MAX_LENGTH} rows={3}
+                onChange={event => setForm({ ...form, actionItems: event.target.value })} />
             </label>
           </div>}
           <div className="grid gap-3 md:grid-cols-2">
@@ -371,9 +406,8 @@ export function WorkspaceProjectLogsPanel({ workspaceId }: { workspaceId: number
       title="No project logs yet" description="Create the first decision, risk or meeting note for this project."
       action={<Button onClick={() => setCreating(true)}>Create first log</Button>} /></Card>
       : <div className="space-y-3">{query.data?.content.map(item =>
-        <LogCard key={item.id} item={item} workspaceId={workspaceId} historyOpen={historyId === item.id}
-          onToggleHistory={() => setHistoryId(current => current === item.id ? undefined : item.id)}
-          onUpdateRisk={(mitigationPlan, status) => riskMutation.mutate({ item, mitigationPlan, status })}
+        <LogCard key={item.id} item={item}
+          onUpdateRisk={status => riskMutation.mutate({ item, status })}
           updating={riskMutation.isPending && riskMutation.variables?.item.id === item.id}
           updateError={riskMutation.isError && riskMutation.variables?.item.id === item.id ? riskMutation.error : undefined} />)}</div>}
     {query.data && query.data.totalPages > 1 && <div className="flex items-center justify-between">
@@ -385,64 +419,63 @@ export function WorkspaceProjectLogsPanel({ workspaceId }: { workspaceId: number
       <CardHeader><CardTitle>Activity feed</CardTitle></CardHeader>
       <CardContent>{activity.isPending ? <div className="h-16 animate-pulse rounded-lg bg-muted" />
         : activity.isError ? <p role="alert" className="text-sm text-destructive">{getWorkspaceError(activity.error)}</p>
-          : activity.data?.items.length ? <div className="divide-y">{activity.data.items.map(event => <div key={event.id} className="py-3">
-            <p className="text-sm font-medium">{event.title}</p>
-            <p className="text-xs text-muted-foreground">{event.description} · {event.occurredAt ? new Date(event.occurredAt).toLocaleString() : ""}</p>
-          </div>)}</div> : <p className="text-sm text-muted-foreground">No activity recorded yet.</p>}</CardContent>
+          : activityItems.length ? <>
+            <div className="divide-y">{visibleActivityItems.map(event => <div key={event.id} className="py-3">
+              <p className="text-sm font-medium">{event.title}</p>
+              <p className="text-xs text-muted-foreground">{event.description} · {event.occurredAt ? new Date(event.occurredAt).toLocaleString() : ""}</p>
+            </div>)}</div>
+            {activityPageCount > 1 && <div className="mt-4 flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Page {activityPage + 1} of {activityPageCount} · {activityItems.length} activities</p>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" disabled={activityPage === 0}
+                  onClick={() => setActivityPage(current => current - 1)}>Previous</Button>
+                <Button type="button" variant="outline" disabled={activityPage + 1 >= activityPageCount}
+                  onClick={() => setActivityPage(current => current + 1)}>Next</Button>
+              </div>
+            </div>}
+          </> : <p className="text-sm text-muted-foreground">No activity recorded yet.</p>}</CardContent>
     </Card>
   </div>;
 }
 
-function LogCard({ item, workspaceId, historyOpen, onToggleHistory, onUpdateRisk, updating, updateError }: {
-  item: ProjectLog; workspaceId: number; historyOpen: boolean; onToggleHistory: () => void;
-  onUpdateRisk: (mitigationPlan: string, status: string) => void; updating: boolean; updateError?: unknown;
+function LogCard({ item, onUpdateRisk, updating, updateError }: {
+  item: ProjectLog; onUpdateRisk: (status: string) => void; updating: boolean; updateError?: unknown;
 }) {
-  const [plan, setPlan] = useState(item.mitigationPlan ?? "");
   const [status, setStatus] = useState(item.status);
-  const audit = useQuery({
-    queryKey: ["project-log-history", workspaceId, item.id],
-    queryFn: ({ signal }) => workspaceApi.projectLogHistory(workspaceId, item.id, signal),
-    enabled: historyOpen, retry: false
-  });
+  const typeLabel = item.type === "RISK_ISSUE"
+    ? item.category === "ISSUE" ? "Issue" : "Risk"
+    : item.type === "DECISION" ? "Decision" : "Meeting note";
   const linkLabel = item.targetType === "MILESTONE" ? "Milestone"
     : item.targetType === "SPRINT" ? "Sprint"
       : item.targetType === "TASK" ? "Task" : "Backlog item";
-  return <Card><CardContent className="space-y-3 pt-5">
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><p className="font-semibold">{item.title}</p><p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{item.content}</p></div>
-      <div className="flex gap-2"><Badge variant="outline">{item.type.replace("_", " ")}</Badge><Badge>{item.status}</Badge></div>
+  return <details className="rounded-xl border bg-card">
+    <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 p-4 [&::-webkit-details-marker]:hidden">
+      <span className="min-w-0 flex-1 truncate font-semibold">{item.title}</span>
+      <span className="flex flex-wrap items-center gap-2">
+        <Badge variant="outline">{typeLabel}</Badge><Badge>{item.status}</Badge>
+        <span className="text-xs text-muted-foreground">{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : ""}</span>
+      </span>
+    </summary>
+    <div className="space-y-3 border-t p-4">
+      <p className="whitespace-pre-wrap text-sm text-muted-foreground">{item.content}</p>
+      {item.rationale && <p className="text-sm"><strong>Rationale:</strong> {item.rationale}</p>}
+      {item.severity && <p className="text-sm"><strong>Severity:</strong> {item.severity} · {item.category}</p>}
+      {item.mitigationPlan && <p className="whitespace-pre-wrap text-sm"><strong>Mitigation:</strong> {item.mitigationPlan}</p>}
+      {item.meetingDate && <p className="text-sm"><strong>Meeting:</strong> {new Date(item.meetingDate).toLocaleString()} · {item.attendees?.map(attendee => attendee.name).join(", ")}</p>}
+      {item.actionItems && <p className="whitespace-pre-wrap text-sm"><strong>Action items:</strong> {item.actionItems}</p>}
+      <p className="text-xs text-muted-foreground">
+        {item.targetType && item.targetId ? <>{linkLabel} · {item.targetId} · </> : null}
+        {item.authorName ?? `Author ${item.createdBy ?? ""}`} · {item.createdAt ? new Date(item.createdAt).toLocaleString() : ""}
+      </p>
+      {item.type === "RISK_ISSUE" && <form className="grid gap-2 border-t pt-3 md:grid-cols-[1fr_auto]" onSubmit={event => {
+        event.preventDefault(); onUpdateRisk(status);
+      }}>
+        <select aria-label="Risk status" className="h-10 rounded-md border bg-background px-3" value={status} onChange={event => setStatus(event.target.value)}>
+          <option value="OPEN">Open</option><option value="IN_MITIGATION">In mitigation</option><option value="CLOSED">Closed</option>
+        </select>
+        <Button type="submit" variant="outline" disabled={updating || status === item.status}>{updating ? "Saving..." : "Update status"}</Button>
+      </form>}
+      {updateError !== undefined && <p role="alert" className="text-sm text-destructive">{getWorkspaceError(updateError)}</p>}
     </div>
-    {item.rationale && <p className="text-sm"><strong>Rationale:</strong> {item.rationale}</p>}
-    {item.severity && <p className="text-sm"><strong>Severity:</strong> {item.severity} · {item.category}</p>}
-    {item.mitigationPlan && <p className="whitespace-pre-wrap text-sm"><strong>Mitigation:</strong> {item.mitigationPlan}</p>}
-    {item.meetingDate && <p className="text-sm"><strong>Meeting:</strong> {new Date(item.meetingDate).toLocaleString()} · {item.attendees?.map(attendee => attendee.name).join(", ")}</p>}
-    {item.actionItems && <p className="whitespace-pre-wrap text-sm"><strong>Action items:</strong> {item.actionItems}</p>}
-    <p className="text-xs text-muted-foreground">
-      {item.targetType && item.targetId ? <>{linkLabel} · {item.targetId} · </> : null}
-      {item.authorName ?? `Author ${item.createdBy ?? ""}`} · {item.createdAt ? new Date(item.createdAt).toLocaleString() : ""}
-    </p>
-    {item.type === "RISK_ISSUE" && <form className="grid gap-2 border-t pt-3 md:grid-cols-[1fr_180px_auto]" onSubmit={event => {
-      event.preventDefault(); onUpdateRisk(plan, status);
-    }}>
-      <Textarea aria-label="Mitigation plan" value={plan} required onChange={event => setPlan(event.target.value)} />
-      <select aria-label="Risk status" className="h-10 rounded-md border bg-background px-3" value={status} onChange={event => setStatus(event.target.value)}>
-        <option value="OPEN">Open</option><option value="IN_MITIGATION">In mitigation</option><option value="CLOSED">Closed</option>
-      </select>
-      <Button type="submit" variant="outline" disabled={updating || !plan.trim()}>{updating ? "Saving..." : "Update risk"}</Button>
-    </form>}
-    {updateError !== undefined && <p role="alert" className="text-sm text-destructive">{getWorkspaceError(updateError)}</p>}
-    <Button type="button" size="sm" variant="ghost" onClick={onToggleHistory}>{historyOpen ? "Hide audit history" : "View audit history"}</Button>
-    {historyOpen && <div className="space-y-2 border-t pt-3">
-      {audit.isPending ? <p className="text-sm text-muted-foreground">Loading audit history...</p>
-        : audit.isError ? <p role="alert" className="text-sm text-destructive">{getWorkspaceError(audit.error)}</p>
-          : audit.data?.length ? audit.data.map(event => <div key={event.id} className="rounded-md bg-muted p-3 text-xs">
-            <p>{event.action} · actor {event.actorId} · {new Date(event.timestamp).toLocaleString()} · correlation {event.correlationId}</p>
-            {event.ip && <p>IP: {event.ip}</p>}
-            <details className="mt-2">
-              <summary className="cursor-pointer">Before / after</summary>
-              <pre className="mt-2 overflow-auto whitespace-pre-wrap">Before: {event.beforeJson}{"\n"}After: {event.afterJson}</pre>
-            </details>
-          </div>) : <p className="text-sm text-muted-foreground">No audit entries.</p>}
-    </div>}
-  </CardContent></Card>;
+  </details>;
 }

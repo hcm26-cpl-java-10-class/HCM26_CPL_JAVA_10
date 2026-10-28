@@ -305,6 +305,7 @@ public class ProjectTeamTemplateService {
                 .map(assignment -> new TeamProjectTemplateResponse.Member(
                         assignment.getClassMember().getId(),
                         assignment.getClassMember().getUser().getFullName(),
+                        assignment.getClassMember().getUser().getUserCode(),
                         ProjectMemberRole.parseRoles(assignment.getRole())))
                 .toList();
 

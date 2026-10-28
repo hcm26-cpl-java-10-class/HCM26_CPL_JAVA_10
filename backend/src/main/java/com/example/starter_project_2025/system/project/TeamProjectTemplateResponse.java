@@ -22,6 +22,6 @@ public record TeamProjectTemplateResponse(
         List<ProjectTemplateConstraints.RoleQuota> roleQuotas,
         List<Member> members
 ) {
-    public record Member(Long memberId, String fullName, List<String> roles) {
+    public record Member(Long memberId, String fullName, String userCode, List<String> roles) {
     }
 }

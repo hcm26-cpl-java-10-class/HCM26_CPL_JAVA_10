@@ -999,6 +999,7 @@ export default function TeamAllocationPage() {
     : members;
   const filteredMembers = memberOptions.filter((member) =>
     member.fullName.toLowerCase().includes(memberSearch.trim().toLowerCase()) ||
+    member.userCode?.toLowerCase().includes(memberSearch.trim().toLowerCase()) ||
     String(member.memberId).includes(memberSearch.trim()),
   );
   const publishableTeams = savedTeams.filter((team) => team.status === "DRAFT");
@@ -1120,33 +1121,15 @@ export default function TeamAllocationPage() {
     publishMutation.mutate([team.teamId]);
   };
 
-  const nameForMember = (memberId: number) =>
-    memberById.get(memberId)?.fullName ?? `Học viên #${memberId}`;
+  const nameForMember = (memberId: number) => {
+    const member = memberById.get(memberId);
+    if (!member) return `Học viên #${memberId}`;
+    return member.userCode ? `${member.fullName} (${member.userCode})` : member.fullName;
+  };
 
   return (
-    <MainLayout pathName={{ "team-allocation": "Phân nhóm dự án" }}>
+    <MainLayout pathName={{ "team-allocation": "Project Team Allocation" }}>
       <div className="mx-auto w-full max-w-7xl space-y-6">
-        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-900 px-6 py-8 text-white sm:px-9 sm:py-10">
-          <div className="pointer-events-none absolute -right-12 -top-24 size-72 rounded-full bg-blue-400/20 blur-3xl" />
-          <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-            <div className="max-w-2xl">
-              <Badge className="mb-4 border border-white/20 bg-white/10 text-blue-100 hover:bg-white/10">
-                ĐIỀU PHỐI LỚP HỌC
-              </Badge>
-              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-                Phân nhóm dự án thủ công
-              </h1>
-              <p className="mt-3 text-sm leading-6 text-blue-100/80 sm:text-base">
-                Chọn học viên, lưu nhóm ở trạng thái nháp và publish khi đã sẵn sàng.
-                Lựa chọn trên form được giữ lại nếu lưu gặp lỗi.
-              </p>
-            </div>
-            <div className="hidden size-24 shrink-0 items-center justify-center rounded-3xl border border-white/15 bg-white/10 sm:flex">
-              <UsersRound className="size-12 text-blue-100" />
-            </div>
-          </div>
-        </section>
-
         <div role="tablist" aria-label="Quản lý nhóm" className="flex gap-2 border-b">
           <button
             type="button"
@@ -1852,7 +1835,7 @@ export default function TeamAllocationPage() {
                                       variant="outline"
                                       className="border-destructive bg-destructive/10 text-destructive"
                                     >
-                                      {member.fullName} (#{member.memberId})
+                                      {member.fullName}{member.userCode ? ` · ${member.userCode}` : ` (#${member.memberId})`}
                                     </Badge>
                                   ))
                                 : publishFailure.unassignedMemberIds?.map((memberId) => (
@@ -2155,7 +2138,7 @@ export default function TeamAllocationPage() {
                     key={member.memberId}
                     className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
                   >
-                    <span className="min-w-0 truncate">{member.fullName}</span>
+                    <span className="min-w-0 truncate">{member.fullName}{member.userCode ? ` · ${member.userCode}` : ""}</span>
                     <span className="shrink-0 text-xs text-muted-foreground">
                       #{member.memberId}
                     </span>
@@ -2276,7 +2259,7 @@ export default function TeamAllocationPage() {
                   )
                   ?.members?.map((member) => (
                     <option key={member.memberId} value={member.memberId}>
-                      {member.fullName} · {member.role ?? "Chưa có role"}
+                      {member.fullName}{member.userCode ? ` · ${member.userCode}` : ""} · {member.role ?? "Chưa có role"}
                     </option>
                   ))}
               </select>
@@ -2803,7 +2786,9 @@ function MemberOption({
         onCheckedChange={(value) => onCheckedChange(value === true)}
         aria-label={`Chọn ${member.fullName}`}
       />
-      <span className="min-w-0 flex-1 truncate font-medium">{member.fullName}</span>
+      <span className="min-w-0 flex-1 truncate font-medium">
+        {member.fullName}{member.userCode ? <span className="ml-2 text-xs font-normal text-muted-foreground">{member.userCode}</span> : null}
+      </span>
       <span className="text-xs text-muted-foreground">#{member.memberId}</span>
       {duplicateDraft && (
         <span className="text-xs text-amber-700 dark:text-amber-300">Đã ở nhóm DRAFT khác</span>
@@ -2916,6 +2901,7 @@ function SavedTeamCard({
     : team.memberIds.map((memberId) => ({
         memberId,
         fullName: memberName(memberId),
+        userCode: null,
         roles: memberRoles[memberId] ?? ([`DEV`] as TeamMemberRole[]),
       }));
   const savedRolesComplete = members.every(
@@ -3201,7 +3187,7 @@ function SavedTeamCard({
                       key={member.memberId}
                       className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
                     >
-                      <span className="min-w-0 truncate">{member.fullName}</span>
+                      <span className="min-w-0 truncate">{member.fullName}{member.userCode ? ` · ${member.userCode}` : ""}</span>
                       <span className="flex shrink-0 items-center gap-2">
                         {canManageRoles ? (
                           allowMultiRole ? (
@@ -3443,7 +3429,7 @@ function SavedTeamCard({
                       .filter((option) => !option.assignedToActiveTeam)
                       .map((option) => (
                         <option key={option.memberId} value={option.memberId}>
-                          {option.fullName}
+                          {option.fullName}{option.userCode ? ` · ${option.userCode}` : ""}
                         </option>
                       ))}
                   </select>
@@ -3571,7 +3557,7 @@ function ReadinessReport({ report }: { report: AllocationReadiness }) {
                 variant="outline"
                 className="border-destructive bg-destructive/10 text-destructive"
               >
-                {student.fullName} (#{student.memberId})
+                {student.fullName}{student.userCode ? ` · ${student.userCode}` : ` (#${student.memberId})`}
               </Badge>
             ))}
           </div>
