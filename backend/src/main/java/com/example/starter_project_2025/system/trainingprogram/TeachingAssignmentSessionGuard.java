@@ -24,6 +24,17 @@ public class TeachingAssignmentSessionGuard {
     }
 
     public void requireCompatible(ScheduleCandidate candidate) {
+        checkCompatible(candidate, true);
+    }
+
+    /** Validate a preview without marking the assignment as used. */
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true,
+            noRollbackFor = BusinessValidationException.class)
+    public void checkCompatible(ScheduleCandidate candidate) {
+        checkCompatible(candidate, false);
+    }
+
+    private void checkCompatible(ScheduleCandidate candidate, boolean markUsed) {
         // Legacy sessions without an explicit link continue through existing schedule validation.
         if (candidate.teachingAssignmentId() == null) return;
         var assignment = assignments.findById(candidate.teachingAssignmentId()).orElseThrow(() -> invalid("The teaching assignment no longer exists."));
@@ -37,7 +48,7 @@ public class TeachingAssignmentSessionGuard {
                     || (assignment.getEffectiveTo() != null && candidate.endTime().toLocalDate().isAfter(assignment.getEffectiveTo())))) {
             throw invalid("The session must fall within the current teaching assignment effective period.");
         }
-        assignment.setEverUsed(true);
+        if (markUsed) assignment.setEverUsed(true);
     }
 
     public void rememberUse(Long assignmentId) {

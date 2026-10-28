@@ -11,4 +11,6 @@ public interface SessionService extends BaseCrudService<Long, SessionDTO, Sessio
     SessionDTO cancelSession(Long id, SessionCancelDTO cancelDTO);
 
     java.util.List<SessionDTO> createValidatedBatch(java.util.List<SessionDTO> requests);
+
+    com.example.starter_project_2025.system.schedule.ScheduleValidationResult previewValidatedBatch(java.util.List<SessionDTO> requests);
 }

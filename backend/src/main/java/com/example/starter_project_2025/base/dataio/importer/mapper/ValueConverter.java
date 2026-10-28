@@ -15,11 +15,19 @@ public class ValueConverter {
         if (type == String.class)
             return val;
 
-        if (type == Long.class || type == long.class)
-            return Long.valueOf(val);
+        if (type == Long.class || type == long.class) {
+            try { return new java.math.BigDecimal(val).longValueExact(); }
+            catch (NumberFormatException | ArithmeticException error) {
+                throw new IllegalArgumentException("Expected a whole number within the supported range: " + val, error);
+            }
+        }
 
-        if (type == Integer.class || type == int.class)
-            return Integer.valueOf(val);
+        if (type == Integer.class || type == int.class) {
+            try { return new java.math.BigDecimal(val).intValueExact(); }
+            catch (NumberFormatException | ArithmeticException error) {
+                throw new IllegalArgumentException("Expected a whole number within the supported range: " + val, error);
+            }
+        }
 
         if (type == Boolean.class || type == boolean.class)
             return Boolean.valueOf(val);
@@ -36,12 +44,21 @@ public class ValueConverter {
             return enumVal;
         }
 
-        if (type == java.time.LocalDateTime.class)
-            return java.time.LocalDateTime.parse(val);
-
-        if (type == java.time.LocalDate.class)
-            return java.time.LocalDate.parse(val);
-
+        String dateTime = val.replace(' ', 'T');
+        try {
+            if (type == java.time.LocalDateTime.class)
+                return java.time.LocalDateTime.parse(dateTime);
+            if (type == java.time.LocalDate.class)
+                return dateTime.contains("T") ? java.time.LocalDateTime.parse(dateTime).toLocalDate()
+                        : java.time.LocalDate.parse(dateTime);
+            if (type == java.time.LocalTime.class)
+                return dateTime.contains("T") ? java.time.LocalDateTime.parse(dateTime).toLocalTime()
+                        : java.time.LocalTime.parse(dateTime);
+        } catch (java.time.format.DateTimeParseException error) {
+            String format = type == java.time.LocalDate.class ? "yyyy-MM-dd"
+                    : type == java.time.LocalTime.class ? "HH:mm" : "yyyy-MM-ddTHH:mm (for example 2026-10-28T09:00)";
+            throw new IllegalArgumentException("Expected " + format + ": " + val, error);
+        }
         return raw;
     }
 }
