@@ -48,6 +48,7 @@ test('both create and update send normalized identity to the actual API delegate
     }) },
     '../axios': { default: {} },
     '@/utils/subject-identity.utils': identity,
+    '@/utils/subject-query.utils': load('src/utils/subject-query.utils.ts'),
   });
   const data = { code: 'java_core', version: 'v1.0' };
   await subjectApi.create(data);

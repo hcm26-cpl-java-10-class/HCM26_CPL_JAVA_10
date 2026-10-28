@@ -28,4 +28,10 @@ public class SubjectFilter extends BaseFilter {
 
     @FilterField(entityField = "version", operator = FilterOperator.EQUAL)
     String version;
+
+    @FilterField(entityField = "durationHours", operator = FilterOperator.GREATER_OR_EQUAL)
+    Integer minHours;
+
+    @FilterField(entityField = "durationHours", operator = FilterOperator.LESS_OR_EQUAL)
+    Integer maxHours;
 }

@@ -721,6 +721,8 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
     total: query.data?.totalElements ?? 0,
     loading: query.isLoading,
     isFetching: query.isFetching,
+    error: query.error,
+    refetch: query.refetch,
 
     page: pagination.page,
     size: pagination.size,

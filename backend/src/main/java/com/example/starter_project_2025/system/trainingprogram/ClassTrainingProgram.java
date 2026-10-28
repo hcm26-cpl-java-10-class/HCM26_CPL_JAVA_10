@@ -26,7 +26,7 @@ import lombok.experimental.FieldDefaults;
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ResourcePermission("CLASS")
-@ResourceMenu(title = "Gán chương trình", group = "Training Management", icon = "graduation-cap",
+@ResourceMenu(title = "Class Study Plans", group = "Subjects & Scheduling", icon = "graduation-cap",
         url = "/class-setup", order = 3, permission = "CLASS_READ")
 public class ClassTrainingProgram extends BaseEntity {
     @Column(name = "class_id", nullable = false)

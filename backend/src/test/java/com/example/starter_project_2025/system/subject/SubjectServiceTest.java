@@ -3,7 +3,6 @@ package com.example.starter_project_2025.system.subject;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
-import com.example.starter_project_2025.system.demo.session.SessionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,7 +10,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.jdbc.core.JdbcOperations;
 
 import java.util.Optional;
 import java.util.List;
@@ -31,10 +29,7 @@ class SubjectServiceTest {
     private SubjectMapper subjectMapper;
 
     @Mock
-    private SessionRepository sessionRepository;
-
-    @Mock
-    private JdbcOperations jdbcTemplate;
+    private SubjectUsageService usageService;
 
     @InjectMocks
     private SubjectServiceImpl subjectService;
@@ -44,6 +39,7 @@ class SubjectServiceTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(usageService.getUsage(any())).thenReturn(new SubjectUsageService.Usage(0, 0, 0, 0));
         mockSubject = Subject.builder()
                 .code("JAVA_CORE")
                 .name("Java Core Fundamentals")
@@ -65,7 +61,7 @@ class SubjectServiceTest {
     @Test
     @DisplayName("beforeDelete: Ném BadRequestException khi môn học đã được tham chiếu trong Session")
     void beforeDelete_ShouldThrowBadRequestException_WhenSubjectIsReferencedInSessions() {
-        when(sessionRepository.existsByTopicId(10L)).thenReturn(true);
+        when(usageService.getUsage(10L)).thenReturn(new SubjectUsageService.Usage(0, 0, 1, 0));
 
         BadRequestException ex = assertThrows(BadRequestException.class, () -> {
             subjectService.beforeDelete(mockSubject);
@@ -79,7 +75,6 @@ class SubjectServiceTest {
     @Test
     @DisplayName("beforeDelete: Thành công không ném lỗi khi môn học chưa từng được tham chiếu")
     void beforeDelete_ShouldPass_WhenSubjectIsNotReferenced() {
-        when(sessionRepository.existsByTopicId(10L)).thenReturn(false);
 
         assertDoesNotThrow(() -> {
             subjectService.beforeDelete(mockSubject);
@@ -89,7 +84,7 @@ class SubjectServiceTest {
     @Test
     @DisplayName("isSubjectReferenced: Trả về true khi tìm thấy tham chiếu trong session")
     void isSubjectReferenced_ShouldReturnTrue_WhenSessionExists() {
-        when(sessionRepository.existsByTopicId(10L)).thenReturn(true);
+        when(usageService.getUsage(10L)).thenReturn(new SubjectUsageService.Usage(0, 0, 1, 0));
 
         boolean referenced = subjectService.isSubjectReferenced(10L);
         assertTrue(referenced);
