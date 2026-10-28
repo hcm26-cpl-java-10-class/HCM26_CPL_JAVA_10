@@ -8,24 +8,7 @@ import {
     type RegisterRequest,
 } from "../../types/features/auth";
 
-/**
- * Thrown by login() when the password was right but the account still has a temporary password
- * (for example created by an Excel import without one). No session is created; the user must go to the
- * "create your password" page with `setupToken`.
- */
-export class PasswordChangeRequiredError extends Error {
-    setupToken: string;
-
-    constructor(setupToken: string) {
-        super("You must create your own password before signing in.");
-        this.name = "PasswordChangeRequiredError";
-        this.setupToken = setupToken;
-    }
-}
-
 interface BackendAuthenticationResponse {
-    passwordChangeRequired?: boolean;
-    setupToken?: string;
     accessToken: string;
     email: string;
     firstName: string;
@@ -77,9 +60,6 @@ export const authApi = {
             email: credentials.email,
             password: credentials.password,
         });
-        if (response.data.passwordChangeRequired && response.data.setupToken) {
-            throw new PasswordChangeRequiredError(response.data.setupToken);
-        }
         return mapAuthResponse(response.data);
     },
 

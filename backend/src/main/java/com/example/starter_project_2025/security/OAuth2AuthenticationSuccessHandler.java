@@ -1,8 +1,6 @@
-
 package com.example.starter_project_2025.security;
 
 import com.example.starter_project_2025.system.auth.authentication.AuthService;
-import com.example.starter_project_2025.system.auth.authentication.SsoLoginException;
 import com.example.starter_project_2025.system.auth.authentication.dto.response.AuthenticationResponse;
 import com.example.starter_project_2025.system.auth.util.CookieUtil;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,8 +24,7 @@ import java.util.Map;
 @Slf4j
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-public class OAuth2AuthenticationSuccessHandler
-        extends SimpleUrlAuthenticationSuccessHandler {
+public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
 
     AuthService authService;
     CookieUtil cookieUtil;
@@ -37,13 +34,9 @@ public class OAuth2AuthenticationSuccessHandler
     String frontendUrl;
 
     @Override
-    public void onAuthenticationSuccess(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            Authentication authentication) throws IOException {
-
-        log.info("Google OAuth success handler reached");
-
+    public void onAuthenticationSuccess(HttpServletRequest request,
+                                        HttpServletResponse response,
+                                        Authentication authentication) throws IOException {
         try {
             if (!(authentication.getPrincipal() instanceof OAuth2User oAuth2User)) {
                 throw new IllegalStateException("OAuth2 principal is missing");
@@ -54,93 +47,34 @@ public class OAuth2AuthenticationSuccessHandler
             String email = getStringAttribute(attributes, "email");
             String firstName = getStringAttribute(attributes, "given_name");
             String lastName = getStringAttribute(attributes, "family_name");
-            boolean emailVerified = isTrue(attributes.get("email_verified"));
 
-            log.info("Google email available: {}", email != null && !email.isBlank());
-            log.info("Google email verified: {}", emailVerified);
+            AuthenticationResponse authResponse = authService.loginWithGoogle(email, firstName, lastName);
+            cookieUtil.setRefreshTokenCookie(response, authResponse.getRefreshToken());
 
-            AuthenticationResponse authResponse =
-                    authService.loginWithGoogle(
-                            email, emailVerified, firstName, lastName);
+            String redirectUrl = UriComponentsBuilder.fromHttpUrl(frontendUrl)
+                    .path("/oauth2/redirect")
+                    .queryParam("token", authResponse.getAccessToken())
+                    .build()
+                    .encode()
+                    .toUriString();
 
-            log.info("loginWithGoogle completed");
-
-            if (authResponse == null
-                    || authResponse.getAccessToken() == null
-                    || authResponse.getAccessToken().isBlank()) {
-                throw new IllegalStateException(
-                        "Access token is missing from AuthenticationResponse");
-            }
-
-            String accessToken = authResponse.getAccessToken();
-
-            log.info("Access token exists: true");
-
-            if (authResponse.getRefreshToken() != null
-                    && !authResponse.getRefreshToken().isBlank()) {
-                cookieUtil.setRefreshTokenCookie(
-                        response, authResponse.getRefreshToken());
-            }
-
-            String baseUrl = frontendUrl.replaceAll("/+$", "");
-
-            String redirectUrl = baseUrl
-                    + "/oauth2/redirect#token="
-                    + accessToken;
-
-            log.info("Redirecting Google login to frontend OAuth callback");
-
-            getRedirectStrategy().sendRedirect(
-                    request, response, redirectUrl);
-
-        } catch (SsoLoginException ex) {
-            log.warn(
-                    "Google sign-in refused. Code: {}, message: {}",
-                    ex.getCode(), ex.getMessage());
-
-            redirectToLogin(request, response, ex.getCode());
-
+            getRedirectStrategy().sendRedirect(request, response, redirectUrl);
         } catch (Exception ex) {
             log.error("Google authentication success flow failed", ex);
 
-            redirectToLogin(
-                    request,
-                    response,
-                    SsoLoginException.AUTH_FAILED);
+            String redirectUrl = UriComponentsBuilder.fromHttpUrl(frontendUrl)
+                    .path("/login")
+                    .queryParam("error", "google_auth_failed")
+                    .build()
+                    .encode()
+                    .toUriString();
+
+            getRedirectStrategy().sendRedirect(request, response, redirectUrl);
         }
     }
 
-    private void redirectToLogin(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            String errorCode) throws IOException {
-
-        String redirectUrl = UriComponentsBuilder
-                .fromHttpUrl(frontendUrl)
-                .path("/login")
-                .queryParam("error", errorCode)
-                .build()
-                .encode()
-                .toUriString();
-
-        getRedirectStrategy().sendRedirect(
-                request, response, redirectUrl);
-    }
-
-    private boolean isTrue(Object value) {
-        return value instanceof Boolean flag
-                ? flag
-                : "true".equalsIgnoreCase(String.valueOf(value));
-    }
-
-    private String getStringAttribute(
-            Map<String, Object> attributes,
-            String key) {
-
+    private String getStringAttribute(Map<String, Object> attributes, String key) {
         Object value = attributes.get(key);
-
-        return value instanceof String stringValue
-                ? stringValue
-                : null;
+        return value instanceof String stringValue ? stringValue : null;
     }
 }

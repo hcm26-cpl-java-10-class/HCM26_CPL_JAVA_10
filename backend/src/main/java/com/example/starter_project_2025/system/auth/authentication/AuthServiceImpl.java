@@ -15,7 +15,6 @@ import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenSe
 import com.example.starter_project_2025.system.auth.verify.VerificationService;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
-import com.example.starter_project_2025.system.auth.util.PasswordPolicy;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import jakarta.transaction.Transactional;
@@ -30,7 +29,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -52,7 +50,6 @@ public class AuthServiceImpl implements AuthService {
     UserRepository userRepository;
     RoleRepository roleRepository;
     PasswordEncoder passwordEncoder;
-    SsoAccessPolicy ssoAccessPolicy;
 
     @Override
     public AuthenticationResponse login(LoginRequest request) {
@@ -65,21 +62,6 @@ public class AuthServiceImpl implements AuthService {
 
         UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
 
-        // Temporary password (for example from an Excel import): the password was right, but the account
-        // can only be used after its owner chooses their own. No access or refresh token is issued, so the
-        // temporary password cannot be used to call the API; the user only gets a short-lived token to set
-        // the new password on the existing reset-password page.
-        if (Boolean.TRUE.equals(principal.getUser().getMustChangePassword())) {
-            String setupToken = oneTimeTokenService.createOneTimeToken(
-                    principal.getUser(), OneTimeToken.TokenType.RESET_PASSWORD, Duration.ofMinutes(30));
-
-            return AuthenticationResponse.builder()
-                    .email(principal.getUser().getEmail())
-                    .passwordChangeRequired(true)
-                    .setupToken(setupToken)
-                    .build();
-        }
-
         refreshTokenService.revokeAllRefreshTokens(principal.getUser().getId());
 
         String accessToken = refreshTokenService.generateAccessToken(authentication);
@@ -90,24 +72,19 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public AuthenticationResponse loginWithGoogle(String email, boolean emailVerified, String firstName, String lastName) {
+    public AuthenticationResponse loginWithGoogle(String email, String firstName, String lastName) {
         if (!StringUtils.hasText(email)) {
-            throw new SsoLoginException(SsoLoginException.AUTH_FAILED, "Google account email is required");
+            throw new BadRequestException("Google account email is required");
         }
 
-        ssoAccessPolicy.checkEmail(email, emailVerified);
+        User user = userRepository.findByEmail(email)
+                .orElseGet(() -> createGoogleUser(email, firstName, lastName));
 
-        // Only accounts that already exist may sign in (imported or created by an administrator),
-        // unless app.sso.auto-create-users=true.
-        User user = userRepository.findByEmailIgnoreCase(email).orElse(null);
-        if (user == null) {
-            if (!ssoAccessPolicy.autoCreateUsers()) {
-                throw ssoAccessPolicy.notRegistered(email);
-            }
-            user = createGoogleUser(email, firstName, lastName);
+        if (Boolean.TRUE.equals(user.getLocked())) {
+            throw new org.springframework.security.authentication.LockedException(
+                    "Account is locked"
+            );
         }
-
-        ssoAccessPolicy.checkAccount(user);
 
         user = updateUserFromGoogleProfile(user, firstName, lastName);
 
@@ -208,18 +185,7 @@ public class AuthServiceImpl implements AuthService {
 
         User user = resetToken.getUser();
 
-        String passwordProblem = PasswordPolicy.validate(request.newPassword());
-        if (passwordProblem != null) {
-            throw new BadRequestException(passwordProblem);
-        }
-
-        // The new password must really be new (for example not the temporary one it replaces).
-        if (passwordEncoder.matches(request.newPassword(), user.getPasswordHash())) {
-            throw new BadRequestException("The new password must be different from the current password.");
-        }
-
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
-        user.setMustChangePassword(false);
         userRepository.save(user);
 
         refreshTokenService.revokeAllRefreshTokens(user.getId());
@@ -368,7 +334,21 @@ public class AuthServiceImpl implements AuthService {
             }
         }
 
+        if (sortedRoles.contains("ADMIN")) {
+            includePreviewRolePermissions(rolePermissions, "STUDENT");
+            includePreviewRolePermissions(rolePermissions, "TEACHER");
+        }
+
         return rolePermissions;
+    }
+
+    private void includePreviewRolePermissions(Map<String, Set<String>> rolePermissions, String roleName) {
+        if (rolePermissions.containsKey(roleName)) {
+            return;
+        }
+
+        roleRepository.findByName(roleName)
+                .ifPresent(role -> rolePermissions.put(roleName, mapRolePermissions(role)));
     }
 
     private Set<String> mapRolePermissions(Role role) {

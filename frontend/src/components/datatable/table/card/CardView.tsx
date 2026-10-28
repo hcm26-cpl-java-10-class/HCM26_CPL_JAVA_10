@@ -69,7 +69,7 @@ export function CardView({
   };
 
   return (
-    <div className="flex h-full w-full min-w-0 max-w-full flex-col overflow-hidden">
+    <div className="flex flex-col overflow-hidden h-full">
       {selectable && (
         <CardSelectAllBar
           totalCount={allIds.length}
@@ -81,7 +81,7 @@ export function CardView({
       )}
 
       <div
-        className={`grid grid-cols-1 gap-4 p-3 sm:grid-cols-2 lg:grid-cols-3 w-full min-w-0 max-w-full overflow-y-auto flex-1 transition-opacity ${table.isFetching ? "opacity-50" : ""
+        className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 p-3 overflow-y-auto flex-1 transition-opacity ${table.isFetching ? "opacity-50" : ""
           }`}
       >
         {table.data?.map((row: any, idx: number) => {
@@ -108,7 +108,7 @@ export function CardView({
           };
 
           if (renderCard) {
-            return <div key={id} className="w-full min-w-0 max-w-full">{renderCard(cardProps)}</div>;
+            return <div key={id}>{renderCard(cardProps)}</div>;
           }
 
           return (

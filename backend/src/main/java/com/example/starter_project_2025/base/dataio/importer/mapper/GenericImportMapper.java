@@ -22,13 +22,9 @@ public class GenericImportMapper {
     ValueConverter converter;
 
     public <T> T map(Map<String, String> rowData, Class<T> clazz) {
-        return map(rowData, clazz, null);
-    }
-
-    public <T> T map(Map<String, String> rowData, Class<T> clazz, T existingEntity) {
 
         try {
-            T entity = existingEntity != null ? existingEntity : clazz.getDeclaredConstructor().newInstance();
+            T entity = clazz.getDeclaredConstructor().newInstance();
 
             for (Field field : clazz.getDeclaredFields()) {
 

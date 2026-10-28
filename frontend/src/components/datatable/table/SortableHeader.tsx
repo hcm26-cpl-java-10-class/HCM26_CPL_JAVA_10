@@ -10,7 +10,7 @@ interface SortableHeaderProps {
   field: FieldSchema;
   sortState: SortEntry[];
   onToggleSort: (fieldName: string) => void;
-  width?: number | string;
+  width?: number;
   onResizeStart?: (e: React.MouseEvent) => void;
   dateFormat?: DateFormatKey;
   onDateFormatCycle?: (fieldName: string) => void;

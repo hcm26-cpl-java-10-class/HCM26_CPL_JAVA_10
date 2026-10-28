@@ -39,7 +39,7 @@ export function ToolbarActions({ table, headerActions }: ToolbarActionsProps) {
   };
 
   return (
-    <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+    <div className="flex flex-col lg:flex-row justify-end items-center gap-2">
       <PermissionGate permission={table.permission?.keys?.delete}>
         {table.permission?.canDelete && table.selected?.length > 0 && (
           <ActionButton
