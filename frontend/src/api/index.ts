@@ -14,3 +14,4 @@ export * from "./features/demo/enrollment.api";
 export * from "./features/demo/lesson.api";
 export * from "./features/rbac/department.api";
 export * from "./features/exam-template.api";
+export * from "./features/score-appeal.api";

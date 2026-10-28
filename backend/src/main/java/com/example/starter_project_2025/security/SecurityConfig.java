@@ -104,7 +104,15 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of(frontendUrl, backendUrl, "http://localhost:5173", "http://localhost:8080"));
+        // Dùng allowedOriginPatterns thay vì allowedOrigins để chấp nhận mọi port
+        // localhost (5173, 5174, 5175...) trong lúc dev. Nếu chỉ allow cứng 5173,
+        // Vite fallback sang port khác sẽ khiến mọi request API bị CORS 403.
+        config.setAllowedOriginPatterns(List.of(
+                frontendUrl,
+                backendUrl,
+                "http://localhost:[*]",
+                "http://127.0.0.1:[*]"
+        ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

@@ -21,6 +21,7 @@ public interface UserMapper extends BaseCrudMapper<User, UserDTO> {
 
     @Override
     @Mapping(target = "roleIds", expression = "java(mapRoleIds(user))")
+    @Mapping(target = "departmentIds", expression = "java(mapDepartmentIds(user))")
     @Mapping(target = "status", expression = "java(mapStatus(user))")
     @Mapping(target = "password", ignore = true)
     UserDTO toResponse(User user);
@@ -41,6 +42,13 @@ public interface UserMapper extends BaseCrudMapper<User, UserDTO> {
                 .stream()
                 .map(Role::getId)
                 .collect(Collectors.toSet());
+    }
+
+    default Set<Long> mapDepartmentIds(User user) {
+        if (user.getDepartments() == null) {
+            return null;
+        }
+        return user.getDepartments().stream().map(department -> department.getId()).collect(Collectors.toSet());
     }
 
     default String mapStatus(User user) {

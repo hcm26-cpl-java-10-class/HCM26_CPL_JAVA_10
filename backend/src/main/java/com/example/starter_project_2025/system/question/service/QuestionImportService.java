@@ -50,8 +50,7 @@ public class QuestionImportService {
 
         String originalFilename = file.getOriginalFilename();
         boolean isCsv = originalFilename != null && originalFilename.toLowerCase().endsWith(".csv");
-        boolean isExcel = originalFilename != null && (originalFilename.toLowerCase().endsWith(".xlsx")
-                || originalFilename.toLowerCase().endsWith(".xls"));
+        boolean isExcel = originalFilename != null && (originalFilename.toLowerCase().endsWith(".xlsx") || originalFilename.toLowerCase().endsWith(".xls"));
 
         if (!isCsv && !isExcel) {
             result.getErrors().add(new RowError(0, "Hệ thống hỗ trợ định dạng file Excel (.xlsx, .xls) và CSV (.csv)"));
@@ -72,8 +71,6 @@ public class QuestionImportService {
             result.setFailureCount(1);
             return result;
         }
-
-        result.setTotalCount(rows.size());
 
         if (rows.isEmpty()) {
             result.getErrors().add(new RowError(1, "File không chứa dòng dữ liệu nào hợp lệ"));
@@ -97,15 +94,13 @@ public class QuestionImportService {
 
             String contentKey = buildUniqueKey(dto.getContent(), dto.getTopic());
             if (!seenInFile.add(contentKey)) {
-                result.getErrors().add(
-                        new RowError(rowNumber, "Câu hỏi bị trùng lặp nội dung với một dòng khác trong cùng file"));
+                result.getErrors().add(new RowError(rowNumber, "Câu hỏi bị trùng lặp nội dung với một dòng khác trong cùng file"));
                 result.setFailureCount(result.getFailureCount() + 1);
                 continue;
             }
 
             if (isDuplicateInDatabase(dto.getContent(), dto.getTopic())) {
-                result.getErrors()
-                        .add(new RowError(rowNumber, "Câu hỏi đã tồn tại trong hệ thống (trùng nội dung và chủ đề)"));
+                result.getErrors().add(new RowError(rowNumber, "Câu hỏi đã tồn tại trong hệ thống (trùng nội dung và chủ đề)"));
                 result.setFailureCount(result.getFailureCount() + 1);
                 continue;
             }
@@ -116,8 +111,7 @@ public class QuestionImportService {
             if (ctx.hasErrors()) {
                 StringBuilder errorMsg = new StringBuilder();
                 ctx.getErrors().forEach((field, messages) -> {
-                    if (!errorMsg.isEmpty())
-                        errorMsg.append("; ");
+                    if (!errorMsg.isEmpty()) errorMsg.append("; ");
                     errorMsg.append(field).append(": ").append(String.join(", ", messages));
                 });
                 result.getErrors().add(new RowError(rowNumber, errorMsg.toString()));
@@ -129,8 +123,7 @@ public class QuestionImportService {
         }
 
         if (!result.getErrors().isEmpty()) {
-            log.warn("Import bị hủy (Rollback): phát hiện {} dòng lỗi trong file '{}'", result.getFailureCount(),
-                    originalFilename);
+            log.warn("Import bị hủy (Rollback): phát hiện {} dòng lỗi trong file '{}'", result.getFailureCount(), originalFilename);
             return result;
         }
 
@@ -150,21 +143,18 @@ public class QuestionImportService {
     }
 
     private boolean isDuplicateInDatabase(String content, String topic) {
-        if (content == null || content.isBlank())
-            return false;
+        if (content == null || content.isBlank()) return false;
         String trimmedContent = content.trim().toLowerCase();
         String normalizedTopic = (topic != null && !topic.isBlank()) ? topic.trim().toLowerCase() : null;
 
         return questionRepository.exists((root, query, cb) -> {
             Predicate bankOnly = cb.isNull(root.get("sourceQuestionId"));
-            Predicate contentPredicate = cb.and(bankOnly,
-                    cb.equal(cb.lower(cb.trim(root.get("content"))), trimmedContent));
+            Predicate contentPredicate = cb.and(bankOnly, cb.equal(cb.lower(cb.trim(root.get("content"))), trimmedContent));
             if (normalizedTopic != null) {
                 Predicate topicPredicate = cb.equal(cb.lower(cb.trim(root.get("topic"))), normalizedTopic);
                 return cb.and(contentPredicate, topicPredicate);
             } else {
-                Predicate topicNullOrEmpty = cb.or(cb.isNull(root.get("topic")),
-                        cb.equal(cb.trim(root.get("topic")), ""));
+                Predicate topicNullOrEmpty = cb.or(cb.isNull(root.get("topic")), cb.equal(cb.trim(root.get("topic")), ""));
                 return cb.and(contentPredicate, topicNullOrEmpty);
             }
         });

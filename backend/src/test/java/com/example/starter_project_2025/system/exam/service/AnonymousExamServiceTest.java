@@ -64,6 +64,9 @@ class AnonymousExamServiceTest {
     @Mock
     private EmailService emailService;
 
+    @Mock
+    private GuestEmailResolver guestEmailResolver;
+
     @InjectMocks
     private AnonymousExamService service;
 
@@ -114,6 +117,8 @@ class AnonymousExamServiceTest {
 
     private void givenValidSession() {
         lenient().when(sessionRepository.findBySessionToken(TOKEN)).thenReturn(Optional.of(session));
+        lenient().when(guestEmailResolver.resolveGuestEmail(any(ExamAttempt.class)))
+                .thenReturn("sv@example.com");
     }
 
     @Test
@@ -324,6 +329,7 @@ class AnonymousExamServiceTest {
     @DisplayName("Gửi kết quả cuối cho học sinh anonymous sau khi chấm")
     void sendsFinalResultToGuest() {
         when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
+        when(guestEmailResolver.resolveGuestEmail(attempt)).thenReturn("sv@example.com");
         attempt.setFinalScore(new BigDecimal(9));
 
         service.sendFinalResultToGuest(ATTEMPT_ID);

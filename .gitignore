@@ -31,6 +31,9 @@ docker/.env
 
 # === Logs ===
 *.log
+*.err
+backend/run.log
+backend/run.err
 
 /backend.zip
 

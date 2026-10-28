@@ -92,11 +92,6 @@ export function UserForm({ mode, values, errors, submitting, onChange, onSubmit,
     />
   );
 
-  const generalHasError = (
-    ["firstName", "lastName", "username", "email", "employeeCode", "phone", "password", "confirmPassword", "departmentIds", "status", "description"] as const
-  ).some((k) => errors[k]?.length);
-  const authHasError = !!errors.roleIds?.length;
-
   return (
     <form onSubmit={handleSubmit} noValidate className="mx-auto grid w-full max-w-5xl gap-5">
       <section className="rounded-xl border bg-card p-5 shadow-sm">

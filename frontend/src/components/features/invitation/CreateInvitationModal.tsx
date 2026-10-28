@@ -2,7 +2,6 @@ import { invitationApi } from "@/api";
 import type {
     AnonymousInvitationRequest,
     BatchInvitationRequest,
-    InvitationCreateRequest,
     InvitationDTO,
     ReminderRequest,
     ReminderType,
@@ -23,7 +22,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Link2, Mail, QrCode, RefreshCw, Share2, Users, X } from "lucide-react";
-import { useState } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import { toast } from "sonner";
 
 interface CreateInvitationModalProps {
@@ -35,7 +34,6 @@ interface CreateInvitationModalProps {
 }
 
 interface AuthForm {
-    userId: string;
     note: string;
     expiresAt: string;
 }
@@ -50,7 +48,7 @@ interface AnonForm {
     maxAccessAttempts: string;
 }
 
-const DEFAULT_AUTH: AuthForm = { userId: "", note: "", expiresAt: "" };
+const DEFAULT_AUTH: AuthForm = { note: "", expiresAt: "" };
 const DEFAULT_ANON: AnonForm = { maxAccessAttempts: "1" };
 
 const REMINDER_OPTIONS: { value: ReminderType; label: string }[] = [
@@ -71,15 +69,11 @@ function toIso(value: string) {
 }
 
 function UserPicker({
-                        value,
                         selected,
-                        onChange,
                         onSelectionChange,
                     }: {
-    value: string;
     selected: SelectedStudent[];
-    onChange: (id: string) => void;
-    onSelectionChange: (students: SelectedStudent[]) => void;
+    onSelectionChange: Dispatch<SetStateAction<SelectedStudent[]>>;
 }) {
     const [search, setSearch] = useState("");
 
@@ -103,18 +97,26 @@ function UserPicker({
     const selectedIds = new Set(selected.map((s) => s.id));
 
     const toggleStudent = (student: SelectedStudent) => {
-        if (selectedIds.has(student.id)) {
-            onSelectionChange(selected.filter((s) => s.id !== student.id));
-        } else {
-            onSelectionChange([...selected, student]);
-        }
+        onSelectionChange((prev) =>
+            prev.some((s) => s.id === student.id)
+                ? prev.filter((s) => s.id !== student.id)
+                : [...prev, student],
+        );
     };
 
     const selectAllStudents = () => {
         if (!students) return;
-        onSelectionChange(
-            students.map((s) => ({ id: String(s.id), email: s.email, fullName: s.fullName })),
-        );
+        onSelectionChange((prev) => {
+            const merged = new Map(prev.map((s) => [s.id, s]));
+            for (const s of students) {
+                merged.set(String(s.id), {
+                    id: String(s.id),
+                    email: s.email,
+                    fullName: s.fullName,
+                });
+            }
+            return [...merged.values()];
+        });
     };
 
     const clearSelection = () => onSelectionChange([]);
@@ -151,7 +153,7 @@ function UserPicker({
                                 <button
                                     type="button"
                                     className="ml-2 text-green-700 hover:text-red-600"
-                                    onClick={() => toggleStudent({ id: s.id, email: s.email, fullName: s.fullName })}
+                                    onClick={() => toggleStudent(s)}
                                 >
                                     ×
                                 </button>
@@ -196,28 +198,32 @@ function UserPicker({
             {isLoading && <p className="text-sm text-muted-foreground">Searching...</p>}
             {users?.content && users.content.length > 0 && (
                 <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border p-2">
-                    {users.content.map((u) => (
-                        <button
-                            key={u.id}
-                            type="button"
-                            className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-muted ${
-                                value === String(u.id) ? "bg-muted font-medium" : ""
-                            }`}
-                            onClick={() => {
-                                onChange(String(u.id));
-                                setSearch("");
-                            }}
-                        >
-                            <span>{u.firstName} {u.lastName ?? ""}</span>
-                            <span className="text-muted-foreground">({u.email})</span>
-                        </button>
-                    ))}
+                    {users.content.map((u) => {
+                        const id = String(u.id);
+                        const isSelected = selectedIds.has(id);
+                        const fullName = [u.firstName, u.lastName].filter(Boolean).join(" ");
+                        return (
+                            <button
+                                key={u.id}
+                                type="button"
+                                className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-muted ${
+                                    isSelected ? "bg-muted font-medium" : ""
+                                }`}
+                                onClick={() =>
+                                    toggleStudent({
+                                        id,
+                                        email: u.email ?? "",
+                                        fullName: fullName || u.email || `#${u.id}`,
+                                    })
+                                }
+                            >
+                                <span className="w-4 shrink-0">{isSelected ? "✓" : ""}</span>
+                                <span>{fullName}</span>
+                                <span className="text-muted-foreground">({u.email})</span>
+                            </button>
+                        );
+                    })}
                 </div>
-            )}
-            {value && (
-                <p className="text-xs text-muted-foreground">
-                    Selected ID: <span className="font-medium text-foreground">{value}</span>
-                </p>
             )}
         </div>
     );
@@ -253,40 +259,6 @@ export function CreateInvitationModal({
         setSelectedStudents([]);
     };
 
-    const createAuthMutation = useMutation({
-        mutationFn: async () => {
-            const request: InvitationCreateRequest = {
-                userId: Number(auth.userId),
-                note: auth.note || undefined,
-                expiresAt: toIso(auth.expiresAt) || undefined,
-            };
-            return invitationApi.create(examId, request);
-        },
-        onSuccess: async (inv) => {
-            setAuthInvitations((prev) => [...prev, inv]);
-            toast.success("Invitation created.");
-
-            if (reminderType !== "NONE") {
-                const req: ReminderRequest = {
-                    reminderType: reminderType as ReminderType,
-                    scheduledAt: reminderType === "CUSTOM" ? toIso(customReminder) : undefined,
-                };
-                try {
-                    await invitationApi.scheduleReminder(examId, req);
-                    toast.success("Email reminder scheduled.");
-                } catch {
-                }
-            }
-
-            setAuth(DEFAULT_AUTH);
-            onSuccess?.();
-            void queryClient.invalidateQueries({ queryKey: ["exam-invitations", examId] });
-        },
-        onError: (error: unknown) => {
-            toast.error(getErrorMessage(error, "Failed to create invitation."));
-        },
-    });
-
     const createBatchMutation = useMutation({
         mutationFn: async () => {
             const request: BatchInvitationRequest = {
@@ -295,7 +267,6 @@ export function CreateInvitationModal({
                     note: auth.note || undefined,
                     expiresAt: toIso(auth.expiresAt) || undefined,
                 })),
-                sendEmail: true,
             };
             return invitationApi.createBatch(examId, request);
         },
@@ -321,6 +292,7 @@ export function CreateInvitationModal({
                 };
                 try {
                     await invitationApi.scheduleReminder(examId, req);
+                    toast.success("Email reminder scheduled.");
                 } catch {
                 }
             }
@@ -362,8 +334,6 @@ export function CreateInvitationModal({
         },
     });
 
-    const canSubmitAuth = Boolean(auth.userId);
-
     const handleClose = () => {
         resetForm();
         onOpenChange(false);
@@ -393,14 +363,12 @@ export function CreateInvitationModal({
                         <form
                             onSubmit={(e) => {
                                 e.preventDefault();
-                                createAuthMutation.mutate();
+                                createBatchMutation.mutate();
                             }}
                             className="space-y-4"
                         >
                             <UserPicker
-                                value={auth.userId}
                                 selected={selectedStudents}
-                                onChange={(id) => setAuth((f) => ({ ...f, userId: id }))}
                                 onSelectionChange={setSelectedStudents}
                             />
 
@@ -458,39 +426,28 @@ export function CreateInvitationModal({
                             </div>
 
                             <DialogFooter>
-                                {selectedStudents.length > 0 && (
-                                    <Button
-                                        type="button"
-                                        variant="secondary"
-                                        disabled={createBatchMutation.isPending}
-                                        onClick={() => createBatchMutation.mutate()}
-                                    >
-                                        {createBatchMutation.isPending ? (
-                                            <>
-                                                <RefreshCw className="size-4 animate-spin" />
-                                                Creating {selectedStudents.length}...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Users className="size-4" />
-                                                Create for {selectedStudents.length} student(s)
-                                            </>
-                                        )}
-                                    </Button>
-                                )}
                                 <Button
                                     type="submit"
-                                    disabled={!canSubmitAuth || createAuthMutation.isPending}
+                                    disabled={selectedStudents.length === 0 || createBatchMutation.isPending}
+                                    title={
+                                        selectedStudents.length === 0
+                                            ? "Select at least one student first"
+                                            : undefined
+                                    }
                                 >
-                                    {createAuthMutation.isPending ? (
+                                    {createBatchMutation.isPending ? (
                                         <>
                                             <RefreshCw className="size-4 animate-spin" />
-                                            Creating...
+                                            Creating {selectedStudents.length}...
                                         </>
                                     ) : (
                                         <>
                                             <Mail className="size-4" />
-                                            Create & Send
+                                            {selectedStudents.length === 0
+                                                ? "Create & Send"
+                                                : selectedStudents.length === 1
+                                                    ? "Create & Send to 1 student"
+                                                    : `Create & Send to ${selectedStudents.length} students`}
                                         </>
                                     )}
                                 </Button>

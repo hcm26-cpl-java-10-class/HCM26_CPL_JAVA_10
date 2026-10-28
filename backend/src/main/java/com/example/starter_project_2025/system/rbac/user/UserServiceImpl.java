@@ -69,6 +69,7 @@ public class UserServiceImpl
         validateEmailUnique(request.getEmail(), null, ctx);
         validatePhone(request.getPhone(), ctx);
         validateRoles(request.getRoleIds(), ctx);
+        validateDepartments(request.getDepartmentIds(), ctx);
 
         user.setUsername(request.getUsername());
         user.setEmployeeCode(request.getEmployeeCode());
@@ -89,6 +90,7 @@ public class UserServiceImpl
         }
 
         user.setRoles(getRoles(request.getRoleIds()));
+        user.setDepartments(getDepartments(request.getDepartmentIds()));
     }
 
     @Override
@@ -110,9 +112,9 @@ public class UserServiceImpl
             validateRoles(request.getRoleIds(), ctx);
         }
 
-        // if (request.getDepartmentIds() != null) {
-        //     validateDepartments(request.getDepartmentIds(), ctx);
-        // }
+        if (request.getDepartmentIds() != null) {
+            validateDepartments(request.getDepartmentIds(), ctx);
+        }
 
 
         if (ctx.hasErrors()) {
@@ -128,6 +130,11 @@ public class UserServiceImpl
         if (request.getRoleIds() != null) {
             user.getRoles().clear();
             user.getRoles().addAll(getRoles(request.getRoleIds()));
+        }
+
+        if (request.getDepartmentIds() != null) {
+            user.getDepartments().clear();
+            user.getDepartments().addAll(getDepartments(request.getDepartmentIds()));
         }
 
     }
@@ -210,6 +217,21 @@ public class UserServiceImpl
 
     private Set<Role> getRoles(Set<Long> roleIds) {
         return new HashSet<>(roleRepository.findAllById(roleIds));
+    }
+
+    private void validateDepartments(Set<Long> departmentIds, ValidationContext ctx) {
+        if (departmentIds == null || departmentIds.isEmpty()) {
+            return;
+        }
+        if (departmentRepository.countByIdIn(departmentIds) != departmentIds.size()) {
+            ctx.add("departmentIds", "One or more departments are invalid");
+        }
+    }
+
+    private Set<com.example.starter_project_2025.system.rbac.department.Department> getDepartments(Set<Long> departmentIds) {
+        return departmentIds == null || departmentIds.isEmpty()
+                ? new HashSet<>()
+                : new HashSet<>(departmentRepository.findAllById(departmentIds));
     }
 
     @Override

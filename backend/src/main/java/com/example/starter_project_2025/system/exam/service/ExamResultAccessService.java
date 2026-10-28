@@ -82,6 +82,24 @@ public class ExamResultAccessService {
                 .orElse(true);
     }
 
+    /**
+     * Diem chi duoc appeal khi giao vien da cong bo ket qua (published + policy khong HIDDEN).
+     * Dung chung cho frontend de disable nut Appeal truoc khi submit va nhin 400.
+     */
+    @Transactional(readOnly = true)
+    public boolean isScorePublished(Exam exam) {
+        if (exam == null || exam.getId() == null) {
+            return false;
+        }
+
+        return publicationRepository.findByExam_Id(exam.getId())
+                .map(publication ->
+                        publication.isPublished()
+                                && publication.getReleasePolicy() != null
+                                && publication.getReleasePolicy() != ScoreReleasePolicy.HIDDEN)
+                .orElse(false);
+    }
+
     private boolean isVisibilitySatisfied(Exam exam) {
         ResultVisibility visibility = exam.getResultVisibility();
 

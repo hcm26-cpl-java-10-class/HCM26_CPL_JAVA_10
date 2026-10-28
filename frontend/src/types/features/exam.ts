@@ -153,6 +153,7 @@ export interface CriterionScore {
   maxPoints?: number;
   awardedPoints: number;
   comment?: string;
+  explanation?: string;
 }
 
 export interface AiQuestionProposal {
@@ -178,4 +179,38 @@ export interface AiGradingRequest {
 export interface AiGradingResponse {
   model?: string;
   proposals: AiQuestionProposal[];
+}
+
+export interface SimilarPair {
+  pairId: string;
+  questionId: number;
+  questionDisplayOrder: number;
+  questionContent: string;
+  attemptId1: number;
+  studentName1: string;
+  studentEmail1: string;
+  answerText1: string;
+  attemptId2: number;
+  studentName2: string;
+  studentEmail2: string;
+  answerText2: string;
+  lexicalSimilarity: number;
+  semanticSimilarity?: number | null;
+  overallSimilarity: number;
+  matchType: string;
+  explanation?: string | null;
+  aiAnalyzed: boolean;
+}
+
+export interface SimilarityReport {
+  examId: number;
+  examTitle: string;
+  scannedAttemptsCount: number;
+  scannedQuestionsCount: number;
+  totalPairsCompared: number;
+  flaggedPairsCount: number;
+  aiEvaluated: boolean;
+  aiMessage?: string | null;
+  scannedAt: string;
+  pairs: SimilarPair[];
 }

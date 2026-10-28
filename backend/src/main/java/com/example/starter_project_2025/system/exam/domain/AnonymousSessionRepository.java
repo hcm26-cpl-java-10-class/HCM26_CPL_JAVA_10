@@ -22,4 +22,10 @@ public interface AnonymousSessionRepository extends BaseCrudRepository<Anonymous
             @Param("invitationId") Long invitationId,
             @Param("guestUserId") Long guestUserId
     );
+
+    @Query("SELECT s FROM AnonymousSession s WHERE s.guestUserId = :guestUserId AND s.invitation.exam.id = :examId ORDER BY s.accessedAt DESC")
+    List<AnonymousSession> findByGuestUserIdAndExamIdOrderByAccessedAtDesc(
+            @Param("guestUserId") Long guestUserId,
+            @Param("examId") Long examId
+    );
 }

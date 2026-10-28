@@ -9,6 +9,7 @@ import com.example.starter_project_2025.base.dataio.template.annotation.ImportEn
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import com.example.starter_project_2025.system.rbac.role.Role;
+import com.example.starter_project_2025.system.rbac.department.Department;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -42,6 +43,16 @@ public class User extends BaseEntity {
     @ImportField(name = "Email", required = true)
     @ExportField(name = "Email")
     String email;
+
+    @Column(unique = true, length = 50)
+    @ImportField(name = "Username")
+    @ExportField(name = "Username")
+    String username;
+
+    @Column(unique = true, length = 50)
+    @ImportField(name = "Employee Code")
+    @ExportField(name = "Employee Code")
+    String employeeCode;
 
     /**
      * Export-only column. It is deliberately transient and always null, so the exported file has an
@@ -106,6 +117,15 @@ public class User extends BaseEntity {
                 joinColumns = @JoinColumn(name = "user_id"),
                 inverseJoinColumns = @JoinColumn(name = "role_id"))
     Set<Role> roles = new HashSet<>();
+
+    @Builder.Default
+    @ManyToMany(fetch = FetchType.LAZY)
+    @ExportField(name = "Departments", relation = true, path = "code")
+    @ImportField(name = "Departments", lookupEntity = Department.class, lookupField = "code", separator = ",")
+    @JoinTable(name = "user_departments",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "department_id"))
+    Set<Department> departments = new HashSet<>();
 
     public String getFullName() {
         return firstName + (lastName != null ? " " + lastName : "");

@@ -32,7 +32,7 @@ import java.util.Map;
 @PreAuthorize("hasAuthority('STUDENT_SCORE_READ')")
 @ResourceMenu(
         title = "My Scores",
-        group = "Student",
+        group = "Exam",
         icon = "bar-chart",
         url = "/my-scores",
         order = 3,

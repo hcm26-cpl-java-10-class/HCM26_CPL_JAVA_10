@@ -21,6 +21,7 @@ import StudentExamList from "@/pages/student/StudentExamList";
 import StudentExamTakingPage from "@/pages/student/StudentExamTakingPage";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import MyScoresPage from "@/pages/student/MyScoresPage";
+import MyAppealsPage from "@/pages/student/MyAppealsPage";
 import ExamReviewPage from "@/pages/student/ExamReviewPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import AnonymousAccessPage from "@/pages/exam/AnonymousAccessPage";
@@ -130,6 +131,13 @@ export const routes: RouteConfig[] = [
     path: "/my-scores",
     component: MyScoresPage,
     requiredPermission: "STUDENT_SCORE_VIEW_OWN",
+    isModuleDriven: true,
+  },
+
+  {
+    path: "/my-appeals",
+    component: MyAppealsPage,
+    requiredPermission: "SCORE_APPEAL_VIEW_OWN",
     isModuleDriven: true,
   },
 

@@ -7,6 +7,7 @@ import com.example.starter_project_2025.system.exam.dto.ScoreEmailRecipient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,6 +19,7 @@ public class ExamResultEmailDispatcher {
 
     private final ExamAttemptRepository attemptRepository;
     private final ExamResultEmailService emailService;
+    private final GuestEmailResolver guestEmailResolver;
 
     @Transactional(readOnly = true)
     public void dispatch(Exam exam) {
@@ -44,25 +46,44 @@ public class ExamResultEmailDispatcher {
 
         List<ScoreEmailRecipient> recipients =
                 latestScoredAttempts.values().stream()
-                        .filter(attempt ->
-                                attempt.getStudent().getEmail() != null
-                                        && !attempt.getStudent().getEmail().isBlank()
-                        )
-                        .map(attempt -> new ScoreEmailRecipient(
-                                attempt.getStudent().getId(),
-                                attempt.getStudent().getEmail(),
-                                "Exam: " + exam.getTitle()
-                                        + "\nAttempt: " + attempt.getAttemptNumber()
-                                        + "\nObjective score: "
-                                        + (attempt.getObjectiveScore() == null
-                                        ? "Not available"
-                                        : attempt.getObjectiveScore().setScale(2, java.math.RoundingMode.HALF_UP))
-                                        + "\nFinal score: "
-                                        + attempt.getFinalScore().setScale(2, java.math.RoundingMode.HALF_UP)
-                                        + "/" + ExamScoring.effectiveMax(attempt.getMaxScore()).stripTrailingZeros().toPlainString()
-                        ))
+                        .map(this::toRecipient)
+                        .filter(recipient -> recipient != null)
                         .toList();
 
         emailService.sendScoreEmails(exam, recipients);
+    }
+
+    /**
+     * Lay email nhan thuc cua nguoi thi.
+     * Guest (khong co account) co the luu email gia trong bang user
+     * (guest-xxx@anon.invalid) khi email trung mot account that,
+     * nen phai tra email that tu anonymous_session.
+     */
+    private ScoreEmailRecipient toRecipient(ExamAttempt attempt) {
+        boolean isGuest = Boolean.TRUE.equals(attempt.getStudent().getIsGuest());
+
+        String email = isGuest
+                ? guestEmailResolver.resolveGuestEmail(attempt)
+                : attempt.getStudent().getEmail();
+
+        if (email == null || email.isBlank()) {
+            return null;
+        }
+
+        String scoreSummary = "Exam: " + attempt.getExam().getTitle()
+                + "\nAttempt: " + attempt.getAttemptNumber()
+                + "\nObjective score: "
+                + (attempt.getObjectiveScore() == null
+                ? "Not available"
+                : attempt.getObjectiveScore().setScale(2, java.math.RoundingMode.HALF_UP))
+                + "\nFinal score: "
+                + attempt.getFinalScore().setScale(2, java.math.RoundingMode.HALF_UP)
+                + "/" + ExamScoring.effectiveMax(attempt.getMaxScore()).stripTrailingZeros().toPlainString();
+
+        return new ScoreEmailRecipient(
+                attempt.getStudent().getId(),
+                email,
+                scoreSummary
+        );
     }
 }

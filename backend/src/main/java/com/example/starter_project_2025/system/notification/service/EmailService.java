@@ -27,6 +27,8 @@ public class EmailService {
     private static final String EXAM_REVOKED_EMAIL = "email/exam_revoked";
     private static final String EXAM_ACCEPTED_EMAIL = "email/exam_accepted";
     private static final String EXAM_RESULT_EMAIL = "email/exam_result";
+    private static final String SCORE_APPEAL_APPROVED_EMAIL = "email/score_appeal_approved";
+    private static final String SCORE_APPEAL_REJECTED_EMAIL = "email/score_appeal_rejected";
 
     private static final DateTimeFormatter DATE_TIME_FORMATTER =
             DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
@@ -163,7 +165,7 @@ public class EmailService {
         send("[Hủy] " + examTitle, invitation.getUser().getEmail(), EXAM_REVOKED_EMAIL, vars);
     }
 
-    public void sendAnonymousExamResult(
+    public boolean sendAnonymousExamResult(
             String recipientEmail,
             String studentName,
             String examTitle,
@@ -173,7 +175,8 @@ public class EmailService {
             boolean pendingReview
     ) {
         if (recipientEmail == null || recipientEmail.isBlank()) {
-            return;
+            log.warn("Skip anonymous exam result email: recipient email is empty (exam {})", examTitle);
+            return false;
         }
 
         List<Map.Entry<String, Object>> vars = new ArrayList<>();
@@ -188,15 +191,91 @@ public class EmailService {
                 + "Chúng tôi sẽ gửi lại điểm chính thức qua email này sau khi chấm xong."
                 : "Bài thi của bạn đã được chấm xong. Điểm chi tiết sẽ được thông báo sau khi giáo viên công bố."));
 
-        send("[Kết quả] " + examTitle, recipientEmail, EXAM_RESULT_EMAIL, vars);
+        return send("[Kết quả] " + examTitle, recipientEmail, EXAM_RESULT_EMAIL, vars);
     }
 
-    private void send(String subject, String to, String template, List<Map.Entry<String, Object>> vars) {
+    public void sendScoreAppealApproved(
+            String recipientEmail,
+            String studentName,
+            String examTitle,
+            BigDecimal oldScore,
+            BigDecimal newScore,
+            String note) {
+        if (recipientEmail == null || recipientEmail.isBlank()) {
+            return;
+        }
+        List<Map.Entry<String, Object>> vars = new ArrayList<>();
+        vars.add(Map.entry("username", studentName == null || studentName.isBlank() ? "Student" : studentName));
+        vars.add(Map.entry("examTitle", examTitle == null ? "" : examTitle));
+        vars.add(Map.entry("oldScore", formatScore(oldScore)));
+        vars.add(Map.entry("newScore", newScore == null ? "Unchanged" : formatScore(newScore)));
+        vars.add(Map.entry("note", note == null ? "" : note));
+
+        send("[Score Appeal Approved] " + examTitle, recipientEmail, SCORE_APPEAL_APPROVED_EMAIL, vars);
+    }
+
+    public void sendScoreAppealRejected(
+            String recipientEmail,
+            String studentName,
+            String examTitle,
+            String note) {
+        if (recipientEmail == null || recipientEmail.isBlank()) {
+            return;
+        }
+        List<Map.Entry<String, Object>> vars = new ArrayList<>();
+        vars.add(Map.entry("username", studentName == null || studentName.isBlank() ? "Student" : studentName));
+        vars.add(Map.entry("examTitle", examTitle == null ? "" : examTitle));
+        vars.add(Map.entry("note", note == null ? "" : note));
+
+        send("[Score Appeal Rejected] " + examTitle, recipientEmail, SCORE_APPEAL_REJECTED_EMAIL, vars);
+    }
+
+    /**
+     * Gui email test de kiem tra cau hinh SMTP. Tra ve true neu gui thanh cong.
+     */
+    public boolean sendTestEmail(String recipientEmail) {
+        if (recipientEmail == null || recipientEmail.isBlank()) {
+            log.warn("Skip test email: recipient is empty");
+            return false;
+        }
+
+        List<Map.Entry<String, Object>> vars = new ArrayList<>();
+        vars.add(Map.entry("username", "Thí sinh"));
+        vars.add(Map.entry("examTitle", "Email test"));
+        vars.add(Map.entry("score", "8.5"));
+        vars.add(Map.entry("totalPoints", "10"));
+        vars.add(Map.entry("submittedAt", formatDateTime(LocalDateTime.now())));
+        vars.add(Map.entry("pendingReview", "false"));
+        vars.add(Map.entry("resultMessage",
+                "Đây là email kiểm tra cấu hình SMTP. Nếu bạn nhận được email này thì hệ thống đã gửi được kết quả thi thành công."));
+
+        return send("[Test] Kiểm tra cấu hình email", recipientEmail.trim(), EXAM_RESULT_EMAIL, vars);
+    }
+
+    private String formatScore(BigDecimal score) {
+        if (score == null) {
+            return "-";
+        }
+        return score.setScale(2, java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString();
+    }
+
+    /**
+     * Gui email. Tra ve true neu gui thanh cong, false neu that bai.
+     * Log day du stack trace de canh copy console backend khi canh tim loi gui mail.
+     */
+    private boolean send(String subject, String to, String template, List<Map.Entry<String, Object>> vars) {
+        if (to == null || to.isBlank()) {
+            log.warn("Skip email '{}' because recipient is empty (template {})", subject, template);
+            return false;
+        }
         try {
             mailUtil.buildAndSendMail(subject, hostEmail, to, template, vars);
             log.info("Email sent to {} with template {}", to, template);
+            return true;
         } catch (Exception e) {
-            log.error("Failed to send email to {} with template {}: {}", to, template, e.getMessage());
+            log.error("Failed to send email to {} with template {} subject='{}': {}",
+                    to, template, subject, e.getMessage(), e);
+            return false;
         }
     }
 

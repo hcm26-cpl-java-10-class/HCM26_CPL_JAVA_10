@@ -18,6 +18,7 @@ const examBase = createBaseApiService<ExamDTO, ExamFilter>({ path: "/exams" });
 export interface PublishedExamScore {
   examId: number;
   examTitle: string;
+  attemptId: number;
   attemptNumber: number;
   objectiveScore: number | null;
   finalScore: number | null;
@@ -25,12 +26,35 @@ export interface PublishedExamScore {
   firstScore: number | null;
   secondScore: number | null;
   submittedAt: string;
+  /** Giao vien da cong bo ket qua: moi duoc appeal. */
+  resultPublished: boolean;
 }
 
 export const examApi = {
   ...examBase,
   getMyPublishedExamScores: async (): Promise<PublishedExamScore[]> => {
     const response = await axiosInstance.get<PublishedExamScore[]>("/exams/my-scores");
+    return response.data;
+  },
+  resendResultEmail: async (
+    attemptId: number,
+    email?: string,
+  ): Promise<{ attemptId: number; sent: boolean; message: string }> => {
+    const response = await axiosInstance.post<{
+      attemptId: number;
+      sent: boolean;
+      message: string;
+    }>(`/exams/attempts/${attemptId}/resend-result-email`, null, {
+      params: email ? { email } : undefined,
+    });
+    return response.data;
+  },
+  sendTestEmail: async (email: string): Promise<{ sent: boolean; message: string }> => {
+    const response = await axiosInstance.post<{ sent: boolean; message: string }>(
+      "/exams/mail/test",
+      null,
+      { params: { email } },
+    );
     return response.data;
   },
   addQuestions: async (examId: number, questionIds: number[]): Promise<ExamDTO> => {

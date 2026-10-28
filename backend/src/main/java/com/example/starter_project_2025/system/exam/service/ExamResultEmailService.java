@@ -7,6 +7,8 @@ import com.example.starter_project_2025.system.exam.domain.ExamResultPublication
 import com.example.starter_project_2025.system.exam.domain.ExamResultPublicationRepository;
 import com.example.starter_project_2025.system.exam.domain.ScoreEmailDeliveryStatus;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
@@ -18,6 +20,9 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class ExamResultEmailService {
+
+    // Bien "log" cua @Slf4j bi che boi bien ExamResultEmailLog trong method, nen dung rieng.
+    private static final Logger LOGGER = LoggerFactory.getLogger(ExamResultEmailService.class);
 
     private final JavaMailSender mailSender;
     private final ExamResultEmailLogRepository emailLogRepository;
@@ -90,11 +95,6 @@ public class ExamResultEmailService {
         log.setLastError(null);
         emailLogRepository.save(log);
 
-        log.setRecipientEmail(recipientEmail);
-        log.setStatus(ScoreEmailDeliveryStatus.PENDING);
-        log.setLastError(null);
-        emailLogRepository.save(log);
-
         try {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setTo(recipientEmail);
@@ -110,9 +110,13 @@ public class ExamResultEmailService {
             log.setStatus(ScoreEmailDeliveryStatus.SENT);
             log.setSentAt(LocalDateTime.now());
             log.setLastError(null);
+            LOGGER.info("Score email sent to {} for examId {} studentId {}",
+                    recipientEmail, exam.getId(), studentId);
         } catch (Exception exception) {
             log.setStatus(ScoreEmailDeliveryStatus.FAILED);
             log.setLastError(truncate(exception.getMessage(), 1000));
+            LOGGER.error("Failed to send score email to {} for examId {} studentId {}: {}",
+                    recipientEmail, exam.getId(), studentId, exception.getMessage());
         } finally {
             log.setAttemptCount(log.getAttemptCount() + 1);
             emailLogRepository.save(log);

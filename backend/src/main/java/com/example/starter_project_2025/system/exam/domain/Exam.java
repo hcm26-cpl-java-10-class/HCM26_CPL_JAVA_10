@@ -20,7 +20,7 @@ import lombok.Setter;
 @ResourcePermission("EXAM")
 @ResourceMenu(
         title = "Exams",
-        group = "Exam Management",
+        group = "Exam",
         icon = "book-open",
         url = "/exams",
         order = 1,

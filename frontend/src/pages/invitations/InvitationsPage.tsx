@@ -1,7 +1,7 @@
 import { Navigate } from "react-router-dom";
 
-import InvitationsLandingPage from "@/pages/management/exam/invitations";
 import StudentInvitationList from "@/components/features/invitation/StudentInvitationList";
+import InvitationsLandingPage from "@/pages/invitations/InvitationsLandingPage";
 import { usePermissions } from "@/hooks/usePermissions";
 import { STUDENT_ROLE, normalizeRole } from "@/utils/rbac.utils";
 
