@@ -1,18 +1,35 @@
+
 package com.example.trainingprogram.controller;
 
 import com.example.trainingprogram.dto.*;
 import com.example.trainingprogram.entity.ProgramStatus;
 import com.example.trainingprogram.service.TrainingProgramService;
 import jakarta.validation.Valid;
-import org.springframework.data.domain.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
-import java.util.Map;
+
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/programs")
 public class TrainingProgramController {
+
     private final TrainingProgramService service;
+
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+        "id",
+        "code",
+        "name",
+        "version",
+        "region",
+        "status",
+        "createdAt",
+        "updatedAt"
+    );
 
     public TrainingProgramController(TrainingProgramService service) {
         this.service = service;
@@ -28,10 +45,24 @@ public class TrainingProgramController {
         @RequestParam(defaultValue = "updatedAt,desc") String sort
     ) {
         String[] sortParts = sort.split(",", 2);
-        Sort.Direction direction = sortParts.length > 1 && "asc".equalsIgnoreCase(sortParts[1])
-            ? Sort.Direction.ASC : Sort.Direction.DESC;
-        Pageable pageable = PageRequest.of(Math.max(0, page), Math.min(Math.max(size, 1), 100),
-            Sort.by(direction, sortParts[0]));
+
+        String sortField = sortParts[0].trim();
+        if (!ALLOWED_SORT_FIELDS.contains(sortField)) {
+            sortField = "updatedAt";
+        }
+
+        Sort.Direction direction =
+            sortParts.length > 1
+                && "asc".equalsIgnoreCase(sortParts[1].trim())
+                ? Sort.Direction.ASC
+                : Sort.Direction.DESC;
+
+        Pageable pageable = PageRequest.of(
+            Math.max(0, page),
+            Math.min(Math.max(size, 1), 100),
+            Sort.by(direction, sortField)
+        );
+
         return service.list(search, region, status, pageable);
     }
 
@@ -42,7 +73,9 @@ public class TrainingProgramController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public TrainingProgramResponse create(@Valid @RequestBody TrainingProgramRequest request) {
+    public TrainingProgramResponse create(
+        @Valid @RequestBody TrainingProgramRequest request
+    ) {
         return service.create(request);
     }
 
@@ -66,9 +99,9 @@ public class TrainingProgramController {
     @ResponseStatus(HttpStatus.CREATED)
     public TrainingProgramResponse cloneProgram(
         @PathVariable Long id,
-        @RequestBody Map<String, String> request
+        @Valid @RequestBody CloneProgramRequest request
     ) {
-        return service.cloneProgram(id, request.get("newVersion"));
+        return service.cloneProgram(id, request.newVersion());
     }
 
     @DeleteMapping("/{id}")
