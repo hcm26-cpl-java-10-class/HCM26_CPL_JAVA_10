@@ -44,6 +44,14 @@ public interface CourseEnrollmentRepository
             @Param("courseId") Long courseId
     );
 
+    @Query("select department.id, count(distinct e.user.id) from CourseEnrollment e "
+            + "join e.user.roles role join e.user.departments department "
+            + "where e.user.isActive = true and role.name = 'STUDENT' "
+            + "and e.course.id = :courseId group by department.id")
+    List<Object[]> countEnrolledStudentsPerDepartmentForCourse(
+            @Param("courseId") Long courseId
+    );
+
     @Query("select distinct e.user.id from CourseEnrollment e "
             + "join e.user.roles role join e.user.departments department "
             + "where department.id = :departmentId "

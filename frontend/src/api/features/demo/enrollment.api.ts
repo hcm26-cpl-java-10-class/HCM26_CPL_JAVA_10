@@ -1,10 +1,22 @@
 import axiosInstance from "@/api/axios";
-import type { DepartmentEnrollmentPreview, DepartmentEnrollmentResult, Enrollment } from "@/types";
+import type {
+    DepartmentBatchEnrollmentResult,
+    DepartmentEnrollmentPreview,
+    DepartmentEnrollmentResult,
+    Enrollment,
+} from "@/types";
 import type { DepartmentMemberPage } from "@/types";
 
 interface DepartmentEnrollmentRequest {
     departmentId: number;
     courseId: number;
+    /** Sinh viên trong department bị loại khỏi lần assign này. */
+    excludedStudentIds?: number[];
+}
+
+export interface DepartmentBatchEnrollmentRequest {
+    courseId: number;
+    departments: { departmentId: number; excludedStudentIds: number[] }[];
 }
 
 interface StudentEnrollmentRequest {
@@ -70,11 +82,42 @@ export const enrollmentApi = {
         return response.data;
     },
 
+    /** Id các department đã được assign hết vào course (mọi sinh viên active đã enroll). */
+    getAssignedDepartmentIds: async (courseId: number): Promise<number[]> => {
+        const response = await axiosInstance.get<number[]>(
+            "/enrollments/departments/assigned",
+            { params: { courseId } },
+        );
+        return response.data;
+    },
+
     enrollDepartment: async (
         request: DepartmentEnrollmentRequest,
     ): Promise<DepartmentEnrollmentResult> => {
         const response = await axiosInstance.post<DepartmentEnrollmentResult>(
             "/enrollments/departments",
+            request,
+        );
+        return response.data;
+    },
+
+    /** Xem trước kết quả khi assign nhiều department cùng lúc. */
+    previewDepartments: async (
+        request: DepartmentBatchEnrollmentRequest,
+    ): Promise<DepartmentBatchEnrollmentResult> => {
+        const response = await axiosInstance.post<DepartmentBatchEnrollmentResult>(
+            "/enrollments/departments/batch/preview",
+            request,
+        );
+        return response.data;
+    },
+
+    /** Assign nhiều department cùng lúc, trả về chi tiết từng người đã enroll. */
+    enrollDepartments: async (
+        request: DepartmentBatchEnrollmentRequest,
+    ): Promise<DepartmentBatchEnrollmentResult> => {
+        const response = await axiosInstance.post<DepartmentBatchEnrollmentResult>(
+            "/enrollments/departments/batch",
             request,
         );
         return response.data;
