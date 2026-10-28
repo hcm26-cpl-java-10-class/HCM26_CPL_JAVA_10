@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { EXAM_CATEGORY_LABEL, EXAM_CATEGORY_SHOW_ANSWERS_DEFAULT, type ExamCategory, type ExamDTO, type ExamType, type LatePolicy, type QuestionDTO, type QuestionDifficulty, type QuestionFilter, type QuestionType, type ResultVisibility } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, CheckCheck, CheckSquare, ClipboardCheck, Dices, Layers, Mail, MoreVertical, Pencil, Plus, Search, BookmarkPlus, ShieldAlert, Tags, Trash2, X } from "lucide-react";
+import { BookOpen, CheckCheck, CheckSquare, ClipboardCheck, Dices, Layers, Mail, MoreVertical, Pencil, Plus, Search, Sparkles, BookmarkPlus, Tags, Trash2, X } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -65,8 +65,6 @@ interface ExamConfigForm {
   requireFullscreen: boolean;
   singleSession: boolean;
   flagThreshold: string;
-  fastSubmitPercent: string;
-  similarityPercent: string;
 }
 
 const DEFAULT_CONFIG: ExamConfigForm = {
@@ -90,9 +88,7 @@ const DEFAULT_CONFIG: ExamConfigForm = {
   blockCopyPaste: true,
   requireFullscreen: false,
   singleSession: true,
-  flagThreshold: "5",
-  fastSubmitPercent: "20",
-  similarityPercent: "80",
+  flagThreshold: "1",
 };
 
 const LATE_POLICY_LABEL: Record<LatePolicy, string> = {
@@ -139,8 +135,6 @@ const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   requireFullscreen: exam.requireFullscreen ?? false,
   singleSession: exam.singleSession ?? false,
   flagThreshold: exam.flagThreshold != null ? String(exam.flagThreshold) : "",
-  fastSubmitPercent: exam.fastSubmitPercent != null ? String(exam.fastSubmitPercent) : "",
-  similarityPercent: exam.similarityPercent != null ? String(exam.similarityPercent) : "",
 });
 
 function validateConfig(
@@ -310,8 +304,6 @@ export default function ExamManagementPage() {
         requireFullscreen: cfg.requireFullscreen,
         singleSession: cfg.singleSession,
         flagThreshold: cfg.flagThreshold !== "" ? Number(cfg.flagThreshold) : 0,
-        fastSubmitPercent: cfg.fastSubmitPercent !== "" ? Number(cfg.fastSubmitPercent) : 0,
-        similarityPercent: cfg.similarityPercent !== "" ? Number(cfg.similarityPercent) : 0,
       };
       return editingExam?.id
           ? examApi.update(String(editingExam.id), request)
@@ -622,37 +614,23 @@ export default function ExamManagementPage() {
   return (
       <MainLayout pathName={{ exams: "Exam Management" }}>
         <section className="flex flex-col gap-5">
-
           <header className="flex flex-wrap items-end justify-between gap-4 border-b pb-4">
             <div>
               <p className="text-sm text-muted-foreground">Exam Management</p>
               <h1 className="mt-1 text-2xl font-semibold">Exams List</h1>
             </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                  onClick={() => {
-                    setEditingExam(null);
-                    setNewTitle("");
-                    setNewDuration("60");
-                    setCfg(DEFAULT_CONFIG);
-                    setCreateOpen(true);
-                  }}
-              >
-                <Plus className="mr-2 size-4" />
-                Create Exam
-              </Button>
-
-              <Button
-                  variant="outline"
-                  onClick={() => navigate("/management/exam/templates")}
-              >
-                <BookmarkPlus className="mr-2 size-4" />
-                Use Template
-              </Button>
-            </div>
+            <Button onClick={() => { setEditingExam(null); setNewTitle(""); setNewDuration("60"); setCfg(DEFAULT_CONFIG); setCreateOpen(true); }}>
+              <Plus />
+              Create Exam
+            </Button>
+            <Button
+                variant="outline"
+                onClick={() => navigate("/management/exam/templates")}
+            >
+              <BookmarkPlus className="mr-2 size-4" />
+              Use Template
+            </Button>
           </header>
-
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="relative w-full max-w-md">
@@ -748,17 +726,6 @@ export default function ExamManagementPage() {
                           <Button
                               variant="outline"
                               size="sm"
-                              className="text-purple-700 hover:text-purple-900 dark:text-purple-300"
-                              onClick={() => exam.id && navigate(`/exams/${exam.id}/grading/similarity`)}
-                              disabled={!exam.id}
-                              title="AI Similarity and Plagiarism Check"
-                          >
-                            <ShieldAlert className="size-4" />
-                            AI Similarity
-                          </Button>
-                          <Button
-                              variant="outline"
-                              size="sm"
                               onClick={() => exam.id && navigate(`/exams/${exam.id}/invitations`)}
                               disabled={!exam.id}
                           >
@@ -800,13 +767,6 @@ export default function ExamManagementPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                  className="cursor-pointer"
-                                  onClick={() => exam.id && navigate(`/exams/${exam.id}/grading/similarity`)}
-                              >
-                                <ShieldAlert className="mr-2 size-4 text-purple-600" />
-                                AI Similarity Check
-                              </DropdownMenuItem>
                               <DropdownMenuItem
                                   className="cursor-pointer"
                                   onClick={() => openSaveAsTemplate(exam)}
@@ -1032,17 +992,8 @@ export default function ExamManagementPage() {
                           Detect multiple tabs / devices
                         </label>
                         <label className="grid gap-1 text-sm sm:col-span-2">
-                          Flag as suspicious after N violations (empty = no flag)
+                          Flag an attempt after N violations (empty = 1)
                           <Input type="number" min={0} max={1000} value={cfg.flagThreshold} onChange={(event) => setCfg((c) => ({ ...c, flagThreshold: event.target.value }))} />
-                        </label>
-                        {/* NEW (anti-cheat nang cao) */}
-                        <label className="grid gap-1 text-sm">
-                          Flag fast submit: under N% of exam time (empty/0 = off)
-                          <Input type="number" min={0} max={100} value={cfg.fastSubmitPercent} onChange={(event) => setCfg((c) => ({ ...c, fastSubmitPercent: event.target.value }))} />
-                        </label>
-                        <label className="grid gap-1 text-sm">
-                          Flag similar essays: from N% similarity (empty/0 = off)
-                          <Input type="number" min={0} max={100} value={cfg.similarityPercent} onChange={(event) => setCfg((c) => ({ ...c, similarityPercent: event.target.value }))} />
                         </label>
                       </div>
                   )}

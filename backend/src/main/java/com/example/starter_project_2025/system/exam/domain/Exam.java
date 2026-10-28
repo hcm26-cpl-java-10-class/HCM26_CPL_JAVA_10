@@ -104,12 +104,6 @@ public class Exam extends BaseEntity {
     /** So vi pham de danh dau "nghi van" trong bao cao (null/0 = khong danh dau). */
     private Integer flagThreshold;
 
-    /** NEW: gan co "nop qua nhanh" neu nop bai trong duoi N% thoi gian cho phep (null = tat). */
-    private Integer fastSubmitPercent;
-
-    /** NEW: gan co "noi dung trung" neu tu luan giong nhau tu N% (null = tat). */
-    private Integer similarityPercent;
-
     @ManyToMany
     @JoinTable(name = "exam_question",
             joinColumns = @JoinColumn(name = "exam_id"),

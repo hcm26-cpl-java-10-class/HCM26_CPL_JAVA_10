@@ -3,7 +3,6 @@ package com.example.starter_project_2025.system.exam.controller;
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.exam.dto.ExamIntegrityReportDTO;
 import com.example.starter_project_2025.system.exam.dto.IntegrityEventRequest;
-import com.example.starter_project_2025.system.exam.dto.IntegrityReviewRequest;
 import com.example.starter_project_2025.system.exam.service.AnonymousExamService;
 import com.example.starter_project_2025.system.exam.service.ExamIntegrityService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -64,20 +63,6 @@ public class ExamIntegrityController {
     public ResponseEntity<List<ExamIntegrityReportDTO.EventDTO>> events(
             @PathVariable Long examId, @PathVariable Long attemptId) {
         return ResponseEntity.ok(service.getEvents(examId, attemptId));
-    }
-
-    /** NEW: giao vien danh dau da xem xet 1 luot thi (binh thuong / nghi van) + ghi chu. */
-    @PutMapping("/{examId}/integrity-report/attempts/{attemptId}/review")
-    @PreAuthorize("hasAuthority('EXAM_UPDATE')")
-    public ResponseEntity<Void> review(
-            @PathVariable Long examId,
-            @PathVariable Long attemptId,
-            @Valid @RequestBody IntegrityReviewRequest request,
-            @AuthenticationPrincipal UserPrincipal principal
-    ) {
-        service.review(examId, attemptId, request,
-                principal.getUser().getId(), principal.getUser().getFullName());
-        return ResponseEntity.noContent().build();
     }
 
     private static String clientIp(HttpServletRequest req) {

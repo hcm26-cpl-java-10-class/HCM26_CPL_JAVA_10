@@ -1,18 +1,14 @@
 // NEW (anti-cheat): bao cao vi pham cua ky thi, hien trong trang Thong ke ket qua.
-// CHANGED (anti-cheat nang cao): giao dien moi (the tom tat, bieu do, bo loc, phan trang),
-// co nop nhanh / noi dung trung, trang thai xem xet cua giao vien.
+// CHANGED: chi thong ke (khong co xem xet/ghi chu/export). Chi co 1 co duy nhat "Bi gan co" = co vi pham,
+// de sau nay lam tinh nang sua diem cho sinh vien bi gan co. Loc duoc theo tung loai vi pham.
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, Download, Search } from "lucide-react";
-import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
+import { ChevronDown, ChevronRight, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     getIntegrityEvents,
     getIntegrityReport,
-    reviewIntegrityAttempt,
-    type IntegrityFlagReason,
     type IntegrityReportRow,
-    type IntegrityReviewStatus,
 } from "@/api/exam.api";
 import { formatScore } from "@/utils/examScore";
 
@@ -42,29 +38,16 @@ const TYPE_COLOR: Record<string, string> = {
     MULTI_SESSION: "bg-red-600",
 };
 
-const FLAG_LABEL: Record<IntegrityFlagReason, string> = {
-    MANY_VIOLATIONS: "Nhiều vi phạm",
-    TOO_FAST: "Nộp quá nhanh",
-    SIMILAR_CONTENT: "Nội dung trùng",
-};
-
-const FLAG_STYLE: Record<IntegrityFlagReason, string> = {
-    MANY_VIOLATIONS: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
-    TOO_FAST: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
-    SIMILAR_CONTENT: "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300",
-};
-
-const REVIEW_LABEL: Record<IntegrityReviewStatus, string> = {
-    NOT_REVIEWED: "Chưa xem",
-    REVIEWED_NORMAL: "Đã xem - bình thường",
-    REVIEWED_SUSPICIOUS: "Đã xem - nghi vấn",
-};
-
-const REVIEW_STYLE: Record<IntegrityReviewStatus, string> = {
-    NOT_REVIEWED: "bg-muted text-muted-foreground",
-    REVIEWED_NORMAL: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
-    REVIEWED_SUSPICIOUS: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
-};
+/** Nhom loai vi pham dung cho bo loc (khop cac cot dem cua bang). */
+const FILTER_TYPES: { key: string; label: string; count: (r: IntegrityReportRow) => number }[] = [
+    { key: "TAB_HIDDEN", label: "Rời tab", count: (r) => r.tabSwitchCount },
+    { key: "WINDOW_BLUR", label: "Chuyển cửa sổ", count: (r) => r.windowBlurCount },
+    { key: "FULLSCREEN_EXIT", label: "Thoát toàn màn hình", count: (r) => r.fullscreenExitCount },
+    { key: "COPY", label: "Sao chép / dán", count: (r) => r.copyPasteCount },
+    { key: "CONTEXT_MENU", label: "Chuột phải", count: (r) => r.contextMenuCount },
+    { key: "DEVTOOLS_KEY", label: "Phím tắt DevTools / in", count: (r) => r.shortcutCount },
+    { key: "MULTI_SESSION", label: "Mở nhiều nơi", count: (r) => r.multiSessionCount },
+];
 
 const PAGE_SIZE = 10;
 
@@ -77,23 +60,14 @@ const fmtDuration = (s?: number | null) => {
 };
 
 function typeCounts(r: IntegrityReportRow): [string, number][] {
-    return ([
-        ["TAB_HIDDEN", r.tabSwitchCount],
-        ["WINDOW_BLUR", r.windowBlurCount],
-        ["FULLSCREEN_EXIT", r.fullscreenExitCount],
-        ["COPY", r.copyPasteCount],
-        ["CONTEXT_MENU", r.contextMenuCount],
-        ["DEVTOOLS_KEY", r.shortcutCount],
-        ["MULTI_SESSION", r.multiSessionCount],
-    ] as [string, number][]).filter(([, n]) => n > 0);
+    return FILTER_TYPES.map((t) => [t.key, t.count(r)] as [string, number]).filter(([, n]) => n > 0);
 }
 
-function StatCard({ label, value, tone }: { label: string; value: number; tone?: "red" | "amber" | "green" | "default" }) {
+function StatCard({ label, value, tone }: { label: string; value: number; tone?: "red" | "amber" | "default" }) {
     const accent =
         tone === "red" ? "border-l-red-500"
             : tone === "amber" ? "border-l-amber-500"
-                : tone === "green" ? "border-l-emerald-500"
-                    : "border-l-primary/40";
+                : "border-l-primary/40";
     return (
         <div className={`rounded-lg border border-l-4 bg-card p-3 ${accent}`}>
             <p className="text-xs text-muted-foreground">{label}</p>
@@ -157,70 +131,12 @@ function EventList({ examId, attemptId }: { examId: number; attemptId: number })
     );
 }
 
-function ReviewForm({ examId, row, onSaved }: { examId: number; row: IntegrityReportRow; onSaved: () => void }) {
-    const [status, setStatus] = useState<IntegrityReviewStatus>(row.reviewStatus);
-    const [note, setNote] = useState(row.reviewNote ?? "");
-
-    useEffect(() => {
-        setStatus(row.reviewStatus);
-        setNote(row.reviewNote ?? "");
-    }, [row.attemptId, row.reviewStatus, row.reviewNote]);
-
-    const mutation = useMutation({
-        mutationFn: () => reviewIntegrityAttempt(examId, row.attemptId, { status, note: note.trim() || undefined }),
-        onSuccess: () => {
-            toast.success("Đã lưu kết quả xem xét.");
-            onSaved();
-        },
-        onError: () => toast.error("Không lưu được kết quả xem xét."),
-    });
-
-    const options: IntegrityReviewStatus[] = ["NOT_REVIEWED", "REVIEWED_NORMAL", "REVIEWED_SUSPICIOUS"];
-    return (
-        <div className="rounded-md border bg-card p-3">
-            <p className="text-sm font-medium">Xem xét của giáo viên</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-                Đây chỉ là nhận định sơ bộ, hệ thống không tự kết luận gian lận.
-            </p>
-            <div className="mt-2 flex flex-wrap gap-2">
-                {options.map((o) => (
-                    <button
-                        key={o}
-                        type="button"
-                        onClick={() => setStatus(o)}
-                        className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                            status === o ? `${REVIEW_STYLE[o]} border-transparent ring-2 ring-primary/40` : "hover:bg-muted"
-                        }`}
-                    >
-                        {REVIEW_LABEL[o]}
-                    </button>
-                ))}
-            </div>
-            <textarea
-                className="mt-2 min-h-[64px] w-full rounded-md border bg-background p-2 text-sm"
-                placeholder="Ghi chú (ví dụ: rời tab do mất mạng, không có dấu hiệu gian lận)"
-                maxLength={1000}
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-            />
-            <div className="mt-2 flex items-center justify-between gap-2">
-                <span className="text-xs text-muted-foreground">
-                    {row.reviewedBy ? `Lần xem gần nhất: ${row.reviewedBy} · ${fmtDate(row.reviewedAt)}` : "Chưa có ai xem xét."}
-                </span>
-                <Button size="sm" onClick={() => mutation.mutate()} disabled={mutation.isPending}>
-                    {mutation.isPending ? "Đang lưu..." : "Lưu"}
-                </Button>
-            </div>
-        </div>
-    );
-}
-
-type Filter = "ALL" | "FLAGGED" | "PENDING" | "REVIEWED";
+type Filter = "ALL" | "FLAGGED";
 type Sort = "FLAG" | "VIOLATIONS" | "NAME";
 
 export function IntegrityReportSection({ examId }: { examId: number }) {
-    const queryClient = useQueryClient();
     const [filter, setFilter] = useState<Filter>("ALL");
+    const [typeFilter, setTypeFilter] = useState<string>("ALL");
     const [sort, setSort] = useState<Sort>("FLAG");
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(0);
@@ -235,10 +151,10 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
 
     const rows = useMemo(() => {
         const term = search.trim().toLowerCase();
+        const typeDef = FILTER_TYPES.find((t) => t.key === typeFilter);
         const list = (report?.rows ?? []).filter((r) => {
             if (filter === "FLAGGED" && !r.flagged) return false;
-            if (filter === "PENDING" && !(r.flagged && r.reviewStatus === "NOT_REVIEWED")) return false;
-            if (filter === "REVIEWED" && r.reviewStatus === "NOT_REVIEWED") return false;
+            if (typeDef && typeDef.count(r) === 0) return false;
             if (!term) return true;
             return [r.studentName, r.email, r.username, r.employeeCode, r.phone]
                 .some((v) => (v ?? "").toLowerCase().includes(term));
@@ -248,9 +164,9 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
         else if (sort === "NAME") sorted.sort((a, b) => a.studentName.localeCompare(b.studentName));
         else sorted.sort((a, b) => Number(b.flagged) - Number(a.flagged) || b.totalViolations - a.totalViolations);
         return sorted;
-    }, [report, filter, sort, search]);
+    }, [report, filter, typeFilter, sort, search]);
 
-    useEffect(() => setPage(0), [filter, sort, search]);
+    useEffect(() => setPage(0), [filter, typeFilter, sort, search]);
 
     const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
     const safePage = Math.min(page, pageCount - 1);
@@ -258,63 +174,19 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
 
     const typeTotals = Object.entries(report?.totalsByType ?? {}).filter(([, n]) => n > 0);
     const maxType = Math.max(1, ...typeTotals.map(([, n]) => n));
-    const manyCount = (report?.rows ?? []).filter((r) => r.flagReasons.includes("MANY_VIOLATIONS")).length;
-    const maxFlag = Math.max(1, manyCount, report?.tooFastCount ?? 0, report?.similarCount ?? 0);
-
-    const refresh = () => void queryClient.invalidateQueries({ queryKey: ["exam-integrity-report", examId] });
-
-    const exportCsv = () => {
-        if (!report) return;
-        const head = [
-            "Họ tên", "Email", "Username", "Mã nhân viên/sinh viên", "SĐT", "Mô tả", "Khách",
-            "Lượt thi", "Trạng thái", "Bắt đầu", "Nộp bài", "Thời gian làm (giây)", "Điểm", "Điểm tối đa",
-            "Tổng vi phạm", "Rời tab", "Chuyển cửa sổ", "Thoát toàn màn hình", "Copy/Dán",
-            "Chuột phải", "Phím tắt", "Mở nhiều nơi", "Tổng giây rời bài", "Vi phạm gần nhất",
-            "Cờ", "Giống nhất (%)", "Giống với", "Trạng thái xem xét", "Người xem", "Thời điểm xem", "Ghi chú",
-        ];
-        const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-        const lines = [head.map(esc).join(",")];
-        for (const r of report.rows) {
-            lines.push([
-                r.studentName, r.email, r.username, r.employeeCode, r.phone, r.description, r.guest ? "Có" : "Không",
-                r.attemptNumber, r.status, fmtDate(r.startedAt), fmtDate(r.submittedAt), r.durationSeconds ?? "",
-                r.finalScore ?? r.objectiveScore ?? "", r.maxScore ?? "",
-                r.totalViolations, r.tabSwitchCount, r.windowBlurCount, r.fullscreenExitCount, r.copyPasteCount,
-                r.contextMenuCount, r.shortcutCount, r.multiSessionCount, r.totalAwaySeconds,
-                fmtDate(r.lastViolationAt),
-                r.flagReasons.map((f) => FLAG_LABEL[f]).join("; "),
-                r.maxSimilarityPercent ?? "", r.similarStudentName ?? "",
-                REVIEW_LABEL[r.reviewStatus], r.reviewedBy ?? "", fmtDate(r.reviewedAt), r.reviewNote ?? "",
-            ].map(esc).join(","));
-        }
-        const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `integrity-report-exam-${examId}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
-    };
 
     const filters: { key: Filter; label: string }[] = [
         { key: "ALL", label: "Tất cả" },
         { key: "FLAGGED", label: "Bị gắn cờ" },
-        { key: "PENDING", label: "Chờ xem xét" },
-        { key: "REVIEWED", label: "Đã xem" },
     ];
 
     return (
         <section className="min-w-0 rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                    <h2 className="text-lg font-semibold">Integrity Report (Báo cáo vi phạm)</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        Vi phạm và cờ bất thường của từng lượt thi, kèm thông tin sinh viên. Chỉ ghi nhận, không tự động xử lý.
-                    </p>
-                </div>
-                <Button variant="outline" size="sm" onClick={exportCsv} disabled={!report?.rows.length}>
-                    <Download className="mr-2 h-4 w-4" /> Export CSV
-                </Button>
+            <div>
+                <h2 className="text-lg font-semibold">Integrity Report (Báo cáo vi phạm)</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                    Số lần vi phạm của từng lượt thi, kèm thông tin sinh viên. Chỉ ghi nhận, không tự động xử lý.
+                </p>
             </div>
 
             {query.isLoading && <p className="mt-4 text-sm text-muted-foreground">Đang tải...</p>}
@@ -328,40 +200,26 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
 
             {report && (
                 <>
-                    <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+                    <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
                         <StatCard label="Lượt thi" value={report.totalAttempts} />
                         <StatCard label="Có vi phạm" value={report.attemptsWithViolations} tone="amber" />
                         <StatCard label="Bị gắn cờ" value={report.flaggedAttempts} tone="red" />
-                        <StatCard label="Chờ xem xét" value={report.pendingReviewFlagged} tone="amber" />
-                        <StatCard label="Đã xem - nghi vấn" value={report.reviewedSuspicious} tone="red" />
                         <StatCard label="Tổng vi phạm" value={report.totalViolations} />
                     </div>
 
-                    <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                        <div className="rounded-lg border p-4">
-                            <p className="text-sm font-medium">Số vi phạm theo loại</p>
-                            <div className="mt-3 space-y-2">
-                                {typeTotals.length === 0 && (
-                                    <p className="text-sm text-muted-foreground">Chưa ghi nhận vi phạm nào.</p>
-                                )}
-                                {typeTotals.map(([t, n]) => (
-                                    <BarRow key={t} label={TYPE_LABEL[t] ?? t} value={n} max={maxType} color={TYPE_COLOR[t] ?? "bg-slate-400"} />
-                                ))}
-                            </div>
+                    <div className="mt-4 rounded-lg border p-4">
+                        <p className="text-sm font-medium">Số vi phạm theo loại</p>
+                        <div className="mt-3 grid gap-2 lg:grid-cols-2 lg:gap-x-8">
+                            {typeTotals.length === 0 && (
+                                <p className="text-sm text-muted-foreground">Chưa ghi nhận vi phạm nào.</p>
+                            )}
+                            {typeTotals.map(([t, n]) => (
+                                <BarRow key={t} label={TYPE_LABEL[t] ?? t} value={n} max={maxType} color={TYPE_COLOR[t] ?? "bg-slate-400"} />
+                            ))}
                         </div>
-                        <div className="rounded-lg border p-4">
-                            <p className="text-sm font-medium">Lượt thi bị gắn cờ theo lý do</p>
-                            <div className="mt-3 space-y-2">
-                                <BarRow label="Nhiều vi phạm" value={manyCount} max={maxFlag} color="bg-red-500" />
-                                <BarRow label="Nộp quá nhanh" value={report.tooFastCount} max={maxFlag} color="bg-amber-500" />
-                                <BarRow label="Nội dung trùng" value={report.similarCount} max={maxFlag} color="bg-purple-500" />
-                            </div>
-                            <p className="mt-3 text-xs text-muted-foreground">
-                                Ngưỡng: {report.flagThreshold ? `≥ ${report.flagThreshold} vi phạm` : "vi phạm: tắt"}
-                                {" · "}{report.fastSubmitPercent ? `nộp < ${report.fastSubmitPercent}% thời gian` : "nộp nhanh: tắt"}
-                                {" · "}{report.similarityPercent ? `tự luận giống ≥ ${report.similarityPercent}%` : "trùng nội dung: tắt"}
-                            </p>
-                        </div>
+                        <p className="mt-3 text-xs text-muted-foreground">
+                            Cờ: lượt thi có từ {report.flagThreshold && report.flagThreshold > 1 ? report.flagThreshold : 1} vi phạm trở lên.
+                        </p>
                     </div>
 
                     <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -390,6 +248,17 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
                         </div>
                         <select
                             className="h-9 rounded-md border bg-background px-2 text-sm"
+                            value={typeFilter}
+                            onChange={(e) => setTypeFilter(e.target.value)}
+                            aria-label="Lọc theo loại vi phạm"
+                        >
+                            <option value="ALL">Loại vi phạm: tất cả</option>
+                            {FILTER_TYPES.map((t) => (
+                                <option key={t.key} value={t.key}>{t.label}</option>
+                            ))}
+                        </select>
+                        <select
+                            className="h-9 rounded-md border bg-background px-2 text-sm"
                             value={sort}
                             onChange={(e) => setSort(e.target.value as Sort)}
                             aria-label="Sắp xếp"
@@ -402,7 +271,7 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
                     </div>
 
                     <div className="mt-3 overflow-x-auto rounded-lg border">
-                        <table className="w-full min-w-[960px] text-sm">
+                        <table className="w-full min-w-[860px] text-sm">
                             <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
                                 <tr>
                                     <th className="w-8 px-3 py-2" />
@@ -410,12 +279,11 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
                                     <th className="px-3 py-2">Lượt thi</th>
                                     <th className="px-3 py-2">Vi phạm</th>
                                     <th className="px-3 py-2">Cờ</th>
-                                    <th className="px-3 py-2">Xem xét</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {pageRows.length === 0 && (
-                                    <tr><td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">Không có dữ liệu.</td></tr>
+                                    <tr><td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">Không có dữ liệu.</td></tr>
                                 )}
                                 {pageRows.map((r) => {
                                     const open = expanded === r.attemptId;
@@ -450,7 +318,7 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
                                                     <div className={`text-lg font-semibold tabular-nums ${r.totalViolations > 0 ? "" : "text-muted-foreground"}`}>
                                                         {r.totalViolations}
                                                     </div>
-                                                    <div className="mt-1 flex max-w-[16rem] flex-wrap gap-1">
+                                                    <div className="mt-1 flex max-w-[18rem] flex-wrap gap-1">
                                                         {counts.map(([t, n]) => (
                                                             <span key={t} className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs">
                                                                 <span className={`size-1.5 rounded-full ${TYPE_COLOR[t] ?? "bg-slate-400"}`} />
@@ -460,55 +328,27 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
                                                     </div>
                                                 </td>
                                                 <td className="px-3 py-3">
-                                                    {r.flagReasons.length === 0 ? (
-                                                        <span className="text-xs text-muted-foreground">—</span>
+                                                    {r.flagged ? (
+                                                        <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-800 dark:bg-red-950 dark:text-red-300">
+                                                            Bị gắn cờ
+                                                        </span>
                                                     ) : (
-                                                        <div className="flex flex-col items-start gap-1">
-                                                            {r.flagReasons.map((f) => (
-                                                                <span key={f} className={`rounded-full px-2 py-0.5 text-xs font-medium ${FLAG_STYLE[f]}`}>
-                                                                    {FLAG_LABEL[f]}
-                                                                    {f === "SIMILAR_CONTENT" && r.maxSimilarityPercent != null ? ` ${r.maxSimilarityPercent}%` : ""}
-                                                                </span>
-                                                            ))}
-                                                        </div>
+                                                        <span className="text-xs text-muted-foreground">—</span>
                                                     )}
-                                                </td>
-                                                <td className="px-3 py-3">
-                                                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${REVIEW_STYLE[r.reviewStatus]}`}>
-                                                        {REVIEW_LABEL[r.reviewStatus]}
-                                                    </span>
                                                 </td>
                                             </tr>
                                             {open && (
                                                 <tr className="border-t bg-muted/20">
-                                                    <td colSpan={6} className="p-4">
-                                                        <div className="grid gap-4 lg:grid-cols-2">
-                                                            <div className="space-y-3">
-                                                                <div className="grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
-                                                                    <span>Bắt đầu: {fmtDate(r.startedAt)}</span>
-                                                                    <span>Nộp bài: {fmtDate(r.submittedAt)}</span>
-                                                                    <span>Tổng thời gian rời bài: {fmtDuration(r.totalAwaySeconds)}</span>
-                                                                    <span>Vi phạm gần nhất: {fmtDate(r.lastViolationAt)}</span>
-                                                                    {r.description && <span className="sm:col-span-2">Mô tả: {r.description}</span>}
-                                                                </div>
-                                                                {r.tooFast && (
-                                                                    <p className="rounded-md bg-amber-50 p-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-                                                                        Nộp bài sau {fmtDuration(r.durationSeconds)}, dưới {report.fastSubmitPercent}% thời gian cho phép.
-                                                                    </p>
-                                                                )}
-                                                                {r.maxSimilarityPercent != null && (
-                                                                    <p className="rounded-md bg-purple-50 p-2 text-sm text-purple-900 dark:bg-purple-950/40 dark:text-purple-200">
-                                                                        Tự luận giống {r.maxSimilarityPercent}% với bài của{" "}
-                                                                        <strong>{r.similarStudentName}</strong> (lượt #{r.similarAttemptId}). Cần đối chiếu thủ công.
-                                                                    </p>
-                                                                )}
-                                                                <ReviewForm examId={examId} row={r} onSaved={refresh} />
-                                                            </div>
-                                                            <div>
-                                                                <p className="mb-2 text-sm font-medium">Chi tiết sự kiện</p>
-                                                                <EventList examId={examId} attemptId={r.attemptId} />
-                                                            </div>
+                                                    <td colSpan={5} className="p-4">
+                                                        <div className="grid gap-1 text-sm text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
+                                                            <span>Bắt đầu: {fmtDate(r.startedAt)}</span>
+                                                            <span>Nộp bài: {fmtDate(r.submittedAt)}</span>
+                                                            <span>Tổng thời gian rời bài: {fmtDuration(r.totalAwaySeconds)}</span>
+                                                            <span>Vi phạm gần nhất: {fmtDate(r.lastViolationAt)}</span>
+                                                            {r.description && <span className="sm:col-span-2 lg:col-span-4">Mô tả: {r.description}</span>}
                                                         </div>
+                                                        <p className="mb-2 mt-3 text-sm font-medium">Chi tiết sự kiện</p>
+                                                        <EventList examId={examId} attemptId={r.attemptId} />
                                                     </td>
                                                 </tr>
                                             )}

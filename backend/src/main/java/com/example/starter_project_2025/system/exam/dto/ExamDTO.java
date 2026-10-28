@@ -93,15 +93,6 @@ public class ExamDTO extends BaseDTO {
     @Max(value = 1000, groups = {OnCreate.class, OnUpdate.class}, message = "flagThreshold tối đa 1000")
     private Integer flagThreshold;
 
-    // NEW (anti-cheat nang cao): 0 = tat
-    @Min(value = 0, groups = {OnCreate.class, OnUpdate.class}, message = "fastSubmitPercent phải từ 0 đến 100")
-    @Max(value = 100, groups = {OnCreate.class, OnUpdate.class}, message = "fastSubmitPercent phải từ 0 đến 100")
-    private Integer fastSubmitPercent;
-
-    @Min(value = 0, groups = {OnCreate.class, OnUpdate.class}, message = "similarityPercent phải từ 0 đến 100")
-    @Max(value = 100, groups = {OnCreate.class, OnUpdate.class}, message = "similarityPercent phải từ 0 đến 100")
-    private Integer similarityPercent;
-
     @JsonProperty(access = READ_ONLY)
     private Boolean hasPassword;
 }
