@@ -111,6 +111,14 @@ const RESULT_VISIBILITY_LABEL: Record<ResultVisibility, string> = {
 
 const toInputDateTime = (value?: string | null) => (value ? value.slice(0, 16) : "");
 
+const getLocalDatetimeString = (date = new Date()) => {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
+const getFutureDatetimeString = (minutesAhead: number) =>
+  getLocalDatetimeString(new Date(Date.now() + minutesAhead * 60 * 1000));
+
 const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   startTime: toInputDateTime(exam.startTime),
   endTime: toInputDateTime(exam.endTime),
@@ -140,13 +148,13 @@ function validateConfig(
     originalStartTime?: string,
     originalEndTime?: string,
 ): string | null {
-  const now = Date.now() - 60 * 1000;
+  const now = Date.now() - 60 * 1000; // Allow 1-min grace when saving
 
   if (cfg.startTime) {
     const start = new Date(cfg.startTime).getTime();
     const isStartChanged = !originalStartTime || new Date(originalStartTime).getTime() !== start;
     if (isStartChanged && start < now) {
-      return "Start time cannot be in the past.";
+      return "Start time must be at current time or later (recommended: set at least 1 minute ahead so students have time to join).";
     }
   }
 
@@ -623,7 +631,7 @@ export default function ExamManagementPage() {
                     setEditingExam(null);
                     setNewTitle("");
                     setNewDuration("60");
-                    setCfg(DEFAULT_CONFIG);
+                    setCfg({ ...DEFAULT_CONFIG, startTime: getFutureDatetimeString(2) });
                     setCreateOpen(true);
                   }}
               >
@@ -809,8 +817,9 @@ export default function ExamManagementPage() {
         </section>
 
         <Dialog open={isCreateOpen} onOpenChange={setCreateOpen}>
-          <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-4xl">
             <form
+                className="flex min-h-0 flex-1 flex-col"
                 onSubmit={(event) => {
                   event.preventDefault();
                   const problem = validateConfig(
@@ -826,12 +835,12 @@ export default function ExamManagementPage() {
                   saveExamMutation.mutate();
                 }}
             >
-              <DialogHeader>
+              <DialogHeader className="shrink-0">
                 <DialogTitle>{editingExam ? "Edit Exam" : "Create Exam"}</DialogTitle>
                 <DialogDescription>Configure exam title, duration, and rules.</DialogDescription>
               </DialogHeader>
-              <div className="grid gap-4 py-5">
-                <label className="grid gap-2 text-sm font-medium">
+              <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto py-5 pr-1 sm:grid-cols-2">
+                <label className="grid gap-2 text-sm font-medium sm:col-span-2">
                   Exam Title
                   <Input required maxLength={200} value={newTitle} onChange={(event) => setNewTitle(event.target.value)} />
                 </label>
@@ -874,7 +883,7 @@ export default function ExamManagementPage() {
                     The category sets the default for showing answers; you can change that setting below.
                   </span>
                 </label>
-                <label className="grid gap-2 text-sm font-medium">
+                <label className="grid gap-2 text-sm font-medium sm:col-span-2">
                   Exam Password / Access Code (leave blank if not required)
                   <Input
                       type="text"
@@ -885,15 +894,62 @@ export default function ExamManagementPage() {
                   />
                 </label>
 
-                <div className="grid gap-4 border-t pt-4 sm:grid-cols-2">
-                  <label className="grid gap-2 text-sm font-medium">
-                    Start Time
+                <div className="grid gap-4 border-t pt-4 sm:col-span-2 sm:grid-cols-2">
+                  <div className="grid gap-2 text-sm font-medium">
+                    <div className="flex flex-wrap items-center justify-between gap-1">
+                      <span>Start Time</span>
+                      <div className="flex items-center gap-1 font-normal">
+                        <button
+                          type="button"
+                          className="text-[11px] text-primary hover:underline cursor-pointer"
+                          onClick={() => setCfg((c) => ({ ...c, startTime: getFutureDatetimeString(2) }))}
+                        >
+                          Now +2m
+                        </button>
+                        <span className="text-[10px] text-muted-foreground">·</span>
+                        <button
+                          type="button"
+                          className="text-[11px] text-primary hover:underline cursor-pointer"
+                          onClick={() => setCfg((c) => ({ ...c, startTime: getFutureDatetimeString(15) }))}
+                        >
+                          +15m
+                        </button>
+                        <span className="text-[10px] text-muted-foreground">·</span>
+                        <button
+                          type="button"
+                          className="text-[11px] text-primary hover:underline cursor-pointer"
+                          onClick={() => setCfg((c) => ({ ...c, startTime: getFutureDatetimeString(60) }))}
+                        >
+                          +1h
+                        </button>
+                        {cfg.startTime && (
+                          <>
+                            <span className="text-[10px] text-muted-foreground">·</span>
+                            <button
+                              type="button"
+                              className="text-[11px] text-destructive hover:underline cursor-pointer"
+                              onClick={() => setCfg((c) => ({ ...c, startTime: "" }))}
+                            >
+                              Clear
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
                     <Input
                         type="datetime-local"
+                        min={editingExam?.startTime && new Date(editingExam.startTime).getTime() < Date.now()
+                          ? undefined
+                          : getLocalDatetimeString()}
                         value={cfg.startTime}
                         onChange={(event) => setCfg((c) => ({ ...c, startTime: event.target.value }))}
                     />
-                  </label>
+                    <p className="text-[11px] font-normal text-muted-foreground">
+                      {cfg.startTime
+                        ? "Must be at current time or later (recommended: at least 1–2 min ahead)."
+                        : "Leave blank = no open/close time limits (students can start anytime)."}
+                    </p>
+                  </div>
                   <label className="grid gap-2 text-sm font-medium">
                     End Time
                     <Input
@@ -975,7 +1031,7 @@ export default function ExamManagementPage() {
                 </div>
 
                 {/* NEW (anti-cheat): cau hinh chong gian lan theo tung de */}
-                <div className="grid gap-3 border-t pt-4">
+                <div className="grid gap-3 border-t pt-4 sm:col-span-2">
                   <label className="flex items-center gap-2 text-sm font-semibold">
                     <input type="checkbox" className="size-4 accent-primary" checked={cfg.antiCheatEnabled} onChange={(event) => setCfg((c) => ({ ...c, antiCheatEnabled: event.target.checked }))} />
                     Anti-cheating monitoring (chống gian lận)
@@ -1005,7 +1061,7 @@ export default function ExamManagementPage() {
                   )}
                 </div>
               </div>
-              <DialogFooter>
+              <DialogFooter className="shrink-0 border-t pt-4">
                 <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
                 <Button type="submit" disabled={saveExamMutation.isPending || !newTitle.trim()}>
                   {saveExamMutation.isPending ? "Saving..." : editingExam ? "Save Changes" : "Create Exam"}
