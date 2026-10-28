@@ -10,6 +10,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.example.starter_project_2025.system.exam.dto.ExamAttemptStatisticsDTO;
+import com.example.starter_project_2025.system.exam.service.ExamAttemptStatisticsService;
+import java.util.List;
+
+
 @RestController
 @RequestMapping("/api/exams/{examId}/result-statistics")
 @RequiredArgsConstructor
@@ -17,6 +22,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class ExamResultStatisticsController {
 
     private final ExamResultStatisticsService statisticsService;
+    private final ExamAttemptStatisticsService attemptStatisticsService;
+
 
     @GetMapping
     public ResponseEntity<ExamResultStatisticsDTO> getStatistics(
@@ -26,4 +33,14 @@ public class ExamResultStatisticsController {
                 statisticsService.getStatistics(examId)
         );
     }
+
+    @GetMapping("/attempts")
+    public ResponseEntity<List<ExamAttemptStatisticsDTO>> getAttemptStatistics(
+            @PathVariable Long examId
+    ) {
+        return ResponseEntity.ok(
+                attemptStatisticsService.getAttempts(examId)
+        );
+    }
+
 }

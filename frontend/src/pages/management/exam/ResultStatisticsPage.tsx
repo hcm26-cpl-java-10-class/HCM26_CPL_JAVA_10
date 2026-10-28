@@ -2,10 +2,10 @@ import axiosInstance from "@/api/axios";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, FileSpreadsheet, FileText, Download } from "lucide-react";
+import { ChevronLeft, FileSpreadsheet, FileText, Download, Pencil, Search, X } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { IntegrityReportSection } from "./IntegrityReportSection"; // NEW (anti-cheat)
 import { downloadBlob, getFilenameFromHeader } from "@/components/datatable/util/dataio.utils";
@@ -43,6 +43,19 @@ type PublicationStatus = {
     unpublishedAt: string | null;
     unpublishedBy: number | null;
 };
+
+type ExamAttemptStatistics = {
+    attemptId: number;
+    studentId: number | null;
+    studentName: string;
+    studentEmail: string;
+    attemptNumber: number | null;
+    startedAt: string | null;
+    submittedAt: string | null;
+    finalScore: number | null;
+    status: string;
+};
+
 
 const policies: { value: ReleasePolicy; label: string }[] = [
     {
@@ -317,6 +330,13 @@ export default function ResultStatisticsPage() {
     const [exportingFormat, setExportingFormat] =
         useState<"xlsx" | "csv" | "pdf" | null>(null);
 
+    const [attemptPage, setAttemptPage] = useState(1);
+    const [editDialogOpen, setEditDialogOpen] = useState(false);
+    const [attemptSearch, setAttemptSearch] = useState("");
+    const [selectedAttempt, setSelectedAttempt] =
+        useState<ExamAttemptStatistics | null>(null);
+    const [editedScore, setEditedScore] = useState("");
+
     const validExamId =
         Number.isInteger(examId) && examId > 0;
 
@@ -421,6 +441,40 @@ export default function ResultStatisticsPage() {
 
     const statistics = statisticsQuery.data;
     const publication = publicationQuery.data;
+
+    const attemptsQuery = useQuery({
+        queryKey: ["exam-attempt-statistics", examId],
+        queryFn: async () => {
+            const response = await axiosInstance.get<ExamAttemptStatistics[]>(
+                `/exams/${examId}/result-statistics/attempts`,
+            );
+            return response.data;
+        },
+        enabled: validExamId,
+    });
+
+    const attempts = attemptsQuery.data ?? [];
+    const pageSize = 5;
+    const totalPages = Math.max(1, Math.ceil(attempts.length / pageSize));
+
+    const filteredAttempts = useMemo(() => {
+        const keyword = attemptSearch.trim().toLowerCase();
+
+        if (!keyword) return attempts;
+
+        return attempts.filter((attempt) =>
+            attempt.studentName.toLowerCase().includes(keyword) ||
+            attempt.studentEmail.toLowerCase().includes(keyword)
+        );
+    }, [attempts, attemptSearch]);
+
+    const paginatedAttempts = useMemo(() => {
+        const start = (attemptPage - 1) * pageSize;
+        return attempts.slice(start, start + pageSize);
+    }, [attempts, attemptPage]);
+
+    const formatDateTime = (value: string | null) =>
+        value ? new Date(value).toLocaleString() : "--";
 
     return (
         <MainLayout>
@@ -574,6 +628,327 @@ export default function ResultStatisticsPage() {
                             </section>
                         </div>
                     </>
+                )}
+
+                <section className="rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h2 className="text-lg font-semibold">
+                                Student Attempt Results
+                            </h2>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                Each row represents one exam attempt.
+                            </p>
+                        </div>
+
+                        <Button
+                            onClick={() => {
+                                setAttemptSearch("");
+                                setSelectedAttempt(null);
+                                setEditedScore("");
+                                setEditDialogOpen(true);
+                            }}
+                            disabled={attempts.length === 0}
+                        >
+                            <Pencil className="mr-2 size-4" />
+                            Edit
+                        </Button>
+                    </div>
+
+                    {attemptsQuery.isLoading && (
+                        <p className="py-6 text-center text-sm text-muted-foreground">
+                            Loading student attempts...
+                        </p>
+                    )}
+
+                    {attemptsQuery.isError && (
+                        <p className="py-4 text-sm text-red-600">
+                            Failed to load student attempts:{" "}
+                            {getErrorMessage(attemptsQuery.error)}
+                        </p>
+                    )}
+
+                    {!attemptsQuery.isLoading && !attemptsQuery.isError && (
+                        <>
+                            <div className="w-full overflow-x-auto">
+                                <table className="w-full min-w-[1000px] text-left text-sm">
+                                    <thead className="border-b border-border bg-muted">
+                                    <tr>
+                                        <th className="p-3">No.</th>
+                                        <th className="p-3">Student</th>
+                                        <th className="p-3">Email</th>
+                                        <th className="p-3">Started At</th>
+                                        <th className="p-3">Submitted At</th>
+                                        <th className="p-3">Final Score</th>
+                                        <th className="p-3">Status</th>
+                                        <th className="p-3">Action</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    {paginatedAttempts.map((attempt, index) => (
+                                        <tr
+                                            key={attempt.attemptId}
+                                            className="border-b border-border last:border-0"
+                                        >
+                                            <td className="p-3">
+                                                {(attemptPage - 1) * pageSize + index + 1}
+                                            </td>
+                                            <td className="p-3">
+                                                <div className="font-medium">
+                                                    {attempt.studentName || "--"}
+                                                </div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    Attempt #{attempt.attemptNumber ?? "--"}
+                                                </div>
+                                            </td>
+                                            <td className="p-3">{attempt.studentEmail || "--"}</td>
+                                            <td className="p-3">
+                                                {formatDateTime(attempt.startedAt)}
+                                            </td>
+                                            <td className="p-3">
+                                                {formatDateTime(attempt.submittedAt)}
+                                            </td>
+                                            <td className="p-3 font-semibold">
+                                                {attempt.finalScore == null
+                                                    ? "--"
+                                                    : Number(attempt.finalScore).toFixed(2)}
+                                            </td>
+                                            <td className="p-3">
+                                                {attempt.status}
+                                            </td>
+                                            <td className="p-3 text-muted-foreground">—</td>
+                                        </tr>
+                                    ))}
+
+                                    {attempts.length === 0 && (
+                                        <tr>
+                                            <td
+                                                colSpan={8}
+                                                className="p-8 text-center text-muted-foreground"
+                                            >
+                                                No student attempts found.
+                                            </td>
+                                        </tr>
+                                    )}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                                <p className="text-sm text-muted-foreground">
+                                    {attempts.length === 0
+                                        ? "0 attempts"
+                                        : `Showing ${(attemptPage - 1) * pageSize + 1}–${Math.min(
+                                            attemptPage * pageSize,
+                                            attempts.length,
+                                        )} of ${attempts.length} attempts`}
+                                </p>
+
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={attemptPage <= 1}
+                                        onClick={() => setAttemptPage((page) => page - 1)}
+                                    >
+                                        Previous
+                                    </Button>
+                                    <span className="text-sm">
+                                        Page {attemptPage} / {totalPages}
+                                    </span>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={attemptPage >= totalPages}
+                                        onClick={() => setAttemptPage((page) => page + 1)}
+                                    >
+                                        Next
+                                    </Button>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </section>
+
+                {editDialogOpen && (
+                    <div
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-6"
+                        onClick={() => setEditDialogOpen(false)}
+                    >
+                        <div
+                            role="dialog"
+                            aria-modal="true"
+                            aria-labelledby="edit-attempts-title"
+                            className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-xl"
+                            onClick={(event) => event.stopPropagation()}
+                        >
+                            <div className="flex items-center justify-between border-b border-border p-5">
+                                <div>
+                                    <h2
+                                        id="edit-attempts-title"
+                                        className="text-xl font-semibold"
+                                    >
+                                        Edit Student Results
+                                    </h2>
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                        Search students and select an attempt to edit.
+                                    </p>
+                                </div>
+
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setEditDialogOpen(false)}
+                                    aria-label="Close popup"
+                                >
+                                    <X className="size-5" />
+                                </Button>
+                            </div>
+
+                            <div className="overflow-y-auto p-5">
+                                <div className="relative mb-4">
+                                    <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                                    <input
+                                        type="text"
+                                        value={attemptSearch}
+                                        onChange={(event) => {
+                                            setAttemptSearch(event.target.value);
+                                            setSelectedAttempt(null);
+                                            setEditedScore("");
+                                        }}
+                                        placeholder="Search by student name or email..."
+                                        className="w-full rounded-lg border border-border bg-background py-2.5 pl-10 pr-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                </div>
+
+                                <div className="overflow-x-auto rounded-lg border border-border">
+                                    <table className="w-full min-w-[750px] text-left text-sm">
+                                        <thead className="bg-muted">
+                                        <tr>
+                                            <th className="p-3">No.</th>
+                                            <th className="p-3">Student</th>
+                                            <th className="p-3">Email</th>
+                                            <th className="p-3">Attempt</th>
+                                            <th className="p-3">Final Score</th>
+                                            <th className="p-3">Status</th>
+                                            <th className="p-3">Action</th>
+                                        </tr>
+                                        </thead>
+
+                                        <tbody>
+                                        {filteredAttempts.map((attempt, index) => (
+                                            <tr
+                                                key={attempt.attemptId}
+                                                className={`border-t border-border ${
+                                                    selectedAttempt?.attemptId === attempt.attemptId
+                                                        ? "bg-muted"
+                                                        : ""
+                                                }`}
+                                            >
+                                                <td className="p-3">{index + 1}</td>
+                                                <td className="p-3 font-medium">
+                                                    {attempt.studentName || "--"}
+                                                </td>
+                                                <td className="p-3">
+                                                    {attempt.studentEmail || "--"}
+                                                </td>
+                                                <td className="p-3">
+                                                    #{attempt.attemptNumber ?? "--"}
+                                                </td>
+                                                <td className="p-3">
+                                                    {formatScore(attempt.finalScore)}
+                                                </td>
+                                                <td className="p-3">{attempt.status}</td>
+                                                <td className="p-3">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => {
+                                                            setSelectedAttempt(attempt);
+                                                            setEditedScore(
+                                                                attempt.finalScore == null
+                                                                    ? ""
+                                                                    : String(attempt.finalScore)
+                                                            );
+                                                        }}
+                                                    >
+                                                        <Pencil className="mr-1 size-3" />
+                                                        Edit
+                                                    </Button>
+                                                </td>
+                                            </tr>
+                                        ))}
+
+                                        {filteredAttempts.length === 0 && (
+                                            <tr>
+                                                <td
+                                                    colSpan={7}
+                                                    className="p-8 text-center text-muted-foreground"
+                                                >
+                                                    No matching students found.
+                                                </td>
+                                            </tr>
+                                        )}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <p className="mt-3 text-sm text-muted-foreground">
+                                    Showing {filteredAttempts.length} of {attempts.length} attempts.
+                                </p>
+
+                                {selectedAttempt && (
+                                    <div className="mt-6 rounded-xl border border-border p-4">
+                                        <h3 className="font-semibold">
+                                            Edit Score — {selectedAttempt.studentName || "Student"}
+                                        </h3>
+
+                                        <p className="mt-1 text-sm text-muted-foreground">
+                                            Attempt #{selectedAttempt.attemptNumber ?? "--"}
+                                            {" · "}Attempt ID: {selectedAttempt.attemptId}
+                                        </p>
+
+                                        <div className="mt-4 max-w-sm space-y-2">
+                                            <label
+                                                htmlFor="edited-score"
+                                                className="text-sm font-medium"
+                                            >
+                                                Final Score
+                                            </label>
+
+                                            <input
+                                                id="edited-score"
+                                                type="number"
+                                                min={0}
+                                                step="0.01"
+                                                value={editedScore}
+                                                onChange={(event) =>
+                                                    setEditedScore(event.target.value)
+                                                }
+                                                placeholder="Enter score"
+                                                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                            />
+                                        </div>
+
+                                        <p className="mt-3 text-sm text-amber-600">
+                                            Score editing is not connected to the backend yet.
+                                            Saving has not been implemented, so changes here
+                                            will not be persisted.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="flex justify-end gap-2 border-t border-border p-4">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setEditDialogOpen(false)}
+                                >
+                                    Close
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
                 )}
 
                 <section className="rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
