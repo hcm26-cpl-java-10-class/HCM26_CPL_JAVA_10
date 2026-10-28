@@ -142,12 +142,15 @@ class WorkspaceOverviewIntegrationTest {
         assertThat(result.has("members")).isFalse();
     }
 
-    @Test void ac02SnapshotRemainsFixedWhenLiveProjectContentChanges() throws Exception {
+    @Test void ac02ProjectBriefUsesFieldsFromProject() throws Exception {
         snapshot("[\"Requirement A\"]");
         tx.executeWithoutResult(status -> projects.findById(projectId).orElseThrow()
                 .setDescription("New content from a later source version"));
         var result = overview();
-        assertThat(result.get("projectDescription").asText()).isEqualTo("Frozen description");
+        assertThat(result.get("projectDescription").asText()).isEqualTo("New content from a later source version");
+        assertThat(result.get("projectCode").asText()).startsWith("PROJECT-");
+        assertThat(result.get("projectName").asText()).isEqualTo("Project A");
+        assertThat(result.get("projectStatus").asText()).isEqualTo("PLANNING");
         assertThat(result.at("/topic_snapshot/version").asText()).isEqualTo("v1.0.0");
         assertThat(result.at("/topic_snapshot/topic_title").asText()).isEqualTo("Fixed topic title");
         assertThat(result.at("/topic_snapshot/objectives").asText()).isEqualTo("Frozen objectives");

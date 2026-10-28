@@ -21,9 +21,11 @@ public interface TeamAllocationSessionRepository
             Long classId
     );
 
-    List<TeamAllocationSession> findAllByTrainingClass_IdOrderByCreatedAtDesc(
+    List<TeamAllocationSession> findAllByTrainingClass_IdOrderByCreatedAtDescIdDesc(
             Long classId
     );
+
+    long countByTrainingClass_Id(Long classId);
 
     Optional<TeamAllocationSession> findFirstByTrainingClass_IdOrderByIdAsc(Long classId);
 

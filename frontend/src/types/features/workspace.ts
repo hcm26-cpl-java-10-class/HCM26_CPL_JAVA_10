@@ -69,21 +69,11 @@ export interface WorkspaceMember {
   status: ParticipationStatus;
 }
 
-export interface WorkspaceTopicSnapshot {
-  topic_code: string;
-  topic_title: string;
-  version: string;
-  description: string | null;
-  objectives: string | null;
-  requirements: string[];
-  attachments: { name: string; url: string }[];
-}
-
 export interface WorkspaceDetail extends WorkspaceResponse {
   id: number;
   projectCode?: string | null;
   projectName?: string | null;
-  projectDescription?: string;
+  projectDescription?: string | null;
   projectStatus?: string | null;
   teamCode: string;
   teamName: string;
@@ -95,7 +85,6 @@ export interface WorkspaceDetail extends WorkspaceResponse {
   createdByName?: string;
   member_count: number;
   can_view_members: boolean;
-  topic_snapshot: WorkspaceTopicSnapshot | null;
   activities: WorkspaceActivity[] | null;
 }
 
