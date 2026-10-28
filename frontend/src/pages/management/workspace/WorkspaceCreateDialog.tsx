@@ -46,7 +46,7 @@ export function WorkspaceCreateDialog({ candidates, initialSelection, onClose, o
       }}>
         {candidates.map(candidate => <option key={candidate.teamId} value={candidate.teamId}>{candidate.teamName} · {candidate.classCode}</option>)}
       </select>}
-      <p className="text-sm text-muted-foreground">Workspace này thuộc trực tiếp Team và không cần Project Template.</p>
+      <p className="text-sm text-muted-foreground">Workspace belongs directly to the team. If a project template is assigned, a separate project is created for the team.</p>
       {error && <Alert variant="destructive"><AlertCircle /><AlertTitle>Workspace was not created</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
       <DialogFooter>
         <Button variant="outline" disabled={create.isPending} onClick={onClose}>Cancel</Button>

@@ -81,10 +81,10 @@ export interface WorkspaceTopicSnapshot {
 
 export interface WorkspaceDetail extends WorkspaceResponse {
   id: number;
-  projectCode: string;
-  projectName: string;
+  projectCode?: string | null;
+  projectName?: string | null;
   projectDescription?: string;
-  projectStatus: string;
+  projectStatus?: string | null;
   teamCode: string;
   teamName: string;
   mentorName?: string;

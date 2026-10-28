@@ -1,7 +1,11 @@
 package com.example.starter_project_2025.system.project.workspace.service;
 
 import com.example.starter_project_2025.system.project.domain.Project;
+import com.example.starter_project_2025.system.project.domain.ProjectStatus;
+import com.example.starter_project_2025.system.project.ProjectRepository;
 import com.example.starter_project_2025.system.project.ProjectTeam;
+import com.example.starter_project_2025.system.project.ProjectTeamRepository;
+import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.example.starter_project_2025.system.project.team.Team;
 import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
 import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceSection;
@@ -27,6 +31,8 @@ public class WorkspaceCreationTransaction {
     private final WorkspaceIdempotencyService idempotency;
     private final WorkspaceJournalService journal;
     private final WorkspaceProjectSelection selection;
+    private final ProjectRepository projects;
+    private final ProjectTeamRepository teams;
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public WorkspaceResponse create(String key, WorkspaceCreateRequest request, String correlationId) {
@@ -46,8 +52,9 @@ public class WorkspaceCreationTransaction {
             return idempotency.response(previous);
         }
         var chosen = selection.resolve(user, request, true);
+        Project project = chosen.project() != null ? chosen.project() : createProjectForTeam(chosen.team(), tenant.getId());
         Workspace workspace = new Workspace();
-        workspace.setTenant(tenant); workspace.setProject(null); workspace.setTeam(team);
+        workspace.setTenant(tenant); workspace.setProject(project); workspace.setTeam(team);
         workspace.setCode("WS-TEAM-" + request.getTeamId());
         workspace.setName("Workspace / " + team.getTeamName());
         workspace.setStatus(WorkspaceStatus.ACTIVE);
@@ -55,12 +62,34 @@ public class WorkspaceCreationTransaction {
         workspace.setSections(new ArrayList<>(Arrays.asList(WorkspaceSection.values())));
         workspaces.saveAndFlush(workspace);
         WorkspaceResponse response = WorkspaceResponse.builder()
-                .id(workspace.getId()).tenantId(tenant.getId()).projectId(null).teamId(request.getTeamId())
+                .id(workspace.getId()).tenantId(tenant.getId())
+                .projectId(project == null ? null : project.getId()).teamId(request.getTeamId())
                 .code(workspace.getCode()).name(workspace.getName()).status(workspace.getStatus())
                 .createdBy(workspace.getCreatedBy()).createdAt(workspace.getCreatedAt())
                 .sections(workspace.getSections().stream().map(WorkspaceSection::getKey).toList()).build();
         journal.recordCreation(workspace, user, response, correlationId);
         idempotency.save(tenant.getId(), user.getId(), key, request, response);
         return response;
+    }
+
+    private Project createProjectForTeam(ProjectTeam team, Long tenantId) {
+        if (team.getProject() != null) {
+            return team.getProject();
+        }
+        ProjectTemplate template = team.getProjectTemplate();
+        if (template == null) {
+            return null;
+        }
+
+        Project project = new Project();
+        project.setCode("TEAM-" + team.getId());
+        project.setName(template.getName());
+        project.setDescription(template.getDescription());
+        project.setTenantId(tenantId);
+        project.setStatus(ProjectStatus.PLANNING);
+        project = projects.saveAndFlush(project);
+        team.setProject(project);
+        teams.saveAndFlush(team);
+        return project;
     }
 }

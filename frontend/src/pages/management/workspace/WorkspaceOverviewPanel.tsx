@@ -49,6 +49,15 @@ export function WorkspaceOverviewPanel({ workspace, canViewMembers, onViewMember
       </Card>
     </div>
     <div className="space-y-5">
+      <Card><CardHeader><CardTitle>Project</CardTitle></CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          {workspace.projectId != null ? <>
+            <p><span className="font-medium">Name:</span> {information(workspace.projectName)}</p>
+            <p><span className="font-medium">Code:</span> {information(workspace.projectCode)}</p>
+            <p><span className="font-medium">Status:</span> {information(workspace.projectStatus)}</p>
+          </> : <p className="text-muted-foreground">No project is associated with this workspace.</p>}
+        </CardContent>
+      </Card>
       <Card><CardHeader><CardTitle>{workspace.teamName}</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm"><span className="font-medium">{workspace.member_count}</span> active members</p>
