@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/table";
 import type { EssayAttemptStatus } from "@/types";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, Eye, RefreshCw } from "lucide-react";
+import { ChevronLeft, Eye, RefreshCw, ShieldAlert } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 
 export const ESSAY_STATUS_LABEL: Record<EssayAttemptStatus, string> = {
@@ -53,10 +53,22 @@ export default function EssayAttemptListPage() {
                             Exam #{examId} · {rows.length} submission(s)
                         </p>
                     </div>
-                    <Button variant="outline" onClick={() => void attemptsQuery.refetch()} disabled={attemptsQuery.isFetching}>
-                        <RefreshCw className="size-4" />
-                        Reload
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            className="gap-1.5 border-purple-200 bg-purple-50/50 text-purple-700 hover:bg-purple-100 hover:text-purple-900 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-300"
+                            onClick={() => navigate(`/exams/${numericExamId}/grading/similarity`)}
+                            disabled={!validId}
+                            title="Kiểm tra tương đồng và trùng lặp bài tự luận"
+                        >
+                            <ShieldAlert className="size-4 text-purple-600" />
+                            AI Similarity Check
+                        </Button>
+                        <Button variant="outline" onClick={() => void attemptsQuery.refetch()} disabled={attemptsQuery.isFetching}>
+                            <RefreshCw className="size-4" />
+                            Reload
+                        </Button>
+                    </div>
                 </header>
 
                 <div className="overflow-hidden rounded-md border bg-background">
@@ -98,16 +110,25 @@ export default function EssayAttemptListPage() {
                                     <TableCell>{formatDateTime(row.submittedAt)}</TableCell>
                                     <TableCell>{row.essayAnswered} / {row.essayCount}</TableCell>
                                     <TableCell>
-                                        <Badge variant={row.status === "EXPIRED" ? "destructive" : "secondary"}>
+                                        <Badge
+                                            variant={
+                                                row.status === "SUBMITTED"
+                                                    ? "default"
+                                                    : row.status === "PENDING_REVIEW"
+                                                        ? "secondary"
+                                                        : "outline"
+                                            }
+                                        >
                                             {ESSAY_STATUS_LABEL[row.status] || row.status}
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <Button
-                                            variant="outline"
                                             size="sm"
-                                            onClick={(event) => {
-                                                event.stopPropagation();
+                                            variant="ghost"
+                                            className="h-8 gap-1"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
                                                 navigate(`/exams/${numericExamId}/grading/${row.attemptId}`);
                                             }}
                                         >

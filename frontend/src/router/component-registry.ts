@@ -1,4 +1,3 @@
-
 import { Logout } from "@/components/auth/Logout";
 import { OAuth2RedirectHandler } from "@/components/auth/OAuth2RedirectHandler";
 import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage";
@@ -12,6 +11,7 @@ import ExamTemplatesPage from "@/pages/management/exam/templates";
 import ResultStatisticsPage from "@/pages/management/exam/ResultStatisticsPage";
 import EssayAttemptListPage from "@/pages/management/exam/grading/EssayAttemptListPage";
 import EssayAttemptDetailPage from "@/pages/management/exam/grading/EssayAttemptDetailPage";
+import ExamSimilarityPage from "@/pages/management/exam/similarity/ExamSimilarityPage";
 import InvitationsPage from "@/pages/management/exam/invitation";
 import UnifiedInvitationsPage, {
   StudentInvitationsRedirect,
@@ -62,6 +62,18 @@ export const routes: RouteConfig[] = [
   {
     path: "/exams/:examId/grading",
     component: EssayAttemptListPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
+
+  {
+    path: "/exams/:examId/grading/similarity",
+    component: ExamSimilarityPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
+
+  {
+    path: "/exams/:examId/similarity",
+    component: ExamSimilarityPage,
     requiredPermission: "EXAM_UPDATE",
   },
 

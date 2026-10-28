@@ -1,6 +1,17 @@
 import { createBaseApiService } from "@/api/base-service.api";
 import axiosInstance from "@/api/axios";
-import type { AiGradingRequest, AiGradingResponse, EssayGradingDetail, EssayGradingSummary, ExamDTO, ExamFilter, GradeSubmissionRequest, QuestionDTO, QuestionFilter } from "@/types";
+import type {
+  AiGradingRequest,
+  AiGradingResponse,
+  EssayGradingDetail,
+  EssayGradingSummary,
+  ExamDTO,
+  ExamFilter,
+  GradeSubmissionRequest,
+  QuestionDTO,
+  QuestionFilter,
+  SimilarityReport
+} from "@/types";
 
 const examBase = createBaseApiService<ExamDTO, ExamFilter>({ path: "/exams" });
 
@@ -52,6 +63,14 @@ export const examApi = {
         `/exams/${examId}/grading/attempts/${attemptId}/ai-suggest`,
         payload || {}
     );
+    return response.data;
+  },
+  getExamSimilarity: async (examId: number): Promise<SimilarityReport> => {
+    const response = await axiosInstance.get<SimilarityReport>(`/exams/${examId}/grading/similarity`);
+    return response.data;
+  },
+  scanExamSimilarity: async (examId: number): Promise<SimilarityReport> => {
+    const response = await axiosInstance.post<SimilarityReport>(`/exams/${examId}/grading/similarity/scan`);
     return response.data;
   },
   removeQuestion: async (examId: number, questionId: number): Promise<ExamDTO> => {

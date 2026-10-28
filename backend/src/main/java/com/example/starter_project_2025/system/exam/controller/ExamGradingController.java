@@ -1,7 +1,9 @@
 package com.example.starter_project_2025.system.exam.controller;
 
 import com.example.starter_project_2025.system.exam.dto.EssayGradingDTO;
+import com.example.starter_project_2025.system.exam.dto.ExamSimilarityDTO;
 import com.example.starter_project_2025.system.exam.service.ExamEssayGradingService;
+import com.example.starter_project_2025.system.exam.service.ExamSimilarityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -21,6 +23,7 @@ import java.util.List;
 public class ExamGradingController {
 
     private final ExamEssayGradingService service;
+    private final ExamSimilarityService similarityService;
 
     @GetMapping("/attempts")
     public ResponseEntity<List<EssayGradingDTO.Summary>> listPending(@PathVariable Long examId) {
@@ -51,5 +54,15 @@ public class ExamGradingController {
             @RequestBody(required = false) EssayGradingDTO.AiGradingRequest request
     ) {
         return ResponseEntity.ok(service.requestAiGrading(examId, attemptId, request));
+    }
+
+    @GetMapping("/similarity")
+    public ResponseEntity<ExamSimilarityDTO.SimilarityReport> getSimilarityReport(@PathVariable Long examId) {
+        return ResponseEntity.ok(similarityService.scanExamSimilarity(examId));
+    }
+
+    @PostMapping("/similarity/scan")
+    public ResponseEntity<ExamSimilarityDTO.SimilarityReport> triggerSimilarityScan(@PathVariable Long examId) {
+        return ResponseEntity.ok(similarityService.scanExamSimilarity(examId));
     }
 }

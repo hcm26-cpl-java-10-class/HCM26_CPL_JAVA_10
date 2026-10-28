@@ -114,6 +114,7 @@ public class EssayGradingDTO {
         private Integer maxPoints;
         private Integer awardedPoints;
         private String comment;
+        private String explanation;
     }
 
     @Getter
