@@ -1,6 +1,9 @@
 package com.example.starter_project_2025.system.project.sprint_backlog;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
+import com.example.starter_project_2025.base.dataio.importer.annotation.ImportField;
+import com.example.starter_project_2025.base.dataio.importer.annotation.PostImport;
+import com.example.starter_project_2025.base.dataio.template.annotation.ImportEntity;
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
@@ -72,6 +75,7 @@ import java.time.LocalDateTime;
 )
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @AttributeOverride(name = "id", column = @Column(name = "sprint_backlog_id"))
+@ImportEntity("sprint-backlog")
 @ResourcePermission("SPRINT_BACKLOG")
 @ResourceMenu(
         title = "Sprint Backlogs",
@@ -83,12 +87,19 @@ import java.time.LocalDateTime;
 )
 public class SprintBacklog extends BaseEntity {
 
+    /** Same limit enforced by {@code SprintBacklogServiceImpl}. */
+    static final int MAX_TITLE_LENGTH = 200;
+
+    /** Same limit enforced by {@code SprintBacklogServiceImpl}. */
+    static final int MAX_DESCRIPTION_LENGTH = 2000;
+
     /**
      * Owning sprint. Optional: when it is {@code null} the item is still in the
      * product backlog and only waits to be assigned to a sprint.
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sprint_id")
+    @ImportField(name = "Sprint", lookupEntity = Sprint.class, lookupField = "name")
     Sprint sprint;
 
     /**
@@ -100,6 +111,7 @@ public class SprintBacklog extends BaseEntity {
      * in sync by itself.
      */
     @Column(name = "project_id")
+    @ImportField(name = "Project ID")
     Long projectId;
 
     /**
@@ -118,29 +130,35 @@ public class SprintBacklog extends BaseEntity {
      * project member module is available.
      */
     @Column(name = "assignee_project_member_id")
+    @ImportField(name = "Assignee")
     Long assigneeProjectMemberId;
 
     /**
      * Item title: mandatory, 1..200 characters.
      */
     @Column(nullable = false, length = 200)
+    @ImportField(name = "Title", required = true)
     String title;
 
     /**
      * Item description: optional, at most 2000 characters.
      */
     @Column(columnDefinition = "TEXT")
+    @ImportField(name = "Description")
     String description;
 
     @Column(name = "start_date")
+    @ImportField(name = "Start Date")
     LocalDateTime startDate;
 
     @Column(name = "end_date")
+    @ImportField(name = "End Date")
     LocalDateTime endDate;
 
     @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
+    @ImportField(name = "Status")
     SprintBacklogStatus status = SprintBacklogStatus.TODO;
 
     /**
@@ -151,6 +169,7 @@ public class SprintBacklog extends BaseEntity {
     @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(name = "work_type", length = 20)
+    @ImportField(name = "Work Type")
     SprintBacklogWorkType workType = SprintBacklogWorkType.TASK;
 
     /**
@@ -160,12 +179,14 @@ public class SprintBacklog extends BaseEntity {
     @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
+    @ImportField(name = "Priority")
     SprintBacklogPriority priority = SprintBacklogPriority.MEDIUM;
 
     /**
      * Optional effort estimate in hours, used by the board capacity summary.
      */
     @Column(name = "estimated_hours")
+    @ImportField(name = "Estimated Hours")
     Double estimatedHours;
 
     /**
@@ -188,5 +209,69 @@ public class SprintBacklog extends BaseEntity {
 
     public void setSprintBacklogId(Long sprintBacklogId) {
         setId(sprintBacklogId);
+    }
+
+    /**
+     * Import hook (bulk file import bypasses {@code SprintBacklogServiceImpl}).
+     * <p>
+     * Applies the same rules the REST create path enforces: trimmed title and
+     * description with their length limits, start/end dates that are either
+     * both present or both empty and in the right order, a non negative
+     * estimate, the default lifecycle values and the project inherited from the
+     * selected sprint.
+     */
+    @PostImport
+    void prepareForImport() {
+
+        if (title != null) {
+            title = title.trim();
+            if (title.length() > MAX_TITLE_LENGTH) {
+                throw new IllegalArgumentException(
+                        "Title không vượt quá " + MAX_TITLE_LENGTH + " ký tự");
+            }
+        }
+
+        if (description != null) {
+            description = description.trim();
+            if (description.length() > MAX_DESCRIPTION_LENGTH) {
+                throw new IllegalArgumentException(
+                        "Description không vượt quá " + MAX_DESCRIPTION_LENGTH + " ký tự");
+            }
+        }
+
+        if ((startDate == null) != (endDate == null)) {
+            throw new IllegalArgumentException(
+                    "Start Date và End Date phải được nhập cùng nhau");
+        }
+
+        if (startDate != null && !startDate.isBefore(endDate)) {
+            throw new IllegalArgumentException(
+                    "Start Date phải trước End Date");
+        }
+
+        if (estimatedHours != null && estimatedHours < 0) {
+            throw new IllegalArgumentException(
+                    "Estimated Hours phải lớn hơn hoặc bằng 0");
+        }
+
+        if (projectId == null && sprint != null) {
+            projectId = sprint.getProjectId();
+        }
+
+        if (isActive == null) {
+            isActive = true;
+        }
+
+        if (status == null) {
+            status = SprintBacklogStatus.TODO;
+        }
+
+        if (priority == null) {
+            priority = SprintBacklogPriority.MEDIUM;
+        }
+
+        if (workType == null) {
+            workType = SprintBacklogWorkType.DEFAULT;
+        }
     }
 }
