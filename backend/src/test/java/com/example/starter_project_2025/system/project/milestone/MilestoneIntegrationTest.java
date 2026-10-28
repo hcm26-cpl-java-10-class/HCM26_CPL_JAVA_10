@@ -84,6 +84,7 @@ class MilestoneIntegrationTest {
         jdbcTemplate.execute("DELETE FROM final_project_grades");
         jdbcTemplate.execute("DELETE FROM milestone_waivers");
         jdbcTemplate.execute("DELETE FROM milestone_submissions");
+        jdbcTemplate.execute("DELETE FROM sprint_backlog WHERE milestone_id IN (SELECT milestone_id FROM milestones)");
         milestoneRepository.deleteAll();
         ensureActualTeamFixture();
         var teacher = userDetailsService.loadUserByUsername("teacher@example.com");

@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -42,7 +43,7 @@ import java.util.UUID;
  *     <li>title mandatory, 1..200 characters (422)</li>
  *     <li>description optional, at most 2000 characters (422)</li>
  *     <li>start date &lt; end date when both are provided (422)</li>
- *     <li>status one of {@link SprintBacklogStatus} (To do / In progress / Review / Done)</li>
+ *     <li>status one of {@link SprintBacklogStatus}; updates follow the shared task workflow transition matrix</li>
  *     <li>work type one of {@link SprintBacklogWorkType} (Story / Bug / Task), task by
  *     default - the set is fixed, no new work type can be created</li>
  *     <li>priority one of {@link SprintBacklogPriority}, medium by default</li>
@@ -81,6 +82,14 @@ public class SprintBacklogServiceImpl
 
     static final String EVENT_CREATED = "SPRINT_BACKLOG_ITEM_CREATED";
     static final String EVENT_UPDATED = "SPRINT_BACKLOG_ITEM_UPDATED";
+
+    private static final Map<SprintBacklogStatus, Set<SprintBacklogStatus>> STATUS_TRANSITIONS = Map.of(
+            SprintBacklogStatus.TODO, Set.of(SprintBacklogStatus.IN_PROGRESS, SprintBacklogStatus.BLOCKED),
+            SprintBacklogStatus.IN_PROGRESS, Set.of(SprintBacklogStatus.REVIEW, SprintBacklogStatus.BLOCKED, SprintBacklogStatus.TODO),
+            SprintBacklogStatus.REVIEW, Set.of(SprintBacklogStatus.DONE, SprintBacklogStatus.BLOCKED, SprintBacklogStatus.IN_PROGRESS),
+            SprintBacklogStatus.BLOCKED, Set.of(SprintBacklogStatus.TODO, SprintBacklogStatus.IN_PROGRESS),
+            SprintBacklogStatus.DONE, Set.of(SprintBacklogStatus.IN_PROGRESS)
+    );
 
     static final String MILESTONE_NOT_FOUND_MESSAGE =
             "Milestone không tồn tại hoặc đã bị thay đổi";
@@ -209,12 +218,21 @@ public class SprintBacklogServiceImpl
         LocalDateTime endDate = request.getEndDate() != null
                 ? request.getEndDate()
                 : backlog.getEndDate();
-        Long assigneeId = request.getAssigneeProjectMemberId() != null
-                ? request.getAssigneeProjectMemberId()
-                : backlog.getAssigneeProjectMemberId();
+        Long assigneeId = Boolean.TRUE.equals(request.getClearAssignee())
+                ? null
+                : request.getAssigneeProjectMemberId() != null
+                    ? request.getAssigneeProjectMemberId()
+                    : backlog.getAssigneeProjectMemberId();
         Double estimatedHours = request.getEstimatedHours() != null
                 ? request.getEstimatedHours()
                 : backlog.getEstimatedHours();
+
+        SprintBacklogStatus requestedStatus = request.getStatus();
+        if (requestedStatus != null && requestedStatus != backlog.getStatus()
+                && !STATUS_TRANSITIONS.getOrDefault(backlog.getStatus(), Set.of()).contains(requestedStatus)) {
+            throw new SprintBacklogConflictException(
+                    "Workflow không cho phép chuyển từ " + backlog.getStatus() + " sang " + requestedStatus);
+        }
 
         Map<String, List<String>> errors = new LinkedHashMap<>();
 
@@ -263,6 +281,10 @@ public class SprintBacklogServiceImpl
         request.setDescription(description);
 
         sprintBacklogMapper.update(backlog, request);
+
+        if (Boolean.TRUE.equals(request.getClearAssignee()) || request.getAssigneeProjectMemberId() != null) {
+            backlog.setAssigneeProjectMemberId(assigneeId);
+        }
 
         backlog.setSprint(sprint);
         backlog.setMilestone(milestone);

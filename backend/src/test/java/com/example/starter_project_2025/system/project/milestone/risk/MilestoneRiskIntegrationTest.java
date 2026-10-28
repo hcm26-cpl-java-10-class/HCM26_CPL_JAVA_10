@@ -38,6 +38,7 @@ import org.springframework.test.web.servlet.*;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 import java.time.*;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.*;
 import static org.assertj.core.api.Assertions.*;
@@ -91,7 +92,7 @@ class MilestoneRiskIntegrationTest {
     }
     Milestone milestone(String title,Instant deadline,boolean open) {
         var row=Milestone
-                .create(MilestoneRiskIdentity.tenant(tenantId),projectAlias,title,null,deadline,true,UUID.randomUUID(),
+                .create(MilestoneRiskIdentity.tenant(tenantId),projectId,teamId,title,null,deadline,true,UUID.randomUUID(),
                 null,LatePolicyType.NO_LATE,null,null,MilestoneRiskIdentity.actor(mentorId),now);
         if(open)row.openForWork(MilestoneRiskIdentity.actor(mentorId),now);
         return milestones.saveAndFlush(row);
@@ -120,7 +121,7 @@ class MilestoneRiskIntegrationTest {
             var target=member(team,student,ProjectRole.DEV,ParticipationStatus.ACTIVE);
             member(team,former,ProjectRole.DEV,ParticipationStatus.LEFT);
             member(team,teacher,ProjectRole.BA,ParticipationStatus.ACTIVE);
-            projectAlias=UUID.randomUUID();memberAlias=UUID.randomUUID();
+            projectAlias=UUID.nameUUIDFromBytes(("milestone:project:"+projectId).getBytes(StandardCharsets.UTF_8));memberAlias=UUID.randomUUID();
             var link=new TaskAlertData.ProjectLink();link.setId(projectAlias);link.setProjectId(projectId);link.setTenantId(tenantId);projectLinks.saveAndFlush(link);
             var ml=new TaskAlertData.MemberLink();ml.setId(memberAlias);ml.setProjectId(projectAlias);ml.setSource(TaskAlertData.MemberSource.TEAM_MEMBER);
             ml.setSourceMemberId(target.getId());memberLinks.saveAndFlush(ml);
@@ -129,7 +130,7 @@ class MilestoneRiskIntegrationTest {
         });
         oldAlerts=alerts.count();oldOutbox=outbox.count();oldAudit=audit.count();
     }
-    String endpoint() {return "/api/projects/"+projectAlias+"/milestone-risks";}
+    String endpoint() {return "/api/projects/"+projectId+"/milestone-risks";}
     String body(String note) throws Exception {
         var map=new LinkedHashMap<String,Object>();map.put("version",milestones.findById(milestoneId).orElseThrow().getVersion());
         if(note!=null)map.put("warningNote",note);return json.writeValueAsString(map);
@@ -186,8 +187,8 @@ class MilestoneRiskIntegrationTest {
             switch(change){
                 case "HARD"->milestones.delete(row);
                 case "SOFT"->row.softDelete(MilestoneRiskIdentity.actor(mentorId),now);
-                case "MOVED"->jdbc.update("update milestones set project_id=? where milestone_id=?",UUID.randomUUID(),milestoneId);
-                default->jdbc.update("update milestones set tenant_id=? where milestone_id=?",UUID.randomUUID(),milestoneId);
+                case "MOVED"->jdbc.update("update milestones set project_id=? where milestone_id=?",projectId+1_000_000L,milestoneId);
+                default->jdbc.update("update milestones set tenant_id=? where milestone_id=?",tenantId+1_000_000L,milestoneId);
             }
         });
         send(mentorToken,milestoneId,UUID.randomUUID().toString(),payload).andExpect(status().isNotFound())
@@ -196,7 +197,7 @@ class MilestoneRiskIntegrationTest {
     }
     @Test void unknownIdIs404ButForeignProjectScopeIs403AndNoDataLeaks()throws Exception {
         send(mentorToken,UUID.randomUUID(),UUID.randomUUID().toString(),body("Reminder")).andExpect(status().isNotFound());
-        mvc.perform(get("/api/projects/"+UUID.randomUUID()+"/milestone-risks").header("Authorization","Bearer "+mentorToken))
+        mvc.perform(get("/api/projects/"+(projectId+1_000_000L)+"/milestone-risks").header("Authorization","Bearer "+mentorToken))
                 .andExpect(status().isForbidden()).andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("MVP delivery"))));
         unchanged();
     }
@@ -271,10 +272,12 @@ class MilestoneRiskIntegrationTest {
         taskDemo.seed();riskDemo.seed();
         var admin=users.findByEmail("admin@example.com").orElseThrow();
         var project=1L;
-        var rows=milestones.findByProjectIdAndTenantIdAndActiveTrueOrderByDeadlineAscIdAsc(project,MilestoneRiskIdentity.tenant(admin.getTenant().getId()));
+        var seededTitles=Set.of("MVP delivery at risk", "No tasks planned", "Completion target met",
+                "Outside warning window", "Deadline already passed", "Awaiting kickoff");
+        var rows=milestones.findByProjectIdAndTenantIdAndActiveTrueOrderByDeadlineAscIdAsc(project,MilestoneRiskIdentity.tenant(admin.getTenant().getId()))
+                .stream().filter(row->seededTitles.contains(row.getTitle())).toList();
         assertThat(rows).hasSize(6);
-        var teacher=users.findByEmail("teacher@example.com").orElseThrow();
-        mvc.perform(get("/api/projects/"+project+"/milestone-risks").header("Authorization","Bearer "+token(teacher)))
+        mvc.perform(get("/api/projects/"+project+"/milestone-risks").header("Authorization","Bearer "+token(admin)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(2));
         rows.getFirst().softDelete(MilestoneRiskIdentity.actor(admin.getId()),now);milestones.flush();
         long count=milestones.count(),taskCount=tasks.count(),userCount=users.count();

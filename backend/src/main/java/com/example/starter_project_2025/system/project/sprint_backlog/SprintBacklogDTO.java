@@ -72,6 +72,13 @@ public class SprintBacklogDTO extends BaseDTO {
      */
     Long assigneeProjectMemberId;
 
+    /** Set true on update to explicitly clear the assignee. */
+    Boolean clearAssignee;
+
+    /** Resolved assignee display name for workspace/board read responses. */
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    String assigneeDisplayName;
+
     String title;
 
     String description;
