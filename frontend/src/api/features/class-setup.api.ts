@@ -211,7 +211,9 @@ export const classSetupApi = {
   importAssignments: async (file: File) => {
     const body = new FormData();
     body.append("file", file);
-    return (await axiosInstance.post<ImportResult>("/teaching-assignments/import", body)).data;
+    return (await axiosInstance.post<ImportResult>("/teaching-assignments/import", body, {
+      headers: { "Content-Type": "multipart/form-data" },
+    })).data;
   },
   exportAssignments: async (format: FileFormat, filters: AssignmentSearchParams) => {
     const response = await axiosInstance.get<Blob>("/teaching-assignments/export", {
