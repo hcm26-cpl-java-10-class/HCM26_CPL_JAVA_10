@@ -13,6 +13,13 @@ public record ExamAttemptStatisticsDTO(
         Instant startedAt,
         Instant submittedAt,
         BigDecimal finalScore,
-        ExamAttemptStatus status
+        ExamAttemptStatus status,
+        BigDecimal maxScore,
+        BigDecimal firstScore,
+        BigDecimal secondScore,
+        boolean flagged,
+        long violationCount,
+        boolean editable,
+        String lockReason
 ) {
 }

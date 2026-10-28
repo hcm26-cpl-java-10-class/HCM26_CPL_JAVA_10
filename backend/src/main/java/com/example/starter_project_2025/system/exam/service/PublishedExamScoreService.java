@@ -62,6 +62,8 @@ public class PublishedExamScoreService {
                         attempt.getObjectiveScore(),
                         attempt.getFinalScore(),
                         ExamScoring.effectiveMax(attempt.getMaxScore()),
+                        attempt.getFirstScore(),
+                        attempt.getFirstScore() == null ? null : attempt.getFinalScore(),
                         attempt.getSubmittedAt()
                 ))
                 .toList();

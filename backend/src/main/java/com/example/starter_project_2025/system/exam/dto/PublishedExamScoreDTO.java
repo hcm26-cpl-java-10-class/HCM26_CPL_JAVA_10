@@ -10,6 +10,8 @@ public record PublishedExamScoreDTO(
         BigDecimal objectiveScore,
         BigDecimal finalScore,
         BigDecimal maxScore,
+        BigDecimal firstScore,
+        BigDecimal secondScore,
 
         Instant submittedAt
 ) {

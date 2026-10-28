@@ -73,6 +73,10 @@ public class ExamAttempt extends BaseEntity {
     @Column(precision = 12, scale = 4)
     private BigDecimal finalScore;
 
+    /** Diem cham lan 1 (giu nguyen khi giao vien sua diem). Null neu chua co cham lan 2. */
+    @Column(precision = 12, scale = 4)
+    private BigDecimal firstScore;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private ExamAttemptStatus status = ExamAttemptStatus.IN_PROGRESS;

@@ -5,7 +5,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, FileSpreadsheet, FileText, Download, Pencil, Search, X } from "lucide-react";
+import { ChevronLeft, FileSpreadsheet, FileText, Download, Lock, Pencil, Search, X } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { IntegrityReportSection } from "./IntegrityReportSection"; // NEW (anti-cheat)
 import { downloadBlob, getFilenameFromHeader } from "@/components/datatable/util/dataio.utils";
@@ -54,6 +54,13 @@ type ExamAttemptStatistics = {
     submittedAt: string | null;
     finalScore: number | null;
     status: string;
+    maxScore: number | null;
+    flagged: boolean;
+    violationCount: number;
+    firstScore: number | null;
+    secondScore: number | null;
+    editable: boolean;
+    lockReason: string | null;
 };
 
 
@@ -336,6 +343,7 @@ export default function ResultStatisticsPage() {
     const [selectedAttempt, setSelectedAttempt] =
         useState<ExamAttemptStatistics | null>(null);
     const [editedScore, setEditedScore] = useState("");
+    const [editReason, setEditReason] = useState("");
 
     const validExamId =
         Number.isInteger(examId) && examId > 0;
@@ -439,6 +447,34 @@ export default function ResultStatisticsPage() {
         },
     });
 
+    const adjustScoreMutation = useMutation({
+        mutationFn: async (vars: {
+            attemptId: number;
+            score: number;
+            reason: string;
+        }) => {
+            const response = await axiosInstance.put<ExamAttemptStatistics>(
+                `/exams/${examId}/result-statistics/attempts/${vars.attemptId}/score`,
+                { score: vars.score, reason: vars.reason },
+            );
+            return response.data;
+        },
+        onSuccess: async (updated) => {
+            toast.success("2nd grading score saved.");
+            setSelectedAttempt(updated);
+            setEditedScore(String(updated.finalScore ?? ""));
+            setEditReason("");
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ["exam-attempt-statistics", examId] }),
+                queryClient.invalidateQueries({ queryKey: ["exam-result-statistics", examId] }),
+                queryClient.invalidateQueries({ queryKey: ["exam-integrity-report", examId] }),
+            ]);
+        },
+        onError: (error: unknown) => {
+            toast.error(getErrorMessage(error));
+        },
+    });
+
     const statistics = statisticsQuery.data;
     const publication = publicationQuery.data;
 
@@ -472,6 +508,27 @@ export default function ResultStatisticsPage() {
         const start = (attemptPage - 1) * pageSize;
         return attempts.slice(start, start + pageSize);
     }, [attempts, attemptPage]);
+
+    const selectEditAttempt = (attempt: ExamAttemptStatistics) => {
+        setSelectedAttempt(attempt);
+        setEditedScore(attempt.finalScore == null ? "" : String(attempt.finalScore));
+        setEditReason("");
+    };
+
+    const scoreNumber = Number(editedScore);
+    const scoreError =
+        editedScore.trim() === "" || Number.isNaN(scoreNumber)
+            ? "Enter a valid score."
+            : scoreNumber < 0
+                ? "Score cannot be negative."
+                : selectedAttempt?.maxScore != null && scoreNumber > selectedAttempt.maxScore
+                    ? `Score cannot exceed ${selectedAttempt.maxScore}.`
+                    : null;
+    const canSave =
+        !!selectedAttempt?.editable &&
+        !scoreError &&
+        editReason.trim().length > 0 &&
+        !adjustScoreMutation.isPending;
 
     const formatDateTime = (value: string | null) =>
         value ? new Date(value).toLocaleString() : "--";
@@ -646,6 +703,7 @@ export default function ResultStatisticsPage() {
                                 setAttemptSearch("");
                                 setSelectedAttempt(null);
                                 setEditedScore("");
+                                setEditReason("");
                                 setEditDialogOpen(true);
                             }}
                             disabled={attempts.length === 0}
@@ -671,7 +729,7 @@ export default function ResultStatisticsPage() {
                     {!attemptsQuery.isLoading && !attemptsQuery.isError && (
                         <>
                             <div className="w-full overflow-x-auto">
-                                <table className="w-full min-w-[1000px] text-left text-sm">
+                                <table className="w-full min-w-[1100px] text-left text-sm">
                                     <thead className="border-b border-border bg-muted">
                                     <tr>
                                         <th className="p-3">No.</th>
@@ -679,7 +737,8 @@ export default function ResultStatisticsPage() {
                                         <th className="p-3">Email</th>
                                         <th className="p-3">Started At</th>
                                         <th className="p-3">Submitted At</th>
-                                        <th className="p-3">Final Score</th>
+                                        <th className="p-3">1st Score</th>
+                                        <th className="p-3">2nd Score</th>
                                         <th className="p-3">Status</th>
                                         <th className="p-3">Action</th>
                                     </tr>
@@ -700,6 +759,11 @@ export default function ResultStatisticsPage() {
                                                 <div className="text-xs text-muted-foreground">
                                                     Attempt #{attempt.attemptNumber ?? "--"}
                                                 </div>
+                                                {attempt.flagged && (
+                                                    <span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950 dark:text-red-200">
+                                                        Flagged · {attempt.violationCount}
+                                                    </span>
+                                                )}
                                             </td>
                                             <td className="p-3">{attempt.studentEmail || "--"}</td>
                                             <td className="p-3">
@@ -709,21 +773,47 @@ export default function ResultStatisticsPage() {
                                                 {formatDateTime(attempt.submittedAt)}
                                             </td>
                                             <td className="p-3 font-semibold">
-                                                {attempt.finalScore == null
+                                                {formatScore(attempt.firstScore ?? attempt.finalScore)}
+                                            </td>
+                                            <td className="p-3 font-semibold">
+                                                {attempt.secondScore == null
                                                     ? "--"
-                                                    : Number(attempt.finalScore).toFixed(2)}
+                                                    : formatScore(attempt.secondScore)}
                                             </td>
                                             <td className="p-3">
                                                 {attempt.status}
                                             </td>
-                                            <td className="p-3 text-muted-foreground">—</td>
+                                            <td className="p-3">
+                                                {attempt.editable ? (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => {
+                                                            setAttemptSearch("");
+                                                            selectEditAttempt(attempt);
+                                                            setEditDialogOpen(true);
+                                                        }}
+                                                    >
+                                                        <Pencil className="mr-1 size-3" />
+                                                        Edit
+                                                    </Button>
+                                                ) : (
+                                                    <span
+                                                        className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+                                                        title={attempt.lockReason ?? "Locked"}
+                                                    >
+                                                        <Lock className="size-3" />
+                                                        Locked
+                                                    </span>
+                                                )}
+                                            </td>
                                         </tr>
                                     ))}
 
                                     {attempts.length === 0 && (
                                         <tr>
                                             <td
-                                                colSpan={8}
+                                                colSpan={9}
                                                 className="p-8 text-center text-muted-foreground"
                                             >
                                                 No student attempts found.
@@ -791,7 +881,7 @@ export default function ResultStatisticsPage() {
                                         Edit Student Results
                                     </h2>
                                     <p className="mt-1 text-sm text-muted-foreground">
-                                        Search students and select an attempt to edit.
+                                        Only attempts flagged for cheating and fully graded can be edited. Others are locked.
                                     </p>
                                 </div>
 
@@ -815,6 +905,7 @@ export default function ResultStatisticsPage() {
                                             setAttemptSearch(event.target.value);
                                             setSelectedAttempt(null);
                                             setEditedScore("");
+                                            setEditReason("");
                                         }}
                                         placeholder="Search by student name or email..."
                                         className="w-full rounded-lg border border-border bg-background py-2.5 pl-10 pr-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
@@ -822,14 +913,15 @@ export default function ResultStatisticsPage() {
                                 </div>
 
                                 <div className="overflow-x-auto rounded-lg border border-border">
-                                    <table className="w-full min-w-[750px] text-left text-sm">
+                                    <table className="w-full min-w-[850px] text-left text-sm">
                                         <thead className="bg-muted">
                                         <tr>
                                             <th className="p-3">No.</th>
                                             <th className="p-3">Student</th>
                                             <th className="p-3">Email</th>
                                             <th className="p-3">Attempt</th>
-                                            <th className="p-3">Final Score</th>
+                                            <th className="p-3">1st Score</th>
+                                            <th className="p-3">2nd Score</th>
                                             <th className="p-3">Status</th>
                                             <th className="p-3">Action</th>
                                         </tr>
@@ -848,6 +940,11 @@ export default function ResultStatisticsPage() {
                                                 <td className="p-3">{index + 1}</td>
                                                 <td className="p-3 font-medium">
                                                     {attempt.studentName || "--"}
+                                                    {attempt.flagged && (
+                                                        <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950 dark:text-red-200">
+                                                            Flagged · {attempt.violationCount}
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td className="p-3">
                                                     {attempt.studentEmail || "--"}
@@ -856,25 +953,31 @@ export default function ResultStatisticsPage() {
                                                     #{attempt.attemptNumber ?? "--"}
                                                 </td>
                                                 <td className="p-3">
-                                                    {formatScore(attempt.finalScore)}
+                                                    {formatScore(attempt.firstScore ?? attempt.finalScore)}
+                                                </td>
+                                                <td className="p-3">
+                                                    {formatScore(attempt.secondScore)}
                                                 </td>
                                                 <td className="p-3">{attempt.status}</td>
                                                 <td className="p-3">
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        onClick={() => {
-                                                            setSelectedAttempt(attempt);
-                                                            setEditedScore(
-                                                                attempt.finalScore == null
-                                                                    ? ""
-                                                                    : String(attempt.finalScore)
-                                                            );
-                                                        }}
-                                                    >
-                                                        <Pencil className="mr-1 size-3" />
-                                                        Edit
-                                                    </Button>
+                                                    {attempt.editable ? (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => selectEditAttempt(attempt)}
+                                                        >
+                                                            <Pencil className="mr-1 size-3" />
+                                                            Edit
+                                                        </Button>
+                                                    ) : (
+                                                        <span
+                                                            className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+                                                            title={attempt.lockReason ?? "Locked"}
+                                                        >
+                                                            <Lock className="size-3" />
+                                                            {attempt.lockReason ?? "Locked"}
+                                                        </span>
+                                                    )}
                                                 </td>
                                             </tr>
                                         ))}
@@ -882,7 +985,7 @@ export default function ResultStatisticsPage() {
                                         {filteredAttempts.length === 0 && (
                                             <tr>
                                                 <td
-                                                    colSpan={7}
+                                                    colSpan={8}
                                                     className="p-8 text-center text-muted-foreground"
                                                 >
                                                     No matching students found.
@@ -913,28 +1016,74 @@ export default function ResultStatisticsPage() {
                                                 htmlFor="edited-score"
                                                 className="text-sm font-medium"
                                             >
-                                                Final Score
+                                                2nd grading score
                                             </label>
 
                                             <input
                                                 id="edited-score"
                                                 type="number"
                                                 min={0}
+                                                max={selectedAttempt.maxScore ?? undefined}
                                                 step="0.01"
                                                 value={editedScore}
+                                                disabled={!selectedAttempt.editable}
                                                 onChange={(event) =>
                                                     setEditedScore(event.target.value)
                                                 }
                                                 placeholder="Enter score"
-                                                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
+                                            />
+                                            <p className="text-xs text-muted-foreground">
+                                                1st grading: {formatScore(selectedAttempt.firstScore ?? selectedAttempt.finalScore)}
+                                                {selectedAttempt.secondScore != null &&
+                                                    ` · Current 2nd: ${formatScore(selectedAttempt.secondScore)}`}
+                                                {selectedAttempt.maxScore != null &&
+                                                    ` · Max: ${selectedAttempt.maxScore}`}
+                                            </p>
+                                            {scoreError && editedScore !== "" && (
+                                                <p className="text-xs text-red-600">{scoreError}</p>
+                                            )}
+                                        </div>
+
+                                        <div className="mt-4 max-w-xl space-y-2">
+                                            <label
+                                                htmlFor="edited-score-reason"
+                                                className="text-sm font-medium"
+                                            >
+                                                Reason <span className="text-red-600">*</span>
+                                            </label>
+                                            <textarea
+                                                id="edited-score-reason"
+                                                rows={3}
+                                                maxLength={1000}
+                                                value={editReason}
+                                                disabled={!selectedAttempt.editable}
+                                                onChange={(event) => setEditReason(event.target.value)}
+                                                placeholder="Why is this score being changed? (required)"
+                                                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
                                             />
                                         </div>
 
-                                        <p className="mt-3 text-sm text-amber-600">
-                                            Score editing is not connected to the backend yet.
-                                            Saving has not been implemented, so changes here
-                                            will not be persisted.
-                                        </p>
+                                        {!selectedAttempt.editable && (
+                                            <p className="mt-3 text-sm text-amber-600">
+                                                Locked: {selectedAttempt.lockReason}
+                                            </p>
+                                        )}
+
+                                        <div className="mt-4">
+                                            <Button
+                                                disabled={!canSave}
+                                                onClick={() =>
+                                                    adjustScoreMutation.mutate({
+                                                        attemptId: selectedAttempt.attemptId,
+                                                        score: scoreNumber,
+                                                        reason: editReason.trim(),
+                                                    })
+                                                }
+                                            >
+                                                {adjustScoreMutation.isPending ? "Saving..." : "Save 2nd score"}
+                                            </Button>
+                                        </div>
                                     </div>
                                 )}
                             </div>

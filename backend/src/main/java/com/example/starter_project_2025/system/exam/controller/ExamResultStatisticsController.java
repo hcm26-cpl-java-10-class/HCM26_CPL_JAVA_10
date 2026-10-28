@@ -1,17 +1,22 @@
 package com.example.starter_project_2025.system.exam.controller;
 
+import com.example.starter_project_2025.security.UserPrincipal;
+import com.example.starter_project_2025.system.exam.dto.AdjustScoreRequest;
+import com.example.starter_project_2025.system.exam.dto.ExamAttemptStatisticsDTO;
 import com.example.starter_project_2025.system.exam.dto.ExamResultStatisticsDTO;
+import com.example.starter_project_2025.system.exam.service.ExamAttemptStatisticsService;
 import com.example.starter_project_2025.system.exam.service.ExamResultStatisticsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.starter_project_2025.system.exam.dto.ExamAttemptStatisticsDTO;
-import com.example.starter_project_2025.system.exam.service.ExamAttemptStatisticsService;
 import java.util.List;
 
 
@@ -40,6 +45,19 @@ public class ExamResultStatisticsController {
     ) {
         return ResponseEntity.ok(
                 attemptStatisticsService.getAttempts(examId)
+        );
+    }
+
+    /** Sua diem cuoi cua 1 luot thi - chi luot bi gan co gian lan va da cham xong. */
+    @PutMapping("/attempts/{attemptId}/score")
+    public ResponseEntity<ExamAttemptStatisticsDTO> adjustScore(
+            @PathVariable Long examId,
+            @PathVariable Long attemptId,
+            @RequestBody AdjustScoreRequest request,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(
+                attemptStatisticsService.adjustScore(examId, attemptId, request, principal.getUser().getId())
         );
     }
 

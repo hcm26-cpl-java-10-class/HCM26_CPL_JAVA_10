@@ -39,6 +39,18 @@ function ExamScoreCard({ score }: { score: PublishedExamScore }) {
             {formatScore(displayScore ?? 0)}/{formatScore(score.maxScore ?? 10)}
           </span>
         </div>
+        {score.secondScore != null && (
+          <>
+            <div className="flex justify-between text-muted-foreground">
+              <span>1st grading</span>
+              <span>{formatScore(score.firstScore ?? 0)}/{formatScore(score.maxScore ?? 10)}</span>
+            </div>
+            <div className="flex justify-between text-muted-foreground">
+              <span>2nd grading (official)</span>
+              <span>{formatScore(score.secondScore)}/{formatScore(score.maxScore ?? 10)}</span>
+            </div>
+          </>
+        )}
         <div className="flex justify-between text-muted-foreground">
           <span>Attempt</span>
           <span>{score.attemptNumber}</span>

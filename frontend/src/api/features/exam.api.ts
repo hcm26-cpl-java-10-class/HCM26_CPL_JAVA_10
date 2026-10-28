@@ -22,6 +22,8 @@ export interface PublishedExamScore {
   objectiveScore: number | null;
   finalScore: number | null;
   maxScore: number | null;
+  firstScore: number | null;
+  secondScore: number | null;
   submittedAt: string;
 }
 
