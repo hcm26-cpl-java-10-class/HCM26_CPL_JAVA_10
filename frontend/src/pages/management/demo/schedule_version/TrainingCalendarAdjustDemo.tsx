@@ -14,7 +14,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  ArrowLeft,
   ChevronDown,
   ChevronRight,
   ChevronUp,
@@ -26,15 +25,11 @@ import {
   ShieldCheck,
   Clock,
   BookOpen,
-  ArrowUp,
-  ArrowDown,
   Sparkles,
   CalendarDays,
   AlertCircle,
-  AlertTriangle,
   CheckCircle2,
   Lock,
-  RotateCcw,
   Menu,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -334,7 +329,6 @@ export function generateDaysFromDuration({
 
 const selectClass =
   "h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-const cellClass = "px-3 py-2 text-left align-top";
 const uid = () => crypto.randomUUID();
 
 export function formatFamsDate(dateStr: string): string {
@@ -390,10 +384,6 @@ export function formatFamsDateRange(days: TrainingDay[]): string {
 
   if (first === last) return formatShort(first);
   return `${formatShort(first)} - ${formatShort(last)}`;
-}
-
-function dayOfWeekName(dateStr: string) {
-  return getFamsDayOfWeek(dateStr);
 }
 
 function newActivity(
@@ -1171,19 +1161,7 @@ export default function TrainingCalendarAdjustDemo({
     );
   }
 
-  function moveTopic(index: number, direction: "up" | "down") {
-    if (
-      (direction === "up" && index === 0) ||
-      (direction === "down" && index === topics.length - 1)
-    ) {
-      return;
-    }
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
-    const reordered = [...topics];
-    const [moved] = reordered.splice(index, 1);
-    reordered.splice(targetIndex, 0, moved);
-    changeTopics(() => reordered);
-  }
+
 
   function changeDay(topicId: string, dayId: string, update: Partial<TrainingDay>) {
     changeTopics((prev) =>
@@ -1794,7 +1772,7 @@ export default function TrainingCalendarAdjustDemo({
         )}
 
         {/* Danh sách các Topic và các Day / Activity bên trong */}
-        {topics.map((topic, topicIndex) => {
+        {topics.map((topic, _topicIndex) => {
           const collapsed = collapsedTopics.includes(topic.id);
           const topicConflict = getTopicConflict(topic, topics);
           const allDaysSelected = topic.days.length > 0 && topic.days.every((d) => selectedDayIds.includes(d.id));
@@ -1955,7 +1933,15 @@ export default function TrainingCalendarAdjustDemo({
                     <table className="w-full text-sm border-collapse">
                       <thead>
                         <tr className="bg-[#F8F9FA] text-gray-700 font-semibold border-b border-gray-200 text-xs">
-                          <th className="w-16 px-3 py-3"></th>
+                          <th className="w-16 px-3 py-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={allDaysSelected}
+                              onChange={() => toggleSelectAllDays(topic.days)}
+                              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer"
+                              title="Select all days"
+                            />
+                          </th>
                           <th className="w-20 px-3 py-3 text-center">Day No</th>
                           <th className="px-4 py-3 text-left">
                             <span>Name</span>
@@ -1975,7 +1961,7 @@ export default function TrainingCalendarAdjustDemo({
                           return (
                             <Fragment key={day.id}>
                               {/* Day Header Row */}
-                              <tr className={`border-b border-gray-200 hover:bg-gray-50/60 transition-colors ${isDaySelected ? "bg-indigo-50/30" : "bg-white"}`}>
+                              <tr className={`border-b border-gray-200 hover:bg-gray-50/60 transition-colors ${dayConflict ? "bg-amber-50/40" : isDaySelected ? "bg-indigo-50/30" : "bg-white"}`}>
                                 <td className="w-16 px-3 py-3 text-center">
                                   <div className="flex items-center justify-center gap-2">
                                     <Menu className="size-4 text-gray-400 shrink-0 cursor-grab" />
@@ -2204,7 +2190,7 @@ export default function TrainingCalendarAdjustDemo({
                                                           {d}
                                                         </option>
                                                       ))}
-                                                      {!["1h", "1.5h", "2h", "2.5h", "3h", "3.5h", "4h"].includes(act.duration) && (
+                                                      {!["1h", "1.5h", "2h", "2.5h", "3h", "3.5h", "4h"].includes(act.duration || "") && (
                                                         <option value={act.duration}>{act.duration}</option>
                                                       )}
                                                     </select>
@@ -2234,7 +2220,7 @@ export default function TrainingCalendarAdjustDemo({
                                                     >
                                                       <optgroup label={`Ca phù hợp ${durNum}h`}>
                                                         {availableSections
-                                                          .filter((s) => s.duration === `${durNum}h` || parseDurationHours(s.duration) === durNum)
+                                                          .filter((s) => s.duration === `${durNum}h` || parseDurationHours(s.duration || "") === durNum)
                                                           .map((s) => (
                                                             <option key={s.id} value={s.label}>
                                                               {s.label}
@@ -2243,7 +2229,7 @@ export default function TrainingCalendarAdjustDemo({
                                                       </optgroup>
                                                       <optgroup label="Các ca thời lượng khác">
                                                         {availableSections
-                                                          .filter((s) => s.duration !== `${durNum}h` && parseDurationHours(s.duration) !== durNum)
+                                                          .filter((s) => s.duration !== `${durNum}h` && parseDurationHours(s.duration || "") !== durNum)
                                                           .map((s) => (
                                                             <option key={s.id} value={s.label}>
                                                               {s.label}
