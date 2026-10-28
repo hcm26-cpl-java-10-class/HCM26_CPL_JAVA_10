@@ -24,3 +24,6 @@ frontend/dist/
 docker/.env
 
 /backend.zip
+
+# Local H2 database
+/data/
