@@ -24,4 +24,9 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     int deleteAllRevokedExpired(@Param("now") Instant now);
 
     List<RefreshToken> findAllByUserId(Long userId);
+
+    /** Xóa toàn bộ refresh token của một user (cần trước khi xóa user vì có khóa ngoại). */
+    @Modifying(flushAutomatically = true)
+    @Query("DELETE FROM RefreshToken rt WHERE rt.user.id = ?1")
+    int deleteAllByUserId(Long userId);
 }

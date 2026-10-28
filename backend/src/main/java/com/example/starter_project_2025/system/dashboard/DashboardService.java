@@ -25,7 +25,8 @@ public class DashboardService {
         stats.setTotalMenus(ModuleGroupsRepository.count());
         stats.setTotalMenuItems(ModuleRepository.count());
 
-        stats.setActiveUsers(userRepository.countByIsActive(true));
+        // Chỉ tính tài khoản Hoạt động (isActive và không bị khóa) để khớp với trạng thái ở trang Users.
+        stats.setActiveUsers(userRepository.countByIsActiveAndLocked(true, false));
         stats.setActiveRoles(roleRepository.countByIsActive(true));
         stats.setActiveMenus(ModuleGroupsRepository.findByIsActive(true).stream().count());
 
