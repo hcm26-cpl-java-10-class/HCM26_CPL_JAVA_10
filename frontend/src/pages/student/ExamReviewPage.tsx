@@ -115,24 +115,13 @@ export default function ExamReviewPage() {
 
                 {data && (
                     <>
-                    <header className="space-y-1">
-                        <h1 className="text-2xl font-bold text-slate-900">{data.title}</h1>
-                        <p className="text-sm text-slate-600">
-                            Attempt #{data.attemptNumber} · Score: {formatScore(data.finalScore ?? data.objectiveScore)}/
-                            {formatScore(data.maxScore ?? 10)}
-                        </p>
-                        {(data.finalScore ?? data.objectiveScore) != null && (
-                            <div className="pt-2">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => navigate(`/my-appeals?attemptId=${data.attemptId}`)}
-                                >
-                                    Appeal this score
-                                </Button>
-                            </div>
-                        )}
-                    </header>
+                        <header className="space-y-1">
+                            <h1 className="text-2xl font-bold text-slate-900">{data.title}</h1>
+                            <p className="text-sm text-slate-600">
+                                Attempt #{data.attemptNumber} · Score: {formatScore(data.finalScore ?? data.objectiveScore)}/
+                                {formatScore(data.maxScore ?? 10)}
+                            </p>
+                        </header>
                         {data.questions.map((question, index) => (
                             <QuestionReview key={question.questionId} question={question} index={index} />
                         ))}

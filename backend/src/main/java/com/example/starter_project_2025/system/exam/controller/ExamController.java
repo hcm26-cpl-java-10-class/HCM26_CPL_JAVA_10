@@ -24,7 +24,7 @@ import java.util.List;
 @ResourceMenu(
         title = "My Exams",
         url = "/student/exams",
-        group = "Exam",
+        group = "Student",
         icon = "calendar",
         order = 2,
         permission = "EXAM_READ"

@@ -44,7 +44,7 @@ import java.util.Map;
 @ResourcePermission("STUDENT_SCORE")
 @ResourceMenu(
         title = "Student Scores",
-        group = "Score",
+        group = "Score Management",
         icon = "bar-chart",
         url = "/student-scores",
         order = 1,

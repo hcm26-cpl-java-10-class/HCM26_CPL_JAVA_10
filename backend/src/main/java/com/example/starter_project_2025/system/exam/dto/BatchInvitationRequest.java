@@ -15,4 +15,6 @@ public class BatchInvitationRequest {
     @NotEmpty(groups = OnCreate.class, message = "At least one invitation is required")
     @Valid
     private List<InvitationCreateRequest> invitations;
+
+    private boolean sendEmail = true;
 }

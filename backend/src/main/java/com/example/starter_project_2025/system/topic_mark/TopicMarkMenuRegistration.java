@@ -4,7 +4,7 @@ import com.example.starter_project_2025.init.annotation.ResourceMenu;
 
 @ResourceMenu(
         title = "Topic Mark Gradebook",
-        group = "Score",
+        group = "Score Management",
         icon = "clipboard-check",
         url = "/topic-marks/gradebook-demo",
         order = 2,

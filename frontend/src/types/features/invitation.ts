@@ -56,11 +56,12 @@ export interface BatchInvitationItemResult {
 }
 
 export interface BatchInvitationRequest {
-  examId?: number;
-  userIds?: number[];
-  invitations?: InvitationCreateRequest[];
-  note?: string;
-  expiresAt?: string;
+    examId?: number;
+    userIds?: number[];
+    invitations?: InvitationCreateRequest[];
+    sendEmail?: boolean;
+    note?: string;
+    expiresAt?: string;
 }
 
 export interface BatchInvitationResponse {

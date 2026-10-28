@@ -6,7 +6,6 @@ import java.time.Instant;
 public record PublishedExamScoreDTO(
         Long examId,
         String examTitle,
-        Long attemptId,
         int attemptNumber,
         BigDecimal objectiveScore,
         BigDecimal finalScore,
@@ -14,8 +13,6 @@ public record PublishedExamScoreDTO(
         BigDecimal firstScore,
         BigDecimal secondScore,
 
-        Instant submittedAt,
-
-        boolean resultPublished
+        Instant submittedAt
 ) {
 }
