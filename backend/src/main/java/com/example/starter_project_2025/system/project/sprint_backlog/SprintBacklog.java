@@ -109,9 +109,11 @@ public class SprintBacklog extends BaseEntity {
      * It is derived by the service from the sprint, from the linked milestone
      * or from the explicit request value, so the UI never has to keep the two
      * in sync by itself.
+     * <p>
+     * Not importable on purpose: a file import has no project column, the
+     * project is inherited from the selected sprint in {@link #prepareForImport()}.
      */
     @Column(name = "project_id")
-    @ImportField(name = "Project ID")
     Long projectId;
 
     /**
@@ -128,9 +130,11 @@ public class SprintBacklog extends BaseEntity {
     /**
      * TEMPORARY assignee: only the raw project member id is stored until the
      * project member module is available.
+     * <p>
+     * Not importable on purpose: imported items stay unassigned ({@code null})
+     * so the assignee is always picked deliberate in the backlog board.
      */
     @Column(name = "assignee_project_member_id")
-    @ImportField(name = "Assignee")
     Long assigneeProjectMemberId;
 
     /**
@@ -155,10 +159,13 @@ public class SprintBacklog extends BaseEntity {
     @ImportField(name = "End Date")
     LocalDateTime endDate;
 
+    /**
+     * Lifecycle state. Not importable on purpose: every imported item starts
+     * as {@link SprintBacklogStatus#TODO} and is advanced through the UI.
+     */
     @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    @ImportField(name = "Status")
     SprintBacklogStatus status = SprintBacklogStatus.TODO;
 
     /**
@@ -219,6 +226,11 @@ public class SprintBacklog extends BaseEntity {
      * both present or both empty and in the right order, a non negative
      * estimate, the default lifecycle values and the project inherited from the
      * selected sprint.
+     * <p>
+     * Status, assignee and project are not part of the import file: every
+     * imported item is forced to {@link SprintBacklogStatus#TODO}, stays
+     * unassigned ({@code assigneeProjectMemberId} is {@code null}) and takes the
+     * project of its sprint.
      */
     @PostImport
     void prepareForImport() {
@@ -262,9 +274,8 @@ public class SprintBacklog extends BaseEntity {
             isActive = true;
         }
 
-        if (status == null) {
-            status = SprintBacklogStatus.TODO;
-        }
+        // A file can never set the lifecycle: every imported item starts at TODO.
+        status = SprintBacklogStatus.TODO;
 
         if (priority == null) {
             priority = SprintBacklogPriority.MEDIUM;

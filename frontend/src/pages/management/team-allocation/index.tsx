@@ -2896,14 +2896,6 @@ function SavedTeamCard({
         ...member,
         roles: memberRolesOf(member),
       }))
-<<<<<<< HEAD
-    : team.memberIds.map((memberId) => ({
-        memberId,
-        userCode: null as string | null,
-        fullName: memberName(memberId),
-        roles: memberRoles[memberId] ?? ([`DEV`] as TeamMemberRole[]),
-      }));
-=======
     : team.memberIds.map((memberId) => {
         const member = memberOptions.find((option) => option.memberId === memberId);
         return {
@@ -2913,7 +2905,6 @@ function SavedTeamCard({
           roles: memberRoles[memberId] ?? ([`DEV`] as TeamMemberRole[]),
         };
       });
->>>>>>> 3a2b740bc2bf3b878fa541317f6d858f938775b4
   const currentQuotaGaps = roleQuotaGaps(team, memberRoles);
   const mentorValue = team.assignedMentorId === null
     ? ""
