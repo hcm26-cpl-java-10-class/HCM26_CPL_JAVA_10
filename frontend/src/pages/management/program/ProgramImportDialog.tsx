@@ -1,4 +1,3 @@
-```tsx
 import { useState, type ChangeEvent } from "react";
 import * as XLSX from "xlsx";
 import {
@@ -686,4 +685,3 @@ export function ProgramImportDialog({
     </Dialog>
   );
 }
-```
