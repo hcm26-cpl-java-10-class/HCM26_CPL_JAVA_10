@@ -103,11 +103,10 @@ export const sprintBacklogSchema: EntitySchema = {
                 labelField: "name",
             },
             sortable: true,
-            required: true,
-            requiredMessage: "Vui lòng chọn Sprint cho Sprint Backlog",
+            required: false,
             filterable: true,
             filterType: "select",
-            helpText: "Mỗi Sprint Backlog luôn thuộc về một Sprint đang tồn tại",
+            helpText: "Có thể để trống khi công việc chưa được đưa vào Sprint",
         },
         {
             name: "assigneeProjectMemberId",
@@ -195,10 +194,6 @@ export const sprintBacklogSchema: EntitySchema = {
             errors.description = [
                 "Mô tả Sprint Backlog không vượt quá 2000 ký tự",
             ];
-        }
-
-        if (!values.sprintId) {
-            errors.sprintId = ["Vui lòng chọn Sprint cho Sprint Backlog"];
         }
 
         const assignee = values.assigneeProjectMemberId;

@@ -18,6 +18,18 @@ public class ProjectAlertReadStore {
     private final EntityManager em;
     private final ProjectAlertAccess access;
     public record Scope(Map<Long,ProjectTeam> teams,Map<Long,ProjectMember> members,List<SprintBacklog> items) { }
+    public List<ProjectTeam> monitoringTeams() {
+        return em.createQuery("select t from ProjectTeam t join fetch t.trainingClass left join fetch t.project",ProjectTeam.class)
+                .getResultList().stream().filter(t->Boolean.TRUE.equals(t.getIsActive())&&t.getStatus()==ProjectTeamStatus.ACTIVE)
+                .filter(t->Boolean.TRUE.equals(t.getTrainingClass().getIsActive())
+                        &&!Set.of(com.example.starter_project_2025.system.project.trainingclass.TrainingClassStatus.CANCELLED,
+                        com.example.starter_project_2025.system.project.trainingclass.TrainingClassStatus.COMPLETED).contains(t.getTrainingClass().getStatus()))
+                .filter(t->{var tenant=em.find(com.example.starter_project_2025.system.project.tenant.Tenant.class,t.getTrainingClass().getTenantId());
+                    return tenant!=null&&Boolean.TRUE.equals(tenant.getIsActive())&&Boolean.TRUE.equals(tenant.getActive());})
+                .filter(t->t.getProject()==null||Boolean.TRUE.equals(t.getProject().getIsActive())
+                        &&Objects.equals(t.getProject().getTenantId(),t.getTrainingClass().getTenantId()))
+                .filter(access::monitoring).toList();
+    }
     public Scope load(List<ProjectTeam> teams) {
         Map<Long,ProjectTeam> byTeam=new LinkedHashMap<>();teams.forEach(team->byTeam.put(team.getId(),team));
         if(teams.isEmpty())return new Scope(byTeam,Map.of(),List.of());
@@ -27,8 +39,8 @@ public class ProjectAlertReadStore {
         Map<Long,ProjectMember> byMember=new LinkedHashMap<>();
         memberships.stream().filter(access::current).forEach(m->byMember.put(m.getId(),m));
         List<Long> projects=teams.stream().map(ProjectTeam::getProjectId).filter(Objects::nonNull).toList();
-        var items=em.createQuery("select b from SprintBacklog b left join fetch b.sprint s where b.isActive=true and " +
-                "(s.teamId in :teams or (s.teamId is null and s.projectId in :projects) " +
+        var items=em.createQuery("select b from SprintBacklog b left join fetch b.sprint s left join fetch b.milestone m where b.isActive=true and " +
+                "(m.teamId in :teams or s.teamId in :teams or (s.teamId is null and s.projectId in :projects) " +
                 "or (b.sprint is null and b.assigneeProjectMemberId in :members))",SprintBacklog.class)
                 .setParameter("teams",byTeam.keySet()).setParameter("projects",nonempty(projects))
                 .setParameter("members",nonempty(byMember.keySet())).getResultList();
@@ -46,6 +58,11 @@ public class ProjectAlertReadStore {
             if(sprint.getProjectId()!=null)return scope.teams().values().stream()
                     .filter(team->sprint.getProjectId().equals(team.getProjectId())).findFirst().orElse(null);
             return null;
+        }
+        if(item.getMilestone()!=null) {
+            var milestone=item.getMilestone();var team=scope.teams().get(milestone.getTeamId());
+            if(team!=null&&milestone.isActive()&&Objects.equals(milestone.getTenantId(),team.getTrainingClass().getTenantId())
+                    &&matchesProject(team,milestone.getProjectId()))return team;
         }
         ProjectMember assignee=scope.members().get(item.getAssigneeProjectMemberId());
         return assignee==null?null:scope.teams().get(assignee.getTeam().getId());
