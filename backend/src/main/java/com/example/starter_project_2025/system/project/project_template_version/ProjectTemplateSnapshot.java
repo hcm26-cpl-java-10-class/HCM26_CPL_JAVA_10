@@ -9,6 +9,7 @@ import com.example.starter_project_2025.base.dataio.template.annotation.ImportEn
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import com.example.starter_project_2025.system.project.ProjectTemplate;
+import com.example.starter_project_2025.system.project.domain.Project;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.AttributeOverride;
@@ -22,6 +23,7 @@ import jakarta.persistence.ForeignKey;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -43,10 +45,11 @@ import lombok.experimental.SuperBuilder;
  *     {@code Sprint#sprintId}.</li>
  *     <li>{@code template_id} (ProjectTemplate) and {@code project_id}
  *     (Project) are stored as plain identifiers: the owning modules are
- *     implemented by other team members, so no JPA relation is declared and no
- *     lookup / existence check is performed. Any id provided by the client is
- *     persisted as-is so the data is preserved and the real relations can be
- *     re-introduced once those modules are available.</li>
+ *     implemented by other team members, so no writable JPA relation is
+ *     declared and no existence check is performed on create. Any id provided
+ *     by the client is persisted as-is; the service only resolves the names for
+ *     display. File imports may also reference the owners by name through the
+ *     transient {@link #templateByName} / {@link #projectByName} fields.</li>
  *     <li>{@code version} is a {@code String} (business version label such as
  *     {@code "v1.0"}), not an optimistic-locking counter. Uniqueness is
  *     enforced per template by {@code uk_project_template_version}.</li>
@@ -99,7 +102,7 @@ public class ProjectTemplateSnapshot extends BaseEntity {
      * identifier is kept: no relation, no lookup, no business rule relies on it.
      */
     @Column(name = "template_id", nullable = false)
-    @ImportField(name = "Template Id", required = true)
+    @ImportField(name = "Template Id")
     @ExportField(name = "Template Id")
     Long templateId;
 
@@ -132,6 +135,29 @@ public class ProjectTemplateSnapshot extends BaseEntity {
     @ImportField(name = "Project Id")
     @ExportField(name = "Project Id")
     Long projectId;
+
+    /**
+     * Import-only lookup of the owning template by its name.
+     * <p>
+     * Not persisted: {@code prepareForImport()} copies {@code id} into
+     * {@link #templateId}, which stays the single source of truth. Declared so an
+     * exported file can be edited with readable names instead of raw ids.
+     */
+    @Transient
+    @JsonIgnore
+    @ImportField(name = "Template Name", lookupEntity = ProjectTemplate.class, lookupField = "name")
+    ProjectTemplate templateByName;
+
+    /**
+     * Import-only lookup of the referenced project by its name.
+     * <p>
+     * Not persisted: {@code prepareForImport()} copies {@code id} into
+     * {@link #projectId}. Optional, exactly like the id column.
+     */
+    @Transient
+    @JsonIgnore
+    @ImportField(name = "Project Name", lookupEntity = Project.class, lookupField = "name")
+    Project projectByName;
 
     @Column(name = "version", nullable = false, length = 50)
     @ImportField(name = "Version", required = true)
@@ -182,13 +208,28 @@ public class ProjectTemplateSnapshot extends BaseEntity {
      * Import hook (bulk file import bypasses
      * {@code ProjectTemplateSnapshotServiceImpl}).
      * <p>
-     * Applies the same rules the REST create path enforces: the version label
-     * is trimmed and limited to 50 characters, the content must be valid JSON,
-     * and a row without a status starts as
-     * {@link ProjectTemplateVersionStatus#DRAFT}.
+     * Applies the same rules the REST create path enforces: the template is
+     * required (by id or by name), the version label is trimmed and limited to
+     * 50 characters, the content must be valid JSON, and a row without a status
+     * starts as {@link ProjectTemplateVersionStatus#DRAFT}.
      */
     @PostImport
     void prepareForImport() {
+
+        // The readable columns are optional and win over the raw ids, so a file
+        // exported by this module (both columns filled) stays unambiguous.
+        if (templateByName != null) {
+            templateId = templateByName.getId();
+        }
+
+        if (projectByName != null) {
+            projectId = projectByName.getId();
+        }
+
+        if (templateId == null) {
+            throw new IllegalArgumentException(
+                    "Template Id hoặc Template Name là bắt buộc");
+        }
 
         if (version != null) {
             version = version.trim();

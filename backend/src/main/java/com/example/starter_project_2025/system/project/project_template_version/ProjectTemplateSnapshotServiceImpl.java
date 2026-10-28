@@ -7,8 +7,10 @@ import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserPrincipal;
+import com.example.starter_project_2025.system.project.ProjectRepository;
 import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
+import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.project_template_version.audit.ProjectTemplateSnapshotAuditLogDTO;
 import com.example.starter_project_2025.system.project.project_template_version.audit.ProjectTemplateSnapshotAuditService;
 import com.example.starter_project_2025.system.project.project_template_version.event.ProjectTemplateSnapshotOutboxService;
@@ -32,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -60,10 +63,11 @@ import java.util.stream.Collectors;
  *     event (idempotent)</li>
  * </ul>
  * <p>
- * The ProjectTemplate / Project relations are intentionally not resolved: both
- * modules are owned by other team members, so {@code templateId} and
- * {@code projectId} are only carried along (any id is accepted) and never
- * validated or looked up here.
+ * The ProjectTemplate / Project relations are never validated (both modules are
+ * owned by other team members, so {@code templateId} and {@code projectId} are
+ * only carried along and any id is accepted), but they are resolved read-only on
+ * every response: {@code templateName} / {@code projectName} are filled from the
+ * owning rows so the clients never render a raw id.
  */
 @Service
 @Transactional
@@ -135,6 +139,8 @@ public class ProjectTemplateSnapshotServiceImpl
      * ownership of {@code project_templates} stays in a single module.
      */
     ProjectTemplateRepository projectTemplateRepository;
+    /** Read-only lookup of the {@code project} rows behind {@code projectId}. */
+    ProjectRepository projectRepository;
     /** Used to derive the baseline snapshot payload from the template plan. */
     TemplateMilestoneRepository templateMilestoneRepository;
     ObjectMapper objectMapper;
@@ -642,8 +648,8 @@ public class ProjectTemplateSnapshotServiceImpl
     // ---------------------------------------------------------------------
 
     /**
-     * Enriches every row with the name of its Project Template so the client
-     * never has to resolve a raw {@code template_id}.
+     * Enriches every row with the name of its Project Template and Project so
+     * the client never has to resolve a raw {@code template_id} / {@code project_id}.
      */
     @Override
     public Page<ProjectTemplateSnapshotDTO> getAll(Pageable pageable,
@@ -652,7 +658,7 @@ public class ProjectTemplateSnapshotServiceImpl
 
         Page<ProjectTemplateSnapshotDTO> page = super.getAll(pageable, search, filter);
 
-        enrichTemplateNames(page.getContent());
+        enrichOwnerNames(page.getContent());
 
         return page;
     }
@@ -662,7 +668,7 @@ public class ProjectTemplateSnapshotServiceImpl
 
         ProjectTemplateSnapshotDTO dto = super.getById(id);
 
-        enrichTemplateNames(List.of(dto));
+        enrichOwnerNames(List.of(dto));
 
         return dto;
     }
@@ -672,7 +678,7 @@ public class ProjectTemplateSnapshotServiceImpl
 
         ProjectTemplateSnapshotDTO created = super.create(request);
 
-        enrichTemplateNames(List.of(created));
+        enrichOwnerNames(List.of(created));
 
         return created;
     }
@@ -694,7 +700,7 @@ public class ProjectTemplateSnapshotServiceImpl
                 .map(snapshotMapper::toResponse)
                 .collect(Collectors.toCollection(ArrayList::new));
 
-        enrichTemplateNames(versions);
+        enrichOwnerNames(versions);
 
         return versions;
     }
@@ -720,9 +726,18 @@ public class ProjectTemplateSnapshotServiceImpl
 
         check(PERMISSION_READ);
 
-        return snapshotRepository.findAll()
-                .stream()
-                .map(ProjectTemplateSnapshotExportRow::from)
+        List<ProjectTemplateSnapshot> snapshots = snapshotRepository.findAll();
+
+        Map<Long, String> templateNames =
+                resolveTemplateNames(ownerIds(snapshots, ProjectTemplateSnapshot::getTemplateId));
+        Map<Long, String> projectNames =
+                resolveProjectNames(ownerIds(snapshots, ProjectTemplateSnapshot::getProjectId));
+
+        return snapshots.stream()
+                .map(snapshot -> ProjectTemplateSnapshotExportRow.from(
+                        snapshot,
+                        templateNames.get(snapshot.getTemplateId()),
+                        projectNames.get(snapshot.getProjectId())))
                 .toList();
     }
 
@@ -1041,35 +1056,76 @@ public class ProjectTemplateSnapshotServiceImpl
         }
     }
 
-    /** Mapper output enriched with the owning template name. */
+    /** Mapper output enriched with the owning template / project names. */
     private ProjectTemplateSnapshotDTO toResponse(ProjectTemplateSnapshot snapshot) {
 
         ProjectTemplateSnapshotDTO dto = snapshotMapper.toResponse(snapshot);
 
-        enrichTemplateNames(List.of(dto));
+        enrichOwnerNames(List.of(dto));
 
         return dto;
     }
 
-    private void enrichTemplateNames(List<ProjectTemplateSnapshotDTO> rows) {
+    /**
+     * Fills {@code templateName} and {@code projectName} in one pass so a list
+     * response costs two lookups instead of one per row.
+     */
+    private void enrichOwnerNames(List<ProjectTemplateSnapshotDTO> rows) {
 
         if (rows == null || rows.isEmpty()) {
             return;
         }
 
-        Set<Long> templateIds = rows.stream()
-                .map(ProjectTemplateSnapshotDTO::getTemplateId)
+        Map<Long, String> templateNames = resolveTemplateNames(
+                rows.stream()
+                        .map(ProjectTemplateSnapshotDTO::getTemplateId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet()));
+
+        Map<Long, String> projectNames = resolveProjectNames(
+                rows.stream()
+                        .map(ProjectTemplateSnapshotDTO::getProjectId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet()));
+
+        rows.forEach(row -> {
+            row.setTemplateName(templateNames.get(row.getTemplateId()));
+            row.setProjectName(projectNames.get(row.getProjectId()));
+        });
+    }
+
+    /** Distinct, non-null owner ids of the given rows. */
+    private Set<Long> ownerIds(List<ProjectTemplateSnapshot> snapshots,
+                               Function<ProjectTemplateSnapshot, Long> extractor) {
+        return snapshots.stream()
+                .map(extractor)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
+    }
+
+    /** Id -> name of the given Project Templates (missing ids are simply absent). */
+    private Map<Long, String> resolveTemplateNames(Set<Long> templateIds) {
 
         if (templateIds.isEmpty()) {
-            return;
+            return Map.of();
         }
 
-        Map<Long, String> names = projectTemplateRepository.findAllById(templateIds)
+        return projectTemplateRepository.findAllById(templateIds)
                 .stream()
-                .collect(Collectors.toMap(ProjectTemplate::getId, ProjectTemplate::getName, (left, right) -> left));
+                .collect(Collectors.toMap(
+                        ProjectTemplate::getId, ProjectTemplate::getName, (left, right) -> left));
+    }
 
-        rows.forEach(row -> row.setTemplateName(names.get(row.getTemplateId())));
+    /** Id -> name of the given Projects (missing ids are simply absent). */
+    private Map<Long, String> resolveProjectNames(Set<Long> projectIds) {
+
+        if (projectIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return projectRepository.findAllById(projectIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        Project::getId, Project::getName, (left, right) -> left));
     }
 }

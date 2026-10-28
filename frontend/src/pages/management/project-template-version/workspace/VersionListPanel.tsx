@@ -113,9 +113,12 @@ export function VersionListPanel({
                 {showTemplate && (
                   <span
                     className="max-w-40 shrink-0 truncate text-[11px] font-medium text-muted-foreground"
-                    title={version.templateName ?? `template_id = ${version.templateId}`}
+                    title={
+                      version.templateName ?? `template_id = ${version.templateId}`
+                    }
                   >
-                    {version.templateName ?? `TPL-${version.templateId ?? "—"}`} · PRJ-{version.projectId ?? "—"}
+                    {version.templateName ?? `TPL-${version.templateId ?? "—"}`} ·{" "}
+                    {version.projectName?.trim() || `PRJ-${version.projectId ?? "—"}`}
                   </span>
                 )}
                 <span className="shrink-0 text-[11px] text-muted-foreground">
