@@ -3,7 +3,6 @@ import { ProTable } from "@/components/datatable/ProTable";
 import ActionButton from "@/components/datatable/common/ActionButton";
 import { useProTable } from "@/components/datatable/hook/useProTable";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,7 +22,7 @@ import type {
   Pagination,
 } from "@/types";
 import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, ClipboardCheck, Eye, FolderKanban, Plus, ShieldAlert } from "lucide-react";
+import { ClipboardCheck, Eye, FolderKanban, Plus, ShieldAlert } from "lucide-react";
 import { useCallback, useEffect, useMemo } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { MilestoneEmptyState, MilestoneListError } from "../components/MilestoneListStates";
@@ -86,26 +85,16 @@ function MilestoneStandardListPage() {
     [projectId, projectOptions],
   );
 
-  useEffect(() => {
-    if (projectId || projectOptionsQuery.isPending) return;
-    if (projectOptions.length > 0) {
-      const defaultProject = projectOptions[0];
-      navigate(
-        `/projects/${defaultProject.id}/milestones${location.search}`,
-        { replace: true },
-      );
-    }
-  }, [location.search, navigate, projectId, projectOptions, projectOptionsQuery.isPending]);
-
   const handleSelectProject = useCallback((nextProjectId: string) => {
-    if (!nextProjectId || nextProjectId === projectId) return;
+    if (!nextProjectId || nextProjectId === (projectId ?? "all")) return;
     const nextSearch = serializeMilestoneListParams({
       ...listParams,
       teamId: undefined,
       page: 0,
     });
     const queryString = nextSearch.toString();
-    navigate(`/projects/${nextProjectId}/milestones${queryString ? `?${queryString}` : ""}`);
+    const path = nextProjectId === "all" ? "/milestones" : `/projects/${nextProjectId}/milestones`;
+    navigate(`${path}${queryString ? `?${queryString}` : ""}`);
   }, [listParams, navigate, projectId]);
 
   const filters = useMemo<MilestoneTableFilters>(() => ({
@@ -143,7 +132,7 @@ function MilestoneStandardListPage() {
         [deadlineFrom, deadlineTo] = [deadlineTo, deadlineFrom];
       }
 
-      return milestoneApi.getList(projectId as string, {
+      return milestoneApi.getList(projectId, {
         page: pagination.page ?? 0,
         size: pagination.size ?? 20,
         teamId: listParams.teamId,
@@ -159,8 +148,8 @@ function MilestoneStandardListPage() {
   }), [projectId, listParams.teamId]);
 
   const table = useProTable(tableApi, milestoneListSchema, {
-    enabled: Boolean(projectId),
-    queryKeyParts: [projectId, listParams.teamId],
+    enabled: true,
+    queryKeyParts: [projectId ?? "all", listParams.teamId],
     searchDebounceMs: 300,
     retry: false,
     staleTime: 30_000,
@@ -215,51 +204,15 @@ function MilestoneStandardListPage() {
     }
   }, [listParams.page, response, table.isFetching, updateListParams]);
 
-  if (!projectId) {
-    if (projectOptionsQuery.isPending) {
-      return (
-        <MainLayout pathName={breadcrumbs}>
-          <div className="rounded-xl border bg-card p-6 text-sm text-muted-foreground shadow-xs" role="status">
-            Loading projects...
-          </div>
-        </MainLayout>
-      );
-    }
-
-    return (
-      <MainLayout pathName={breadcrumbs}>
-        <Alert variant={projectOptionsQuery.isError ? "destructive" : "default"}>
-          <AlertCircle />
-          <AlertTitle>
-            {projectOptionsQuery.isError ? "Unable to load projects" : "No projects available"}
-          </AlertTitle>
-          <AlertDescription>
-            {projectOptionsQuery.isError ? (
-              <>
-                <p>The project list could not be loaded.</p>
-                <Button variant="outline" size="sm" onClick={() => void projectOptionsQuery.refetch()}>Try again</Button>
-              </>
-            ) : (
-              <>
-                <p>No projects are available in your current scope. You can still open milestones assigned directly to a team.</p>
-                <Button variant="outline" size="sm" onClick={() => navigate("/milestones/teams")}>Browse team milestones</Button>
-              </>
-            )}
-          </AlertDescription>
-        </Alert>
-      </MainLayout>
-    );
-  }
-
   const currentProjectStatus = response?.project?.status ?? selectedProjectOption?.status;
-  const currentProjectName = response?.project?.name ?? selectedProjectOption?.name ?? `Project #${projectId}`;
+  const currentProjectName = response?.project?.name ?? selectedProjectOption?.name ?? "All projects";
 
   const openDetail = (row: MilestoneListItem) => {
     const routeState: MilestoneDetailRouteState = {
-      projectName: response?.project?.name ?? selectedProjectOption?.name,
+      projectName: row.projectName ?? response?.project?.name ?? selectedProjectOption?.name,
       returnTo,
     };
-    navigate(`/projects/${projectId}/milestones/${row.id}${teamId ? `?teamId=${teamId}` : ""}`, { state: routeState });
+    navigate(`/projects/${row.projectId}/milestones/${row.id}${teamId ? `?teamId=${teamId}` : ""}`, { state: routeState });
   };
 
   const clearSearchAndFilters = () => {
@@ -268,14 +221,14 @@ function MilestoneStandardListPage() {
 
   const createAction = (
     <div className="flex items-center gap-2">
-      <ActionButton
+      {projectId ? <ActionButton
         onClick={() => navigate(`/milestone-submissions?projectId=${projectId}`)}
         tooltip="Open milestone review queue"
         title="Review submissions"
         variant="outline"
         icon={<ClipboardCheck size={16} />}
-      />
-      {table.permission?.canCreate ? <ActionButton
+      /> : null}
+      {projectId && table.permission?.canCreate ? <ActionButton
       onClick={() => navigate(createUrl)}
       tooltip={projectActive
         ? "Create milestone"
@@ -302,7 +255,7 @@ function MilestoneStandardListPage() {
           </div>
           <div className="min-w-[240px] max-w-md flex-1">
             <Select
-              value={String(projectId)}
+              value={projectId ?? "all"}
               onValueChange={handleSelectProject}
               disabled={projectOptionsQuery.isPending}
             >
@@ -310,6 +263,7 @@ function MilestoneStandardListPage() {
                 <SelectValue placeholder={currentProjectName} />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="all">All projects</SelectItem>
                 {projectOptions.length > 0 ? (
                   projectOptions.map((project) => (
                     <SelectItem key={String(project.id)} value={String(project.id)}>
@@ -337,14 +291,14 @@ function MilestoneStandardListPage() {
             </Badge>
           ) : null}
         </div>
-        <Button
+        {projectId ? <Button
           variant="outline"
           size="sm"
           onClick={() => navigate(`/projects/${projectId}/milestones?view=risk`)}
         >
           <ShieldAlert className="size-4" />
           Risk monitoring
-        </Button>
+        </Button> : null}
       </div>
       <ProTable<MilestoneListItem>
         table={table}

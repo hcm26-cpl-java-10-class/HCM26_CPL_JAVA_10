@@ -5,6 +5,7 @@ import com.example.starter_project_2025.system.project.milestone.dto.response.Mi
 import com.example.starter_project_2025.system.project.milestone.dto.response.MilestoneProjectOptionResponse;
 import com.example.starter_project_2025.system.project.milestone.dto.response.MilestoneDetailResponse;
 import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
+import com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus;
 import com.example.starter_project_2025.system.project.milestone.dto.request.MilestoneListQuery;
 import com.example.starter_project_2025.system.project.milestone.exception.MilestoneValidationException;
 import com.example.starter_project_2025.system.project.milestone.integration.model.ProjectReadContext;
@@ -14,6 +15,7 @@ import com.example.starter_project_2025.system.project.milestone.repository.Mile
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +25,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -100,10 +104,39 @@ public class MilestoneQueryService {
                                 query.latePolicyType(),
                                 deadlineFrom,
                                 deadlineToExclusive
-                        ),
+                        ).and(studentVisibility()),
                         pageable
                 )
         );
+    }
+
+    @Transactional(readOnly = true)
+    public MilestonePageResponse getAllList(MilestoneListQuery query) {
+        String search = normalizeSearch(query.search());
+        validateListQuery(query, search);
+        UUID actorId = actorProvider.requireCurrentActorId();
+        Long tenantId = tenantProvider.requireCurrentTenantId();
+        Map<Long, String> projectNames = projectPort.listAccessibleProjects(actorId, tenantId).stream()
+                .collect(Collectors.toMap(option -> option.id(), option -> option.name()));
+        Set<Long> projectIds = projectNames.keySet();
+        if (projectIds.isEmpty()) {
+            return mapper.toPageResponse(null, org.springframework.data.domain.Page.empty(
+                    PageRequest.of(query.page(), query.size(), buildSort(query.sort()))));
+        }
+
+        Instant deadlineFrom = null;
+        Instant deadlineToExclusive = null;
+        if (query.deadlineFrom() != null || query.deadlineTo() != null) {
+            ZoneId zone = tenantSettingsPort.requireTimeZone(tenantId);
+            if (query.deadlineFrom() != null) deadlineFrom = query.deadlineFrom().atStartOfDay(zone).toInstant();
+            if (query.deadlineTo() != null) deadlineToExclusive = query.deadlineTo().plusDays(1).atStartOfDay(zone).toInstant();
+        }
+        Specification<Milestone> allowedProjects = (root, ignored, cb) -> root.get("projectId").in(projectIds);
+        return mapper.toPageResponse(null, repository.findAll(
+                MilestoneSpecifications.matching(tenantId, null, query.teamId(), search, query.status(),
+                        query.mandatory(), query.latePolicyType(), deadlineFrom, deadlineToExclusive)
+                        .and(allowedProjects).and(studentVisibility()),
+                PageRequest.of(query.page(), query.size(), buildSort(query.sort()))), projectNames);
     }
 
     @Transactional(readOnly = true)
@@ -114,7 +147,7 @@ public class MilestoneQueryService {
         scopeService.requireTeamScope(null, teamId, tenantId);
         return mapper.toPageResponse(null, repository.findAll(
                 MilestoneSpecifications.matching(tenantId, null, teamId, search, query.status(),
-                        query.mandatory(), query.latePolicyType(), null, null),
+                        query.mandatory(), query.latePolicyType(), null, null).and(studentVisibility()),
                 PageRequest.of(query.page(), query.size(), buildSort(query.sort()))));
     }
 
@@ -127,8 +160,9 @@ public class MilestoneQueryService {
         var milestone = repository.findByIdAndProjectIdAndTenantId(milestoneId, projectId, tenantId)
                 .filter(m -> teamId == null || teamId.equals(m.getTeamId()))
                 .filter(com.example.starter_project_2025.system.project.milestone.domain.Milestone::isActive)
+                .filter(m -> !isStudent() || m.getStatus() != MilestoneStatus.PLANNED)
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
-        var rubric = rubricPort.requireSnapshotForRead(milestone.getRubricSnapshotId(), projectId, tenantId);
+        var rubric = milestone.getRubricSnapshotId() == null ? null : rubricPort.requireSnapshotForRead(milestone.getRubricSnapshotId(), projectId, tenantId);
         var reviewer = milestone.getReviewerId() == null
                 ? null
                 : reviewerPort.requireReviewerForRead(milestone.getReviewerId(), projectId, tenantId);
@@ -142,12 +176,23 @@ public class MilestoneQueryService {
         var scope = scopeService.requireTeamScope(null, teamId, tenantId);
         var milestone = repository.findByIdAndTeamIdAndTenantId(milestoneId, teamId, tenantId)
                 .filter(Milestone::isActive)
+                .filter(m -> !isStudent() || m.getStatus() != MilestoneStatus.PLANNED)
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
-        var rubric = rubricPort.requireSnapshotForRead(milestone.getRubricSnapshotId(), scope.projectId(), tenantId);
+        var rubric = milestone.getRubricSnapshotId() == null ? null : rubricPort.requireSnapshotForRead(milestone.getRubricSnapshotId(), scope.projectId(), tenantId);
         var reviewer = milestone.getReviewerId() == null ? null
                 : reviewerPort.requireReviewerForRead(milestone.getReviewerId(), scope.projectId(), tenantId);
         return detailMapper.toResponse(milestone, null, rubric, reviewer,
                 tenantSettingsPort.requireTimeZone(tenantId));
+    }
+
+    private Specification<Milestone> studentVisibility() {
+        return (root, query, cb) -> isStudent() ? cb.notEqual(root.get("status"), MilestoneStatus.PLANNED) : cb.conjunction();
+    }
+
+    private boolean isStudent() {
+        var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(authority -> authority.getAuthority().equals("ROLE_STUDENT") || authority.getAuthority().equals("ROLE_TRAINEE"));
     }
 
     private void validateListQuery(MilestoneListQuery query, String search) {

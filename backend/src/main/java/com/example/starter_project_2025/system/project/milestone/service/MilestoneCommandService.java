@@ -53,6 +53,7 @@ public class MilestoneCommandService {
     private final MilestoneMapper mapper;
     private final TransactionTemplate transactionTemplate;
     private final Clock milestoneClock;
+    private final MilestoneLifecycleService lifecycle;
 
     @org.springframework.transaction.annotation.Transactional
     public MilestoneResponse openForSubmissions(Long projectId, Long teamId, UUID milestoneId) {
@@ -75,11 +76,7 @@ public class MilestoneCommandService {
         if (milestone.getStatus() == com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN) return mapper.toResponse(milestone);
         if (milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.PLANNED)
             throw new MilestoneConflictException("Only a planned milestone can be opened for submissions");
-        Instant now = milestoneClock.instant(); milestone.openForWork(actorId, now); milestoneRepository.saveAndFlush(milestone);
-        auditRepository.save(MilestoneAuditLog.statusEvent(milestoneId, projectId, tenantId, actorId,
-                "MILESTONE_OPENED", CorrelationIdFilter.currentId(), "{\"before\":\"PLANNED\",\"after\":\"OPEN\"}", now));
-        outboxWriter.writeMilestoneOpened(milestone, now);
-        return mapper.toResponse(milestone);
+        return lifecycle.publish(projectId, teamId, milestoneId, milestone.getVersion());
     }
 
     public MilestoneResponse create(Long projectId, String idempotencyKey, CreateMilestoneRequest request) {

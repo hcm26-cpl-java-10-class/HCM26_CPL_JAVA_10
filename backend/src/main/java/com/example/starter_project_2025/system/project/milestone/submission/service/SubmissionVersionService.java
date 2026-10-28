@@ -110,6 +110,9 @@ public class SubmissionVersionService {
         if (submission.getStatus() != SubmissionStatus.DRAFT) {
             throw new MilestoneConflictException("Only a draft submission can be submitted");
         }
+        if (submission.getMilestone().getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN
+                || submission.getMilestone().getExecutionStatus() != MilestoneExecutionStatus.IN_PROGRESS)
+            throw new MilestoneConflictException("Milestone is not accepting submissions");
         var version = versions.findBySubmissionIdAndVersionNumber(id, submission.getCurrentVersionNumber())
                 .orElseThrow(() -> new com.example.starter_project_2025.exception.ResourceNotFoundException(
                         "Submission version not found"));
@@ -126,6 +129,7 @@ public class SubmissionVersionService {
         }
         version.submit(now, late, penalty);
         submission.submitted(version.getVersionNumber(), now);
+        submission.getMilestone().setExecutionStatus(MilestoneExecutionStatus.REVIEW, actorId, now);
         versions.save(version);
         submissions.save(submission);
         audits.save(SubmissionAuditLog.create(id, version.getId(), "SUBMISSION_SUBMITTED",

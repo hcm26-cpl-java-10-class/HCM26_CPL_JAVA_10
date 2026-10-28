@@ -65,6 +65,9 @@ public class ArtifactDraftService {
     public ArtifactSubmissionWorkspaceResponse getWorkspace(Long projectId, UUID milestoneId) {
         Scope scope = requireScope(projectId);
         var milestone = resolveMilestone(projectId, milestoneId, scope.tenantId());
+        if (milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN
+                || milestone.getExecutionStatus() == com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus.TODO)
+            throw new ResourceNotFoundException("Milestone not available to students");
         var draft = draftRepository.findByMilestoneIdAndProjectIdAndTenantId(milestoneId, projectId, scope.tenantId())
                 .map(this::toResponse).orElse(null);
         var latestSubmission = submissionRepository
@@ -81,6 +84,9 @@ public class ArtifactDraftService {
         Scope scope = requireScope(projectId);
         contributionLock.lockCurrentActor();
         var milestone = resolveMilestone(projectId, milestoneId, scope.tenantId());
+        if (milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN
+                || milestone.getExecutionStatus() != com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus.IN_PROGRESS)
+            throw new ResourceNotFoundException("Milestone not available to students");
         validateUrl("repositoryUrl", request.repositoryUrl());
         validateUrl("deploymentUrl", request.deploymentUrl());
         Map<UUID, Boolean> checklist = validateChecklist(milestone, request.checklist());

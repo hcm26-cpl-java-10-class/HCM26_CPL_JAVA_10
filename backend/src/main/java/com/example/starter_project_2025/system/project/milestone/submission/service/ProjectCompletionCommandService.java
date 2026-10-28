@@ -48,6 +48,9 @@ public class ProjectCompletionCommandService {
         Long tenantId = tenantProvider.requireCurrentTenantId();
         var milestone = milestones.findByIdAndProjectIdAndTenantId(milestoneId, projectId, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone does not exist or has changed"));
+        if (!milestone.isActive() || milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN)
+            throw new com.example.starter_project_2025.system.project.milestone.exception.MilestoneConflictException(
+                    "Only a published milestone can be waived");
         UUID actorId = actorProvider.requireCurrentActorId();
         var now = milestoneClock.instant();
         waivers.findByTenantIdAndMilestoneIdAndTeamId(tenantId, milestoneId, teamId)

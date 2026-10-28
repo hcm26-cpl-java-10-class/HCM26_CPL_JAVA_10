@@ -27,4 +27,16 @@ public interface SprintBacklogService
      *               keeps the tenant-wide list.
      */
     List<BacklogMilestoneOptionDTO> getMilestoneOptions(Long teamId);
+
+    /**
+     * Members of the given team that a backlog item can be assigned to.
+     * <p>
+     * The Backlog tab of a team workspace passes its team id, so the assignee
+     * picker only offers the active members of that team instead of a raw
+     * project member id.
+     *
+     * @param teamId team that owns the workspace; {@code null} returns an
+     *               empty list because there is no team to scope the picker to.
+     */
+    List<BacklogAssigneeOptionDTO> getAssigneeOptions(Long teamId);
 }

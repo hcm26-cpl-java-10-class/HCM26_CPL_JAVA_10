@@ -14,9 +14,14 @@ import {
 } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import type { MilestoneOption, SprintBacklogWorkType } from "@/types";
+import type {
+  BacklogAssigneeOption,
+  MilestoneOption,
+  SprintBacklogWorkType,
+} from "@/types";
 import {
   CalendarDays,
+  Check,
   ChevronDown,
   Loader2,
   Milestone as MilestoneIcon,
@@ -60,8 +65,11 @@ interface SprintCreateRowProps {
   hint: string;
   /** True while this box is saving the work item. */
   creating: boolean;
-  /** Member ids already used on the board, offered as quick picks. */
-  assigneeOptions?: number[];
+  /**
+   * Active members of the workspace team, offered by the assignee picker.
+   * Empty when the board is not scoped to a team (`/backlogs` route page).
+   */
+  assignees?: BacklogAssigneeOption[];
   /** Active milestones the item can be linked to (UFR-PRJ-003-02). */
   milestones?: MilestoneOption[];
   /** Resolves the outcome so the bar can reset itself or show the API errors. */
@@ -94,6 +102,16 @@ const formatDueDate = (value: string) => {
 const compactInputClass =
   "h-8 w-full min-w-0 rounded-md border border-input bg-transparent px-2 text-sm outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30";
 
+/** `Nguyen Van An` -> `NA` (avatar bubble of the assignee picker). */
+const initialsOf = (name: string) =>
+  name
+    .trim()
+    .split(/\s+/)
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase() || "?";
+
 const WORK_TYPES = Object.keys(
   BACKLOG_WORK_TYPE_META,
 ) as SprintBacklogWorkType[];
@@ -123,7 +141,7 @@ export function SprintCreateRow({
   canEdit,
   hint,
   creating,
-  assigneeOptions = [],
+  assignees = [],
   milestones = [],
   onCreate,
 }: SprintCreateRowProps) {
@@ -150,6 +168,8 @@ export function SprintCreateRow({
   const WorkTypeIcon = workTypeMeta.icon;
   const selectedMilestone =
     milestones.find((milestone) => milestone.id === milestoneId) ?? null;
+  const selectedAssignee =
+    assignees.find((member) => String(member.id) === assignee) ?? null;
 
   const reset = () => {
     setTitle("");
@@ -443,7 +463,7 @@ export function SprintCreateRow({
           </PopoverContent>
         </Popover>
 
-        {/* Assignee: project member id until the member module exists. */}
+        {/* Assignee: active members of the team that owns the workspace. */}
         <Popover>
           <PopoverTrigger asChild>
             <Button
@@ -452,52 +472,66 @@ export function SprintCreateRow({
               size="icon-xs"
               className={cn(
                 "h-7 w-7 rounded-full border text-[10px] font-semibold",
-                assignee
+                selectedAssignee
                   ? "border-sky-200 bg-sky-100 text-sky-700 dark:border-sky-800 dark:bg-sky-900/40 dark:text-sky-300"
                   : "border-transparent text-muted-foreground",
               )}
-              title={assignee ? `Assignee #${assignee}` : "Unassigned"}
+              title={selectedAssignee ? selectedAssignee.fullName : "Unassigned"}
             >
-              {assignee || <UserRound className="size-3.5" />}
+              {selectedAssignee ? initialsOf(selectedAssignee.fullName) : (
+                <UserRound className="size-3.5" />
+              )}
             </Button>
           </PopoverTrigger>
 
-          <PopoverContent align="end" className="w-56 p-3">
-            <p className="mb-2 text-xs font-medium text-muted-foreground">
+          <PopoverContent align="end" className="w-64 p-2">
+            <p className="mb-2 px-1 text-xs font-medium text-muted-foreground">
               Assignee
             </p>
 
-            <input
-              type="number"
-              min={1}
-              value={assignee}
-              placeholder="Member id"
-              aria-label="Assignee member id"
-              className={compactInputClass}
-              onChange={(event) => {
-                setAssignee(event.target.value);
-                if (error) setError(null);
-              }}
-            />
+            {assignees.length === 0 ? (
+              <p className="px-1 py-2 text-[11px] text-muted-foreground">
+                No team member is available in this workspace.
+              </p>
+            ) : (
+              <div className="max-h-56 overflow-y-auto">
+                {assignees.map((member) => {
+                  const isSelected = String(member.id) === assignee;
 
-            {assigneeOptions.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1">
-                {assigneeOptions.map((id) => (
-                  <Button
-                    key={id}
-                    type="button"
-                    variant={String(id) === assignee ? "secondary" : "outline"}
-                    size="icon-xs"
-                    className="h-6 w-6 rounded-full p-0 text-[10px] font-semibold"
-                    onClick={() => setAssignee(String(id))}
-                  >
-                    {id}
-                  </Button>
-                ))}
+                  return (
+                    <button
+                      key={member.id}
+                      type="button"
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent",
+                        isSelected && "bg-accent",
+                      )}
+                      onClick={() => {
+                        setAssignee(String(member.id));
+                        if (error) setError(null);
+                      }}
+                    >
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-100 text-[10px] font-semibold text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
+                        {initialsOf(member.fullName)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium">
+                          {member.fullName}
+                        </span>
+                        <span className="block truncate text-[11px] text-muted-foreground">
+                          {[member.role, member.userCode]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      </span>
+                      {isSelected && <Check className="size-3.5 shrink-0" />}
+                    </button>
+                  );
+                })}
               </div>
             )}
 
-            <div className="mt-2 flex justify-end">
+            <div className="mt-1 flex justify-end border-t pt-1">
               <Button
                 type="button"
                 variant="ghost"
@@ -518,7 +552,7 @@ export function SprintCreateRow({
           onClick={() => void submit()}
         >
           {creating && <Loader2 className="size-3.5 animate-spin" />}
-          Lưu Backlog Item
+          Save Backlog Item
         </Button>
 
         <Button

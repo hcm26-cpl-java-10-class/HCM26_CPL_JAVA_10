@@ -9,6 +9,7 @@ import java.util.UUID;
 
 public record MilestoneDetailResponse(
         UUID id,
+        Long teamId,
         MilestoneDetailProjectResponse project,
         String title,
         String description,
@@ -24,6 +25,11 @@ public record MilestoneDetailResponse(
         long version,
         Instant createdAt,
         UUID createdBy,
-        BigDecimal weight
+        BigDecimal weight,
+        com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus executionStatus
 ) {
+    @com.fasterxml.jackson.annotation.JsonProperty("lifecycleStatus")
+    public String lifecycleStatus() {
+        return status == MilestoneStatus.PLANNED ? "DRAFT" : executionStatus == null ? status.name() : executionStatus.name();
+    }
 }

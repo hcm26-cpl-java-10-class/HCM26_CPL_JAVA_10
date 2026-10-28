@@ -252,6 +252,40 @@ class MilestoneSubmissionIntegrationTest {
     }
 
     @Test
+    void requestChangesIsBlockedWhenMilestoneIsNotOpenEvenBeforeDeadline() throws Exception {
+        Instant now = Instant.now();
+        UUID actor = UUID.randomUUID();
+        Milestone milestone = milestones.saveAndFlush(Milestone.create(MockMilestoneData.TENANT_ID,
+                MockMilestoneData.PROJECT_ID, MockMilestoneData.TEAM_ID, "Not open " + UUID.randomUUID(),
+                null, now.plusSeconds(3600), true, MockMilestoneData.RUBRIC_ID,
+                MockMilestoneData.TECHNICAL_REVIEWER_ID, LatePolicyType.NO_LATE, null, null, actor, now));
+        MilestoneSubmission submission = submissions.saveAndFlush(MilestoneSubmission.create(milestone, 901L,
+                "Team", UUID.randomUUID(), "Student", MockMilestoneData.TECHNICAL_REVIEWER_ID, "Reviewer", now));
+        SubmissionVersion version = SubmissionVersion.draft(submission, 1, "Work", null, null, actor, now);
+        version.submit(now, false, BigDecimal.ZERO);
+        versions.saveAndFlush(version);
+        submission.submitted(1, now);
+        submissions.saveAndFlush(submission);
+        JsonNode detail = objectMapper.readTree(mockMvc.perform(get("/api/milestone-submissions/{id}", submission.getId())
+                .header("Authorization", bearer())).andExpect(status().isOk())
+                .andExpect(jsonPath("$.availableActions.requestChanges").value(false))
+                .andReturn().getResponse().getContentAsString());
+        long auditCount = audits.count();
+        long eventCount = outbox.count();
+        mockMvc.perform(post("/api/milestone-submissions/{id}/review", submission.getId())
+                .header("Authorization", bearer()).header("Idempotency-Key", "not-open")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(reviewRequest(detail, "REQUEST_CHANGES", "Please revise."))))
+                .andExpect(status().isUnprocessableEntity());
+        mockMvc.perform(get("/api/milestone-submissions/{id}", submission.getId())
+                .header("Authorization", bearer())).andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUBMITTED"))
+                .andExpect(jsonPath("$.reviews").isEmpty());
+        assertEquals(auditCount, audits.count());
+        assertEquals(eventCount, outbox.count());
+    }
+
+    @Test
     void requestChangesIsBlockedAfterNoLateDeadline() throws Exception {
         Instant now = Instant.now();
         UUID actor = UUID.randomUUID();

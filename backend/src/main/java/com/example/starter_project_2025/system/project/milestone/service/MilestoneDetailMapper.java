@@ -23,6 +23,7 @@ public class MilestoneDetailMapper {
     ) {
         return new MilestoneDetailResponse(
                 milestone.getId(),
+                milestone.getTeamId(),
                 project == null ? null : new MilestoneDetailProjectResponse(project.projectId(), project.projectName(), project.status()),
                 milestone.getTitle(),
                 milestone.getDescription(),
@@ -34,7 +35,7 @@ public class MilestoneDetailMapper {
                         .sorted(Comparator.comparingInt(MilestoneChecklistItem::getOrderIndex))
                         .map(this::toChecklistResponse)
                         .toList(),
-                new MilestoneRubricDetailResponse(
+                rubric == null ? null : new MilestoneRubricDetailResponse(
                         rubric.id(),
                         rubric.name(),
                         rubric.version(),
@@ -53,7 +54,7 @@ public class MilestoneDetailMapper {
                         milestone.isAllowResubmission(), milestone.getMaxSubmissionAttempts()),
                 milestone.getVersion(),
                 milestone.getCreatedAt(),
-                milestone.getCreatedBy(), milestone.getWeight()
+                milestone.getCreatedBy(), milestone.getWeight(), milestone.getExecutionStatus()
         );
     }
 

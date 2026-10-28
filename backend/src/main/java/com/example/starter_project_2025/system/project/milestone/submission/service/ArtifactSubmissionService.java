@@ -86,7 +86,8 @@ public class ArtifactSubmissionService {
         }
 
         accessPolicy.requireSubmittableState(scope.project());
-        if (milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN) {
+        if (milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN
+                || milestone.getExecutionStatus() != com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus.IN_PROGRESS) {
             throw new MilestoneConflictException("Milestone must be OPEN before students can submit artifacts");
         }
 

@@ -28,6 +28,11 @@ public record MilestoneResponse(
         UUID createdBy,
         List<ChecklistItemResponse> checklist,
         BigDecimal weight,
-        LatePenaltyBasis latePenaltyBasis
+        LatePenaltyBasis latePenaltyBasis,
+        com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus executionStatus
 ) {
+    @com.fasterxml.jackson.annotation.JsonProperty("lifecycleStatus")
+    public String lifecycleStatus() {
+        return status == MilestoneStatus.PLANNED ? "DRAFT" : executionStatus == null ? status.name() : executionStatus.name();
+    }
 }

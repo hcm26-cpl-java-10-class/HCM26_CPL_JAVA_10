@@ -87,6 +87,19 @@ public class SprintBacklogController
     }
 
     /**
+     * Members of the workspace team that a backlog item can be assigned to.
+     * <p>
+     * The assignee picker of the backlog create bar calls it with the team of
+     * the open workspace, so the student selects a person instead of typing a
+     * raw project member id.
+     */
+    @GetMapping("/assignee-options")
+    public ResponseEntity<List<BacklogAssigneeOptionDTO>> getAssigneeOptions(
+            @RequestParam(required = false) Long teamId) {
+        return ResponseEntity.ok(sprintBacklogService.getAssigneeOptions(teamId));
+    }
+
+    /**
      * Bulk import of backlog items (create permission of the resource).
      * <p>
      * The import is atomic: every row is validated first and the rows are only
