@@ -7,7 +7,6 @@ const path = "/users";
 const base = createBaseApiService<UserDTO, UserFilter>({ path: path });
 
 export const userApi = Object.assign({}, base, {
- feature/user-profile-update
     getPage: async (pagination: any, search?: string, filter?: any) => {
         const modifiedPagination = { ...pagination };
         if (modifiedPagination.sort) {
@@ -67,5 +66,4 @@ export const userApi = Object.assign({}, base, {
   unlock: async (id: string | number): Promise<void> => {
     await axiosInstance.patch(`${path}/${id}/unlock`);
   },
- dev
 });

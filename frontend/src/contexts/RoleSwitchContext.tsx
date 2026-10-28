@@ -1,12 +1,8 @@
 import type { RootState } from "@/store/store";
- feature/user-profile-update
 import {
   availableAccountViews,
   normalizeRole,
 } from "@/utils/rbac.utils";
-
-import { normalizeRole, uniqueRoles } from "@/utils/rbac.utils";
- dev
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 
@@ -37,25 +33,7 @@ export const RoleSwitchProvider: React.FC<{ children: React.ReactNode }> = ({
     return normalizedRole || null;
   });
 
- feature/user-profile-update
-
   const availableRoles = useMemo(() => availableAccountViews(permissions), [permissions]);
-
-  const primaryRole = normalizeRole(role);
-
-  const availableRoles = useMemo(() => {
-    const roleCandidates = uniqueRoles(
-      [
-        ...Object.keys(rolePermissions ?? {}),
-        ...(roles ?? []),
-        primaryRole,
-      ],
-      primaryRole,
-    );
-
-    return roleCandidates;
-  }, [primaryRole, rolePermissions, roles]);
- dev
 
   useEffect(() => {
     if (!isAuthenticated) {

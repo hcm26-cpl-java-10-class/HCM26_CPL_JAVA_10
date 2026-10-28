@@ -45,6 +45,9 @@ public class UserDTO extends BaseDTO {
     @Size(max = 100, groups = {OnCreate.class, OnUpdate.class}, message = "Last name must not exceed 100 characters")
     String lastName;
 
+    @Size(max = 50, groups = {OnCreate.class, OnUpdate.class}, message = "Employee code must not exceed 50 characters")
+    String employeeCode;
+
     String fullName;
 
     @NotEmpty(groups = OnCreate.class, message = "At least one role is required")

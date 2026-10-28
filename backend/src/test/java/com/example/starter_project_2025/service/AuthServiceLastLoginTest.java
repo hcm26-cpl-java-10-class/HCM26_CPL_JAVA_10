@@ -4,6 +4,7 @@ import com.example.starter_project_2025.security.UserDetailsServiceImpl;
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.auth.authentication.AuthMapper;
 import com.example.starter_project_2025.system.auth.authentication.AuthServiceImpl;
+import com.example.starter_project_2025.system.auth.authentication.SsoAccessPolicy;
 import com.example.starter_project_2025.system.auth.authentication.dto.request.LoginRequest;
 import com.example.starter_project_2025.system.auth.authentication.dto.response.AuthenticationResponse;
 import com.example.starter_project_2025.system.auth.token.onetime.OneTimeTokenService;
@@ -54,6 +55,8 @@ public class AuthServiceLastLoginTest {
     private RoleRepository roleRepository;
     @Mock
     private PasswordEncoder passwordEncoder;
+    @Mock
+    private SsoAccessPolicy ssoAccessPolicy;
 
     private AuthServiceImpl authService;
 
@@ -73,7 +76,8 @@ public class AuthServiceLastLoginTest {
                 authMapper,
                 userRepository,
                 roleRepository,
-                passwordEncoder
+                passwordEncoder,
+                ssoAccessPolicy
         );
 
         Role adminRole = Role.builder()
@@ -140,7 +144,7 @@ public class AuthServiceLastLoginTest {
     @Test
     @DisplayName("loginWithGoogle - Successful Google login should update and persist lastLoginAt and device")
     void loginWithGoogle_Success_ShouldUpdateLastLoginAt() {
-        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(sampleUser));
+        when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(sampleUser));
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
         when(refreshTokenService.generateAccessToken(any())).thenReturn("mock-access-token");
         when(refreshTokenService.createRefreshToken(any())).thenReturn("mock-refresh-token");

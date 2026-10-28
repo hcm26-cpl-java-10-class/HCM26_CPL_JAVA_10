@@ -73,6 +73,9 @@ public class User extends BaseEntity {
     @ExportField(name = "Last Name")
     String lastName;
 
+    @Column(name = "employee_code", length = 50)
+    String employeeCode;
+
     @Column(length = 20)
     @ImportField(name = "Phone")
     @ExportField(name = "Phone")

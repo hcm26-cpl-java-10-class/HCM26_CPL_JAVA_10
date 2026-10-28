@@ -68,10 +68,8 @@ const userSchema: EntitySchema = {
       name: "firstName",
       label: "First Name",
       type: "text",
- feature/user-profile-update
       visible: false,
       hideable: false,
-
       sortable: true,
       validation: {
         required: true,
@@ -80,16 +78,13 @@ const userSchema: EntitySchema = {
         patternMessage: "Use letters, spaces, dots, apostrophes or hyphens only.",
         inputFilter: (v) => v.replace(/[^\p{L}\s.'-]/gu, ""),
       },
- dev
     },
     {
       name: "lastName",
       label: "Last Name",
       type: "text",
- feature/user-profile-update
       visible: false,
       hideable: false,
-
       sortable: true,
       validation: {
         maxLength: 100,
@@ -110,7 +105,6 @@ const userSchema: EntitySchema = {
         inputFilter: (v) => v.replace(/[^\d+]/g, "").replace(/(?!^)\+/g, ""),
         placeholder: "0901234567",
       },
- dev
     },
     {
       name: "password",

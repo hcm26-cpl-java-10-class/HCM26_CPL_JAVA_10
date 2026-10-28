@@ -85,9 +85,15 @@ export default function HeaderRight() {
 
   const switchRole = (nextRole: string) => {
     const normalizedRole = normalizeRole(nextRole);
-    setViewRole(normalizedRole);
     setOpen(false);
-    navigate(getHomePathByRole(normalizedRole, auth.permissions));
+
+    // Đổi role và đổi trang trong CÙNG một lần cập nhật. Nếu tách ra, React có một lượt render
+    // mà role mới đã có hiệu lực nhưng URL vẫn là trang cũ -> trang cũ bị coi là không có quyền
+    // (403) hoặc không tồn tại với role mới (404) và bị đẩy sang trang lỗi.
+    startTransition(() => {
+      setViewRole(normalizedRole === primaryRole ? null : normalizedRole);
+      navigate(getHomePathByRole(normalizedRole, auth.permissions), { replace: true });
+    });
   };
 
   const renderUserAccountMenu = () => (
@@ -175,22 +181,7 @@ export default function HeaderRight() {
     );
   }
 
- feature/user-profile-update
 
-  const switchRole = (nextRole: string) => {
-    const normalizedRole = normalizeRole(nextRole);
-    setOpen(false);
-
-    // Đổi role và đổi trang trong CÙNG một lần cập nhật. Nếu tách ra, React có một lượt render
-    // mà role mới đã có hiệu lực nhưng URL vẫn là trang cũ -> trang cũ bị coi là không có quyền
-    // (403) hoặc không tồn tại với role mới (404) và bị đẩy sang trang lỗi.
-    startTransition(() => {
-      setViewRole(normalizedRole === primaryRole ? null : normalizedRole);
-      navigate(getHomePathByRole(normalizedRole), { replace: true });
-    });
-  };
-
- dev
   return (
     <div className="flex items-center gap-3" ref={dropdownRef}>
       {/* Existing Role / View-mode selector */}

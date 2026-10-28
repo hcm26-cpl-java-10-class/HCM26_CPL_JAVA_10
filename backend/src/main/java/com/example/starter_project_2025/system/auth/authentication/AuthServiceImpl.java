@@ -104,34 +104,30 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
- feature/user-profile-update
     public AuthenticationResponse loginWithGoogle(String email, String firstName, String lastName) {
-        return loginWithGoogle(email, firstName, lastName, null);
+        return loginWithGoogle(email, true, firstName, lastName, null);
     }
 
     @Override
     @Transactional
     public AuthenticationResponse loginWithGoogle(String email, String firstName, String lastName, String device) {
+        return loginWithGoogle(email, true, firstName, lastName, device);
+    }
 
+    @Override
+    @Transactional
     public AuthenticationResponse loginWithGoogle(String email, boolean emailVerified, String firstName, String lastName) {
- dev
+        return loginWithGoogle(email, emailVerified, firstName, lastName, null);
+    }
+
+    @Override
+    @Transactional
+    public AuthenticationResponse loginWithGoogle(String email, boolean emailVerified, String firstName, String lastName, String device) {
         if (!StringUtils.hasText(email)) {
             throw new SsoLoginException(SsoLoginException.AUTH_FAILED, "Google account email is required");
         }
 
         ssoAccessPolicy.checkEmail(email, emailVerified);
-
- feature/user-profile-update
-        user.setLastLoginAt(Instant.now());
-        if (StringUtils.hasText(device)) {
-            user.setLastLoginDevice(device.trim());
-        }
-        user = userRepository.save(user);
-
-        if (Boolean.TRUE.equals(user.getLocked())) {
-            throw new org.springframework.security.authentication.LockedException(
-                    "Account is locked"
-            );
 
         // Only accounts that already exist may sign in (imported or created by an administrator),
         // unless app.sso.auto-create-users=true.
@@ -141,12 +137,17 @@ public class AuthServiceImpl implements AuthService {
                 throw ssoAccessPolicy.notRegistered(email);
             }
             user = createGoogleUser(email, firstName, lastName);
- dev
         }
 
         ssoAccessPolicy.checkAccount(user);
 
         user = updateUserFromGoogleProfile(user, firstName, lastName);
+
+        user.setLastLoginAt(Instant.now());
+        if (StringUtils.hasText(device)) {
+            user.setLastLoginDevice(device.trim());
+        }
+        user = userRepository.save(user);
 
         refreshTokenService.revokeAllRefreshTokens(user.getId());
 

@@ -61,9 +61,13 @@ public class OAuth2AuthenticationSuccessHandler
             log.info("Google email available: {}", email != null && !email.isBlank());
             log.info("Google email verified: {}", emailVerified);
 
+            String userAgent = request.getHeader("User-Agent");
+            String clientDevice = request.getHeader("X-Device-Info");
+            String device = StringUtils.hasText(clientDevice) ? clientDevice.trim() : DeviceUtil.parse(userAgent);
+
             AuthenticationResponse authResponse =
                     authService.loginWithGoogle(
-                            email, emailVerified, firstName, lastName);
+                            email, emailVerified, firstName, lastName, device);
 
             log.info("loginWithGoogle completed");
 
@@ -85,19 +89,9 @@ public class OAuth2AuthenticationSuccessHandler
             }
 
             String baseUrl = frontendUrl.replaceAll("/+$", "");
-
- feature/user-profile-update
-            String userAgent = request.getHeader("User-Agent");
-            String clientDevice = request.getHeader("X-Device-Info");
-            String device = StringUtils.hasText(clientDevice) ? clientDevice.trim() : DeviceUtil.parse(userAgent);
-
-            AuthenticationResponse authResponse = authService.loginWithGoogle(email, firstName, lastName, device);
-            cookieUtil.setRefreshTokenCookie(response, authResponse.getRefreshToken());
-=======
             String redirectUrl = baseUrl
                     + "/oauth2/redirect#token="
                     + accessToken;
- dev
 
             log.info("Redirecting Google login to frontend OAuth callback");
 

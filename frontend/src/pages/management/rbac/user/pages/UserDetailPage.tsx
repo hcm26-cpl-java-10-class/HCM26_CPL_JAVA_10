@@ -6,6 +6,7 @@ import { PermissionGate } from "@/components/PermissionGate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { USER_STATUS_HEADER_CLASS, type UserStatus } from "@/types";
 import { useQuery } from "@tanstack/react-query";
@@ -139,12 +140,8 @@ export function UserDetailPage() {
 
   const roleNames = nameOf(roleQuery.data?.content ?? roleQuery.data?.items, user?.roleIds);
   const deptNames = nameOf(deptQuery.data?.content ?? deptQuery.data?.items, user?.departmentIds);
- feature/user-profile-update
-  const fullName = user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(" ");
-
-  const fullName = [user?.lastName, user?.firstName].filter(Boolean).join(" ");
+  const fullName = user?.fullName || [user?.lastName, user?.firstName].filter(Boolean).join(" ") || [user?.firstName, user?.lastName].filter(Boolean).join(" ");
   const displayName = fullName || user?.email || "";
- dev
   const status: UserStatus = user?.status ?? (user?.isActive === false ? "INACTIVE" : "ACTIVE");
   const initial = (user?.firstName?.[0] ?? user?.email?.[0] ?? "?").toUpperCase();
 
@@ -171,47 +168,80 @@ export function UserDetailPage() {
           </CardContent>
         ) : (
           <CardContent>
- feature/user-profile-update
-            <Tabs defaultValue="general" className="grid gap-5">
-              <TabsList className="group-data-[orientation=horizontal]/tabs:h-auto flex-wrap justify-start">
-                <TabsTrigger className="h-auto min-h-9" value="general">Thông tin chung</TabsTrigger>
-                <TabsTrigger className="h-auto min-h-9" value="authorization">Phân quyền</TabsTrigger>
-                {canInspectLearning && <TabsTrigger className="h-auto min-h-9" value="learning">Learning</TabsTrigger>}
-              </TabsList>
+            {canInspectLearning && id ? (
+              <Tabs defaultValue="general" className="grid gap-5">
+                <TabsList className="group-data-[orientation=horizontal]/tabs:h-auto flex-wrap justify-start">
+                  <TabsTrigger className="h-auto min-h-9" value="general">Thông tin chung</TabsTrigger>
+                  <TabsTrigger className="h-auto min-h-9" value="learning">Lịch sử học tập</TabsTrigger>
+                </TabsList>
 
-              <TabsContent value="general" className="grid gap-4 text-sm md:grid-cols-2">
-                <Item label="Họ tên">
-                  <span className="text-base font-semibold">{fullName}</span>
-                </Item>
-                <Item label="Username">{user?.username}</Item>
-                <Item label="Email">{user?.email}</Item>
-                <Item label="Mã nhân viên">{user?.employeeCode}</Item>
-                <Item label="Số điện thoại">{user?.phone}</Item>
-                <Item label="Trạng thái">
-                  <Badge variant={STATUS_VARIANT[status]}>{statusLabel}</Badge>
-                </Item>
-                <Item label="Phòng ban">
-                  <BadgeGroup names={deptNames} />
-                </Item>
-                <Item label="Đăng nhập gần nhất">{formatDate(user?.lastLoginAt)}</Item>
-                <div className="md:col-span-2">
-                  <Item label="Mô tả">
-                    <p className="leading-6">{user?.description}</p>
-                  </Item>
-                </div>
-                <Item label="Ngày tạo">{formatDate(user?.createdAt)}</Item>
-                <Item label="Cập nhật lần cuối">{formatDate(user?.updatedAt)}</Item>
-              </TabsContent>
+                <TabsContent value="general">
+                  <div className="mx-auto grid w-full max-w-5xl gap-5">
+                    <div className={cn("rounded-xl border p-6", USER_STATUS_HEADER_CLASS[status])}>
+                      <div className="flex flex-wrap items-center gap-5">
+                        <div
+                          className={cn(
+                            "flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-2xl font-semibold ring-4 ring-background",
+                            avatarColor(displayName),
+                          )}
+                        >
+                          {initial}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h2 className="truncate text-xl font-semibold">{displayName}</h2>
+                          <p className="mt-0.5 truncate text-sm text-muted-foreground">{user?.email}</p>
+                          {status !== "ACTIVE" && (
+                            <p className="mt-2 text-xs font-medium text-red-700 dark:text-red-400">
+                              {status === "LOCKED"
+                                ? "Tài khoản đang bị khóa, không thể đăng nhập."
+                                : "Tài khoản đã ngưng hoạt động, không thể đăng nhập."}
+                            </p>
+                          )}
+                        </div>
+                        <UserStatusBadge status={status} />
+                      </div>
+                    </div>
 
-              <TabsContent value="authorization" className="grid gap-4 text-sm">
-                <Item label="Roles">
-                  <BadgeGroup names={roleNames} />
-                </Item>
-              </TabsContent>
-              {canInspectLearning && id && <TabsContent value="learning"><LearningRecordsPanel userId={id} /></TabsContent>}
-            </Tabs>
+                    <Section title="Thông tin tài khoản">
+                      <InfoRow icon={AtSign} label="Username">
+                        {user?.username}
+                      </InfoRow>
+                      <InfoRow icon={Hash} label="Mã nhân viên">
+                        {user?.employeeCode}
+                      </InfoRow>
+                      <InfoRow icon={Mail} label="Email">
+                        {user?.email}
+                      </InfoRow>
+                      <InfoRow icon={Phone} label="Số điện thoại">
+                        {user?.phone}
+                      </InfoRow>
+                      <InfoRow icon={Building2} label="Phòng ban" className="sm:col-span-2">
+                        {deptNames.length > 0 ? <BadgeGroup names={deptNames} /> : null}
+                      </InfoRow>
+                      <InfoRow icon={ShieldCheck} label="Role" className="sm:col-span-2">
+                        {roleNames.length > 0 ? <BadgeGroup names={roleNames} /> : null}
+                      </InfoRow>
+                      <InfoRow icon={FileText} label="Mô tả" className="sm:col-span-2">
+                        {user?.description ? <p className="whitespace-pre-line font-normal leading-6">{user.description}</p> : null}
+                      </InfoRow>
+                    </Section>
 
-            <div className="mx-auto grid w-full max-w-5xl gap-5">
+                    <div className="flex flex-wrap gap-x-6 gap-y-2 px-1 text-xs text-muted-foreground">
+                      <MetaItem icon={CalendarDays} label="Ngày tạo" value={formatDate(user?.createdAt) || "—"} />
+                      <MetaItem icon={Clock} label="Cập nhật lần cuối" value={formatDate(user?.updatedAt) || "—"} />
+                      {user?.lastLoginAt && (
+                        <MetaItem icon={Clock} label="Đăng nhập gần nhất" value={formatDate(user.lastLoginAt)} />
+                      )}
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="learning">
+                  <LearningRecordsPanel userId={id} />
+                </TabsContent>
+              </Tabs>
+            ) : (
+              <div className="mx-auto grid w-full max-w-5xl gap-5">
                 <div className={cn("rounded-xl border p-6", USER_STATUS_HEADER_CLASS[status])}>
                   <div className="flex flex-wrap items-center gap-5">
                     <div
@@ -269,7 +299,7 @@ export function UserDetailPage() {
                   )}
                 </div>
               </div>
- dev
+            )}
           </CardContent>
         )}
 
