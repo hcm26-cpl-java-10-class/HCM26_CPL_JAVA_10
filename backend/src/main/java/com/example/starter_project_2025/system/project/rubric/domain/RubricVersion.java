@@ -99,6 +99,11 @@ public class RubricVersion {
         updatedBy = actorId;
     }
 
+    public void clearDraftCriteria() {
+        requireDraft();
+        criteria.clear();
+    }
+
     public void publish(UUID actorId, Instant now) {
         requireDraft();
         status = RubricVersionStatus.PUBLISHED;
