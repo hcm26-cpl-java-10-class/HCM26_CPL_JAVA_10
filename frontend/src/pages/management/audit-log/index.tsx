@@ -106,13 +106,15 @@ function ActionBadge({ action }: { action: string }) {
 }
 
 function ResultBadge({ result }: { result: string | null }) {
-    const isSuccess = result === "SUCCESS";
-    const isFailed = result === "FAIL" || result === "FAILED";
+    const normalized = result?.trim().toUpperCase();
+
+    const isSuccess = normalized === "SUCCESS";
+    const isFailed = ["FAIL", "FAILED", "FAILURE"].includes(normalized ?? "");
 
     const label = isSuccess
         ? "Success"
         : isFailed
-            ? "Failed"
+            ? "Failure"
             : "Unknown";
 
     const className = isSuccess
@@ -125,8 +127,8 @@ function ResultBadge({ result }: { result: string | null }) {
         <span
             className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${className}`}
         >
-      {label}
-    </span>
+            {label}
+        </span>
     );
 }
 
