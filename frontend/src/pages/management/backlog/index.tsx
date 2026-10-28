@@ -314,10 +314,14 @@ export function BacklogBoard({
     enabled: teamId == null,
   });
 
-  /** Active milestones the user can link a backlog item to (UFR-PRJ-003-02). */
+  /**
+   * Active milestones the user can link a backlog item to (UFR-PRJ-003-02).
+   * Inside a team workspace the request is scoped to that team, so the picker
+   * only offers its own milestones instead of every milestone of the tenant.
+   */
   const milestonesQuery = useQuery({
-    queryKey: MILESTONE_OPTIONS_QUERY_KEY,
-    queryFn: () => milestoneApi.getBacklogOptions(),
+    queryKey: [...MILESTONE_OPTIONS_QUERY_KEY, teamId ?? "all"],
+    queryFn: () => milestoneApi.getBacklogOptions(teamId),
     staleTime: 60_000,
   });
 

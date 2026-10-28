@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
@@ -68,11 +69,14 @@ public class SprintBacklogController
      * <p>
      * Only active milestones of the current tenant are returned, earliest
      * deadline first, so the picker of the backlog form can render the label
-     * and the deadline without an extra request.
+     * and the deadline without an extra request. When {@code teamId} is given
+     * the list is limited to the milestones of that team (Backlog tab of a team
+     * workspace).
      */
     @GetMapping("/milestone-options")
-    public ResponseEntity<List<BacklogMilestoneOptionDTO>> getMilestoneOptions() {
-        return ResponseEntity.ok(sprintBacklogService.getMilestoneOptions());
+    public ResponseEntity<List<BacklogMilestoneOptionDTO>> getMilestoneOptions(
+            @RequestParam(required = false) Long teamId) {
+        return ResponseEntity.ok(sprintBacklogService.getMilestoneOptions(teamId));
     }
 
     // ---------------------------------------------------------------------
