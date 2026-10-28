@@ -1,6 +1,6 @@
 ﻿# Kịch bản demo tổng hợp UFR-PRJ-005 và UFR-PRJ-006
 
-**Người thực hiện:** Trần Trọng Hòa  
+**Người thực hiện:** Trần Trọng Hòa
 **Phạm vi:** Kanban Board, Task List, lịch sử trạng thái; chuẩn bị, nộp và nộp lại artifact.
 
 ## Các user story
@@ -44,7 +44,7 @@ Trong Team Workspace, mở tab **Kanban Board** để demo Board theo Sprint c�
 
 ### UFR-PRJ-006-US01 – Lưu draft (3–4 phút)
 
-1. Dùng Teacher/Admin có quyền mở milestone; chuyển milestone từ `PLANNED` sang `OPEN` nếu cần.
+1. Dùng Teacher/Admin có quyền publish milestone từ `PLANNED` sang `OPEN`, sau đó bấm **Start milestone** để chuyển execution status từ `TODO` sang `IN_PROGRESS`. Student chỉ lưu draft/nộp artifact khi milestone đang `OPEN` và `IN_PROGRESS`.
 2. Đăng nhập Student thuộc đúng Project/Team, mở Prepare artifact.
 3. Kiểm tra thông tin milestone, checklist và rubric. Nhập Repository URL hợp lệ và release notes; các URL không mặc định đều bắt buộc.
 4. Bấm **Lưu nháp**, xác nhận trạng thái `DRAFT`; tải lại màn hình để xác nhận dữ liệu còn và tiếp tục sửa được.
@@ -67,7 +67,7 @@ Trong Team Workspace, mở tab **Kanban Board** để demo Board theo Sprint c�
 ## Điều kiện trước buổi demo
 
 - Backend và frontend chạy; frontend gọi backend mock tại `http://localhost:8080/api`. Chỉ chạy một trong hai cấu hình backend vì cả hai cùng dùng cổng `8080`.
-- Student có membership/scope đúng; Project `ACTIVE`; milestone `OPEN` có checklist/rubric.
+- Student có membership/scope đúng; Project `ACTIVE`; milestone đã publish và start (`OPEN` + `IN_PROGRESS`) có checklist/rubric.
 - Có Project/Sprint/task để demo Board và có submission phù hợp để demo review/resubmit.
 - Chọn trước URL hợp lệ. Không tuyên bố upload chạy nếu policy/scanner vẫn khóa.
 - Không dùng database production hoặc bật seed vào MySQL dùng chung.
@@ -78,5 +78,5 @@ Trong Team Workspace, mở tab **Kanban Board** để demo Board theo Sprint c�
 - Upload yêu cầu cấu hình MIME, giới hạn dung lượng, storage riêng và ClamAV.
 - Project completion không xảy ra chỉ vì student submit. Hiện code kiểm tra final grade đã khóa và mọi milestone mandatory được `ACCEPTED` hoặc waive; chưa xét task/backlog bắt buộc vì chưa có mapping required-task.
 - Với Team-only mock, seed tạo bốn artifact version `SUBMITTED` để trình bày lịch sử; Team-only milestone chưa nối reviewer workflow Project nên không dùng các bản seed đó để demo `Request changes`. Dùng luồng Project-backed có reviewer để demo yêu cầu chỉnh sửa và resubmit.
-- Khi student nộp version mới trong lúc version trước vẫn `SUBMITTED`, reviewer workflow tạo version review mới và giữ nguyên snapshot của version cũ. Dùng trường hợp này để demo tính bất biến; reviewer xử lý version hiện tại riêng.
-- Kiểm tra cho PR này: backend có 111 test trọng tâm đã chạy, tất cả đều qua: alert/backlog (61), artifact submission (13), milestone lifecycle (33), scope adapter (3), demo seed (1). Frontend `npm run build` thành công; Vite còn cảnh báo bundle JavaScript lớn hơn 500 kB. Chưa chạy toàn bộ backend test suite hoặc end-to-end trên trình duyệt, nên kết quả này không khẳng định mọi module đều đã pass.
+- Khi version hiện tại vẫn `SUBMITTED`, yêu cầu nộp thêm bị từ chối; student chỉ tạo version kế tiếp sau khi reviewer chọn **Request changes**. Version trước được giữ nguyên. Đây là điều kiện resubmit hiện được kiểm tra ở backend.
+- Sau khi đồng bộ nhánh nhóm, lifecycle milestone yêu cầu **Start milestone** trước khi sinh viên thao tác artifact; các fixture kiểm thử và mock đã được cập nhật theo quy tắc đó. Bộ kiểm thử backend trọng tâm: 113/113 passed (Project alerts 60, artifact review/submission 14, milestone lifecycle 35, scope adapter 3, demo seed 1). Frontend production build đã qua, còn cảnh báo bundle JavaScript lớn hơn 500 kB. Chưa chạy toàn bộ backend suite hoặc end-to-end trên trình duyệt.

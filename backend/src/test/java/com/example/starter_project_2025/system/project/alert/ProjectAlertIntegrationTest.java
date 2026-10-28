@@ -122,7 +122,7 @@ class ProjectAlertIntegrationTest {
             upcomingId=item(sprint,ma.getId(),"Upcoming parent item",SprintBacklogStatus.IN_PROGRESS,now.plusSeconds(7200)).getId();
             doneId=item(sprint,ma.getId(),"Finished parent item",SprintBacklogStatus.DONE,now.minusSeconds(3600)).getId();
             var m=Milestone.create(tenantId,projectId,teamId,"Real milestone",null,now.plus(Duration.ofHours(24)),true,UUID.randomUUID(),null,
-                    LatePolicyType.NO_LATE,null,null,UUID.randomUUID(),now);m.openForWork(UUID.randomUUID(),now);milestoneId=milestones.saveAndFlush(m).getId();
+                    LatePolicyType.NO_LATE,null,null,UUID.randomUUID(),now);m.openForWork(UUID.randomUUID(),now);m.start(UUID.randomUUID(),now);milestoneId=milestones.saveAndFlush(m).getId();
         });
         oldBatches=batches.count();oldRecipients=recipients.count();oldAudits=audits.count();oldEvents=outbox.count();
     }
@@ -487,10 +487,14 @@ class ProjectAlertIntegrationTest {
         list("milestones",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
         send(mentorToken,UUID.randomUUID().toString(),milestonePayload()).andExpect(status().isConflict());unchanged();
     }
-    @Test void submittedVersionsDoNotResetTaskStartInactivityOrCompleteTheMilestone() throws Exception {
+    @Test void pendingSubmissionCannotBeReplacedAndDoesNotCompleteTheMilestone() throws Exception {
         links(mentorToken,overdueId,doneId).andExpect(status().isOk());
+        long before = submissions.count();
         submitArtifact(UUID.randomUUID().toString(),"First hand-in").andExpect(status().isCreated());
-        submitArtifact(UUID.randomUUID().toString(),"Second hand-in").andExpect(status().isCreated());
+        assertThat(submissions.count()).isEqualTo(before + 1);
+        // A fresh submission is only allowed after the reviewer requests changes.
+        submitArtifact(UUID.randomUUID().toString(),"Second hand-in").andExpect(status().isConflict());
+        assertThat(submissions.count()).isEqualTo(before + 1);
         list("inactive-members",mentorToken,teamId).andExpect(jsonPath("$.total").value(2));
         list("milestones",mentorToken,teamId).andExpect(jsonPath("$.content[0].progress.percentage").value(50));
         assertThat(milestones.findById(milestoneId).orElseThrow().getStatus()).isEqualTo(MilestoneStatus.OPEN);
