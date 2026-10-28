@@ -9,6 +9,8 @@ import com.example.starter_project_2025.system.exam.domain.ExamCategory;
 import com.example.starter_project_2025.system.question.domain.Question;
 import com.example.starter_project_2025.system.question.mapper.QuestionMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 import java.util.Comparator;
@@ -60,7 +62,8 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setQuestionIds(sorted.stream().map(Question::getId).toList());
         d.setQuestions(sorted.stream().map(questionMapper::toResponse).toList());
         d.setTotalPoints(sorted.stream().mapToInt(Question::getPoints).sum());
-        d.setAccessCode(e.getAccessCode());
+        // CHANGED: chi nguoi co EXAM_UPDATE (giao vien) moi thay accessCode; nguoi khac chi thay hasPassword
+        d.setAccessCode(canSeeAccessCode() ? e.getAccessCode() : null);
         // NEW (anti-cheat)
         d.setAntiCheatEnabled(Boolean.TRUE.equals(e.getAntiCheatEnabled()));
         d.setDetectTabSwitch(Boolean.TRUE.equals(e.getDetectTabSwitch()));
@@ -76,6 +79,13 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
     public void update(Exam e, ExamDTO dto) {
         if (dto.getIsActive() != null) e.setIsActive(dto.getIsActive());
         apply(e, dto);
+    }
+
+    // NEW: kiem tra nguoi dang goi co quyen sua de thi khong
+    private static boolean canSeeAccessCode() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.isAuthenticated()
+                && auth.getAuthorities().stream().anyMatch(a -> "EXAM_UPDATE".equals(a.getAuthority()));
     }
 
     private void apply(Exam e, ExamDTO d) {

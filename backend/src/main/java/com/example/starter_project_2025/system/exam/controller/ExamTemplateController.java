@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize; // CHANGED: phan quyen cho template
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,6 +31,7 @@ public class ExamTemplateController {
      * Lưu đề thi hiện có thành đề thi mẫu.
      */
     @PostMapping("/from-exam/{examId}")
+    @PreAuthorize("hasAuthority('EXAM_CREATE')") // CHANGED
     public ResponseEntity<ExamTemplateDTO> saveAsTemplate(
             @PathVariable Long examId,
             @Valid @RequestBody SaveExamTemplateRequest request
@@ -44,6 +46,7 @@ public class ExamTemplateController {
      * Lấy danh sách đề thi mẫu.
      */
     @GetMapping
+    @PreAuthorize("hasAuthority('EXAM_UPDATE')") // CHANGED: STUDENT cung co EXAM_READ nen dung EXAM_UPDATE de chan sinh vien
     public ResponseEntity<List<ExamTemplateDTO>> listTemplates() {
         List<ExamTemplateDTO> templates = service.listTemplates();
 
@@ -54,6 +57,7 @@ public class ExamTemplateController {
      * Lấy chi tiết một đề thi mẫu.
      */
     @GetMapping("/{templateId}")
+    @PreAuthorize("hasAuthority('EXAM_UPDATE')") // CHANGED: STUDENT cung co EXAM_READ nen dung EXAM_UPDATE de chan sinh vien
     public ResponseEntity<ExamTemplateDTO> getTemplate(
             @PathVariable Long templateId
     ) {
@@ -66,6 +70,7 @@ public class ExamTemplateController {
      * Xóa đề thi mẫu.
      */
     @DeleteMapping("/{templateId}")
+    @PreAuthorize("hasAuthority('EXAM_DELETE')") // CHANGED
     public ResponseEntity<Void> deleteTemplate(
             @PathVariable Long templateId
     ) {
