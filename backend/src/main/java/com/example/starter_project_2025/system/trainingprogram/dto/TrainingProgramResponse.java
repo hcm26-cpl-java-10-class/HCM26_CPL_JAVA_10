@@ -1,6 +1,8 @@
+
 package com.example.trainingprogram.dto;
 
 import com.example.trainingprogram.entity.ProgramStatus;
+
 import java.time.Instant;
 import java.util.List;
 
@@ -17,6 +19,7 @@ public record TrainingProgramResponse(
     Instant createdAt,
     Instant updatedAt
 ) {
+
     public record ProgramSubjectResponse(
         Long subjectId,
         String subjectCode,
