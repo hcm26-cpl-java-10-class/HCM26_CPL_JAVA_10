@@ -13,9 +13,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @EnableScheduling
 @EnableAsync(proxyTargetClass = true)
-@SpringBootApplication
-@ComponentScan(
-    basePackages = {
+@SpringBootApplication(
+    scanBasePackages = {
         "com.example.starter_project_2025",
         "com.example.trainingprogram"
     },
