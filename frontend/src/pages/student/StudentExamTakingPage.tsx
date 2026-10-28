@@ -259,19 +259,6 @@ export default function StudentExamTakingPage() {
         };
     }, [attempt?.id, attempt?.status]);
 
-    const handleLeaveExam = () => {
-        if (
-            attempt?.status === 'IN_PROGRESS' &&
-            !window.confirm(
-                'You are currently taking the exam. Are you sure you want to leave?',
-            )
-        ) {
-            return;
-        }
-
-        navigate('/invitations');
-    };
-
     const submitCurrentAnswers = async (requireConfirmation = false) => {
         if (
             !attempt ||
@@ -808,10 +795,8 @@ export default function StudentExamTakingPage() {
                                 );
                             })}
 
-                            <footer className="flex flex-wrap justify-between gap-3 border-t pt-4">
-                                <Button variant="outline" onClick={handleLeaveExam}>
-                                    Leave Exam
-                                </Button>
+                            {/* CHANGED: da bo nut "Leave Exam" */}
+                            <footer className="flex flex-wrap justify-end gap-3 border-t pt-4">
                                 {submitButton}
                             </footer>
                         </>
