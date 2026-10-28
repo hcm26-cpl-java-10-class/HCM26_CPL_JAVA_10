@@ -145,7 +145,7 @@ public class ClassSetupServiceImpl implements ClassSetupService {
             throw new IllegalArgumentException("Page size must be at most 100 and page at most 100000.");
         }
         String term = search == null ? "" : search.trim().toLowerCase(Locale.ROOT);
-        if (term.length() > 100) throw new IllegalArgumentException("Search must be at most 100 characters.");
+        if (term.length() > 200) throw new IllegalArgumentException("Search must be at most 200 characters.");
         Set<String> sortable = Set.of("id", "effectiveFrom", "effectiveTo", "role", "classId", "trainerId");
         for (Sort.Order order : pageable.getSort()) {
             if (!sortable.contains(order.getProperty())) throw new IllegalArgumentException("Unsupported assignment sort field.");

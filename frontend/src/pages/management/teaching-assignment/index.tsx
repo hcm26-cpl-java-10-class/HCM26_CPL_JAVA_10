@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import axios from "axios";
-import { AlertCircle, CalendarOff, ChevronLeft, ChevronRight, Eye, LoaderCircle, Pencil, Plus, RefreshCw, Search, Trash2, Users, X } from "lucide-react";
+import { AlertCircle, CalendarOff, ChevronLeft, ChevronRight, Eye, LoaderCircle, Pencil, Plus, RefreshCw, Search, Trash2, Users } from "lucide-react";
 import { AssignmentLifecycleDialog, type LifecycleMode } from "./components/AssignmentLifecycleDialog";
 import { EditAssignmentDialog } from "./components/EditAssignmentDialog";
 import { CreateAssignmentDialog } from "./components/CreateAssignmentDialog";
@@ -17,7 +17,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AppliedTextInput, AppliedNumberInput } from "./components/ReferenceInput";
-import { roleOptions, trainerTextOptions, type TextOption } from "./assignment-text";
+import { trainerTextOptions, type TextOption } from "./assignment-text";
+import { AssignmentRoleSelect } from "./components/AssignmentRoleSelect";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -65,7 +66,6 @@ export default function TeachingAssignmentPage() {
   const [lifecycle, setLifecycle] = useState<{ mode: LifecycleMode; assignment: TeachingAssignment } | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
-  const [resetVersion, setResetVersion] = useState(0);
   const [url, setUrl] = useSearchParams();
   const detailId = positiveId(url.get("assignmentId"));
   const pageValue = Number(url.get("page") ?? 0);
@@ -77,7 +77,7 @@ export default function TeachingAssignmentPage() {
     ? url.get("sort")! : "effectiveFrom,desc";
   const date = url.get("effectiveOn") ?? "";
   const effectiveOn = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined;
-  const search = (url.get("search") ?? "").trim().slice(0, 100);
+  const search = (url.get("search") ?? "").trim().slice(0, 200);
   const params: AssignmentSearchParams = {
     classId: positiveId(url.get("classId")), subjectId: positiveId(url.get("subjectId")),
     trainerId: positiveId(url.get("trainerId")), role, effectiveOn, search: search || undefined, page, size, sort,
@@ -142,23 +142,22 @@ export default function TeachingAssignmentPage() {
         {options.isError && <Alert variant="destructive"><AlertCircle /><AlertTitle>Unable to load filter options</AlertTitle><AlertDescription>{errorMessage(options.error)} <Button size="sm" variant="outline" onClick={() => void options.refetch()}>Retry filters</Button></AlertDescription></Alert>}
         <Card><CardContent className="space-y-4 pt-6">
           <form onSubmit={submitSearch} className="flex flex-wrap items-end gap-2" role="search">
-            <div className="min-w-48 flex-1 space-y-2"><Label htmlFor="assignment-search">Search</Label><Input key={search} id="assignment-search" name="search" defaultValue={search} maxLength={100} placeholder="Class or subject code/name, trainer name/email" /></div>
+            <div className="min-w-48 flex-1 space-y-2"><Label htmlFor="assignment-search">Search</Label><Input key={search} id="assignment-search" name="search" defaultValue={search} maxLength={200} placeholder="Class or subject code/name, trainer name/email" /></div>
             <Button type="submit"><Search className="size-4" />Search</Button>
-            <Button type="button" variant="outline" onClick={(event) => { event.currentTarget.form?.reset(); setUrl({}); setResetVersion((version) => version + 1); }}><X className="size-4" />Reset</Button>
           </form>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-            <FilterInput key={`${resetVersion}:class:${params.classId ?? ""}`} id="assignment-class" label="Class" value={String(params.classId ?? "")} onChange={(value) => change("classId", value)} options={classOptions} disabled={!options.data} />
-            <FilterInput key={`${resetVersion}:subject:${params.subjectId ?? ""}`} id="assignment-subject" label="Subject" value={String(params.subjectId ?? "")} onChange={(value) => change("subjectId", value)} options={subjectOptions} disabled={!options.data} />
-            <FilterInput key={`${resetVersion}:trainer:${params.trainerId ?? ""}`} id="assignment-trainer" label="Trainer" value={String(params.trainerId ?? "")} onChange={(value) => change("trainerId", value)} options={trainerOptions} disabled={!options.data} />
-            <FilterInput key={`${resetVersion}:role:${role ?? ""}`} id="assignment-role" label="Role" value={role ?? ""} onChange={(value) => change("role", value)} options={roleOptions} />
+            <FilterInput key={`class:${params.classId ?? ""}`} id="assignment-class" label="Class" value={String(params.classId ?? "")} onChange={(value) => change("classId", value)} options={classOptions} disabled={!options.data} />
+            <FilterInput key={`subject:${params.subjectId ?? ""}`} id="assignment-subject" label="Subject" value={String(params.subjectId ?? "")} onChange={(value) => change("subjectId", value)} options={subjectOptions} disabled={!options.data} />
+            <FilterInput key={`trainer:${params.trainerId ?? ""}`} id="assignment-trainer" label="Trainer" value={String(params.trainerId ?? "")} onChange={(value) => change("trainerId", value)} options={trainerOptions} disabled={!options.data} />
+            <div className="space-y-2"><Label htmlFor="assignment-role">Role</Label><AssignmentRoleSelect id="assignment-role" value={role ?? ""} onChange={(value) => change("role", value)} allowAll /></div>
             <div className="space-y-2"><Label htmlFor="assignment-date">Effective on</Label><Input id="assignment-date" type="date" value={effectiveOn ?? ""} onChange={(e) => change("effectiveOn", e.target.value)} /></div>
           </div>
-          <p className="text-xs text-muted-foreground">Enter a code, name, email or ID. Press Enter or leave the field to apply; leave blank to show all.</p>
+          <p className="text-xs text-muted-foreground">Enter a code, name or email. Press Enter or leave the field to apply; leave blank to show all.</p>
         </CardContent></Card>
         <Card><CardContent className="space-y-4 pt-6" aria-busy={assignments.isFetching}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-semibold">Assignment list {data && !assignments.isError && <Badge variant="secondary">{total}</Badge>}</h2>
-            <div className="w-52"><Label className="sr-only" htmlFor="assignment-sort">Sort order</Label><AppliedTextInput key={`${resetVersion}:sort:${sort}`} id="assignment-sort" value={sort} options={sortOptions} allowEmpty={false} onCommit={(value) => change("sort", value)} placeholder="Newest or Oldest" /></div>
+            <div className="w-52"><Label className="sr-only" htmlFor="assignment-sort">Sort order</Label><AppliedTextInput key={`sort:${sort}`} id="assignment-sort" value={sort} options={sortOptions} allowEmpty={false} onCommit={(value) => change("sort", value)} placeholder="Newest or Oldest" /></div>
           </div>
           {assignments.isPending ? <div role="status" className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><LoaderCircle className="size-5 animate-spin" />Loading assignments...</div>
             : assignments.isError ? <Alert variant="destructive"><AlertCircle /><AlertTitle>Unable to load assignments</AlertTitle><AlertDescription>{errorMessage(assignments.error)} <Button size="sm" variant="outline" onClick={() => void assignments.refetch()}>Retry list</Button></AlertDescription></Alert>
@@ -180,7 +179,7 @@ export default function TeachingAssignmentPage() {
               </TableRow>)}</TableBody></Table>}
           {!assignments.isPending && !assignments.isError && data && <div className="flex flex-wrap items-center justify-between gap-4 border-t pt-4">
             <p className="text-sm text-muted-foreground" role="status">{data.content.length ? `${page * size + 1}–${page * size + data.content.length}` : "0"} / {total} assignments</p>
-            <div className="flex flex-wrap items-center gap-2"><Label htmlFor="assignment-size">Rows</Label><AppliedNumberInput key={`${resetVersion}:size:${size}`} id="assignment-size" value={size} className="w-20" onCommit={(value) => change("size", String(value))} />
+            <div className="flex flex-wrap items-center gap-2"><Label htmlFor="assignment-size">Rows</Label><AppliedNumberInput key={`size:${size}`} id="assignment-size" value={size} className="w-20" onCommit={(value) => change("size", String(value))} />
               <Button variant="outline" size="icon" aria-label="Previous page" disabled={page === 0 || assignments.isFetching} onClick={() => change("page", String(page - 1))}><ChevronLeft className="size-4" /></Button>
               <span className="text-sm">Page {page + 1} / {Math.max(1, pages)}</span>
               <Button variant="outline" size="icon" aria-label="Next page" disabled={page + 1 >= pages || assignments.isFetching} onClick={() => change("page", String(page + 1))}><ChevronRight className="size-4" /></Button>
@@ -189,7 +188,7 @@ export default function TeachingAssignmentPage() {
         </CardContent></Card>
       </>}
     </div>
-    {creating && canCreate && <CreateAssignmentDialog initialClassId={params.classId}
+    {creating && canCreate && <CreateAssignmentDialog
       onClose={() => setCreating(false)} onCreated={() => { setCreating(false); }} />}
     {detailId && canRead && <AssignmentDetailDialog key={detailId} assignmentId={detailId} onClose={() => showDetails()} />}
     {editing && canUpdate && <EditAssignmentDialog key={editing} assignmentId={editing} onClose={() => setEditing(null)} />}

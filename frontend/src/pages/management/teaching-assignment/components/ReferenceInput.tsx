@@ -14,12 +14,12 @@ export function ReferenceInput({ value, onChange, options, ...props }: Props) {
   const hintId = `${props.id}-hint`;
   const examples = (value.trim() ? matches : options).slice(0, 3);
   return <div className="space-y-1">
-    <Input {...props} type="text" autoComplete="off" value={value} onChange={(event) => onChange(event.target.value)}
+    <Input {...props} type="text" maxLength={200} autoComplete="off" value={value} onChange={(event) => onChange(event.target.value)}
       aria-describedby={[props["aria-describedby"], !props.readOnly && !props.disabled ? hintId : undefined].filter(Boolean).join(" ") || undefined} />
     {!props.readOnly && !props.disabled && <p id={hintId} className="text-xs text-muted-foreground">
       {value.trim() && matches.length === 1 ? `Matched: ${matches[0].label}`
-        : value.trim() && !matches.length ? "No match. Enter an existing code, name, email or ID."
-          : `${value.trim() ? "Matches" : "Examples"}: ${examples.map((option) => option.label.endsWith(`ID ${option.value}`) ? option.label : `${option.label} [ID: ${option.value}]`).join("; ")}${matches.length > 3 ? "; …" : ""}${value.trim() && matches.length > 1 ? ". Enter more text or the ID to identify one record." : ""}`}
+        : value.trim() && !matches.length ? "No match. Check the name, code or email."
+          : `${value.trim() ? "Matches" : "Examples"}: ${examples.map((option) => option.label).join("; ")}${matches.length > 3 ? "; …" : ""}${value.trim() && matches.length > 1 ? ". Enter the full name, code or email to identify one record." : ""}`}
     </p>}
   </div>;
 }
@@ -34,11 +34,12 @@ export function AppliedTextInput({ value, options, onCommit, allowEmpty = true, 
   const text = draft ?? options.find((option) => option.value === value)?.label ?? value;
   function commit() {
     if (draft === undefined) return;
+    if (draft.length > 200) { setError("Enter at most 200 characters."); return; }
     const next = !draft.trim() && allowEmpty ? "" : resolveText(draft, options);
-    if (next === undefined) { setError("Enter a matching value. Use a code or ID if the name is ambiguous."); return; }
+    if (next === undefined) { setError("Enter a full name, code or email to identify one record."); return; }
     onCommit(next); setDraft(undefined); setError("");
   }
-  return <div className="space-y-1"><Input {...props} value={text} autoComplete="off" aria-invalid={Boolean(error)}
+  return <div className="space-y-1"><Input {...props} value={text} maxLength={200} autoComplete="off" aria-invalid={Boolean(error)}
     aria-describedby={error ? `${props.id}-error` : undefined}
     onChange={(event) => { setDraft(event.target.value); setError(""); }} onBlur={commit}
     onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit(); } else if (event.key === "Escape") { setDraft(undefined); setError(""); } }} />

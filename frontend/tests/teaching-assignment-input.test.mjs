@@ -7,6 +7,11 @@ const trainers = trainerTextOptions([
   { id: 2, name: "Giảng viên mẫu Bình", email: "binh@example.com" },
 ]);
 
+test("trainer display contains name and email without exposing an ID suffix", () => {
+  assert.equal(trainers[0].label, "Giảng viên mẫu An · an@example.com");
+  assert.ok(trainers.every(trainer => !trainer.label.includes("ID")));
+});
+
 test("typed names without accents, exact name tokens and email resolve the existing trainer", () => {
   assert.equal(resolveText("  giang vien mau binh ", trainers), "2");
   assert.equal(resolveText("An", trainers), "1", "An must not ambiguously match the letters in Giang");

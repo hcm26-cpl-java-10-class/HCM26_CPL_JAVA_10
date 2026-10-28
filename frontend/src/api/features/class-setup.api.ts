@@ -164,6 +164,29 @@ export interface AssignmentCreateOptions {
   sampleData: boolean;
 }
 
+export interface AssignmentNewClassRequest {
+  name: string;
+  programId?: number;
+  newProgram?: { name: string; version: string; subjectIds: number[] };
+  startDate: string;
+  endDate: string;
+  plannedSize: number;
+}
+
+export interface AssignmentClassProgram {
+  id: number; code: string; name: string; version: string;
+}
+
+export interface AssignmentCreationRequest {
+  classDetails: AssignmentNewClassRequest;
+  trainer: { name: string; email: string };
+  subjectId?: number;
+  newSubject?: { name: string; durationHours: number };
+  role: AssignmentRole;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+}
+
 export interface AssignmentClassContext {
   classProfile: SharedClass;
   program: NonNullable<ClassProgramSubjects["program"]>;
@@ -171,6 +194,16 @@ export interface AssignmentClassContext {
 }
 
 export const classSetupApi = {
+  createAssignmentWithDetails: async (request: AssignmentCreationRequest) =>
+    (await axiosInstance.post<TeachingAssignment>("/teaching-assignments/create-with-details", request)).data,
+  getNewProgramSubjects: async (signal?: AbortSignal) =>
+    (await axiosInstance.get<Array<{ id: number; code: string; name: string; version: string; durationHours: number }>>("/teaching-assignments/class-subject-options", { signal })).data,
+  saveAssignmentTrainer: async (request: { name: string; email: string }) =>
+    (await axiosInstance.post<SharedTrainer>("/teaching-assignments/trainers", request)).data,
+  getNewClassPrograms: async (signal?: AbortSignal) =>
+    (await axiosInstance.get<AssignmentClassProgram[]>("/teaching-assignments/class-program-options", { signal })).data,
+  createAssignmentClass: async (request: AssignmentNewClassRequest) =>
+    (await axiosInstance.post<SharedClass>("/teaching-assignments/classes", request)).data,
   downloadAssignmentTemplate: async () => {
     const response = await axiosInstance.get<Blob>("/teaching-assignments/import-template", { responseType: "blob" });
     downloadBlob(response.data, "teaching-assignments-template.xlsx");

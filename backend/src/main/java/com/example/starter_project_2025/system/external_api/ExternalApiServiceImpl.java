@@ -29,14 +29,19 @@ public class ExternalApiServiceImpl implements ExternalApiService {
     RestTemplate restTemplate;
     String baseUrl;
     String token;
+    ManagedClassDirectory managedClasses;
+    ManagedTrainerDirectory managedTrainers;
 
     public ExternalApiServiceImpl(
             RestTemplate restTemplate,
             @Value("${external.api.base-url}") String baseUrl,
-            @Value("${external.api.token:}") String token) {
+            @Value("${external.api.token:}") String token,
+            ManagedClassDirectory managedClasses, ManagedTrainerDirectory managedTrainers) {
         this.restTemplate = restTemplate;
         this.baseUrl = baseUrl;
         this.token = token;
+        this.managedClasses = managedClasses;
+        this.managedTrainers = managedTrainers;
     }
 
     // ======================== PUBLIC METHODS ========================
@@ -54,12 +59,14 @@ public class ExternalApiServiceImpl implements ExternalApiService {
         }
 
         String url = uriBuilder.toUriString();
-        return executeGetList(url, new ParameterizedTypeReference<>() {
-        }, "classes");
+        return managedClasses.merge(executeGetList(url, new ParameterizedTypeReference<List<ExternalClassDTO>>() {
+        }, "classes"), status);
     }
 
     @Override
     public ExternalClassDTO fetchClassById(Long id) {
+        var managed = managedClasses.find(id);
+        if (managed.isPresent()) return managed.get();
         log.info("Fetching class by id={} from external API", id);
 
         String url = UriComponentsBuilder
@@ -84,8 +91,8 @@ public class ExternalApiServiceImpl implements ExternalApiService {
         }
 
         String url = uriBuilder.toUriString();
-        return executeGetList(url, new ParameterizedTypeReference<>() {
-        }, "trainers");
+        return managedTrainers.merge(executeGetList(url, new ParameterizedTypeReference<List<ExternalTrainerDTO>>() {
+        }, "trainers"), status);
     }
 
     @Override

@@ -8,7 +8,7 @@ export interface TextOption {
 
 export function trainerTextOptions(trainers: { id: number; name: string; email?: string | null }[]): TextOption[] {
   return trainers.map((trainer) => ({ value: String(trainer.id),
-    label: `${trainer.name}${trainer.email ? ` · ${trainer.email}` : ""} · ID ${trainer.id}`,
+    label: `${trainer.name}${trainer.email ? ` · ${trainer.email}` : ""}`,
     aliases: [trainer.name, ...(trainer.email ? [trainer.email] : [])] }));
 }
 
