@@ -18,6 +18,8 @@ import com.example.starter_project_2025.system.exam.domain.ExamTemplateRepositor
 import com.example.starter_project_2025.system.exam.dto.CreateExamFromTemplateRequest;
 import com.example.starter_project_2025.system.exam.dto.ExamDTO;
 import com.example.starter_project_2025.system.exam.dto.ExamTemplateDTO;
+import com.example.starter_project_2025.system.exam.dto.ExamTemplateQuestionDTO;
+import com.example.starter_project_2025.system.exam.dto.ExamTemplateQuestionOptionDTO;
 import com.example.starter_project_2025.system.exam.dto.SaveExamTemplateRequest;
 import com.example.starter_project_2025.system.exam.dto.UpdateExamTemplateRequest;
 import com.example.starter_project_2025.system.exam.mapper.ExamMapper;
@@ -194,7 +196,7 @@ public class ExamTemplateService {
     }
 
     /**
-     * Lấy chi tiết một đề thi mẫu.
+     * Lấy chi tiết một đề thi mẫu kèm danh sách câu hỏi và đáp án.
      */
     @Transactional(readOnly = true)
     public ExamTemplateDTO getTemplate(Long templateId) {
@@ -203,7 +205,17 @@ public class ExamTemplateService {
                         new ResourceNotFoundException(
                                 "Exam template not found"));
 
-        return toTemplateDTO(template);
+        ExamTemplateDTO dto = toTemplateDTO(template);
+
+        if (template.getQuestions() != null) {
+            List<ExamTemplateQuestionDTO> questionDTOs = template.getQuestions().stream()
+                    .sorted(Comparator.comparingInt(ExamTemplateQuestion::getPosition))
+                    .map(this::toQuestionDTO)
+                    .toList();
+            dto.setQuestions(questionDTOs);
+        }
+
+        return dto;
     }
 
     /**
@@ -258,5 +270,37 @@ public class ExamTemplateService {
         dto.setUpdatedAt(template.getUpdatedAt());
 
         return dto;
+    }
+
+    private ExamTemplateQuestionDTO toQuestionDTO(ExamTemplateQuestion q) {
+        ExamTemplateQuestionDTO qDto = new ExamTemplateQuestionDTO();
+        qDto.setId(q.getId());
+        qDto.setContent(q.getContent());
+        qDto.setType(q.getType());
+        qDto.setDifficulty(q.getDifficulty());
+        qDto.setTopic(q.getTopic());
+        qDto.setImageUrl(q.getImageUrl());
+        qDto.setPoints(q.getPoints());
+        qDto.setPosition(q.getPosition());
+
+        if (q.getOptions() != null) {
+            List<ExamTemplateQuestionOptionDTO> optionDTOs = q.getOptions().stream()
+                    .sorted(Comparator.comparingInt(ExamTemplateQuestionOption::getPosition))
+                    .map(this::toOptionDTO)
+                    .toList();
+            qDto.setOptions(optionDTOs);
+        }
+
+        return qDto;
+    }
+
+    private ExamTemplateQuestionOptionDTO toOptionDTO(ExamTemplateQuestionOption opt) {
+        ExamTemplateQuestionOptionDTO optDto = new ExamTemplateQuestionOptionDTO();
+        optDto.setId(opt.getId());
+        optDto.setContent(opt.getContent());
+        optDto.setCorrect(opt.isCorrect());
+        optDto.setImageUrl(opt.getImageUrl());
+        optDto.setPosition(opt.getPosition());
+        return optDto;
     }
 }

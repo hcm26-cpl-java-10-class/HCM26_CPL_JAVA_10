@@ -194,6 +194,42 @@ class ExamTemplateServiceTest {
     }
 
     @Test
+    @DisplayName("getTemplate: Lấy chi tiết template kèm câu hỏi và đáp án")
+    void getTemplate_Success() {
+        ExamTemplate template = new ExamTemplate();
+        template.setId(1L);
+        template.setName("Template Chi Tiết");
+        template.setDurationMinutes(45);
+
+        ExamTemplateQuestion tq = new ExamTemplateQuestion();
+        tq.setId(10L);
+        tq.setContent("Câu hỏi 1?");
+        tq.setType(QuestionType.MULTIPLE_CHOICE);
+        tq.setPosition(0);
+        tq.setPoints(2);
+
+        ExamTemplateQuestionOption topt = new ExamTemplateQuestionOption();
+        topt.setId(100L);
+        topt.setContent("Lựa chọn 1");
+        topt.setCorrect(true);
+        topt.setPosition(0);
+        tq.getOptions().add(topt);
+
+        template.getQuestions().add(tq);
+
+        when(templateRepository.findById(1L)).thenReturn(Optional.of(template));
+
+        ExamTemplateDTO result = service.getTemplate(1L);
+
+        assertNotNull(result);
+        assertEquals("Template Chi Tiết", result.getName());
+        assertEquals(1, result.getQuestions().size());
+        assertEquals("Câu hỏi 1?", result.getQuestions().get(0).getContent());
+        assertEquals(1, result.getQuestions().get(0).getOptions().size());
+        assertTrue(result.getQuestions().get(0).getOptions().get(0).isCorrect());
+    }
+
+    @Test
     @DisplayName("updateTemplate: Cập nhật thông tin template thành công")
     void updateTemplate_Success() {
         ExamTemplate template = new ExamTemplate();

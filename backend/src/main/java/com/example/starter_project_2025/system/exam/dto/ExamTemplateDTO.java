@@ -1,6 +1,8 @@
 package com.example.starter_project_2025.system.exam.dto;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -16,4 +18,5 @@ public class ExamTemplateDTO {
     private Integer questionCount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private List<ExamTemplateQuestionDTO> questions = new ArrayList<>();
 }

@@ -1,5 +1,26 @@
 import axiosInstance from "@/api/axios";
 
+export interface ExamTemplateOptionDTO {
+    id: number;
+    content: string;
+    correct?: boolean;
+    isCorrect?: boolean;
+    imageUrl?: string;
+    position: number;
+}
+
+export interface ExamTemplateQuestionDTO {
+    id: number;
+    content: string;
+    type: "MULTIPLE_CHOICE" | "ESSAY";
+    difficulty: "EASY" | "MEDIUM" | "HARD";
+    topic?: string;
+    imageUrl?: string;
+    points: number;
+    position: number;
+    options: ExamTemplateOptionDTO[];
+}
+
 export interface ExamTemplateDTO {
     id: number;
     name: string;
@@ -9,6 +30,7 @@ export interface ExamTemplateDTO {
     questionCount: number;
     createdAt?: string;
     updatedAt?: string;
+    questions?: ExamTemplateQuestionDTO[];
 }
 
 export interface SaveExamTemplateRequest {
