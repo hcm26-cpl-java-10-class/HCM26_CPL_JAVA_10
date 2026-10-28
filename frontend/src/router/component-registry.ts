@@ -1,3 +1,4 @@
+
 import { Logout } from "@/components/auth/Logout";
 import { OAuth2RedirectHandler } from "@/components/auth/OAuth2RedirectHandler";
 import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage";
@@ -16,15 +17,17 @@ import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
+
 import SyllabusesPage from "@/pages/management/demo/syllabus";
 import SyllabusDetailPage from "@/pages/management/demo/syllabus/detail";
 
+import StudentSyllabusListPage from "@/pages/student/StudentSyllabusListPage";
 import StudentSyllabusPage from "@/pages/student/StudentSyllabusPage";
+
 import CourseReportPage from "@/pages/management/demo/report";
 import UnansweredQuestionsPage from "@/pages/management/demo/unanswered-questions";
 import CertificateDetailPage from "@/pages/management/demo/certificate/pages/CertificateDetailPage";
 import VerifyCertificatePage from "@/pages/student/VerifyCertificatePage";
-
 
 export interface RouteConfig {
   path: string;
@@ -34,21 +37,57 @@ export interface RouteConfig {
   isModuleDriven?: boolean;
 }
 
-export const ROLE_HOME_PATHS = ["/dashboard", "/student", "/teacher"] as const;
+export const ROLE_HOME_PATHS = [
+  "/dashboard",
+  "/student",
+  "/teacher",
+] as const;
 
 export const routes: RouteConfig[] = [
-  { path: "/dashboard", component: Dashboard },
-  { path: "/student", component: StudentLandingPage },
-  { path: "/teacher", component: TeacherLandingPage },
-  { path: "/dashboard", component: Dashboard, isModuleDriven: true },
-  { path: "/role-permissions", component: RolePermissionMatrixPage, requiredPermission: "ROLE_UPDATE" },
-  { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
+  // ROLE HOME
+  {
+    path: "/dashboard",
+    component: Dashboard,
+  },
+  {
+    path: "/student",
+    component: StudentLandingPage,
+  },
+  {
+    path: "/teacher",
+    component: TeacherLandingPage,
+  },
+
+  // DASHBOARD
+  {
+    path: "/dashboard",
+    component: Dashboard,
+    isModuleDriven: true,
+  },
+
+  // RBAC
+  {
+    path: "/role-permissions",
+    component: RolePermissionMatrixPage,
+    requiredPermission: "ROLE_UPDATE",
+  },
+
+  // EXAMS
+  {
+    path: "/exams",
+    component: ExamManagementPage,
+    isModuleDriven: true,
+  },
+
+  // INVITATIONS
   {
     path: "/invitations",
     component: InvitationManagementPage,
     requiredPermission: "INVITATION_READ",
     isModuleDriven: true,
   },
+
+  // TOPIC MARKS
   {
     path: "/topic-marks/gradebook-demo",
     component: TopicMarkGradebookDemoPage,
@@ -56,6 +95,7 @@ export const routes: RouteConfig[] = [
     isModuleDriven: true,
   },
 
+  // M3 ADMIN / TEACHER
   {
     path: "/syllabuses",
     component: SyllabusesPage,
@@ -68,12 +108,22 @@ export const routes: RouteConfig[] = [
     requiredPermission: "SYLLABUS_READ",
     isModuleDriven: false,
   },
+
+  // M3 STUDENT VIEW
   {
-    path: "/syllabuses/:id/preview",
-    component: StudentSyllabusPage,
-    requiredPermission: "SYLLABUS_READ",
+    path: "/student/syllabuses",
+    component: StudentSyllabusListPage,
+    requiredPermission: "COURSE_READ",
     isModuleDriven: false,
   },
+  {
+    path: "/student/syllabuses/:id",
+    component: StudentSyllabusPage,
+    requiredPermission: "COURSE_READ",
+    isModuleDriven: false,
+  },
+
+  // CERTIFICATES
   {
     path: "/my-certificates/:verificationToken",
     component: CertificateDetailPage,
@@ -86,31 +136,83 @@ export const routes: RouteConfig[] = [
     isModuleDriven: false,
   },
 
-  { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
-  { path: "/student/exams", component: StudentExamList,requiredPermission: "EXAM_READ", isModuleDriven: true },
-  { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
+  // STUDENT
+  {
+    path: "/student",
+    component: StudentLandingPage,
+    requiredPermission: "BOOK_READ",
+  },
+  {
+    path: "/student/exams",
+    component: StudentExamList,
+    requiredPermission: "EXAM_READ",
+    isModuleDriven: true,
+  },
+
+  // TEACHER
+  {
+    path: "/teacher",
+    component: TeacherLandingPage,
+    requiredPermission: "BOOK_UPDATE",
+  },
+
+  // DYNAMIC ENTITY ROUTES
   ...buildEntityRoutes(),
-  { path: "/not-found-page", component: NotFoundPage, isPublic: true },
-  { path: "/login", component: Login, isPublic: true },
-  { path: "/logout", component: Logout, isPublic: true },
-  { path: "/register", component: RegisterPage, isPublic: true },
-  { path: "/forgot-password", component: ForgotPasswordPage, isPublic: true },
-  { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true },
-  { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true,},
-  { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true },
-  { path: "/unauthorized", component: Unauthorized, isPublic: true },
+
+  // AUTHENTICATION
+  {
+    path: "/not-found-page",
+    component: NotFoundPage,
+    isPublic: true,
+  },
+  {
+    path: "/login",
+    component: Login,
+    isPublic: true,
+  },
+  {
+    path: "/logout",
+    component: Logout,
+    isPublic: true,
+  },
+  {
+    path: "/register",
+    component: RegisterPage,
+    isPublic: true,
+  },
+  {
+    path: "/forgot-password",
+    component: ForgotPasswordPage,
+    isPublic: true,
+  },
+  {
+    path: "/oauth2/redirect",
+    component: OAuth2RedirectHandler,
+    isPublic: true,
+  },
+  {
+    path: "/unauthorized",
+    component: Unauthorized,
+    isPublic: true,
+  },
+
+  // CURRICULUM
   {
     path: "/curriculum",
     component: CurriculumManagementPage,
     requiredPermission: "SECTION_READ",
     isModuleDriven: true,
   },
+
+  // COURSE REPORT
   {
     path: "/course-report",
     component: CourseReportPage,
     requiredPermission: "COURSE_REPORT_READ",
     isModuleDriven: true,
   },
+
+  // Q&A
   {
     path: "/unanswered-questions",
     component: UnansweredQuestionsPage,

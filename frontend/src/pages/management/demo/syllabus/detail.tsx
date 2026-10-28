@@ -9,14 +9,12 @@ import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { toast } from "sonner";
-
 import {
     ArrowLeft,
     Plus,
     Pencil,
     Trash2,
     CheckCircle2,
-    Eye,
 } from "lucide-react";
 
 import {
@@ -516,14 +514,10 @@ export default function SyllabusDetailPage() {
                 ) : (
                     <>
                         {/* Student Preview Button */}
-                        <div className="flex justify-end">
-                            <Button asChild variant="outline">
-                                <Link to={`/syllabuses/${syllabusId}/preview`}>
-                                    <Eye className="size-4" />
-                                    Student Preview
-                                </Link>
-                            </Button>
-                        </div>
+
+
+
+
                         {/* Syllabus Header */}
                         <section className="w-full rounded-xl border bg-card p-6">
                             <h1 className="break-words text-2xl font-bold">
