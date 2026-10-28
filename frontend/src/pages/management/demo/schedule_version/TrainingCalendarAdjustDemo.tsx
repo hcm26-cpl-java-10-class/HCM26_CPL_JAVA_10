@@ -64,6 +64,8 @@ export type TrainingTopic = {
   mentor: string;
   prerequisite: string;
   slot: string;
+  durationHours?: number;
+  sessionHours?: number;
   days: TrainingDay[];
 };
 
@@ -98,12 +100,88 @@ export const SLOTS = [
 ];
 
 export const STANDARD_TOPIC_PRESETS = [
-  { code: "JAVA_CORE", name: "Java Core & OOP Fundamentals" },
-  { code: "DATABASE_SQL", name: "Relational Database & SQL Design" },
-  { code: "SPRING_BOOT", name: "Spring Boot Enterprise Backend" },
-  { code: "REACT_FRONTEND", name: "React & TypeScript Modern Web" },
-  { code: "FINAL_PROJECT", name: "Final Capstone Project" },
+  { code: "JAVA_CORE", name: "Java Core & OOP Fundamentals", durationHours: 20 },
+  { code: "DATABASE_SQL", name: "Relational Database & SQL Design", durationHours: 16 },
+  { code: "SPRING_BOOT", name: "Spring Boot Enterprise Backend", durationHours: 24 },
+  { code: "REACT_FRONTEND", name: "React & TypeScript Modern Web", durationHours: 20 },
+  { code: "FINAL_PROJECT", name: "Final Capstone Project", durationHours: 32 },
 ];
+
+export function calculateEndTime(startTime: string, durationHours: number): string {
+  const [h, m] = (startTime || "08:00").split(":").map(Number);
+  const totalMinutes = (h || 8) * 60 + (m || 0) + Math.round(durationHours * 60);
+  const endH = Math.floor(totalMinutes / 60) % 24;
+  const endM = totalMinutes % 60;
+  return `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
+}
+
+export function generateDaysFromDuration({
+  topicName,
+  totalHours,
+  sessionHours = 2.5,
+  startDateStr,
+  startTime = "08:00",
+  trainer = "Lead Trainer",
+  format = "Offline",
+  skipWeekends = true,
+}: {
+  topicName: string;
+  totalHours: number;
+  sessionHours?: number;
+  startDateStr: string;
+  startTime?: string;
+  trainer?: string;
+  format?: string;
+  skipWeekends?: boolean;
+}): TrainingDay[] {
+  const safeTotalHours = Math.max(1, totalHours || 10);
+  const safeSessionHours = Math.max(0.5, sessionHours || 2.5);
+  const sessionCount = Math.ceil(safeTotalHours / safeSessionHours);
+  const defaultEndTime = calculateEndTime(startTime, safeSessionHours);
+
+  const days: TrainingDay[] = [];
+  let currentDate = new Date(startDateStr);
+  if (Number.isNaN(currentDate.getTime())) {
+    currentDate = new Date();
+  }
+
+  for (let i = 1; i <= sessionCount; i++) {
+    if (skipWeekends) {
+      while (currentDate.getDay() === 0 || currentDate.getDay() === 6) {
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+    }
+
+    const dateStr = currentDate.toISOString().substring(0, 10);
+    const isLast = i === sessionCount;
+    const remainingHours = safeTotalHours - (i - 1) * safeSessionHours;
+    const thisSessionHours = Math.min(safeSessionHours, Math.max(0.5, remainingHours));
+    const thisEndTime = thisSessionHours === safeSessionHours
+      ? defaultEndTime
+      : calculateEndTime(startTime, thisSessionHours);
+
+    days.push({
+      id: uid(),
+      name: `${topicName} - Buổi ${i}/${sessionCount}`,
+      date: dateStr,
+      activities: [
+        {
+          id: uid(),
+          name: `${topicName} - Buổi ${i} (${thisSessionHours}h)`,
+          pic: trainer || "Trainer",
+          contribution: isLast ? "Assessment" : (i % 2 === 1 ? "Lecture" : "Practice"),
+          format: format || "Offline",
+          start: startTime,
+          end: thisEndTime,
+        },
+      ],
+    });
+
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  return days;
+}
 
 const selectClass =
   "h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -328,11 +406,24 @@ export default function TrainingCalendarAdjustDemo({
   const [systemSubjects, setSystemSubjects] = useState<SubjectDTO[]>([]);
   const [isLoadingSubjects, setIsLoadingSubjects] = useState(false);
 
-  // Modal thêm Topic
+  // Modal thêm Topic với cơ chế tự động chia theo Duration
   const [topicOpen, setTopicOpen] = useState(false);
   const [topicPreset, setTopicPreset] = useState("CUSTOM");
   const [topicCode, setTopicCode] = useState("");
   const [topicName, setTopicName] = useState("");
+  const [topicTotalHours, setTopicTotalHours] = useState<number>(20);
+  const [topicSessionHours, setTopicSessionHours] = useState<number>(2.5);
+  const [topicDailyStart, setTopicDailyStart] = useState<string>("08:00");
+  const [topicSkipWeekends, setTopicSkipWeekends] = useState<boolean>(true);
+
+  // Modal tự động chia lại buổi (Auto-split by Duration) cho Topic hiện có
+  const [splitModalOpen, setSplitModalOpen] = useState(false);
+  const [splittingTopic, setSplittingTopic] = useState<TrainingTopic | null>(null);
+  const [splitTotalHours, setSplitTotalHours] = useState<number>(20);
+  const [splitSessionHours, setSplitSessionHours] = useState<number>(2.5);
+  const [splitDailyStart, setSplitDailyStart] = useState<string>("08:00");
+  const [splitStartDate, setSplitStartDate] = useState<string>(learningStart);
+  const [splitSkipWeekends, setSplitSkipWeekends] = useState<boolean>(true);
 
   // Modal Lưu phiên bản
   const [saveOpen, setSaveOpen] = useState(false);
@@ -348,6 +439,39 @@ export default function TrainingCalendarAdjustDemo({
   } | null>(null);
 
   const [error, setError] = useState<string | null>(null);
+
+  function openSplitModal(topic: TrainingTopic) {
+    setSplittingTopic(topic);
+    setSplitTotalHours(topic.durationHours || (topic.days.length > 0 ? topic.days.length * 2.5 : 20));
+    setSplitSessionHours(topic.sessionHours || 2.5);
+    setSplitDailyStart(topic.days[0]?.activities[0]?.start || "08:00");
+    setSplitStartDate(topic.days[0]?.date || learningStart);
+    setSplitSkipWeekends(true);
+    setSplitModalOpen(true);
+  }
+
+  function handleApplySplit() {
+    if (!splittingTopic) return;
+    const newDays = generateDaysFromDuration({
+      topicName: splittingTopic.name,
+      totalHours: splitTotalHours,
+      sessionHours: splitSessionHours,
+      startDateStr: splitStartDate,
+      startTime: splitDailyStart,
+      trainer: splittingTopic.trainer || "Lead Trainer",
+      skipWeekends: splitSkipWeekends,
+    });
+
+    changeTopic(splittingTopic.id, {
+      durationHours: splitTotalHours,
+      sessionHours: splitSessionHours,
+      days: newDays,
+    });
+
+    toast.success(`Đã tự động chia lại ${newDays.length} buổi học cho môn [${splittingTopic.code}] (${splitTotalHours}h)!`);
+    setSplitModalOpen(false);
+    setSplittingTopic(null);
+  }
 
   function handleSelectClass(classId: string) {
     if (classId === selectedClassId) return;
@@ -472,7 +596,11 @@ export default function TrainingCalendarAdjustDemo({
 
   const availableTopicOptions = useMemo(() => {
     if (systemSubjects.length > 0) {
-      return systemSubjects.map((s) => ({ code: s.code, name: s.name }));
+      return systemSubjects.map((s) => ({
+        code: s.code,
+        name: s.name,
+        durationHours: s.durationHours || 20,
+      }));
     }
     return STANDARD_TOPIC_PRESETS;
   }, [systemSubjects]);
@@ -592,6 +720,32 @@ export default function TrainingCalendarAdjustDemo({
 
   function addTopic() {
     if (!topicCode.trim() || !topicName.trim()) return;
+
+    // Ngày bắt đầu: tiếp nối ngày của topic trước (nếu có), hoặc learningStart
+    let nextStartDate = learningStart;
+    if (topics.length > 0) {
+      const lastTopic = topics[topics.length - 1];
+      if (lastTopic.days.length > 0) {
+        const lastDayDate = new Date(lastTopic.days[lastTopic.days.length - 1].date);
+        lastDayDate.setDate(lastDayDate.getDate() + 1);
+        while (lastDayDate.getDay() === 0 || lastDayDate.getDay() === 6) {
+          lastDayDate.setDate(lastDayDate.getDate() + 1);
+        }
+        nextStartDate = lastDayDate.toISOString().substring(0, 10);
+      }
+    }
+
+    const generatedDays = generateDaysFromDuration({
+      topicName: topicName.trim(),
+      totalHours: topicTotalHours,
+      sessionHours: topicSessionHours,
+      startDateStr: nextStartDate,
+      startTime: topicDailyStart,
+      trainer: "Lead Trainer",
+      format: "Offline",
+      skipWeekends: topicSkipWeekends,
+    });
+
     changeTopics((prev) => [
       ...prev,
       {
@@ -600,32 +754,36 @@ export default function TrainingCalendarAdjustDemo({
         name: topicName.trim(),
         trainer: "Lead Trainer",
         mentor: "",
-        prerequisite: "",
+        prerequisite: prev.length > 0 ? prev[prev.length - 1].id : "",
         slot: "1",
-        days: [
-          {
-            id: uid(),
-            name: `${topicName.trim()} - Day 1`,
-            date: learningStart,
-            activities: [newActivity("07:00", "09:15", "Lead Trainer")],
-          },
-        ],
+        durationHours: topicTotalHours,
+        sessionHours: topicSessionHours,
+        days: generatedDays,
       },
     ]);
+    toast.success(`Đã thêm môn [${topicCode.trim()}] và tự động chia ${generatedDays.length} buổi học (${topicTotalHours}h)!`);
     setTopicOpen(false);
   }
 
   async function loadAllTopics() {
-    let sourceList: Array<{ code: string; name: string }> = [];
+    let sourceList: Array<{ code: string; name: string; durationHours?: number }> = [];
 
     if (systemSubjects.length > 0) {
-      sourceList = systemSubjects.map((s) => ({ code: s.code, name: s.name }));
+      sourceList = systemSubjects.map((s) => ({
+        code: s.code,
+        name: s.name,
+        durationHours: s.durationHours || 20,
+      }));
     } else {
       try {
         const apiSubjects = await subjectApi.getActiveSubjects();
         if (apiSubjects && apiSubjects.length > 0) {
           setSystemSubjects(apiSubjects);
-          sourceList = apiSubjects.map((s) => ({ code: s.code, name: s.name }));
+          sourceList = apiSubjects.map((s) => ({
+            code: s.code,
+            name: s.name,
+            durationHours: s.durationHours || 20,
+          }));
         }
       } catch {
         // Fallback
@@ -636,30 +794,48 @@ export default function TrainingCalendarAdjustDemo({
       sourceList = STANDARD_TOPIC_PRESETS;
     }
 
+    let curStartDate = learningStart;
     const loaded: TrainingTopic[] = sourceList.map((preset, index) => {
-      const slot = SLOTS[index % SLOTS.length];
+      const topicHours = preset.durationHours || 20;
+      const topicSessionHours = 2.5;
+      const startTime = "08:00";
+      const topicDays = generateDaysFromDuration({
+        topicName: preset.name,
+        totalHours: topicHours,
+        sessionHours: topicSessionHours,
+        startDateStr: curStartDate,
+        startTime,
+        trainer: "Lead Trainer",
+        format: "Offline",
+        skipWeekends: true,
+      });
+
+      if (topicDays.length > 0) {
+        const lastDate = new Date(topicDays[topicDays.length - 1].date);
+        lastDate.setDate(lastDate.getDate() + 1);
+        while (lastDate.getDay() === 0 || lastDate.getDay() === 6) {
+          lastDate.setDate(lastDate.getDate() + 1);
+        }
+        curStartDate = lastDate.toISOString().substring(0, 10);
+      }
+
       return {
         id: `topic-${preset.code.toLowerCase()}`,
         code: preset.code,
         name: preset.name,
         trainer: "Lead Trainer",
         mentor: "Mentor Support",
-        prerequisite:
-          index > 0 ? `topic-${sourceList[index - 1].code.toLowerCase()}` : "",
-        slot: slot.id,
-        days: [
-          {
-            id: uid(),
-            name: `${preset.name} - Day 1`,
-            date: learningStart,
-            activities: [newActivity(slot.start, slot.end, "Lead Trainer")],
-          },
-        ],
+        prerequisite: index > 0 ? `topic-${sourceList[index - 1].code.toLowerCase()}` : "",
+        slot: "1",
+        durationHours: topicHours,
+        sessionHours: topicSessionHours,
+        days: topicDays,
       };
     });
 
     changeTopics(() => loaded);
-    toast.success(`Loaded ${loaded.length} curriculum topics into schedule.`);
+    const totalDays = loaded.reduce((s, t) => s + t.days.length, 0);
+    toast.success(`Đã tự động chia ${totalDays} buổi học cho ${loaded.length} môn theo thời lượng (Duration)!`);
   }
 
   function removeSelected() {
@@ -1138,9 +1314,22 @@ export default function TrainingCalendarAdjustDemo({
                   >
                     <ArrowDown className="size-3.5" />
                   </Button>
-                  <span className="mx-1.5 text-xs text-muted-foreground font-medium">
-                    {topic.days.length} days
-                  </span>
+                  <Badge variant="secondary" className="text-[11px] font-normal gap-1 mx-1">
+                    <Clock className="size-3 text-muted-foreground" />
+                    {topic.durationHours ? `${topic.durationHours}h` : `${topic.days.length * 2.5}h`} · {topic.days.length} buổi
+                  </Badge>
+                  {!isReadOnly && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs gap-1 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50"
+                      title="Tự động chia lại các buổi học theo tổng thời lượng (Duration)"
+                      onClick={() => openSplitModal(topic)}
+                    >
+                      <Sparkles className="size-3 text-indigo-500" />
+                      Chia theo Duration
+                    </Button>
+                  )}
                   {!isReadOnly && (
                     <Button
                       variant="ghost"
@@ -1610,14 +1799,17 @@ export default function TrainingCalendarAdjustDemo({
       <Dialog open={topicOpen} onOpenChange={setTopicOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Training Topic</DialogTitle>
-            <DialogDescription>
-              Select an active subject from database or choose preset curriculum.
+            <DialogTitle className="flex items-center gap-2">
+              <BookOpen className="size-5 text-primary" />
+              Thêm chủ đề đào tạo (Add Training Topic)
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Chọn môn học từ danh mục hoặc nhập môn tùy chỉnh, hệ thống sẽ tự động chia số buổi theo thời lượng.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2 text-xs">
             <label className="space-y-1 block font-medium">
-              Curriculum topic source
+              Nguồn môn học (Curriculum topic source)
               <select
                 className={selectClass}
                 value={topicPreset}
@@ -1629,48 +1821,227 @@ export default function TrainingCalendarAdjustDemo({
                   if (found) {
                     setTopicCode(found.code);
                     setTopicName(found.name);
+                    if (found.durationHours) {
+                      setTopicTotalHours(found.durationHours);
+                    }
                   }
                 }}
               >
-                <option value="CUSTOM">Custom topic</option>
+                <option value="CUSTOM">Custom topic (Tự nhập)</option>
                 {availableTopicOptions.map((item) => (
                   <option key={item.code} value={item.code}>
-                    [{item.code}] {item.name}
+                    [{item.code}] {item.name} ({item.durationHours || 20}h)
                   </option>
                 ))}
               </select>
             </label>
-            <label className="space-y-1 block font-medium">
-              Topic code
-              <Input
-                maxLength={50}
-                className="h-8 text-xs font-mono"
-                value={topicCode}
-                onChange={(e) => setTopicCode(e.target.value)}
-                placeholder="e.g. JAVA_CORE"
-              />
-            </label>
-            <label className="space-y-1 block font-medium">
-              Topic name
-              <Input
-                maxLength={150}
-                className="h-8 text-xs"
-                value={topicName}
-                onChange={(e) => setTopicName(e.target.value)}
-                placeholder="e.g. Java Core & OOP Fundamentals"
-              />
-            </label>
+
+            <div className="grid grid-cols-3 gap-2">
+              <label className="space-y-1 block font-medium col-span-1">
+                Mã môn (Code)
+                <Input
+                  maxLength={50}
+                  className="h-8 text-xs font-mono"
+                  value={topicCode}
+                  onChange={(e) => setTopicCode(e.target.value)}
+                  placeholder="e.g. JAVA_CORE"
+                />
+              </label>
+              <label className="space-y-1 block font-medium col-span-2">
+                Tên môn học (Name)
+                <Input
+                  maxLength={150}
+                  className="h-8 text-xs"
+                  value={topicName}
+                  onChange={(e) => setTopicName(e.target.value)}
+                  placeholder="e.g. Java Core & OOP Fundamentals"
+                />
+              </label>
+            </div>
+
+            {/* Cơ chế 1: Tự động chia buổi theo Duration */}
+            <div className="grid grid-cols-2 gap-3 pt-1 border-t border-border/60">
+              <label className="space-y-1 block font-medium">
+                Tổng thời lượng môn (giờ)
+                <Input
+                  type="number"
+                  min={1}
+                  max={200}
+                  className="h-8 text-xs font-mono"
+                  value={topicTotalHours}
+                  onChange={(e) => setTopicTotalHours(Number(e.target.value) || 1)}
+                />
+              </label>
+
+              <label className="space-y-1 block font-medium">
+                Thời lượng 1 buổi (Session)
+                <select
+                  className={selectClass}
+                  value={topicSessionHours}
+                  onChange={(e) => setTopicSessionHours(Number(e.target.value))}
+                >
+                  <option value={1.5}>1.5 giờ (90 phút)</option>
+                  <option value={2.0}>2.0 giờ (120 phút)</option>
+                  <option value={2.25}>2h15m (135 phút - Slot chuẩn)</option>
+                  <option value={2.5}>2.5 giờ (150 phút - Chuẩn FAMS)</option>
+                  <option value={3.0}>3.0 giờ (180 phút)</option>
+                  <option value={4.0}>4.0 giờ (240 phút - Nửa ngày)</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <label className="space-y-1 block font-medium">
+                Giờ bắt đầu mỗi ngày
+                <Input
+                  type="time"
+                  className="h-8 text-xs font-mono"
+                  value={topicDailyStart}
+                  onChange={(e) => setTopicDailyStart(e.target.value)}
+                />
+              </label>
+
+              <div className="flex items-center gap-2 pt-4">
+                <input
+                  type="checkbox"
+                  id="skipWeekendsCheckbox"
+                  checked={topicSkipWeekends}
+                  onChange={(e) => setTopicSkipWeekends(e.target.checked)}
+                  className="rounded border-input text-primary focus:ring-primary h-4 w-4"
+                />
+                <Label htmlFor="skipWeekendsCheckbox" className="text-xs cursor-pointer">
+                  Chỉ học Thứ 2 – Thứ 6
+                </Label>
+              </div>
+            </div>
+
+            {/* Banner tính toán tự động */}
+            <div className="rounded-md border border-indigo-200 bg-indigo-50/70 dark:border-indigo-800 dark:bg-indigo-950/40 p-2.5 text-xs text-indigo-950 dark:text-indigo-200 space-y-1">
+              <div className="flex items-center gap-1.5 font-semibold text-indigo-700 dark:text-indigo-300">
+                <Sparkles className="size-3.5" />
+                Cơ chế tự động chia buổi (Auto-split by Duration)
+              </div>
+              <p>
+                Tổng <strong>{topicTotalHours}h</strong> chia <strong>{topicSessionHours}h/buổi</strong> ➔ Sinh ra <strong>{Math.ceil(topicTotalHours / topicSessionHours)} buổi học</strong> ({topicDailyStart} – {calculateEndTime(topicDailyStart, topicSessionHours)}).
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setTopicOpen(false)}>
-              Cancel
+              Hủy
             </Button>
             <Button
               size="sm"
               disabled={!topicCode.trim() || !topicName.trim()}
+              className="bg-primary text-primary-foreground gap-1.5"
               onClick={addTopic}
             >
-              Add Topic
+              <Plus className="size-4" />
+              Thêm & Tự động tạo {Math.ceil(topicTotalHours / topicSessionHours)} buổi
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Tự động chia lại buổi theo Duration cho Topic đã có */}
+      <Dialog open={splitModalOpen} onOpenChange={setSplitModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
+              <Sparkles className="size-4" />
+              Tự động chia buổi theo Duration : {splittingTopic?.code}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Hệ thống sẽ tự động tính toán lại số ngày (Days) và hoạt động (Activities) dựa trên tổng thời lượng của môn {splittingTopic?.name}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-xs">
+            <div className="grid grid-cols-2 gap-3">
+              <label className="space-y-1 block font-medium">
+                Tổng thời lượng môn (giờ)
+                <Input
+                  type="number"
+                  min={1}
+                  max={200}
+                  className="h-8 text-xs font-mono"
+                  value={splitTotalHours}
+                  onChange={(e) => setSplitTotalHours(Number(e.target.value) || 1)}
+                />
+              </label>
+
+              <label className="space-y-1 block font-medium">
+                Thời lượng mỗi buổi (Session)
+                <select
+                  className={selectClass}
+                  value={splitSessionHours}
+                  onChange={(e) => setSplitSessionHours(Number(e.target.value))}
+                >
+                  <option value={1.5}>1.5 giờ (90 phút)</option>
+                  <option value={2.0}>2.0 giờ (120 phút)</option>
+                  <option value={2.25}>2h15m (135 phút - Slot chuẩn)</option>
+                  <option value={2.5}>2.5 giờ (150 phút - Chuẩn FAMS)</option>
+                  <option value={3.0}>3.0 giờ (180 phút)</option>
+                  <option value={4.0}>4.0 giờ (240 phút - Nửa ngày)</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <label className="space-y-1 block font-medium">
+                Ngày bắt đầu môn học
+                <Input
+                  type="date"
+                  className="h-8 text-xs"
+                  value={splitStartDate}
+                  onChange={(e) => setSplitStartDate(e.target.value)}
+                />
+              </label>
+
+              <label className="space-y-1 block font-medium">
+                Giờ bắt đầu mỗi ngày
+                <Input
+                  type="time"
+                  className="h-8 text-xs font-mono"
+                  value={splitDailyStart}
+                  onChange={(e) => setSplitDailyStart(e.target.value)}
+                />
+              </label>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="checkbox"
+                id="splitSkipWeekendsCheckbox"
+                checked={splitSkipWeekends}
+                onChange={(e) => setSplitSkipWeekends(e.target.checked)}
+                className="rounded border-input text-primary focus:ring-primary h-4 w-4"
+              />
+              <Label htmlFor="splitSkipWeekendsCheckbox" className="text-xs cursor-pointer">
+                Bỏ qua Thứ 7 và Chủ Nhật (Chỉ học Thứ 2 – Thứ 6)
+              </Label>
+            </div>
+
+            <div className="rounded-md border border-indigo-200 bg-indigo-50/70 dark:border-indigo-800 dark:bg-indigo-950/40 p-2.5 text-xs text-indigo-950 dark:text-indigo-200 space-y-1">
+              <div className="flex items-center gap-1.5 font-semibold text-indigo-700 dark:text-indigo-300">
+                <Clock className="size-3.5" />
+                Kết quả dự kiến:
+              </div>
+              <p>
+                Sẽ sinh ra <strong>{Math.ceil(splitTotalHours / splitSessionHours)} buổi học</strong> ({splitDailyStart} – {calculateEndTime(splitDailyStart, splitSessionHours)}), tổng cộng <strong>{splitTotalHours} giờ</strong>.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setSplitModalOpen(false)}>
+              Hủy bỏ
+            </Button>
+            <Button
+              size="sm"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+              onClick={handleApplySplit}
+            >
+              <Sparkles className="size-3.5 mr-1" />
+              Xác nhận chia lại
             </Button>
           </DialogFooter>
         </DialogContent>
