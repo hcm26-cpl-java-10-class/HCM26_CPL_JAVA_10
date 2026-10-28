@@ -12,7 +12,8 @@ public enum SprintBacklogStatus {
     TODO("To do"),
     IN_PROGRESS("In progress"),
     REVIEW("Review"),
-    DONE("Done");
+    DONE("Done"),
+    BLOCKED("Blocked");
 
     private final String label;
 
