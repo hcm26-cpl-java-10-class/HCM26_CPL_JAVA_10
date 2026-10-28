@@ -2,7 +2,7 @@ import { downloadTemplate } from "@/api/features/dataio/dataio-api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TabsContent } from "@/components/ui/tabs";
-import { Download, FileSpreadsheet, Loader2, Upload, X } from "lucide-react";
+import { Download, Eye, FileSpreadsheet, Loader2, Upload, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -12,10 +12,13 @@ interface ImportTabProps {
   loading: boolean;
   onImport: (file: File) => Promise<void>;
   entityName?: string;
+  onPreview?: (file: File) => Promise<void>;
+  onFileChange?: (file: File | null) => void;
   onDownloadTemplate?: () => Promise<void>;
+  maxFileSize?: number;
 }
 
-export function ImportTab({ loading, onImport, entityName, onDownloadTemplate }: ImportTabProps) {
+export function ImportTab({ loading, onImport, entityName, onPreview, onFileChange, onDownloadTemplate, maxFileSize = MAX_FILE_SIZE }: ImportTabProps) {
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -23,17 +26,15 @@ export function ImportTab({ loading, onImport, entityName, onDownloadTemplate }:
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const validateFile = (file: File): boolean => {
-    if (
-      !file.name.endsWith(".xlsx") &&
-      !file.name.endsWith(".xls") &&
-      !file.name.endsWith(".csv")
-    ) {
+    if (!/\.(xlsx|xls|csv)$/i.test(file.name)) {
       setError("Only Excel or CSV files (.xlsx, .xls, .csv) are allowed");
       return false;
     }
 
-    if (file.size > MAX_FILE_SIZE) {
-      setError("File size must be less than 50MB");
+    if (file.size === 0) { setError("Choose a non-empty file"); return false; }
+
+    if (file.size > maxFileSize) {
+      setError(`File size must be at most ${maxFileSize / (1024 * 1024)}MB`);
       return false;
     }
 
@@ -45,6 +46,7 @@ export function ImportTab({ loading, onImport, entityName, onDownloadTemplate }:
     if (!validateFile(file)) return;
 
     setFile(file);
+    onFileChange?.(file);
     setError(null);
   };
 
@@ -54,19 +56,27 @@ export function ImportTab({ loading, onImport, entityName, onDownloadTemplate }:
     try {
       setError(null);
       await onImport(file);
-      clearFile();
+      clearFile(false);
     } catch (err: any) {
-      setError(err?.response?.data?.message ?? "Failed to import data");
+      setError(err?.response?.data?.message ?? err?.message ?? "Failed to import data");
+    }
+  };
+
+  const handlePreviewClick = async () => {
+    if (!file || loading || !onPreview) return;
+    try { setError(null); await onPreview(file); }
+    catch (error: unknown) {
+      setError(error instanceof Error ? error.message : "Unable to preview the file");
     }
   };
 
   const handleDownloadTemplate = async () => {
-    if (!entityName) return;
+    if (!entityName && !onDownloadTemplate) return;
 
     try {
       setDownloadingTemplate(true);
       if (onDownloadTemplate) await onDownloadTemplate();
-      else await downloadTemplate(entityName);
+      else await downloadTemplate(entityName!);
       toast.success("Template downloaded successfully");
     } catch (error) {
       console.error("Error downloading template:", error);
@@ -96,8 +106,9 @@ export function ImportTab({ loading, onImport, entityName, onDownloadTemplate }:
     handleFileSelect(droppedFile ?? null);
   };
 
-  const clearFile = () => {
+  const clearFile = (notify = true) => {
     setFile(null);
+    if (notify) onFileChange?.(null);
     setError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -106,12 +117,12 @@ export function ImportTab({ loading, onImport, entityName, onDownloadTemplate }:
 
   return (
     <TabsContent value="import" className="mt-4 flex-1 flex flex-col gap-4">
-      {entityName && (
+      {(entityName || onDownloadTemplate) && (
         <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
           <div className="flex-1">
             <p className="text-sm font-medium">Download Template</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Download Excel template to see data format
+              {onDownloadTemplate ? "Download a template to see the data format" : "Download Excel template to see data format"}
             </p>
           </div>
           <Button
@@ -149,7 +160,7 @@ export function ImportTab({ loading, onImport, entityName, onDownloadTemplate }:
           </div>
           <p className="text-sm font-medium">Click to upload or drag and drop</p>
           <p className="text-xs text-muted-foreground">
-            Excel or CSV files (.xlsx, .xls, .csv) up to 50MB
+            Excel or CSV files (.xlsx, .xls, .csv) up to {maxFileSize / (1024 * 1024)}MB
           </p>
 
           <Input
@@ -178,7 +189,7 @@ export function ImportTab({ loading, onImport, entityName, onDownloadTemplate }:
             <Button
               variant="ghost"
               size="sm"
-              onClick={clearFile}
+              onClick={() => clearFile()}
               disabled={loading}
               className="h-8 w-8 p-0"
             >
@@ -186,29 +197,21 @@ export function ImportTab({ loading, onImport, entityName, onDownloadTemplate }:
             </Button>
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
 
-          <Button
-            className="mt-auto w-full font-semibold disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100"
-            onClick={handleImportClick}
-            disabled={!file || loading}
-            size="lg"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Importing...
-              </>
-            ) : (
-              <>
-                <Upload className="mr-2 h-5 w-5" />
-                Import File
-              </>
-            )}
-          </Button>
         </div>
       )}
+      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+      {(file || onPreview) && <div className="mt-auto flex gap-2">
+        {onPreview && <Button type="button" variant="outline" size="lg" className="flex-1 font-semibold"
+          disabled={!file || loading} onClick={handlePreviewClick}>
+          <Eye className="mr-2 h-5 w-5" />Preview
+        </Button>}
+        <Button type="button" className="w-full flex-1 font-semibold disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100"
+          onClick={handleImportClick} disabled={!file || loading} size="lg">
+          {loading ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" />{onPreview ? "Processing..." : "Importing..."}</>
+            : <><Upload className="mr-2 h-5 w-5" />Import File</>}
+        </Button>
+      </div>}
     </TabsContent>
   );
 }
-

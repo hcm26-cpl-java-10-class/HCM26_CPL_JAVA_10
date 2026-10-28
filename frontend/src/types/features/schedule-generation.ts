@@ -73,7 +73,7 @@ export interface PreviewSessionItemDTO {
   meetingUrl?: string;
   teachingAssignmentId?: number;
   title: string;
-  status: "VALID" | "CONFLICT";
+  status: "VALID" | "CONFLICT" | "PENDING";
   conflictDetails?: ConflictDetailDTO;
 }
 

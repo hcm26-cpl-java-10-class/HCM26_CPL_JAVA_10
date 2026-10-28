@@ -13,6 +13,7 @@ import { iconMap } from "@/components/datatable/iconMap";
 import type { FieldSchema } from "@/types";
 import { FieldError } from "./FieldError";
 import { MultiRelationSelect } from "./MultiRelationSelect";
+import { countWords } from "@/components/datatable/util/word-count";
 
 interface FormFieldRendererProps {
   field: FieldSchema;
@@ -34,6 +35,15 @@ export function FormFieldRenderer({
   relationOptions = {},
   onChange,
 }: FormFieldRendererProps) {
+  if (field.renderInput) {
+    return (
+      <div className="grid gap-2">
+        <Label htmlFor={field.name}>{field.label}</Label>
+        {field.renderInput({ id: field.name, value, onChange: (next) => onChange(field.name, next), invalid: Boolean(fieldErrors?.length) })}
+        <FieldError errors={fieldErrors} />
+      </div>
+    );
+  }
   switch (field.type) {
     case "boolean":
       return (
@@ -225,7 +235,9 @@ export function FormFieldRenderer({
         </div>
       );
 
-    case "textarea":
+    case "textarea": {
+      const words = countWords(value);
+      const exceedsLimit = field.maxWords !== undefined && words > field.maxWords;
       return (
         <div className="grid gap-2">
           <Label htmlFor={field.name}>{field.label}</Label>
@@ -236,10 +248,23 @@ export function FormFieldRenderer({
             onChange={(e) => onChange(field.name, e.target.value)}
             placeholder={`Enter ${field.label.toLowerCase()}...`}
             rows={4}
+            aria-invalid={exceedsLimit || Boolean(fieldErrors?.length)}
+            aria-describedby={field.maxWords !== undefined ? `${field.name}-word-count` : undefined}
           />
+          {field.maxWords !== undefined && (
+            <p
+              id={`${field.name}-word-count`}
+              role="status"
+              aria-live="polite"
+              className={`text-right text-xs ${exceedsLimit ? "text-destructive" : "text-muted-foreground"}`}
+            >
+              {words} / {field.maxWords} words
+            </p>
+          )}
           <FieldError errors={fieldErrors} />
         </div>
       );
+    }
 
     case "text":
     default:

@@ -6,15 +6,18 @@ import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
-import com.example.starter_project_2025.system.demo.session.SessionRepository;
+import com.example.starter_project_2025.base.crud.CrudAction;
+import org.springframework.security.access.prepost.PreAuthorize;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.jdbc.core.JdbcOperations;
+import java.util.Objects;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 @Service
 @Transactional
@@ -26,8 +29,7 @@ public class SubjectServiceImpl
 
     SubjectMapper subjectMapper;
     SubjectRepository subjectRepository;
-    SessionRepository sessionRepository;
-    JdbcOperations jdbcTemplate;
+    SubjectUsageService usageService;
 
     @Override
     protected BaseCrudRepository<Subject, Long> getRepository() {
@@ -45,6 +47,19 @@ public class SubjectServiceImpl
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Page<SubjectDTO> getAll(Pageable pageable, String search, SubjectFilter filter) {
+        checkPermission(CrudAction.READ);
+        if (filter != null && filter.getMinHours() != null && filter.getMaxHours() != null
+                && filter.getMinHours() > filter.getMaxHours()) {
+            ValidationContext ctx = new ValidationContext();
+            ctx.add("durationHours", "Minimum hours must not exceed maximum hours");
+            ctx.throwIfErrors();
+        }
+        return super.getAll(pageable, search, filter);
+    }
+
+    @Override
     protected void beforeCreate(Subject subject, SubjectDTO request, ValidationContext ctx) {
         String code = SubjectIdentity.normalizeCode(request.getCode());
         String version = SubjectIdentity.normalizeVersion(request.getVersion());
@@ -53,9 +68,14 @@ public class SubjectServiceImpl
         subject.setCode(code);
         subject.setVersion(version);
         validateIdentity(code, version, null, ctx);
+        validateContent(request, null, ctx);
+        synchronizeStatus(request, null, ctx);
+        subject.setStatus(request.getStatus());
+        subject.setIsActive(request.getIsActive());
+        subject.setName(request.getName());
 
         if (request.getDurationHours() != null && request.getDurationHours() <= 0) {
-            ctx.add("durationHours", "Subject duration must be greater than 0");
+            ctx.add("durationHours", "Hours must be greater than 0");
         }
     }
 
@@ -68,10 +88,86 @@ public class SubjectServiceImpl
         validateIdentity(checkCode, checkVersion, subject.getId(), ctx);
         request.setCode(checkCode);
         request.setVersion(checkVersion);
+        validateContent(request, subject, ctx);
+        synchronizeStatus(request, subject, ctx);
+        if (contentChanged(subject, request) && usageService.getUsage(subject.getId()).isReferenced()) {
+            ctx.add("version", "This version is already in use. Clone it to a new version to change its content.");
+        }
 
         if (request.getDurationHours() != null && request.getDurationHours() <= 0) {
-            ctx.add("durationHours", "Subject duration must be greater than 0");
+            ctx.add("durationHours", "Hours must be greater than 0");
         }
+    }
+
+    private void validateContent(SubjectDTO request, Subject existing, ValidationContext ctx) {
+        String name = request.getName() != null ? request.getName().trim() : existing != null ? existing.getName() : null;
+        if (name == null || name.isBlank()) ctx.add("name", "Subject name is required");
+        if (request.getName() != null) request.setName(name);
+        validateLength("name", name, 255, ctx);
+        validateLength("code", request.getCode(), 50, ctx);
+        validateLength("version", request.getVersion(), 20, ctx);
+        validateLength("technicalGroup", request.getTechnicalGroup(), 100, ctx);
+        validateLength("objectives", request.getObjectives(), 4000, ctx);
+        validateLength("skills", request.getSkills(), 4000, ctx);
+        validateLength("outline", request.getOutline(), 12000, ctx);
+        if (SubjectDescription.countWords(request.getDescription()) > SubjectDescription.MAX_WORDS) {
+            ctx.add("description", "Description must not exceed 500 words");
+        }
+        if (existing == null && request.getDurationHours() == null) ctx.add("durationHours", "Hours is required");
+    }
+
+    private void validateLength(String field, String value, int max, ValidationContext ctx) {
+        if (value != null && value.length() > max) ctx.add(field, field + " must not exceed " + max + " characters");
+    }
+
+    private void synchronizeStatus(SubjectDTO request, Subject existing, ValidationContext ctx) {
+        if (request.getStatus() == SubjectStatus.DRAFT) ctx.add("status", "Choose ACTIVE or INACTIVE");
+        boolean active = request.getIsActive() != null ? request.getIsActive()
+                : request.getStatus() != null ? request.getStatus() == SubjectStatus.ACTIVE
+                : existing == null || Boolean.TRUE.equals(existing.getIsActive());
+        request.setIsActive(active);
+        request.setStatus(active ? SubjectStatus.ACTIVE : SubjectStatus.INACTIVE);
+    }
+
+    private boolean contentChanged(Subject existing, SubjectDTO request) {
+        return changed(SubjectIdentity.normalizeCode(existing.getCode()), request.getCode())
+                || changed(SubjectIdentity.normalizeVersion(existing.getVersion()), request.getVersion())
+                || changed(existing.getName(), request.getName())
+                || changed(existing.getTechnicalGroup(), request.getTechnicalGroup())
+                || changed(existing.getDurationHours(), request.getDurationHours())
+                || changed(existing.getDescription(), request.getDescription())
+                || changed(existing.getObjectives(), request.getObjectives())
+                || changed(existing.getSkills(), request.getSkills())
+                || changed(existing.getDeliveryMode(), request.getDeliveryMode())
+                || changed(existing.getOutline(), request.getOutline());
+    }
+
+    private boolean changed(Object existing, Object requested) {
+        return requested != null && !Objects.equals(existing, requested);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SubjectDTO validateForCreate(SubjectDTO request) {
+        checkPermission(CrudAction.CREATE);
+        ValidationContext ctx = new ValidationContext();
+        beforeCreate(subjectMapper.toEntity(request), request, ctx);
+        ctx.throwIfErrors();
+        return request;
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('SUBJECT_CREATE') and hasAuthority('SUBJECT_READ')")
+    public SubjectDTO cloneVersion(Long id, SubjectCloneRequest request) {
+        Subject original = subjectRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Subject not found"));
+        SubjectDTO copy = subjectMapper.toResponse(original);
+        copy.setId(null);
+        copy.setVersion(request.version());
+        // A new version is explicitly activated after its content has been reviewed.
+        copy.setIsActive(false);
+        copy.setStatus(SubjectStatus.INACTIVE);
+        return create(copy);
     }
 
     private void validateIdentity(String code, String version, Long excludedId, ValidationContext ctx) {
@@ -86,19 +182,23 @@ public class SubjectServiceImpl
 
     @Override
     @Transactional(readOnly = true)
+    @PreAuthorize("hasAuthority('SUBJECT_READ')")
     public List<SubjectDTO> getActiveSubjects() {
         return subjectRepository.findByIsActiveTrue()
                 .stream()
+                .filter(subject -> subject.getStatus() == SubjectStatus.ACTIVE)
                 .map(subjectMapper::toResponse)
                 .toList();
     }
 
     @Override
+    @PreAuthorize("hasAuthority('SUBJECT_UPDATE')")
     public SubjectDTO changeStatus(Long id, Boolean isActive) {
         Subject subject = subjectRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Subject not found with ID: " + id));
 
         subject.setIsActive(Boolean.TRUE.equals(isActive));
+        subject.setStatus(Boolean.TRUE.equals(isActive) ? SubjectStatus.ACTIVE : SubjectStatus.INACTIVE);
         Subject saved = subjectRepository.save(subject);
         return subjectMapper.toResponse(saved);
     }
@@ -116,37 +216,8 @@ public class SubjectServiceImpl
 
     @Override
     @Transactional(readOnly = true)
+    @PreAuthorize("hasAuthority('SUBJECT_READ')")
     public boolean isSubjectReferenced(Long id) {
-        if (id == null) {
-            return false;
-        }
-
-        // 1. Kiểm tra trong bảng sessions (Topic ID)
-        if (sessionRepository != null && sessionRepository.existsByTopicId(id)) {
-            return true;
-        }
-
-        // 2. Kiểm tra động các bảng liên kết từ các module khác (program_subjects, study_sessions, teaching_assignments)
-        String[] checkQueries = {
-                "SELECT COUNT(*) FROM program_subjects WHERE subject_id = ?",
-                "SELECT COUNT(*) FROM teaching_assignments WHERE subject_id = ?",
-                "SELECT COUNT(*) FROM study_sessions WHERE subject_id = ? OR topic_id = ?"
-        };
-
-        if (jdbcTemplate != null) {
-            for (String sql : checkQueries) {
-                try {
-                    Object[] params = sql.contains("OR") ? new Object[]{id, id} : new Object[]{id};
-                    Integer count = jdbcTemplate.queryForObject(sql, Integer.class, params);
-                    if (count != null && count > 0) {
-                        return true;
-                    }
-                } catch (Exception ignored) {
-                    // Bảng chưa tồn tại trong schema ở giai đoạn phát triển độc lập
-                }
-            }
-        }
-
-        return false;
+        return id != null && usageService.getUsage(id).isReferenced();
     }
 }

@@ -31,13 +31,24 @@ public class SubjectDTO extends BaseDTO {
     @Size(max = 20, message = "Version must not exceed 20 characters")
     String version;
 
-    @Size(max = 1000, message = "Description must not exceed 1000 characters")
     String description;
+
+    @Size(max = 4000, message = "Objectives must not exceed 4000 characters")
+    String objectives;
+
+    @Size(max = 4000, message = "Skills must not exceed 4000 characters")
+    String skills;
+
+    SubjectDeliveryMode deliveryMode;
+
+    @Size(max = 12000, message = "Outline must not exceed 12000 characters")
+    String outline;
 
     @Size(max = 100, message = "Technical group must not exceed 100 characters")
     String technicalGroup;
 
-    @NotNull(groups = OnCreate.class, message = "Duration is required")
-    @Min(value = 1, message = "Duration must be greater than 0")
+    @NotNull(groups = OnCreate.class, message = "Hours is required")
+    @Min(value = 1, message = "Hours must be greater than 0")
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = SubjectHoursDeserializer.class)
     Integer durationHours;
 }

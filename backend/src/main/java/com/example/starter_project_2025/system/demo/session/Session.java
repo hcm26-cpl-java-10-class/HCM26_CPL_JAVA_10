@@ -28,11 +28,11 @@ import lombok.experimental.SuperBuilder;
 @ExportEntity(fileName = "class_sessions", sheetName = "Class Sessions")
 @ResourcePermission("SESSION")
 @ResourceMenu(
-        title = "Class Schedules",
-        group = "Training Operations",
+        title = "Study Sessions",
+        group = "Subjects & Scheduling",
         icon = "calendar",
         url = "/sessions",
-        order = 3,
+        order = 5,
         permission = "SESSION_READ"
 )
 public class Session extends BaseEntity {

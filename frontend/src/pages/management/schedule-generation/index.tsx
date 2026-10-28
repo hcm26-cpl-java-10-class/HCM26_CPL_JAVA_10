@@ -1,5 +1,6 @@
 import axios from "axios";
 import { useState, useEffect, useRef } from "react";
+import { getBulkSubmission, type BulkSubmission } from "./submission-key";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AssignmentPicker } from "./AssignmentPicker";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -72,8 +73,6 @@ const SLOT_PRESETS = [
   { id: "CUSTOM", label: "Tùy chỉnh giờ", start: "08:30:00", hours: 3.5 },
 ];
 
-
-
 // Lấy thứ Hai kế tiếp làm ngày mặc định
 const getNextMonday = (): string => {
   const d = new Date();
@@ -90,7 +89,7 @@ export default function BulkScheduleGenerationPage() {
 
   // State Lớp học
   const [classes, setClasses] = useState<SharedClass[]>([]);
-  const [selectedClassId, setSelectedClassId] = useState<number>(queryClassId ? Number(queryClassId) : 1);
+  const [selectedClassId, setSelectedClassId] = useState<number>(queryClassId ? Number(queryClassId) : 0);
   const [context, setContext] = useState<ScheduleGenerationContextResponse | null>(null);
   const [isLoadingContext, setIsLoadingContext] = useState<boolean>(false);
 
@@ -103,9 +102,11 @@ export default function BulkScheduleGenerationPage() {
   const [selectedRoomId, setSelectedRoomId] = useState<number>(0);
   const [rooms, setRooms] = useState<Array<{ id: number; name: string }>>([]);
   const [meetingUrl, setMeetingUrl] = useState("");
-  const replay = useRef<{ payload: string; key: string } | null>(null);
+  const submission = useRef<BulkSubmission | null>(null);
   const submitting = useRef(false);
-  useEffect(() => { classSetupApi.getRooms().then(setRooms).catch(() => toast.error("Unable to load rooms.")); }, []);
+  useEffect(() => {
+    classSetupApi.getRooms().then(setRooms).catch(() => toast.error("Unable to load rooms."));
+  }, []);
   const [skipHolidays, setSkipHolidays] = useState<boolean>(true);
   const checkConflicts = true;
 
@@ -131,14 +132,20 @@ export default function BulkScheduleGenerationPage() {
           }
         }
       })
-      .catch(() => { setClasses([]); toast.error("Unable to load classes. Please reload."); });
+      .catch(() => {
+        setClasses([]);
+        setSelectedClassId(0);
+        toast.error("Không tải được danh sách lớp. Kiểm tra kết nối rồi tải lại trang.");
+      });
   }, [queryClassId]);
 
   // Tải ngữ cảnh môn học của lớp đã chọn
   useEffect(() => {
     if (!selectedClassId) return;
     const controller = new AbortController();
-    setContext(null); setPreviewResult(null); setEditableSessions([]);
+    setContext(null);
+    setPreviewResult(null);
+    setEditableSessions([]);
     setIsLoadingContext(true);
     scheduleGenerationApi
       .getContext(selectedClassId, controller.signal)
@@ -150,7 +157,7 @@ export default function BulkScheduleGenerationPage() {
       })
       .catch((err) => {
         if (controller.signal.aborted) return;
-        toast.error("Không thể tải kế hoạch môn học của lớp");
+        toast.error(err?.response?.data?.message || "Không thể tải kế hoạch môn học của lớp");
         console.error(err);
       })
       .finally(() => { if (!controller.signal.aborted) setIsLoadingContext(false); });
@@ -227,16 +234,22 @@ export default function BulkScheduleGenerationPage() {
 
   // Chỉnh sửa từng dòng trên bảng preview
   const handleUpdateSession = <K extends keyof PreviewSessionItemDTO,>(index: number, field: K, value: PreviewSessionItemDTO[K]) => {
-    setEditableSessions((previous) => {
-      const updated = [...previous];
-      updated[index] = { ...updated[index], [field]: value };
-      if (["date", "startTime", "endTime"].includes(field)) {
-        updated[index].teachingAssignmentId = undefined;
-        updated[index].trainerId = undefined;
-        updated[index].trainerName = undefined;
+    setEditableSessions((previous) => previous.map((session, row) => {
+      if (row !== index) return session;
+      const updated: PreviewSessionItemDTO = {
+        ...session,
+        [field]: value,
+        status: "PENDING",
+        conflictDetails: undefined,
+      };
+      // Đổi ngày/giờ có thể làm assignment không còn hiệu lực => phải chọn lại.
+      if (field === "date" || field === "startTime" || field === "endTime") {
+        updated.teachingAssignmentId = undefined;
+        updated.trainerId = undefined;
+        updated.trainerName = undefined;
       }
       return updated;
-    });
+    }));
   };
 
   // Xóa bớt dòng trong preview
@@ -257,9 +270,8 @@ export default function BulkScheduleGenerationPage() {
     submitting.current = true;
     setIsSaving(true);
     // Sinh Idempotency Key chống gửi lặp / click đúp
-    const payload = JSON.stringify({ sessions: editableSessions });
-    if (!replay.current || replay.current.payload !== payload) replay.current = { payload, key: crypto.randomUUID() };
-    const idempotencyKey = replay.current.key;
+    submission.current = getBulkSubmission(submission.current, selectedClassId, editableSessions);
+    const idempotencyKey = submission.current.key;
 
     try {
       const response = await scheduleGenerationApi.save(
@@ -274,7 +286,8 @@ export default function BulkScheduleGenerationPage() {
       toast.error(requestError(err));
       console.error(err);
     } finally {
-      setIsSaving(false); submitting.current = false;
+      setIsSaving(false);
+      submitting.current = false;
     }
   };
 
@@ -316,7 +329,7 @@ export default function BulkScheduleGenerationPage() {
                 <CardTitle className="text-base font-semibold">1. Lớp học & Kế hoạch môn học của lớp</CardTitle>
               </div>
               <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
-                Lịch lớp: ACTIVE
+                Tạo lịch theo lớp
               </Badge>
             </div>
           </CardHeader>
@@ -464,8 +477,21 @@ export default function BulkScheduleGenerationPage() {
               </div>
             </div>
 
+            {/* Meeting URL khi học online */}
+            {!selectedRoomId && (
+              <div className="space-y-2">
+                <Label htmlFor="bulk-meeting-url">Online meeting URL</Label>
+                <Input
+                  id="bulk-meeting-url"
+                  type="url"
+                  value={meetingUrl}
+                  onChange={(event) => setMeetingUrl(event.target.value)}
+                  placeholder="https://..."
+                />
+              </div>
+            )}
+
             {/* Chọn các thứ trong tuần */}
-            {!selectedRoomId && <div className="space-y-2"><Label htmlFor="bulk-meeting-url">Online meeting URL</Label><Input id="bulk-meeting-url" type="url" value={meetingUrl} onChange={(event) => setMeetingUrl(event.target.value)} placeholder="https://..." /></div>}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <Label className="text-xs font-semibold text-slate-700">Các thứ học trong tuần</Label>
@@ -674,22 +700,65 @@ export default function BulkScheduleGenerationPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <AssignmentPicker classId={selectedClassId} row={session} disabled={isSaving} onSelect={(assignment) => {
-                              setEditableSessions((rows) => rows.map((row, i) => i === idx ? { ...row, teachingAssignmentId: assignment.id, trainerId: assignment.trainerId, trainerName: assignment.trainerName || undefined } : row));
-                            }} />
+                            <AssignmentPicker
+                              classId={selectedClassId}
+                              row={session}
+                              disabled={isSaving}
+                              onSelect={(assignment) => {
+                                setEditableSessions((rows) => rows.map((row, i) => i === idx
+                                  ? {
+                                      ...row,
+                                      teachingAssignmentId: assignment.id,
+                                      trainerId: assignment.trainerId,
+                                      trainerName: assignment.trainerName || undefined,
+                                      status: "PENDING",
+                                      conflictDetails: undefined,
+                                    }
+                                  : row));
+                              }}
+                            />
                           </TableCell>
                           <TableCell>
-                            <select aria-label={`Room for ${session.title}`} className="h-9 w-full rounded-md border bg-background px-2 text-xs" disabled={isSaving} value={session.roomId || 0} onChange={(event) => {
-                              const room = rooms.find((item) => item.id === Number(event.target.value));
-                              setEditableSessions((rows) => rows.map((row, i) => i === idx ? { ...row, roomId: room?.id, roomName: room?.name, meetingUrl: room ? undefined : meetingUrl } : row));
-                            }}><option value={0}>Online meeting</option>{rooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}</select>
-                            {!session.roomId && <Input aria-label={`Meeting URL for ${session.title}`} type="url" value={session.meetingUrl || ""} onChange={(event) => handleUpdateSession(idx, "meetingUrl", event.target.value)} disabled={isSaving} placeholder="https://..." />}
+                            <select
+                              aria-label={`Room for ${session.title}`}
+                              className="h-9 w-full rounded-md border bg-background px-2 text-xs"
+                              disabled={isSaving}
+                              value={session.roomId || 0}
+                              onChange={(event) => {
+                                const room = rooms.find((item) => item.id === Number(event.target.value));
+                                setEditableSessions((rows) => rows.map((row, i) => i === idx
+                                  ? {
+                                      ...row,
+                                      roomId: room?.id,
+                                      roomName: room?.name,
+                                      meetingUrl: room ? undefined : meetingUrl,
+                                      status: "PENDING",
+                                      conflictDetails: undefined,
+                                    }
+                                  : row));
+                              }}
+                            >
+                              <option value={0}>Online meeting</option>
+                              {rooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
+                            </select>
+                            {!session.roomId && (
+                              <Input
+                                aria-label={`Meeting URL for ${session.title}`}
+                                type="url"
+                                value={session.meetingUrl || ""}
+                                onChange={(event) => handleUpdateSession(idx, "meetingUrl", event.target.value)}
+                                disabled={isSaving}
+                                placeholder="https://..."
+                              />
+                            )}
                           </TableCell>
                           <TableCell className="text-center">
                             {isConflict ? (
                               <Badge variant="destructive" className="text-[10px] whitespace-nowrap">
                                 Trùng lịch
                               </Badge>
+                            ) : session.status === "PENDING" ? (
+                              <Badge variant="outline" className="text-[10px] whitespace-nowrap">Kiểm tra khi lưu</Badge>
                             ) : (
                               <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
                                 Hợp lệ

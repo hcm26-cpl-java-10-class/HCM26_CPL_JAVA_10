@@ -19,6 +19,35 @@ class ScheduleGeneratorEngineTest {
     private final ScheduleGeneratorEngine engine = new ScheduleGeneratorEngine();
 
     @Test
+    void invalidTeachingDaysCannotLeaveTheGeneratorInAnEndlessSearch() {
+        for (var days : List.of(Collections.<DayOfWeek>emptySet(), new java.util.HashSet<DayOfWeek>(Collections.singleton(null)))) {
+            var request = BulkPreviewRequestDTO.builder().startDate(LocalDate.of(2026, 11, 2)).daysOfWeek(days).build();
+            org.junit.jupiter.api.Assertions.assertThrows(com.example.starter_project_2025.exception.BadRequestException.class,
+                    () -> engine.generate(List.of(), request, Set.of()));
+        }
+    }
+
+    @Test
+    void anUnboundedOrSubMinuteSlotIsRejectedBeforeGeneratingRows() {
+        for (var hours : List.of(Double.NaN, Double.POSITIVE_INFINITY, 0.001, 25.0)) {
+            var request = BulkPreviewRequestDTO.builder().startDate(LocalDate.of(2026, 11, 2)).daysOfWeek(Set.of(DayOfWeek.MONDAY))
+                    .slotTime(BulkPreviewRequestDTO.SlotTimeDTO.builder().hoursPerSession(hours).build()).build();
+            var topics = List.of(ScheduleGenerationContextResponse.TopicContextItem.builder().totalHours(4.0).build());
+            org.junit.jupiter.api.Assertions.assertThrows(com.example.starter_project_2025.exception.BadRequestException.class,
+                    () -> engine.generate(topics, request, Set.of()));
+        }
+    }
+
+    @Test
+    void schedulesBeyondTheBatchLimitAreRejected() {
+        var request = BulkPreviewRequestDTO.builder().startDate(LocalDate.of(2026, 11, 2)).daysOfWeek(Set.of(DayOfWeek.MONDAY))
+                .slotTime(BulkPreviewRequestDTO.SlotTimeDTO.builder().hoursPerSession(1.0).build()).build();
+        var topics = List.of(ScheduleGenerationContextResponse.TopicContextItem.builder().totalHours(201.0).build());
+        org.junit.jupiter.api.Assertions.assertThrows(com.example.starter_project_2025.exception.BadRequestException.class,
+                () -> engine.generate(topics, request, Set.of()));
+    }
+
+    @Test
     @DisplayName("Should generate sessions across requested days of week and handle partial hours")
     void shouldGenerateSessions() {
         var topics = List.of(

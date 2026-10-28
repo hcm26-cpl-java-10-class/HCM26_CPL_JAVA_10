@@ -25,10 +25,10 @@ import org.springframework.web.bind.annotation.*;
 @ResourcePermission("SESSION")
 @ResourceMenu(
         title = "Weekly Schedule Generation",
-        group = "Schedule Management",
+        group = "Subjects & Scheduling",
         icon = "calendar",
         url = "/schedule-generation",
-        order = 1,
+        order = 6,
         permission = "SESSION_READ"
 )
 public class BulkSessionGenerationController {

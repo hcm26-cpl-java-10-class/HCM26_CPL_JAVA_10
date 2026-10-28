@@ -156,7 +156,7 @@ class SubjectIdentityApiTest {
         mvc.perform(multipart("/api/subjects/import").file(file).header("Authorization", authorization))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.successCount").value(1))
                 .andExpect(jsonPath("$.failureCount").value(1))
-                .andExpect(jsonPath("$.errors[0].message").value(containsString("Duration")));
+                .andExpect(jsonPath("$.errors[0].message").value(containsString("Hours")));
         assertEquals(count + 1, repository.count());
     }
 

@@ -31,8 +31,8 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ResourcePermission("ASSIGNMENT")
-@ResourceMenu(title = "Teaching Assignments", group = "Training Operations", icon = "users",
-        url = "/teaching-assignments", order = 2, permission = "ASSIGNMENT_READ")
+@ResourceMenu(title = "Teaching Assignments", group = "Subjects & Scheduling", icon = "users",
+        url = "/teaching-assignments", order = 4, permission = "ASSIGNMENT_READ")
 public class TeachingAssignment extends BaseEntity {
     @Version
     Long revision;

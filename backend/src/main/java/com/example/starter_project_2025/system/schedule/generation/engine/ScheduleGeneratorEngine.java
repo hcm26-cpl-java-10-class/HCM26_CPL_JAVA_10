@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.schedule.generation.engine;
 
+import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.system.schedule.generation.dto.BulkPreviewRequestDTO;
 import com.example.starter_project_2025.system.schedule.generation.dto.PreviewSessionItemDTO;
 import com.example.starter_project_2025.system.schedule.generation.dto.ScheduleGenerationContextResponse;
@@ -35,6 +36,10 @@ public class ScheduleGeneratorEngine {
             BulkPreviewRequestDTO request,
             Set<LocalDate> customHolidays
     ) {
+        if (request == null || request.getStartDate() == null || request.getDaysOfWeek() == null
+                || request.getDaysOfWeek().isEmpty() || request.getDaysOfWeek().stream().anyMatch(Objects::isNull)) {
+            throw new BadRequestException("Select a start date and at least one teaching day.");
+        }
         if (topics == null || topics.isEmpty()) {
             return Collections.emptyList();
         }
@@ -43,6 +48,11 @@ public class ScheduleGeneratorEngine {
         LocalDate currentDate = request.getStartDate();
         Set<DayOfWeek> daysOfWeek = request.getDaysOfWeek();
         BulkPreviewRequestDTO.SlotTimeDTO slot = request.getSlotTime();
+        if (slot != null && slot.getHoursPerSession() != null
+                && (!Double.isFinite(slot.getHoursPerSession()) || slot.getHoursPerSession() < 1.0 / 60.0
+                    || slot.getHoursPerSession() > 24)) {
+            throw new BadRequestException("A session must last between one minute and 24 hours.");
+        }
         double hoursPerSession = (slot != null && slot.getHoursPerSession() != null && slot.getHoursPerSession() > 0)
                 ? slot.getHoursPerSession()
                 : 4.0;
@@ -55,8 +65,8 @@ public class ScheduleGeneratorEngine {
         Map<String, BulkPreviewRequestDTO.TopicOverrideDTO> overrideMap = new HashMap<>();
         if (request.getTopicOverrides() != null) {
             for (BulkPreviewRequestDTO.TopicOverrideDTO o : request.getTopicOverrides()) {
-                if (o.getProgramSubjectId()!=null) overrideMap.put("PROGRAM_SUBJECT:"+o.getProgramSubjectId(),o);
-                else if (o.getTopicId()!=null) overrideMap.put("TOPIC:"+o.getTopicId(),o);
+                if (o.getProgramSubjectId() != null) overrideMap.put("PROGRAM_SUBJECT:" + o.getProgramSubjectId(), o);
+                else if (o.getTopicId() != null) overrideMap.put("TOPIC:" + o.getTopicId(), o);
             }
         }
 
@@ -83,7 +93,9 @@ public class ScheduleGeneratorEngine {
             String roomName = request.getDefaultRoomName();
             Long teachingAssignmentId = topic.getTeachingAssignmentId();
 
-            String overrideKey=topic.getProgramSubjectId()!=null?"PROGRAM_SUBJECT:"+topic.getProgramSubjectId():"TOPIC:"+topic.getTopicId();
+            String overrideKey = topic.getProgramSubjectId() != null
+                    ? "PROGRAM_SUBJECT:" + topic.getProgramSubjectId()
+                    : "TOPIC:" + topic.getTopicId();
             if (overrideMap.containsKey(overrideKey)) {
                 BulkPreviewRequestDTO.TopicOverrideDTO o = overrideMap.get(overrideKey);
                 if (o.getTrainerId() != null) {
@@ -101,7 +113,9 @@ public class ScheduleGeneratorEngine {
             }
 
             while (remainingHours > 0) {
-                if(result.size()>=200) throw new IllegalArgumentException("A preview cannot contain more than 200 sessions.");
+                if (result.size() >= 200) {
+                    throw new BadRequestException("Generate at most 200 sessions at a time. Reduce the schedule range.");
+                }
                 // Tìm ngày học hợp lệ kế tiếp: thuộc daysOfWeek và không phải ngày nghỉ
                 while (!isValidTeachingDay(currentDate, daysOfWeek, request.getSkipHolidays(), customHolidays)) {
                     currentDate = currentDate.plusDays(1);
@@ -111,7 +125,9 @@ public class ScheduleGeneratorEngine {
                 double actualHours = Math.min(hoursPerSession, remainingHours);
 
                 long minutesToAdd = Math.round(actualHours * 60);
-                if(minutesToAdd<1) throw new IllegalArgumentException("Each session must last at least one minute.");
+                if (minutesToAdd < 1) {
+                    throw new BadRequestException("Each session must last at least one minute.");
+                }
                 LocalTime sessionEndTime = slotStartTime.plusMinutes(minutesToAdd);
 
                 LocalDateTime sessionStart = LocalDateTime.of(currentDate, slotStartTime);

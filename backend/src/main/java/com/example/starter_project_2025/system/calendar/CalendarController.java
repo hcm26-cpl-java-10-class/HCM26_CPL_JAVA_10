@@ -25,10 +25,10 @@ import java.time.LocalDateTime;
 @RequestMapping("/api/calendar")
 @ResourceMenu(
         title = "Timetable",
-        group = "Training Operations",
+        group = "Subjects & Scheduling",
         icon = "calendar",
         url = "/calendar/preview",
-        order = 4,
+        order = 7,
         permission = "SESSION_READ"
 )
 public class CalendarController {

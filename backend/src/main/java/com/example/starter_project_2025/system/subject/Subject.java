@@ -41,7 +41,7 @@ import lombok.experimental.SuperBuilder;
 @ResourcePermission("SUBJECT")
 @ResourceMenu(
     title = "Subjects",
-    group = "Subject Management",
+    group = "Subjects & Scheduling",
     icon = "book-open",
     url = "/subjects",
     order = 1,
@@ -60,6 +60,8 @@ public class Subject extends BaseEntity {
     @lombok.Builder.Default
     @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
     @Column(length = 20)
+    @ImportField(name = "Status")
+    @ExportField(name = "Status")
     SubjectStatus status = SubjectStatus.ACTIVE;
 
     @Column(nullable = false, length = 50)
@@ -77,10 +79,31 @@ public class Subject extends BaseEntity {
     @ExportField(name = "Version")
     String version;
 
-    @Column(length = 1000)
+    @Column(columnDefinition = "TEXT")
     @ImportField(name = "Description")
     @ExportField(name = "Description")
     String description;
+
+    @Column(columnDefinition = "TEXT")
+    @ImportField(name = "Objectives")
+    @ExportField(name = "Objectives")
+    String objectives;
+
+    @Column(columnDefinition = "TEXT")
+    @ImportField(name = "Skills")
+    @ExportField(name = "Skills")
+    String skills;
+
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(name = "delivery_mode", length = 20)
+    @ImportField(name = "Delivery Mode")
+    @ExportField(name = "Delivery Mode")
+    SubjectDeliveryMode deliveryMode;
+
+    @Column(columnDefinition = "TEXT")
+    @ImportField(name = "Outline")
+    @ExportField(name = "Outline")
+    String outline;
 
     @Column(name = "technical_group", length = 100)
     @ImportField(name = "Technical Group")
@@ -89,7 +112,7 @@ public class Subject extends BaseEntity {
 
     @Column(name = "duration_hours", nullable = false)
     @ImportField(name = "Duration (Hours)", required = true)
-    @ExportField(name = "Duration (Hours)")
+    @ExportField(name = "Hours")
     Integer durationHours;
 }
 
