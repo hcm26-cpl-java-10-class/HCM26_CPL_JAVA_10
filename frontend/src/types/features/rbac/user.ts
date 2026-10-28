@@ -12,6 +12,7 @@ export const USER_STATUS_OPTIONS: { value: UserStatus; label: string }[] = [
 export interface UserDTO extends BaseDTO {
   username?: string;
   email?: string;
+  userCode?: string | null;
   password?: string;
   firstName?: string;
   lastName?: string;

@@ -1,4 +1,4 @@
-export interface ProjectTeamMember { id: number; name: string; email: string }
+export interface ProjectTeamMember { id: number; name: string; email: string; userCode: string | null }
 
 export interface TeamCharter {
   mission: string;

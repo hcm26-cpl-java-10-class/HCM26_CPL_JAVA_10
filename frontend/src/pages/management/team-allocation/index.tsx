@@ -70,6 +70,18 @@ interface LocalDraftTeam {
   memberRoles: Record<number, string | null>;
 }
 
+/** Everything the saved-team dialog can change in one save (no publish). */
+interface SaveTeamDetailsPayload {
+  teamId: number;
+  teamVersion: number;
+  mentorId: number | null;
+  mentorChanged: boolean;
+  projectTemplateId: number | null;
+  templateChanged: boolean;
+  rolesChanged: boolean;
+  roles: Array<{ memberId: number; roles: TeamMemberRole[] }>;
+}
+
 interface ApiFailure {
   status: number;
   code: string;
@@ -568,87 +580,6 @@ export default function TeamAllocationPage() {
     onError: (error) => toast.error(getApiFailure(error).message),
   });
 
-  const publishMutation = useMutation({
-    mutationFn: (teamIds: number[]) => {
-      if (classId === null || sessionId === null) {
-        throw new Error("Không có phiên phân nhóm đang mở.");
-      }
-      const fingerprint = JSON.stringify({ classId, sessionId, teamIds });
-      const key = getStoredKey(publishKeyRef, fingerprint);
-      return teamAllocationApi.publishTeams(classId, sessionId, teamIds, key);
-    },
-    onSuccess: async (response) => {
-      publishKeyRef.current = null;
-      setPublishFailure(null);
-      const succeededItems = response?.succeededItems ?? [];
-      const failedItems = response?.failedItems ?? [];
-      setPublishItemFailures(failedItems);
-      if (classId !== null && sessionId !== null && succeededItems.length > 0) {
-        queryClient.setQueryData<TeamListResponse>(
-          ["team-allocation", "teams", classId, sessionId],
-          (current) => current
-            ? {
-                ...current,
-                teams: current.teams.map((team) =>
-                  succeededItems.includes(team.teamId)
-                    ? { ...team, status: "ACTIVE" }
-                    : team,
-                ),
-              }
-            : current,
-        );
-      }
-      if (succeededItems.length > 0) {
-        const successMessage = `Đã publish thành công ${succeededItems.length} nhóm.`;
-        setPublishSuccess(successMessage);
-        if (failedItems.length === 0) toast.success(successMessage);
-      } else {
-        setPublishSuccess(null);
-      }
-      void queryClient.invalidateQueries({
-        queryKey: ["team-allocation", "teams", classId, sessionId],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["team-allocation", "sessions", classId],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["team-allocation", "unassigned-members", classId, sessionId],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["team-allocation", "class-roster", classId, sessionId],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["workspace-candidates"],
-      });
-      if (failedItems.length) {
-        setPublishSuccess(null);
-        toast.warning(
-          succeededItems.length > 0
-            ? `Đã publish ${succeededItems.length} nhóm; ${failedItems.length} nhóm chưa thể publish. Xem toàn bộ lý do bên dưới.`
-            : `Chưa thể publish ${failedItems.length} nhóm. Xem toàn bộ lý do bên dưới.`,
-        );
-      }
-      if (
-        failedItems.length === 0 &&
-        succeededItems.length > 0 &&
-        succeededItems.length >= publishableTeams.length
-      ) {
-        setSession((current) => {
-          if (!current) return current;
-          const publishedSession = { ...current, status: "PUBLISHED" as const };
-          localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(publishedSession));
-          return publishedSession;
-        });
-      }
-    },
-    onError: (error) => {
-      const failure = getApiFailure(error);
-      setPublishSuccess(null);
-      setPublishFailure(failure);
-      toast.error(failure.message);
-    },
-  });
-
   // US-12: strict-mode pre-check (read-only, returns free students + team issues).
   const readinessMutation = useMutation({
     mutationFn: () => {
@@ -885,6 +816,102 @@ export default function TeamAllocationPage() {
     },
   });
 
+  // Save every editable field of one saved team (template, roles, mentor)
+  // without publishing it. The template is assigned first so the returned
+  // optimistic-lock version can be reused by the role update.
+  const saveTeamDetailsMutation = useMutation({
+    mutationFn: async (payload: SaveTeamDetailsPayload) => {
+      if (classId === null || sessionId === null) {
+        throw new Error("Không có phiên phân nhóm.");
+      }
+      let expectedVersion = payload.teamVersion;
+      if (payload.templateChanged && payload.projectTemplateId !== null) {
+        const assigned = await teamAllocationApi.assignProjectTemplate(
+          classId,
+          sessionId,
+          payload.teamId,
+          payload.projectTemplateId,
+        );
+        expectedVersion = assigned.version;
+      }
+      if (payload.rolesChanged) {
+        await teamAllocationApi.updateTeamRoles(
+          classId,
+          sessionId,
+          payload.teamId,
+          {
+            expectedVersion,
+            members: payload.roles.map((member) => ({
+              memberId: member.memberId,
+              roles: member.roles,
+              role: member.roles[0] ?? null,
+            })),
+          },
+        );
+      }
+      if (payload.mentorChanged) {
+        await teamAllocationApi.updateTeamMentor(
+          classId,
+          sessionId,
+          payload.teamId,
+          payload.mentorId,
+        );
+      }
+    },
+    onSuccess: async (_, payload) => {
+      setRoleAssignmentFailures((current) => {
+        const next = { ...current };
+        delete next[payload.teamId];
+        return next;
+      });
+      setTemplateAssignErrors((current) => {
+        const next = { ...current };
+        delete next[payload.teamId];
+        return next;
+      });
+      setReadiness(null);
+      setReadinessError(null);
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["team-allocation", "teams", classId, sessionId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["team-member-history"],
+        }),
+      ]);
+      toast.success("Đã lưu thông tin nhóm (chưa công bố).");
+    },
+    onError: (error, payload) => {
+      const failure = getApiFailure(error);
+      if (
+        failure.code === "ERR_TEAM_CAPACITY_EXCEEDED" ||
+        failure.code === "ERR_TEAM_NOT_DRAFT"
+      ) {
+        const templateFailure = getTemplateFailure(error);
+        setTemplateAssignErrors((current) => ({
+          ...current,
+          [payload.teamId]: templateFailure,
+        }));
+        toast.error(templateFailure.message ?? "Không thể gán đề bài.");
+        return;
+      }
+      const invalidMemberIds = failure.status === 422
+        ? failure.invalidMemberIds?.length
+          ? failure.invalidMemberIds
+          : failure.multiRoleMemberIds ?? []
+        : [];
+      setRoleAssignmentFailures((current) => ({
+        ...current,
+        [payload.teamId]: { ...failure, invalidMemberIds },
+      }));
+      toast.error(
+        failure.status === 409
+          ? "Dữ liệu/Version nhóm đã bị thay đổi, vui lòng tải lại trang"
+          : failure.message,
+      );
+    },
+  });
+
   // US-10: assign the selected project template to a DRAFT team.
   const assignTemplateMutation = useMutation({
     mutationFn: ({
@@ -999,6 +1026,7 @@ export default function TeamAllocationPage() {
     : members;
   const filteredMembers = memberOptions.filter((member) =>
     member.fullName.toLowerCase().includes(memberSearch.trim().toLowerCase()) ||
+    member.userCode?.toLowerCase().includes(memberSearch.trim().toLowerCase()) ||
     String(member.memberId).includes(memberSearch.trim()),
   );
   const publishableTeams = savedTeams.filter((team) => team.status === "DRAFT");
@@ -1120,33 +1148,15 @@ export default function TeamAllocationPage() {
     publishMutation.mutate([team.teamId]);
   };
 
-  const nameForMember = (memberId: number) =>
-    memberById.get(memberId)?.fullName ?? `Học viên #${memberId}`;
+  const nameForMember = (memberId: number) => {
+    const member = memberById.get(memberId);
+    if (!member) return `Học viên #${memberId}`;
+    return member.userCode ? `${member.fullName} (${member.userCode})` : member.fullName;
+  };
 
   return (
-    <MainLayout pathName={{ "team-allocation": "Phân nhóm dự án" }}>
+    <MainLayout pathName={{ "team-allocation": "Project Team Allocation" }}>
       <div className="mx-auto w-full max-w-7xl space-y-6">
-        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-900 px-6 py-8 text-white sm:px-9 sm:py-10">
-          <div className="pointer-events-none absolute -right-12 -top-24 size-72 rounded-full bg-blue-400/20 blur-3xl" />
-          <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-            <div className="max-w-2xl">
-              <Badge className="mb-4 border border-white/20 bg-white/10 text-blue-100 hover:bg-white/10">
-                ĐIỀU PHỐI LỚP HỌC
-              </Badge>
-              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-                Phân nhóm dự án thủ công
-              </h1>
-              <p className="mt-3 text-sm leading-6 text-blue-100/80 sm:text-base">
-                Chọn học viên, lưu nhóm ở trạng thái nháp và publish khi đã sẵn sàng.
-                Lựa chọn trên form được giữ lại nếu lưu gặp lỗi.
-              </p>
-            </div>
-            <div className="hidden size-24 shrink-0 items-center justify-center rounded-3xl border border-white/15 bg-white/10 sm:flex">
-              <UsersRound className="size-12 text-blue-100" />
-            </div>
-          </div>
-        </section>
-
         <div role="tablist" aria-label="Quản lý nhóm" className="flex gap-2 border-b">
           <button
             type="button"
@@ -1446,24 +1456,6 @@ export default function TeamAllocationPage() {
                         ? <LoaderCircle className="size-4 animate-spin" />
                         : <ListChecks className="size-4" />}
                       Kiểm tra điều kiện công bố
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        setPublishItemFailures([]);
-                        setPublishSuccess(null);
-                        publishSessionMutation.mutate();
-                      }}
-                      disabled={
-                        !hasPermission("PEO_TEAM_ALLOCATE") ||
-                        publishSessionMutation.isPending ||
-                        session.status !== "OPEN" ||
-                        draftTeams.length > 0
-                      }
-                    >
-                      {publishSessionMutation.isPending
-                        ? <LoaderCircle className="size-4 animate-spin" />
-                        : <Send className="size-4" />}
-                      Công bố chính thức
                     </Button>
                   </div>
                 </div>
@@ -1823,7 +1815,7 @@ export default function TeamAllocationPage() {
                     Nhóm đã lưu
                   </CardTitle>
                   <CardDescription>
-                    Các nhóm DRAFT chưa giữ chỗ học viên. Publish sẽ kiểm tra lại trạng thái thành viên.
+                    Các nhóm DRAFT chưa giữ chỗ học viên. Công bố chính thức sẽ kiểm tra lại trạng thái thành viên.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -1852,7 +1844,7 @@ export default function TeamAllocationPage() {
                                       variant="outline"
                                       className="border-destructive bg-destructive/10 text-destructive"
                                     >
-                                      {member.fullName} (#{member.memberId})
+                                      {member.fullName}{member.userCode ? ` · ${member.userCode}` : ` (#${member.memberId})`}
                                     </Badge>
                                   ))
                                 : publishFailure.unassignedMemberIds?.map((memberId) => (
@@ -1957,7 +1949,6 @@ export default function TeamAllocationPage() {
                             (team.status === "DRAFT" || team.status === "ACTIVE") &&
                             (session.status === "OPEN" || session.status === "PUBLISHED")
                           }
-                          canPublish={hasPermission("PEO_TEAM_ALLOCATE")}
                           roleSaveError={
                             roleAssignmentFailures[team.teamId]
                           }
@@ -1969,13 +1960,15 @@ export default function TeamAllocationPage() {
                             removeActiveMemberMutation.isPending
                           }
                           pending={
-                            publishMutation.isPending ||
                             saveDraftMutation.isPending ||
                             draftTeams.length > 0 ||
                             session.status !== "OPEN"
                           }
+                          savePending={saveTeamDetailsMutation.isPending}
                           onEdit={() => editSavedTeam(team)}
-                          onPublish={() => togglePublishTeam(team)}
+                          onSaveAll={(payload) =>
+                            saveTeamDetailsMutation.mutate(payload)
+                          }
                           onAddMember={(memberId) =>
                             addActiveMemberMutation.mutate({
                               teamId: team.teamId,
@@ -2052,34 +2045,32 @@ export default function TeamAllocationPage() {
                       ))}
                     </div>
                   )}
-                  {publishableTeams.length > 1 && (
+                  {savedTeams.length > 0 && (
                     <>
                       {teamsMissingRoles.length > 0 && (
                         <p className="text-sm text-muted-foreground">
-                          Gán và lưu role cho mọi thành viên trước khi publish.
+                          Gán và lưu vai trò cho mọi thành viên trước khi công bố chính thức.
                         </p>
                       )}
                       <Button
                         className="w-full"
-                        variant="outline"
                         disabled={
-                          publishMutation.isPending ||
+                          publishSessionMutation.isPending ||
                           !hasPermission("PEO_TEAM_ALLOCATE") ||
-                          teamsMissingRoles.length > 0
+                          session.status !== "OPEN" ||
+                          draftTeams.length > 0
                         }
                         onClick={() => {
                           setPublishItemFailures([]);
                           setPublishFailure(null);
                           setPublishSuccess(null);
-                          publishMutation.mutate(
-                            publishableTeams.map((team) => team.teamId),
-                          );
+                          publishSessionMutation.mutate();
                         }}
                       >
-                        {publishMutation.isPending
+                        {publishSessionMutation.isPending
                           ? <LoaderCircle className="size-4 animate-spin" />
                           : <Send className="size-4" />}
-                        Publish từng nhóm DRAFT còn lại
+                        Công bố chính thức
                       </Button>
                     </>
                   )}
@@ -2155,7 +2146,7 @@ export default function TeamAllocationPage() {
                     key={member.memberId}
                     className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
                   >
-                    <span className="min-w-0 truncate">{member.fullName}</span>
+                    <span className="min-w-0 truncate">{member.fullName}{member.userCode ? ` · ${member.userCode}` : ""}</span>
                     <span className="shrink-0 text-xs text-muted-foreground">
                       #{member.memberId}
                     </span>
@@ -2276,7 +2267,7 @@ export default function TeamAllocationPage() {
                   )
                   ?.members?.map((member) => (
                     <option key={member.memberId} value={member.memberId}>
-                      {member.fullName} · {member.role ?? "Chưa có role"}
+                      {member.fullName}{member.userCode ? ` · ${member.userCode}` : ""} · {member.role ?? "Chưa có role"}
                     </option>
                   ))}
               </select>
@@ -2803,7 +2794,9 @@ function MemberOption({
         onCheckedChange={(value) => onCheckedChange(value === true)}
         aria-label={`Chọn ${member.fullName}`}
       />
-      <span className="min-w-0 flex-1 truncate font-medium">{member.fullName}</span>
+      <span className="min-w-0 flex-1 truncate font-medium">
+        {member.fullName}{member.userCode ? <span className="ml-2 text-xs font-normal text-muted-foreground">{member.userCode}</span> : null}
+      </span>
       <span className="text-xs text-muted-foreground">#{member.memberId}</span>
       {duplicateDraft && (
         <span className="text-xs text-amber-700 dark:text-amber-300">Đã ở nhóm DRAFT khác</span>
@@ -2823,14 +2816,14 @@ function SavedTeamCard({
   canManageMentor,
   canManageRoles,
   canTransfer,
-  canPublish,
   roleSaveError,
   rolesPending,
   transferPending,
   membershipPending,
   pending,
+  savePending,
   onEdit,
-  onPublish,
+  onSaveAll,
   onAddMember,
   onRemoveMember,
   onTransfer,
@@ -2858,14 +2851,14 @@ function SavedTeamCard({
   canManageMentor: boolean;
   canManageRoles: boolean;
   canTransfer: boolean;
-  canPublish: boolean;
   roleSaveError?: ApiFailure;
   rolesPending: boolean;
   transferPending: boolean;
   membershipPending: boolean;
   pending: boolean;
+  savePending: boolean;
   onEdit: () => void;
-  onPublish: () => void;
+  onSaveAll: (payload: SaveTeamDetailsPayload) => void;
   onAddMember: (memberId: number) => void;
   onRemoveMember: (memberId: number) => void;
   onTransfer: (memberId: number) => void;
@@ -2918,10 +2911,24 @@ function SavedTeamCard({
         fullName: memberName(memberId),
         roles: memberRoles[memberId] ?? ([`DEV`] as TeamMemberRole[]),
       }));
-  const savedRolesComplete = members.every(
-    (member) => memberRolesOf(member).length > 0,
-  ) && roleQuotaGaps(team).length === 0;
   const currentQuotaGaps = roleQuotaGaps(team, memberRoles);
+  const mentorValue = team.assignedMentorId === null
+    ? ""
+    : String(team.assignedMentorId);
+  const templateValue = team.projectTemplateId == null
+    ? ""
+    : String(team.projectTemplateId);
+  const mentorChanged = selectedMentor !== mentorValue;
+  const templateChanged =
+    selectedTemplate !== "" && selectedTemplate !== templateValue;
+  const memberRolesChanged = members.some((member) => {
+    const savedRoles = memberRolesOf(member);
+    const nextRoles = memberRoles[member.memberId] ?? savedRoles;
+    return nextRoles.length !== savedRoles.length ||
+      nextRoles.some((role) => !savedRoles.includes(role));
+  });
+  const hasPendingChanges =
+    mentorChanged || templateChanged || memberRolesChanged;
   const updateMemberRoles = (
     memberId: number,
     roles: TeamMemberRole[],
@@ -3033,7 +3040,7 @@ function SavedTeamCard({
                 </p>
               </div>
             </div>
-            {(isActive || isDraft) && canManageMentor && (
+            {isActive && canManageMentor && (
               <div className="flex flex-wrap gap-2">
                 <select
                   aria-label={`Chọn Mentor cho ${team.teamName}`}
@@ -3041,9 +3048,7 @@ function SavedTeamCard({
                   value={selectedMentor}
                   onChange={(event) => setSelectedMentor(event.target.value)}
                 >
-                  <option value="">
-                    {isDraft ? "Chưa gán Mentor" : "Chọn Mentor..."}
-                  </option>
+                  <option value="">Chọn Mentor...</option>
                   {mentors.map((mentor) => (
                     <option key={mentor.mentorId} value={mentor.mentorId}>
                       {mentor.fullName}
@@ -3054,16 +3059,14 @@ function SavedTeamCard({
                   size="sm"
                   variant="outline"
                   disabled={
-                    (isActive && !selectedMentor) ||
-                    selectedMentor === (team.assignedMentorId === null
-                      ? ""
-                      : String(team.assignedMentorId))
+                    !selectedMentor ||
+                    selectedMentor === mentorValue
                   }
                   onClick={() => onUpdateMentor(
                     selectedMentor ? Number(selectedMentor) : null,
                   )}
                 >
-                  {isDraft ? "Lưu Mentor" : "Cập nhật Mentor"}
+                  Cập nhật Mentor
                 </Button>
               </div>
             )}
@@ -3185,6 +3188,12 @@ function SavedTeamCard({
                 </p>
               )}
             </div>
+            {team.projectTemplateId == null ? (
+              <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                Gán đề bài dự án để xem danh sách thành viên và cấu hình vai trò.
+              </p>
+            ) : (
+              <>
             <div>
               <p className="mb-2 text-sm font-medium">Danh sách thành viên</p>
               {members.length === 0 ? (
@@ -3201,7 +3210,7 @@ function SavedTeamCard({
                       key={member.memberId}
                       className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
                     >
-                      <span className="min-w-0 truncate">{member.fullName}</span>
+                      <span className="min-w-0 truncate">{member.fullName}{member.userCode ? ` · ${member.userCode}` : ""}</span>
                       <span className="flex shrink-0 items-center gap-2">
                         {canManageRoles ? (
                           allowMultiRole ? (
@@ -3378,6 +3387,7 @@ function SavedTeamCard({
                     {localRoleErrors.length > 0 ? ` (${localRoleErrors.length} thành viên)` : ""}.
                   </div>
                 )}
+                {isActive && (
                 <Button
                   type="button"
                   size="sm"
@@ -3423,7 +3433,10 @@ function SavedTeamCard({
                     : <Save className="size-4" />}
                   Lưu vai trò
                 </Button>
+                )}
               </div>
+            )}
+              </>
             )}
             {isActive && canManageMembers && (
               <div className="space-y-2">
@@ -3443,7 +3456,7 @@ function SavedTeamCard({
                       .filter((option) => !option.assignedToActiveTeam)
                       .map((option) => (
                         <option key={option.memberId} value={option.memberId}>
-                          {option.fullName}
+                          {option.fullName}{option.userCode ? ` · ${option.userCode}` : ""}
                         </option>
                       ))}
                   </select>
@@ -3479,7 +3492,7 @@ function SavedTeamCard({
               <>
                 <Button
                   variant="outline"
-                  disabled={pending}
+                  disabled={pending || savePending}
                   onClick={() => {
                     setDetailsOpen(false);
                     onEdit();
@@ -3490,25 +3503,56 @@ function SavedTeamCard({
                 <Button
                   disabled={
                     pending ||
-                    !canPublish ||
-                    members.length === 0 ||
-                    !savedRolesComplete
+                    savePending ||
+                    !hasPendingChanges
                   }
                   onClick={() => {
-                    setDetailsOpen(false);
-                    onPublish();
+                    const rolesPayload = members.map((member) => ({
+                      memberId: member.memberId,
+                      roles: memberRoles[member.memberId]
+                        ?? memberRolesOf(member),
+                    }));
+                    if (memberRolesChanged) {
+                      const missingRoleMemberIds = rolesPayload
+                        .filter((member) => member.roles.length === 0)
+                        .map((member) => member.memberId);
+                      const multiRoleMemberIds = allowMultiRole
+                        ? []
+                        : rolesPayload
+                          .filter((member) => member.roles.length > 1)
+                          .map((member) => member.memberId);
+                      if (missingRoleMemberIds.length || multiRoleMemberIds.length) {
+                        setLocalRoleErrors([
+                          ...missingRoleMemberIds,
+                          ...multiRoleMemberIds,
+                        ]);
+                        toast.error(
+                          missingRoleMemberIds.length
+                            ? "Mỗi thành viên cần ít nhất một vai trò."
+                            : "Đề bài không cho phép kiêm nhiệm vai trò.",
+                        );
+                        return;
+                      }
+                    }
+                    onSaveAll({
+                      teamId: team.teamId,
+                      teamVersion: team.version,
+                      mentorId: selectedMentor ? Number(selectedMentor) : null,
+                      mentorChanged,
+                      projectTemplateId: selectedTemplate
+                        ? Number(selectedTemplate)
+                        : null,
+                      templateChanged,
+                      rolesChanged: memberRolesChanged,
+                      roles: rolesPayload,
+                    });
                   }}
                 >
-                  {pending
+                  {savePending
                     ? <LoaderCircle className="size-4 animate-spin" />
-                    : <Send className="size-4" />}
-                  Publish
+                    : <Save className="size-4" />}
+                  Lưu
                 </Button>
-                {!savedRolesComplete && (
-                  <p className="text-xs text-muted-foreground">
-                    Gán role cho mọi thành viên trước khi publish.
-                  </p>
-                )}
               </>
             )}
           </DialogFooter>
@@ -3571,7 +3615,7 @@ function ReadinessReport({ report }: { report: AllocationReadiness }) {
                 variant="outline"
                 className="border-destructive bg-destructive/10 text-destructive"
               >
-                {student.fullName} (#{student.memberId})
+                {student.fullName}{student.userCode ? ` · ${student.userCode}` : ` (#${student.memberId})`}
               </Badge>
             ))}
           </div>

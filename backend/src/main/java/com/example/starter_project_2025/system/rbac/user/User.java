@@ -10,6 +10,7 @@ import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.project.tenant.Tenant;
+import com.example.starter_project_2025.system.project.workspace.domain.MeetingNoteAttendee;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -80,6 +81,10 @@ public class User extends BaseEntity {
                 inverseJoinColumns = @JoinColumn(name = "role_id"))
     Set<Role> roles = new HashSet<>();
 
+    @Builder.Default
+    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
+    Set<MeetingNoteAttendee> meetingNoteAttendances = new HashSet<>();
+
     public void setTenant(Tenant tenant) {
         this.tenant = tenant;
         this.tenantId = tenant == null ? null : tenant.getId();
@@ -95,4 +100,3 @@ public class User extends BaseEntity {
         return firstName + (lastName != null ? " " + lastName : "");
     }
 }
-

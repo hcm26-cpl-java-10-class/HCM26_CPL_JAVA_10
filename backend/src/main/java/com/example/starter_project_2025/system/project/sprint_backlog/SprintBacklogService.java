@@ -21,6 +21,10 @@ public interface SprintBacklogService
     /**
      * Active milestones that can be linked to a backlog item
      * (UFR-PRJ-003-02).
+     *
+     * @param teamId when provided, only the milestones of that team are
+     *               returned (Backlog tab of a team workspace); {@code null}
+     *               keeps the tenant-wide list.
      */
-    List<BacklogMilestoneOptionDTO> getMilestoneOptions();
+    List<BacklogMilestoneOptionDTO> getMilestoneOptions(Long teamId);
 }

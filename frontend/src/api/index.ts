@@ -13,6 +13,7 @@ export * from "./features/project-template.api";
 export * from "./features/milestone-submission.api";
 export * from "./features/sprint.api";
 export * from "./features/sprint_backlog.api";
+export * from "./features/team-backlog.api";
 export * from "./features/task.api";
 export * from "./features/backlog-item.api";
 export * from "./features/rbac/permission.api";

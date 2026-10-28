@@ -29,6 +29,12 @@ public interface SprintBacklogRepository extends BaseCrudRepository<SprintBacklo
      */
     Optional<SprintBacklog> findBySprintIsNullAndTitleIgnoreCase(String title);
 
+    /**
+     * Product backlog item of one project, used by the per-project workspace
+     * demo seed so the same title can exist in two projects.
+     */
+    Optional<SprintBacklog> findByProjectIdAndSprintIsNullAndTitleIgnoreCase(Long projectId, String title);
+
     long countBySprintId(Long sprintId);
 
     /**
@@ -54,4 +60,46 @@ public interface SprintBacklogRepository extends BaseCrudRepository<SprintBacklo
      * idempotently (a title is unique inside one sprint).
      */
     Optional<SprintBacklog> findBySprintIdAndTitleIgnoreCase(Long sprintId, String title);
+
+    /**
+     * Work items that live in a sprint owned by the team, used by the Backlog
+     * tab of a team workspace when the team is not linked to a project.
+     */
+    @Query("""
+            select backlog
+            from SprintBacklog backlog
+            join backlog.sprint sprint
+            where sprint.isActive = true
+              and sprint.teamId = :teamId
+            order by backlog.id asc
+            """)
+    List<SprintBacklog> findActiveBySprintTeamId(@Param("teamId") Long teamId);
+
+    /**
+     * Work items of a team workspace: the items of the team sprints plus the
+     * items of the sprints that belong to the project of the team.
+     */
+    @Query("""
+            select backlog
+            from SprintBacklog backlog
+            join backlog.sprint sprint
+            where sprint.isActive = true
+              and (sprint.teamId = :teamId or sprint.projectId = :projectId)
+            order by backlog.id asc
+            """)
+    List<SprintBacklog> findActiveBySprintTeamIdOrProjectId(@Param("teamId") Long teamId,
+                                                            @Param("projectId") Long projectId);
+
+    /**
+     * Product backlog (no sprint assigned yet) of one project, used by the
+     * Backlog tab of the team workspace that works on that project.
+     */
+    @Query("""
+            select backlog
+            from SprintBacklog backlog
+            where backlog.sprint is null
+              and backlog.projectId = :projectId
+            order by backlog.id asc
+            """)
+    List<SprintBacklog> findProductBacklogByProjectId(@Param("projectId") Long projectId);
 }

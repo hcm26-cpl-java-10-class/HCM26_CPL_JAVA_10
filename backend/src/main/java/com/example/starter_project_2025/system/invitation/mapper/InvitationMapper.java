@@ -60,6 +60,7 @@ public class InvitationMapper implements BaseCrudMapper<Invitation, InvitationDT
             dto.setUserId(entity.getUser().getId());
             dto.setUserEmail(entity.getUser().getEmail());
             dto.setUserFullName(entity.getUser().getFullName());
+            dto.setUserCode(entity.getUser().getUserCode());
         }
 
         dto.setStatus(entity.getStatus());

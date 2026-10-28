@@ -130,11 +130,15 @@ export const milestoneApi = {
 
   /**
    * Milestones that can be linked to a backlog item (UFR-PRJ-003-02).
-   * Only active milestones of the current tenant are returned.
+   * Only active milestones of the current tenant are returned. When `teamId`
+   * is given the backend limits the list to the milestones of that team, so
+   * the Backlog tab of a team workspace never offers milestones of other teams
+   * that work on the same project.
    */
-  getBacklogOptions: async (): Promise<MilestoneOption[]> => {
+  getBacklogOptions: async (teamId?: number | null): Promise<MilestoneOption[]> => {
     const response = await axiosInstance.get<MilestoneOption[]>(
       backlogMilestoneOptionsPath,
+      { params: teamId == null ? undefined : { teamId } },
     );
     return response.data ?? [];
   },

@@ -12,7 +12,7 @@ export const WORKSPACE_SECTIONS = [
   { id: "backlog", label: "Backlog", icon: ListTodo, description: "The team's work items" },
   { id: "artifacts", label: "Artifact", icon: FolderOpen, description: "Documents and deliverables" },
   { id: "feedback", label: "Feedback", icon: MessageSquare, description: "Project reviews and feedback" },
-  { id: "activity", label: "Activity", icon: Activity, description: "Activity, risks and decisions" },
+  { id: "activity", label: "Risks, Decisions & Logs", icon: Activity, description: "Decision logs, risks, meeting notes and audit history" },
 ] as const;
 
 const STATUS_LABELS: Record<string, string> = {
