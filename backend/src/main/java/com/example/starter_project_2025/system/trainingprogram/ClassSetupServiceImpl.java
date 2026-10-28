@@ -545,7 +545,16 @@ public class ClassSetupServiceImpl implements ClassSetupService {
     }
 
     private ExternalClassDTO requireClass(Long classId) {
-        ExternalClassDTO externalClass = externalApiService.fetchClassById(classId);
+        ExternalClassDTO externalClass;
+        try {
+            externalClass = externalApiService.fetchClassById(classId);
+        } catch (ExternalApiException error) {
+            if (error.getStatusCode() == 404) {
+                throw new ResourceNotFoundException("Class not found with ID: " + classId
+                        + ". Use a Class ID from the current import template.");
+            }
+            throw error;
+        }
         if (externalClass == null || externalClass.getId() == null) {
             throw new ResourceNotFoundException("Class not found with ID: " + classId);
         }

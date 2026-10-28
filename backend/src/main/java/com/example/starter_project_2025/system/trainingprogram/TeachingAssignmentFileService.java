@@ -36,9 +36,13 @@ import java.util.stream.Collectors;
 @Slf4j
 public class TeachingAssignmentFileService {
     private static final List<String> HEADERS = List.of("Class ID", "Program Subject ID", "Trainer ID", "Role", "Effective From", "Effective To");
+    private static final List<String> DETAILS_HEADERS = List.of("Class Name", "Class Start Date", "Class End Date", "Planned Size",
+            "Program Name", "Program Version", "Subject Name", "Duration Hours", "Trainer Name", "Trainer Email",
+            "Role", "Effective From", "Effective To");
     private static final int MAX_IMPORT_ROWS = 1000;
     private static final int MAX_EXPORT_ROWS = 10000;
     private final ClassSetupService assignments;
+    private final TeachingAssignmentDetailsImport detailsImport;
     private final Validator validator;
     private final PlatformTransactionManager transactionManager;
 
@@ -47,14 +51,19 @@ public class TeachingAssignmentFileService {
         var options = assignments.getAssignmentCreateOptions();
         try (var workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook(); var out = new ByteArrayOutputStream()) {
             var input = workbook.createSheet("Import");
-            append(input, HEADERS.toArray());
+            append(input, DETAILS_HEADERS.toArray());
             var guide = workbook.createSheet("Instructions");
-            append(guide, "Fill only the Import sheet. Other sheets are reference data at download time.");
-            append(guide, "Copy Class ID and Program Subject ID from the same Curriculum row. Subject ID is different.");
-            append(guide, "Copy Trainer ID from Trainers. Role must be MAIN or ASSISTANT.");
+            append(guide, "Fill the Import sheet to create a new class, program, subject, trainer and assignment per row. IDs are generated automatically.");
+            append(guide, "All columns are required except Effective To. Planned Size: 1-10000. Duration Hours: positive whole number.");
+            append(guide, "Each row creates a separate class with one subject. Class names must be unique, including within this file.");
+            append(guide, "An existing active trainer is reused only when both email and name match. Do not invent email addresses.");
+            append(guide, "Role must be MAIN or ASSISTANT. Assignment dates must be within the supplied class dates.");
             append(guide, "Dates use YYYY-MM-DD or Excel date cells. Effective To may be blank.");
-            append(guide, "Each row creates a new assignment. Existing or overlapping assignments fail; valid rows are saved.");
+            append(guide, "Each valid row commits separately. Failed rows leave no new records. Existing assignments are never overwritten.");
+            append(guide, "Creating all details requires assignment, class, program, subject and trainer creation permissions.");
+            append(guide, "Legacy ID-based files remain supported: use the Existing Assignments headers as the first sheet in a separate file.");
             append(guide, "Maximum 1000 rows; CSV must be UTF-8. Import rechecks all current reference data.");
+            append(workbook.createSheet("Existing Assignments"), HEADERS.toArray());
             var classes = workbook.createSheet("Classes");
             append(classes, "Class ID", "Code", "Name");
             var curriculum = workbook.createSheet("Curriculum");
@@ -95,12 +104,17 @@ public class TeachingAssignmentFileService {
             if (row.values().values().stream().allMatch(String::isBlank)) continue;
             try {
                 var values = row.values();
-                var request = new TeachingAssignmentRequest(id(values, "Class ID"), id(values, "Program Subject ID"),
+                if (values.containsKey("Class Name")) {
+                    var request = detailsRequest(values);
+                    transaction.execute(status -> detailsImport.create(request));
+                } else {
+                    var request = new TeachingAssignmentRequest(id(values, "Class ID"), id(values, "Program Subject ID"),
                         id(values, "Trainer ID"), role(values.get("Role")), date(values, "Effective From", false),
                         date(values, "Effective To", true));
-                var violations = validator.validate(request);
-                if (!violations.isEmpty()) throw new ConstraintViolationException(violations);
-                transaction.execute(status -> assignments.createAssignment(request));
+                    var violations = validator.validate(request);
+                    if (!violations.isEmpty()) throw new ConstraintViolationException(violations);
+                    transaction.execute(status -> assignments.createAssignment(request));
+                }
                 result.setSuccessCount(result.getSuccessCount() + 1);
             } catch (AccessDeniedException error) {
                 throw error;
@@ -184,8 +198,10 @@ public class TeachingAssignmentFileService {
 
     private List<String> headers(List<String> cells) {
         var headers = cells.stream().map(value -> value.replace("\uFEFF", "").trim()).toList();
-        if (!headers.containsAll(HEADERS) || new HashSet<>(headers).size() != headers.size()) {
-            throw new BadRequestException("Use unique template headers: " + String.join(", ", HEADERS) + ".");
+        boolean details = headers.contains("Class Name");
+        var required = details ? DETAILS_HEADERS : HEADERS;
+        if (!headers.containsAll(required) || new HashSet<>(headers).size() != headers.size()) {
+            throw new BadRequestException("Use unique template headers: " + String.join(", ", required) + ". Download the current template to create new classes, subjects and trainers.");
         }
         return headers;
     }
@@ -211,6 +227,25 @@ public class TeachingAssignmentFileService {
     private AssignmentRole role(String value) {
         try { return AssignmentRole.valueOf(value.toUpperCase(Locale.ROOT)); }
         catch (IllegalArgumentException error) { throw new BadRequestException("Role must be MAIN or ASSISTANT."); }
+    }
+
+    private AssignmentCreationService.Request detailsRequest(Map<String, String> values) {
+        return new AssignmentCreationService.Request(
+                new AssignmentClassCreation.Request(values.get("Class Name"), null,
+                        date(values, "Class Start Date", false), date(values, "Class End Date", false),
+                        positiveInteger(values, "Planned Size"),
+                        new AssignmentProgramCreation.Request(values.get("Program Name"), values.get("Program Version"), List.of())),
+                new AssignmentTrainerCreation.Request(values.get("Trainer Name"), values.get("Trainer Email")),
+                null, role(values.get("Role")), date(values, "Effective From", false), date(values, "Effective To", true),
+                new AssignmentSubjectCreation.Request(values.get("Subject Name"), positiveInteger(values, "Duration Hours")));
+    }
+
+    private Integer positiveInteger(Map<String, String> values, String key) {
+        try {
+            int value = new BigDecimal(values.get(key)).intValueExact();
+            if (value > 0) return value;
+        } catch (ArithmeticException | NumberFormatException ignored) { }
+        throw new BadRequestException(key + " must be a positive whole number.");
     }
 
     private LocalDate date(Map<String, String> values, String key, boolean optional) {

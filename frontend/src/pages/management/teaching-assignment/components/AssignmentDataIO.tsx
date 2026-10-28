@@ -32,7 +32,7 @@ export function AssignmentDataIO({ filters, canImport }: { filters: AssignmentSe
     <Button variant="secondary" onClick={() => setExporting(true)}><Download className="size-4" />Export</Button>
     <ImportModal open={importing} onOpenChange={setImporting} table={table} canImport={canImport}
       title="Import Teaching Assignments"
-      description="Create assignments from Excel or UTF-8 CSV (up to 1,000 rows). The template includes class, curriculum and trainer reference sheets. Role: MAIN or ASSISTANT. Dates: YYYY-MM-DD; Effective To may be blank. Each valid row is saved separately; existing assignments are never overwritten."
+      description="Import new classes, programs, subjects, trainers and assignments from Excel or UTF-8 CSV (up to 1,000 rows). Download the new template and fill every column except optional Effective To. Each row creates a separate class with one subject; class names must be unique. Matching trainers are reused by name and email. Role: MAIN or ASSISTANT. Dates: YYYY-MM-DD. Valid rows are saved separately; failed rows leave no new records. Existing ID-based files are also supported."
       onDownloadTemplate={classSetupApi.downloadAssignmentTemplate}
       onImportSuccess={imported} />
     <ExportModal open={exporting} onOpenChange={setExporting} table={table} title="Export Teaching Assignments"

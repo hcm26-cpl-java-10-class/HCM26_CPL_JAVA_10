@@ -33,10 +33,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class TeachingAssignmentFileIntegrationTest {
     private static final String HEADER = "Class ID,Program Subject ID,Trainer ID,Role,Effective From,Effective To\n";
+    private static final String DETAILS_HEADER = "Class Name,Class Start Date,Class End Date,Planned Size,Program Name,Program Version,Subject Name,Duration Hours,Trainer Name,Trainer Email,Role,Effective From,Effective To\n";
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper mapper;
     @Autowired TeachingAssignmentRepository assignments;
     @Autowired ProgramSubjectRepository programSubjects;
+    @Autowired com.example.starter_project_2025.system.external_api.ManagedTeachingClassRepository classes;
+    @Autowired com.example.starter_project_2025.system.external_api.ManagedTeachingTrainerRepository trainers;
+    @Autowired TrainingProgramRepository programs;
+    @Autowired com.example.starter_project_2025.system.subject.SubjectRepository subjects;
     private String bearer;
     private long programSubjectId;
 
@@ -47,6 +52,88 @@ class TeachingAssignmentFileIntegrationTest {
         var context = mvc.perform(get("/api/teaching-assignments/create-context").param("classId", "1")
                 .header("Authorization", bearer)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         programSubjectId = mapper.readTree(context).get("subjects").get(0).get("programSubjectId").asLong();
+    }
+
+    @Test
+    @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named = "assignment.import.fixture", matches = ".+")
+    void importsProvided100RowWorkbook() throws Exception {
+        var path = java.nio.file.Path.of(System.getProperty("assignment.import.fixture"));
+        mvc.perform(multipart("/api/teaching-assignments/import")
+                .file(new MockMultipartFile("file", path.getFileName().toString(), "application/octet-stream", java.nio.file.Files.readAllBytes(path)))
+                .header("Authorization", bearer)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.successCount").value(100))
+                .andExpect(jsonPath("$.failureCount").value(0));
+        assertThat(assignments.count()).isEqualTo(100);
+    }
+
+    @Test
+    void creates100NewClassesSubjectsTrainersAndAssignmentsFromXlsxWithoutIds() throws Exception {
+        long classCount = classes.count(), trainerCount = trainers.count(), subjectCount = subjects.count(), programCount = programs.count();
+        String prefix = "Import " + java.util.UUID.randomUUID();
+        try (var workbook = new XSSFWorkbook(); var out = new ByteArrayOutputStream()) {
+            var sheet = workbook.createSheet("Import");
+            var header = sheet.createRow(0);
+            var names = DETAILS_HEADER.trim().split(",");
+            for (int col = 0; col < names.length; col++) header.createCell(col).setCellValue(names[col]);
+            for (int number = 1; number <= 100; number++) {
+                var row = sheet.createRow(number);
+                String[] values = {prefix + number, "2026-10-01", "2026-12-31", "25", prefix + " Program " + number,
+                        "1.0", "Java " + number, "8", "Trainer " + number, prefix.replace(" ", "") + number + "@example.com",
+                        "MAIN", "2026-10-01", "2026-10-31"};
+                for (int col = 0; col < values.length; col++) row.createCell(col).setCellValue(values[col]);
+            }
+            workbook.write(out);
+            mvc.perform(multipart("/api/teaching-assignments/import")
+                    .file(new MockMultipartFile("file", "new-details.xlsx", "application/octet-stream", out.toByteArray()))
+                    .header("Authorization", bearer)).andExpect(status().isOk())
+                    .andExpect(jsonPath("$.successCount").value(100)).andExpect(jsonPath("$.failureCount").value(0));
+        }
+        assertThat(assignments.count()).isEqualTo(100);
+        assertThat(classes.count()).isEqualTo(classCount + 100);
+        assertThat(trainers.count()).isEqualTo(trainerCount + 100);
+        assertThat(subjects.count()).isEqualTo(subjectCount + 100);
+        assertThat(programs.count()).isEqualTo(programCount + 100);
+    }
+
+    @Test
+    void detailsImportRollsBackFailedRowsRejectsDuplicatesAndReusesMatchingTrainer() throws Exception {
+        long classCount = classes.count(), trainerCount = trainers.count(), subjectCount = subjects.count(), programCount = programs.count();
+        String name = "CSV " + java.util.UUID.randomUUID();
+        String row = name + ",2026-10-01,2026-12-31,25,Program,1.0,Java,8,CSV Trainer," + name.replace(" ", "")
+                + "@example.com,MAIN,2026-10-01,2026-10-31\n";
+        upload(DETAILS_HEADER + row.replace("MAIN,2026-10-01", "MAIN,2026-09-01")
+                + row + row + row.replace(name + ",", name + " second,"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.successCount").value(2))
+                .andExpect(jsonPath("$.failureCount").value(2))
+                .andExpect(jsonPath("$.errors[0].rowNumber").value(2))
+                .andExpect(jsonPath("$.errors[1].rowNumber").value(4));
+        assertThat(classes.count()).isEqualTo(classCount + 2);
+        assertThat(trainers.count()).isEqualTo(trainerCount + 1);
+        assertThat(subjects.count()).isEqualTo(subjectCount + 2);
+        assertThat(programs.count()).isEqualTo(programCount + 2);
+        assertThat(assignments.count()).isEqualTo(2);
+        upload(DETAILS_HEADER + row.replace("25,", "0,"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.failureCount").value(1));
+        upload(DETAILS_HEADER + row.replace("@example.com", ""))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.failureCount").value(1));
+        assertThat(classes.count()).isEqualTo(classCount + 2);
+    }
+
+    @Test
+    void reportsMissingClassIdsAcross100RowsAndStillCommitsValidRows() throws Exception {
+        var rows = new StringBuilder(HEADER);
+        for (int number = 0; number < 99; number++) {
+            rows.append(8858610016823783L + number).append(",")
+                    .append(programSubjectId).append(",1,MAIN,2026-10-01,\n");
+        }
+        rows.append("1,").append(programSubjectId).append(",1,MAIN,2026-10-01,\n");
+        upload(rows.toString()).andExpect(status().isOk())
+                .andExpect(jsonPath("$.successCount").value(1))
+                .andExpect(jsonPath("$.failureCount").value(99))
+                .andExpect(jsonPath("$.errors[0].rowNumber").value(2))
+                .andExpect(jsonPath("$.errors[0].message").value(org.hamcrest.Matchers.containsString("8858610016823783")))
+                .andExpect(jsonPath("$.errors[98].message").value(org.hamcrest.Matchers.containsString("Class not found")));
+        assertThat(assignments.count()).isEqualTo(1);
     }
 
     @Test
@@ -146,11 +233,12 @@ class TeachingAssignmentFileIntegrationTest {
         var template = mvc.perform(get("/api/teaching-assignments/import-template")
                 .header("Authorization", bearer)).andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
         try (var workbook = WorkbookFactory.create(new ByteArrayInputStream(template))) {
-            assertThat(workbook.getSheetAt(0).getRow(0).getPhysicalNumberOfCells()).isEqualTo(6);
-            assertThat(workbook.getSheetAt(0).getRow(0).getCell(1).getStringCellValue()).isEqualTo("Program Subject ID");
-            assertThat(workbook.getSheet("Classes").getLastRowNum()).isEqualTo(1);
-            assertThat(workbook.getSheet("Curriculum").getLastRowNum()).isEqualTo(3);
-            assertThat(workbook.getSheet("Trainers").getLastRowNum()).isEqualTo(2);
+            assertThat(workbook.getSheetAt(0).getRow(0).getPhysicalNumberOfCells()).isEqualTo(13);
+            assertThat(workbook.getSheetAt(0).getRow(0).getCell(0).getStringCellValue()).isEqualTo("Class Name");
+            assertThat(workbook.getSheet("Existing Assignments").getRow(0).getCell(1).getStringCellValue()).isEqualTo("Program Subject ID");
+            assertThat(workbook.getSheet("Classes").getLastRowNum()).isGreaterThanOrEqualTo(1);
+            assertThat(workbook.getSheet("Curriculum").getLastRowNum()).isGreaterThanOrEqualTo(3);
+            assertThat(workbook.getSheet("Trainers").getLastRowNum()).isGreaterThanOrEqualTo(2);
         }
         upload(HEADER + "1," + programSubjectId + ",1,MAIN,2026-10-01,\n").andExpect(status().isOk());
         for (String format : new String[]{"EXCEL", "CSV", "PDF"}) {
