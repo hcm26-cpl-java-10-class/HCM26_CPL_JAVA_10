@@ -174,10 +174,72 @@ export function calculateEndTime(startTime: string, durationHours: number): stri
   return `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
 }
 
+export function parseDurationHours(durationStr: string | number | undefined): number {
+  if (typeof durationStr === "number") return durationStr > 0 ? durationStr : 2;
+  if (!durationStr) return 2;
+  const match = durationStr.toString().trim().replace(",", ".").match(/[\d.]+/);
+  const val = match ? parseFloat(match[0]) : 2;
+  return Number.isNaN(val) || val <= 0 ? 2 : val;
+}
+
+export function formatSectionLabel(index: number, start: string, end: string): string {
+  const fmt = (t: string) => {
+    const [h, m] = (t || "08:00").split(":");
+    return `${(h || "08").padStart(2, "0")}h${(m || "00").padStart(2, "0")}`;
+  };
+  return `${index} (${fmt(start)} - ${fmt(end)})`;
+}
+
+export function getSectionsForDuration(durationHours: number): Array<{ id: string; label: string; start: string; end: string; duration: string }> {
+  const dur = Math.max(0.5, durationHours || 2);
+  const durLabel = `${dur}h`;
+  const result: Array<{ id: string; label: string; start: string; end: string; duration: string }> = [];
+
+  // Ca sáng (Morning) bắt đầu 08:00
+  let curStart = "08:00";
+  let idx = 1;
+  while (curStart < "12:00") {
+    const curEnd = calculateEndTime(curStart, dur);
+    if (curEnd > "12:30") break;
+    const label = formatSectionLabel(idx, curStart, curEnd);
+    result.push({ id: label, label, start: curStart, end: curEnd, duration: durLabel });
+    idx++;
+    curStart = curEnd;
+  }
+
+  // Ca chiều (Afternoon) bắt đầu 13:00
+  curStart = "13:00";
+  while (curStart < "17:30") {
+    const curEnd = calculateEndTime(curStart, dur);
+    if (curEnd > "18:00") break;
+    const label = formatSectionLabel(idx, curStart, curEnd);
+    result.push({ id: label, label, start: curStart, end: curEnd, duration: durLabel });
+    idx++;
+    curStart = curEnd;
+  }
+
+  // Ca tối (Evening) bắt đầu 18:00
+  curStart = "18:00";
+  const endEve = calculateEndTime(curStart, dur);
+  if (endEve <= "22:00") {
+    const label = formatSectionLabel(idx, curStart, endEve);
+    result.push({ id: label, label, start: curStart, end: endEve, duration: durLabel });
+  }
+
+  // Bổ sung các preset chuẩn để người dùng luôn có thể chọn ca khác nếu cần
+  for (const s of SECTION_OPTIONS) {
+    if (!result.some((r) => r.start === s.start && r.end === s.end)) {
+      result.push(s);
+    }
+  }
+
+  return result;
+}
+
 export function generateDaysFromDuration({
   topicName,
   totalHours,
-  sessionHours = 4,
+  sessionHours = 2,
   startDateStr,
   startTime = "08:00",
   trainer = "NgaTTT45",
@@ -194,8 +256,11 @@ export function generateDaysFromDuration({
   skipWeekends?: boolean;
 }): TrainingDay[] {
   const safeTotalHours = Math.max(1, totalHours || 8);
-  const safeSessionHours = Math.max(1, sessionHours || 4);
-  const sessionCount = Math.ceil(safeTotalHours / safeSessionHours);
+  const dur = Math.max(0.5, sessionHours || 2);
+  const durLabel = `${dur}h`;
+  const sessionsPerDay = dur <= 2.5 ? 2 : (dur <= 4 ? 2 : 1);
+  const totalSessions = Math.ceil(safeTotalHours / dur);
+  const totalDays = Math.ceil(totalSessions / sessionsPerDay);
 
   const days: TrainingDay[] = [];
   let currentDate = new Date(startDateStr);
@@ -203,7 +268,8 @@ export function generateDaysFromDuration({
     currentDate = new Date("2026-05-14");
   }
 
-  for (let i = 1; i <= sessionCount; i++) {
+  let sessionCount = 0;
+  for (let d = 1; d <= totalDays && sessionCount < totalSessions; d++) {
     if (skipWeekends) {
       while (currentDate.getDay() === 0 || currentDate.getDay() === 6) {
         currentDate.setDate(currentDate.getDate() + 1);
@@ -211,35 +277,53 @@ export function generateDaysFromDuration({
     }
 
     const dateStr = currentDate.toISOString().substring(0, 10);
+    const dayActivities: Activity[] = [];
+
+    // Session 1 của ngày
+    sessionCount++;
+    const start1 = startTime || "08:00";
+    const end1 = calculateEndTime(start1, dur);
+    const sec1 = formatSectionLabel(1, start1, end1);
+    dayActivities.push({
+      id: uid(),
+      name: `${topicName}`,
+      pic: trainer || "NgaTTT45",
+      contribution: "Lecture",
+      format: format || "Self Learning",
+      duration: durLabel,
+      section: sec1,
+      start: start1,
+      end: end1,
+    });
+
+    // Session 2 của ngày (nếu chia 2 buổi/ngày)
+    if (sessionCount < totalSessions && sessionsPerDay > 1) {
+      sessionCount++;
+      let start2 = end1;
+      if (dur >= 4 || start2 >= "12:00") {
+        start2 = "13:00";
+      }
+      const end2 = calculateEndTime(start2, dur);
+      const sec2 = formatSectionLabel(2, start2, end2);
+      dayActivities.push({
+        id: uid(),
+        name: "Assignment",
+        pic: "",
+        contribution: "Assignment",
+        format: "Offline",
+        duration: durLabel,
+        section: sec2,
+        start: start2,
+        end: end2,
+      });
+    }
+
     days.push({
       id: uid(),
-      dayNo: i,
+      dayNo: d,
       name: `${topicName}`,
       date: dateStr,
-      activities: [
-        {
-          id: uid(),
-          name: `${topicName}`,
-          pic: trainer || "NgaTTT45",
-          contribution: "Lecture",
-          format: format || "Self Learning",
-          duration: "4h",
-          section: "1 (08h00 - 12h00)",
-          start: "08:00",
-          end: "12:00",
-        },
-        {
-          id: uid(),
-          name: "Assignment",
-          pic: "",
-          contribution: "Assignment",
-          format: "Offline",
-          duration: "4h",
-          section: "2 (13h00 - 17h00)",
-          start: "13:00",
-          end: "17:00",
-        },
-      ],
+      activities: dayActivities,
     });
 
     currentDate.setDate(currentDate.getDate() + 1);
@@ -715,6 +799,20 @@ export default function TrainingCalendarAdjustDemo({
     if (dayId) {
       const day = topic.days.find((d) => d.id === dayId);
       if (!day) return;
+      const firstAct = day.activities[0];
+      const dur = firstAct ? parseDurationHours(firstAct.duration) : (topic.sessionHours || 2);
+      const durLabel = `${dur}h`;
+      const start1 = "08:00";
+      const end1 = calculateEndTime(start1, dur);
+      const sec1 = formatSectionLabel(1, start1, end1);
+
+      let start2 = end1;
+      if (dur >= 4 || start2 >= "12:00") {
+        start2 = "13:00";
+      }
+      const end2 = calculateEndTime(start2, dur);
+      const sec2 = formatSectionLabel(2, start2, end2);
+
       const extractedActivities: Activity[] = [
         {
           id: uid(),
@@ -722,10 +820,10 @@ export default function TrainingCalendarAdjustDemo({
           pic: defaultTrainer,
           contribution: "Lecture",
           format: "Self Learning",
-          duration: "4h",
-          section: "1 (08h00 - 12h00)",
-          start: "08:00",
-          end: "12:00",
+          duration: durLabel,
+          section: sec1,
+          start: start1,
+          end: end1,
         },
         {
           id: uid(),
@@ -733,15 +831,28 @@ export default function TrainingCalendarAdjustDemo({
           pic: "",
           contribution: "Assignment",
           format: "Offline",
-          duration: "4h",
-          section: "2 (13h00 - 17h00)",
-          start: "13:00",
-          end: "17:00",
+          duration: durLabel,
+          section: sec2,
+          start: start2,
+          end: end2,
         },
       ];
       changeDay(topicId, dayId, { activities: extractedActivities });
-      toast.success(`Đã trích xuất hoạt động mẫu (Extract Activities) cho Day ${day.dayNo || 1}!`);
+      toast.success(`Đã trích xuất hoạt động mẫu theo ${durLabel} cho Day ${day.dayNo || 1}!`);
     } else {
+      const dur = topic.sessionHours || 2;
+      const durLabel = `${dur}h`;
+      const start1 = "08:00";
+      const end1 = calculateEndTime(start1, dur);
+      const sec1 = formatSectionLabel(1, start1, end1);
+
+      let start2 = end1;
+      if (dur >= 4 || start2 >= "12:00") {
+        start2 = "13:00";
+      }
+      const end2 = calculateEndTime(start2, dur);
+      const sec2 = formatSectionLabel(2, start2, end2);
+
       changeTopic(topicId, {
         days: topic.days.map((day) => ({
           ...day,
@@ -752,10 +863,10 @@ export default function TrainingCalendarAdjustDemo({
               pic: defaultTrainer,
               contribution: "Lecture",
               format: "Self Learning",
-              duration: "4h",
-              section: "1 (08h00 - 12h00)",
-              start: "08:00",
-              end: "12:00",
+              duration: durLabel,
+              section: sec1,
+              start: start1,
+              end: end1,
             },
             {
               id: uid(),
@@ -763,15 +874,15 @@ export default function TrainingCalendarAdjustDemo({
               pic: "",
               contribution: "Assignment",
               format: "Offline",
-              duration: "4h",
-              section: "2 (13h00 - 17h00)",
-              start: "13:00",
-              end: "17:00",
+              duration: durLabel,
+              section: sec2,
+              start: start2,
+              end: end2,
             },
           ],
         })),
       });
-      toast.success(`Đã trích xuất hoạt động mẫu (Extract Activities) cho toàn bộ môn [${topic.code}]!`);
+      toast.success(`Đã trích xuất hoạt động mẫu theo ${durLabel} cho toàn bộ môn [${topic.code}]!`);
     }
   }
 
@@ -781,26 +892,40 @@ export default function TrainingCalendarAdjustDemo({
     const day = topic.days.find((d) => d.id === dayId);
     if (!day) return;
 
-    const hasMorning = day.activities.some((a) => a.section?.includes("1 (08h00"));
-    const section = hasMorning ? "2 (13h00 - 17h00)" : "1 (08h00 - 12h00)";
-    const start = hasMorning ? "13:00" : "08:00";
-    const end = hasMorning ? "17:00" : "12:00";
+    const lastAct = day.activities[day.activities.length - 1];
+    const durHours = lastAct ? parseDurationHours(lastAct.duration) : (topic.sessionHours || 2);
+    const durLabel = `${durHours}h`;
+
+    let nextStart = "08:00";
+    if (lastAct && lastAct.end) {
+      nextStart = lastAct.end;
+      if (nextStart >= "12:00" && nextStart < "13:00") {
+        nextStart = "13:00";
+      } else if (nextStart >= "17:00" && nextStart < "18:00") {
+        nextStart = "18:00";
+      }
+    }
+
+    const nextEnd = calculateEndTime(nextStart, durHours);
+    const nextIndex = day.activities.length + 1;
+    const section = formatSectionLabel(nextIndex, nextStart, nextEnd);
 
     changeDay(topicId, dayId, {
       activities: [
         ...day.activities,
         newActivity(
-          start,
-          end,
+          nextStart,
+          nextEnd,
           topic.trainer || "NgaTTT45",
           "New training activity",
           "Lecture",
           "Offline",
           section,
-          "4h"
+          durLabel
         ),
       ],
     });
+    toast.success(`Đã thêm buổi học mới: Section ${nextIndex} (${nextStart.replace(":", "h")} - ${nextEnd.replace(":", "h")}, ${durLabel})`);
   }
 
   // Danh mục môn học thực tế từ API Hoàng
@@ -1972,140 +2097,191 @@ export default function TrainingCalendarAdjustDemo({
                                             </tr>
                                           </thead>
                                           <tbody className="divide-y divide-gray-100">
-                                            {day.activities.map((act) => (
-                                              <tr key={act.id} className="hover:bg-gray-50/70 transition-colors">
-                                                <td className="px-3 py-2">
-                                                  <Input
-                                                    value={act.name}
-                                                    disabled={isReadOnly}
-                                                    onChange={(e) =>
-                                                      changeActivity(topic.id, day.id, act.id, {
-                                                        name: e.target.value,
-                                                      })
-                                                    }
-                                                    className="h-9 w-full rounded-lg border-gray-300 text-xs bg-white text-gray-800"
-                                                    placeholder="Activity name"
-                                                  />
-                                                </td>
-                                                <td className="px-3 py-2">
-                                                  <select
-                                                    value={act.pic}
-                                                    disabled={isReadOnly}
-                                                    onChange={(e) =>
-                                                      changeActivity(topic.id, day.id, act.id, {
-                                                        pic: e.target.value,
-                                                      })
-                                                    }
-                                                    className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs text-gray-800 focus:ring-2 focus:ring-indigo-500"
-                                                  >
-                                                    <option value=""> </option>
-                                                    {PIC_OPTIONS.map((pic) => (
-                                                      <option key={pic} value={pic}>
-                                                        {pic}
-                                                      </option>
-                                                    ))}
-                                                  </select>
-                                                </td>
-                                                <td className="px-3 py-2">
-                                                  <select
-                                                    value={act.contribution}
-                                                    disabled={isReadOnly}
-                                                    onChange={(e) =>
-                                                      changeActivity(topic.id, day.id, act.id, {
-                                                        contribution: e.target.value,
-                                                      })
-                                                    }
-                                                    className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs text-gray-800 focus:ring-2 focus:ring-indigo-500"
-                                                  >
-                                                    {CONTRIBUTION_OPTIONS.map((c) => (
-                                                      <option key={c} value={c}>
-                                                        {c}
-                                                      </option>
-                                                    ))}
-                                                  </select>
-                                                </td>
-                                                <td className="px-2 py-2 text-center">
-                                                  <select
-                                                    value={act.format}
-                                                    disabled={isReadOnly}
-                                                    onChange={(e) =>
-                                                      changeActivity(topic.id, day.id, act.id, {
-                                                        format: e.target.value,
-                                                      })
-                                                    }
-                                                    className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2 text-xs text-gray-800 text-center focus:ring-2 focus:ring-indigo-500"
-                                                  >
-                                                    {FORMAT_OPTIONS.map((f) => (
-                                                      <option key={f} value={f}>
-                                                        {f}
-                                                      </option>
-                                                    ))}
-                                                  </select>
-                                                </td>
-                                                <td className="px-3 py-2 text-center">
-                                                  <Input
-                                                    value={act.duration || "4h"}
-                                                    disabled={isReadOnly}
-                                                    onChange={(e) =>
-                                                      changeActivity(topic.id, day.id, act.id, {
-                                                        duration: e.target.value,
-                                                      })
-                                                    }
-                                                    className="h-9 w-16 mx-auto rounded-lg border-gray-300 text-xs text-center bg-white font-medium text-gray-800"
-                                                  />
-                                                </td>
-                                                <td className="px-3 py-2">
-                                                  <select
-                                                    value={act.section || "1 (08h00 - 12h00)"}
-                                                    disabled={isReadOnly}
-                                                    onChange={(e) => {
-                                                      const secVal = e.target.value;
-                                                      const matchSec = SECTION_OPTIONS.find((s) => s.id === secVal);
-                                                      changeActivity(topic.id, day.id, act.id, {
-                                                        section: secVal,
-                                                        start: matchSec?.start || act.start,
-                                                        end: matchSec?.end || act.end,
-                                                        duration: matchSec?.duration || act.duration,
-                                                      });
-                                                    }}
-                                                    className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs text-gray-800 focus:ring-2 focus:ring-indigo-500"
-                                                  >
-                                                    {SECTION_OPTIONS.map((s) => (
-                                                      <option key={s.id} value={s.id}>
-                                                        {s.label}
-                                                      </option>
-                                                    ))}
-                                                  </select>
-                                                </td>
-                                                <td className="px-3 py-2 text-center">
-                                                  <div className="flex items-center justify-center gap-1.5">
-                                                    <button
-                                                      type="button"
-                                                      title="Add activity"
-                                                      className="text-indigo-600 hover:text-indigo-800 transition-colors p-0.5"
-                                                      onClick={() => addActivityToDay(topic.id, day.id)}
-                                                    >
-                                                      <PlusCircle className="size-4" />
-                                                    </button>
-                                                    <button
-                                                      type="button"
-                                                      title="Delete activity"
-                                                      className="text-red-500 hover:text-red-700 transition-colors p-0.5"
-                                                      onClick={() =>
-                                                        setRemoval({
-                                                          kind: "activity",
-                                                          topicId: topic.id,
-                                                          dayId: day.id,
-                                                          activityId: act.id,
+                                            {day.activities.map((act, actIndex) => {
+                                              const durNum = parseDurationHours(act.duration || "2h");
+                                              const availableSections = getSectionsForDuration(durNum);
+
+                                              return (
+                                                <tr key={act.id} className="hover:bg-gray-50/70 transition-colors">
+                                                  <td className="px-3 py-2">
+                                                    <Input
+                                                      value={act.name}
+                                                      disabled={isReadOnly}
+                                                      onChange={(e) =>
+                                                        changeActivity(topic.id, day.id, act.id, {
+                                                          name: e.target.value,
                                                         })
                                                       }
+                                                      className="h-9 w-full rounded-lg border-gray-300 text-xs bg-white text-gray-800"
+                                                      placeholder="Activity name"
+                                                    />
+                                                  </td>
+                                                  <td className="px-3 py-2">
+                                                    <select
+                                                      value={act.pic}
+                                                      disabled={isReadOnly}
+                                                      onChange={(e) =>
+                                                        changeActivity(topic.id, day.id, act.id, {
+                                                          pic: e.target.value,
+                                                        })
+                                                      }
+                                                      className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs text-gray-800 focus:ring-2 focus:ring-indigo-500"
                                                     >
-                                                      <Trash2 className="size-3.5 text-red-500" />
-                                                    </button>
-                                                  </div>
-                                                </td>
-                                              </tr>
-                                            ))}
+                                                      <option value=""> </option>
+                                                      {PIC_OPTIONS.map((pic) => (
+                                                        <option key={pic} value={pic}>
+                                                          {pic}
+                                                        </option>
+                                                      ))}
+                                                    </select>
+                                                  </td>
+                                                  <td className="px-3 py-2">
+                                                    <select
+                                                      value={act.contribution}
+                                                      disabled={isReadOnly}
+                                                      onChange={(e) =>
+                                                        changeActivity(topic.id, day.id, act.id, {
+                                                          contribution: e.target.value,
+                                                        })
+                                                      }
+                                                      className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs text-gray-800 focus:ring-2 focus:ring-indigo-500"
+                                                    >
+                                                      {CONTRIBUTION_OPTIONS.map((c) => (
+                                                        <option key={c} value={c}>
+                                                          {c}
+                                                        </option>
+                                                      ))}
+                                                    </select>
+                                                  </td>
+                                                  <td className="px-2 py-2 text-center">
+                                                    <select
+                                                      value={act.format}
+                                                      disabled={isReadOnly}
+                                                      onChange={(e) =>
+                                                        changeActivity(topic.id, day.id, act.id, {
+                                                          format: e.target.value,
+                                                        })
+                                                      }
+                                                      className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2 text-xs text-gray-800 text-center focus:ring-2 focus:ring-indigo-500"
+                                                    >
+                                                      {FORMAT_OPTIONS.map((f) => (
+                                                        <option key={f} value={f}>
+                                                          {f}
+                                                        </option>
+                                                      ))}
+                                                    </select>
+                                                  </td>
+                                                  <td className="px-3 py-2 text-center">
+                                                    <select
+                                                      value={act.duration || "2h"}
+                                                      disabled={isReadOnly}
+                                                      onChange={(e) => {
+                                                        const newDurStr = e.target.value;
+                                                        const newDurNum = parseDurationHours(newDurStr);
+                                                        const prevAct = actIndex > 0 ? day.activities[actIndex - 1] : null;
+                                                        let curStart = act.start || "08:00";
+                                                        if (prevAct && prevAct.end) {
+                                                          curStart = prevAct.end;
+                                                          if (curStart >= "12:00" && curStart < "13:00") {
+                                                            curStart = "13:00";
+                                                          }
+                                                        }
+                                                        const newEnd = calculateEndTime(curStart, newDurNum);
+                                                        const newSec = formatSectionLabel(actIndex + 1, curStart, newEnd);
+
+                                                        changeActivity(topic.id, day.id, act.id, {
+                                                          duration: `${newDurNum}h`,
+                                                          start: curStart,
+                                                          end: newEnd,
+                                                          section: newSec,
+                                                        });
+                                                        toast.info(`Đã tự động chia: Section ${actIndex + 1} (${curStart.replace(":", "h")} - ${newEnd.replace(":", "h")}, ${newDurNum}h)`);
+                                                      }}
+                                                      className="h-9 w-20 rounded-lg border border-gray-300 bg-white px-2 text-xs text-center font-medium text-gray-800 focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-sm hover:border-indigo-400 transition-colors"
+                                                    >
+                                                      {["1h", "1.5h", "2h", "2.5h", "3h", "3.5h", "4h"].map((d) => (
+                                                        <option key={d} value={d}>
+                                                          {d}
+                                                        </option>
+                                                      ))}
+                                                      {!["1h", "1.5h", "2h", "2.5h", "3h", "3.5h", "4h"].includes(act.duration) && (
+                                                        <option value={act.duration}>{act.duration}</option>
+                                                      )}
+                                                    </select>
+                                                  </td>
+                                                  <td className="px-3 py-2">
+                                                    <select
+                                                      value={act.section || availableSections[0]?.label || "1 (08h00 - 10h00)"}
+                                                      disabled={isReadOnly}
+                                                      onChange={(e) => {
+                                                        const secVal = e.target.value;
+                                                        const matched = availableSections.find((s) => s.id === secVal || s.label === secVal)
+                                                          || SECTION_OPTIONS.find((s) => s.id === secVal || s.label === secVal);
+                                                        if (matched) {
+                                                          changeActivity(topic.id, day.id, act.id, {
+                                                            section: matched.label,
+                                                            start: matched.start,
+                                                            end: matched.end,
+                                                            duration: matched.duration || act.duration,
+                                                          });
+                                                        } else {
+                                                          changeActivity(topic.id, day.id, act.id, {
+                                                            section: secVal,
+                                                          });
+                                                        }
+                                                      }}
+                                                      className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs text-gray-800 focus:ring-2 focus:ring-indigo-500 shadow-sm font-medium hover:border-indigo-400 transition-colors"
+                                                    >
+                                                      <optgroup label={`Ca phù hợp ${durNum}h`}>
+                                                        {availableSections
+                                                          .filter((s) => s.duration === `${durNum}h` || parseDurationHours(s.duration) === durNum)
+                                                          .map((s) => (
+                                                            <option key={s.id} value={s.label}>
+                                                              {s.label}
+                                                            </option>
+                                                          ))}
+                                                      </optgroup>
+                                                      <optgroup label="Các ca thời lượng khác">
+                                                        {availableSections
+                                                          .filter((s) => s.duration !== `${durNum}h` && parseDurationHours(s.duration) !== durNum)
+                                                          .map((s) => (
+                                                            <option key={s.id} value={s.label}>
+                                                              {s.label}
+                                                            </option>
+                                                          ))}
+                                                      </optgroup>
+                                                    </select>
+                                                  </td>
+                                                  <td className="px-3 py-2 text-center">
+                                                    <div className="flex items-center justify-center gap-1.5">
+                                                      <button
+                                                        type="button"
+                                                        title="Add activity"
+                                                        className="text-indigo-600 hover:text-indigo-800 transition-colors p-0.5"
+                                                        onClick={() => addActivityToDay(topic.id, day.id)}
+                                                      >
+                                                        <PlusCircle className="size-4" />
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        title="Delete activity"
+                                                        className="text-red-500 hover:text-red-700 transition-colors p-0.5"
+                                                        onClick={() =>
+                                                          setRemoval({
+                                                            kind: "activity",
+                                                            topicId: topic.id,
+                                                            dayId: day.id,
+                                                            activityId: act.id,
+                                                          })
+                                                        }
+                                                      >
+                                                        <Trash2 className="size-3.5 text-red-500" />
+                                                      </button>
+                                                    </div>
+                                                  </td>
+                                                </tr>
+                                              );
+                                            })}
                                           </tbody>
                                         </table>
                                       </div>
