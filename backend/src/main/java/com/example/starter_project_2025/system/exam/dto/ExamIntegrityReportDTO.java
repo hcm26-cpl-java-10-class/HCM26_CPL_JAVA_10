@@ -1,11 +1,13 @@
 package com.example.starter_project_2025.system.exam.dto;
 
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus;
+import com.example.starter_project_2025.system.exam.domain.IntegrityReviewStatus;
 import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -23,6 +25,15 @@ public class ExamIntegrityReportDTO {
     private int flaggedAttempts;
     private int totalViolations;
     private Map<String, Integer> totalsByType;
+
+    // NEW (anti-cheat nang cao)
+    private Integer fastSubmitPercent;
+    private Integer similarityPercent;
+    private int pendingReviewFlagged;   // bi gan co nhung chua xem
+    private int reviewedNormal;
+    private int reviewedSuspicious;
+    private int tooFastCount;
+    private int similarCount;
 
     private List<Row> rows;
 
@@ -61,6 +72,18 @@ public class ExamIntegrityReportDTO {
         private int totalAwaySeconds;
         private Instant lastViolationAt;
         private boolean flagged;
+
+        // NEW (anti-cheat nang cao)
+        private Long durationSeconds;            // thoi gian lam bai thuc te
+        private boolean tooFast;
+        private Integer maxSimilarityPercent;    // null = khong co / khong dat nguong
+        private Long similarAttemptId;
+        private String similarStudentName;
+        private List<String> flagReasons = new ArrayList<>(); // MANY_VIOLATIONS, TOO_FAST, SIMILAR_CONTENT
+        private IntegrityReviewStatus reviewStatus = IntegrityReviewStatus.NOT_REVIEWED;
+        private String reviewedBy;
+        private Instant reviewedAt;
+        private String reviewNote;
     }
 
     /** Chi tiet tung su kien cua 1 luot thi. */

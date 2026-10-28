@@ -282,7 +282,21 @@ export interface IntegrityReportRow {
     totalAwaySeconds: number;
     lastViolationAt: string | null;
     flagged: boolean;
+    // NEW (anti-cheat nang cao)
+    durationSeconds: number | null;
+    tooFast: boolean;
+    maxSimilarityPercent: number | null;
+    similarAttemptId: number | null;
+    similarStudentName: string | null;
+    flagReasons: IntegrityFlagReason[];
+    reviewStatus: IntegrityReviewStatus;
+    reviewedBy: string | null;
+    reviewedAt: string | null;
+    reviewNote: string | null;
 }
+
+export type IntegrityReviewStatus = 'NOT_REVIEWED' | 'REVIEWED_NORMAL' | 'REVIEWED_SUSPICIOUS';
+export type IntegrityFlagReason = 'MANY_VIOLATIONS' | 'TOO_FAST' | 'SIMILAR_CONTENT';
 
 export interface IntegrityReport {
     examId: number;
@@ -294,6 +308,14 @@ export interface IntegrityReport {
     flaggedAttempts: number;
     totalViolations: number;
     totalsByType: Record<string, number>;
+    // NEW (anti-cheat nang cao)
+    fastSubmitPercent: number | null;
+    similarityPercent: number | null;
+    pendingReviewFlagged: number;
+    reviewedNormal: number;
+    reviewedSuspicious: number;
+    tooFastCount: number;
+    similarCount: number;
     rows: IntegrityReportRow[];
 }
 
@@ -317,4 +339,13 @@ export const getIntegrityEvents = async (examId: number, attemptId: number) => {
         `/exams/${examId}/integrity-report/attempts/${attemptId}/events`,
     );
     return response.data;
+};
+
+// NEW (anti-cheat nang cao): giao vien danh dau da xem xet 1 luot thi
+export const reviewIntegrityAttempt = async (
+    examId: number,
+    attemptId: number,
+    payload: { status: IntegrityReviewStatus; note?: string },
+) => {
+    await api.put(`/exams/${examId}/integrity-report/attempts/${attemptId}/review`, payload);
 };

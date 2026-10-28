@@ -211,44 +211,27 @@ export function useExamIntegrity({ attemptId, config, active, send }: Options) {
     return { enabled, violations, lastMessage, needFullscreen, enterFullscreen };
 }
 
-/** Thong bao dang giam sat + chan man hinh khi chua vao toan man hinh. */
+/**
+ * CHANGED: khong con hien khung "Bai thi dang duoc giam sat" va so lan vi pham cho sinh vien
+ * (he thong van ghi nhan ngam). Chi con lop phu "Vao toan man hinh" khi de bat buoc toan man hinh.
+ */
 export function ExamIntegrityNotice({
-                                        config,
-                                        state,
-                                    }: {
+    config,
+    state,
+}: {
     config: ExamIntegrityConfig | undefined;
     state: ReturnType<typeof useExamIntegrity>;
 }) {
-    if (!state.enabled || !config) return null;
-    const rules: string[] = [];
-    if (config.detectTabSwitch) rules.push('đếm số lần rời tab / chuyển cửa sổ');
-    if (config.blockCopyPaste) rules.push('chặn sao chép, dán, chuột phải');
-    if (config.requireFullscreen) rules.push('yêu cầu toàn màn hình');
-    if (config.singleSession) rules.push('chỉ cho phép một nơi làm bài');
+    if (!state.enabled || !config || !state.needFullscreen) return null;
     return (
-        <>
-            <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                <p className="font-medium">Bài thi đang được giám sát</p>
-                <p className="mt-1">
-                    Hệ thống {rules.join(', ')}. Các hành vi vi phạm được ghi lại và giáo viên có thể xem.
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/95 p-6">
+            <div className="max-w-md space-y-4 rounded-lg border bg-card p-6 text-center shadow-lg">
+                <h2 className="text-lg font-semibold">Cần bật toàn màn hình để làm bài</h2>
+                <p className="text-sm text-muted-foreground">
+                    Bài thi yêu cầu chế độ toàn màn hình. Thời gian làm bài vẫn tiếp tục chạy.
                 </p>
-                {state.violations > 0 && (
-                    <p className="mt-1 font-medium">
-                        Đã ghi nhận {state.violations} lần vi phạm{state.lastMessage ? ` (gần nhất: ${state.lastMessage})` : ''}.
-                    </p>
-                )}
+                <Button onClick={() => void state.enterFullscreen()}>Vào toàn màn hình</Button>
             </div>
-            {state.needFullscreen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/95 p-6">
-                    <div className="max-w-md space-y-4 rounded-lg border bg-card p-6 text-center shadow-lg">
-                        <h2 className="text-lg font-semibold">Cần bật toàn màn hình để làm bài</h2>
-                        <p className="text-sm text-muted-foreground">
-                            Bài thi yêu cầu chế độ toàn màn hình. Thời gian làm bài vẫn tiếp tục chạy.
-                        </p>
-                        <Button onClick={() => void state.enterFullscreen()}>Vào toàn màn hình</Button>
-                    </div>
-                </div>
-            )}
-        </>
+        </div>
     );
 }

@@ -1,4 +1,3 @@
-
 import axiosInstance from "@/api/axios";
 
 export interface ExamTemplateDTO {
@@ -15,6 +14,13 @@ export interface ExamTemplateDTO {
 export interface SaveExamTemplateRequest {
     name: string;
     description?: string;
+}
+
+export interface UpdateExamTemplateRequest {
+    name: string;
+    description?: string;
+    durationMinutes?: number;
+    maxAttempts?: number;
 }
 
 export interface CreateExamFromTemplateRequest {
@@ -38,6 +44,24 @@ export const examTemplateApi = {
     list: async (): Promise<ExamTemplateDTO[]> => {
         const response = await axiosInstance.get<ExamTemplateDTO[]>(
             "/exam-templates"
+        );
+        return response.data;
+    },
+
+    get: async (templateId: number): Promise<ExamTemplateDTO> => {
+        const response = await axiosInstance.get<ExamTemplateDTO>(
+            `/exam-templates/${templateId}`
+        );
+        return response.data;
+    },
+
+    update: async (
+        templateId: number,
+        payload: UpdateExamTemplateRequest
+    ): Promise<ExamTemplateDTO> => {
+        const response = await axiosInstance.put<ExamTemplateDTO>(
+            `/exam-templates/${templateId}`,
+            payload
         );
         return response.data;
     },

@@ -1,4 +1,3 @@
-
 package com.example.starter_project_2025.system.exam.service;
 
 import java.util.Comparator;
@@ -20,6 +19,7 @@ import com.example.starter_project_2025.system.exam.dto.CreateExamFromTemplateRe
 import com.example.starter_project_2025.system.exam.dto.ExamDTO;
 import com.example.starter_project_2025.system.exam.dto.ExamTemplateDTO;
 import com.example.starter_project_2025.system.exam.dto.SaveExamTemplateRequest;
+import com.example.starter_project_2025.system.exam.dto.UpdateExamTemplateRequest;
 import com.example.starter_project_2025.system.exam.mapper.ExamMapper;
 import com.example.starter_project_2025.system.question.domain.Question;
 import com.example.starter_project_2025.system.question.domain.QuestionOption;
@@ -204,6 +204,33 @@ public class ExamTemplateService {
                                 "Exam template not found"));
 
         return toTemplateDTO(template);
+    }
+
+    /**
+     * Cập nhật thông tin đề thi mẫu (tên, mô tả, cấu hình thời gian).
+     */
+    @Transactional
+    public ExamTemplateDTO updateTemplate(
+            Long templateId,
+            UpdateExamTemplateRequest request) {
+
+        ExamTemplate template = templateRepository.findById(templateId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Exam template not found"));
+
+        template.setName(request.getName().trim());
+        template.setDescription(request.getDescription());
+
+        if (request.getDurationMinutes() != null && request.getDurationMinutes() > 0) {
+            template.setDurationMinutes(request.getDurationMinutes());
+        }
+        if (request.getMaxAttempts() != null && request.getMaxAttempts() > 0) {
+            template.setMaxAttempts(request.getMaxAttempts());
+        }
+
+        ExamTemplate saved = templateRepository.save(template);
+        return toTemplateDTO(saved);
     }
 
     /**

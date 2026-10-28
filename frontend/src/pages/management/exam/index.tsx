@@ -65,6 +65,8 @@ interface ExamConfigForm {
   requireFullscreen: boolean;
   singleSession: boolean;
   flagThreshold: string;
+  fastSubmitPercent: string;
+  similarityPercent: string;
 }
 
 const DEFAULT_CONFIG: ExamConfigForm = {
@@ -89,6 +91,8 @@ const DEFAULT_CONFIG: ExamConfigForm = {
   requireFullscreen: false,
   singleSession: true,
   flagThreshold: "5",
+  fastSubmitPercent: "20",
+  similarityPercent: "80",
 };
 
 const LATE_POLICY_LABEL: Record<LatePolicy, string> = {
@@ -135,6 +139,8 @@ const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   requireFullscreen: exam.requireFullscreen ?? false,
   singleSession: exam.singleSession ?? false,
   flagThreshold: exam.flagThreshold != null ? String(exam.flagThreshold) : "",
+  fastSubmitPercent: exam.fastSubmitPercent != null ? String(exam.fastSubmitPercent) : "",
+  similarityPercent: exam.similarityPercent != null ? String(exam.similarityPercent) : "",
 });
 
 function validateConfig(
@@ -304,6 +310,8 @@ export default function ExamManagementPage() {
         requireFullscreen: cfg.requireFullscreen,
         singleSession: cfg.singleSession,
         flagThreshold: cfg.flagThreshold !== "" ? Number(cfg.flagThreshold) : 0,
+        fastSubmitPercent: cfg.fastSubmitPercent !== "" ? Number(cfg.fastSubmitPercent) : 0,
+        similarityPercent: cfg.similarityPercent !== "" ? Number(cfg.similarityPercent) : 0,
       };
       return editingExam?.id
           ? examApi.update(String(editingExam.id), request)
@@ -1008,6 +1016,15 @@ export default function ExamManagementPage() {
                         <label className="grid gap-1 text-sm sm:col-span-2">
                           Flag as suspicious after N violations (empty = no flag)
                           <Input type="number" min={0} max={1000} value={cfg.flagThreshold} onChange={(event) => setCfg((c) => ({ ...c, flagThreshold: event.target.value }))} />
+                        </label>
+                        {/* NEW (anti-cheat nang cao) */}
+                        <label className="grid gap-1 text-sm">
+                          Flag fast submit: under N% of exam time (empty/0 = off)
+                          <Input type="number" min={0} max={100} value={cfg.fastSubmitPercent} onChange={(event) => setCfg((c) => ({ ...c, fastSubmitPercent: event.target.value }))} />
+                        </label>
+                        <label className="grid gap-1 text-sm">
+                          Flag similar essays: from N% similarity (empty/0 = off)
+                          <Input type="number" min={0} max={100} value={cfg.similarityPercent} onChange={(event) => setCfg((c) => ({ ...c, similarityPercent: event.target.value }))} />
                         </label>
                       </div>
                   )}

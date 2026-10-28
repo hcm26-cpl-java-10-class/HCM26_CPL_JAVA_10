@@ -71,6 +71,8 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setRequireFullscreen(Boolean.TRUE.equals(e.getRequireFullscreen()));
         d.setSingleSession(Boolean.TRUE.equals(e.getSingleSession()));
         d.setFlagThreshold(e.getFlagThreshold());
+        d.setFastSubmitPercent(e.getFastSubmitPercent());
+        d.setSimilarityPercent(e.getSimilarityPercent());
         d.setHasPassword(e.getAccessCode() != null && !e.getAccessCode().trim().isEmpty());
         return d;
     }
@@ -114,6 +116,8 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         if (d.getRequireFullscreen() != null) e.setRequireFullscreen(d.getRequireFullscreen());
         if (d.getSingleSession() != null) e.setSingleSession(d.getSingleSession());
         if (d.getFlagThreshold() != null) e.setFlagThreshold(d.getFlagThreshold() == 0 ? null : d.getFlagThreshold());
+        if (d.getFastSubmitPercent() != null) e.setFastSubmitPercent(d.getFastSubmitPercent() == 0 ? null : d.getFastSubmitPercent());
+        if (d.getSimilarityPercent() != null) e.setSimilarityPercent(d.getSimilarityPercent() == 0 ? null : d.getSimilarityPercent());
         if (d.getAccessCode() != null) {
             String trimmed = d.getAccessCode().trim();
             e.setAccessCode(trimmed.isEmpty() ? null : trimmed);
