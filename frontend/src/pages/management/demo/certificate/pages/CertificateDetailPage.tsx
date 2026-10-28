@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
+import { downloadCertificate } from "../utils/downloadCertificate";
 
 export default function CertificateDetailPage() {
   const { verificationToken } = useParams<{
@@ -23,12 +24,12 @@ export default function CertificateDetailPage() {
 
   const [copied, setCopied] = useState(false);
 
-    const certificateQuery = useQuery<CertificateVerificationDTO>({
-        queryKey: ["certificate-verification", verificationToken],
-        queryFn: () => certificateApi.verify(verificationToken!),
-        enabled: Boolean(verificationToken),
-        retry: false,
-    });
+  const certificateQuery = useQuery<CertificateVerificationDTO>({
+      queryKey: ["certificate-verification", verificationToken],
+      queryFn: () => certificateApi.verify(verificationToken!),
+      enabled: Boolean(verificationToken),
+      retry: false,
+  });
 
 
 
@@ -81,6 +82,22 @@ export default function CertificateDetailPage() {
       } catch {
         window.prompt("Copy certificate link:", verificationUrl);
       }
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!certificate) return;
+
+    try {
+      downloadCertificate({
+        studentName: certificate.studentName || "Student",
+        courseName: certificate.courseName || "Course",
+        issuedAt: formatDate(certificate.issuedAt),
+        verificationUrl,
+      });
+    } catch (error) {
+      console.error("Failed to generate certificate PDF:", error);
+      // Hiển thị toast báo lỗi tại đây nếu dự án có toast.
     }
   };
 
@@ -161,7 +178,7 @@ export default function CertificateDetailPage() {
                   <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Completed by
                   </p>
-                  <h2 className="mt-1 break-words text-lg font-bold">
+                  <h2 className="mt-1 wrap-break-word text-lg font-bold">
                     {certificate.studentName || "Student"}
                   </h2>
                   <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
@@ -182,7 +199,7 @@ export default function CertificateDetailPage() {
                   </div>
 
                   <div className="min-w-0">
-                    <h3 className="break-words font-semibold leading-6">
+                    <h3 className="wrap-break-word font-semibold leading-6">
                       {certificate.courseName || "Course"}
                     </h3>
                     <p className="mt-1 text-sm text-muted-foreground">
@@ -220,6 +237,7 @@ export default function CertificateDetailPage() {
               <Button
                 variant="outline"
                 className="gap-2"
+                onClick={handleDownloadPdf}
               >
                 <Download className="size-4" />
                 Download as PDF
@@ -230,10 +248,10 @@ export default function CertificateDetailPage() {
           {/* Right: certificate preview */}
           <section className="min-w-0 space-y-4">
             <div className="certificate-print-area relative overflow-hidden border border-blue-200 bg-white text-slate-900 shadow-lg">
-              <div className="relative aspect-[1.414/1] min-h-[360px] overflow-hidden p-5 sm:p-8 lg:p-10">
+              <div className="relative aspect-[1.414/1] min-h-90 overflow-hidden p-5 sm:p-8 lg:p-10">
                 {/* Decorative background */}
-                <div className="pointer-events-none absolute left-0 top-0 size-24 bg-gradient-to-br from-blue-100 to-transparent" />
-                <div className="pointer-events-none absolute bottom-0 right-0 size-40 bg-gradient-to-tl from-blue-100 to-transparent" />
+                <div className="pointer-events-none absolute left-0 top-0 size-24 bg-linear-to-br from-blue-100 to-transparent" />
+                <div className="pointer-events-none absolute bottom-0 right-0 size-40 bg-linear-to-tl from-blue-100 to-transparent" />
                 <div className="pointer-events-none absolute bottom-8 right-8 size-44 rounded-full border border-blue-100/80" />
                 <div className="pointer-events-none absolute bottom-12 right-12 size-36 rounded-full border border-blue-100/80" />
 
@@ -268,7 +286,7 @@ export default function CertificateDetailPage() {
                       COMPLETION
                     </span>
                     <Award className="mt-2 size-5 text-blue-200" />
-                    <div className="absolute -bottom-3 left-0 size-0 w-0 border-x-40 border-t-12 border-x-transparent border-t-blue-700 lg:border-x-[48px]" />
+                    <div className="absolute -bottom-3 left-0 size-0 w-0 border-x-40 border-t-12 border-x-transparent border-t-blue-700 lg:border-x-48" />
                   </div>
 
                   {/* Main certificate text */}
@@ -289,7 +307,7 @@ export default function CertificateDetailPage() {
                       has successfully completed the course
                     </p>
 
-                    <h4 className="mt-2 break-words text-sm font-bold leading-snug text-blue-700 sm:text-lg lg:text-xl">
+                    <h4 className="mt-2 wrap-break-word text-sm font-bold leading-snug text-blue-700 sm:text-lg lg:text-xl">
                       {certificate.courseName || "Course"}
                     </h4>
                   </div>

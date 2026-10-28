@@ -20,29 +20,6 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-// Hàm tiện ích ghép đầy đủ họ tên học viên từ các field của backend
-export const getUserFullName = (item?: {
-  userFirstName?: string;
-  userLastName?: string;
-  firstName?: string;
-  lastName?: string;
-  userName?: string;
-  userId?: number | string;
-}) => {
-  if (!item) return "N/A";
-
-  const firstName = item.userFirstName ?? item.firstName;
-  const lastName = item.userLastName ?? item.lastName;
-
-  // Ghép theo thứ tự Họ Tên (chuẩn Tiếng Việt: lastName + firstName) hoặc điều chỉnh nếu muốn
-  const parts = [lastName, firstName].filter(Boolean);
-  if (parts.length > 0) {
-    return parts.join(" ");
-  }
-
-  return item.userName || (item.userId ? `User #${item.userId}` : "N/A");
-};
-
 // 1. Cấu hình Schema: Chuẩn hóa theo CertificateDTO & Entity ở Backend
 const certificateSchema: EntitySchema = {
   entityName: "certificate",
@@ -55,10 +32,18 @@ const certificateSchema: EntitySchema = {
       sortable: true,
       editable: false,
     },
+    // Hiển thị tên khóa học trên bảng list
+    {
+      name: "courseName",
+      label: "Course",
+      type: "text",
+      sortable: true,
+      editable: false,
+    },
     {
       name: "issuedAt",
       label: "Issue Date",
-      type: "date",
+      type: "text",
       sortable: true,
       editable: false,
     },
@@ -76,14 +61,6 @@ const certificateSchema: EntitySchema = {
         valueField: "id",
         labelField: "email",
       },
-    },
-    // Hiển thị tên khóa học trên bảng list
-    {
-      name: "courseName",
-      label: "Course",
-      type: "text",
-      sortable: true,
-      editable: false,
     },
     // Form Select Course khi tạo/sửa
     {
@@ -130,12 +107,10 @@ function StudentCertificateList() {
 
   const certificatesQuery = useQuery({
     queryKey: ["student-certificates", search],
-    queryFn: () =>
-      certificateApi.getPage({ page: 0, size: 50 }, search.trim() || undefined),
+    queryFn: () => certificateApi.getMyCertificates(),
   });
 
-  const certificates =
-    certificatesQuery.data?.content ?? certificatesQuery.data?.items ?? [];
+  const certificates = certificatesQuery.data ?? [];
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return "N/A";
@@ -222,7 +197,7 @@ function StudentCertificateList() {
                   className="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-300 hover:shadow-xl dark:border-slate-800 dark:bg-card"
                 >
                   {/* Certificate Preview */}
-                  <div className="relative overflow-hidden bg-gradient-to-br from-slate-50 via-white to-blue-50 p-5 dark:from-slate-900 dark:via-slate-900 dark:to-blue-950/40">
+                  <div className="relative overflow-hidden bg-linear-to-br from-slate-50 via-white to-blue-50 p-5 dark:from-slate-900 dark:via-slate-900 dark:to-blue-950/40">
                     {/* Decorative elements */}
                     <div className="pointer-events-none absolute -right-12 -top-12 size-40 rounded-full border border-blue-200/70 dark:border-blue-800/50" />
                     <div className="pointer-events-none absolute -right-6 -top-6 size-28 rounded-full border border-blue-200/70 dark:border-blue-800/50" />
@@ -272,8 +247,8 @@ function StudentCertificateList() {
                         <p className="text-xs text-slate-500 dark:text-slate-400">
                           Awarded to
                         </p>
-                        <p className="mt-1 line-clamp-2 break-words text-sm font-semibold text-slate-800 dark:text-slate-100">
-                          {item.userFullName || getUserFullName(item)}
+                        <p className="mt-1 line-clamp-2 wrap-break-word text-sm font-semibold text-slate-800 dark:text-slate-100">
+                          {item.userFullName}
                         </p>
                       </div>
 
