@@ -3,6 +3,7 @@ package com.example.starter_project_2025.init;
 import com.example.starter_project_2025.system.project.ProjectMemberRole;
 import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
+import com.example.starter_project_2025.system.project.template.ProjectTemplateLevel;
 import com.example.starter_project_2025.system.project.template.artifact.TemplateArtifactRequirement;
 import com.example.starter_project_2025.system.project.template.artifact.TemplateArtifactRequirementRepository;
 import com.example.starter_project_2025.system.project.template.artifact.TemplateArtifactType;
@@ -48,11 +49,15 @@ import org.springframework.transaction.annotation.Transactional;
 )
 public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner {
 
-    /** code, name, constraints JSON (US-10 capacity window + US-11 role quotas) */
+    /** code, name, description, category, level, weeks, constraints JSON (US-10 window + US-11 quotas) */
     private static final List<TemplateSeed> TEMPLATES = List.of(
             new TemplateSeed(
                     "US10-TPL-WEB-4-6",
                     "Ứng dụng Web Java (4-6 thành viên)",
+                    "Đề bài mẫu cho nhóm phát triển ứng dụng web với Java Spring Boot và React.",
+                    "Web Application",
+                    ProjectTemplateLevel.INTERMEDIATE,
+                    10,
                     constraints(4, 6, false,
                             "\"PM\":{\"min\":1,\"max\":1},"
                                     + "\"BA\":{\"min\":1,\"max\":1},"
@@ -61,6 +66,10 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
             new TemplateSeed(
                     "US10-TPL-DATA-2-5",
                     "Phân tích dữ liệu (2-5 thành viên)",
+                    "Đề bài mẫu cho nhóm xây dựng pipeline phân tích dữ liệu và báo cáo.",
+                    "Data Analytics",
+                    ProjectTemplateLevel.BEGINNER,
+                    8,
                     constraints(2, 5, true,
                             "\"PM\":{\"min\":1,\"max\":2},"
                                     + "\"BA\":{\"min\":0,\"max\":1},"
@@ -69,6 +78,10 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
             new TemplateSeed(
                     "US10-TPL-CAPSTONE-5-7",
                     "Đồ án Capstone (5-7 thành viên)",
+                    "Đề bài mẫu cho đồ án tốt nghiệp với các mốc bảo vệ giữa kỳ và cuối kỳ.",
+                    "Capstone",
+                    ProjectTemplateLevel.ADVANCED,
+                    15,
                     constraints(5, 7, false,
                             "\"PM\":{\"min\":1,\"max\":1},"
                                     + "\"BA\":{\"min\":1,\"max\":1},"
@@ -77,6 +90,10 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
             new TemplateSeed(
                     "US10-TPL-MOBILE-3-4",
                     "Ứng dụng Mobile (3-4 thành viên)",
+                    "Đề bài mẫu cho nhóm phát triển ứng dụng di động đa nền tảng.",
+                    "Mobile Application",
+                    ProjectTemplateLevel.INTERMEDIATE,
+                    9,
                     constraints(3, 4, true,
                             "\"PM\":{\"min\":1,\"max\":1},"
                                     + "\"BA\":{\"min\":1,\"max\":1},"
@@ -86,6 +103,10 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
             new TemplateSeed(
                     "US11-TPL-MULTIROLE-4-8",
                     "Đề bài kiêm nhiệm (4-8 thành viên)",
+                    "Đề bài mẫu cho phép một thành viên đảm nhận nhiều vai trò.",
+                    "Cross-functional",
+                    ProjectTemplateLevel.INTERMEDIATE,
+                    12,
                     constraints(4, 8, true,
                             "\"PM\":{\"min\":1,\"max\":2},"
                                     + "\"BA\":{\"min\":1,\"max\":2},"
@@ -118,6 +139,10 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
                 created++;
             }
             template.setName(seed.name());
+            template.setDescription(seed.description());
+            template.setCategory(seed.category());
+            template.setLevel(seed.level());
+            template.setEstimatedDurationWeeks(seed.estimatedDurationWeeks());
             template.setConstraintsJson(seed.constraintsJson());
             template.setIsActive(true);
             ProjectTemplate savedTemplate = projectTemplateRepository.save(template);
@@ -308,6 +333,10 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
     private record TemplateSeed(
             String code,
             String name,
+            String description,
+            String category,
+            ProjectTemplateLevel level,
+            Integer estimatedDurationWeeks,
             String constraintsJson
     ) {
     }

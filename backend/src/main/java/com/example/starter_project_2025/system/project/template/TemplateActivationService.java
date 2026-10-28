@@ -43,8 +43,8 @@ public class TemplateActivationService {
 
     public TemplateActivationChecklist getChecklist(Long id) {
         User user = access.requireUser("READ");
-        ProjectTemplate template = findTemplate(id, user);
-        return checklist(template, loadMilestones(id), access.can(user, "ACTIVATE"));
+        ProjectTemplate template = findReadableTemplate(id, user);
+        return checklist(template, loadMilestones(id), access.can(user, "ACTIVATE") && template.getTenantId() != null);
     }
 
     @Transactional
@@ -141,6 +141,12 @@ public class TemplateActivationService {
 
     private ProjectTemplate findTemplate(Long id, User user) {
         return templates.findByIdAndTenantIdAndIsActiveTrue(id, user.getTenantId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project template was not found"));
+    }
+
+    /** Read-only: also resolves the shared catalogue ({@code tenant_id is null}). */
+    private ProjectTemplate findReadableTemplate(Long id, User user) {
+        return templates.findReadableById(id, user.getTenantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project template was not found"));
     }
 
