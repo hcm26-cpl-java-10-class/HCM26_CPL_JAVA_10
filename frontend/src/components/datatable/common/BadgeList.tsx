@@ -42,12 +42,12 @@ export function BadgeList({
 
   return (
     <TooltipWrapper content={tooltipText}>
-      <div className="flex flex-wrap gap-1">
+      <div className="flex min-w-0 max-w-full flex-wrap gap-1">
         {visible.map((m) => (
           <Badge
             key={m[valueField]}
             variant="secondary"
-            className="text-xs truncate"
+            className="max-w-full whitespace-normal break-all text-xs"
           >
             {m[labelField]}
           </Badge>

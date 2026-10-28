@@ -44,7 +44,7 @@ public class ExcelParser implements FileParser {
             DataFormatter formatter = new DataFormatter();
             FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
 
-            // Headers are trimmed, so "Email " in the file still matches the column "Email".
+            
             List<String> headers = new ArrayList<>();
             int headerCount = Math.max(headerRow.getLastCellNum(), 0);
             for (int j = 0; j < headerCount; j++) {
@@ -55,7 +55,7 @@ public class ExcelParser implements FileParser {
             for (int i = 1; i <= sheet.getLastRowNum(); i++) {
                 Row row = sheet.getRow(i);
 
-                // Empty rows are common at the end of a sheet (formatting only). They used to crash the import.
+               
                 if (row == null) {
                     continue;
                 }
@@ -86,10 +86,7 @@ public class ExcelParser implements FileParser {
         return rows;
     }
 
-    /**
-     * Text of a cell as the user typed it: numbers without ".0" or exponent notation (a phone number
-     * stored as a number used to come out as "9.01234567E8"), formulas evaluated, text trimmed.
-     */
+    
     private String getCellValue(Cell cell, DataFormatter formatter, FormulaEvaluator evaluator) {
         if (cell == null) return null;
 

@@ -42,10 +42,20 @@ public class Role extends BaseEntity {
     @ExportField(name = "Name")
     String name;
 
-    @Column
+    @Column(length = 1000)
     @ImportField(name = "Description")
     @ExportField(name = "Description")
     String description;
+
+    @Builder.Default
+    @Column(name = "is_system", nullable = false)
+    @ExportField(name = "Is System")
+    Boolean isSystem = false;
+
+    @Builder.Default
+    @Column(name = "is_active", nullable = false)
+    @ExportField(name = "Is Active")
+    Boolean isActive = true;
 
     @Builder.Default
     @ManyToMany(fetch = FetchType.LAZY)

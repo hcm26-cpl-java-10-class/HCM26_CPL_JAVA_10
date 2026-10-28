@@ -6,11 +6,16 @@ import RegisterPage from "@/pages/auth/RegisterPage";
 import NotFoundPage from "@/pages/error/NotFoundPage";
 import { Unauthorized } from "@/pages/error/Unauthorized";
 import { Dashboard } from "@/pages/management/dashboard";
+import ExamManagementPage from "@/pages/management/exam";
+import InvitationManagementPage from "@/pages/management/invitation";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
+import StudentExamList from "@/pages/student/StudentExamList";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
+import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
+
 
 export interface RouteConfig {
   path: string;
@@ -21,7 +26,16 @@ export interface RouteConfig {
 }
 
 export const routes: RouteConfig[] = [
+  { path: "/fams/module-group-module", component: ModuleGroupModulePage, isPublic: true },
+  { path: "/module-group-module", component: ModuleGroupModulePage, isPublic: true },
   { path: "/dashboard", component: Dashboard, isModuleDriven: true },
+  { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
+  {
+    path: "/invitations",
+    component: InvitationManagementPage,
+    requiredPermission: "INVITATION_READ",
+    isModuleDriven: true,
+  },
   {
     path: "/topic-marks/gradebook-demo",
     component: TopicMarkGradebookDemoPage,
@@ -29,6 +43,7 @@ export const routes: RouteConfig[] = [
     isModuleDriven: true,
   },
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
+  { path: "/student/exams", component: StudentExamList,requiredPermission: "EXAM_READ", isModuleDriven: true },
   { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
   ...buildEntityRoutes(),
 
@@ -37,6 +52,7 @@ export const routes: RouteConfig[] = [
   { path: "/logout", component: Logout, isPublic: true },
   { path: "/register", component: RegisterPage, isPublic: true },
   { path: "/forgot-password", component: ForgotPasswordPage, isPublic: true },
+  { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true },
   { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true,},
   { path: "/unauthorized", component: Unauthorized, isPublic: true },
 ];

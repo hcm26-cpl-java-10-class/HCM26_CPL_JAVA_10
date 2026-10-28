@@ -69,7 +69,7 @@ public class UserServiceImpl
         validateEmailUnique(request.getEmail(), null, ctx);
         validatePhone(request.getPhone(), ctx);
         validateRoles(request.getRoleIds(), ctx);
-        validateDepartments(request.getDepartmentIds(), ctx);
+        // validateDepartments(request.getDepartmentIds(), ctx);
 
         // No email is sent when an account is created, so the administrator sets the initial password
         // and hands it to the person.
@@ -88,7 +88,7 @@ public class UserServiceImpl
         }
 
         user.setRoles(getRoles(request.getRoleIds()));
-        user.setDepartments(getDepartments(request.getDepartmentIds()));
+        // user.setDepartments(getDepartments(request.getDepartmentIds()));
     }
 
     @Override
@@ -110,9 +110,9 @@ public class UserServiceImpl
             validateRoles(request.getRoleIds(), ctx);
         }
 
-        if (request.getDepartmentIds() != null) {
-            validateDepartments(request.getDepartmentIds(), ctx);
-        }
+        // if (request.getDepartmentIds() != null) {
+        //     validateDepartments(request.getDepartmentIds(), ctx);
+        // }
 
 
         if (ctx.hasErrors()) {
@@ -131,10 +131,10 @@ public class UserServiceImpl
         }
 
         // null = giữ nguyên, [] = bỏ hết phòng ban.
-        if (request.getDepartmentIds() != null) {
-            user.getDepartments().clear();
-            user.getDepartments().addAll(getDepartments(request.getDepartmentIds()));
-        }
+        // if (request.getDepartmentIds() != null) {
+        //     user.getDepartments().clear();
+        //     user.getDepartments().addAll(getDepartments(request.getDepartmentIds()));
+        // }
     }
 
     @Override
@@ -218,26 +218,26 @@ public class UserServiceImpl
         return new HashSet<>(roleRepository.findAllById(roleIds));
     }
 
-    private void validateDepartments(Set<Long> departmentIds, ValidationContext ctx) {
-
-        // Phòng ban không bắt buộc: null/rỗng là hợp lệ.
-        if (departmentIds == null || departmentIds.isEmpty()) {
-            return;
-        }
-
-        long found = departmentRepository.countByIdIn(departmentIds);
-
-        if (found != departmentIds.size()) {
-            ctx.add("departmentIds", "One or more departments are invalid");
-        }
-    }
-
-    private Set<Department> getDepartments(Set<Long> departmentIds) {
-        if (departmentIds == null || departmentIds.isEmpty()) {
-            return new HashSet<>();
-        }
-        return new HashSet<>(departmentRepository.findAllById(departmentIds));
-    }
+    // private void validateDepartments(Set<Long> departmentIds, ValidationContext ctx) {
+    //
+    //     // Phòng ban không bắt buộc: null/rỗng là hợp lệ.
+    //     if (departmentIds == null || departmentIds.isEmpty()) {
+    //         return;
+    //     }
+    //
+    //     long found = departmentRepository.countByIdIn(departmentIds);
+    //
+    //     if (found != departmentIds.size()) {
+    //         ctx.add("departmentIds", "One or more departments are invalid");
+    //     }
+    // }
+    //
+    // private Set<Department> getDepartments(Set<Long> departmentIds) {
+    //     if (departmentIds == null || departmentIds.isEmpty()) {
+    //         return new HashSet<>();
+    //     }
+    //     return new HashSet<>(departmentRepository.findAllById(departmentIds));
+    // }
 
 
     @Override

@@ -23,6 +23,8 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
 
     Long countByIsActive(Boolean isActive);
 
-    /** Số tài khoản ACTIVE: đang hoạt động và không bị khóa. */
+    
     Long countByIsActiveAndLocked(Boolean isActive, Boolean locked);
+
+    long countByRolesId(Long roleId);
 }

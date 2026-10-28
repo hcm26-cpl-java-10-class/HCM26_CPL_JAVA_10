@@ -2,26 +2,27 @@ package com.example.starter_project_2025.system.rbac.role;
 
 import com.example.starter_project_2025.base.crud.dto.BaseDTO;
 import com.example.starter_project_2025.base.crud.dto.OnCreate;
-import com.example.starter_project_2025.base.crud.dto.OnUpdate;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Null;
 import jakarta.validation.constraints.Size;
-import lombok.*;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
-import java.time.LocalDateTime;
 import java.util.Set;
-import java.util.UUID;
 
-import static com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY;
-
+@Data
 @Getter
 @Setter
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
+@EqualsAndHashCode(callSuper = false)
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class RoleDTO extends BaseDTO {
 
@@ -29,9 +30,9 @@ public class RoleDTO extends BaseDTO {
     @Size(max = 100, message = "Name must not exceed 100 characters")
     String name;
 
-    @Size(max = 255, message = "Description must not exceed 255 characters")
+    @Size(max = 1000, message = "Description must not exceed 1000 characters")
     String description;
-
-    @NotNull(groups = OnCreate.class, message = "Permission IDs are required")
+    Boolean isSystem;
+    Long userCount;
     Set<Long> permissionIds;
 }
