@@ -1,5 +1,7 @@
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, useSidebar } from "@/components/ui/sidebar";
+
 import { NavMain } from "@/components/layout/NavMain";
+
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { Button } from "@/components/ui/button";
 import { LogOutIcon, MapPin } from "lucide-react";
@@ -30,6 +32,7 @@ export function SidebarMenu() {
 
                 const items = group.modules
                     .filter((module) => !!module.url)
+<<<<<<< HEAD
                     .filter((module) => {
                         const isUnderSystemManagement = groupNameLower.includes("system");
                         const isModulesMenu =
@@ -40,6 +43,8 @@ export function SidebarMenu() {
                         }
                         return true;
                     })
+=======
+>>>>>>> 0992edcd32e756feae852e991e8116f0022682ea
                     .map((module) => ({
                         title: module.title ?? "Untitled",
                         url: module.url ?? "#",

@@ -12,4 +12,9 @@ export * from "./features/rbac/role.api";
 export * from "./features/rbac/user.api";
 export * from "./features/demo/enrollment.api";
 export * from "./features/demo/lesson.api";export * from "./features/rbac/department.api";
+<<<<<<< HEAD
 export * from './features/rbac/location.api';
+=======
+
+export * from "./features/student.api";
+>>>>>>> 0992edcd32e756feae852e991e8116f0022682ea

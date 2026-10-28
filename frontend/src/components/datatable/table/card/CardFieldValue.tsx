@@ -40,6 +40,16 @@ export function CardFieldValue({
     );
   }
 
+  // Show Vietnamese labels for student gender values stored by the backend.
+  if (field.name === "gender" && value != null) {
+    const genderText = String(value).toUpperCase() === "MALE"
+      ? "Nam"
+      : String(value).toUpperCase() === "FEMALE"
+        ? "Nữ"
+        : String(value);
+    return <TruncatedText content={genderText} bold={field.bold} className="text-sm" />;
+  }
+
   if (field.type === "icon" || field.name === "icon") {
     const iconKey = value?.toString();
     const Icon =
@@ -113,13 +123,16 @@ export function CardFieldValue({
 
   if (field.type === "date" && value) {
     try {
-      const formatted = new Date(value).toLocaleDateString("vi-VN", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+      // Date-only values (e.g. LocalDate yyyy-MM-dd) must not be timezone-converted.
+      const raw = String(value);
+      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+      const formatted = match
+        ? `${match[3]}/${match[2]}/${match[1]}`
+        : new Date(raw).toLocaleDateString("vi-VN", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          });
       return (
         <TruncatedText
           content={formatted}

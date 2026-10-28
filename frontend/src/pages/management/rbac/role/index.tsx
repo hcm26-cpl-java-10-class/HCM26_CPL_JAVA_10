@@ -24,6 +24,21 @@ const roleSchema: EntitySchema = {
       sortable: true,
     },
     {
+      name: "isSystem",
+      label: "System Role",
+      type: "boolean",
+      sortable: true,
+      editable: false,
+      booleanLabels: { true: "System", false: "Custom" },
+    },
+    {
+      name: "userCount",
+      label: "Users",
+      type: "number",
+      sortable: true,
+      editable: false,
+    },
+    {
       name: "permissionIds",
       label: "Permissions",
       type: "relation",

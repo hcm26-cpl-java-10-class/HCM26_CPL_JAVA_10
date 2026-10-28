@@ -82,6 +82,12 @@ export interface FieldSchema {
 
   bold?: boolean;
 
+  /** Required input in the create/edit form. */
+  required?: boolean;
+
+  /** Maximum text length for text/textarea inputs. */
+  maxLength?: number;
+
   expandable?: boolean;
 
   renderExpanded?: (value: any, row: any) => React.ReactNode;

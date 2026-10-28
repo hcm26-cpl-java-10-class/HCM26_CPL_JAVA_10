@@ -148,7 +148,13 @@ export const resolveEffectivePermissions = (
     );
   }
 
-  return uniquePermissions(allPermissions);
+  // Never grant every permission to an unknown or empty role.
+  // ADMIN receives all permissions only when the backend did not send an explicit map.
+  if (role === ADMIN_ROLE) {
+    return uniquePermissions(allPermissions);
+  }
+
+  return [];
 };
 
 export const formatRoleLabel = (role: string): string =>
