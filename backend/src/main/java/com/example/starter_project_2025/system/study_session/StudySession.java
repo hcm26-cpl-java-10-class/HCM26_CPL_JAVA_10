@@ -32,6 +32,8 @@ import java.time.LocalTime;
 @ImportEntity("study_session")
 @ExportEntity(fileName = "study_sessions", sheetName = "Study Sessions")
 @ResourcePermission("STUDY_SESSION")
+@com.example.starter_project_2025.init.annotation.ResourceMenu(title="Study Sessions",group="Training Operations",
+        icon="calendar-days",url="/study-sessions",order=6,permission="STUDY_SESSION_READ")
 public class StudySession extends BaseEntity {
 
     // Scalar references only; assignment links are checked by the module-local resolver.
@@ -52,9 +54,11 @@ public class StudySession extends BaseEntity {
     Long trainerId;
 
     @Column(name = "room_id")
+    @ImportField(name = "Room ID")
     Long roomId;
 
     @Column(name = "meeting_url", length = 2048)
+    @ImportField(name = "Meeting URL")
     String meetingUrl;
 
     @Column(name = "subject_id", nullable = false)

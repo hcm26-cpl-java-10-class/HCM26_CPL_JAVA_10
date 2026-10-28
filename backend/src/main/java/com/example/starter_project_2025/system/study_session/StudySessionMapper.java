@@ -26,6 +26,7 @@ public interface StudySessionMapper extends BaseCrudMapper<StudySession, StudySe
     StudySessionDTO toResponse(StudySession entity);
 
     @Override
+    @IgnoreAuditFields
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "status", ignore = true)
     @Mapping(target = "cancelReason", ignore = true)

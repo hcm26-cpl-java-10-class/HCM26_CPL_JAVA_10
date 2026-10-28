@@ -8,6 +8,7 @@ import { Unauthorized } from "@/pages/error/Unauthorized";
 import WeeklyCalendarPage from "@/pages/management/calendar/WeeklyCalendarPage";
 import ClassSetupPage from "@/pages/management/class-setup";
 import TeachingAssignmentPage from "@/pages/management/teaching-assignment";
+import StudySessionPage from "@/pages/management/study-session";
 import BulkScheduleGenerationPage from "@/pages/management/schedule-generation";
 import { Dashboard } from "@/pages/management/dashboard";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
@@ -30,6 +31,7 @@ export interface RouteConfig {
 }
 
 export const routes: RouteConfig[] = [
+  { path: "/study-sessions", component: StudySessionPage, requiredPermission: "STUDY_SESSION_READ", isModuleDriven: true },
   {
     path: "/teaching-assignments",
     component: TeachingAssignmentPage,

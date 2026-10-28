@@ -3,6 +3,8 @@
 The management page is available at `/teaching-assignments` under **Training Operations → Teaching Assignments**.
 It uses the existing application layout, theme, permissions and UI components. Labels are in English; names from the shared system are displayed as supplied.
 
+Editable text fields in Teaching Assignments have a 200-character limit: class/program/subject/trainer names, trainer email, list search and text filters. Form inputs enforce the cap; backend creation DTOs and list/export search validate it again. Email syntax validation still applies. Number/date controls keep their existing range and calendar validation. Managed class/trainer name columns support 200 characters; program/subject names use the existing wider base columns.
+
 ## Run locally
 
 From the repository root, start the backend with the existing sample-data profile:
@@ -25,18 +27,42 @@ Sample data uses an in-memory database and is cleared on restart. The default pr
 
 ## Create an assignment
 
-1. Sign in with an account that has `ASSIGNMENT_READ` and `ASSIGNMENT_CREATE`.
+1. Sign in with an account that has assignment, class/program and trainer creation permissions (the local admin has these permissions).
 2. Open **Teaching Assignments** and click **New assignment**.
-3. Select an eligible class, then one of its active program subjects.
-4. Select an active trainer from the trainer directory and the Main or Assistant role.
+3. Enter a new class name and new training-program name freely and enter the class dates/student count. Program version defaults to `1.0`; no version input is shown.
+4. Enter a new Subject name freely (maximum 200 characters) and its positive whole-number Duration (hours). This is the form's only subject field; the new subject is automatically added to the program. No existing-subject matching or additional-subject list is shown. Enter the trainer name/email in their separate fields. Select Main trainer or Assistant trainer for the role.
 5. Set the effective start date and optional end date, then click **Create assignment**.
 
-If the page is already filtered by class, that class is preselected when eligible. Changing the class clears the subject selection. Errors retain the form values, and a successful create closes the dialog and refreshes list/filter queries while keeping the current list filters.
+The dialog has one new-class flow, with no existing-class switch or class preselection from list filters. It has no separate class/trainer save buttons: only **Create assignment** writes the completed draft. Subject is a plain text input with `maxLength=200`, without reference hints or No match messages. Duration is explicitly supplied rather than guessed. The new subject is created with a generated code/version 1.0 using the existing SubjectService and added to the new curriculum. The extra subject-search box and selected-count sentence are removed. Cancel before submission saves nothing. Errors retain form values. A successful assignment create closes the dialog and refreshes list/filter queries while keeping current filters. The list has no Reset button; clear a text filter to show all records.
+
+Role uses a dropdown with Main trainer and Assistant trainer in create/edit forms; the role filter also offers All roles. New class/program names and trainer names/emails are ordinary text fields, without sample-name matching. Reference lookup remains for selecting a subject already in the new curriculum and for list filters. Trainer display labels and lookup hints omit internal ID suffixes. The edit form preserves the trainer lock for assignments already used. Text filters/sort apply on Enter or blur; clearing a filter means all records. Row counts accept whole numbers from 1 to 100.
+
+### Create a class with a freely entered name
+
+Users with assignment/class/program/trainer creation permissions enter the whole form before saving. **Create assignment** generates codes, creates/activates the program through the existing program service, saves the class/program association, creates or reuses the trainer and creates the assignment in one transaction. Any failed validation rolls back all new records; existing trainer profiles are preserved. There are no separately saved class or trainer records when cancelling an unsent draft.
+
+New class names are limited to 200 characters; student count is 1–10000. Blank names, duplicate names/codes (ignoring case and repeated whitespace), reversed dates and programs without active subjects are rejected. Newly created profiles are stored in `managed_teaching_classes`, returned by the class directory and used by assignment searches, imports/templates, StudySession validation and generation. They supplement shared profiles; external profiles are not modified and upstream outages are not treated as a successful lookup. The normal database lifecycle applies, including the existing local H2 reset on restart.
+
+Class references use positive 52-bit generated IDs that are safe in JavaScript. Creation checks for collisions with known shared/application IDs under the schedule write lock; the combined directory rejects any later shared/application collision instead of silently replacing a profile. The training-program association continues to use the existing `class_training_programs` table.
+
+- `GET /api/teaching-assignments/class-program-options` lists eligible active programs.
+- `GET /api/teaching-assignments/class-subject-options` lists eligible subjects for a new program; additionally requires program create/update permissions.
+- `POST /api/teaching-assignments/classes` accepts `{name, newProgram: {name, version, subjectIds}, startDate, endDate, plannedSize}` and returns the saved class profile (201). The earlier `programId` variant remains compatible for API callers; exactly one program source is required.
+
+Class endpoints require assignment create, class create and class-program update permissions. New-program writes also check program create/update permissions. Existing assignment creation payloads remain unchanged; internal IDs are retained for stable linkage.
+
+The form uses `POST /api/teaching-assignments/create-with-details` with `{classDetails, trainer: {name, email}, newSubject: {name, durationHours}, role, effectiveFrom, effectiveTo}`. The form sends an empty `classDetails.newProgram.subjectIds` array; the server adds the new Subject to the curriculum. No existing-subject lookup is needed to fill or submit this form. It requires assignment create, class create, class-program update, program create/update, trainer create and subject create permissions. The server resolves the new ProgramSubject after creating the curriculum, avoiding temporary IDs or mismatched identities. The earlier `subjectId` variant remains compatible for other callers; exactly one subject source is required. The response is a standard TeachingAssignmentResponse (201). Any subsequent failure rolls back the new subject together with class/program/trainer/assignment writes. Independent class/trainer APIs remain compatible for other callers.
+
+### Enter a trainer name and email
+
+Trainer fields accept new names and valid emails directly. `POST /api/teaching-assignments/trainers` saves `{name, email}` and returns an active profile. It requires `TRAINER_CREATE` and assignment create or update permission. New profiles are persisted in `managed_teaching_trainers` and included in class-setup, assignment, template/import and schedule reference lookups. They are teaching profiles, not login accounts, and no email is sent.
+
+An existing active profile with the same name/email is reused, including shared profiles; email comparison ignores case. A reused email with a different name, or an inactive/ambiguous owner, returns 409. Malformed email/blank name returns 400. Editing an unused assignment can save a new trainer profile before preview; any name/email edit invalidates the preview. A used assignment retains its locked trainer and session history.
 
 ## Creation rules
 
 - Classes and their assigned programs must be active. A subject must belong to the selected class program, have `isActive=true` and status `ACTIVE`.
-- Trainer IDs come from the shared trainer directory, not from the general user list. Only profiles with active status are accepted, even if an upstream filter incorrectly returns an inactive profile.
+- Trainer IDs come from the combined shared/application teaching directory, not from the general user list. Only profiles with active status are accepted, even if an upstream filter incorrectly returns an inactive profile.
 - Start/end dates are inclusive; a same-day assignment is allowed. The end cannot precede the start.
 - The period must stay within the class dates when those bounds are provided. An omitted end uses the class end date when available, otherwise it remains open-ended.
 - There can be one Main trainer per class subject at a time. Multiple different Assistant trainers are allowed. The same trainer cannot have overlapping assignments for the same class subject, including across roles.
@@ -103,6 +129,23 @@ Lifecycle endpoints are:
 
 Update permission does not grant delete permission, and delete permission does not grant permission to end an assignment.
 
+## Import and export
+
+The Teaching Assignments header offers **Import** to users with `ASSIGNMENT_CREATE` and **Export** to users with `ASSIGNMENT_READ`, using the same dialogs as Courses.
+
+- **Download Template** supplies an Excel workbook with an empty Import sheet, Instructions, eligible Classes, Curriculum and active Trainers. Copy Class ID and Program Subject ID from the same Curriculum row; a Subject ID cannot substitute for Program Subject ID. Reference sheets are a snapshot; import rechecks current data.
+- Import accepts `.xlsx`, `.xls` and UTF-8 `.csv`, up to 50 MB and 1,000 data rows. Required headers are `Class ID`, `Program Subject ID`, `Trainer ID`, `Role`, `Effective From`, `Effective To`. The final column may be blank. Role is `MAIN` or `ASSISTANT`; dates are ISO `YYYY-MM-DD` or Excel date cells.
+- Import creates new assignments only, using the existing create service, schedule lock, active/curriculum/date and overlap rules. Each row has its own transaction: valid rows remain saved when later rows fail. The result shows success/failure counts and spreadsheet row numbers. Reimporting the same assignment reports an overlap; it never overwrites a record or changes session history. Repair and retry failed rows only.
+- Export supports Excel, CSV and PDF. It applies the current search, class/subject/trainer/role/effective-date filters and sort across all pages, ignoring current page/row count. Exports above 10,000 matching assignments are rejected with a request to narrow the filters. Excel/CSV include import headers and display columns; PDF is for viewing.
+
+Endpoints:
+
+- `GET /api/teaching-assignments/import-template` requires `ASSIGNMENT_CREATE`.
+- `POST /api/teaching-assignments/import` requires `ASSIGNMENT_CREATE`; multipart field `file`; response `{successCount, failureCount, errors: [{rowNumber, message}]}`. Malformed files/headers return 400 before writes; row-level validation failures are included in the result.
+- `GET /api/teaching-assignments/export?format=EXCEL|CSV|PDF` requires `ASSIGNMENT_READ`; uses the list filter/sort parameters.
+
+The shared Courses import flow remains unchanged; the optional template callback is used only by Teaching Assignments.
+
 ## Validation commands
 
 ```powershell
@@ -121,4 +164,4 @@ Edit integration tests cover read-only preview, immutable identity, historical/c
 
 Lifecycle tests cover inclusive ending, open-ended assignments, extension/reversed-date rejection, stale contexts/revisions, all historical session statuses, separate update/delete permissions, profile outages and races between ending/deletion and session creation. Frontend tests cover date defaults/bounds, exact-preview confirmation and unused-only deletion guards.
 
-The remaining schedule integration and full cross-module flow are the final implementation stage.
+The assignment integration endpoints, source transition, verification and module ownership boundaries are documented in [teaching-assignment-integration.md](teaching-assignment-integration.md).

@@ -13,11 +13,13 @@ public record TeachingAssignmentSessionResponse(
         Long roomId,
         String meetingUrl,
         Session.SessionStatus status,
-        boolean active
+        boolean active,
+        com.example.starter_project_2025.system.schedule.ScheduleEntryKey.Source source
 ) {
     public static TeachingAssignmentSessionResponse from(Session session) {
         return new TeachingAssignmentSessionResponse(session.getId(), session.getTitle(), session.getStartTime(),
                 session.getEndTime(), session.getLocation(), session.getRoomId(), session.getMeetingUrl(),
-                session.getStatus(), Boolean.TRUE.equals(session.getIsActive()));
+                session.getStatus(), Boolean.TRUE.equals(session.getIsActive()),
+                com.example.starter_project_2025.system.schedule.ScheduleEntryKey.Source.DEMO_SESSION);
     }
 }

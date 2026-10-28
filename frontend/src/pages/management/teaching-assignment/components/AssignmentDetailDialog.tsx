@@ -1,3 +1,4 @@
+import { assignmentSessionKey } from "../assignment-session-key";
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
@@ -8,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AppliedTextInput, AppliedNumberInput } from "./ReferenceInput";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatScheduleDateTime, safeMeetingUrl } from "../assignment-detail";
 
@@ -76,18 +77,16 @@ export function AssignmentDetailDialog({ assignmentId, onClose }: { assignmentId
           <div><h2 className="font-semibold">Linked sessions {data && !sessions.isError && <Badge variant="secondary">{total}</Badge>}</h2><p className="mt-1 text-sm text-muted-foreground">Includes completed, cancelled and archived sessions.</p></div>
           <div className="flex flex-wrap gap-3">
             <div className="w-40 space-y-1"><Label htmlFor="detail-session-status">Session status</Label>
-              <Select value={status} onValueChange={(value) => { setStatus(value as typeof status); setPage(0); }}>
-                <SelectTrigger id="detail-session-status" className="w-full"><SelectValue /></SelectTrigger><SelectContent>
-                  <SelectItem value="all">All statuses</SelectItem><SelectItem value="SCHEDULED">Scheduled</SelectItem><SelectItem value="COMPLETED">Completed</SelectItem><SelectItem value="CANCELLED">Cancelled</SelectItem>
-                </SelectContent>
-              </Select>
+              <AppliedTextInput key={status} id="detail-session-status" value={status} options={[
+                { value: "all", label: "All statuses", aliases: ["All"] }, { value: "SCHEDULED", label: "Scheduled" },
+                { value: "COMPLETED", label: "Completed" }, { value: "CANCELLED", label: "Cancelled" },
+              ]} onCommit={(value) => { setStatus((value || "all") as typeof status); setPage(0); }} placeholder="All, Scheduled, Completed or Cancelled" />
             </div>
             <div className="w-44 space-y-1"><Label htmlFor="detail-session-sort">Sort order</Label>
-              <Select value={sort} onValueChange={(value) => { setSort(value); setPage(0); }}>
-                <SelectTrigger id="detail-session-sort" className="w-full"><SelectValue /></SelectTrigger><SelectContent>
-                  <SelectItem value="startTime,asc">Earliest first</SelectItem><SelectItem value="startTime,desc">Latest first</SelectItem>
-                </SelectContent>
-              </Select>
+              <AppliedTextInput key={sort} id="detail-session-sort" value={sort} options={[
+                  { value: "startTime,asc", label: "Earliest first", aliases: ["Earliest", "Ascending"] },
+                  { value: "startTime,desc", label: "Latest first", aliases: ["Latest", "Descending"] },
+                ]} allowEmpty={false} onCommit={(value) => { setSort(value); setPage(0); }} placeholder="Earliest or Latest" />
             </div>
           </div>
         </div>
@@ -101,7 +100,7 @@ export function AssignmentDetailDialog({ assignmentId, onClose }: { assignmentId
           : <Table><TableHeader><TableRow><TableHead>Session</TableHead><TableHead>Start</TableHead><TableHead>End</TableHead><TableHead>Location / meeting</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
             <TableBody>{data.content.map((session) => {
               const meetingUrl = safeMeetingUrl(session.meetingUrl);
-              return <TableRow key={session.id}>
+              return <TableRow key={assignmentSessionKey(session)}>
                 <TableCell className="max-w-64 whitespace-normal font-medium">{session.title}{!session.active && <Badge variant="outline" className="ml-2">Archived</Badge>}</TableCell>
                 <TableCell className="whitespace-nowrap">{formatScheduleDateTime(session.startTime)}</TableCell>
                 <TableCell className="whitespace-nowrap">{formatScheduleDateTime(session.endTime)}</TableCell>
@@ -114,7 +113,7 @@ export function AssignmentDetailDialog({ assignmentId, onClose }: { assignmentId
         {!sessions.isPending && !sessions.isError && data && <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
           <p role="status" className="text-sm text-muted-foreground">{data.content.length ? `${page * size + 1}–${page * size + data.content.length}` : "0"} / {total} sessions</p>
           <div className="flex flex-wrap items-center gap-2"><Label htmlFor="detail-session-size">Rows</Label>
-            <Select value={String(size)} onValueChange={(value) => { setSize(Number(value)); setPage(0); }}><SelectTrigger id="detail-session-size" className="w-20"><SelectValue /></SelectTrigger><SelectContent>{[10, 20, 50].map((value) => <SelectItem key={value} value={String(value)}>{value}</SelectItem>)}</SelectContent></Select>
+            <AppliedNumberInput key={size} id="detail-session-size" value={size} className="w-20" onCommit={(value) => { setSize(value); setPage(0); }} />
             <Button variant="outline" size="icon" aria-label="Previous sessions page" disabled={page === 0 || sessions.isFetching} onClick={() => setPage((current) => current - 1)}><ChevronLeft className="size-4" /></Button>
             <span className="text-sm">Page {page + 1} / {Math.max(1, pages)}</span>
             <Button variant="outline" size="icon" aria-label="Next sessions page" disabled={page + 1 >= pages || sessions.isFetching} onClick={() => setPage((current) => current + 1)}><ChevronRight className="size-4" /></Button>

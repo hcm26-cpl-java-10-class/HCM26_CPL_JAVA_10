@@ -1,4 +1,6 @@
 import axiosInstance from "../axios";
+import type { FileFormat, ImportResult } from "@/types";
+import { downloadBlob, getFilenameFromHeader } from "@/components/datatable/util/dataio.utils";
 
 export type AssignmentRole = "MAIN" | "ASSISTANT";
 
@@ -87,6 +89,7 @@ export interface AssignmentLifecycleContext {
 export type AssignmentSessionStatus = "SCHEDULED" | "COMPLETED" | "CANCELLED";
 
 export interface AssignmentSession {
+  source: "DEMO_SESSION" | "STUDY_SESSION";
   id: number;
   title: string;
   startTime: string;
@@ -161,6 +164,29 @@ export interface AssignmentCreateOptions {
   sampleData: boolean;
 }
 
+export interface AssignmentNewClassRequest {
+  name: string;
+  programId?: number;
+  newProgram?: { name: string; version: string; subjectIds: number[] };
+  startDate: string;
+  endDate: string;
+  plannedSize: number;
+}
+
+export interface AssignmentClassProgram {
+  id: number; code: string; name: string; version: string;
+}
+
+export interface AssignmentCreationRequest {
+  classDetails: AssignmentNewClassRequest;
+  trainer: { name: string; email: string };
+  subjectId?: number;
+  newSubject?: { name: string; durationHours: number };
+  role: AssignmentRole;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+}
+
 export interface AssignmentClassContext {
   classProfile: SharedClass;
   program: NonNullable<ClassProgramSubjects["program"]>;
@@ -168,8 +194,32 @@ export interface AssignmentClassContext {
 }
 
 export const classSetupApi = {
-  getRooms: async () =>
-    (await axiosInstance.get<Array<{ id: number; name: string }>>("/external/rooms")).data,
+  createAssignmentWithDetails: async (request: AssignmentCreationRequest) =>
+    (await axiosInstance.post<TeachingAssignment>("/teaching-assignments/create-with-details", request)).data,
+  getNewProgramSubjects: async (signal?: AbortSignal) =>
+    (await axiosInstance.get<Array<{ id: number; code: string; name: string; version: string; durationHours: number }>>("/teaching-assignments/class-subject-options", { signal })).data,
+  saveAssignmentTrainer: async (request: { name: string; email: string }) =>
+    (await axiosInstance.post<SharedTrainer>("/teaching-assignments/trainers", request)).data,
+  getNewClassPrograms: async (signal?: AbortSignal) =>
+    (await axiosInstance.get<AssignmentClassProgram[]>("/teaching-assignments/class-program-options", { signal })).data,
+  createAssignmentClass: async (request: AssignmentNewClassRequest) =>
+    (await axiosInstance.post<SharedClass>("/teaching-assignments/classes", request)).data,
+  downloadAssignmentTemplate: async () => {
+    const response = await axiosInstance.get<Blob>("/teaching-assignments/import-template", { responseType: "blob" });
+    downloadBlob(response.data, "teaching-assignments-template.xlsx");
+  },
+  importAssignments: async (file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return (await axiosInstance.post<ImportResult>("/teaching-assignments/import", body)).data;
+  },
+  exportAssignments: async (format: FileFormat, filters: AssignmentSearchParams) => {
+    const response = await axiosInstance.get<Blob>("/teaching-assignments/export", {
+      params: { ...filters, page: undefined, size: undefined, format }, responseType: "blob",
+    });
+    downloadBlob(response.data, getFilenameFromHeader(response.headers["content-disposition"]) ?? `teaching-assignments.${format === "EXCEL" ? "xlsx" : format.toLowerCase()}`);
+  },
+  getRooms: async () => (await axiosInstance.get<Array<{ id: number; name: string }>>("/external/rooms")).data,
   getAssignmentCreateOptions: async (signal?: AbortSignal) =>
     (await axiosInstance.get<AssignmentCreateOptions>("/teaching-assignments/create-options", { signal })).data,
   getAssignmentCreateContext: async (classId: number, signal?: AbortSignal) =>
@@ -186,8 +236,8 @@ export const classSetupApi = {
     (await axiosInstance.get<ClassProgramSubjects>(`/classes/${classId}/program-subjects`)).data,
   getAssignments: async (classId: number) =>
     (await axiosInstance.get<TeachingAssignment[]>(`/classes/${classId}/teaching-assignments`)).data,
-  getAvailableAssignments: async (classId: number, date: string) =>
-    (await axiosInstance.get<TeachingAssignment[]>(`/classes/${classId}/teaching-assignments/available`, { params: { date } })).data,
+  getAvailableAssignments: async (classId: number, query: string | { date?: string; programSubjectId?: number; from?: string; to?: string }, signal?: AbortSignal) =>
+    (await axiosInstance.get<TeachingAssignment[]>(`/classes/${classId}/teaching-assignments/available`, { params: typeof query === "string" ? { date: query } : query, signal })).data,
   getAssignmentOptions: async (signal?: AbortSignal) =>
     (await axiosInstance.get<AssignmentOptions>("/teaching-assignments/options", { signal })).data,
   searchAssignments: async (params: AssignmentSearchParams, signal?: AbortSignal) =>

@@ -10,9 +10,13 @@ import java.util.List;
 @Component
 @Profile("schedule-demo")
 public class DemoScheduleReferenceProvider implements ScheduleReferenceProvider {
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.starter_project_2025.system.external_api.ManagedClassDirectory managedClasses;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.starter_project_2025.system.external_api.ManagedTrainerDirectory managedTrainers;
     @Override
     public ScheduleReferences load() {
-        return new ScheduleReferences(
+        var fixtures = new ScheduleReferences(
                 List.of(ExternalClassDTO.builder().id(1L).code("JAVA-01").name("Java 01")
                         .startDate("2026-01-01").endDate("2027-12-31").status("ACTIVE").build(),
                         ExternalClassDTO.builder().id(2L).code("JAVA-02").name("Java 02")
@@ -25,5 +29,7 @@ public class DemoScheduleReferenceProvider implements ScheduleReferenceProvider 
                         new ScheduleReferences.Assignment(2L, 2L, 1L, 2L, LocalDate.of(2026,1,1), LocalDate.of(2027,12,31), "ACTIVE"),
                         new ScheduleReferences.Assignment(3L, 2L, 1L, 1L, LocalDate.of(2026,1,1), LocalDate.of(2027,12,31), "ACTIVE")),
                 List.of(new ScheduleReferences.Holiday(LocalDate.of(2026,11,20), null, "Demo holiday")));
+        return managedClasses == null ? fixtures : new ScheduleReferences(managedClasses.merge(fixtures.classes(), null),
+                managedTrainers == null ? fixtures.trainers() : managedTrainers.merge(fixtures.trainers(), null), fixtures.rooms(), fixtures.assignments(), fixtures.holidays());
     }
 }

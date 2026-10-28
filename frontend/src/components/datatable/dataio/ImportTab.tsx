@@ -215,4 +215,3 @@ export function ImportTab({ loading, onImport, entityName, onPreview, onFileChan
     </TabsContent>
   );
 }
-

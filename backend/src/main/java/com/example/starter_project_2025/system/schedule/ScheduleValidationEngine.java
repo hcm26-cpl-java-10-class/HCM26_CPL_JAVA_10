@@ -210,8 +210,29 @@ public class ScheduleValidationEngine {
         LocalDateTime from = candidates.stream().map(ScheduleCandidate::startTime).min(LocalDateTime::compareTo).orElseThrow();
         LocalDateTime to = candidates.stream().map(ScheduleCandidate::endTime).max(LocalDateTime::compareTo).orElseThrow();
         List<Session> existing = sessions.findBlockingInRange(from, to);
+        var studyEntries = List.<ScheduleSessionSource.Entry>of();
+        if (scopedSources.contains(ScheduleEntryKey.Source.STUDY_SESSION)) {
+            var read = scopedSources.read(ScheduleEntryKey.Source.STUDY_SESSION, from, to);
+            if (read.status() != ScheduleSessionSource.ReadStatus.COMPLETE) {
+                issue(issues,"SOURCE_UNAVAILABLE","sessions","Study session bookings could not be verified.",-1);
+            } else studyEntries = read.entries().stream().filter(e -> Boolean.TRUE.equals(e.isActive()) && !"CANCELLED".equals(e.rawStatus())).toList();
+        }
         for (int i = 0; i < candidates.size(); i++) {
             var candidate = candidates.get(i);
+            for (var old : studyEntries) {
+                var facts=old.facts();
+                if(!orderedTimes(facts) || facts.classId()==null || facts.trainerId()==null) {
+                    issue(issues,"RESOURCE_DATA_INCOMPLETE","sessions","An existing study session has incomplete resource identity.",i);
+                    continue;
+                }
+                int first=issues.size();
+                compare(candidate,facts,i,null,old.key().id(),ref,issues);
+                for(int position=first;position<issues.size();position++) {
+                    var error=issues.get(position);
+                    issues.set(position,new ScheduleIssue(error.code(),error.field(),error.message(),error.candidateIndex(),
+                            error.relatedCandidateIndex(),error.relatedSessionId(),error.relatedTitle(),error.relatedStart(),error.relatedEnd(),ScheduleEntryKey.Source.STUDY_SESSION));
+                }
+            }
             for (Session old : existing) {
                 if (!excluded.contains(old.getId())) compare(candidate, fromSession(old), i, null, old.getId(), ref, issues);
             }
@@ -229,6 +250,17 @@ public class ScheduleValidationEngine {
     }
 
     private void checkConditions(ScheduleCandidate c, int index, ScheduleReferences ref, List<ScheduleIssue> issues) {
+        checkConditions(c, index, ref, issues, true);
+    }
+
+    /** Assignment identity is checked locally by the integration service, without guessing a topic ID. */
+    public List<ScheduleIssue> inspectResources(List<ScheduleCandidate> candidates, ScheduleReferences resources) {
+        var issues = new ArrayList<ScheduleIssue>();
+        for (int i = 0; i < candidates.size(); i++) checkConditions(candidates.get(i), i, resources, issues, false);
+        return issues;
+    }
+
+    private void checkConditions(ScheduleCandidate c, int index, ScheduleReferences ref, List<ScheduleIssue> issues, boolean checkAssignment) {
         var start = c.startTime();
         var end = c.endTime();
         if (!start.toLocalDate().equals(end.toLocalDate()) || start.toLocalTime().isBefore(rules.getOpeningTime())
@@ -259,7 +291,7 @@ public class ScheduleValidationEngine {
                 && Objects.equals(a.trainerId(), c.trainerId()) && active(a.status())
                 && a.effectiveFrom() != null && !start.toLocalDate().isBefore(a.effectiveFrom())
                 && (a.effectiveTo() == null || !end.toLocalDate().isAfter(a.effectiveTo())));
-        if (!assigned) issue(issues, "ASSIGNMENT_INVALID", "teachingAssignmentId", "No active teaching assignment matches this class, subject, and instructor for the full session duration.", index);
+        if (checkAssignment && !assigned) issue(issues, "ASSIGNMENT_INVALID", "teachingAssignmentId", "No active teaching assignment matches this class, subject, and instructor for the full session duration.", index);
 
         Long room = canonicalRoom(c, ref);
         if (c.roomId() != null && ref.rooms().stream().noneMatch(r -> Objects.equals(r.getId(), c.roomId())))

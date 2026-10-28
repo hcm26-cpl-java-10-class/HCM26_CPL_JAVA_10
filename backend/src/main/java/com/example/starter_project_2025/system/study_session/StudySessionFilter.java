@@ -13,6 +13,9 @@ import java.time.LocalDate;
 @Setter
 @NoArgsConstructor
 public class StudySessionFilter extends BaseFilter {
+    @FilterField Long classId;
+    @FilterField Long teachingAssignmentId;
+    @FilterField Long programSubjectId;
 
 	@FilterField
 	Long subjectId;

@@ -82,6 +82,9 @@ class StudySessionCancellationServiceTest {
     private StudySessionValidator studySessionValidator = new StudySessionValidator(
             FACTORY.getValidator());
 
+    @org.mockito.Mock
+    private com.example.starter_project_2025.system.study_session.StudySessionScheduling scheduling;
+
     @InjectMocks
     private StudySessionServiceImpl studySessionService;
 

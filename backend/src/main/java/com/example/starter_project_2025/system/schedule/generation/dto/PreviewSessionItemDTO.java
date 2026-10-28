@@ -17,6 +17,8 @@ public class PreviewSessionItemDTO {
     String tempId;
 
     Long topicId;
+    Long programSubjectId;
+    Long subjectId;
 
     String topicName;
 
@@ -38,6 +40,7 @@ public class PreviewSessionItemDTO {
     Long roomId;
 
     String roomName;
+    String meetingUrl;
 
     String meetingUrl;
 

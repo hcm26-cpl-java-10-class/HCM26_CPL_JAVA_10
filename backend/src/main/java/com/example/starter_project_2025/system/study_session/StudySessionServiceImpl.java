@@ -32,6 +32,27 @@ public class StudySessionServiceImpl
     ApplicationEventPublisher eventPublisher;
     StudySessionValidator studySessionValidator;
     StudySessionAssignmentResolver assignmentResolver;
+    StudySessionScheduling scheduling;
+
+    @Override
+    public StudySessionDTO create(StudySessionDTO request) {
+        check("STUDY_SESSION_CREATE"); scheduling.lock(); return super.create(request);
+    }
+
+    @Override
+    public StudySessionDTO update(Long id, StudySessionDTO request) {
+        check("STUDY_SESSION_UPDATE"); scheduling.lock(); return super.update(id,request);
+    }
+
+    @Override
+    public void delete(Long id) {
+        check("STUDY_SESSION_DELETE"); scheduling.lock();
+        studySessionRepository.findById(id).ifPresent(s->scheduling.remember(s.getTeachingAssignmentId()));
+        super.delete(id);
+    }
+
+    @Override
+    protected void afterUpdate(StudySession entity, StudySessionDTO request) { scheduling.validate(entity); }
 
     @Override
     @Transactional(readOnly = true)
@@ -81,6 +102,8 @@ public class StudySessionServiceImpl
         studySession.setStatus(SessionStatus.SCHEDULED);
         studySession.setCancelReason(null);
         studySession.setNotes(null);
+        ctx.throwIfErrors();
+        scheduling.validate(studySession);
     }
 
     @Override
@@ -107,6 +130,10 @@ public class StudySessionServiceImpl
         }
 
         studySessionValidator.validateUpdate(studySession, request, ctx);
+        scheduling.remember(studySession.getTeachingAssignmentId());
+        if (request.getMeetingUrl()!=null && !request.getMeetingUrl().isBlank() && request.getRoomId()==null) {
+            studySession.setRoomId(null); studySession.setRoom(null);
+        }
         var resolved = assignmentResolver.resolveUpdate(studySession, request, ctx);
         if (resolved != null) {
             request.setProgramSubjectId(resolved.programSubjectId());
@@ -121,6 +148,7 @@ public class StudySessionServiceImpl
     @Override
     public StudySessionDTO updateStatus(Long id, Boolean isActive) {
         check("STUDY_SESSION_UPDATE");
+        scheduling.lock();
         if (isActive == null) {
             throw new BadRequestException("isActive is required");
         }
@@ -128,12 +156,14 @@ public class StudySessionServiceImpl
         StudySession studySession = studySessionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Study session not found"));
         studySession.setIsActive(isActive);
+        if (isActive && studySession.getStatus()!=SessionStatus.CANCELLED) scheduling.validate(studySession);
         return studySessionMapper.toResponse(studySessionRepository.save(studySession));
     }
 
     @Override
     public StudySessionDTO cancel(Long id, CancelSessionRequest request) {
         check("STUDY_SESSION_UPDATE");
+        scheduling.lock();
         StudySession studySession = studySessionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Study session not found"));
 
@@ -165,6 +195,7 @@ public class StudySessionServiceImpl
     @Override
     public StudySessionDTO complete(Long id, CompleteSessionRequest request) {
         check("STUDY_SESSION_UPDATE");
+        scheduling.lock();
         StudySession studySession = studySessionRepository.findById(id)
                 .orElseThrow(() ->
                         new ResourceNotFoundException("Study session not found"));

@@ -16,6 +16,12 @@ public interface ClassSetupService {
 
     List<TeachingAssignmentResponse> getAvailableClassAssignments(Long classId, LocalDate date);
 
+    List<TeachingAssignmentResponse> getAvailableClassAssignments(Long classId, LocalDate date, Long programSubjectId,
+            java.time.LocalDateTime from, java.time.LocalDateTime to);
+    record SchedulingDirectory(com.example.starter_project_2025.system.external_api.dto.ExternalClassDTO classProfile,
+                               List<TeachingAssignmentResponse> assignments) {}
+    SchedulingDirectory getSchedulingDirectory(Long classId);
+
     Page<TeachingAssignmentResponse> searchAssignments(Long classId, Long programSubjectId,
                                                          Long trainerId, AssignmentRole role,
                                                          LocalDate effectiveOn, String search, Long subjectId, Pageable pageable);

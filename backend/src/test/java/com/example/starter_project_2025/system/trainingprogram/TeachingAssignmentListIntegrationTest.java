@@ -87,7 +87,7 @@ class TeachingAssignmentListIntegrationTest {
         mvc.perform(get("/api/teaching-assignments").header("Authorization", bearer).param("page", "10"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.content", hasSize(0)))
                 .andExpect(jsonPath("$.totalElements").value(3));
-        for (String[] invalid : new String[][]{{"sort", "unknown,asc"}, {"size", "101"}, {"search", "a".repeat(101)}}) {
+        for (String[] invalid : new String[][]{{"sort", "unknown,asc"}, {"size", "101"}, {"search", "a".repeat(201)}}) {
             mvc.perform(get("/api/teaching-assignments").header("Authorization", bearer).param(invalid[0], invalid[1]))
                     .andExpect(status().isBadRequest());
         }

@@ -63,8 +63,11 @@ public class ClassSetupController {
     @PreAuthorize("hasAuthority('ASSIGNMENT_READ')")
     public ResponseEntity<List<TeachingAssignmentResponse>> getAvailableClassAssignments(
             @PathVariable Long classId,
-            @RequestParam(required = false) LocalDate date) {
-        return ResponseEntity.ok(service.getAvailableClassAssignments(classId, date));
+            @RequestParam(required = false) LocalDate date,
+            @RequestParam(required = false) Long programSubjectId,
+            @RequestParam(required = false) java.time.LocalDateTime from,
+            @RequestParam(required = false) java.time.LocalDateTime to) {
+        return ResponseEntity.ok(service.getAvailableClassAssignments(classId, date, programSubjectId, from, to));
     }
 
     @GetMapping("/teaching-assignments")

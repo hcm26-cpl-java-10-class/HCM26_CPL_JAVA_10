@@ -11,9 +11,9 @@ export const scheduleGenerationApi = {
   /**
    * Lấy ngữ cảnh môn học và giảng viên của lớp
    */
-  getContext: async (classId: number | string): Promise<ScheduleGenerationContextResponse> => {
+  getContext: async (classId: number | string, signal?: AbortSignal): Promise<ScheduleGenerationContextResponse> => {
     const response = await axiosInstance.get<ScheduleGenerationContextResponse>(
-      `/classes/${classId}/schedule-generation/context`
+      `/classes/${classId}/schedule-generation/context`, { signal }
     );
     return response.data;
   },

@@ -10,7 +10,6 @@ import com.example.starter_project_2025.system.external_api.exception.ExternalAp
 import com.example.starter_project_2025.system.subject.Subject;
 import com.example.starter_project_2025.system.subject.SubjectStatus;
 import com.example.starter_project_2025.system.demo.session.Session;
-import com.example.starter_project_2025.system.demo.session.SessionRepository;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -43,11 +42,12 @@ public class ClassSetupServiceImpl implements ClassSetupService {
     private final TrainingProgramRepository trainingProgramRepository;
     private final ProgramSubjectRepository programSubjectRepository;
     private final ExternalApiService externalApiService;
-    private final SessionRepository sessionRepository;
+    private final AssignmentSessionHistory sessionHistory;
     private final TeachingAssignmentSessionGuard assignmentSessionGuard;
 
     @Override
     public ClassProgramSubjectsResponse assignProgram(Long classId, Long programId) {
+        assignmentSessionGuard.lockForWrite();
         ExternalClassDTO externalClass = requireClass(classId);
         requireActiveClass(externalClass);
         TrainingProgram program = requireProgram(programId);
@@ -94,13 +94,46 @@ public class ClassSetupServiceImpl implements ClassSetupService {
     @Override
     @Transactional(readOnly = true)
     public List<TeachingAssignmentResponse> getAvailableClassAssignments(Long classId, LocalDate date) {
-        LocalDate effectiveOn = date == null ? LocalDate.now() : date;
+        return getAvailableClassAssignments(classId, date, null, null, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<TeachingAssignmentResponse> getAvailableClassAssignments(Long classId, LocalDate date, Long programSubjectId,
+            java.time.LocalDateTime from, java.time.LocalDateTime to) {
+        if ((from == null) != (to == null) || (date != null && from != null))
+            throw fieldError("from", "Provide either date or both from and to.");
+        if (from != null && !to.isAfter(from)) throw fieldError("to", "The end must be after the start.");
+        if (programSubjectId != null && programSubjectId <= 0) throw fieldError("programSubjectId", "Use a positive program subject ID.");
+        LocalDate effectiveOn = from != null ? from.toLocalDate() : date == null ? LocalDate.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh")) : date;
+        LocalDate lastDay = to == null ? effectiveOn : to.toLocalDate();
+        var directory=getSchedulingDirectory(classId);
+        var externalClass=directory.classProfile();
+        LocalDate first = classDate(externalClass.getStartDate()), last = classDate(externalClass.getEndDate());
+        if ((first != null && effectiveOn.isBefore(first)) || (last != null && lastDay.isAfter(last))) return List.of();
+        return directory.assignments().stream()
+                .filter(a->programSubjectId==null || programSubjectId.equals(a.programSubjectId()))
+                .filter(a->!effectiveOn.isBefore(a.effectiveFrom()) && (a.effectiveTo()==null || !lastDay.isAfter(a.effectiveTo())))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly=true)
+    public SchedulingDirectory getSchedulingDirectory(Long classId) {
         ExternalClassDTO externalClass = requireClass(classId);
+        validateClassDates(externalClass);
+        if (!isActive(externalClass.getStatus())) return new SchedulingDirectory(externalClass,List.of());
+        Long programId = resolveProgramId(classId, externalClass);
+        if (programId == null || requireProgram(programId).getStatus() != ProgramStatus.ACTIVE) return new SchedulingDirectory(externalClass,List.of());
         Map<Long, ExternalTrainerDTO> trainers = fetchTrainerLookup();
-        return teachingAssignmentRepository.findByClassIdOrderByEffectiveFromAscIdAsc(classId).stream()
-                .filter(assignment -> isEffectiveOn(assignment, effectiveOn))
+        var eligible=teachingAssignmentRepository.findByClassIdOrderByEffectiveFromAscIdAsc(classId).stream()
+                .filter(assignment -> Boolean.TRUE.equals(assignment.getIsActive()))
+                .filter(assignment -> Objects.equals(assignment.getProgramSubject().getProgram().getId(), programId))
+                .filter(assignment -> isActiveSubject(assignment.getProgramSubject().getSubject()))
+                .filter(assignment -> trainers.containsKey(assignment.getTrainerId()) && isActive(trainers.get(assignment.getTrainerId()).getStatus()))
                 .map(assignment -> toResponse(assignment, externalClass, trainers.get(assignment.getTrainerId())))
                 .toList();
+        return new SchedulingDirectory(externalClass,eligible);
     }
 
     @Override
@@ -112,7 +145,7 @@ public class ClassSetupServiceImpl implements ClassSetupService {
             throw new IllegalArgumentException("Page size must be at most 100 and page at most 100000.");
         }
         String term = search == null ? "" : search.trim().toLowerCase(Locale.ROOT);
-        if (term.length() > 100) throw new IllegalArgumentException("Search must be at most 100 characters.");
+        if (term.length() > 200) throw new IllegalArgumentException("Search must be at most 200 characters.");
         Set<String> sortable = Set.of("id", "effectiveFrom", "effectiveTo", "role", "classId", "trainerId");
         for (Sort.Order order : pageable.getSort()) {
             if (!sortable.contains(order.getProperty())) throw new IllegalArgumentException("Unsupported assignment sort field.");
@@ -232,13 +265,12 @@ public class ClassSetupServiceImpl implements ClassSetupService {
         }
         Sort sort = pageable.getSort().getOrderFor("id") == null
                 ? pageable.getSort().and(Sort.by("id")) : pageable.getSort();
-        return sessionRepository.findAssignmentSessions(id, status,
-                PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort))
-                .map(TeachingAssignmentSessionResponse::from);
+        return sessionHistory.sessions(id, status, PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort));
     }
 
     @Override
     public TeachingAssignmentResponse createAssignment(TeachingAssignmentRequest request) {
+        assignmentSessionGuard.lockForWrite();
         ExternalClassDTO externalClass = requireClass(request.classId());
         requireActiveClass(externalClass);
         request = boundEffectiveTo(request, externalClass);
@@ -277,7 +309,7 @@ public class ClassSetupServiceImpl implements ClassSetupService {
     public TeachingAssignmentEditContext getAssignmentEditContext(Long id) {
         var assignment = findAssignment(id);
         var clazz = requireClass(assignment.getClassId());
-        long linkedCount = sessionRepository.countByTeachingAssignmentId(id);
+        long linkedCount = sessionHistory.count(id);
         return new TeachingAssignmentEditContext(toResponse(assignment, clazz, fetchTrainerLookup().get(assignment.getTrainerId())),
                 clazz, externalApiService.fetchTrainers("active").stream().filter(t -> isActive(t.getStatus())).toList(),
                 linkedCount, Boolean.TRUE.equals(assignment.getEverUsed()) || linkedCount > 0);
@@ -318,25 +350,26 @@ public class ClassSetupServiceImpl implements ClassSetupService {
         boolean trainerChanged = !Objects.equals(assignment.getTrainerId(), request.trainerId());
         var until = request.effectiveTo() == null || request.effectiveTo().equals(LocalDate.MAX)
                 ? null : request.effectiveTo().plusDays(1).atStartOfDay();
-        var affected = sessionRepository.findAssignmentImpacts(assignment.getId(), trainerChanged, request.classId(),
-                request.trainerId(), request.effectiveFrom().atStartOfDay(), until, Session.SessionStatus.CANCELLED,
+        var affected = sessionHistory.impacts(assignment.getId(), trainerChanged, request.classId(),
+                request.trainerId(), request.effectiveFrom().atStartOfDay(), until,
                 PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), Sort.by("startTime").and(Sort.by("id"))));
-        var rows = affected.map(session -> {
+        var rows = affected.map(row -> {
+            var session = row.summary();
             List<String> reasons = new ArrayList<>();
             if (trainerChanged) reasons.add("Trainer changes are blocked once any session references this assignment. Create a replacement assignment instead.");
-            if (session.getStatus() != Session.SessionStatus.CANCELLED) {
-                if (session.getStartTime().toLocalDate().isBefore(request.effectiveFrom())
-                        || (request.effectiveTo() != null && session.getEndTime().toLocalDate().isAfter(request.effectiveTo()))) {
+            if (session.status() != Session.SessionStatus.CANCELLED) {
+                if (session.startTime().toLocalDate().isBefore(request.effectiveFrom())
+                        || (request.effectiveTo() != null && session.endTime().toLocalDate().isAfter(request.effectiveTo()))) {
                     reasons.add("The session falls outside the proposed effective period.");
                 }
-                if (!Objects.equals(session.getClassId(), request.classId()) || !Objects.equals(session.getTrainerId(), request.trainerId())) {
+                if (!Objects.equals(row.classId(), request.classId()) || !Objects.equals(row.trainerId(), request.trainerId())) {
                     reasons.add("The session class or trainer does not match the proposed assignment.");
                 }
             }
-            return new TeachingAssignmentImpactResponse.SessionImpact(TeachingAssignmentSessionResponse.from(session), reasons);
+            return new TeachingAssignmentImpactResponse.SessionImpact(session, reasons);
         });
         return new TeachingAssignmentImpactResponse(affected.getTotalElements() == 0, assignment.getRevision(),
-                sessionRepository.countByTeachingAssignmentId(assignment.getId()), affected.getTotalElements(),
+                sessionHistory.count(assignment.getId()), affected.getTotalElements(),
                 request.effectiveFrom(), request.effectiveTo(), rows);
     }
 
@@ -344,7 +377,7 @@ public class ClassSetupServiceImpl implements ClassSetupService {
     @Transactional(readOnly = true)
     public TeachingAssignmentLifecycleContext getAssignmentLifecycleContext(Long id) {
         var assignment = findAssignment(id);
-        long count = sessionRepository.countByTeachingAssignmentId(id);
+        long count = sessionHistory.count(id);
         boolean used = Boolean.TRUE.equals(assignment.getEverUsed()) || count > 0;
         return new TeachingAssignmentLifecycleContext(toResponse(assignment, null, null), count, !used, used);
     }
@@ -395,7 +428,7 @@ public class ClassSetupServiceImpl implements ClassSetupService {
         assignmentSessionGuard.lockForWrite();
         var assignment = findAssignmentForLifecycleWrite(id);
         requireRevision(assignment, revision);
-        long references = sessionRepository.countByTeachingAssignmentId(id);
+        long references = sessionHistory.count(id);
         if (references > 0 || Boolean.TRUE.equals(assignment.getEverUsed())) {
             throw new ConflictException(references > 0 ? "This assignment is referenced by " + references
                     + " session(s), including historical records, and cannot be deleted. End its effective period instead."

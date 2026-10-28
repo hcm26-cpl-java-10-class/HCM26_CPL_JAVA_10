@@ -25,4 +25,5 @@ public class BulkSaveSessionsResponseDTO {
     LocalDateTime createdAt;
 
     String correlationId;
+    java.util.List<com.example.starter_project_2025.system.schedule.ScheduleEntryKey> createdSessions;
 }

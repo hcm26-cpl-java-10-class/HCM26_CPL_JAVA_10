@@ -13,7 +13,10 @@ import java.util.Objects;
 /** Standalone development data; never used as a fallback for a failed remote API. */
 @Service
 @Profile("local")
+@lombok.RequiredArgsConstructor
 public class LocalExternalApiService implements ExternalApiService {
+    private final ManagedClassDirectory managedClasses;
+    private final ManagedTrainerDirectory managedTrainers;
 
     @Override
     public boolean isSampleData() {
@@ -22,11 +25,11 @@ public class LocalExternalApiService implements ExternalApiService {
 
     @Override
     public List<ExternalClassDTO> fetchClasses(String status) {
-        return List.of(
+        return managedClasses.merge(List.of(
                 sampleClass(1L, "LOCAL_JAVA_01", "Lớp Java mẫu 01", "active"),
                 sampleClass(2L, "LOCAL_JAVA_02", "Lớp Java mẫu 02", "active"),
                 sampleClass(3L, "LOCAL_JAVA_OLD", "Lớp Java mẫu đã kết thúc", "inactive")
-        ).stream().filter(item -> matchesStatus(status, item.getStatus())).toList();
+        ).stream().filter(item -> matchesStatus(status, item.getStatus())).toList(), status);
     }
 
     @Override
@@ -39,11 +42,11 @@ public class LocalExternalApiService implements ExternalApiService {
 
     @Override
     public List<ExternalTrainerDTO> fetchTrainers(String status) {
-        return List.of(
+        return managedTrainers.merge(List.of(
                 new ExternalTrainerDTO(1L, "Giảng viên mẫu An", "trainer.an@example.com", "active"),
                 new ExternalTrainerDTO(2L, "Giảng viên mẫu Bình", "trainer.binh@example.com", "active"),
                 new ExternalTrainerDTO(3L, "Giảng viên mẫu đã nghỉ", "trainer.old@example.com", "inactive")
-        ).stream().filter(item -> matchesStatus(status, item.getStatus())).toList();
+        ).stream().filter(item -> matchesStatus(status, item.getStatus())).toList(), status);
     }
 
     @Override

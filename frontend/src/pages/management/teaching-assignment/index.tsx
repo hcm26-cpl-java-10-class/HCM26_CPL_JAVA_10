@@ -2,11 +2,12 @@ import { useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import axios from "axios";
-import { AlertCircle, CalendarOff, ChevronLeft, ChevronRight, Eye, LoaderCircle, Pencil, Plus, RefreshCw, Search, Trash2, Users, X } from "lucide-react";
+import { AlertCircle, CalendarOff, ChevronLeft, ChevronRight, Eye, LoaderCircle, Pencil, Plus, RefreshCw, Search, Trash2, Users } from "lucide-react";
 import { AssignmentLifecycleDialog, type LifecycleMode } from "./components/AssignmentLifecycleDialog";
 import { EditAssignmentDialog } from "./components/EditAssignmentDialog";
 import { CreateAssignmentDialog } from "./components/CreateAssignmentDialog";
 import { AssignmentDetailDialog } from "./components/AssignmentDetailDialog";
+import { AssignmentDataIO } from "./components/AssignmentDataIO";
 import { classSetupApi, type AssignmentRole, type AssignmentSearchParams, type TeachingAssignment } from "@/api/features/class-setup.api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -15,7 +16,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AppliedTextInput, AppliedNumberInput } from "./components/ReferenceInput";
+import { trainerTextOptions, type TextOption } from "./assignment-text";
+import { AssignmentRoleSelect } from "./components/AssignmentRoleSelect";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -38,18 +41,21 @@ function displayDate(value: string) {
   return value.split("-").reverse().join("/");
 }
 
-function FilterSelect({ id, label, value, onChange, children, disabled = false }: {
+function FilterInput({ id, label, value, onChange, options, disabled = false }: {
   id: string; label: string; value: string; onChange: (value: string) => void;
-  children: React.ReactNode; disabled?: boolean;
+  options: TextOption[]; disabled?: boolean;
 }) {
-  return <div className="space-y-2">
-    <Label htmlFor={id}>{label}</Label>
-    <Select value={value || "all"} onValueChange={(next) => onChange(next === "all" ? "" : next)} disabled={disabled}>
-      <SelectTrigger id={id} className="w-full"><SelectValue /></SelectTrigger>
-      <SelectContent><SelectItem value="all">All</SelectItem>{children}</SelectContent>
-    </Select>
+  return <div className="space-y-2"><Label htmlFor={id}>{label}</Label>
+    <AppliedTextInput id={id} value={value} options={options} onCommit={onChange} disabled={disabled} placeholder={`All ${label === "Class" ? "classes" : `${label.toLowerCase()}s`}`} />
   </div>;
 }
+
+const sortOptions: TextOption[] = [
+  { value: "effectiveFrom,desc", label: "Start date: newest first", aliases: ["Newest", "Start descending"] },
+  { value: "effectiveFrom,asc", label: "Start date: oldest first", aliases: ["Oldest", "Start ascending"] },
+  { value: "effectiveTo,asc", label: "End date: ascending", aliases: ["End ascending"] },
+  { value: "effectiveTo,desc", label: "End date: descending", aliases: ["End descending"] },
+];
 
 export default function TeachingAssignmentPage() {
   const { hasPermission } = usePermissions();
@@ -65,13 +71,13 @@ export default function TeachingAssignmentPage() {
   const pageValue = Number(url.get("page") ?? 0);
   const page = Number.isInteger(pageValue) && pageValue >= 0 && pageValue <= 100000 ? pageValue : 0;
   const sizeValue = Number(url.get("size") ?? 20);
-  const size = [10, 20, 50, 100].includes(sizeValue) ? sizeValue : 20;
+  const size = Number.isInteger(sizeValue) && sizeValue >= 1 && sizeValue <= 100 ? sizeValue : 20;
   const role = ["MAIN", "ASSISTANT"].includes(url.get("role") ?? "") ? url.get("role") as AssignmentRole : undefined;
   const sort = ["effectiveFrom,asc", "effectiveFrom,desc", "effectiveTo,asc", "effectiveTo,desc"].includes(url.get("sort") ?? "")
     ? url.get("sort")! : "effectiveFrom,desc";
   const date = url.get("effectiveOn") ?? "";
   const effectiveOn = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined;
-  const search = (url.get("search") ?? "").trim().slice(0, 100);
+  const search = (url.get("search") ?? "").trim().slice(0, 200);
   const params: AssignmentSearchParams = {
     classId: positiveId(url.get("classId")), subjectId: positiveId(url.get("subjectId")),
     trainerId: positiveId(url.get("trainerId")), role, effectiveOn, search: search || undefined, page, size, sort,
@@ -106,6 +112,13 @@ export default function TeachingAssignmentPage() {
       return next;
     });
   }
+  const classOptions: TextOption[] = (options.data?.classes ?? []).map((item) => ({ value: String(item.id), label: `${item.code} - ${item.name}`, aliases: [item.code, item.name] }));
+  const subjectOptions: TextOption[] = (options.data?.subjects ?? []).map((item) => ({ value: String(item.id), label: `${item.code} - ${item.name} - v${item.version}`, aliases: [item.code, item.name, `${item.code} v${item.version}`] }));
+  const trainerOptions = trainerTextOptions(options.data?.trainers ?? []);
+  for (const [value, choices, label] of [[params.classId, classOptions, "Class"], [params.subjectId, subjectOptions, "Subject"], [params.trainerId, trainerOptions, "Trainer"]] as const) {
+    if (value && !choices.some((item) => item.value === String(value))) choices.push({ value: String(value), label: `${label} #${value}` });
+  }
+
   const data = assignments.data;
   const total = data?.totalElements ?? 0;
   const pages = data?.totalPages ?? 0;
@@ -120,6 +133,7 @@ export default function TeachingAssignmentPage() {
         <Button variant="outline" disabled={assignments.isFetching || options.isFetching || !canRead} onClick={() => { void assignments.refetch(); void options.refetch(); }}>
           <RefreshCw className={assignments.isFetching || options.isFetching ? "size-4 animate-spin" : "size-4"} />Refresh
         </Button>
+        {canRead && <AssignmentDataIO filters={params} canImport={canCreate} />}
         {canRead && canCreate && <Button onClick={() => setCreating(true)}><Plus className="size-4" />New assignment</Button>}
         </div>
       </div>
@@ -128,36 +142,22 @@ export default function TeachingAssignmentPage() {
         {options.isError && <Alert variant="destructive"><AlertCircle /><AlertTitle>Unable to load filter options</AlertTitle><AlertDescription>{errorMessage(options.error)} <Button size="sm" variant="outline" onClick={() => void options.refetch()}>Retry filters</Button></AlertDescription></Alert>}
         <Card><CardContent className="space-y-4 pt-6">
           <form onSubmit={submitSearch} className="flex flex-wrap items-end gap-2" role="search">
-            <div className="min-w-48 flex-1 space-y-2"><Label htmlFor="assignment-search">Search</Label><Input key={search} id="assignment-search" name="search" defaultValue={search} maxLength={100} placeholder="Class or subject code/name, trainer name/email" /></div>
+            <div className="min-w-48 flex-1 space-y-2"><Label htmlFor="assignment-search">Search</Label><Input key={search} id="assignment-search" name="search" defaultValue={search} maxLength={200} placeholder="Class or subject code/name, trainer name/email" /></div>
             <Button type="submit"><Search className="size-4" />Search</Button>
-            <Button type="button" variant="outline" onClick={(event) => { event.currentTarget.form?.reset(); setUrl({}); }}><X className="size-4" />Reset</Button>
           </form>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-            <FilterSelect id="assignment-class" label="Class" value={String(params.classId ?? "")} onChange={(v) => change("classId", v)} disabled={!options.data}>
-              {params.classId && !options.data?.classes.some((c) => c.id === params.classId) && <SelectItem value={String(params.classId)}>Class #{params.classId}</SelectItem>}
-              {options.data?.classes.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.code} · {c.name}</SelectItem>)}
-            </FilterSelect>
-            <FilterSelect id="assignment-subject" label="Subject" value={String(params.subjectId ?? "")} onChange={(v) => change("subjectId", v)} disabled={!options.data}>
-              {params.subjectId && !options.data?.subjects.some((s) => s.id === params.subjectId) && <SelectItem value={String(params.subjectId)}>Subject #{params.subjectId}</SelectItem>}
-              {options.data?.subjects.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.code} · {s.name} · v{s.version}</SelectItem>)}
-            </FilterSelect>
-            <FilterSelect id="assignment-trainer" label="Trainer" value={String(params.trainerId ?? "")} onChange={(v) => change("trainerId", v)} disabled={!options.data}>
-              {params.trainerId && !options.data?.trainers.some((t) => t.id === params.trainerId) && <SelectItem value={String(params.trainerId)}>Trainer #{params.trainerId}</SelectItem>}
-              {options.data?.trainers.map((t) => <SelectItem key={t.id} value={String(t.id)}>{t.name}{t.email ? ` · ${t.email}` : ""}</SelectItem>)}
-            </FilterSelect>
-            <FilterSelect id="assignment-role" label="Role" value={role ?? ""} onChange={(v) => change("role", v)}>
-              <SelectItem value="MAIN">Main trainer</SelectItem><SelectItem value="ASSISTANT">Assistant trainer</SelectItem>
-            </FilterSelect>
+            <FilterInput key={`class:${params.classId ?? ""}`} id="assignment-class" label="Class" value={String(params.classId ?? "")} onChange={(value) => change("classId", value)} options={classOptions} disabled={!options.data} />
+            <FilterInput key={`subject:${params.subjectId ?? ""}`} id="assignment-subject" label="Subject" value={String(params.subjectId ?? "")} onChange={(value) => change("subjectId", value)} options={subjectOptions} disabled={!options.data} />
+            <FilterInput key={`trainer:${params.trainerId ?? ""}`} id="assignment-trainer" label="Trainer" value={String(params.trainerId ?? "")} onChange={(value) => change("trainerId", value)} options={trainerOptions} disabled={!options.data} />
+            <div className="space-y-2"><Label htmlFor="assignment-role">Role</Label><AssignmentRoleSelect id="assignment-role" value={role ?? ""} onChange={(value) => change("role", value)} allowAll /></div>
             <div className="space-y-2"><Label htmlFor="assignment-date">Effective on</Label><Input id="assignment-date" type="date" value={effectiveOn ?? ""} onChange={(e) => change("effectiveOn", e.target.value)} /></div>
           </div>
+          <p className="text-xs text-muted-foreground">Enter a code, name or email. Press Enter or leave the field to apply; leave blank to show all.</p>
         </CardContent></Card>
         <Card><CardContent className="space-y-4 pt-6" aria-busy={assignments.isFetching}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-semibold">Assignment list {data && !assignments.isError && <Badge variant="secondary">{total}</Badge>}</h2>
-            <div className="w-52"><Label className="sr-only" htmlFor="assignment-sort">Sort order</Label><Select value={sort} onValueChange={(v) => change("sort", v)}><SelectTrigger id="assignment-sort" className="w-full"><SelectValue /></SelectTrigger><SelectContent>
-              <SelectItem value="effectiveFrom,desc">Start date: newest first</SelectItem><SelectItem value="effectiveFrom,asc">Start date: oldest first</SelectItem>
-              <SelectItem value="effectiveTo,asc">End date: ascending</SelectItem><SelectItem value="effectiveTo,desc">End date: descending</SelectItem>
-            </SelectContent></Select></div>
+            <div className="w-52"><Label className="sr-only" htmlFor="assignment-sort">Sort order</Label><AppliedTextInput key={`sort:${sort}`} id="assignment-sort" value={sort} options={sortOptions} allowEmpty={false} onCommit={(value) => change("sort", value)} placeholder="Newest or Oldest" /></div>
           </div>
           {assignments.isPending ? <div role="status" className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><LoaderCircle className="size-5 animate-spin" />Loading assignments...</div>
             : assignments.isError ? <Alert variant="destructive"><AlertCircle /><AlertTitle>Unable to load assignments</AlertTitle><AlertDescription>{errorMessage(assignments.error)} <Button size="sm" variant="outline" onClick={() => void assignments.refetch()}>Retry list</Button></AlertDescription></Alert>
@@ -179,7 +179,7 @@ export default function TeachingAssignmentPage() {
               </TableRow>)}</TableBody></Table>}
           {!assignments.isPending && !assignments.isError && data && <div className="flex flex-wrap items-center justify-between gap-4 border-t pt-4">
             <p className="text-sm text-muted-foreground" role="status">{data.content.length ? `${page * size + 1}–${page * size + data.content.length}` : "0"} / {total} assignments</p>
-            <div className="flex flex-wrap items-center gap-2"><Label htmlFor="assignment-size">Rows</Label><Select value={String(size)} onValueChange={(v) => change("size", v)}><SelectTrigger id="assignment-size" className="w-20"><SelectValue /></SelectTrigger><SelectContent>{[10, 20, 50, 100].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}</SelectContent></Select>
+            <div className="flex flex-wrap items-center gap-2"><Label htmlFor="assignment-size">Rows</Label><AppliedNumberInput key={`size:${size}`} id="assignment-size" value={size} className="w-20" onCommit={(value) => change("size", String(value))} />
               <Button variant="outline" size="icon" aria-label="Previous page" disabled={page === 0 || assignments.isFetching} onClick={() => change("page", String(page - 1))}><ChevronLeft className="size-4" /></Button>
               <span className="text-sm">Page {page + 1} / {Math.max(1, pages)}</span>
               <Button variant="outline" size="icon" aria-label="Next page" disabled={page + 1 >= pages || assignments.isFetching} onClick={() => change("page", String(page + 1))}><ChevronRight className="size-4" /></Button>
@@ -188,7 +188,7 @@ export default function TeachingAssignmentPage() {
         </CardContent></Card>
       </>}
     </div>
-    {creating && canCreate && <CreateAssignmentDialog initialClassId={params.classId}
+    {creating && canCreate && <CreateAssignmentDialog
       onClose={() => setCreating(false)} onCreated={() => { setCreating(false); }} />}
     {detailId && canRead && <AssignmentDetailDialog key={detailId} assignmentId={detailId} onClose={() => showDetails()} />}
     {editing && canUpdate && <EditAssignmentDialog key={editing} assignmentId={editing} onClose={() => setEditing(null)} />}
