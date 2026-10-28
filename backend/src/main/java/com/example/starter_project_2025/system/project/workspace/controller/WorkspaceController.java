@@ -10,6 +10,8 @@ import com.example.starter_project_2025.system.project.workspace.service.Workspa
 import com.example.starter_project_2025.system.project.workspace.service.WorkspaceProjectSelection;
 import com.example.starter_project_2025.system.project.workspace.service.WorkspaceRelationshipException;
 import com.example.starter_project_2025.system.project.workspace.service.WorkspaceService;
+import com.example.starter_project_2025.system.project.template.ProjectTemplateException;
+import com.example.starter_project_2025.exception.error.ValidationErrorResponse;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -103,6 +105,12 @@ public class WorkspaceController {
     @ExceptionHandler(WorkspaceRelationshipException.class)
     public ResponseEntity<WorkspaceError> invalidRelationship(WorkspaceRelationshipException exception) {
         return error(422, exception.getMessage(), null);
+    }
+
+    @ExceptionHandler(ProjectTemplateException.class)
+    public ResponseEntity<ValidationErrorResponse> templateValidation(ProjectTemplateException exception) {
+        return ResponseEntity.status(exception.getStatus())
+                .body(new ValidationErrorResponse(exception.getMessage(), exception.getErrors()));
     }
 
     @ExceptionHandler(ResponseStatusException.class)

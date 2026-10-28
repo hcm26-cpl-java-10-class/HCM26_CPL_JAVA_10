@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.project.task;
 
 import com.example.starter_project_2025.security.UserPrincipal;
+import com.example.starter_project_2025.system.project.task.backlog.TaskBacklogContextService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.access.AccessDeniedException;
@@ -15,6 +16,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class TaskAccessService {
     private final ObjectProvider<TaskProjectAccess> projectAccessProvider;
+    private final TaskBacklogContextService backlogContext;
     private TaskProjectAccess projectAccess(UUID projectId) {
         TaskProjectAccess value = projectAccessProvider.getIfAvailable();
         return value != null && value.supports(projectId) ? value : null;
@@ -53,6 +55,9 @@ public class TaskAccessService {
     }
 
     public void checkRead(Task task, Long actorId) {
+        if (task.getBacklogItem() != null) {
+            backlogContext.require(task.getBacklogItem().getId(), actorId, false);
+        }
         checkProject(task.getProjectId(), actorId);
         if (projectAccess(task.getProjectId()) == null && !Objects.equals(task.getCreatedBy(), actorId)) {
             throw new AccessDeniedException("You do not have permission to view this task");

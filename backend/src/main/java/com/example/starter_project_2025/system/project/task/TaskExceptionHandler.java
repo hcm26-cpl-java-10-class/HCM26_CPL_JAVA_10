@@ -31,6 +31,7 @@ import java.util.LinkedHashMap;
 
 @Slf4j
 @RestControllerAdvice(assignableTypes = {TaskController.class, TaskWorkflowController.class,
+        com.example.starter_project_2025.system.project.task.backlog.BacklogSubtaskController.class,
         com.example.starter_project_2025.system.project.task.alert.TaskAlertController.class,
         com.example.starter_project_2025.system.project.task.reminder.MemberReminderController.class})
 @Order(Ordered.HIGHEST_PRECEDENCE)
@@ -111,9 +112,10 @@ public class TaskExceptionHandler {
             case "title" -> "Task title must contain 1 to 250 characters";
             case "priority" -> "Priority must be High, Medium or Low";
             case "status" -> "Please select a valid task status";
+            case "backlogItemId" -> "Backlog item ID must be a positive whole number";
             case "version" -> "Task version must be a non-negative whole number";
             case "tags" -> "Tags must be a list of text values";
-            case "projectId", "sprintId", "milestoneId", "assigneeProjectMemberId", "predecessorTaskId" ->
+            case "projectId", "sprintId", "milestoneId", "assigneeProjectMemberId" ->
                     "Please provide a valid ID";
             default -> "Invalid request data";
         };

@@ -28,9 +28,9 @@ export function WorkspaceOverviewPanel({ workspace, canViewMembers, onViewMember
         <CardHeader><CardTitle>Project brief</CardTitle></CardHeader>
         <CardContent className="space-y-5">
           {topic && <div className="grid gap-3 text-sm sm:grid-cols-2">
-            <div><p className="text-muted-foreground">Topic code</p><p>{information(topic.topic_code)}</p></div>
+            <div><p className="text-muted-foreground">Brief code</p><p>{information(topic.topic_code)}</p></div>
             <div><p className="text-muted-foreground">Version</p><p>{information(topic.version)}</p></div>
-            <div className="sm:col-span-2"><p className="text-muted-foreground">Topic title</p><p>{information(topic.topic_title)}</p></div>
+            <div className="sm:col-span-2"><p className="text-muted-foreground">Brief title</p><p>{information(topic.topic_title)}</p></div>
           </div>}
           <div><p className="mb-2 text-sm font-medium">Description</p><p className="whitespace-pre-wrap text-sm leading-7">{information(workspace.projectDescription)}</p></div>
           <div><p className="mb-2 text-sm font-medium">Objectives</p><p className="whitespace-pre-wrap text-sm leading-7">{information(topic?.objectives)}</p></div>

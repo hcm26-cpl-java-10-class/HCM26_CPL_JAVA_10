@@ -14,6 +14,7 @@ import com.example.starter_project_2025.system.project.sprint.SprintRepository;
 import com.example.starter_project_2025.system.project.sprint_backlog.audit.SprintBacklogAuditLogDTO;
 import com.example.starter_project_2025.system.project.sprint_backlog.audit.SprintBacklogAuditService;
 import com.example.starter_project_2025.system.project.sprint_backlog.event.SprintBacklogOutboxService;
+import com.example.starter_project_2025.system.project.task.TaskRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -92,6 +93,7 @@ public class SprintBacklogServiceImpl
     MilestoneTenantProvider milestoneTenantProvider;
     SprintBacklogAuditService sprintBacklogAuditService;
     SprintBacklogOutboxService sprintBacklogOutboxService;
+    TaskRepository subtasks;
 
     @Override
     protected BaseCrudRepository<SprintBacklog, Long> getRepository() {
@@ -195,7 +197,8 @@ public class SprintBacklogServiceImpl
 
         checkPermission(CrudAction.UPDATE);
 
-        SprintBacklog backlog = requireBacklog(id);
+        SprintBacklog backlog = sprintBacklogRepository.findForSubtaskUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Backlog item was not found"));
 
         String title = request.getTitle() != null
                 ? request.getTitle().trim()
@@ -255,6 +258,10 @@ public class SprintBacklogServiceImpl
                 errors
         );
 
+        if (!java.util.Objects.equals(projectId, backlog.getProjectId()) && subtasks.existsByBacklogItem_Id(id)) {
+            errors.put(PROJECT_ID_FIELD, List.of("A backlog item with subtasks cannot be moved to another project"));
+        }
+
         throwIfInvalid(errors);
 
         Map<String, Object> before = snapshot(backlog);
@@ -299,7 +306,12 @@ public class SprintBacklogServiceImpl
 
         checkPermission(CrudAction.DELETE);
 
-        SprintBacklog backlog = requireBacklog(id);
+        SprintBacklog backlog = sprintBacklogRepository.findForSubtaskUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Backlog item was not found"));
+        if (subtasks.existsByBacklogItem_Id(id)) {
+            throw new SprintBacklogValidationException(Map.of("subtasks",
+                    List.of("A backlog item with subtask history cannot be deleted")));
+        }
 
         Map<String, Object> before = snapshot(backlog);
 

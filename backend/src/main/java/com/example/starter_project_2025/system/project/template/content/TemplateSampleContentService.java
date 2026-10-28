@@ -2,9 +2,7 @@ package com.example.starter_project_2025.system.project.template.content;
 
 import com.example.starter_project_2025.system.project.*;
 import com.example.starter_project_2025.system.project.template.*;
-import com.example.starter_project_2025.system.project.template.artifact.*;
 import com.example.starter_project_2025.system.project.template.backlog.*;
-import com.example.starter_project_2025.system.project.template.milestone.*;
 import com.example.starter_project_2025.system.project.milestone.outbox.OutboxEvent;
 import com.example.starter_project_2025.system.project.milestone.outbox.OutboxEventRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
@@ -28,8 +26,6 @@ import org.springframework.web.server.ResponseStatusException;
 public class TemplateSampleContentService {
     private final ProjectTemplateRepository templates;
     private final TemplateBacklogItemRepository backlog;
-    private final TemplateArtifactRequirementRepository artifacts;
-    private final TemplateMilestoneRepository milestones;
     private final ProjectTemplateAccessService access;
     private final TemplateSampleContentValidator validator;
     private final ProjectTemplateAuditRepository audits;
@@ -62,13 +58,9 @@ public class TemplateSampleContentService {
             throw ProjectTemplateException.conflict("This template has changed. Reload it before saving your changes");
         }
         var oldBacklog = backlog.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(id);
-        var oldArtifacts = artifacts.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(id);
-        var milestoneList = milestones.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(id);
         var backlogById = oldBacklog.stream().collect(Collectors.toMap(TemplateBacklogItem::getId, Function.identity()));
-        var artifactById = oldArtifacts.stream().collect(Collectors.toMap(TemplateArtifactRequirement::getId, Function.identity()));
-        var milestoneById = milestoneList.stream().collect(Collectors.toMap(TemplateMilestone::getId, Function.identity()));
-        checkReferences(request, backlogById, artifactById, milestoneById);
-        String before = state(TemplateSampleContentResponse.from(template, oldBacklog, oldArtifacts, milestoneList, false, importPolicy.maxBytes()));
+        checkReferences(request, backlogById);
+        String before = state(TemplateSampleContentResponse.from(template, oldBacklog, false, importPolicy.maxBytes()));
         template.setUpdatedAt(LocalDateTime.now());
         templates.saveAndFlush(template);
 
@@ -88,25 +80,7 @@ public class TemplateSampleContentService {
         backlog.deleteAll(oldBacklog.stream().filter(item -> !retainedBacklog.contains(item.getId())).toList());
         backlog.saveAllAndFlush(savedBacklog);
 
-        List<TemplateArtifactRequirement> savedArtifacts = new ArrayList<>();
-        for (int i = 0; i < request.artifacts().size(); i++) {
-            var input = request.artifacts().get(i);
-            var item = input.id() == null ? new TemplateArtifactRequirement() : artifactById.get(input.savedId());
-            item.setTemplate(template);
-            item.setMilestone(milestoneById.get(input.savedMilestoneId()));
-            item.setTitle(input.title().strip());
-            item.setDescription(clean(input.description()));
-            item.setType(input.type());
-            item.getAllowedMimeTypes().clear();
-            item.getAllowedMimeTypes().addAll(input.allowedMimeTypes());
-            item.setOrderIndex(i);
-            savedArtifacts.add(item);
-        }
-        Set<Long> retainedArtifacts = request.artifacts().stream().map(TemplateSampleContentRequest.Artifact::savedId)
-                .filter(Objects::nonNull).collect(Collectors.toSet());
-        artifacts.deleteAll(oldArtifacts.stream().filter(item -> !retainedArtifacts.contains(item.getId())).toList());
-        artifacts.saveAllAndFlush(savedArtifacts);
-        var response = TemplateSampleContentResponse.from(template, savedBacklog, savedArtifacts, milestoneList, true, importPolicy.maxBytes());
+        var response = TemplateSampleContentResponse.from(template, savedBacklog, true, importPolicy.maxBytes());
         String after = state(response);
         String correlationId = CorrelationIdFilter.currentId();
         audits.save(new ProjectTemplateAudit(template.getTenantId(), id, user.getId(),
@@ -121,21 +95,11 @@ public class TemplateSampleContentService {
         return response;
     }
 
-    private void checkReferences(TemplateSampleContentRequest request, Map<Long, TemplateBacklogItem> backlog,
-            Map<Long, TemplateArtifactRequirement> artifacts, Map<Long, TemplateMilestone> milestones) {
+    private void checkReferences(TemplateSampleContentRequest request, Map<Long, TemplateBacklogItem> backlog) {
         for (int i = 0; i < request.backlogItems().size(); i++) {
             var item = request.backlogItems().get(i);
             if (item.id() != null && !backlog.containsKey(item.savedId())) {
                 notFound("backlogItems[" + i + "].id", "Backlog item was not found in this template");
-            }
-        }
-        for (int i = 0; i < request.artifacts().size(); i++) {
-            var item = request.artifacts().get(i);
-            if (item.id() != null && !artifacts.containsKey(item.savedId())) {
-                notFound("artifacts[" + i + "].id", "Artifact requirement was not found in this template");
-            }
-            if (!milestones.containsKey(item.savedMilestoneId())) {
-                notFound("artifacts[" + i + "].milestoneId", "Milestone was not found in this template. Reload the milestone list");
             }
         }
     }
@@ -157,8 +121,7 @@ public class TemplateSampleContentService {
 
     private TemplateSampleContentResponse load(ProjectTemplate template, boolean canEdit) {
         return TemplateSampleContentResponse.from(template, backlog.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId()),
-                artifacts.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId()),
-                milestones.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId()), canEdit, importPolicy.maxBytes());
+                canEdit, importPolicy.maxBytes());
     }
 
     private String clean(String value) {

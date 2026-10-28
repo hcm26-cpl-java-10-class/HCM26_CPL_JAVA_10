@@ -1,8 +1,6 @@
 package com.example.starter_project_2025.system.project.template.content;
 
-import com.example.starter_project_2025.system.project.milestone.submission.service.ArtifactMimePolicy;
 import com.example.starter_project_2025.system.project.template.ProjectTemplateException;
-import com.example.starter_project_2025.system.project.template.artifact.TemplateArtifactType;
 import java.math.BigDecimal;
 import java.util.*;
 import org.springframework.stereotype.Component;
@@ -19,30 +17,6 @@ public class TemplateSampleContentValidator {
             error(errors, "lockVersion", "A valid template revision is required. Please reload the template");
         }
         errors.putAll(backlogErrors(request.backlogItems(), "backlogItems"));
-        if (request.artifacts() == null || request.artifacts().size() > MAX_ITEMS) {
-            error(errors, "artifacts", "Provide an artifact list with at most " + MAX_ITEMS + " items");
-        } else {
-            Set<Long> ids = new HashSet<>();
-            for (int i = 0; i < request.artifacts().size(); i++) {
-                var item = request.artifacts().get(i); String path = "artifacts[" + i + "]";
-                if (item == null) { error(errors, path, "Enter the artifact requirement"); continue; }
-                id(errors, path + ".id", item.id(), ids, false);
-                id(errors, path + ".milestoneId", item.milestoneId(), new HashSet<>(), true);
-                text(errors, path + ".title", item.title(), 120, "Artifact name");
-                description(errors, path + ".description", item.description(), 1000);
-                if (item.type() == null) error(errors, path + ".type", "Select File or URL");
-                var types = item.allowedMimeTypes();
-                if (types == null) {
-                    error(errors, path + ".allowedMimeTypes", "Provide a list of allowed file formats");
-                } else if (item.type() == TemplateArtifactType.FILE && (types.isEmpty()
-                        || types.stream().anyMatch(type -> type == null || !ArtifactMimePolicy.SUPPORTED_TYPES.contains(type))
-                        || new HashSet<>(types).size() != types.size())) {
-                    error(errors, path + ".allowedMimeTypes", "Select one or more supported file formats without duplicates");
-                } else if (item.type() == TemplateArtifactType.URL && !types.isEmpty()) {
-                    error(errors, path + ".allowedMimeTypes", "URL requirements must not contain file formats");
-                }
-            }
-        }
         if (!errors.isEmpty()) throw new ProjectTemplateException(422, "Please correct the highlighted fields", errors);
     }
 

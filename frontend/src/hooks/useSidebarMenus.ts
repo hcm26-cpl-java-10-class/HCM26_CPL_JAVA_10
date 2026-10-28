@@ -58,6 +58,7 @@ export function useActiveModuleGroups(enabled = true) {
 
                 return (
                     !isExcludedPath &&
+                    url !== "/tasks" && url !== "/management/tasks" &&
                     url !== "/team-allocation" &&
                     canAccessByPermission(module.requiredPermission, hasPermission)
                 );

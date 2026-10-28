@@ -12,13 +12,11 @@ import { Loader2, Trash2 } from "lucide-react";
 
 export function TaskDeleteDialog({
   task,
-  dependencyCount,
   pending,
   onClose,
   onConfirm,
 }: {
   task: TaskDTO;
-  dependencyCount: number;
   pending: boolean;
   onClose: () => void;
   onConfirm: () => void;
@@ -35,16 +33,11 @@ export function TaskDeleteDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle>Delete task?</DialogTitle>
+          <DialogTitle>Delete subtask?</DialogTitle>
           <DialogDescription className="break-words">
-            You are about to delete "{task.title}" from this project.
+            You are about to delete "{task.title}" from this backlog item.
           </DialogDescription>
         </DialogHeader>
-        <p className="text-sm text-muted-foreground">
-          {dependencyCount > 0
-            ? `${dependencyCount} related dependencies will be removed.`
-            : "This task has no dependencies."}
-        </p>
         <p className="text-sm text-muted-foreground">
           Tasks linked to an artifact or review cannot be deleted.
         </p>

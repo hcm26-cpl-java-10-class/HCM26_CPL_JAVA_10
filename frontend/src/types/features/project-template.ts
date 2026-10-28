@@ -175,7 +175,6 @@ export interface TemplateMilestoneOptions {
 }
 
 export type TemplateSuggestedRole = "PM" | "BA" | "DEV" | "QA";
-export type TemplateArtifactType = "FILE" | "URL";
 
 export interface TemplateBacklogItem {
   id: number;
@@ -185,25 +184,12 @@ export interface TemplateBacklogItem {
   orderIndex: number;
 }
 
-export interface TemplateArtifactRequirement {
-  id: number;
-  milestoneId: number;
-  title: string;
-  description: string | null;
-  type: TemplateArtifactType;
-  allowedMimeTypes: string[];
-  orderIndex: number;
-}
-
 export interface TemplateSampleContent {
   templateId: number;
   lockVersion: number;
   editable: boolean;
   backlogItems: TemplateBacklogItem[];
-  artifacts: TemplateArtifactRequirement[];
-  milestones: { id: number; title: string; orderIndex: number }[];
   roles: TemplateSuggestedRole[];
-  supportedMimeTypes: string[];
   maxItems: number;
   maxImportBytes: number;
 }
@@ -218,14 +204,6 @@ export interface TemplateBacklogInput {
 export interface TemplateSampleContentPayload {
   lockVersion: number;
   backlogItems: TemplateBacklogInput[];
-  artifacts: {
-    id?: number;
-    milestoneId: number;
-    title: string;
-    description: string;
-    type: TemplateArtifactType;
-    allowedMimeTypes: string[];
-  }[];
 }
 
 export interface ProjectTemplateDTO {

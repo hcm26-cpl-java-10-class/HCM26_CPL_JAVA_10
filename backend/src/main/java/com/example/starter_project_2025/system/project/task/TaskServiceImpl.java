@@ -5,6 +5,7 @@ import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.project.task.audit.TaskAuditService;
 import com.example.starter_project_2025.system.project.task.event.TaskOutboxService;
 import com.example.starter_project_2025.system.project.task.tag.TaskTagService;
+import com.example.starter_project_2025.system.project.task.backlog.TaskBacklogContextService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -30,6 +31,7 @@ public class TaskServiceImpl implements TaskService {
     private final TaskAuditService taskAuditService;
     private final TaskOutboxService taskOutboxService;
     private final AutoSpecBuilder autoSpecBuilder;
+    private final TaskBacklogContextService backlogContext;
 
     @Override
     @Transactional(readOnly = true)
@@ -69,6 +71,7 @@ public class TaskServiceImpl implements TaskService {
     @Override
     public TaskDTO create(TaskDTO request, TaskRequestContext context) {
         Long actorId = taskAccess.requirePermission("TASK_CREATE");
+        var backlog = backlogContext.prepare(request, actorId);
         taskValidator.normalizeAndValidate(request, false);
         request.setStatus(TaskStatus.TODO);
         taskAccess.checkProject(request.getProjectId(), actorId);
@@ -81,6 +84,7 @@ public class TaskServiceImpl implements TaskService {
         }
 
         Task task = taskMapper.toEntity(request);
+        task.setBacklogItem(backlog);
         task.setStatus(TaskStatus.TODO);
         task.setCreatedBy(actorId);
         task.setUpdatedBy(actorId);
@@ -94,6 +98,12 @@ public class TaskServiceImpl implements TaskService {
         Long actorId = taskAccess.requirePermission("TASK_UPDATE");
         Task task = findTask(id);
         taskAccess.checkRead(task, actorId);
+        if (task.getBacklogItem() != null) {
+            if (!Objects.equals(task.getBacklogItem().getId(), request.getBacklogItemId())) {
+                throw new TaskValidationException("backlogItemId", "A subtask cannot be moved to a different backlog item");
+            }
+            backlogContext.prepare(request, actorId);
+        }
         taskValidator.normalizeAndValidate(request, true);
 
         String requestHash = taskOutboxService.requestHash("UPDATE", id, request);
@@ -103,6 +113,10 @@ public class TaskServiceImpl implements TaskService {
         }
 
         taskAccess.checkUpdate(task, actorId);
+        Long backlogItemId = task.getBacklogItem() == null ? null : task.getBacklogItem().getId();
+        if (!Objects.equals(backlogItemId, request.getBacklogItemId())) {
+            throw new TaskValidationException("backlogItemId", "A subtask cannot be moved to a different backlog item");
+        }
         if (!Objects.equals(task.getVersion(), request.getVersion())) {
             throw new TaskConflictException(TaskConflictException.STALE_MESSAGE);
         }

@@ -4,7 +4,6 @@ import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.project.task.*;
 import com.example.starter_project_2025.system.project.task.audit.TaskActivityDTO;
 import com.example.starter_project_2025.system.project.task.audit.TaskAuditService;
-import com.example.starter_project_2025.system.project.task.dependency.*;
 import com.example.starter_project_2025.system.project.task.event.TaskOutboxService;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +18,6 @@ import java.util.*;
 @Transactional
 public class TaskWorkflowService {
     private final TaskRepository taskRepository;
-    private final TaskDependencyRepository dependencyRepository;
     private final TaskMapper taskMapper;
     private final TaskAccessService taskAccess;
     private final TaskAuditService auditService;
@@ -30,12 +28,8 @@ public class TaskWorkflowService {
     public TaskWorkflowDTO getWorkflow(UUID taskId) {
         Long actorId = taskAccess.requirePermission("TASK_READ");
         Task task = findReadableTask(taskId, actorId);
-        var predecessors = dependencyRepository.findBySuccessorTaskIdOrderByCreatedAtAsc(taskId).stream()
-                .map(dependency -> relatedTask(dependency.getPredecessorTask(), dependency, actorId)).toList();
-        var successors = dependencyRepository.findByPredecessorTaskIdOrderByCreatedAtAsc(taskId).stream()
-                .map(dependency -> relatedTask(dependency.getSuccessorTask(), dependency, actorId)).toList();
         return new TaskWorkflowDTO(taskMapper.toResponse(task), task.getStatus().nextStatuses(),
-                predecessors, successors, taskAccess.canUpdate(task, actorId), taskAccess.canDelete(task, actorId));
+                taskAccess.canUpdate(task, actorId), taskAccess.canDelete(task, actorId));
     }
 
     @Transactional(readOnly = true)
@@ -60,65 +54,11 @@ public class TaskWorkflowService {
         if (!task.getStatus().nextStatuses().contains(request.status())) {
             throw new TaskConflictException("This task status transition is not allowed");
         }
-        if (request.status() == TaskStatus.IN_PROGRESS || request.status() == TaskStatus.DONE) {
-            checkPrerequisitesDone(task);
-        }
+
 
         TaskDTO before = taskMapper.toResponse(task);
         task.setStatus(request.status());
         return recordChange("STATUS_CHANGED", task, before, actorId, context, hash);
-    }
-
-    public TaskDTO addDependency(UUID taskId, TaskDependencyRequest request, TaskRequestContext context) {
-        Long actorId = taskAccess.requirePermission("TASK_UPDATE");
-        Task task = findReadableTask(taskId, actorId);
-        validateVersion(request.version());
-        if (request.predecessorTaskId() == null) {
-            throw new TaskValidationException("predecessorTaskId", "Please select a prerequisite task");
-        }
-        String hash = outboxService.requestHash("DEPENDENCY_ADDED", taskId, request);
-        var replay = outboxService.findReplay(actorId, context, hash);
-        if (replay.isPresent()) return replay.get();
-
-        lockForUpdate(task, actorId, request.version());
-        Task predecessor = findLinkedTask(request.predecessorTaskId(), task, actorId);
-        if (wouldCreateCycle(taskId, predecessor.getId(), task.getProjectId())) {
-            throw new TaskValidationException("predecessorTaskId", "Cannot create a circular dependency");
-        }
-        TaskDependencyId id = new TaskDependencyId(predecessor.getId(), taskId);
-        if (dependencyRepository.existsById(id)) {
-            throw new TaskConflictException("This dependency already exists");
-        }
-        if (task.getStatus() != TaskStatus.TODO && predecessor.getStatus() != TaskStatus.DONE) {
-            throw new TaskValidationException("predecessorTaskId",
-                    "Only completed prerequisites can be added after a task has started");
-        }
-
-        TaskDTO before = taskMapper.toResponse(task);
-        TaskDependency dependency = dependencyRepository.save(TaskDependency.builder()
-                .id(id).predecessorTask(predecessor).successorTask(task).build());
-        task.getIncomingDependencies().add(dependency);
-        return recordChange("DEPENDENCY_ADDED", task, before, actorId, context, hash);
-    }
-
-    public TaskDTO removeDependency(UUID taskId, UUID predecessorId, Long version, TaskRequestContext context) {
-        Long actorId = taskAccess.requirePermission("TASK_UPDATE");
-        Task task = findReadableTask(taskId, actorId);
-        validateVersion(version);
-        TaskDependencyRequest request = new TaskDependencyRequest(predecessorId, version);
-        String hash = outboxService.requestHash("DEPENDENCY_REMOVED", taskId, request);
-        var replay = outboxService.findReplay(actorId, context, hash);
-        if (replay.isPresent()) return replay.get();
-
-        lockForUpdate(task, actorId, version);
-        findLinkedTask(predecessorId, task, actorId);
-        TaskDependencyId id = new TaskDependencyId(predecessorId, taskId);
-        TaskDependency dependency = dependencyRepository.findById(id)
-                .orElseThrow(this::missingLinkedTask);
-        TaskDTO before = taskMapper.toResponse(task);
-        task.getIncomingDependencies().removeIf(current -> current.getId().equals(id));
-        dependencyRepository.delete(dependency);
-        return recordChange("DEPENDENCY_REMOVED", task, before, actorId, context, hash);
     }
 
     private void lockForUpdate(Task task, Long actorId, Long version) {
@@ -135,53 +75,6 @@ public class TaskWorkflowService {
         Task task = taskRepository.findByIdAndIsActiveTrue(id).orElseThrow(this::missingLinkedTask);
         taskAccess.checkRead(task, actorId);
         return task;
-    }
-
-    private Task findLinkedTask(UUID id, Task task, Long actorId) {
-        Task linked = findReadableTask(id, actorId);
-        if (!task.getProjectId().equals(linked.getProjectId())) {
-            throw new TaskValidationException("predecessorTaskId", "Dependent tasks must belong to the same project");
-        }
-        entityManager.refresh(linked);
-        if (!Boolean.TRUE.equals(linked.getIsActive())) throw missingLinkedTask();
-        return linked;
-    }
-
-    private TaskDependencyDTO relatedTask(Task task, TaskDependency dependency, Long actorId) {
-        if (!Boolean.TRUE.equals(task.getIsActive())) throw missingLinkedTask();
-        taskAccess.checkRead(task, actorId);
-        return new TaskDependencyDTO(task.getId(), task.getTitle(), task.getStatus(),
-                dependency.getDependencyType(), dependency.getCreatedAt());
-    }
-
-    private boolean wouldCreateCycle(UUID successorId, UUID predecessorId, UUID projectId) {
-        Map<UUID, List<UUID>> successors = new HashMap<>();
-        for (TaskDependency dependency : dependencyRepository.findBySuccessorTaskProjectId(projectId)) {
-            if (Boolean.TRUE.equals(dependency.getPredecessorTask().getIsActive())
-                    && Boolean.TRUE.equals(dependency.getSuccessorTask().getIsActive())) {
-                successors.computeIfAbsent(dependency.getId().getPredecessorTaskId(), key -> new ArrayList<>())
-                        .add(dependency.getId().getSuccessorTaskId());
-            }
-        }
-        Deque<UUID> pending = new ArrayDeque<>();
-        Set<UUID> visited = new HashSet<>();
-        pending.add(successorId);
-        while (!pending.isEmpty()) {
-            UUID current = pending.removeFirst();
-            if (current.equals(predecessorId)) return true;
-            if (visited.add(current)) pending.addAll(successors.getOrDefault(current, List.of()));
-        }
-        return false;
-    }
-
-    private void checkPrerequisitesDone(Task task) {
-        for (TaskDependency dependency : dependencyRepository.findBySuccessorTaskIdOrderByCreatedAtAsc(task.getId())) {
-            Task predecessor = dependency.getPredecessorTask();
-            if (!Boolean.TRUE.equals(predecessor.getIsActive())) throw missingLinkedTask();
-            if (predecessor.getStatus() != TaskStatus.DONE) {
-                throw new TaskValidationException("status", "All prerequisite tasks must be Done before changing to this status");
-            }
-        }
     }
 
     private TaskDTO recordChange(String action, Task task, TaskDTO before, Long actorId,
@@ -202,6 +95,6 @@ public class TaskWorkflowService {
     }
 
     private ResourceNotFoundException missingLinkedTask() {
-        return new ResourceNotFoundException("The linked task does not exist or has been deleted");
+        return new ResourceNotFoundException("Task does not exist or has been deleted");
     }
 }
