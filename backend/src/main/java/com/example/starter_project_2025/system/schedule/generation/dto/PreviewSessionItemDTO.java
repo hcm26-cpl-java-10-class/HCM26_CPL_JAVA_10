@@ -42,8 +42,6 @@ public class PreviewSessionItemDTO {
     String roomName;
     String meetingUrl;
 
-    String meetingUrl;
-
     Long teachingAssignmentId;
 
     String title;

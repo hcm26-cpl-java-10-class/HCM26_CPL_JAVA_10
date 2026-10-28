@@ -19,6 +19,7 @@ import ScheduleValidationPage from "@/pages/management/schedule-validation";
 import StudentExamList from "@/pages/student/StudentExamList";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
+import ScheduleVersionListPage from "@/pages/management/demo/schedule_version";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 
@@ -57,6 +58,17 @@ export const routes: RouteConfig[] = [
     component: WeeklyCalendarPage,
     requiredPermission: "SESSION_READ",
     isModuleDriven: true,
+  },
+  {
+    path: "/schedule-versions",
+    component: ScheduleVersionListPage,
+    requiredPermission: "SESSION_READ",
+    isModuleDriven: true,
+  },
+  {
+    path: "/calendar/adjust",
+    component: ScheduleVersionListPage,
+    requiredPermission: "SESSION_READ",
   },
   {
     path: "/fams/module-group-module",
