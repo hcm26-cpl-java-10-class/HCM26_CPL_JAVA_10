@@ -19,6 +19,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -74,13 +75,16 @@ public class ClassImportService {
                 .filter(program -> program.getStatus() == ProgramStatus.ACTIVE)
                 .toList();
         ImportResult result = new ImportResult();
+        List<PreparedRow> preparedRows = new ArrayList<>();
+        List<RowError> validationErrors = new ArrayList<>();
+        int dataRowCount = 0;
 
         for (int index = 0; index < rows.size(); index++) {
             Map<String, String> row = rows.get(index);
             int rowNumber = index + 2;
             if (isBlankRow(row)) continue;
 
-            ExternalClassDTO created = null;
+            dataRowCount++;
             try {
                 ParsedClass parsed = parseRow(row, activePrograms);
                 String normalizedCode = normalizeCode(parsed.request().code());
@@ -97,27 +101,78 @@ public class ClassImportService {
                             .map(ConstraintViolation::getMessage).distinct().sorted().collect(Collectors.joining("; ")));
                 }
 
-                created = classSetupService.createClass(parsed.request());
-                if (parsed.program() != null) {
-                    classSetupService.assignProgram(created.getId(), parsed.program().getId());
-                }
-                existingCodes.add(normalizedCode);
-                result.setSuccessCount(result.getSuccessCount() + 1);
+                preparedRows.add(new PreparedRow(rowNumber, parsed));
             } catch (Exception error) {
-                String message = error.getMessage() == null ? "Dữ liệu không hợp lệ." : error.getMessage();
-                if (created != null) {
-                    try {
-                        classSetupService.deleteClass(created.getId());
-                    } catch (Exception cleanupError) {
-                        existingCodes.add(normalizeCode(created.getCode()));
-                        message += " Lớp đã được tạo nhưng không thể tự động hoàn tác.";
-                    }
-                }
-                result.getErrors().add(new RowError(rowNumber, message));
-                result.setFailureCount(result.getFailureCount() + 1);
+                validationErrors.add(new RowError(rowNumber, errorMessage(error, "Dữ liệu không hợp lệ.")));
             }
         }
-        return result;
+
+        if (dataRowCount == 0) {
+            throw new BadRequestException("File không có dòng dữ liệu để import.");
+        }
+
+        if (!validationErrors.isEmpty()) {
+            result.setFailureCount(dataRowCount);
+            result.getErrors().addAll(validationErrors.stream()
+                    .map(error -> new RowError(error.getRowNumber(), error.getMessage()
+                            + " Toàn bộ file đã bị hủy, không có lớp nào được tạo."))
+                    .toList());
+            Set<Integer> rowsWithErrors = validationErrors.stream()
+                    .map(RowError::getRowNumber)
+                    .collect(Collectors.toSet());
+            preparedRows.stream()
+                    .filter(row -> !rowsWithErrors.contains(row.rowNumber()))
+                    .forEach(row -> result.getErrors().add(new RowError(row.rowNumber(),
+                            "Dòng hợp lệ nhưng chưa được tạo vì file có lỗi; toàn bộ import đã bị hủy.")));
+            return result;
+        }
+
+        List<CreatedClass> createdClasses = new ArrayList<>();
+        int failedRowNumber = -1;
+        try {
+            for (PreparedRow row : preparedRows) {
+                failedRowNumber = row.rowNumber();
+                ExternalClassDTO created = classSetupService.createClass(row.parsed().request());
+                if (created == null || created.getId() == null) {
+                    throw new IllegalStateException("API không trả về ID của lớp vừa tạo nên không thể tiếp tục import an toàn.");
+                }
+                createdClasses.add(new CreatedClass(row.rowNumber(), created.getId(), created.getCode()));
+                if (row.parsed().program() != null) {
+                    classSetupService.assignProgram(created.getId(), row.parsed().program().getId());
+                }
+            }
+            result.setSuccessCount(preparedRows.size());
+            return result;
+        } catch (Exception error) {
+            String message = "Import thất bại: " + errorMessage(error, "Lỗi khi lưu dữ liệu.")
+                    + " Toàn bộ file đã bị hủy.";
+            result.setFailureCount(dataRowCount);
+            result.getErrors().add(new RowError(failedRowNumber, message));
+
+            Set<Integer> rowsWithErrors = new HashSet<>();
+            rowsWithErrors.add(failedRowNumber);
+            for (int index = createdClasses.size() - 1; index >= 0; index--) {
+                CreatedClass created = createdClasses.get(index);
+                try {
+                    classSetupService.deleteClass(created.id());
+                } catch (Exception cleanupError) {
+                    rowsWithErrors.add(created.rowNumber());
+                    result.getErrors().add(new RowError(created.rowNumber(),
+                            "Không thể hoàn tác lớp " + created.code() + ": "
+                                    + errorMessage(cleanupError, "Lỗi khi xóa lớp.")));
+                }
+            }
+
+            preparedRows.stream()
+                    .filter(row -> !rowsWithErrors.contains(row.rowNumber()))
+                    .forEach(row -> result.getErrors().add(new RowError(row.rowNumber(),
+                            "Dòng chưa được import vì một dòng khác gặp lỗi; toàn bộ file đã bị hủy.")));
+            return result;
+        }
+    }
+
+    private String errorMessage(Exception error, String fallback) {
+        return error.getMessage() == null || error.getMessage().isBlank() ? fallback : error.getMessage();
     }
 
     private ParsedClass parseRow(Map<String, String> row, List<TrainingProgram> activePrograms) {
@@ -239,4 +294,6 @@ public class ClassImportService {
     }
 
     private record ParsedClass(ExternalClassRequest request, TrainingProgram program) {}
+    private record PreparedRow(int rowNumber, ParsedClass parsed) {}
+    private record CreatedClass(int rowNumber, Long id, String code) {}
 }
