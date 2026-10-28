@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 const PAGE_SIZE = 10;
+const MIN_LENGTH = 3; // keep in sync with QnaContentPolicy.MIN_LENGTH on the backend
 const MAX_LENGTH = 2000;
 const MAX_SEARCH_LENGTH = 100;
 
@@ -74,7 +75,9 @@ function Composer({
       />
       <div className="flex items-center justify-between gap-3">
         <span className="text-xs text-muted-foreground">
-          {value.length}/{MAX_LENGTH} characters
+          {trimmed.length > 0 && trimmed.length < MIN_LENGTH
+            ? `At least ${MIN_LENGTH} characters`
+            : `${value.length}/${MAX_LENGTH} characters`}
         </span>
         <div className="flex gap-2">
           {onCancel && (
@@ -82,7 +85,7 @@ function Composer({
               Cancel
             </Button>
           )}
-          <Button type="button" size="sm" disabled={pending || !trimmed} onClick={onSubmit}>
+          <Button type="button" size="sm" disabled={pending || trimmed.length < MIN_LENGTH} onClick={onSubmit}>
             {pending ? "Saving..." : submitLabel}
           </Button>
         </div>

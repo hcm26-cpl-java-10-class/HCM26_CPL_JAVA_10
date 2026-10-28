@@ -15,7 +15,10 @@ import org.hibernate.annotations.OnDeleteAction;
 @Entity
 @Table(
         name = "lesson_questions",
-        indexes = @Index(name = "idx_lesson_questions_lesson", columnList = "lesson_id")
+        indexes = {
+                @Index(name = "idx_lesson_questions_lesson", columnList = "lesson_id"),
+                @Index(name = "idx_lesson_questions_author_created", columnList = "author_id, created_at")
+        }
 )
 @ResourcePermission("LESSON_QUESTION")
 @Getter
