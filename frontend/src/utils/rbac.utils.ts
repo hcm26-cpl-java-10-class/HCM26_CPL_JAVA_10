@@ -184,7 +184,7 @@ export const canAccessByPermission = (
 };
 
 export const ROLE_HIDDEN_MODULE_URLS: Record<string, string[]> = {
-  [STUDENT_ROLE]: ["/exams", "/student/exams"],
+  [STUDENT_ROLE]: ["/exams"],
 };
 
 export const ROLE_HIDDEN_MENU_GROUP_NAMES: Record<string, string[]> = {

@@ -37,18 +37,20 @@ export interface QuestionFilter {
 
 export type LatePolicy = "NOT_ALLOWED" | "ALLOWED_WITH_PENALTY" | "ALLOWED";
 export type ExamType = "MULTIPLE_CHOICE" | "ESSAY" | "MIXED";
-export type ExamCategory = "ASSESSMENT" | "PROGRESS_TEST" | "FINAL_TEST";
+export type ExamCategory = "ASSESSMENT" | "QUIZ" | "MIDTERM" | "FINAL_TEST";
 export type ResultVisibility = "IMMEDIATE" | "AFTER_EXAM_CLOSED" | "MANUAL_RELEASE";
 
 export const EXAM_CATEGORY_LABEL: Record<ExamCategory, string> = {
   ASSESSMENT: "Assessment",
-  PROGRESS_TEST: "Progress Test",
+  QUIZ: "Quiz",
+  MIDTERM: "Midterm",
   FINAL_TEST: "Final Test",
 };
 
 export const EXAM_CATEGORY_SHOW_ANSWERS_DEFAULT: Record<ExamCategory, boolean> = {
   ASSESSMENT: true,
-  PROGRESS_TEST: true,
+  QUIZ: true,
+  MIDTERM: false,
   FINAL_TEST: false,
 };
 

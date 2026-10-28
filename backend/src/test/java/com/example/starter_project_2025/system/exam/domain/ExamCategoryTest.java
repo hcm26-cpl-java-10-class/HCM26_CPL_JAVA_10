@@ -9,13 +9,14 @@ import org.junit.jupiter.api.Test;
 class ExamCategoryTest {
 
     @Test
-    void assessmentAndProgressTestShowAnswersByDefault() {
+    void assessmentAndQuizShowAnswersByDefault() {
         assertTrue(ExamCategory.ASSESSMENT.isShowAnswersByDefault());
-        assertTrue(ExamCategory.PROGRESS_TEST.isShowAnswersByDefault());
+        assertTrue(ExamCategory.QUIZ.isShowAnswersByDefault());
     }
 
     @Test
-    void finalTestHidesAnswersByDefault() {
+    void midtermAndFinalTestHideAnswersByDefault() {
+        assertFalse(ExamCategory.MIDTERM.isShowAnswersByDefault());
         assertFalse(ExamCategory.FINAL_TEST.isShowAnswersByDefault());
     }
 

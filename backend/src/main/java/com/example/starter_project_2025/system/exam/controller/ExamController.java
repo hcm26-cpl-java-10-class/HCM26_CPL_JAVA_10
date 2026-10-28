@@ -22,7 +22,7 @@ import java.util.List;
 @RequestMapping("/api/exams")
 @RequiredArgsConstructor
 @ResourceMenu(
-        title = "Lịch Thi",
+        title = "My Exams",
         url = "/student/exams",
         group = "Student",
         icon = "calendar",
