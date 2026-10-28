@@ -368,6 +368,7 @@ public class SprintBacklogServiceImpl
 
         return candidates
                 .stream()
+                .filter(milestone -> milestone.getStatus() == com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN)
                 .map(milestone -> new BacklogMilestoneOptionDTO(
                         milestone.getId(),
                         milestone.getProjectId(),

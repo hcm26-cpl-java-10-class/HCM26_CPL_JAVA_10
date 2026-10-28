@@ -15,6 +15,7 @@ public interface MilestoneSubmissionRepository extends JpaRepository<MilestoneSu
     Optional<MilestoneSubmission> findByIdAndTenantId(UUID id, Long tenantId);
 
     Optional<MilestoneSubmission> findByMilestoneIdAndTeamId(UUID milestoneId, Long teamId);
+    boolean existsByMilestoneIdAndTeamId(UUID milestoneId, Long teamId);
 
     List<MilestoneSubmission> findAllByProjectIdAndMilestoneMandatoryTrue(Long projectId);
 

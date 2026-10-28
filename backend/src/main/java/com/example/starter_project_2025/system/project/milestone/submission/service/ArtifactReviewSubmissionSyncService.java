@@ -80,24 +80,8 @@ public class ArtifactReviewSubmissionSyncService {
                     version.linkArtifactSubmission(artifact.getId());
                     versions.save(version);
                 } else if (!version.getArtifactSubmissionId().equals(artifact.getId())) {
-                    boolean isNewerArtifact = artifactSubmissions.findById(version.getArtifactSubmissionId())
-                            .map(existing -> artifact.getVersion() > existing.getVersion())
-                            .orElse(true);
-                    if (isNewerArtifact) {
-                        version.refreshSubmittedArtifact(
-                                artifact.getId(),
-                                versionTitle(milestone, artifact),
-                                artifact.getReleaseNotes(),
-                                primaryUrl(artifact),
-                                buildArtifactValues(artifact),
-                                artifact.getSubmittedAt(),
-                                artifact.isSubmittedLate(),
-                                artifact.getLatePenaltyPercent()
-                        );
-                        submission.refreshSubmittedAt(artifact.getSubmittedAt());
-                        versions.saveAndFlush(version);
-                        submissions.saveAndFlush(submission);
-                    }
+                    throw new com.example.starter_project_2025.system.project.milestone.exception.MilestoneConflictException(
+                            "Submitted version is immutable; request changes before resubmitting");
                 }
             }
             return submission.getId();
@@ -108,6 +92,7 @@ public class ArtifactReviewSubmissionSyncService {
         version.linkArtifactSubmission(artifact.getId());
         version.submit(artifact.getSubmittedAt(), artifact.isSubmittedLate(), artifact.getLatePenaltyPercent());
         submission.submitted(version.getVersionNumber(), artifact.getSubmittedAt());
+        milestone.setExecutionStatus(MilestoneExecutionStatus.REVIEW, artifact.getSubmitterId(), artifact.getSubmittedAt());
         versions.save(version);
         submissions.saveAndFlush(submission);
         return submission.getId();

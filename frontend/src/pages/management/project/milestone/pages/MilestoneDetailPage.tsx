@@ -52,7 +52,20 @@ export function MilestoneDetailPage() {
     retry: false,
   });
   const openMilestone = useMutation({
-    mutationFn: () => milestoneApi.openForSubmissions(projectId as string, milestoneId as string),
+    mutationFn: () => milestoneApi.publish(projectId, teamId ?? 0, milestoneId as string, detailQuery.data!.version),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects", projectId, "milestones", milestoneId, teamId] }),
+  });
+  const startMilestone = useMutation({
+    mutationFn: () => milestoneApi.start(projectId, teamId ?? 0, milestoneId as string, detailQuery.data!.version),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects", projectId, "milestones", milestoneId, teamId] }),
+  });
+  const deleteMilestone = useMutation({
+    mutationFn: () => milestoneApi.deleteDraft(projectId, teamId ?? 0, milestoneId as string, detailQuery.data!.version),
+    onSuccess: () => navigate(returnUrl),
+  });
+  const editMetadata = useMutation({
+    mutationFn: (payload: {title: string; description: string; deadline: string; expectedVersion: number}) =>
+      milestoneApi.editMetadata(projectId, teamId ?? 0, milestoneId as string, payload),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects", projectId, "milestones", milestoneId, teamId] }),
   });
 
@@ -89,7 +102,7 @@ export function MilestoneDetailPage() {
         <Card className="border-primary/20 bg-gradient-to-r from-primary/5 via-background to-background">
           <CardHeader>
             <div className="flex flex-wrap items-center gap-2">
-              <MilestoneStatusBadge status={milestone.status} />
+              <MilestoneStatusBadge status={milestone.status} executionStatus={milestone.executionStatus} />
               {milestone.mandatory ? <Badge variant="secondary">Mandatory</Badge> : null}
             </div>
             <CardTitle className="mt-2 text-2xl">{milestone.title}</CardTitle>
@@ -125,7 +138,7 @@ export function MilestoneDetailPage() {
               </CardContent>
             </Card>
 
-            <MilestoneRubricCard rubric={milestone.rubric} />
+            {milestone.rubric && <MilestoneRubricCard rubric={milestone.rubric} />}
           </div>
 
           <div className="grid gap-6">
@@ -174,7 +187,7 @@ export function MilestoneDetailPage() {
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4"><Button variant="outline" onClick={() => navigate(returnUrl)}><ArrowLeft className="size-4" /> Back to milestones</Button>
-          <div className="flex flex-wrap items-center gap-2">{milestone.status === "PLANNED" && hasPermission("MILESTONE_WRITE") && <Button onClick={() => openMilestone.mutate()} disabled={openMilestone.isPending}>{openMilestone.isPending ? "Opening…" : "Open milestone"}</Button>}{milestone.status === "PLANNED" && <span className="text-xs text-muted-foreground">Open it before students can submit.</span>}{openMilestone.isError && <span className="text-xs text-destructive">Could not open milestone. Check that the project is active.</span>}{canPrepareArtifact && hasPermission("ARTIFACT_READ") && <Button onClick={() => navigate(`/projects/${projectId}/milestones/${milestone.id}/submit`)}>Prepare artifact</Button>}</div></div>
+          <div className="flex flex-wrap items-center gap-2">{milestone.status === "PLANNED" && hasPermission("MILESTONE_WRITE") && <><Button variant="outline" onClick={() => navigate(`/projects/${projectId}/milestones/${milestone.id}/edit?teamId=${milestone.teamId ?? ""}`)}>Edit Draft</Button><Button variant="destructive" onClick={() => { if (window.confirm("Delete this draft milestone?")) deleteMilestone.mutate(); }} disabled={deleteMilestone.isPending}>Delete Draft</Button><Button onClick={() => openMilestone.mutate()} disabled={openMilestone.isPending}>Publish</Button></>}{milestone.status === "OPEN" && !["DONE", "FAILED"].includes(milestone.executionStatus ?? "") && hasPermission("MILESTONE_WRITE") && <Button variant="outline" onClick={() => { const title = window.prompt("Title", milestone.title); if (title === null) return; const description = window.prompt("Description", milestone.description ?? ""); if (description === null) return; const deadline = window.prompt("Deadline (ISO 8601)", milestone.deadline); if (deadline === null) return; editMetadata.mutate({ title, description, deadline, expectedVersion: milestone.version }); }}>Edit metadata</Button>}{milestone.executionStatus === "TODO" && normalizedRole === ADMIN_ROLE && <Button onClick={() => startMilestone.mutate()} disabled={startMilestone.isPending}>Start</Button>}{openMilestone.isError && <span className="text-xs text-destructive">Publish failed. Check required fields.</span>}{canPrepareArtifact && milestone.status === "OPEN" && milestone.executionStatus !== "TODO" && hasPermission("ARTIFACT_READ") && <Button onClick={() => navigate(`/projects/${projectId}/milestones/${milestone.id}/submit`)}>Prepare artifact</Button>}</div></div>
       </div>
     </MainLayout>
   );

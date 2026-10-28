@@ -11,6 +11,7 @@ import java.util.Optional;
 
 @Repository
 public interface SprintBacklogRepository extends BaseCrudRepository<SprintBacklog, Long> {
+    boolean existsByMilestone_Id(java.util.UUID milestoneId);
 
     List<SprintBacklog> findBySprintIdOrderByIdAsc(Long sprintId);
 

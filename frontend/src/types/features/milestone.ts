@@ -76,6 +76,7 @@ export interface MilestoneResponse {
   deadline: string;
   mandatory: boolean;
   status: MilestoneStatus;
+  executionStatus?: "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE" | "FAILED" | null;
   rubricSnapshotId: string;
   reviewerId: string;
   latePolicyType: LatePolicyType;
@@ -130,12 +131,14 @@ export interface MilestoneDetailResponse {
   weight?: number | null;
   id: string;
   project: MilestoneProjectOption;
+  teamId?: number;
   title: string;
   description?: string | null;
   deadline: string;
   tenantTimeZone: string;
   mandatory: boolean;
   status: MilestoneStatus;
+  executionStatus?: "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE" | "FAILED" | null;
   checklist: MilestoneChecklistItemResponse[];
   rubric: MilestoneRubricDetail;
   reviewer: MilestoneReviewerDetail;
@@ -144,7 +147,6 @@ export interface MilestoneDetailResponse {
   version: number;
   createdAt: string;
   createdBy: string;
-  teamId?: number;
 }
 
 export interface ArtifactDraft {
@@ -236,6 +238,8 @@ export interface MilestoneDetailRouteState {
 }
 
 export interface MilestoneListItem {
+  projectId: number;
+  projectName?: string;
   weight?: number | null;
   latePenaltyBasis?: LatePenaltyBasis;
   id: string;
@@ -244,6 +248,7 @@ export interface MilestoneListItem {
   description?: string | null;
   deadline: string;
   status: MilestoneStatus;
+  executionStatus?: "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE" | "FAILED" | null;
   mandatory: boolean;
   rubricSnapshotId: string;
   reviewerId: string;

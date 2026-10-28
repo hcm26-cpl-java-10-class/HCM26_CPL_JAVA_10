@@ -10,6 +10,7 @@ import java.util.UUID;
 
 public record MilestoneListItemResponse(
         UUID id,
+        Long projectId,
         Long teamId,
         String title,
         String description,
@@ -24,6 +25,12 @@ public record MilestoneListItemResponse(
         long version,
         Instant createdAt,
         BigDecimal weight,
-        LatePenaltyBasis latePenaltyBasis
+        LatePenaltyBasis latePenaltyBasis,
+        String projectName,
+        com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus executionStatus
 ) {
+    @com.fasterxml.jackson.annotation.JsonProperty("lifecycleStatus")
+    public String lifecycleStatus() {
+        return status == MilestoneStatus.PLANNED ? "DRAFT" : executionStatus == null ? status.name() : executionStatus.name();
+    }
 }

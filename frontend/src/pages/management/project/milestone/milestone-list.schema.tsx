@@ -23,6 +23,13 @@ export const milestoneListSchema: EntitySchema = {
       minWidth: 180,
     },
     {
+      name: "projectName",
+      label: "Project",
+      type: "text",
+      width: 200,
+      minWidth: 140,
+    },
+    {
       name: "description",
       label: "Description",
       type: "textarea",
@@ -38,8 +45,8 @@ export const milestoneListSchema: EntitySchema = {
       filterable: true,
       filterType: "select",
       filterOptions: [
-        { label: "Planned", value: "PLANNED" },
-        { label: "Open", value: "OPEN" },
+        { label: "Draft", value: "PLANNED" },
+        { label: "Published", value: "OPEN" },
         { label: "Closed", value: "CLOSED" },
         { label: "Cancelled", value: "CANCELLED" },
       ],
