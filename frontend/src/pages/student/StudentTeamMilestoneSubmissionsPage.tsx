@@ -45,7 +45,19 @@ export default function StudentTeamMilestoneSubmissionsPage() {
           <Button variant="outline" size="sm" onClick={() => { void workspaceQuery.refetch(); void submissionsQuery.refetch(); }}><RotateCw className="size-4" /> Thử lại</Button>
         </AlertDescription></Alert>
         : <>
-          <Card><CardHeader><CardTitle>{workspaceQuery.data?.milestone.title ?? "Milestone"}</CardTitle><CardDescription>Lịch sử các phiên bản artifact do bạn nộp trong milestone này.</CardDescription></CardHeader>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <div>
+                <CardTitle>{workspaceQuery.data?.milestone.title ?? "Milestone"}</CardTitle>
+                <CardDescription>Lịch sử các phiên bản artifact do bạn nộp trong milestone này.</CardDescription>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => navigate(`/teams/${teamId}/milestones/${milestoneId}/submit?workspaceId=${encodeURIComponent(workspaceId ?? "")}`)}
+              >
+                {submissionsQuery.data && submissionsQuery.data.length > 0 ? "Nộp lại phiên bản mới (Resubmit)" : "Nộp sản phẩm"}
+              </Button>
+            </CardHeader>
             <CardContent className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground"><Badge variant="outline">{workspaceQuery.data?.milestone.status}</Badge><span className="flex items-center gap-2"><CalendarClock className="size-4" /> Hạn nộp: {workspaceQuery.data?.milestone.deadline ? new Date(workspaceQuery.data.milestone.deadline).toLocaleString("vi-VN") : "—"}</span></CardContent>
           </Card>
           {latestSubmission?.submission.status === "CHANGES_REQUESTED" ? <Alert className="border-amber-400 bg-amber-50 text-amber-950 dark:bg-amber-950/20 dark:text-amber-100">
