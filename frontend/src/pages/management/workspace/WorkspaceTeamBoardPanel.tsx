@@ -377,11 +377,11 @@ export function WorkspaceTeamBoardPanel({ teamId, canUpdate, onCreateWorkItem }:
                 const items = key === "BACKLOG" ? filteredItems.filter((item) => item.sprintId == null)
                   : sprintItems.filter((item) => item.status === key);
                 return <section key={key} aria-label={`${label}, ${items.length} work items`}
-                  className={`flex min-h-[25rem] flex-col rounded-2xl border border-slate-200 bg-slate-50/70 p-2 ${draggedItem ? "transition-colors" : ""}`}
+                  className={`flex h-[32rem] min-h-[24rem] max-h-[70vh] flex-col rounded-2xl border border-slate-200 bg-slate-50/70 p-2 ${draggedItem ? "transition-colors" : ""}`}
                   onDragOver={(event) => { if (draggedItem) event.preventDefault(); }}
                   onDrop={(event) => { event.preventDefault(); if (draggedItem) void moveItem(draggedItem, key); }}>
                   <header className="mb-3 flex items-center justify-between gap-2 px-1"><div className="flex min-w-0 items-center gap-2"><span className={`size-2.5 rounded-full ${color}`} /><h3 className="truncate text-sm font-bold">{label}</h3><Badge variant="secondary">{items.length}</Badge></div><Icon className="size-4 text-slate-400" /></header>
-                  <div className="flex flex-1 flex-col gap-2.5">
+                  <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto overscroll-contain pr-1">
                     {items.map((item) => <article key={item.id} draggable={canUpdate && savingItemId !== item.id}
                       onDragStart={() => setDraggedItem(item)} onDragEnd={() => setDraggedItem(null)}
                       className={`cursor-grab rounded-xl border bg-white p-3 shadow-sm active:cursor-grabbing ${savingItemId === item.id ? "opacity-50" : ""}`}>

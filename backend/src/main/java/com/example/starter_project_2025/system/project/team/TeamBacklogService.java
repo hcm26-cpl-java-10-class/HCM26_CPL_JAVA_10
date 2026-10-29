@@ -24,6 +24,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Locale;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -67,7 +69,16 @@ public class TeamBacklogService {
                 ? backlogs.findActiveBySprintTeamId(teamId)
                 : backlogs.findActiveBySprintTeamIdOrProjectId(teamId, projectId));
         if (projectId != null) {
-            items.addAll(backlogs.findProductBacklogByProjectId(projectId));
+            Set<String> sprintItemKeys = items.stream()
+                    .filter(item -> item.getSprint() != null)
+                    .map(TeamBacklogService::workItemKey)
+                    .collect(Collectors.toSet());
+            backlogs.findProductBacklogByProjectId(projectId).stream()
+                    // A product-backlog row can be left behind when its work
+                    // item was moved into a sprint. Prefer the sprint row,
+                    // which carries the current workflow state and history.
+                    .filter(item -> !sprintItemKeys.contains(workItemKey(item)))
+                    .forEach(items::add);
         }
         items.sort(Comparator.comparing(SprintBacklog::getId));
 
@@ -131,6 +142,14 @@ public class TeamBacklogService {
     private static String displayName(ProjectMember member) {
         var user = member.getClassMember().getUser();
         return (user.getFirstName() + " " + (user.getLastName() == null ? "" : user.getLastName())).trim();
+    }
+
+    private static String workItemKey(SprintBacklog item) {
+        return normalize(item.getTitle()) + "\u0000" + normalize(item.getDescription());
+    }
+
+    private static String normalize(String value) {
+        return value == null ? "" : value.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
     }
 
     private static boolean eligibleMember(ProjectMember member) {

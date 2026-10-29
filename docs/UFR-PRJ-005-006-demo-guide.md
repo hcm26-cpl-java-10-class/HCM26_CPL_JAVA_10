@@ -24,6 +24,8 @@ Mở project root trong IntelliJ, chọn **Backend Demo (H2 Mock Data)** ở men
 
 Nếu chưa thấy cấu hình, mở lại project hoặc reload project để IntelliJ nạp shared configuration từ `.run`. Log backend cần thể hiện profile `milestone-mock` và cổng `8080`.
 
+Trong profile demo, health check không tính Redis và SMTP vì đây là tích hợp tùy chọn, không được cấu hình trong H2 local; `/actuator/health` phản ánh trạng thái ứng dụng/database. Các backlog fixture trùng chính xác được giữ bản ghi trong database nhưng bản trùng sẽ được soft-archive và không xuất hiện trên board; mục có nội dung khác fixture không tự động bị ẩn.
+
 Frontend mặc định gọi `http://localhost:8080/api`, nên không cần đổi `VITE_API_URL` khi dùng run configuration IntelliJ. Dừng backend hiện tại trước khi chạy để tránh lỗi cổng đang được sử dụng.
 
 Tài khoản demo đã được kiểm tra trên database kết hợp: `admin@example.com`, `teacher@example.com`, `student@example.com`; mật khẩu `password123`. Mock Workspace trả 5 team candidate; đăng nhập admin/student thành công. Database kết hợp giữ thay đổi qua các lần chạy. Run config cũng bật seed bốn phiên bản artifact cho milestone Team-only đầu tiên của Team ID `3` (Team Pixel); mở tab **Milestone** → **View all** → **Submissions** để xem. Vì milestone Team-only chưa nối reviewer workflow của Project, các bản này hiển thị đúng trạng thái `SUBMITTED`; UI không tự gán `CHANGES_REQUESTED` hay `ACCEPTED`. Quyền reviewer mock được gán cho `admin@example.com` và `teacher@example.com` trên team demo. Seed chỉ thêm dữ liệu nếu milestone chưa có submission. Tắt `TEAM_ARTIFACT_SUBMISSION_DEMO_SEED_ENABLED` nếu không muốn tạo các bản demo này; tắt `MILESTONE_SUBMISSION_MOCK_SEED_ENABLED` nếu không muốn seed submission/review thuộc luồng Project.
