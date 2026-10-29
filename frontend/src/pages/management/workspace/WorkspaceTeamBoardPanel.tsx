@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { SprintBacklogDTO, SprintBacklogStatus, SprintDTO } from "@/types";
 import type { WorkspaceBoardColumn } from "@/types/features/workspace";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Check, ChevronLeft, ChevronRight, Circle, CircleDot, Clock3, LayoutGrid, List, Plus, RefreshCw, Search, SlidersHorizontal, UserRound } from "lucide-react";
+import { Activity, Check, ChevronLeft, ChevronRight, Circle, CircleDot, Clock3, LayoutGrid, List, Plus, RefreshCw, Search, SlidersHorizontal, Trash2, UserRound } from "lucide-react";
 import { BacklogItemDetailSheet } from "@/pages/management/backlog/components/BacklogItemDetailSheet";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -18,6 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import type { BacklogPriority, SprintBacklogWorkType, SprintPlanningItem } from "@/types";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import axios from "axios";
 
 type BoardColumnKey = "BACKLOG" | Exclude<SprintBacklogStatus, "BLOCKED">;
 const allowedStatusTransitions: Record<SprintBacklogStatus, SprintBacklogStatus[]> = {
@@ -28,7 +29,10 @@ const allowedStatusTransitions: Record<SprintBacklogStatus, SprintBacklogStatus[
   REVIEW: ["DONE", "IN_PROGRESS"],
   BLOCKED: ["IN_PROGRESS"],
   DONE: ["REVIEW"],
+  CUSTOM_1: [], CUSTOM_2: [], CUSTOM_3: [], CUSTOM_4: [], CUSTOM_5: [],
 };
+const CUSTOM_STATUS_KEYS: BoardColumnKey[] = ["CUSTOM_1", "CUSTOM_2", "CUSTOM_3", "CUSTOM_4", "CUSTOM_5"];
+const CUSTOM_COLORS = ["bg-fuchsia-500", "bg-cyan-500", "bg-lime-600", "bg-orange-500", "bg-indigo-500"];
 export interface BoardColumnConfig {
   key: BoardColumnKey;
   label: string;
@@ -75,6 +79,21 @@ function priorityStyle(priority?: string | null) {
   }
 }
 
+function boardSettingsErrorMessage(error: unknown) {
+  if (axios.isAxiosError(error)) {
+    const status = error.response?.status;
+    const data: unknown = error.response?.data;
+    const message = data && typeof data === "object" && "message" in data
+      ? (data as { message?: unknown }).message
+      : undefined;
+    if (status === 403) return "Bạn không có quyền cấu hình Board. Cần SPRINT_WRITE hoặc SPRINT_BACKLOG_UPDATE.";
+    if (typeof message === "string" && message.trim()) return `Không lưu được cấu hình Board: ${message}`;
+    if (status === 400 || status === 422) return "Cấu hình không hợp lệ. Kiểm tra tên cột, trạng thái trùng và cột đang bật.";
+    if (status === 409) return "Không thể xóa trạng thái đang được work item sử dụng.";
+  }
+  return "Không lưu được cấu hình Board. Hãy kiểm tra kết nối rồi thử lại; cấu hình cũ vẫn được giữ.";
+}
+
 function workTypeStyle(workType?: string | null) {
   switch (workType) {
     case "BUG": return "border-rose-200 bg-rose-50 text-rose-700";
@@ -107,6 +126,12 @@ function statusLabel(status?: string | null) {
     case "BACKLOG": return "Backlog";
     default: return status ?? "—";
   }
+}
+
+function columnFor(key: BoardColumnKey, label: string, visible = true, index = 0): BoardColumnConfig {
+  const known = DEFAULT_COLUMNS.find((column) => column.key === key);
+  return known ? { ...known, label, visible }
+    : { key, label, visible, icon: CircleDot, color: CUSTOM_COLORS[index % CUSTOM_COLORS.length] };
 }
 
 function auditValueLabel(key: string, value: unknown) {
@@ -158,7 +183,7 @@ function auditSummary(action: string, beforeState?: string | null, afterState?: 
   return { actionLabel, changes: [] as string[] };
 }
 
-export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, onCreateWorkItem }: { workspaceId: number; teamId: number; canUpdate: boolean; onCreateWorkItem?: () => void }) {
+export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canConfigureColumns, onCreateWorkItem }: { workspaceId: number; teamId: number; canUpdate: boolean; canConfigureColumns: boolean; onCreateWorkItem?: () => void }) {
   const queryClient = useQueryClient();
   const [sprintId, setSprintId] = useState<number>();
   const [memberFilter, setMemberFilter] = useState("ALL");
@@ -179,10 +204,14 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, onCrea
   });
   useEffect(() => {
     if (columnsQuery.data) {
-      setBoardColumns(DEFAULT_COLUMNS.map(def => {
-        const match = columnsQuery.data.find(column => column.key === def.key);
-        return match ? { ...def, label: match.label || def.label, visible: match.visible } : def;
-      }));
+      const configured = columnsQuery.data;
+      const keys = new Set(configured.map((column) => column.key));
+      const defaults = DEFAULT_COLUMNS.filter((column) => !keys.has(column.key))
+        .map((column) => ({ key: column.key, label: column.label, visible: column.visible }));
+      setBoardColumns([
+        ...configured.map((column, index) => columnFor(column.key as BoardColumnKey, column.label, column.visible, index)),
+        ...defaults.map((column) => columnFor(column.key as BoardColumnKey, column.label, column.visible)),
+      ]);
     }
   }, [columnsQuery.data]);
 
@@ -190,19 +219,33 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, onCrea
     mutationFn: (columns: BoardColumnConfig[]) => workspaceApi.updateBoardColumns(workspaceId,
       columns.map(({ key, label, visible }) => ({ key, label, visible }) as WorkspaceBoardColumn)),
     onSuccess: columns => {
-      setBoardColumns(DEFAULT_COLUMNS.map(def => {
-        const match = columns.find(column => column.key === def.key);
-        return match ? { ...def, label: match.label, visible: match.visible } : def;
-      }));
+      const configuredKeys = new Set(columns.map((column) => column.key));
+      const defaults = DEFAULT_COLUMNS.filter((column) => !configuredKeys.has(column.key))
+        .map((column) => ({ key: column.key, label: column.label, visible: column.visible }));
+      setBoardColumns([
+        ...columns.map((column, index) => columnFor(column.key as BoardColumnKey, column.label, column.visible, index)),
+        ...defaults.map((column) => columnFor(column.key as BoardColumnKey, column.label, column.visible)),
+      ]);
       void queryClient.invalidateQueries({ queryKey: ["workspace-board-columns", workspaceId] });
       toast.success("Board settings saved for this workspace.");
       setColumnsDialogOpen(false);
     },
-    onError: () => toast.error("Could not save Board settings. Sprint write permission is required; existing settings are unchanged."),
+    onError: error => toast.error(boardSettingsErrorMessage(error)),
   });
 
   const saveColumnsConfig = (newCols: BoardColumnConfig[]) => saveColumns.mutate(newCols);
   const visibleColumns = useMemo(() => boardColumns.filter(c => c.visible), [boardColumns]);
+  const configuredStatusLabel = (status?: string | null) =>
+    boardColumns.find((column) => column.key === status)?.label ?? statusLabel(status);
+  const transitionOptions = (status: SprintBacklogStatus): SprintBacklogStatus[] => {
+    const standard = allowedStatusTransitions[status] ?? [];
+    const workflow = boardColumns.filter((column) => column.key !== "BACKLOG").map((column) => column.key as SprintBacklogStatus);
+    const index = workflow.indexOf(status);
+    const adjacent = workflow.filter((_, candidateIndex) => Math.abs(candidateIndex - index) === 1);
+    if (status.startsWith("CUSTOM_")) return adjacent;
+    const customNeighbors = adjacent.filter((candidate) => CUSTOM_STATUS_KEYS.includes(candidate as BoardColumnKey));
+    return [...new Set([...standard, ...customNeighbors])];
+  };
   const query = useQuery({
     queryKey: ["team-backlog-board", teamId],
     queryFn: () => teamBacklogApi.getBoard(teamId),
@@ -356,9 +399,9 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, onCrea
             {!sprints.length ? <option value="">Team chưa có Sprint</option> : null}
             {sprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name} · {sprint.status}</option>)}
           </select>
-          <Button variant="outline" size="sm" onClick={() => setColumnsDialogOpen(true)} title="Đổi tên hoặc ẩn/hiện cột workflow có sẵn">
+          {canConfigureColumns && <Button variant="outline" size="sm" onClick={() => setColumnsDialogOpen(true)} title="Đổi tên hoặc ẩn/hiện cột workflow có sẵn">
             <SlidersHorizontal className="mr-1.5 size-4" /> Tùy chỉnh cột
-          </Button>
+          </Button>}
           <Button variant="outline" size="icon" aria-label="Làm mới Board" onClick={() => void query.refetch()} disabled={query.isFetching}>
             <RefreshCw className={`size-4 ${query.isFetching ? "animate-spin" : ""}`} />
           </Button>
@@ -399,7 +442,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, onCrea
               {viewMode === "list" ? <label className="sr-only" htmlFor="workspace-board-sort">Sắp xếp</label> : null}
               {viewMode === "list" ? <>
                 <label className="sr-only" htmlFor="workspace-board-status">Lọc trạng thái</label>
-                <select id="workspace-board-status" className="h-10 rounded-md border bg-white px-3 text-sm" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="ALL">Mọi trạng thái</option><option value="BACKLOG">Backlog</option><option value="TODO">To do</option><option value="IN_PROGRESS">In progress</option><option value="REVIEW">Review</option><option value="DONE">Done</option><option value="BLOCKED">Blocked</option></select>
+                <select id="workspace-board-status" className="h-10 rounded-md border bg-white px-3 text-sm" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="ALL">Mọi trạng thái</option><option value="BACKLOG">Backlog</option><option value="TODO">To do</option><option value="IN_PROGRESS">In progress</option><option value="REVIEW">Review</option><option value="DONE">Done</option><option value="BLOCKED">Blocked</option>{boardColumns.filter((column) => CUSTOM_STATUS_KEYS.includes(column.key)).map((column) => <option key={column.key} value={column.key}>{column.label}</option>)}</select>
                 <label className="sr-only" htmlFor="workspace-board-priority">Lọc ưu tiên</label>
                 <select id="workspace-board-priority" className="h-10 rounded-md border bg-white px-3 text-sm" value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)}><option value="ALL">All priorities</option><option value="URGENT">Urgent</option><option value="HIGH">High</option><option value="MEDIUM">Medium</option><option value="LOW">Low</option></select>
                 <label className="sr-only" htmlFor="workspace-board-sort">Sắp xếp</label>
@@ -476,7 +519,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, onCrea
                 <td className="max-w-md px-4 py-3"><p className="text-[10px] font-mono text-muted-foreground">#{item.id ?? "—"}</p><p className="font-medium text-slate-800">{item.title || "Untitled work item"}</p>{item.milestoneName ? <p className="mt-1 truncate text-xs text-muted-foreground">{item.milestoneName}</p> : null}</td>
                 <td className="px-4 py-3">{item.workType ? <Badge variant="outline" className={workTypeStyle(item.workType)}>{workTypeLabel(item.workType)}</Badge> : "—"}</td>
                 <td className="px-4 py-3">{item.priority ? <Badge variant="outline" className={priorityStyle(item.priority)}>{priorityLabel(item.priority)}</Badge> : "—"}</td>
-                <td className="px-4 py-3">{canUpdate && item.sprintId != null ? <select aria-label={`Status for ${item.title ?? "work item"}`} className={`rounded-full border px-2 py-1 text-xs font-medium ${item.status === "BLOCKED" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-slate-200 bg-white text-slate-700"}`} value={item.status ?? "TODO"} disabled={savingItemId === item.id || query.isFetching} onChange={(event) => void updateStatus(item, event.target.value as SprintBacklogStatus)}>{([...new Set([item.status ?? "TODO", ...(allowedStatusTransitions[item.status ?? "TODO"] ?? [])])] as SprintBacklogStatus[]).map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select> : <Badge variant="outline" className={item.sprintId == null ? "border-slate-200 bg-slate-100 text-slate-700" : item.status === "BLOCKED" ? "border-rose-200 bg-rose-50 text-rose-700" : item.status === "DONE" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : item.status === "REVIEW" ? "border-amber-200 bg-amber-50 text-amber-800" : item.status === "IN_PROGRESS" ? "border-violet-200 bg-violet-50 text-violet-700" : "border-sky-200 bg-sky-50 text-sky-700"}>{item.sprintId == null ? statusLabel("BACKLOG") : statusLabel(item.status)}</Badge>}</td>
+                <td className="px-4 py-3">{canUpdate && item.sprintId != null ? <select aria-label={`Status for ${item.title ?? "work item"}`} className={`rounded-full border px-2 py-1 text-xs font-medium ${item.status === "BLOCKED" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-slate-200 bg-white text-slate-700"}`} value={item.status ?? "TODO"} disabled={savingItemId === item.id || query.isFetching} onChange={(event) => void updateStatus(item, event.target.value as SprintBacklogStatus)}>{([...new Set([item.status ?? "TODO", ...transitionOptions(item.status ?? "TODO")])] as SprintBacklogStatus[]).map((status) => <option key={status} value={status}>{configuredStatusLabel(status)}</option>)}</select> : <Badge variant="outline" className={item.sprintId == null ? "border-slate-200 bg-slate-100 text-slate-700" : item.status === "BLOCKED" ? "border-rose-200 bg-rose-50 text-rose-700" : item.status === "DONE" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : item.status === "REVIEW" ? "border-amber-200 bg-amber-50 text-amber-800" : item.status === "IN_PROGRESS" ? "border-violet-200 bg-violet-50 text-violet-700" : "border-sky-200 bg-sky-50 text-sky-700"}>{item.sprintId == null ? statusLabel("BACKLOG") : configuredStatusLabel(item.status)}</Badge>}</td>
                 <td className="px-4 py-3 text-slate-600">{canUpdate ? <select aria-label={`Assign ${item.title ?? "work item"}`} className="max-w-40 bg-transparent" value={item.assigneeProjectMemberId ?? ""} disabled={savingItemId === item.id || query.isFetching} onChange={(event) => void assignItem(item, event.target.value)}><option value="">Unassigned</option>{(query.data?.members ?? []).map((member) => <option key={member.projectMemberId} value={member.projectMemberId}>{member.displayName}</option>)}</select> : item.assigneeDisplayName || "Unassigned"}</td>
                 <td className="px-4 py-3 text-right text-slate-600">{item.estimatedHours != null ? `${item.estimatedHours}h` : "—"}</td>
               </tr>)}</tbody>
@@ -501,19 +544,30 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, onCrea
       </div>}
   
     {/* Customize Columns Dialog (Fix Bug #35 & #36) */}
-    <Dialog open={columnsDialogOpen} onOpenChange={setColumnsDialogOpen}>
+    <Dialog open={canConfigureColumns && columnsDialogOpen} onOpenChange={setColumnsDialogOpen}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <SlidersHorizontal className="size-5 text-primary" /> Tùy chỉnh cột Kanban Board
           </DialogTitle>
           <DialogDescription>
-            Đổi tên hoặc ẩn/hiện các cột workflow hiện có. Cấu hình được lưu cho workspace và dùng chung với thành viên khác.
-            Các trạng thái mới cần được hỗ trợ trong workflow backend trước khi xuất hiện tại đây.
+            Tạo cột trạng thái mới (tối đa 8 cột), đổi tên hoặc ẩn/hiện cột. Cấu hình được lưu cho workspace và dùng chung với thành viên khác.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          <Button type="button" variant="outline" size="sm" disabled={saveColumns.isPending || boardColumns.length >= 8 || !CUSTOM_STATUS_KEYS.some((key) => !boardColumns.some((column) => column.key === key))}
+            onClick={() => {
+              const key = CUSTOM_STATUS_KEYS.find((candidate) => !boardColumns.some((column) => column.key === candidate));
+              if (!key) return;
+              const created = columnFor(key, "Trạng thái mới", true, boardColumns.length);
+              const doneIndex = boardColumns.findIndex((column) => column.key === "DONE");
+              const next = [...boardColumns];
+              next.splice(doneIndex < 0 ? next.length : doneIndex, 0, created);
+              setBoardColumns(next);
+            }}>
+            <Plus className="mr-1 size-4" /> Thêm trạng thái
+          </Button>
           {boardColumns.map((col, idx) => (
             <div key={col.key} className="flex items-center justify-between gap-3 rounded-lg border p-3">
               <div className="flex items-center gap-2 flex-1">
@@ -530,7 +584,8 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, onCrea
                 />
               </div>
               <div className="flex items-center gap-2">
-                <Label htmlFor={"switch-" + col.key} className="text-xs text-muted-foreground">
+                  {CUSTOM_STATUS_KEYS.includes(col.key) ? <Button type="button" variant="ghost" size="icon" className="size-7 text-muted-foreground" aria-label={`Remove ${col.label}`} disabled={saveColumns.isPending} onClick={() => setBoardColumns((columns) => columns.filter((column) => column.key !== col.key))}><Trash2 className="size-3.5" /></Button> : null}
+                  <Label htmlFor={"switch-" + col.key} className="text-xs text-muted-foreground">
                   {col.visible ? "Hiện" : "Ẩn"}
                 </Label>
                 <Switch
@@ -559,7 +614,8 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, onCrea
             size="sm"
             disabled={saveColumns.isPending}
             onClick={() => {
-              saveColumnsConfig(DEFAULT_COLUMNS);
+              const custom = boardColumns.filter((column) => CUSTOM_STATUS_KEYS.includes(column.key));
+              saveColumnsConfig([...DEFAULT_COLUMNS.filter((column) => column.key !== "DONE"), ...custom, DEFAULT_COLUMNS.find((column) => column.key === "DONE")!]);
             }}
           >
             Khôi phục mặc định
@@ -595,6 +651,8 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, onCrea
         fullName: m.displayName,
         role: "Member",
       }))}
+      workflowStatuses={boardColumns.filter((column) => column.key !== "BACKLOG")
+        .map((column) => ({ value: column.key as SprintBacklogStatus, label: column.label }))}
       canEdit={canUpdate}
       canMove={canUpdate}
       canDelete={canUpdate}

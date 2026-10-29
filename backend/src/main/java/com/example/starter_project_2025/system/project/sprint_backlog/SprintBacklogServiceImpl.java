@@ -18,6 +18,10 @@ import com.example.starter_project_2025.system.project.sprint_backlog.audit.Spri
 import com.example.starter_project_2025.system.project.sprint_backlog.audit.SprintBacklogAuditService;
 import com.example.starter_project_2025.system.project.sprint_backlog.event.SprintBacklogOutboxService;
 import com.example.starter_project_2025.system.project.task.TaskRepository;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceRepository;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceSectionDtos.BoardColumn;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -109,6 +113,8 @@ public class SprintBacklogServiceImpl
     TaskRepository subtasks;
     ProjectMemberRepository projectMemberRepository;
     ProjectTeamRepository projectTeamRepository;
+    WorkspaceRepository workspaceRepository;
+    ObjectMapper objectMapper;
 
     @Override
     protected BaseCrudRepository<SprintBacklog, Long> getRepository() {
@@ -139,6 +145,11 @@ public class SprintBacklogServiceImpl
         Map<String, List<String>> errors = new LinkedHashMap<>();
 
         Sprint sprint = resolveSprint(request.getSprintId(), errors);
+
+        if (request.getStatus() != null && request.getStatus().isCustom()
+                && !isConfiguredCustomStatus(sprint, request.getStatus())) {
+            errors.put(STATUS_FIELD, List.of("This custom status is not configured for the sprint workspace"));
+        }
 
         // AC03: a milestone that no longer exists / was cancelled fails the
         // whole request with 404 instead of an inline field error.
@@ -293,8 +304,15 @@ public class SprintBacklogServiceImpl
         if (requestedStatus == null) {
             request.setStatus(backlog.getStatus());
         } else if (!requestedStatus.equals(backlog.getStatus())) {
-            Set<SprintBacklogStatus> allowed = STATUS_TRANSITIONS.getOrDefault(backlog.getStatus(), Set.of());
-            if (!allowed.contains(requestedStatus)) {
+            boolean allowedTransition;
+            if (requestedStatus.isCustom() || backlog.getStatus().isCustom()) {
+                allowedTransition = isAdjacentWorkspaceStatus(sprint, backlog.getStatus(), requestedStatus);
+            } else {
+                Set<SprintBacklogStatus> allowed = STATUS_TRANSITIONS.getOrDefault(backlog.getStatus(), Set.of());
+                allowedTransition = allowed.contains(requestedStatus);
+            }
+            if (!allowedTransition) {
+                Set<SprintBacklogStatus> allowed = STATUS_TRANSITIONS.getOrDefault(backlog.getStatus(), Set.of());
                 errors.put("status", java.util.List.of(
                     "Cannot transition from " + backlog.getStatus() + " to " + requestedStatus
                     + ". Allowed next: " + allowed));
@@ -696,6 +714,40 @@ public class SprintBacklogServiceImpl
 
         return sprintBacklogRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("SprintBacklog", "id", id));
+    }
+
+    private List<BoardColumn> workspaceBoardColumns(Sprint sprint) {
+        if (sprint == null || sprint.getTeamId() == null) return List.of();
+        return workspaceRepository.findFirstByTeamIdOrderByIdAsc(sprint.getTeamId())
+                .map(workspace -> {
+                    String json = workspace.getBoardColumnsConfig();
+                    if (json == null || json.isBlank()) return List.<BoardColumn>of();
+                    try {
+                        return objectMapper.readValue(json, new TypeReference<List<BoardColumn>>() { });
+                    } catch (Exception ignored) {
+                        return List.<BoardColumn>of();
+                    }
+                }).orElseGet(List::of);
+    }
+
+    private boolean isConfiguredCustomStatus(Sprint sprint, SprintBacklogStatus status) {
+        return status != null && status.isCustom()
+                && workspaceBoardColumns(sprint).stream().anyMatch(column -> column.key().equals(status.name()));
+    }
+
+    private boolean isAdjacentWorkspaceStatus(Sprint sprint, SprintBacklogStatus current, SprintBacklogStatus target) {
+        List<SprintBacklogStatus> statuses = workspaceBoardColumns(sprint).stream()
+                .map(BoardColumn::key)
+                .filter(key -> !"BACKLOG".equals(key))
+                .map(key -> {
+                    try { return SprintBacklogStatus.valueOf(key); }
+                    catch (IllegalArgumentException ignored) { return null; }
+                })
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        int currentIndex = statuses.indexOf(current);
+        int targetIndex = statuses.indexOf(target);
+        return currentIndex >= 0 && targetIndex >= 0 && Math.abs(currentIndex - targetIndex) == 1;
     }
 
     private Long sprintIdOf(SprintBacklog backlog) {

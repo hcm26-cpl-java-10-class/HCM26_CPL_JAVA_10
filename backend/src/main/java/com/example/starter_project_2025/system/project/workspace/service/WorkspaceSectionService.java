@@ -2,6 +2,8 @@ package com.example.starter_project_2025.system.project.workspace.service;
 
 import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
 import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceSection;
+import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogRepository;
+import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogStatus;
 
 import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +26,7 @@ public class WorkspaceSectionService {
     private final WorkspaceSectionPolicy policy;
     private final WorkspaceSectionDataSource source;
     private final ObjectMapper objectMapper;
+    private final SprintBacklogRepository sprintBacklogs;
 
     private Context context(Long id) {
         User user = access.requireUser(false);
@@ -64,14 +67,26 @@ public class WorkspaceSectionService {
         if (!access.permitted(context.user(), "SPRINT_WRITE")
                 && !access.permitted(context.user(), "SPRINT_BACKLOG_UPDATE"))
             throw new AccessDeniedException("Sprint board update permission is required to configure the team board");
-        Set<String> allowed = Set.of("BACKLOG", "TODO", "IN_PROGRESS", "REVIEW", "DONE");
+        Set<String> allowed = Set.of("BACKLOG", "TODO", "IN_PROGRESS", "REVIEW", "DONE",
+                "CUSTOM_1", "CUSTOM_2", "CUSTOM_3", "CUSTOM_4", "CUSTOM_5");
         List<BoardColumn> columns = request.columns();
         if (columns.stream().anyMatch(column -> !allowed.contains(column.key()))
                 || columns.stream().map(BoardColumn::key).distinct().count() != columns.size()
+                || columns.stream().map(column -> column.label().trim().toLowerCase()).distinct().count() != columns.size()
                 || columns.stream().noneMatch(BoardColumn::visible))
             throw new org.springframework.web.server.ResponseStatusException(
                     org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY,
                     "Use each supported board column once and keep at least one column visible");
+        Set<String> requestedKeys = columns.stream().map(BoardColumn::key).collect(java.util.stream.Collectors.toSet());
+        for (String customKey : List.of("CUSTOM_1", "CUSTOM_2", "CUSTOM_3", "CUSTOM_4", "CUSTOM_5")) {
+            SprintBacklogStatus status = SprintBacklogStatus.valueOf(customKey);
+            if (!requestedKeys.contains(customKey)
+                    && sprintBacklogs.existsBySprint_TeamIdAndStatus(context.scope().teamId(), status)) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.CONFLICT,
+                        "A custom status cannot be removed while work items still use it");
+            }
+        }
         try {
             context.workspace().setBoardColumnsConfig(objectMapper.writeValueAsString(columns));
             return new BoardColumns(columns);
