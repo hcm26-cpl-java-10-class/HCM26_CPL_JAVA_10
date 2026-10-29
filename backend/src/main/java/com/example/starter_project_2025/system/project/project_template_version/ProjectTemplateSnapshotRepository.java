@@ -10,6 +10,9 @@ import java.util.Optional;
 public interface ProjectTemplateSnapshotRepository
         extends BaseCrudRepository<ProjectTemplateSnapshot, Long> {
 
+    boolean existsByTemplateIdAndProjectIdIsNotNull(Long templateId);
+
+    @org.springframework.data.jpa.repository.Query("select version from ProjectTemplateSnapshot version where version.templateId = :templateId order by version.createdAt desc, version.id desc")
     List<ProjectTemplateSnapshot> findByTemplateIdOrderByCreatedAtDesc(Long templateId);
 
     Optional<ProjectTemplateSnapshot> findFirstByTemplateIdAndIsActiveTrueOrderByCreatedAtDesc(Long templateId);

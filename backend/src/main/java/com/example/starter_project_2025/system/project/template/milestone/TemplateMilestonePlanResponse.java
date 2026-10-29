@@ -18,9 +18,19 @@ public record TemplateMilestonePlanResponse(
 ) {
     public static TemplateMilestonePlanResponse from(
             ProjectTemplate template, List<TemplateMilestone> milestones, boolean canUpdate) {
+        return from(template, milestones, canUpdate, template.getTenantId());
+    }
+
+    /**
+     * @param tenantId tenant used to resolve rubric ownership. For shared
+     *                 templates ({@code tenant_id is null}) this is the acting
+     *                 user's tenant, so an assigned rubric is not hidden.
+     */
+    public static TemplateMilestonePlanResponse from(
+            ProjectTemplate template, List<TemplateMilestone> milestones, boolean canUpdate, Long tenantId) {
         return new TemplateMilestonePlanResponse(template.getId(), template.getLockVersion(), template.getEstimatedDurationWeeks(),
                 canUpdate && template.getStatus() == ProjectTemplateStatus.DRAFT,
-                milestones.stream().map(Milestone::from).toList());
+                milestones.stream().map(milestone -> Milestone.from(milestone, tenantId)).toList());
     }
 
     public record Milestone(
@@ -38,10 +48,10 @@ public record TemplateMilestonePlanResponse(
             List<RubricCriterion> legacyRubricCriteria,
             LatePolicy latePolicy
     ) {
-        static Milestone from(TemplateMilestone milestone) {
+        static Milestone from(TemplateMilestone milestone, Long tenantId) {
             var version = milestone.getRubricVersion();
-            boolean ownTenant = version != null && RubricTenantIdentity.from(milestone.getTemplate().getTenantId())
-                    .equals(version.getRubric().getTenantId());
+            boolean ownTenant = version != null && tenantId != null
+                    && RubricTenantIdentity.from(tenantId).equals(version.getRubric().getTenantId());
             return new Milestone(milestone.getId(), milestone.getTitle(), milestone.getDescription(),
                     milestone.getDueAfter(), milestone.getDueUnit(), milestone.getWeight(), milestone.isMandatory(),
                     milestone.getOrderIndex(), ownTenant ? version.getId() : null,

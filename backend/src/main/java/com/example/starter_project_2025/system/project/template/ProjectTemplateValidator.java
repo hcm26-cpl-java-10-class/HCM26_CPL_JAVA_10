@@ -9,11 +9,17 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class ProjectTemplateValidator {
+    public static final int MAX_DESCRIPTION_WORDS = 1000;
+
     public void validate(ProjectTemplateRequest request, boolean updating) {
         Map<String, List<String>> errors = new LinkedHashMap<>();
         text(errors, "code", request.code(), 100);
         text(errors, "name", request.name(), 255);
         text(errors, "description", request.description(), Integer.MAX_VALUE);
+        if (request.description() != null && java.util.regex.Pattern.compile("(?U)\\S+").matcher(request.description())
+                .results().limit(MAX_DESCRIPTION_WORDS + 1L).count() > MAX_DESCRIPTION_WORDS) {
+            errors.put("description", List.of("Description must not exceed 1000 words"));
+        }
         text(errors, "category", request.category(), 255);
         if (request.level() == null) {
             errors.put("level", List.of("Select Beginner, Intermediate or Advanced"));

@@ -79,6 +79,15 @@ public class SprintBacklogDTO extends BaseDTO {
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     String assigneeDisplayName;
 
+    /**
+     * TEMPORARY reporter id: the team member who reported the item (same raw
+     * project member id approach as the assignee).
+     */
+    Long reporterProjectMemberId;
+
+    /** Set true on update to explicitly clear the reporter. */
+    Boolean clearReporter;
+
     String title;
 
     String description;

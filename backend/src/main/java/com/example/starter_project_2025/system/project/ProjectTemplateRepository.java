@@ -25,6 +25,10 @@ public interface ProjectTemplateRepository
 
     Optional<ProjectTemplate> findByIdAndTenantIdAndIsActiveTrue(Long id, Long tenantId);
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select t from ProjectTemplate t where t.id = :id and t.tenantId = :tenantId and t.isActive = true")
+    Optional<ProjectTemplate> findForTemplateUpdate(Long id, Long tenantId);
+
     /**
      * Read-only lookup that also resolves the shared catalogue: rows without a
      * tenant ({@code tenant_id is null}, e.g. the demo/sample templates seeded

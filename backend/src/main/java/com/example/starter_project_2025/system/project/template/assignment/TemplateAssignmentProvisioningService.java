@@ -27,14 +27,12 @@ import com.example.starter_project_2025.system.project.sprint_backlog.SprintBack
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogWorkType;
 import com.example.starter_project_2025.system.project.template.backlog.TemplateBacklogItem;
 import com.example.starter_project_2025.system.project.template.backlog.TemplateBacklogItemRepository;
+import com.example.starter_project_2025.system.project.rubric.domain.RubricVersion;
+import com.example.starter_project_2025.system.project.rubric.service.RubricCatalogService;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestone;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneChecklistItem;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneRepository;
-import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestonePlanRequest;
-import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneRubrics;
-import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneScheduleValidator;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneTimeUnit;
-import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneValidator;
 import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
 import com.example.starter_project_2025.system.project.tenant.Tenant;
 import com.example.starter_project_2025.system.project.tenant.TenantRepository;
@@ -95,9 +93,7 @@ public class TemplateAssignmentProvisioningService {
     private final SprintBacklogRepository sprintBacklog;
     private final TemplateMilestoneRepository templateMilestones;
     private final TemplateBacklogItemRepository templateBacklogItems;
-    private final TemplateMilestoneValidator milestoneValidator;
-    private final TemplateMilestoneScheduleValidator scheduleValidator;
-    private final TemplateMilestoneRubrics milestoneRubrics;
+    private final RubricCatalogService rubricCatalog;
     private final TemplateBriefSnapshotWriter briefSnapshots;
     private final ObjectMapper objectMapper;
 
@@ -118,12 +114,12 @@ public class TemplateAssignmentProvisioningService {
                     "Select an active project template available to this team before creating its workspace");
         }
         Instant now = Instant.now();
+        // The milestone plan is authored and validated while the template is DRAFT
+        // (activation checklist). A template can legitimately be ACTIVE with
+        // milestones that only carry legacy rubric criteria, so provisioning must
+        // not re-apply the authoring rules here - it resolves rubrics leniently.
         List<TemplateMilestone> milestonePlan =
                 templateMilestones.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId());
-        var planRequest = TemplateMilestonePlanRequest.from(template.getLockVersion(), milestonePlan);
-        milestoneValidator.validate(planRequest);
-        scheduleValidator.validate(planRequest, template.getEstimatedDurationWeeks());
-        milestoneRubrics.requirePublished(planRequest, tenantId);
 
         // ---- Step 1: immutable evidence snapshot of the active brief version
         ProjectTemplateSnapshot snapshot = briefSnapshots.snapshotForAssignment(
@@ -280,6 +276,12 @@ public class TemplateAssignmentProvisioningService {
         }
 
         UUID actorUuid = actorUuid(actorId);
+        UUID fallbackRubricId = resolveRubricVersion(tenantId, plan);
+        if (fallbackRubricId == null) {
+            log.warn("US-13 team {}: no published rubric for tenant {} - milestone generation skipped",
+                    team.getId(), tenantId);
+            return 0;
+        }
         int created = 0;
 
         for (TemplateMilestone planMilestone : plan) {
@@ -289,6 +291,9 @@ public class TemplateAssignmentProvisioningService {
                     ? deadline.plus(planMilestone.getMaxLateDays(), ChronoUnit.DAYS)
                     : null;
             BigDecimal penalty = allowLate ? planMilestone.getPenaltyPerDayPercent() : null;
+            UUID rubricVersionId = planMilestone.getRubricVersion() != null
+                    ? planMilestone.getRubricVersion().getId()
+                    : fallbackRubricId;
 
             Milestone milestone = Milestone.create(
                     tenantId,
@@ -298,13 +303,17 @@ public class TemplateAssignmentProvisioningService {
                     planMilestone.getDescription(),
                     deadline,
                     planMilestone.isMandatory(),
-                    planMilestone.getRubricVersion().getId(),
+                    rubricVersionId,
                     null,
                     allowLate ? LatePolicyType.ALLOW_LATE : LatePolicyType.NO_LATE,
                     lateUntil,
                     penalty,
                     actorUuid,
                     now);
+
+            // Template milestones follow the same scheduled PLANNED -> IN_PROGRESS flow
+            // as milestones created directly in a workspace.
+            milestone.configureAutoStart(7, true);
 
             milestone.configureAssessment(
                     planMilestone.getWeight(),
@@ -325,6 +334,25 @@ public class TemplateAssignmentProvisioningService {
         long days = milestone.getDueAfter().longValue()
                 * (milestone.getDueUnit() == TemplateMilestoneTimeUnit.WEEKS ? 7L : 1L);
         return startsAt.plus(days, ChronoUnit.DAYS);
+    }
+
+    /**
+     * Rubric used when a template milestone has none: the first rubric version
+     * referenced by the plan, otherwise the first PUBLISHED rubric of the team's
+     * tenant (legacy tenant ids included by {@link RubricCatalogService}).
+     *
+     * @return rubric version id or {@code null} when the tenant has no rubric
+     */
+    private UUID resolveRubricVersion(Long tenantId, List<TemplateMilestone> plan) {
+        for (TemplateMilestone milestone : plan) {
+            if (milestone.getRubricVersion() != null) {
+                return milestone.getRubricVersion().getId();
+            }
+        }
+        return rubricCatalog.findPublished(tenantId).stream()
+                .map(RubricVersion::getId)
+                .findFirst()
+                .orElse(null);
     }
 
     private int generateSampleBacklog(Project project, ProjectTemplate template) {

@@ -90,6 +90,12 @@ public class OutboxEvent {
         return event;
     }
 
+    public static OutboxEvent templateDeleted(Long tenantId, Long templateId, String payloadJson, Instant now) {
+        OutboxEvent event = templateSampleContentUpdated(tenantId, templateId, payloadJson, now);
+        event.eventType = "PROJECT_TEMPLATE_DELETED";
+        return event;
+    }
+
     public static OutboxEvent milestoneAtRiskAlert(UUID eventId, UUID milestoneId, String payloadJson, Instant now) {
         OutboxEvent event = milestoneCreated(milestoneId, payloadJson, now);
         event.eventId = eventId;

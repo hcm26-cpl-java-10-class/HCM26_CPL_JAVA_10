@@ -44,10 +44,11 @@ public class TemplateMilestoneService {
     private final TemplateMilestoneRubrics rubrics;
     private final TemplateMilestoneMapper mapper;
     private final TemplateArtifactRequirementRepository artifactRequirements;
+    private final com.example.starter_project_2025.system.project.template.TemplateConfigurationService configurations;
 
     public List<TemplateMilestoneCreation> prepareForProject(Long templateId, Long teamId, Instant startsAt) {
         User user = access.requireUser("READ");
-        ProjectTemplate template = findTemplate(templateId, user);
+        ProjectTemplate template = findReadableTemplate(templateId, user);
         if (template.getStatus() != ProjectTemplateStatus.ACTIVE) {
             throw ProjectTemplateException.conflict("Only active templates can be used to create a project");
         }
@@ -58,7 +59,7 @@ public class TemplateMilestoneService {
         var request = TemplateMilestonePlanRequest.from(template.getLockVersion(), plan);
         validator.validate(request);
         scheduleValidator.validate(request, template.getEstimatedDurationWeeks());
-        rubrics.requirePublished(request, template.getTenantId());
+        rubrics.requirePublished(request, tenantOf(template, user));
         return plan.stream().map(item -> mapper.forProject(item, teamId, startsAt)).toList();
     }
 
@@ -73,7 +74,8 @@ public class TemplateMilestoneService {
         User user = access.requireUser("READ");
         ProjectTemplate template = findReadableTemplate(templateId, user);
         return TemplateMilestonePlanResponse.from(template,
-                loadMilestones(templateId), access.can(user, "UPDATE"));
+                loadMilestones(templateId), access.can(user, "UPDATE") && template.getTenantId() != null,
+                tenantOf(template, user));
     }
 
     @Transactional
@@ -96,8 +98,9 @@ public class TemplateMilestoneService {
                 .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
         var removedIds = existing.stream().map(TemplateMilestone::getId).filter(id -> !retainedMilestones.contains(id)).toList();
         scheduleValidator.validate(request, template.getEstimatedDurationWeeks());
-        var rubricVersions = rubrics.requirePublished(request, template.getTenantId());
-        String before = state(template, existing);
+        Long tenantId = tenantOf(template, user);
+        var rubricVersions = rubrics.requirePublished(request, tenantId);
+        String before = state(template, existing, tenantId);
 
         template.setUpdatedAt(LocalDateTime.now());
         template = templates.saveAndFlush(template);
@@ -123,9 +126,10 @@ public class TemplateMilestoneService {
         if (!removedIds.isEmpty()) artifactRequirements.deleteByMilestone_IdIn(removedIds);
         milestones.deleteAll(existing.stream().filter(item -> !retainedIds.contains(item.getId())).toList());
         List<TemplateMilestone> saved = milestones.saveAllAndFlush(updated);
+        configurations.refreshDraft(template);
         audits.save(new ProjectTemplateAudit(template.getTenantId(), templateId, user.getId(),
-                "PROJECT_TEMPLATE_MILESTONES_UPDATED", before, state(template, saved), CorrelationIdFilter.currentId()));
-        return TemplateMilestonePlanResponse.from(template, saved, true);
+                "PROJECT_TEMPLATE_MILESTONES_UPDATED", before, state(template, saved, tenantId), CorrelationIdFilter.currentId()));
+        return TemplateMilestonePlanResponse.from(template, saved, true, tenantId);
     }
 
     private void updateLatePolicy(TemplateMilestone milestone, TemplateMilestonePlanRequest.LatePolicy policy) {
@@ -173,7 +177,7 @@ public class TemplateMilestoneService {
     }
 
     private ProjectTemplate findTemplate(Long templateId, User user) {
-        return templates.findByIdAndTenantIdAndIsActiveTrue(templateId, user.getTenantId())
+        return templates.findForTemplateUpdate(templateId, user.getTenantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project template was not found"));
     }
 
@@ -183,9 +187,14 @@ public class TemplateMilestoneService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project template was not found"));
     }
 
-    private String state(ProjectTemplate template, List<TemplateMilestone> items) {
+    /** Audit/rubric tenant: shared rows use the acting user's tenant. */
+    private Long tenantOf(ProjectTemplate template, User user) {
+        return template.getTenantId() != null ? template.getTenantId() : user.getTenantId();
+    }
+
+    private String state(ProjectTemplate template, List<TemplateMilestone> items, Long tenantId) {
         try {
-            return objectMapper.writeValueAsString(TemplateMilestonePlanResponse.from(template, items, false));
+            return objectMapper.writeValueAsString(TemplateMilestonePlanResponse.from(template, items, false, tenantId));
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Unable to record template milestone changes", exception);
         }

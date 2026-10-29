@@ -40,6 +40,10 @@ export interface SprintBacklogDTO extends BaseDTO {
   clearAssignee?: boolean;
   /** Read-only display name resolved for the assigned project member. */
   assigneeDisplayName?: string | null;
+  /** `project_members.id` of the reporter (picked in the work item panel). */
+  reporterProjectMemberId?: number | null;
+  /** Set true on update to explicitly clear the current reporter. */
+  clearReporter?: boolean;
   title?: string;
   description?: string | null;
   startDate?: string | null;

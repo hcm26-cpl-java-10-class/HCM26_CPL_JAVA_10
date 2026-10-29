@@ -9,6 +9,8 @@ import java.util.Optional;
 public interface TrainingClassRepository
         extends BaseCrudRepository<TrainingClass, Long> {
 
+    boolean existsByProjectTemplate_Id(Long templateId);
+
     Optional<TrainingClass> findByIdAndTenantId(Long id, Long tenantId);
 
     Optional<TrainingClass> findByCodeAndTenantId(String code, Long tenantId);
@@ -16,7 +18,6 @@ public interface TrainingClassRepository
     Optional<TrainingClass> findByCode(String code);
 
     boolean existsByCodeAndTenantId(String code, Long tenantId);
-
     boolean existsByTenantIdAndCohortId(Long tenantId, Long cohortId);
 
     java.util.List<TrainingClass> findAllByTenantIdAndCohortIdIsNotNull(Long tenantId);

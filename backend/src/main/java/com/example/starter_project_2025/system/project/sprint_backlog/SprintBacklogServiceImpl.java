@@ -8,6 +8,7 @@ import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.project.ProjectMember;
 import com.example.starter_project_2025.system.project.ProjectMemberRepository;
+import com.example.starter_project_2025.system.project.ProjectTeamRepository;
 import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
 import com.example.starter_project_2025.system.project.milestone.integration.port.MilestoneTenantProvider;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
@@ -28,7 +29,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -46,7 +46,8 @@ import java.util.UUID;
  *     <li>title mandatory, 1..200 characters (422)</li>
  *     <li>description optional, at most 2000 characters (422)</li>
  *     <li>start date &lt; end date when both are provided (422)</li>
- *     <li>status one of {@link SprintBacklogStatus}; updates follow the shared task workflow transition matrix</li>
+ *     <li>status one of {@link SprintBacklogStatus}; the team may move an item
+ *     to <em>any</em> status of the workflow (no forward-only transition matrix)</li>
  *     <li>work type one of {@link SprintBacklogWorkType} (Story / Bug / Task), task by
  *     default - the set is fixed, no new work type can be created</li>
  *     <li>priority one of {@link SprintBacklogPriority}, medium by default</li>
@@ -72,6 +73,7 @@ public class SprintBacklogServiceImpl
     static final String PROJECT_ID_FIELD = "projectId";
     static final String MILESTONE_ID_FIELD = "milestoneId";
     static final String ASSIGNEE_FIELD = "assigneeProjectMemberId";
+    static final String REPORTER_FIELD = "reporterProjectMemberId";
     static final String TITLE_FIELD = "title";
     static final String DESCRIPTION_FIELD = "description";
     static final String START_DATE_FIELD = "startDate";
@@ -86,14 +88,6 @@ public class SprintBacklogServiceImpl
     static final String EVENT_CREATED = "SPRINT_BACKLOG_ITEM_CREATED";
     static final String EVENT_UPDATED = "SPRINT_BACKLOG_ITEM_UPDATED";
 
-    private static final Map<SprintBacklogStatus, Set<SprintBacklogStatus>> STATUS_TRANSITIONS = Map.of(
-            SprintBacklogStatus.TODO, Set.of(SprintBacklogStatus.IN_PROGRESS),
-            SprintBacklogStatus.IN_PROGRESS, Set.of(SprintBacklogStatus.REVIEW, SprintBacklogStatus.BLOCKED, SprintBacklogStatus.TODO),
-            SprintBacklogStatus.REVIEW, Set.of(SprintBacklogStatus.DONE, SprintBacklogStatus.IN_PROGRESS),
-            SprintBacklogStatus.BLOCKED, Set.of(SprintBacklogStatus.IN_PROGRESS),
-            SprintBacklogStatus.DONE, Set.of(SprintBacklogStatus.IN_PROGRESS)
-    );
-
     static final String MILESTONE_NOT_FOUND_MESSAGE =
             "Milestone không tồn tại hoặc đã bị thay đổi";
 
@@ -106,6 +100,7 @@ public class SprintBacklogServiceImpl
     SprintBacklogOutboxService sprintBacklogOutboxService;
     TaskRepository subtasks;
     ProjectMemberRepository projectMemberRepository;
+    ProjectTeamRepository projectTeamRepository;
 
     @Override
     protected BaseCrudRepository<SprintBacklog, Long> getRepository() {
@@ -147,6 +142,7 @@ public class SprintBacklogServiceImpl
         validateDescription(backlog.getDescription(), errors);
         validateDates(backlog.getStartDate(), backlog.getEndDate(), errors);
         validateAssignee(backlog.getAssigneeProjectMemberId(), errors);
+        validateReporter(backlog.getReporterProjectMemberId(), errors);
         validateEstimatedHours(backlog.getEstimatedHours(), errors);
 
         throwIfInvalid(errors);
@@ -229,6 +225,11 @@ public class SprintBacklogServiceImpl
                 : request.getAssigneeProjectMemberId() != null
                     ? request.getAssigneeProjectMemberId()
                     : backlog.getAssigneeProjectMemberId();
+        Long reporterId = Boolean.TRUE.equals(request.getClearReporter())
+                ? null
+                : request.getReporterProjectMemberId() != null
+                    ? request.getReporterProjectMemberId()
+                    : backlog.getReporterProjectMemberId();
         Double estimatedHours = request.getEstimatedHours() != null
                 ? request.getEstimatedHours()
                 : backlog.getEstimatedHours();
@@ -239,6 +240,7 @@ public class SprintBacklogServiceImpl
         validateDescription(description, errors);
         validateDates(startDate, endDate, errors);
         validateAssignee(assigneeId, errors);
+        validateReporter(reporterId, errors);
         validateEstimatedHours(estimatedHours, errors);
 
         Sprint sprint = backlog.getSprint();
@@ -278,11 +280,11 @@ public class SprintBacklogServiceImpl
 
         throwIfInvalid(errors);
 
+        // Any workflow status can be selected (the team may move an item
+        // backwards, skip a step or reopen a finished item).
         SprintBacklogStatus requestedStatus = request.getStatus();
-        if (requestedStatus != null && requestedStatus != backlog.getStatus()
-                && !STATUS_TRANSITIONS.getOrDefault(backlog.getStatus(), Set.of()).contains(requestedStatus)) {
-            throw new SprintBacklogConflictException(
-                    "Workflow does not allow transition from " + backlog.getStatus() + " to " + requestedStatus);
+        if (requestedStatus == null) {
+            request.setStatus(backlog.getStatus());
         }
 
         Map<String, Object> before = snapshot(backlog);
@@ -294,6 +296,10 @@ public class SprintBacklogServiceImpl
 
         if (Boolean.TRUE.equals(request.getClearAssignee()) || request.getAssigneeProjectMemberId() != null) {
             backlog.setAssigneeProjectMemberId(assigneeId);
+        }
+
+        if (Boolean.TRUE.equals(request.getClearReporter()) || request.getReporterProjectMemberId() != null) {
+            backlog.setReporterProjectMemberId(reporterId);
         }
 
         backlog.setSprint(sprint);
@@ -420,21 +426,28 @@ public class SprintBacklogServiceImpl
 
     /**
      * Active members of the workspace team, used by the assignee picker of the
-     * backlog create bar instead of a raw project member id.
+     * backlog create bar and of the work item panel instead of a raw project
+     * member id.
+     * <p>
+     * When the caller is not scoped to a team (the global `/backlogs` page),
+     * the team that owns the item's project is used, so a work item can still
+     * be assigned to one of its team members from the detail view.
      */
     @Override
     @Transactional(readOnly = true)
-    public List<BacklogAssigneeOptionDTO> getAssigneeOptions(Long teamId) {
+    public List<BacklogAssigneeOptionDTO> getAssigneeOptions(Long teamId, Long projectId) {
 
         check("SPRINT_BACKLOG_READ");
 
-        if (teamId == null) {
+        Long resolvedTeamId = resolveAssigneeTeamId(teamId, projectId);
+
+        if (resolvedTeamId == null) {
             return List.of();
         }
 
         List<ProjectMember> members =
                 projectMemberRepository.findAllByTeam_IdAndClassMember_StatusOrderByIdAsc(
-                        teamId,
+                        resolvedTeamId,
                         com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus.ACTIVE);
 
         return members.stream()
@@ -446,6 +459,28 @@ public class SprintBacklogServiceImpl
                         member.getRole()
                 ))
                 .toList();
+    }
+
+    /**
+     * Team that scopes the assignee picker: an explicit team wins, otherwise
+     * the team owning the given project is used (a project created from a
+     * team/allocation keeps its `team_id`).
+     */
+    private Long resolveAssigneeTeamId(Long teamId, Long projectId) {
+
+        if (teamId != null) {
+            return teamId;
+        }
+
+        if (projectId == null) {
+            return null;
+        }
+
+        return projectTeamRepository.findAllByProject_IdInOrderByIdDesc(List.of(projectId))
+                .stream()
+                .map(com.example.starter_project_2025.system.project.ProjectTeam::getId)
+                .findFirst()
+                .orElse(null);
     }
 
     // ---------------------------------------------------------------------
@@ -595,6 +630,14 @@ public class SprintBacklogServiceImpl
         }
     }
 
+    /** Same TEMPORARY rule as the assignee, applied to the reporter id. */
+    private void validateReporter(Long reporterId, Map<String, List<String>> errors) {
+
+        if (reporterId != null && reporterId <= 0) {
+            addError(errors, REPORTER_FIELD, "Người báo cáo không hợp lệ");
+        }
+    }
+
     /**
      * The effort estimate is optional; when provided it cannot be negative.
      */
@@ -664,6 +707,7 @@ public class SprintBacklogServiceImpl
         snapshot.put("milestoneId", milestoneIdOf(backlog));
         snapshot.put("milestoneName", milestoneNameOf(backlog));
         snapshot.put("assigneeProjectMemberId", backlog.getAssigneeProjectMemberId());
+        snapshot.put("reporterProjectMemberId", backlog.getReporterProjectMemberId());
         snapshot.put("title", backlog.getTitle());
         snapshot.put("description", backlog.getDescription());
         snapshot.put("startDate", backlog.getStartDate());

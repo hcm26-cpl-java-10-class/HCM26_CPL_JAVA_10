@@ -24,6 +24,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -150,7 +151,7 @@ public class TeamArtifactSubmissionService {
 
     @Transactional
     public List<TeamSubmissionView> submissions(Long teamId, UUID milestoneId) {
-        Scope s = reviewerScope(teamId);
+        Scope s = submissionScope(teamId);
         var rows = milestoneId == null ? submissionRepository.findByTenantIdAndTeamIdOrderBySubmittedAtDesc(s.tenantId, teamId)
                 : submissionRepository.findByTenantIdAndTeamIdAndMilestoneIdOrderBySubmittedAtDesc(s.tenantId, teamId, milestoneId);
         Map<UUID, com.example.starter_project_2025.system.rbac.user.User> actors = new HashMap<>();
@@ -192,6 +193,17 @@ public class TeamArtifactSubmissionService {
         UUID actor = actorProvider.requireCurrentActorId(); Long tenant = tenantProvider.requireCurrentTenantId();
         var milestoneScope = milestoneScopeService.requireTeamScope(null, teamId, tenant);
         scopePort.requireStudentTeamAccess(teamId, actor, tenant);
+        return new Scope(actor, tenant, milestoneScope.projectId());
+    }
+    private Scope submissionScope(Long teamId) {
+        UUID actor = actorProvider.requireCurrentActorId(); Long tenant = tenantProvider.requireCurrentTenantId();
+        var milestoneScope = milestoneScopeService.requireTeamScope(null, teamId, tenant);
+        try {
+            scopePort.requireReviewerTeamAccess(teamId, actor, tenant);
+        } catch (AccessDeniedException e) {
+            scopePort.requireStudentTeamAccess(teamId, actor, tenant);
+        }
+        if (!milestoneRepository.existsByTeamIdAndTenantIdAndActiveTrue(teamId, tenant)) throw new ResourceNotFoundException("Team milestone not found");
         return new Scope(actor, tenant, milestoneScope.projectId());
     }
     private Scope reviewerScope(Long teamId) {

@@ -75,9 +75,10 @@ export const projectTemplateApi = {
    *
    * Student team-leader options remain separate from the mentor picker API.
    */
-  async getAssignableOptions(): Promise<ProjectTemplateOption[]> {
+  async getAssignableOptions(signal?: AbortSignal): Promise<ProjectTemplateOption[]> {
     const response = await axiosInstance.get<ProjectTemplateOption[]>(
       "/v1/students/me/draft-teams/template-options",
+      { signal },
     );
     return response.data ?? [];
   },
@@ -153,5 +154,9 @@ export const projectTemplateApi = {
   async archive(id: number, lockVersion: number) {
     const response = await axiosInstance.post<ProjectTemplateDTO>(`${path}/${id}/archive`, { lockVersion });
     return response.data;
+  },
+
+  async delete(id: number, lockVersion: number) {
+    await axiosInstance.delete(`${path}/${id}`, { params: { lockVersion } });
   },
 };
