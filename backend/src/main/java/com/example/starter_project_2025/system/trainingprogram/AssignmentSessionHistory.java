@@ -35,6 +35,15 @@ public class AssignmentSessionHistory {
         return jdbc.query("select * from " + ROWS + " where is_active=true and status<>'CANCELLED' and starts<:to and ends>:from",
                 Map.of("from",from,"to",to),(rs,index)->row(rs));
     }
+    public boolean hasTrainerBooking(Long trainerId, Long ignoreAssignmentId, LocalDateTime from, LocalDateTime to) {
+        var params = new HashMap<String, Object>();
+        params.put("trainer", trainerId); params.put("ignore", ignoreAssignmentId);
+        params.put("from", from); params.put("to", to);
+        return jdbc.queryForObject("select count(*) from " + ROWS + """
+            where trainer_id=:trainer and is_active=true and status<>'CANCELLED' and starts<:to and ends>:from
+              and (cast(:ignore as bigint) is null or teaching_assignment_id is null or teaching_assignment_id<>:ignore)
+            """, params, Long.class) > 0;
+    }
     public Page<TeachingAssignmentSessionResponse> sessions(Long id, Session.SessionStatus status, Pageable page) {
         var params = new HashMap<String, Object>(); params.put("id", id);
         String where = " where teaching_assignment_id=:id";
@@ -42,16 +51,27 @@ public class AssignmentSessionHistory {
         return query(where, params, page).map(Row::summary);
     }
     public Page<Row> impacts(Long id, boolean trainerChanged, Long classId, Long trainerId,
-                             LocalDateTime from, LocalDateTime until, Pageable page) {
+                             LocalDateTime from, LocalDateTime until, List<AssignmentTeachingSlot> slots, Pageable page) {
         var params = new HashMap<String, Object>();
         params.put("id", id); params.put("changed", trainerChanged); params.put("classId", classId);
         params.put("trainerId", trainerId); params.put("from", from); params.put("until", until);
+        String slotCondition = "";
+        if (slots != null && !slots.isEmpty()) {
+            var choices = new ArrayList<String>();
+            for (int i = 0; i < slots.size(); i++) {
+                var slot = slots.get(i);
+                params.put("slotFrom" + i, slot.getDate().atTime(slot.getStartTime()));
+                params.put("slotTo" + i, slot.getDate().atTime(slot.getEndTime()));
+                choices.add("(starts>=:slotFrom" + i + " and ends<=:slotTo" + i + ")");
+            }
+            slotCondition = " or not (" + String.join(" or ", choices) + ")";
+        }
         return query("""
             where teaching_assignment_id=:id and
               (:changed=true or (status <> 'CANCELLED' and
                 (class_id is null or class_id<>:classId or trainer_id is null or trainer_id<>:trainerId
-                 or starts<:from or (cast(:until as timestamp) is not null and ends>=:until))))
-            """, params, page);
+                 or starts<:from or (cast(:until as timestamp) is not null and ends>=:until)
+            """ + slotCondition + ")))", params, page);
     }
     private Page<Row> query(String where, Map<String,Object> params, Pageable page) {
         Map<String,String> columns = Map.of("id","id","startTime","starts","endTime","ends","status","status");

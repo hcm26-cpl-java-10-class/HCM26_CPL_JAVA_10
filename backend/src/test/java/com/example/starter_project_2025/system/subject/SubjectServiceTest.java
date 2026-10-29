@@ -45,7 +45,7 @@ class SubjectServiceTest {
                 .name("Java Core Fundamentals")
                 .version("1.0")
                 .technicalGroup("Backend")
-                .durationHours(40)
+                .durationHours(java.math.BigDecimal.valueOf(40))
                 .isActive(true)
                 .build();
         mockSubject.setId(10L);
@@ -55,7 +55,7 @@ class SubjectServiceTest {
         mockSubjectDTO.setCode("JAVA_CORE");
         mockSubjectDTO.setName("Java Core Fundamentals");
         mockSubjectDTO.setVersion("1.0");
-        mockSubjectDTO.setDurationHours(40);
+        mockSubjectDTO.setDurationHours(java.math.BigDecimal.valueOf(40));
     }
 
     @Test

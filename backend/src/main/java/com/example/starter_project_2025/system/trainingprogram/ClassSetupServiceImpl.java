@@ -44,6 +44,7 @@ public class ClassSetupServiceImpl implements ClassSetupService {
     private final ExternalApiService externalApiService;
     private final AssignmentSessionHistory sessionHistory;
     private final TeachingAssignmentSessionGuard assignmentSessionGuard;
+    private final AssignmentTeachingSlotPolicy teachingSlotPolicy;
 
     @Override
     public ClassProgramSubjectsResponse assignProgram(Long classId, Long programId) {
@@ -114,6 +115,10 @@ public class ClassSetupServiceImpl implements ClassSetupService {
         return directory.assignments().stream()
                 .filter(a->programSubjectId==null || programSubjectId.equals(a.programSubjectId()))
                 .filter(a->!effectiveOn.isBefore(a.effectiveFrom()) && (a.effectiveTo()==null || !lastDay.isAfter(a.effectiveTo())))
+                .filter(a -> from != null ? AssignmentTeachingSlot.covers(a.teachingSlots(), from, to)
+                        : a.teachingSlots().isEmpty() || a.teachingSlots().stream().anyMatch(slot -> slot.getDate().equals(effectiveOn)))
+                .filter(a -> from == null || !teachingAssignmentRepository.existsTrainerSlotConflict(a.trainerId(), a.id(),
+                        from.toLocalDate(), from.toLocalTime(), to.toLocalTime()))
                 .toList();
     }
 
@@ -294,6 +299,7 @@ public class ClassSetupServiceImpl implements ClassSetupService {
         TeachingAssignment assignment = teachingAssignmentRepository.findForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Teaching assignment not found with ID: " + id));
         requireEditIdentity(assignment, request);
+        request = preserveTeachingSlots(request, assignment);
         validateAssignment(request, id, externalClass);
         if (impact(assignment, request, PageRequest.of(0, 1)).affectedSessionCount() > 0) {
             throw new ConflictException("This change affects linked sessions. Preview the impact and resolve those sessions before saving.");
@@ -323,6 +329,7 @@ public class ClassSetupServiceImpl implements ClassSetupService {
         var clazz = requireClass(assignment.getClassId());
         requireActiveClass(clazz);
         request = boundEffectiveTo(request, clazz);
+        request = preserveTeachingSlots(request, assignment);
         requireActiveTrainer(request.trainerId());
         validateAssignment(request, id, clazz, false);
         if (pageable.getPageSize() > 100 || pageable.getPageNumber() > 100000) {
@@ -352,6 +359,7 @@ public class ClassSetupServiceImpl implements ClassSetupService {
                 ? null : request.effectiveTo().plusDays(1).atStartOfDay();
         var affected = sessionHistory.impacts(assignment.getId(), trainerChanged, request.classId(),
                 request.trainerId(), request.effectiveFrom().atStartOfDay(), until,
+                request.teachingSlots() == null ? assignment.getTeachingSlots() : request.teachingSlots(),
                 PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), Sort.by("startTime").and(Sort.by("id"))));
         var rows = affected.map(row -> {
             var session = row.summary();
@@ -365,6 +373,8 @@ public class ClassSetupServiceImpl implements ClassSetupService {
                 if (!Objects.equals(row.classId(), request.classId()) || !Objects.equals(row.trainerId(), request.trainerId())) {
                     reasons.add("The session class or trainer does not match the proposed assignment.");
                 }
+                if (!AssignmentTeachingSlot.covers(request.teachingSlots() == null ? assignment.getTeachingSlots() : request.teachingSlots(),
+                        session.startTime(), session.endTime())) reasons.add("The session falls outside the proposed teaching slots.");
             }
             return new TeachingAssignmentImpactResponse.SessionImpact(session, reasons);
         });
@@ -486,6 +496,7 @@ public class ClassSetupServiceImpl implements ClassSetupService {
         if (classEnd != null && request.effectiveTo() != null && request.effectiveTo().isAfter(classEnd)) {
             throw fieldError("effectiveTo", "The end date must not be after the class end date.");
         }
+        teachingSlotPolicy.validate(request, ignoreId);
         Long assignedProgramId = resolveProgramId(request.classId(), externalClass);
         if (assignedProgramId == null) {
             throw fieldError("classId", "Assign an active training program to this class first.");
@@ -524,6 +535,11 @@ public class ClassSetupServiceImpl implements ClassSetupService {
         assignment.setRole(request.role());
         assignment.setEffectiveFrom(request.effectiveFrom());
         assignment.setEffectiveTo(request.effectiveTo());
+        if (request.teachingSlots() != null) {
+            assignment.getTeachingSlots().clear();
+            request.teachingSlots().forEach(slot -> assignment.getTeachingSlots().add(
+                    new AssignmentTeachingSlot(slot.getDate(), slot.getStartTime(), slot.getEndTime())));
+        }
     }
 
     private Long resolveProgramId(Long classId, ExternalClassDTO externalClass) {
@@ -616,7 +632,13 @@ public class ClassSetupServiceImpl implements ClassSetupService {
         // An omitted end date is bounded by the class end, when the shared class has one.
         LocalDate end = request.effectiveTo() == null ? classDate(externalClass.getEndDate()) : request.effectiveTo();
         return new TeachingAssignmentRequest(request.classId(), request.programSubjectId(), request.trainerId(),
-                request.role(), request.effectiveFrom(), end, request.revision());
+                request.role(), request.effectiveFrom(), end, request.revision(), request.teachingSlots());
+    }
+
+    private TeachingAssignmentRequest preserveTeachingSlots(TeachingAssignmentRequest request, TeachingAssignment assignment) {
+        if (request.teachingSlots() != null || assignment.getTeachingSlots().isEmpty()) return request;
+        return new TeachingAssignmentRequest(request.classId(), request.programSubjectId(), request.trainerId(), request.role(),
+                request.effectiveFrom(), request.effectiveTo(), request.revision(), List.copyOf(assignment.getTeachingSlots()));
     }
 
     private Map<Long, ExternalTrainerDTO> fetchTrainerLookup() {
@@ -638,7 +660,7 @@ public class ClassSetupServiceImpl implements ClassSetupService {
                 externalClass == null ? null : externalClass.getName(), subject.getVersion(),
                 trainer == null ? null : trainer.getEmail(), assignment.getProgramSubject().getProgram().getId(),
                 assignment.getProgramSubject().getProgram().getCode(), assignment.getProgramSubject().getProgram().getName(),
-                assignment.getProgramSubject().getProgram().getVersion(), assignment.getRevision());
+                assignment.getProgramSubject().getProgram().getVersion(), assignment.getRevision(), List.copyOf(assignment.getTeachingSlots()));
     }
 
     private boolean isEffectiveOn(TeachingAssignment assignment, LocalDate date) {

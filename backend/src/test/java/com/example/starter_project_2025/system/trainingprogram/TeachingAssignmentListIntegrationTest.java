@@ -102,7 +102,7 @@ class TeachingAssignmentListIntegrationTest {
         var menu = modules.findByUrl("/teaching-assignments").orElseThrow();
         assertThat(menu.getTitle()).isEqualTo("Teaching Assignments");
         assertThat(menu.getRequiredPermission()).isEqualTo("ASSIGNMENT_READ");
-        assertThat(menu.getModuleGroup().getName()).isEqualTo("Training Operations");
+        assertThat(menu.getModuleGroup().getName()).isEqualTo("Subjects & Scheduling");
     }
 
     @Test

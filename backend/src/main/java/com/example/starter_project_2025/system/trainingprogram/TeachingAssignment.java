@@ -13,6 +13,9 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.OrderColumn;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -20,6 +23,8 @@ import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "teaching_assignments", indexes = {
@@ -62,4 +67,9 @@ public class TeachingAssignment extends BaseEntity {
 
     @Column(name = "effective_to")
     LocalDate effectiveTo;
+
+    @ElementCollection
+    @CollectionTable(name = "teaching_assignment_slots", joinColumns = @JoinColumn(name = "assignment_id"))
+    @OrderColumn(name = "slot_order")
+    List<AssignmentTeachingSlot> teachingSlots = new ArrayList<>();
 }

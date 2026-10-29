@@ -20,8 +20,11 @@ export function validateSubject(values: SubjectFormValues): Record<string, strin
   for (const [field, label] of [["code", "Code"], ["name", "Name"], ["version", "Version"]] as const) {
     if (!values[field]?.trim()) errors[field] = [`${label} is required.`];
   }
-  if (!Number.isInteger(values.durationHours) || Number(values.durationHours) < 1) {
-    errors.durationHours = ["Hours must be a whole number greater than 0."];
+  if (values.durationHours === "" || !Number.isFinite(values.durationHours) || Number(values.durationHours) <= 0 || Number(values.durationHours) > 2147483647) {
+    errors.durationHours = ["Hours must be a positive number within the supported range."];
+  } else {
+    const [coefficient, exponent = "0"] = String(values.durationHours).toLowerCase().split("e");
+    if ((coefficient.split(".")[1]?.length ?? 0) - Number(exponent) > 9) errors.durationHours = ["Hours supports up to 9 decimal places."];
   }
   const lengths = { code: 50, name: 255, version: 20, technicalGroup: 100, objectives: 4000, skills: 4000, outline: 12000 } as const;
   for (const field of Object.keys(lengths) as (keyof typeof lengths)[]) {

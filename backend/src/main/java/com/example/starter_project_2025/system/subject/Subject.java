@@ -110,9 +110,9 @@ public class Subject extends BaseEntity {
     @ExportField(name = "Technical Group")
     String technicalGroup;
 
-    @Column(name = "duration_hours", nullable = false)
+    @Column(name = "duration_hours", nullable = false, precision = 20, scale = 9)
     @ImportField(name = "Duration (Hours)", required = true)
     @ExportField(name = "Hours")
-    Integer durationHours;
+    java.math.BigDecimal durationHours;
 }
 

@@ -11,9 +11,9 @@ test("new subjects default to Active and editing preserves all learning content"
   const defaults = subjectDefaults(data);
   assert.equal(defaults.objectives, "OOP"); assert.equal(defaults.outline, "Week 1"); assert.equal(defaults.isActive, false);
 });
-test("hours reject negatives, zero, fractions, NaN and an empty value", () => {
-  for (const durationHours of [-10, 0, 1.5, NaN, ""]) assert.ok(validateSubject({...valid(), durationHours}).durationHours);
-  for (const durationHours of [1, 8, 100]) assert.equal(validateSubject({...valid(), durationHours}).durationHours, undefined);
+test("hours accept positive fractions and reject negatives, zero, nonfinite and empty values", () => {
+  for (const durationHours of [-10, 0, NaN, Infinity, 2147483648, 0.0000000001, 1.2345678912, ""]) assert.ok(validateSubject({...valid(), durationHours}).durationHours);
+  for (const durationHours of [0.000000001, 0.516666667, 0.75, 1, 1.5, 8, 100]) assert.equal(validateSubject({...valid(), durationHours}).durationHours, undefined);
 });
 test("required identity fields and content length limits are checked", () => {
   assert.ok(validateSubject({...valid(), code: " ", name: "\t", version: ""}).code);

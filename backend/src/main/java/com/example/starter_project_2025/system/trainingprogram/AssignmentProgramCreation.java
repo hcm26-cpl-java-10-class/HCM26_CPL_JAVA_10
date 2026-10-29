@@ -19,12 +19,14 @@ public class AssignmentProgramCreation {
 
     public record Request(@NotBlank @Size(max = 200) String name, @NotBlank @Size(max = 30) String version,
                           @NotNull @Size(max = 200) List<@NotNull @Positive Long> subjectIds) {}
-    public record SubjectOption(Long id, String code, String name, String version, Integer durationHours) {}
+    public record SubjectOption(Long id, String code, String name, String version, java.math.BigDecimal durationHours) {
+        public SubjectOption { durationHours = com.example.starter_project_2025.system.subject.SubjectDuration.normalize(durationHours); }
+    }
 
     @Transactional(readOnly = true)
     public List<SubjectOption> subjectOptions() {
         return subjects.findByIsActiveTrue().stream().filter(s -> s.getStatus() == SubjectStatus.ACTIVE
-                && s.getDurationHours() != null && s.getDurationHours() > 0)
+                && s.getDurationHours() != null && s.getDurationHours().signum() > 0)
                 .map(s -> new SubjectOption(s.getId(), s.getCode(), s.getName(), s.getVersion(), s.getDurationHours())).toList();
     }
 
@@ -34,7 +36,7 @@ public class AssignmentProgramCreation {
         if (new HashSet<>(request.subjectIds()).size() != request.subjectIds().size()) throw invalid("Do not repeat a subject.");
         var choices = subjects.findByIdInAndIsActiveTrue(request.subjectIds());
         if (choices.size() != request.subjectIds().size() || choices.stream().anyMatch(s -> s.getStatus() != SubjectStatus.ACTIVE
-                || s.getDurationHours() == null || s.getDurationHours() <= 0)) throw invalid("Add active subjects with a valid duration.");
+                || s.getDurationHours() == null || s.getDurationHours().signum() <= 0)) throw invalid("Add active subjects with a valid duration.");
         var links = new ArrayList<ProgramSubjectRequest>();
         for (int index = 0; index < request.subjectIds().size(); index++) links.add(new ProgramSubjectRequest(request.subjectIds().get(index), index + 1));
         var created = service.create(new TrainingProgramRequest("TP_" + UUID.randomUUID().toString().replace("-", ""),

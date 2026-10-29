@@ -22,8 +22,12 @@ public record ClassProgramSubjectsResponse(
             Long subjectId,
             String subjectCode,
             String subjectName,
-            Integer durationHours,
+            java.math.BigDecimal durationHours,
             Integer orderIndex,
             List<TeachingAssignmentResponse> assignments
-    ) {}
+    ) {
+        public ProgramSubjectItem {
+            durationHours = com.example.starter_project_2025.system.subject.SubjectDuration.normalize(durationHours);
+        }
+    }
 }

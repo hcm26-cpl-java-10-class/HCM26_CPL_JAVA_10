@@ -1,47 +1,55 @@
-import { test } from "node:test";
+import { test, mock } from "node:test";
 import assert from "node:assert/strict";
 import { validateAssignmentCreation, hasCreationErrors } from "../src/pages/management/teaching-assignment/assignment-creation.ts";
 
-const classForm = { name: "New class", programName: "New program", programVersion: "1.0", subjectIds: [], startDate: "2026-11-01", endDate: "2026-12-31", plannedSize: "25" };
-const trainer = { name: "New trainer", email: "trainer.free@example.com" };
-const assignment = { subject: "Java arbitrary name", subjectDurationHours: "40", role: "MAIN", effectiveFrom: "2026-11-02", effectiveTo: "2026-11-30" };
+mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-29T05:00:00Z") });
 
-test("one-submit validation accepts unsaved class/program/trainer data without temporary IDs", () => {
+const classForm = { name: "New class", programName: "New program", programVersion: "1.0", subjectIds: [], startDate: "2026-11-01", endDate: "2026-12-31", plannedSize: "25" };
+const trainer = { name: "Freely entered trainer", email: "trainer.free@example.com" };
+const assignment = { subject: "New subject", role: "MAIN",
+  teachingSlots: [{ date: "2026-12-31", startTime: "08:00", endTime: "10:00" }] };
+
+test("validates the three-section form with freely entered subject and trainer details", () => {
   const errors = validateAssignmentCreation(classForm, trainer, assignment);
   assert.equal(hasCreationErrors(errors), false);
 });
 
-test("subject accepts free names without looking up existing subjects", () => {
-  for (const subject of ["JAVA_CO arbitrary text", "x".repeat(200)]) {
-    assert.equal(hasCreationErrors(validateAssignmentCreation(classForm, trainer, { ...assignment, subject })), false);
-  }
-});
-
-test("subject names are required and limited to 200 characters", () => {
-  for (const subject of ["", "   ", "x".repeat(201)]) {
+test("accepts a freely entered subject without a duration input and validates the name", () => {
+  assert.equal(hasCreationErrors(validateAssignmentCreation(classForm, trainer, { ...assignment, subject: "x".repeat(200) })), false);
+  for (const subject of ["", "   ", "x".repeat(201)])
     assert.ok(validateAssignmentCreation(classForm, trainer, { ...assignment, subject }).assignment.subject);
+});
+
+test("retains free class and program names and their 200-character limit", () => {
+  for (const field of ["name", "programName"]) {
+    assert.equal(hasCreationErrors(validateAssignmentCreation({ ...classForm, [field]: "x".repeat(200) }, trainer, assignment)), false);
+    assert.ok(validateAssignmentCreation({ ...classForm, [field]: "x".repeat(201) }, trainer, assignment).classDetails[field]);
   }
 });
 
-test("a real positive whole subject duration is required", () => {
-  for (const subjectDurationHours of ["", "0", "-1", "1.5", "2147483648"]) {
-    assert.ok(validateAssignmentCreation(classForm, trainer, { ...assignment, subjectDurationHours }).assignment.subjectDurationHours);
+test("blank trainer details or an invalid email prevent submission", () => {
+  for (const profile of [{ name: "", email: "" }, { name: trainer.name, email: "bad-email" }]) {
+    assert.ok(hasCreationErrors(validateAssignmentCreation(classForm, profile, assignment)));
   }
-  assert.equal(hasCreationErrors(validateAssignmentCreation(classForm, trainer, { ...assignment, subjectDurationHours: "1" })), false);
 });
 
 test("one-submit validation reports class, trainer and assignment errors together", () => {
-  const errors = validateAssignmentCreation({ ...classForm, name: "" }, { ...trainer, email: "bad-email" },
-    { ...assignment, effectiveFrom: "2026-10-01", role: "INVALID" });
+  const errors = validateAssignmentCreation({ ...classForm, name: "", startDate: "2026-10-29" }, { ...trainer, email: "bad-email" },
+    { ...assignment, subject: "", role: "INVALID", teachingSlots: [] });
   assert.ok(errors.classDetails.name);
   assert.ok(errors.trainer.email);
-  assert.ok(errors.assignment.effectiveFrom);
+  assert.ok(errors.classDetails.startDate);
+  assert.ok(errors.assignment.subject);
+  assert.ok(errors.slots.teachingSlots);
   assert.ok(errors.assignment.role);
   assert.equal(hasCreationErrors(errors), true);
 });
 
-test("optional end date and inclusive same-day effectivity remain supported", () => {
-  for (const effectiveTo of ["", assignment.effectiveFrom]) {
-    assert.equal(hasCreationErrors(validateAssignmentCreation(classForm, trainer, { ...assignment, effectiveTo })), false);
+test("uses class dates to bound slots without separate effective-date inputs", () => {
+  for (const date of [classForm.startDate, classForm.endDate]) {
+    assert.equal(hasCreationErrors(validateAssignmentCreation(classForm, trainer, { ...assignment, teachingSlots: [{ ...assignment.teachingSlots[0], date }] })), false);
+  }
+  for (const date of ["2026-10-31", "2027-01-01"]) {
+    assert.ok(validateAssignmentCreation(classForm, trainer, { ...assignment, teachingSlots: [{ ...assignment.teachingSlots[0], date }] }).slots["teachingSlots[0].date"]);
   }
 });

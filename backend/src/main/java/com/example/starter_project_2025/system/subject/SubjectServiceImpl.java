@@ -51,7 +51,7 @@ public class SubjectServiceImpl
     public Page<SubjectDTO> getAll(Pageable pageable, String search, SubjectFilter filter) {
         checkPermission(CrudAction.READ);
         if (filter != null && filter.getMinHours() != null && filter.getMaxHours() != null
-                && filter.getMinHours() > filter.getMaxHours()) {
+                && filter.getMinHours().compareTo(filter.getMaxHours()) > 0) {
             ValidationContext ctx = new ValidationContext();
             ctx.add("durationHours", "Minimum hours must not exceed maximum hours");
             ctx.throwIfErrors();
@@ -74,7 +74,7 @@ public class SubjectServiceImpl
         subject.setIsActive(request.getIsActive());
         subject.setName(request.getName());
 
-        if (request.getDurationHours() != null && request.getDurationHours() <= 0) {
+        if (request.getDurationHours() != null && request.getDurationHours().signum() <= 0) {
             ctx.add("durationHours", "Hours must be greater than 0");
         }
     }
@@ -94,7 +94,7 @@ public class SubjectServiceImpl
             ctx.add("version", "This version is already in use. Clone it to a new version to change its content.");
         }
 
-        if (request.getDurationHours() != null && request.getDurationHours() <= 0) {
+        if (request.getDurationHours() != null && request.getDurationHours().signum() <= 0) {
             ctx.add("durationHours", "Hours must be greater than 0");
         }
     }
@@ -143,6 +143,8 @@ public class SubjectServiceImpl
     }
 
     private boolean changed(Object existing, Object requested) {
+        if (existing instanceof java.math.BigDecimal previous && requested instanceof java.math.BigDecimal next)
+            return previous.compareTo(next) != 0;
         return requested != null && !Objects.equals(existing, requested);
     }
 

@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.text.Normalizer;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.*;
 
 @Service
@@ -40,6 +41,9 @@ public class AssignmentClassCreation {
     @Transactional
     public ExternalClassDTO create(Request request) {
         guard.lockForWrite();
+        if (!request.startDate().isAfter(LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh")))) {
+            throw invalid("startDate", "Class start date must be tomorrow or later (Vietnam time).");
+        }
         if (request.endDate().isBefore(request.startDate())) throw invalid("endDate", "Class end date must be on or after the start date.");
         if ((request.programId() == null) == (request.newProgram() == null)) throw invalid("programId", "Provide either an existing program or a new program with subjects.");
         var program = request.newProgram() != null ? newPrograms.create(request.newProgram())

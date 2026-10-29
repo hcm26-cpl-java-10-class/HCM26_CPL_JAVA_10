@@ -14,6 +14,8 @@ import { Label } from "@/components/ui/label";
 import { ReferenceInput } from "./ReferenceInput";
 import { AssignmentRoleSelect } from "./AssignmentRoleSelect";
 import { NewTrainerFields } from "./NewTrainerFields";
+import { TeachingSlotsFields } from "./TeachingSlotsFields";
+import { validateTeachingSlots, type SlotErrors } from "../assignment-slots";
 import { parseRole, resolveText, trainerTextOptions } from "../assignment-text";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatScheduleDateTime } from "../assignment-detail";
@@ -67,13 +69,16 @@ function EditForm({ context, onClose, onBusy, onReload }: {
     trainerId: trainerOptions.find((option) => option.value === String(a.trainerId))?.label || String(a.trainerId),
     role: a.role, effectiveFrom: a.effectiveFrom, effectiveTo: a.effectiveTo || "" });
   const [errors, setErrors] = useState<AssignmentErrors>({});
+  const [slots, setSlots] = useState((a.teachingSlots ?? []).map(slot => ({ ...slot, startTime: slot.startTime.slice(0, 5), endTime: slot.endTime.slice(0, 5) })));
+  const [slotErrors, setSlotErrors] = useState<SlotErrors>({});
   const [reviewed, setReviewed] = useState<TeachingAssignmentUpdateRequest | null>(null);
   const [page, setPage] = useState(0);
   const trainerId = trainerLocked ? String(a.trainerId) : resolveText(form.trainerId, trainerOptions);
   const role = parseRole(form.role);
   const resolvedForm = { ...form, trainerId: trainerId ?? "" };
   const request: TeachingAssignmentUpdateRequest | null = trainerId && role ? { classId: a.classId, programSubjectId: a.programSubjectId,
-    trainerId: Number(trainerId), role, effectiveFrom: form.effectiveFrom, effectiveTo: form.effectiveTo || null, revision: a.revision } : null;
+    trainerId: Number(trainerId), role, effectiveFrom: form.effectiveFrom, effectiveTo: form.effectiveTo || null, revision: a.revision,
+    teachingSlots: slots.length ? slots : undefined } : null;
   const impact = useQuery({
     queryKey: ["teaching-assignment-impact", a.id, reviewed, page],
     queryFn: ({ signal }) => classSetupApi.previewAssignmentImpact(a.id, reviewed!, page, signal),
@@ -110,7 +115,8 @@ function EditForm({ context, onClose, onBusy, onReload }: {
   }
   function preview() {
     const next = validateAssignmentEdit(resolvedForm, { ...context, trainers }); setErrors(next);
-    if (Object.keys(next).length || !request) return;
+    const nextSlots = validateSlots();
+    if (Object.keys(next).length || Object.keys(nextSlots).length || !request) return;
     if (reviewed && updateKey(request) === updateKey(reviewed) && page === 0) void impact.refetch();
     else { setPage(0); setReviewed(request); }
   }
@@ -118,13 +124,26 @@ function EditForm({ context, onClose, onBusy, onReload }: {
     event.preventDefault();
     if (!allowed || busy || sending.current) return;
     const next = validateAssignmentEdit(resolvedForm, { ...context, trainers }); setErrors(next);
-    if (Object.keys(next).length) return;
+    const nextSlots = validateSlots();
+    if (Object.keys(next).length || Object.keys(nextSlots).length) return;
     sending.current = true; onBusy(true); save.mutate();
   }
   function fieldError(field: keyof AssignmentForm) {
     const source = axios.isAxiosError(impact.error) ? impact.error.response?.data?.errors?.[field] : undefined;
     const text = errors[field] || (Array.isArray(source) && typeof source[0] === "string" ? source[0] : undefined);
     return text ? <p id={`edit-${field}-error`} className="text-sm text-destructive">{text}</p> : null;
+  }
+
+  function validateSlots() {
+    const next = slots.length || a.teachingSlots?.length ? validateTeachingSlots(slots, form.effectiveFrom, form.effectiveTo || context.classProfile.endDate) : {};
+    setSlotErrors(next); return next;
+  }
+  const visibleSlotErrors = { ...slotErrors };
+  const slotErrorSource = save.error || impact.error;
+  if (axios.isAxiosError(slotErrorSource)) {
+    for (const [key, values] of Object.entries(slotErrorSource.response?.data?.errors ?? {})) {
+      if (key.startsWith("teachingSlots") && Array.isArray(values) && typeof values[0] === "string") visibleSlotErrors[key] = values[0];
+    }
   }
 
   return <form onSubmit={submit} noValidate className="space-y-5">
@@ -141,6 +160,8 @@ function EditForm({ context, onClose, onBusy, onReload }: {
       <div className="space-y-2"><Label htmlFor="edit-from">Effective from</Label><Input id="edit-from" type="date" value={form.effectiveFrom} min={context.classProfile.startDate ?? undefined} max={context.classProfile.endDate ?? undefined} onChange={(e) => change("effectiveFrom", e.target.value)} aria-describedby="edit-effectiveFrom-error" />{fieldError("effectiveFrom")}</div>
       <div className="space-y-2"><Label htmlFor="edit-to">Effective to</Label><Input id="edit-to" type="date" value={form.effectiveTo} min={form.effectiveFrom || undefined} max={context.classProfile.endDate ?? undefined} onChange={(e) => change("effectiveTo", e.target.value)} aria-describedby="edit-effectiveTo-error" />{fieldError("effectiveTo")}<p className="text-xs text-muted-foreground">{context.classProfile.endDate ? `Leave blank to use the class end date (${context.classProfile.endDate}).` : "Leave blank for no end date."}</p></div>
     </fieldset>
+    <TeachingSlotsFields slots={slots} from={form.effectiveFrom} to={form.effectiveTo || context.classProfile.endDate}
+      disabled={busy} errors={visibleSlotErrors} onChange={next => { setSlots(next); setSlotErrors({}); setReviewed(null); setPage(0); save.reset(); }} />
     <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={busy || impact.isFetching} onClick={preview}>{impact.isFetching && <LoaderCircle className="size-4 animate-spin" />}Preview impact</Button><Button type="button" variant="ghost" disabled={busy} onClick={onReload}><RefreshCw className="size-4" />Reload current assignment</Button></div>
     {(impact.isError || save.isError) && <Alert variant="destructive"><AlertCircle /><AlertTitle>Unable to apply changes</AlertTitle><AlertDescription>{message(save.error || impact.error)}</AlertDescription></Alert>}
     {reviewed && impact.data && !impact.isError && <section className="space-y-3" aria-label="Assignment change impact" aria-busy={impact.isFetching}>

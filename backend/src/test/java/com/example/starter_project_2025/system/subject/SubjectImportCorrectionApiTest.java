@@ -71,7 +71,7 @@ class SubjectImportCorrectionApiTest {
         assertEquals(count, subjects.count());
         send("rows", List.of(row(9, values))).andExpect(status().isOk()).andExpect(jsonPath("$.successCount").value(1));
         var saved = subjects.findByCodeAndVersion(code, "1.0").orElseThrow();
-        assertEquals(8, saved.getDurationHours()); assertEquals("Learn OOP", saved.getObjectives()); assertFalse(saved.getIsActive());
+        assertEquals(0, saved.getDurationHours().compareTo(java.math.BigDecimal.valueOf(8))); assertEquals("Learn OOP", saved.getObjectives()); assertFalse(saved.getIsActive());
     }
     @Test void duplicatesCreatedByInlineEditsAreReportedAndCanBeCorrected() throws Exception {
         String code = code(); var first = values(code, "4"); var second = values(code.toLowerCase(Locale.ROOT), "4");
@@ -82,14 +82,15 @@ class SubjectImportCorrectionApiTest {
         send("preview-rows", List.of(row(2, first), row(3, second))).andExpect(status().isOk()).andExpect(jsonPath("$.validRows").value(2));
         assertTrue(subjects.findByCodeAndVersion(code, "1.0").isEmpty());
     }
-    @Test void saveRevalidatesFractionalHoursLongDescriptionsAndInvalidModes() throws Exception {
+    @Test void savePreservesFractionalHoursButRejectsLongDescriptionsAndInvalidModes() throws Exception {
         var fractional = values(code(), "1.5");
         var longDescription = values(code(), "4"); longDescription.put("Description", String.join(" ", Collections.nCopies(501, "word")));
         var invalidMode = values(code(), "4"); invalidMode.put("Delivery Mode", "OTHER");
         long count = subjects.count();
         send("rows", List.of(row(2, fractional), row(3, longDescription), row(4, invalidMode))).andExpect(status().isOk())
-                .andExpect(jsonPath("$.successCount").value(0)).andExpect(jsonPath("$.failureCount").value(3));
-        assertEquals(count, subjects.count());
+                .andExpect(jsonPath("$.successCount").value(1)).andExpect(jsonPath("$.failureCount").value(2));
+        assertEquals(count + 1, subjects.count());
+        assertEquals(0, subjects.findByCodeAndVersion(fractional.get("Code"), "1.0").orElseThrow().getDurationHours().compareTo(new java.math.BigDecimal("1.5")));
     }
     @Test void partialImportCanRetryOnlyFailedOriginalRowNumbers() throws Exception {
         String first = code(), second = code(); var failed = values(second, "0");
@@ -99,14 +100,14 @@ class SubjectImportCorrectionApiTest {
         send("rows", List.of(row(12, failed))).andExpect(status().isOk())
                 .andExpect(jsonPath("$.successCount").value(1)).andExpect(jsonPath("$.failureCount").value(0));
         assertEquals(count + 1, subjects.count());
-        assertEquals(4, subjects.findByCodeAndVersion(first, "1.0").orElseThrow().getDurationHours());
+        assertEquals(0, subjects.findByCodeAndVersion(first, "1.0").orElseThrow().getDurationHours().compareTo(java.math.BigDecimal.valueOf(4)));
     }
     @Test void aDuplicateInsertedAfterRecheckIsRejectedAtSaveTime() throws Exception {
         String code = code(); var rows = List.of(row(7, values(code, "4")));
         send("preview-rows", rows).andExpect(status().isOk()).andExpect(jsonPath("$.validRows").value(1));
-        subjects.saveAndFlush(Subject.builder().code(code).name("Already created elsewhere").version("1.0").durationHours(20).build());
+        subjects.saveAndFlush(Subject.builder().code(code).name("Already created elsewhere").version("1.0").durationHours(java.math.BigDecimal.valueOf(20)).build());
         send("rows", rows).andExpect(status().isOk()).andExpect(jsonPath("$.successCount").value(0)).andExpect(jsonPath("$.failureCount").value(1));
-        assertEquals(20, subjects.findByCodeAndVersion(code, "1.0").orElseThrow().getDurationHours());
+        assertEquals(0, subjects.findByCodeAndVersion(code, "1.0").orElseThrow().getDurationHours().compareTo(java.math.BigDecimal.valueOf(20)));
     }
     @Test void malformedAndDuplicateRowNumbersAreRejectedBeforeAnyWrites() throws Exception {
         long count = subjects.count();

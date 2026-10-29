@@ -2,7 +2,9 @@ package com.example.starter_project_2025.system.subject;
 
 import com.example.starter_project_2025.base.crud.dto.BaseDTO;
 import com.example.starter_project_2025.base.crud.dto.OnCreate;
-import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -48,7 +50,13 @@ public class SubjectDTO extends BaseDTO {
     String technicalGroup;
 
     @NotNull(groups = OnCreate.class, message = "Hours is required")
-    @Min(value = 1, message = "Hours must be greater than 0")
+    @DecimalMin(value = "0", inclusive = false, message = "Hours must be greater than 0")
+    @DecimalMax(value = "2147483647", message = "Hours exceeds the supported range")
+    @Digits(integer = 10, fraction = 9, message = "Hours supports up to 9 decimal places")
     @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = SubjectHoursDeserializer.class)
-    Integer durationHours;
+    java.math.BigDecimal durationHours;
+
+    public java.math.BigDecimal getDurationHours() {
+        return SubjectDuration.normalize(durationHours);
+    }
 }

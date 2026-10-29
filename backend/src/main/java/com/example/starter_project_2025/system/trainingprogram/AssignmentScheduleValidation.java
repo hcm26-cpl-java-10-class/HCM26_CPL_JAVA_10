@@ -54,6 +54,11 @@ public class AssignmentScheduleValidation {
                     || mismatch(p.subjectId(),ps.getSubject().getId()) || mismatch(p.programSubjectId(),ps.getId())) {
                 issues.add(issue("ASSIGNMENT_INVALID","teachingAssignmentId","The assignment must match the class, subject, trainer and full effective period.",i));
             }
+            if (!AssignmentTeachingSlot.covers(a.getTeachingSlots(), p.startTime(), p.endTime()))
+                issues.add(issue("ASSIGNMENT_SLOT_INVALID", "teachingAssignmentId", "The session must fit within one assigned teaching slot.", i));
+            if (assignments.existsTrainerSlotConflict(a.getTrainerId(), a.getId(), p.startTime().toLocalDate(),
+                    p.startTime().toLocalTime(), p.endTime().toLocalTime()))
+                issues.add(issue("TRAINER_CONFLICT", "trainerId", "The trainer has another teaching slot during this time.", i));
             if(p.replacedKey()!=null) {
                 boolean exists=p.replacedKey().source()==ScheduleEntryKey.Source.STUDY_SESSION
                         ? study.existsById(p.replacedKey().id()) : demo.existsById(p.replacedKey().id());

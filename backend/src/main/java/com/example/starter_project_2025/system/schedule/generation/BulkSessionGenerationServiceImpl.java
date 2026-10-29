@@ -83,7 +83,9 @@ public class BulkSessionGenerationServiceImpl implements BulkSessionGenerationSe
         for (var row : rows) {
             var eligible = directory.assignments().stream().filter(a -> a.programSubjectId().equals(row.getProgramSubjectId())
                     && !row.getStartTime().toLocalDate().isBefore(a.effectiveFrom())
-                    && (a.effectiveTo() == null || !row.getEndTime().toLocalDate().isAfter(a.effectiveTo()))).toList();
+                    && (a.effectiveTo() == null || !row.getEndTime().toLocalDate().isAfter(a.effectiveTo()))
+                    && com.example.starter_project_2025.system.trainingprogram.AssignmentTeachingSlot.covers(
+                        a.teachingSlots(), row.getStartTime(), row.getEndTime())).toList();
             // Trainer overrides are explicit preferences, never free-text identity resolution.
             var preferred = eligible.stream().filter(a -> row.getTrainerId() == null || row.getTrainerId().equals(a.trainerId())).toList();
             var main = preferred.stream().filter(a -> a.role() == AssignmentRole.MAIN).toList();

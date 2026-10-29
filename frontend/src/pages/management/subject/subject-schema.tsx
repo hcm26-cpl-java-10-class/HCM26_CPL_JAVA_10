@@ -50,8 +50,8 @@ export const subjectSchema: EntitySchema = {
         <Input
           id={id}
           type="number"
-          min={1}
-          step={1}
+          min={0.000000001}
+          step="any"
           value={value ?? ""}
           aria-invalid={invalid}
           className={invalid ? "border-destructive focus-visible:ring-destructive" : ""}
@@ -61,12 +61,12 @@ export const subjectSchema: EntitySchema = {
           }}
           onPaste={(event) => {
             const pasted = Number(event.clipboardData.getData("text"));
-            if (!Number.isInteger(pasted) || pasted < 1) event.preventDefault();
+            if (!Number.isFinite(pasted) || pasted <= 0 || pasted > 2147483647) event.preventDefault();
           }}
           onChange={(event) => {
             const raw = event.target.value;
             if (raw === "") onChange("");
-            else if (Number.isInteger(Number(raw)) && Number(raw) >= 1) onChange(Number(raw));
+            else if (Number.isFinite(Number(raw)) && Number(raw) >= 0 && Number(raw) <= 2147483647) onChange(Number(raw));
           }}
         />
       ),

@@ -122,7 +122,7 @@ class BulkSessionGenerationIntegrationTest {
     @Test void contextPreservesSubjectAndProgramSubjectAsDifferentIdentities() {
         when(classSetup.getClassProgramSubjects(1L)).thenReturn(new ClassProgramSubjectsResponse(1L, "JAVA-01", "Java",
                 new ClassProgramSubjectsResponse.ProgramSummary(2L, "JAVA", "Program", "1", ProgramStatus.ACTIVE),
-                List.of(new ClassProgramSubjectsResponse.ProgramSubjectItem(99L, 1L, "JAVA", "Java", 4, 1, List.of()))));
+                List.of(new ClassProgramSubjectsResponse.ProgramSubjectItem(99L, 1L, "JAVA", "Java", java.math.BigDecimal.valueOf(4), 1, List.of()))));
         var topic = service.getGenerationContext(1L).getTopics().getFirst();
         assertEquals(1L, topic.getTopicId()); assertEquals(99L, topic.getProgramSubjectId()); assertNull(topic.getAssignedTrainerId());
     }

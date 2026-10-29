@@ -151,9 +151,9 @@ public class SubjectImportService {
         String duration = values.get("Duration (Hours)");
         if (duration != null && !duration.isBlank()) {
             try {
-                values.put("Duration (Hours)", new BigDecimal(duration.trim()).toBigIntegerExact().toString());
+                values.put("Duration (Hours)", new BigDecimal(duration.trim()).stripTrailingZeros().toPlainString());
             } catch (ArithmeticException | NumberFormatException error) {
-                throw new BadRequestException("Duration / Hours must be a whole number of hours");
+                throw new BadRequestException("Duration / Hours must be a valid number of hours");
             }
         }
         for (String field : List.of("Status", "Delivery Mode")) {

@@ -21,6 +21,9 @@ public class ValueConverter {
         if (type == Integer.class || type == int.class)
             return Integer.valueOf(val);
 
+        if (type == java.math.BigDecimal.class)
+            return new java.math.BigDecimal(val);
+
         if (type == Boolean.class || type == boolean.class)
             return Boolean.valueOf(val);
 

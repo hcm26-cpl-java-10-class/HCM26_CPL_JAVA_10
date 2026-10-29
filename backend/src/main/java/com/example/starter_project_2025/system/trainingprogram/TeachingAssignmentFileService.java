@@ -51,14 +51,18 @@ public class TeachingAssignmentFileService {
         var options = assignments.getAssignmentCreateOptions();
         try (var workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook(); var out = new ByteArrayOutputStream()) {
             var input = workbook.createSheet("Import");
-            append(input, DETAILS_HEADERS.toArray());
+            var templateHeaders = new ArrayList<>(DETAILS_HEADERS); templateHeaders.add("Teaching Slots");
+            append(input, templateHeaders.toArray());
             var guide = workbook.createSheet("Instructions");
             append(guide, "Fill the Import sheet to create a new class, program, subject, trainer and assignment per row. IDs are generated automatically.");
-            append(guide, "All columns are required except Effective To. Planned Size: 1-10000. Duration Hours: positive whole number.");
-            append(guide, "Each row creates a separate class with one subject. Class names must be unique, including within this file.");
+            append(guide, "Effective To is optional. Duration Hours may be blank when Teaching Slots is supplied; otherwise enter positive hours (fractions are allowed). Planned Size: 1-10000.");
+            append(guide, "New class names create classes with one subject. Existing classes are reused only when name, dates, size, program/version and subject/duration match.");
+            append(guide, "Deleting assignments keeps classes, programs, subjects and trainers. Reimport recreates assignments using matching existing details; overlaps still fail.");
             append(guide, "An existing active trainer is reused only when both email and name match. Do not invent email addresses.");
             append(guide, "Role must be MAIN or ASSISTANT. Assignment dates must be within the supplied class dates.");
             append(guide, "Dates use YYYY-MM-DD or Excel date cells. Effective To may be blank.");
+            append(guide, "Teaching Slots (optional for legacy files): YYYY-MM-DD HH:mm-HH:mm; YYYY-MM-DD HH:mm-HH:mm. A trainer's slots must not overlap, across all classes and subjects.");
+            append(guide, "When Teaching Slots is supplied, duration is recalculated as the sum of end minus start, preserving fractional hours. Each slot must be longer than 30 minutes.");
             append(guide, "Each valid row commits separately. Failed rows leave no new records. Existing assignments are never overwritten.");
             append(guide, "Creating all details requires assignment, class, program, subject and trainer creation permissions.");
             append(guide, "Legacy ID-based files remain supported: use the Existing Assignments headers as the first sheet in a separate file.");
@@ -110,7 +114,7 @@ public class TeachingAssignmentFileService {
                 } else {
                     var request = new TeachingAssignmentRequest(id(values, "Class ID"), id(values, "Program Subject ID"),
                         id(values, "Trainer ID"), role(values.get("Role")), date(values, "Effective From", false),
-                        date(values, "Effective To", true));
+                        date(values, "Effective To", true), null, teachingSlots(values));
                     var violations = validator.validate(request);
                     if (!violations.isEmpty()) throw new ConstraintViolationException(violations);
                     transaction.execute(status -> assignments.createAssignment(request));
@@ -237,7 +241,27 @@ public class TeachingAssignmentFileService {
                         new AssignmentProgramCreation.Request(values.get("Program Name"), values.get("Program Version"), List.of())),
                 new AssignmentTrainerCreation.Request(values.get("Trainer Name"), values.get("Trainer Email")),
                 null, role(values.get("Role")), date(values, "Effective From", false), date(values, "Effective To", true),
-                new AssignmentSubjectCreation.Request(values.get("Subject Name"), positiveInteger(values, "Duration Hours")));
+                new AssignmentSubjectCreation.Request(values.get("Subject Name"), positiveHours(values.get("Duration Hours"))), teachingSlots(values));
+    }
+
+    private List<AssignmentTeachingSlot> teachingSlots(Map<String, String> values) {
+        String value = values.getOrDefault("Teaching Slots", "");
+        if (value.isBlank()) return null;
+        var parts = value.split(";", -1);
+        if (parts.length > 200) throw new BadRequestException("Use at most 200 teaching slots per assignment.");
+        var slots = new ArrayList<AssignmentTeachingSlot>();
+        for (String part : parts) {
+            String text = part.strip();
+            if (!text.matches("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}-\\d{2}:\\d{2}"))
+                throw new BadRequestException("Teaching Slots must use YYYY-MM-DD HH:mm-HH:mm separated by semicolons.");
+            try {
+                slots.add(new AssignmentTeachingSlot(LocalDate.parse(text.substring(0, 10)),
+                        java.time.LocalTime.parse(text.substring(11, 16)), java.time.LocalTime.parse(text.substring(17, 22))));
+            } catch (java.time.format.DateTimeParseException error) {
+                throw new BadRequestException("Enter valid dates and times in Teaching Slots.");
+            }
+        }
+        return slots;
     }
 
     private Integer positiveInteger(Map<String, String> values, String key) {
@@ -246,6 +270,15 @@ public class TeachingAssignmentFileService {
             if (value > 0) return value;
         } catch (ArithmeticException | NumberFormatException ignored) { }
         throw new BadRequestException(key + " must be a positive whole number.");
+    }
+
+    private BigDecimal positiveHours(String text) {
+        if (text == null || text.isBlank()) return null; // Teaching slots can supply the duration.
+        try {
+            var value = new BigDecimal(text).stripTrailingZeros();
+            if (value.signum() > 0 && value.scale() <= 9 && value.compareTo(new BigDecimal("2147483647")) <= 0) return value;
+        } catch (NumberFormatException ignored) { }
+        throw new BadRequestException("Duration Hours must be a positive number with at most 9 decimal places, or blank when Teaching Slots is provided.");
     }
 
     private LocalDate date(Map<String, String> values, String key, boolean optional) {

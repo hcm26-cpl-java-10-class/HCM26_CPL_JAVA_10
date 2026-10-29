@@ -19,10 +19,13 @@ public record TeachingAssignmentFileRow(
         @ImportField(name = "Effective To") @ExportField(name = "Effective To") LocalDate effectiveTo,
         @ExportField(name = "Class") String classCode,
         @ExportField(name = "Subject") String subjectCode,
-        @ExportField(name = "Trainer") String trainerName
+        @ExportField(name = "Trainer") String trainerName,
+        @ImportField(name = "Teaching Slots") @ExportField(name = "Teaching Slots") String teachingSlots
 ) {
     static TeachingAssignmentFileRow from(TeachingAssignmentResponse row) {
         return new TeachingAssignmentFileRow(row.classId(), row.programSubjectId(), row.trainerId(), row.role(),
-                row.effectiveFrom(), row.effectiveTo(), row.classCode(), row.subjectCode(), row.trainerName());
+                row.effectiveFrom(), row.effectiveTo(), row.classCode(), row.subjectCode(), row.trainerName(),
+                row.teachingSlots().stream().map(slot -> slot.getDate() + " " + slot.getStartTime().toString().substring(0, 5)
+                        + "-" + slot.getEndTime().toString().substring(0, 5)).collect(java.util.stream.Collectors.joining("; ")));
     }
 }

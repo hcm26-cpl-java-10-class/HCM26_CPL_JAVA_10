@@ -9,20 +9,20 @@ import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import java.io.IOException;
 import java.math.BigDecimal;
 
-/** Prevent Jackson's default fractional-number-to-integer truncation for subject hours. */
-public class SubjectHoursDeserializer extends StdDeserializer<Integer> {
-    public SubjectHoursDeserializer() { super(Integer.class); }
+/** Preserve fractional hours rather than truncating them to a whole number. */
+public class SubjectHoursDeserializer extends StdDeserializer<BigDecimal> {
+    public SubjectHoursDeserializer() { super(BigDecimal.class); }
 
     @Override
-    public Integer deserialize(JsonParser parser, DeserializationContext context) throws IOException {
+    public BigDecimal deserialize(JsonParser parser, DeserializationContext context) throws IOException {
         try {
             if (parser.currentToken() == JsonToken.VALUE_NUMBER_INT || parser.currentToken() == JsonToken.VALUE_NUMBER_FLOAT
                     || parser.currentToken() == JsonToken.VALUE_STRING) {
-                return new BigDecimal(parser.getText().trim()).intValueExact();
+                return new BigDecimal(parser.getText().trim()).stripTrailingZeros();
             }
         } catch (NumberFormatException | ArithmeticException ignored) {
-            // Return the same field message for fractional, nonnumeric and overflowing values.
+            // Malformed/nonfinite numbers must never become an empty or truncated duration.
         }
-        throw InvalidFormatException.from(parser, "Hours must be a whole number within the supported range", parser.getText(), Integer.class);
+        throw InvalidFormatException.from(parser, "Enter a valid numeric duration in hours", parser.getText(), BigDecimal.class);
     }
 }

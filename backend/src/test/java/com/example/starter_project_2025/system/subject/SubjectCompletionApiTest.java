@@ -171,14 +171,14 @@ class SubjectCompletionApiTest {
         mvc.perform(post("/api/subjects").header("Authorization", bearer).contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(body))).andExpect(status().isBadRequest());
         var legacy = subjects.saveAndFlush(Subject.builder().code(code()).name("Legacy").version("1.0")
-                .durationHours(4).status(SubjectStatus.DRAFT).isActive(true).build());
+                .durationHours(java.math.BigDecimal.valueOf(4)).status(SubjectStatus.DRAFT).isActive(true).build());
         statusInitializer.run();
         var saved = subjects.findById(legacy.getId()).orElseThrow();
         assertEquals(SubjectStatus.INACTIVE, saved.getStatus()); assertFalse(saved.getIsActive());
     }
     @Test void legacyLongDescriptionDoesNotPreventChangingOnlyStatus() throws Exception {
         var subject = subjects.saveAndFlush(Subject.builder().code(code()).name("Legacy content").version("1.0")
-                .durationHours(4).description(String.join(" ", Collections.nCopies(501, "word"))).build());
+                .durationHours(java.math.BigDecimal.valueOf(4)).description(String.join(" ", Collections.nCopies(501, "word"))).build());
         useInProgram(subject);
         mvc.perform(put("/api/subjects/" + subject.getId()).header("Authorization", bearer).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"isActive\":false}")).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("INACTIVE"));
@@ -196,11 +196,19 @@ class SubjectCompletionApiTest {
         mvc.perform(put("/api/subjects/" + subject.getId()).header("Authorization", bearer).contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("objectives", "x".repeat(4001))))).andExpect(status().isBadRequest());
     }
-    @Test void fractionalJsonHoursAreRejectedRatherThanSilentlyRounded() throws Exception {
+    @Test void fractionalJsonHoursArePreservedRatherThanSilentlyRounded() throws Exception {
         var subject = create();
         mvc.perform(put("/api/subjects/" + subject.getId()).header("Authorization", bearer).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"durationHours\":1.5}")).andExpect(status().isBadRequest());
-        assertEquals(8, subjects.findById(subject.getId()).orElseThrow().getDurationHours());
+                .content("{\"durationHours\":1.5}")).andExpect(status().isOk()).andExpect(jsonPath("$.durationHours").value(1.5));
+        assertEquals(0, subjects.findById(subject.getId()).orElseThrow().getDurationHours().compareTo(new java.math.BigDecimal("1.5")));
+    }
+    @Test void equalHoursWithDifferentDecimalScalesDoNotCountAsAContentChange() throws Exception {
+        var subject = create();
+        useInProgram(subject);
+        mvc.perform(put("/api/subjects/" + subject.getId()).header("Authorization", bearer).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"durationHours\":8.000000000,\"isActive\":false}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.durationHours").value(8))
+                .andExpect(jsonPath("$.isActive").value(false));
     }
     @Test void listAndExportApplyTheSameSearchStatusAndHoursFiltersAcrossPages() throws Exception {
         String prefix = code();

@@ -11,6 +11,7 @@ import jakarta.persistence.LockModeType;
 import java.util.Optional;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 
 public interface TeachingAssignmentRepository extends JpaRepository<TeachingAssignment, Long>,
@@ -27,6 +28,19 @@ public interface TeachingAssignmentRepository extends JpaRepository<TeachingAssi
     boolean existsByClassId(Long classId);
 
     boolean existsByProgramSubject_Id(Long programSubjectId);
+
+    @Query("""
+        select case when count(a) > 0 then true else false end
+        from TeachingAssignment a join a.teachingSlots s
+        where a.trainerId = :trainerId and a.isActive = true
+          and (:ignoreId is null or a.id <> :ignoreId)
+          and s.date = :date and a.effectiveFrom <= :date
+          and (a.effectiveTo is null or a.effectiveTo >= :date)
+          and s.startTime < :endTime and s.endTime > :startTime
+        """)
+    boolean existsTrainerSlotConflict(@Param("trainerId") Long trainerId, @Param("ignoreId") Long ignoreId,
+                                      @Param("date") LocalDate date, @Param("startTime") LocalTime startTime,
+                                      @Param("endTime") LocalTime endTime);
 
     @Query("""
             select case when count(a) > 0 then true else false end

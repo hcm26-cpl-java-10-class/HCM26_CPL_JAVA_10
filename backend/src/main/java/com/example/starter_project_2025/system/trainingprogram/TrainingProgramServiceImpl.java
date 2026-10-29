@@ -109,7 +109,7 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
             if (!Boolean.TRUE.equals(subject.getIsActive())) {
                 throw new IllegalArgumentException("Subject " + subject.getCode() + " is inactive.");
             }
-            if (subject.getDurationHours() == null || subject.getDurationHours() <= 0) {
+            if (subject.getDurationHours() == null || subject.getDurationHours().signum() <= 0) {
                 throw new IllegalArgumentException("Subject " + subject.getCode() + " must have durationHours greater than 0.");
             }
         }
@@ -155,7 +155,7 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
             Subject subject = subjectRepository.findById(req.subjectId())
                     .orElseThrow(() -> new ResourceNotFoundException("Subject not found with ID: " + req.subjectId()));
             if (!Boolean.TRUE.equals(subject.getIsActive())) throw new IllegalArgumentException("Subject is inactive: " + subject.getId());
-            if (subject.getDurationHours() == null || subject.getDurationHours() <= 0)
+            if (subject.getDurationHours() == null || subject.getDurationHours().signum() <= 0)
                 throw new IllegalArgumentException("Subject durationHours must be greater than 0: " + subject.getId());
             ProgramSubject link = existingBySubjectId.get(req.subjectId());
             if (link == null) link = new ProgramSubject();
@@ -185,7 +185,8 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
                         ps.getId(), ps.getSubject().getId(), ps.getSubject().getCode(), ps.getSubject().getName(),
                         ps.getSubject().getVersion(), ps.getSubject().getDurationHours(), ps.getOrderIndex()))
                 .toList();
-        int total = subjects.stream().mapToInt(s -> s.durationHours() == null ? 0 : s.durationHours()).sum();
+        java.math.BigDecimal total = subjects.stream().map(TrainingProgramResponse.ProgramSubjectResponse::durationHours)
+                .filter(Objects::nonNull).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
         return new TrainingProgramResponse(p.getId(), p.getCode(), p.getName(), p.getVersion(), p.getRegion(),
                 p.getStatus(), p.getIsActive(), subjects, total);
     }

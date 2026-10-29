@@ -225,7 +225,7 @@ class StudySessionBackendIntegrationTest {
 
     private Subject subject() {
         return subjects.saveAndFlush(Subject.builder().code("SS-JAVA").name("Java integration")
-                .version("1.0").durationHours(30).build());
+                .version("1.0").durationHours(java.math.BigDecimal.valueOf(30)).build());
     }
 
     private StudySessionDTO request(Long subjectId) {

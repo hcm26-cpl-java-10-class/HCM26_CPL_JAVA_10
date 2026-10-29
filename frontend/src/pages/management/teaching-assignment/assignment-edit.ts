@@ -9,7 +9,8 @@ export function validateAssignmentEdit(form: AssignmentForm, context: Assignment
 
 export function updateKey(request: TeachingAssignmentUpdateRequest): string {
   return JSON.stringify([request.classId, request.programSubjectId, request.trainerId, request.role,
-    request.effectiveFrom, request.effectiveTo || null, request.revision]);
+    request.effectiveFrom, request.effectiveTo || null, request.revision,
+    request.teachingSlots?.map(slot => [slot.date, slot.startTime, slot.endTime]) ?? null]);
 }
 
 export function canSaveAssignmentEdit(current: TeachingAssignmentUpdateRequest,

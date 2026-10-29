@@ -45,7 +45,7 @@ class ScheduleScopedStudySessionIntegrationTest {
         // Explicit TEST server scope only; production defaults remain unset.
         settings.setSources(Set.of(ScheduleEntryKey.Source.STUDY_SESSION));
         subjectId = subjects.saveAndFlush(Subject.builder().code("SCOPED-JAVA").name("Scoped JPA test")
-                .version("1.0").durationHours(30).build()).getId();
+                .version("1.0").durationHours(java.math.BigDecimal.valueOf(30)).build()).getId();
     }
 
     @ParameterizedTest

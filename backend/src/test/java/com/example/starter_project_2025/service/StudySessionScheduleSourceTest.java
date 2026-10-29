@@ -28,7 +28,7 @@ class StudySessionScheduleSourceTest {
     @BeforeEach
     void subject() {
         subjectId = subjects.saveAndFlush(Subject.builder().code("SS-SOURCE").name("Source test")
-                .version("1.0").durationHours(30).build()).getId();
+                .version("1.0").durationHours(java.math.BigDecimal.valueOf(30)).build()).getId();
     }
 
     @Test

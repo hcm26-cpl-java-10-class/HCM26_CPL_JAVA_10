@@ -98,7 +98,7 @@ class SubjectTechnicalGroupApiTest {
     @Test void legacyAndImportedSubjectGroupsRemainVisibleWithoutRewritingSubjects() throws Exception {
         var name = name();
         var saved = subjects.saveAndFlush(Subject.builder().code("GROUP_" + UUID.randomUUID().toString().replace("-", ""))
-                .name("Legacy subject").version("1.0").durationHours(8).technicalGroup("  " + name + "  ").build());
+                .name("Legacy subject").version("1.0").durationHours(java.math.BigDecimal.valueOf(8)).technicalGroup("  " + name + "  ").build());
         mvc.perform(get(PATH).header("Authorization", authorization)).andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasItem(name)));
         assertEquals("  " + name + "  ", subjects.findById(saved.getId()).orElseThrow().getTechnicalGroup());

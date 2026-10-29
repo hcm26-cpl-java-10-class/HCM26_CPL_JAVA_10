@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { AlertCircle, CalendarOff, ChevronLeft, ChevronRight, Eye, LoaderCircle, Pencil, Plus, RefreshCw, Search, Trash2, Users } from "lucide-react";
@@ -8,6 +8,9 @@ import { EditAssignmentDialog } from "./components/EditAssignmentDialog";
 import { CreateAssignmentDialog } from "./components/CreateAssignmentDialog";
 import { AssignmentDetailDialog } from "./components/AssignmentDetailDialog";
 import { AssignmentDataIO } from "./components/AssignmentDataIO";
+import { BulkDeleteAssignmentsDialog } from "./components/BulkDeleteAssignmentsDialog";
+import type { DeleteTarget } from "./assignment-bulk-delete";
+import { Checkbox } from "@/components/ui/checkbox";
 import { classSetupApi, type AssignmentRole, type AssignmentSearchParams, type TeachingAssignment } from "@/api/features/class-setup.api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -19,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { AppliedTextInput, AppliedNumberInput } from "./components/ReferenceInput";
 import { trainerTextOptions, type TextOption } from "./assignment-text";
 import { AssignmentRoleSelect } from "./components/AssignmentRoleSelect";
+import { slotSummary } from "./assignment-slots";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -58,6 +62,9 @@ const sortOptions: TextOption[] = [
 ];
 
 export default function TeachingAssignmentPage() {
+  const client = useQueryClient();
+  const [selection, setSelection] = useState<{ scope: string; ids: Set<number> }>({ scope: "", ids: new Set() });
+  const [bulkDelete, setBulkDelete] = useState<DeleteTarget[] | null>(null);
   const { hasPermission } = usePermissions();
   const canRead = hasPermission("ASSIGNMENT_READ");
   const canCreate = hasPermission("ASSIGNMENT_CREATE");
@@ -120,6 +127,26 @@ export default function TeachingAssignmentPage() {
   }
 
   const data = assignments.data;
+  const selectionScope = JSON.stringify(params);
+  const selectedIds = selection.scope === selectionScope ? selection.ids : new Set<number>();
+  const selectedRows = (data?.content ?? []).filter((a) => selectedIds.has(a.id));
+  const allSelected = Boolean(data?.content.length && selectedRows.length === data.content.length);
+  function toggleSelection(id: number, checked: boolean) {
+    const ids = new Set(selectedIds);
+    if (checked) ids.add(id); else ids.delete(id);
+    setSelection({ scope: selectionScope, ids });
+  }
+  async function onBulkDeleted(ids: number[]) {
+    setSelection((current) => ({ ...current, ids: new Set([...current.ids].filter((id) => !ids.includes(id))) }));
+    if (!ids.length) return;
+    await Promise.all([
+      client.invalidateQueries({ queryKey: ["teaching-assignments"] }),
+      client.invalidateQueries({ queryKey: ["teaching-assignment-options"] }),
+      client.invalidateQueries({ queryKey: ["available-assignments"] }),
+      client.invalidateQueries({ queryKey: ["teaching-assignment-create-context"] }),
+    ]);
+    if (page > 0 && data?.content.every((a) => ids.includes(a.id))) change("page", String(page - 1));
+  }
   const total = data?.totalElements ?? 0;
   const pages = data?.totalPages ?? 0;
   const filtered = Boolean(search || params.classId || params.subjectId || params.trainerId || role || effectiveOn);
@@ -159,17 +186,24 @@ export default function TeachingAssignmentPage() {
             <h2 className="font-semibold">Assignment list {data && !assignments.isError && <Badge variant="secondary">{total}</Badge>}</h2>
             <div className="w-52"><Label className="sr-only" htmlFor="assignment-sort">Sort order</Label><AppliedTextInput key={`sort:${sort}`} id="assignment-sort" value={sort} options={sortOptions} allowEmpty={false} onCommit={(value) => change("sort", value)} placeholder="Newest or Oldest" /></div>
           </div>
+          {canDelete && selectedRows.length > 0 && !assignments.isError && <div className="flex flex-wrap items-center gap-3 rounded-md border p-3">
+            <span role="status" className="text-sm">{selectedRows.length} selected on this page</span>
+            <Button variant="destructive" size="sm" disabled={assignments.isFetching} onClick={() => setBulkDelete(selectedRows)}><Trash2 className="size-4" />Delete selected ({selectedRows.length})</Button>
+            <Button variant="outline" size="sm" onClick={() => setSelection({ scope: selectionScope, ids: new Set() })}>Clear selection</Button>
+          </div>}
           {assignments.isPending ? <div role="status" className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><LoaderCircle className="size-5 animate-spin" />Loading assignments...</div>
             : assignments.isError ? <Alert variant="destructive"><AlertCircle /><AlertTitle>Unable to load assignments</AlertTitle><AlertDescription>{errorMessage(assignments.error)} <Button size="sm" variant="outline" onClick={() => void assignments.refetch()}>Retry list</Button></AlertDescription></Alert>
             : !data?.content.length ? <div role="status" className="space-y-2 rounded-lg border border-dashed px-6 py-14 text-center">
               <p className="font-medium">{total > 0 ? "This page has no records" : filtered ? "No matching assignments" : "No teaching assignments yet"}</p>
               <p className="text-sm text-muted-foreground">{total > 0 ? "Return to the first page to view the current list." : "Try changing the filters or refreshing the list."}</p>
               {total > 0 && <Button variant="outline" onClick={() => change("page", "0")}>Go to first page</Button>}
-            </div> : <Table><TableHeader><TableRow><TableHead>Class</TableHead><TableHead>Subject</TableHead><TableHead>Trainer</TableHead><TableHead>Role</TableHead><TableHead>Effective from</TableHead><TableHead>Effective to</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
-              <TableBody>{data.content.map((a) => <TableRow key={a.id}>
+            </div> : <Table><TableHeader><TableRow>{canDelete && <TableHead className="w-10"><Checkbox aria-label="Select all assignments on this page" checked={allSelected ? true : selectedRows.length ? "indeterminate" : false} disabled={assignments.isFetching}
+              onCheckedChange={(checked) => setSelection({ scope: selectionScope, ids: new Set(checked === true ? data.content.map((a) => a.id) : []) })} /></TableHead>}<TableHead>Class</TableHead><TableHead>Subject</TableHead><TableHead>Trainer</TableHead><TableHead>Role</TableHead><TableHead>Effective from</TableHead><TableHead>Effective to</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+              <TableBody>{data.content.map((a) => <TableRow key={a.id} data-state={selectedIds.has(a.id) ? "selected" : undefined}>
+                {canDelete && <TableCell><Checkbox aria-label={`Select assignment for ${a.subjectCode} in ${a.classCode || a.classId}`} checked={selectedIds.has(a.id)} disabled={assignments.isFetching} onCheckedChange={(checked) => toggleSelection(a.id, checked === true)} /></TableCell>}
                 <TableCell><div className="font-medium">{a.classCode || `Class #${a.classId}`}</div><div className="text-xs text-muted-foreground">{options.data?.classes.find((c) => c.id === a.classId)?.name}</div></TableCell>
                 <TableCell><div className="font-medium">{a.subjectName}</div><div className="text-xs text-muted-foreground">{a.subjectCode}</div></TableCell>
-                <TableCell>{a.trainerName || `Trainer #${a.trainerId}`}</TableCell>
+                <TableCell>{a.trainerName || `Trainer #${a.trainerId}`}<div className="max-w-64 whitespace-normal text-xs text-muted-foreground">{a.teachingSlots?.length ? slotSummary(a.teachingSlots) : null}</div></TableCell>
                 <TableCell><Badge variant={a.role === "MAIN" ? "default" : "outline"}>{a.role === "MAIN" ? "Main" : "Assistant"}</Badge></TableCell>
                 <TableCell className="whitespace-nowrap">{displayDate(a.effectiveFrom)}</TableCell><TableCell className="whitespace-nowrap">{a.effectiveTo ? displayDate(a.effectiveTo) : "No end date"}</TableCell>
                 <TableCell><div className="flex gap-1"><Button variant="ghost" size="sm" aria-label={`View assignment details for ${a.subjectCode} in ${a.classCode || a.classId}`} onClick={() => showDetails(a.id)}><Eye className="size-4" />Details</Button>
@@ -190,6 +224,7 @@ export default function TeachingAssignmentPage() {
     </div>
     {creating && canCreate && <CreateAssignmentDialog
       onClose={() => setCreating(false)} onCreated={() => { setCreating(false); }} />}
+    {bulkDelete && canDelete && <BulkDeleteAssignmentsDialog assignments={bulkDelete} onClose={() => setBulkDelete(null)} onDeleted={onBulkDeleted} />}
     {detailId && canRead && <AssignmentDetailDialog key={detailId} assignmentId={detailId} onClose={() => showDetails()} />}
     {editing && canUpdate && <EditAssignmentDialog key={editing} assignmentId={editing} onClose={() => setEditing(null)} />}
     {lifecycle && (lifecycle.mode === "end" ? canUpdate : canDelete) && <AssignmentLifecycleDialog key={`${lifecycle.mode}:${lifecycle.assignment.id}`} mode={lifecycle.mode} assignment={lifecycle.assignment}

@@ -26,15 +26,22 @@ Download the current template from Teaching Assignments > Import. Fill the first
 
 ```csv
 Class Name,Class Start Date,Class End Date,Planned Size,Program Name,Program Version,Subject Name,Duration Hours,Trainer Name,Trainer Email,Role,Effective From,Effective To
-Java October A,2026-10-01,2026-12-31,25,Java Foundation,1.0,Java Basics,40,Nguyen Van An,an@example.com,MAIN,2026-10-01,2026-10-31
+Java November A,2026-11-01,2026-12-31,25,Java Foundation,1.0,Java Basics,40,Nguyen Van An,an@example.com,MAIN,2026-11-01,2026-11-30
 ```
 
-Each row creates one new class, program, subject and assignment. The system generates
-IDs. Class names must be unique. Trainers are reused when the active trainer's name
-and email both match; conflicting trainer details fail the row. All columns except
-`Effective To` are required. Dates must be ISO `YYYY-MM-DD` or Excel date cells, and
-assignment dates must fall within class dates. Planned Size is 1–10000; Duration
-Hours is a positive whole number. Up to 1000 rows are supported.
+New class names create a class, program, subject and assignment. The system generates
+IDs. Existing classes are reused only when name, dates, planned size, program name/version
+and subject name/duration match. Deleting assignments keeps reference data, so reimporting
+the same details recreates deleted assignments without duplicating classes or subjects.
+Existing overlapping assignments still fail. Trainers are reused when the active trainer's name
+and email both match; conflicting trainer details fail the row. `Effective To` is
+optional. Duration Hours may also be blank when the optional `Teaching Slots`
+column is supplied; the server calculates hours from those intervals. Otherwise,
+Duration Hours must be a positive number (fractional hours are supported).
+Teaching Slots uses `YYYY-MM-DD HH:mm-HH:mm; YYYY-MM-DD HH:mm-HH:mm`; each slot must
+be longer than 30 minutes. Dates must be ISO `YYYY-MM-DD` or Excel date cells, new
+classes must start tomorrow or later in Vietnam time, and assignment dates must
+fall within class dates. Planned Size is 1–10000. Up to 1000 rows are supported.
 
 Each row commits independently; failure rolls back all records created for that
 row. Creation requires the same class, program, subject, trainer and assignment

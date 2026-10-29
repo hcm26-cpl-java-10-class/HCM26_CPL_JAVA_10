@@ -64,7 +64,7 @@ public class SubjectDataInitializer implements CommandLineRunner {
                     .version(version)
                     .description(description)
                     .technicalGroup(technicalGroup)
-                    .durationHours(durationHours)
+                    .durationHours(java.math.BigDecimal.valueOf(durationHours))
                     .isActive(isActive)
                     .build();
             subjectRepository.save(subject);

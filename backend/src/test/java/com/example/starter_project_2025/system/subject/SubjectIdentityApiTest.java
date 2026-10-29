@@ -79,7 +79,7 @@ class SubjectIdentityApiTest {
     @Test
     void rejectsAnUpdateCollidingWithAnotherSubject() throws Exception {
         Subject target = repository.saveAndFlush(Subject.builder().code("IDENTITY_UPDATE_TEST")
-                .name("Editable subject").version("1.0").durationHours(8).build());
+                .name("Editable subject").version("1.0").durationHours(java.math.BigDecimal.valueOf(8)).build());
         mvc.perform(put("/api/subjects/" + target.getId()).header("Authorization", authorization)
                         .contentType(MediaType.APPLICATION_JSON).content(request("java_core", "V1.0")))
                 .andExpect(status().isBadRequest()).andExpect(content().string(containsString("already exists")));
@@ -163,7 +163,7 @@ class SubjectIdentityApiTest {
     @Test
     void inactiveSubjectsStillReserveTheirIdentity() throws Exception {
         repository.saveAndFlush(Subject.builder().code("INACTIVE_IDENTITY")
-                .name("Inactive subject").version("1.0").durationHours(8).isActive(false).build());
+                .name("Inactive subject").version("1.0").durationHours(java.math.BigDecimal.valueOf(8)).isActive(false).build());
         long count = repository.count();
         mvc.perform(post("/api/subjects").header("Authorization", authorization)
                         .contentType(MediaType.APPLICATION_JSON).content(request(" inactive_identity ", "V1.0")))
@@ -174,7 +174,7 @@ class SubjectIdentityApiTest {
     @Test
     void partialUpdateKeepsIdentityAndBlankUpdateIsRejected() throws Exception {
         Subject target = repository.saveAndFlush(Subject.builder().code("PARTIAL_IDENTITY")
-                .name("Before rename").version("1.0").durationHours(8).build());
+                .name("Before rename").version("1.0").durationHours(java.math.BigDecimal.valueOf(8)).build());
         mvc.perform(put("/api/subjects/" + target.getId()).header("Authorization", authorization)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"After rename\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.code").value("PARTIAL_IDENTITY"))
@@ -243,9 +243,9 @@ class SubjectIdentityApiTest {
     @Test
     void updatingOnlyTheVersionCannotCollideWithAnotherSubject() throws Exception {
         repository.saveAndFlush(Subject.builder().code("VERSION_ONLY_UPDATE")
-                .name("First version").version("1.0").durationHours(8).build());
+                .name("First version").version("1.0").durationHours(java.math.BigDecimal.valueOf(8)).build());
         Subject target = repository.saveAndFlush(Subject.builder().code("VERSION_ONLY_UPDATE")
-                .name("Second version").version("2.0").durationHours(8).build());
+                .name("Second version").version("2.0").durationHours(java.math.BigDecimal.valueOf(8)).build());
         mvc.perform(put("/api/subjects/" + target.getId()).header("Authorization", authorization)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"version\":\" V1.0 \"}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errors.code").isArray());
@@ -262,15 +262,17 @@ class SubjectIdentityApiTest {
     }
 
     @Test
-    void importRejectsFractionalDurationAndContinues() throws Exception {
+    void importPreservesFractionalDurationAndRejectsInvalidNumbers() throws Exception {
         MockMultipartFile file = new MockMultipartFile("file", "subjects.csv", "text/csv", ("""
                 Code,Name,Version,Duration (Hours)
-                IMPORT_FRACTION,Invalid duration,1.0,4.5
+                IMPORT_FRACTION,Fractional duration,1.0,4.5
                 IMPORT_WHOLE,Whole duration,1.0,4.0
+                IMPORT_INVALID,Invalid duration,1.0,not-a-number
                 """).getBytes(StandardCharsets.UTF_8));
         mvc.perform(multipart("/api/subjects/import").file(file).header("Authorization", authorization))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.successCount").value(1))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.successCount").value(2))
                 .andExpect(jsonPath("$.failureCount").value(1))
-                .andExpect(jsonPath("$.errors[0].message").value(containsString("whole number")));
+                .andExpect(jsonPath("$.errors[0].message").value(containsString("valid number")));
+        assertEquals(0, repository.findByCodeAndVersion("IMPORT_FRACTION", "1.0").orElseThrow().getDurationHours().compareTo(new java.math.BigDecimal("4.5")));
     }
 }

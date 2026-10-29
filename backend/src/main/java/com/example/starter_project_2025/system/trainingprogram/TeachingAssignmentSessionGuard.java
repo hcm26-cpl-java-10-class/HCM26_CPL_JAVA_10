@@ -24,6 +24,10 @@ public class TeachingAssignmentSessionGuard {
     }
 
     public void requireCompatible(ScheduleCandidate candidate) {
+        if (candidate.trainerId() != null && candidate.startTime() != null && candidate.endTime() != null
+                && assignments.existsTrainerSlotConflict(candidate.trainerId(), candidate.teachingAssignmentId(),
+                    candidate.startTime().toLocalDate(), candidate.startTime().toLocalTime(), candidate.endTime().toLocalTime()))
+            throw invalid("The trainer has another teaching slot during this time.");
         // Legacy sessions without an explicit link continue through existing schedule validation.
         if (candidate.teachingAssignmentId() == null) return;
         var assignment = assignments.findById(candidate.teachingAssignmentId()).orElseThrow(() -> invalid("The teaching assignment no longer exists."));
@@ -37,6 +41,9 @@ public class TeachingAssignmentSessionGuard {
                     || (assignment.getEffectiveTo() != null && candidate.endTime().toLocalDate().isAfter(assignment.getEffectiveTo())))) {
             throw invalid("The session must fall within the current teaching assignment effective period.");
         }
+        if (candidate.startTime() != null && candidate.endTime() != null
+                && !AssignmentTeachingSlot.covers(assignment.getTeachingSlots(), candidate.startTime(), candidate.endTime()))
+            throw invalid("The session must fit within one of the assigned teaching slots.");
         assignment.setEverUsed(true);
     }
 

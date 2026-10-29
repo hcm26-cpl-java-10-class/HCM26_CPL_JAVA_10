@@ -11,15 +11,22 @@ public record TrainingProgramResponse(
         ProgramStatus status,
         Boolean isActive,
         List<ProgramSubjectResponse> subjects,
-        Integer totalDurationHours
+        java.math.BigDecimal totalDurationHours
 ) {
+    public TrainingProgramResponse {
+        totalDurationHours = com.example.starter_project_2025.system.subject.SubjectDuration.normalize(totalDurationHours);
+    }
     public record ProgramSubjectResponse(
             Long id,
             Long subjectId,
             String code,
             String name,
             String version,
-            Integer durationHours,
+            java.math.BigDecimal durationHours,
             Integer orderIndex
-    ) {}
+    ) {
+        public ProgramSubjectResponse {
+            durationHours = com.example.starter_project_2025.system.subject.SubjectDuration.normalize(durationHours);
+        }
+    }
 }

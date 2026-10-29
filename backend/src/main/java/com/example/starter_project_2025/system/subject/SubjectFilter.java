@@ -30,8 +30,8 @@ public class SubjectFilter extends BaseFilter {
     String version;
 
     @FilterField(entityField = "durationHours", operator = FilterOperator.GREATER_OR_EQUAL)
-    Integer minHours;
+    java.math.BigDecimal minHours;
 
     @FilterField(entityField = "durationHours", operator = FilterOperator.LESS_OR_EQUAL)
-    Integer maxHours;
+    java.math.BigDecimal maxHours;
 }

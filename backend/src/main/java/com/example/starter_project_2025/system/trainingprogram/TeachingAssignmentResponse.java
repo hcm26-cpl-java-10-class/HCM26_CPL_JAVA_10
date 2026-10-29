@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.trainingprogram;
 
 import java.time.LocalDate;
+import java.util.List;
 
 public record TeachingAssignmentResponse(
         Long id,
@@ -22,5 +23,6 @@ public record TeachingAssignmentResponse(
         String programCode,
         String programName,
         String programVersion,
-        Long revision
+        Long revision,
+        List<AssignmentTeachingSlot> teachingSlots
 ) {}

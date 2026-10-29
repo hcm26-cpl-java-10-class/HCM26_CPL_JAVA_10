@@ -15,6 +15,8 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Propagation;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,9 +41,11 @@ class TeachingAssignmentClassCreationIntegrationTest {
     @Autowired ScheduleReferenceProvider schedule;
     private String bearer;
     private long programId;
+    private LocalDate start;
 
     @BeforeEach
     void prepare() throws Exception {
+        start = LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh")).plusDays(1);
         bearer = login("admin@example.com");
         var choices = mvc.perform(get("/api/teaching-assignments/class-program-options").header("Authorization", bearer))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
@@ -51,7 +55,7 @@ class TeachingAssignmentClassCreationIntegrationTest {
     @Test
     void createsArbitraryNamedClassAndLinksProgramForAssignmentAndScheduling() throws Exception {
         var json = create(request()).andExpect(status().isCreated()).andExpect(jsonPath("$.name").value("Lớp tự đặt của Thắng"))
-                .andExpect(jsonPath("$.startDate").value("2026-10-01"))
+                .andExpect(jsonPath("$.startDate").value(start.toString()))
                 .andReturn().getResponse().getContentAsString();
         long id = mapper.readTree(json).get("id").asLong();
         assertThat(id).isBetween(1L, 4_503_599_627_370_495L);
@@ -65,13 +69,27 @@ class TeachingAssignmentClassCreationIntegrationTest {
         long ps = mapper.readTree(context).get("subjects").get(0).get("programSubjectId").asLong();
         var assignment = mvc.perform(post("/api/teaching-assignments").header("Authorization", bearer).contentType(MediaType.APPLICATION_JSON)
                 .content(mapper.writeValueAsString(Map.of("classId", id, "programSubjectId", ps, "trainerId", 1,
-                        "role", "MAIN", "effectiveFrom", "2026-10-01", "effectiveTo", "2026-12-31"))))
+                        "role", "MAIN", "effectiveFrom", start.toString(), "effectiveTo", start.plusDays(60).toString()))))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         long assignmentId = mapper.readTree(assignment).get("id").asLong();
         mvc.perform(post("/api/schedule-checks/scoped").header("Authorization", bearer).contentType(MediaType.APPLICATION_JSON)
                 .content(mapper.writeValueAsString(Map.of("sessions", List.of(Map.of("teachingAssignmentId", assignmentId,
-                        "title", "New class session", "startTime", "2026-11-02T08:00:00", "endTime", "2026-11-02T10:00:00", "roomId", 1))))))
+                        "title", "New class session", "startTime", start.plusDays(1) + "T08:00:00", "endTime", start.plusDays(1) + "T10:00:00", "roomId", 1))))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.valid").value(true));
+    }
+
+    @Test
+    void rejectsTodayAndPastClassStartsAtTheApiWithoutCreatingAnyRecords() throws Exception {
+        long classCount = managed.count(), programCount = programs.count(), linkCount = links.count();
+        for (var date : List.of(start.minusDays(1), start.minusDays(2))) {
+            var body = request(); body.put("startDate", date.toString());
+            create(body).andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errors.startDate[0]").value("Class start date must be tomorrow or later (Vietnam time)."));
+        }
+        assertThat(managed.count()).isEqualTo(classCount);
+        assertThat(programs.count()).isEqualTo(programCount);
+        assertThat(links.count()).isEqualTo(linkCount);
+        create(request()).andExpect(status().isCreated()); // Tomorrow is the inclusive lower boundary.
     }
 
     @Test
@@ -87,7 +105,7 @@ class TeachingAssignmentClassCreationIntegrationTest {
     @Test
     void rejectsInvalidClassDatesCountsAndInactiveProgramsBeforeSaving() throws Exception {
         for (var change : List.of(Map.<String, Object>of("name", " "), Map.<String, Object>of("programId", 999999),
-                Map.<String, Object>of("startDate", "2026-12-31", "endDate", "2026-10-01"),
+                Map.<String, Object>of("startDate", start.plusDays(60).toString(), "endDate", start.toString()),
                 Map.<String, Object>of("plannedSize", 0), Map.<String, Object>of("plannedSize", 10001))) {
             var body = request(); body.putAll(change); create(body).andExpect(status().isBadRequest());
         }
@@ -135,12 +153,12 @@ class TeachingAssignmentClassCreationIntegrationTest {
         long psId = link.getProgram().getSubjects().get(0).getId();
         var assignmentJson = mvc.perform(post("/api/teaching-assignments").header("Authorization", bearer).contentType(MediaType.APPLICATION_JSON)
                 .content(mapper.writeValueAsString(Map.of("classId", classId, "programSubjectId", psId, "trainerId", trainerId,
-                        "role", "ASSISTANT", "effectiveFrom", "2026-10-01", "effectiveTo", "2026-12-31"))))
+                        "role", "ASSISTANT", "effectiveFrom", start.toString(), "effectiveTo", start.plusDays(60).toString()))))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         long assignmentId = mapper.readTree(assignmentJson).get("id").asLong();
         mvc.perform(post("/api/schedule-checks/scoped").header("Authorization", bearer).contentType(MediaType.APPLICATION_JSON)
                 .content(mapper.writeValueAsString(Map.of("sessions", List.of(Map.of("teachingAssignmentId", assignmentId,
-                        "title", "Free input flow", "startTime", "2026-11-02T08:00:00", "endTime", "2026-11-02T10:00:00", "roomId", 1))))))
+                        "title", "Free input flow", "startTime", start.plusDays(1) + "T08:00:00", "endTime", start.plusDays(1) + "T10:00:00", "roomId", 1))))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.valid").value(true));
     }
 
@@ -203,7 +221,7 @@ class TeachingAssignmentClassCreationIntegrationTest {
 
     private Map<String, Object> request() {
         return new HashMap<>(Map.of("name", "Lớp tự đặt của Thắng", "programId", programId,
-                "startDate", "2026-10-01", "endDate", "2026-12-31", "plannedSize", 25));
+                "startDate", start.toString(), "endDate", start.plusDays(60).toString(), "plannedSize", 25));
     }
     private ResultActions create(Map<String, Object> body) throws Exception {
         return mvc.perform(post("/api/teaching-assignments/classes").header("Authorization", bearer)

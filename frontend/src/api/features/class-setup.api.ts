@@ -4,6 +4,12 @@ import { downloadBlob, getFilenameFromHeader } from "@/components/datatable/util
 
 export type AssignmentRole = "MAIN" | "ASSISTANT";
 
+export interface AssignmentTeachingSlot {
+  date: string;
+  startTime: string;
+  endTime: string;
+}
+
 export interface SharedClass {
   id: number;
   code: string;
@@ -29,6 +35,7 @@ export interface TeachingAssignmentRequest {
   effectiveFrom: string;
   effectiveTo: string | null;
   revision?: number;
+  teachingSlots?: AssignmentTeachingSlot[];
 }
 
 export type TeachingAssignmentUpdateRequest = TeachingAssignmentRequest & { revision: number };
@@ -54,6 +61,7 @@ export interface TeachingAssignment {
   programName?: string;
   programVersion?: string;
   revision: number;
+  teachingSlots?: AssignmentTeachingSlot[];
 }
 
 export interface AssignmentEditContext {
@@ -181,10 +189,11 @@ export interface AssignmentCreationRequest {
   classDetails: AssignmentNewClassRequest;
   trainer: { name: string; email: string };
   subjectId?: number;
-  newSubject?: { name: string; durationHours: number };
+  newSubject?: { name: string; durationHours?: number };
   role: AssignmentRole;
   effectiveFrom: string;
   effectiveTo: string | null;
+  teachingSlots: AssignmentTeachingSlot[];
 }
 
 export interface AssignmentClassContext {

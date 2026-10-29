@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { AppliedTextInput, AppliedNumberInput } from "./ReferenceInput";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatScheduleDateTime, safeMeetingUrl } from "../assignment-detail";
+import { slotSummary } from "../assignment-slots";
 
 function errorMessage(error: unknown) {
   if (axios.isAxiosError(error)) {
@@ -70,6 +71,7 @@ export function AssignmentDetailDialog({ assignmentId, onClose }: { assignmentId
             <DetailField label="Trainer">{assignment.trainerName || `Trainer #${assignment.trainerId}`}<span className="block font-normal text-muted-foreground">{assignment.trainerEmail || "Profile information not available"}</span></DetailField>
             <DetailField label="Role"><Badge variant={assignment.role === "MAIN" ? "default" : "outline"}>{assignment.role === "MAIN" ? "Main trainer" : "Assistant trainer"}</Badge></DetailField>
             <DetailField label="Effective period">{assignment.effectiveFrom.split("-").reverse().join("/")} → {assignment.effectiveTo ? assignment.effectiveTo.split("-").reverse().join("/") : "No end date"}</DetailField>
+            <DetailField label="Teaching slots">{slotSummary(assignment.teachingSlots)}</DetailField>
           </dl>}
       </section>
       <section className="space-y-4" aria-label="Linked sessions" aria-busy={sessions.isFetching}>
