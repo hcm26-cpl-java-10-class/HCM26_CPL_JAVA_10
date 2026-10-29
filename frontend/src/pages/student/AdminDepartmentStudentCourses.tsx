@@ -1,12 +1,22 @@
 import { departmentApi, enrollmentApi } from "@/api";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { Enrollment } from "@/types";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { BookOpen, CalendarDays, GraduationCap, UserRound } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { EnrollmentProgressBar } from "../management/demo/progress/EnrollmentProgressBar";
+import type { DepartmentMember } from "@/types";
 import { useAdminStudentPreview } from "./useAdminStudentPreview";
+import { StudentCheckboxList, studentFullName } from "./StudentCheckboxList";
 
 const formatEnrollmentDate = (value: string) => {
   const date = new Date(value);
@@ -57,8 +67,10 @@ function CourseCards({ enrollments }: { enrollments: Enrollment[] }) {
 
 export function AdminDepartmentStudentCourses() {
   const isAdminStudentPreview = useAdminStudentPreview();
+  const [selectionMode, setSelectionMode] = useState<"student" | "department">("student");
   const [departmentId, setDepartmentId] = useState("");
-  const [studentId, setStudentId] = useState("");
+  const [selectedStudents, setSelectedStudents] = useState<DepartmentMember[]>([]);
+  const [studentSearch, setStudentSearch] = useState("");
   const [studentPage, setStudentPage] = useState(0);
 
   const departmentsQuery = useQuery({
@@ -70,13 +82,24 @@ export function AdminDepartmentStudentCourses() {
   const studentsQuery = useQuery({
     queryKey: ["admin-student-preview-members", departmentId, studentPage],
     queryFn: () => departmentApi.getMembers(Number(departmentId), studentPage, ""),
-    enabled: isAdminStudentPreview && Boolean(departmentId),
+    enabled: isAdminStudentPreview && selectionMode === "department" && Boolean(departmentId),
   });
 
-  const coursesQuery = useQuery({
-    queryKey: ["admin-student-preview-courses", departmentId, studentId],
-    queryFn: () => enrollmentApi.getDepartmentStudentCourses(Number(departmentId), Number(studentId)),
-    enabled: isAdminStudentPreview && Boolean(departmentId) && Boolean(studentId),
+  const allStudentsQuery = useQuery({
+    queryKey: ["admin-student-preview-students", studentSearch, studentPage],
+    queryFn: () => enrollmentApi.searchStudents(studentPage, studentSearch.trim()),
+    enabled: isAdminStudentPreview && selectionMode === "student",
+  });
+
+  const coursesQueries = useQueries({
+    queries: selectedStudents.map((student) => ({
+      queryKey: ["admin-student-preview-courses", selectionMode, departmentId, student.id],
+      queryFn: () =>
+        selectionMode === "department"
+          ? enrollmentApi.getDepartmentStudentCourses(Number(departmentId), student.id)
+          : enrollmentApi.getStudentCourses(student.id),
+      enabled: isAdminStudentPreview && (selectionMode === "student" || Boolean(departmentId)),
+    })),
   });
 
   if (!isAdminStudentPreview) {
@@ -84,84 +107,122 @@ export function AdminDepartmentStudentCourses() {
   }
 
   const departments = departmentsQuery.data?.content ?? [];
-  const students = studentsQuery.data?.content ?? [];
-  const selectedStudent = students.find((student) => String(student.id) === studentId);
+  const studentPageResult =
+    selectionMode === "department" ? studentsQuery.data : allStudentsQuery.data;
+  const students = studentPageResult?.content ?? [];
+  const studentQuery = selectionMode === "department" ? studentsQuery : allStudentsQuery;
 
   return (
     <section className="space-y-5">
       <div>
         <h2 className="text-xl font-semibold">View a student&apos;s courses</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Choose a department and student to see the courses assigned to that account.
+          Choose any student directly, or select a department and one of its students.
         </p>
       </div>
 
-      <div className="grid gap-4 rounded-xl border bg-card p-5 sm:grid-cols-2">
-        <label className="space-y-2 text-sm font-medium">
-          Department
-          <select
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={departmentId}
-            onChange={(event) => {
-              setDepartmentId(event.target.value);
-              setStudentId("");
+      <div className="space-y-4 rounded-xl border bg-card p-5">
+        <label className="block space-y-2 text-sm font-medium">
+          Enrollment target
+          <Select
+            value={selectionMode}
+            onValueChange={(value) => {
+              if (value !== "student" && value !== "department") return;
+              setSelectionMode(value);
+              setDepartmentId("");
+              setSelectedStudents([]);
+              setStudentSearch("");
               setStudentPage(0);
             }}
-            disabled={departmentsQuery.isLoading || departmentsQuery.isError}
           >
-            <option value="">Choose a department</option>
-            {departments.filter((department) => department.id !== undefined).map((department) => (
-              <option key={department.id} value={department.id}>
-                {department.name || department.code || `Department ${department.id}`}
-              </option>
-            ))}
-          </select>
-          {departmentsQuery.isLoading && <span className="text-xs text-muted-foreground">Loading departments...</span>}
-          {departmentsQuery.isError && (
-            <span role="alert" className="block text-xs text-destructive">
-              Could not load departments: {departmentsQuery.error instanceof Error
-                ? departmentsQuery.error.message
-                : "Unknown error"}
-            </span>
-          )}
-          {!departmentsQuery.isLoading && !departmentsQuery.isError && departments.length === 0 && (
-            <span className="block text-xs text-muted-foreground">No departments found.</span>
-          )}
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="student">Choose a student</SelectItem>
+              <SelectItem value="department">Choose a department, then a student</SelectItem>
+            </SelectContent>
+          </Select>
         </label>
 
-        <label className="space-y-2 text-sm font-medium">
+        {selectionMode === "department" && (
+          <label className="block space-y-2 text-sm font-medium">
+            Department
+            <Select
+              value={departmentId}
+              onValueChange={(value) => {
+                setDepartmentId(value);
+                setSelectedStudents([]);
+                setStudentPage(0);
+              }}
+              disabled={departmentsQuery.isLoading || departmentsQuery.isError}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Choose a department" />
+              </SelectTrigger>
+              <SelectContent>
+                {departments.filter((department) => department.id !== undefined).map((department) => (
+                  <SelectItem key={department.id} value={String(department.id)}>
+                    {department.name || department.code || `Department ${department.id}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {departmentsQuery.isLoading && (
+              <span className="text-xs text-muted-foreground">Loading departments...</span>
+            )}
+            {departmentsQuery.isError && (
+              <span role="alert" className="block text-xs text-destructive">
+                Could not load departments: {departmentsQuery.error instanceof Error
+                  ? departmentsQuery.error.message
+                  : "Unknown error"}
+              </span>
+            )}
+          </label>
+        )}
+
+        {selectionMode === "student" && (
+          <Input
+            aria-label="Search students"
+            placeholder="Search students by name or email"
+            value={studentSearch}
+            onChange={(event) => {
+              setStudentSearch(event.target.value);
+              setStudentPage(0);
+            }}
+          />
+        )}
+
+        <div className="block space-y-2 text-sm font-medium">
           Student
-          <select
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={studentId}
-            onChange={(event) => setStudentId(event.target.value)}
-            disabled={!departmentId || studentsQuery.isLoading || studentsQuery.isError}
-          >
-            <option value="">Choose a student</option>
-            {students.map((student) => (
-              <option key={student.id} value={student.id}>
-                {[student.firstName, student.lastName].filter(Boolean).join(" ")} ({student.email})
-              </option>
-            ))}
-          </select>
-          {studentsQuery.isLoading && <span className="text-xs text-muted-foreground">Loading students...</span>}
-          {studentsQuery.isError && (
+          <StudentCheckboxList
+            students={students}
+            selected={selectedStudents}
+            onChange={setSelectedStudents}
+            disabled={
+              (selectionMode === "department" && !departmentId)
+              || studentQuery.isLoading
+              || studentQuery.isError
+            }
+            showDepartment={selectionMode === "student"}
+          />
+          {studentQuery.isLoading && <span className="text-xs text-muted-foreground">Loading students...</span>}
+          {studentQuery.isError && (
             <span role="alert" className="block text-xs text-destructive">
-              Could not load students: {studentsQuery.error instanceof Error
-                ? studentsQuery.error.message
+              Could not load students: {studentQuery.error instanceof Error
+                ? studentQuery.error.message
                 : "Unknown error"}
             </span>
           )}
-          {studentsQuery.data && studentsQuery.data.totalPages > 1 && (
+          {studentPageResult && studentPageResult.totalPages > 1 && (
             <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>Page {studentPage + 1} of {studentsQuery.data.totalPages}</span>
+              <span>Page {studentPage + 1} of {studentPageResult.totalPages}</span>
               <span className="flex gap-2">
                 <button
                   type="button"
                   className="underline disabled:opacity-50"
                   disabled={studentPage === 0}
                   onClick={() => {
-                    setStudentId("");
                     setStudentPage((page) => page - 1);
                   }}
                 >
@@ -170,9 +231,8 @@ export function AdminDepartmentStudentCourses() {
                 <button
                   type="button"
                   className="underline disabled:opacity-50"
-                  disabled={studentPage >= studentsQuery.data.totalPages - 1}
+                  disabled={studentPage >= studentPageResult.totalPages - 1}
                   onClick={() => {
-                    setStudentId("");
                     setStudentPage((page) => page + 1);
                   }}
                 >
@@ -181,43 +241,53 @@ export function AdminDepartmentStudentCourses() {
               </span>
             </div>
           )}
-        </label>
+        </div>
       </div>
 
-      {departmentId && studentsQuery.data?.totalElements === 0 && (
+      {selectionMode === "department" && departmentId && studentsQuery.data?.totalElements === 0 && (
         <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
           No active students belong to this department.
         </p>
       )}
-      {studentId && selectedStudent && coursesQuery.isLoading && (
-        <p role="status" className="rounded-xl border p-6 text-center text-sm text-muted-foreground">
-          Loading student courses...
+      {selectionMode === "student" && allStudentsQuery.data?.totalElements === 0 && (
+        <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+          {studentSearch.trim() ? "No students match this search." : "No active students are available."}
         </p>
       )}
-      {studentId && coursesQuery.isError && (
-        <p role="alert" className="rounded-xl border border-destructive/30 p-5 text-sm text-destructive">
-          Could not load student courses: {coursesQuery.error instanceof Error
-            ? coursesQuery.error.message
-            : "Unknown error"}
-        </p>
-      )}
-      {studentId && coursesQuery.data && (
-        <div className="space-y-4">
-          <div>
-            <h3 className="font-semibold">
-              {[selectedStudent?.firstName, selectedStudent?.lastName].filter(Boolean).join(" ")}&apos;s courses
-            </h3>
-            <p className="text-sm text-muted-foreground">{coursesQuery.data.length} enrolled courses</p>
+      {selectedStudents.map((student, index) => {
+        const query = coursesQueries[index];
+        return (
+          <div key={student.id} className="space-y-4">
+            <div>
+              <h3 className="font-semibold">{studentFullName(student)}&apos;s courses</h3>
+              {query?.data && (
+                <p className="text-sm text-muted-foreground">{query.data.length} enrolled courses</p>
+              )}
+            </div>
+            {query?.isLoading && (
+              <p role="status" className="rounded-xl border p-6 text-center text-sm text-muted-foreground">
+                Loading student courses...
+              </p>
+            )}
+            {query?.isError && (
+              <p role="alert" className="rounded-xl border border-destructive/30 p-5 text-sm text-destructive">
+                Could not load student courses: {query.error instanceof Error
+                  ? query.error.message
+                  : "Unknown error"}
+              </p>
+            )}
+            {query?.data && (
+              query.data.length ? (
+                <CourseCards enrollments={query.data} />
+              ) : (
+                <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+                  This student has no enrolled courses.
+                </p>
+              )
+            )}
           </div>
-          {coursesQuery.data.length ? (
-            <CourseCards enrollments={coursesQuery.data} />
-          ) : (
-            <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-              This student has no enrolled courses.
-            </p>
-          )}
-        </div>
-      )}
+        );
+      })}
     </section>
   );
 }

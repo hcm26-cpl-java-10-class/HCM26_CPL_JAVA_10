@@ -13,6 +13,8 @@ public interface CourseEnrollmentRepository
 
     boolean existsByUser_IdAndCourse_Id(Long userId, Long courseId);
 
+    Optional<CourseEnrollment> findByUser_IdAndCourse_Id(Long userId, Long courseId);
+
     List<CourseEnrollment> findAllByUser_IdOrderByCreatedAtDesc(
             Long userId
     );
@@ -39,6 +41,14 @@ public interface CourseEnrollmentRepository
             + "and e.course.id = :courseId")
     long countEnrolledStudentsByDepartmentAndCourse(
             @Param("departmentId") Long departmentId,
+            @Param("courseId") Long courseId
+    );
+
+    @Query("select department.id, count(distinct e.user.id) from CourseEnrollment e "
+            + "join e.user.roles role join e.user.departments department "
+            + "where e.user.isActive = true and role.name = 'STUDENT' "
+            + "and e.course.id = :courseId group by department.id")
+    List<Object[]> countEnrolledStudentsPerDepartmentForCourse(
             @Param("courseId") Long courseId
     );
 

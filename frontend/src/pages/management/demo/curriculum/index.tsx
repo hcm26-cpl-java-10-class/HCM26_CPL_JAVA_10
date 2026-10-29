@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useCallback, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
@@ -40,6 +40,11 @@ const SECTION_TEMPLATES = [
     "Assessment and Review",
     "Final Project",
 ];
+
+function parsePositiveId(raw: string | null): number | null {
+    const value = Number(raw);
+    return raw !== null && Number.isSafeInteger(value) && value > 0 ? value : null;
+}
 
 function normalizeTitle(value: string): string {
     return value.trim().replace(/\s+/g, " ");
@@ -195,8 +200,23 @@ export default function CurriculumManagementPage() {
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
 
+    // Deep link (?sectionId=&lessonId=&questionId=) from the "Unanswered questions" inbox:
+    // expand that section once and let it open the lesson, then forget it.
+    const [deepLink, setDeepLink] = useState(() => {
+        const sectionId = parsePositiveId(searchParams.get("sectionId"));
+        const lessonId = parsePositiveId(searchParams.get("lessonId"));
+        return sectionId && lessonId
+            ? {
+                  sectionId,
+                  lessonId,
+                  questionId: parsePositiveId(searchParams.get("questionId")),
+              }
+            : null;
+    });
+    const consumeDeepLink = useCallback(() => setDeepLink(null), []);
+
     const [expandedSectionId, setExpandedSectionId] =
-        useState<number | null>(null);
+        useState<number | null>(() => deepLink?.sectionId ?? null);
 
     // ======================================
     // GET COURSES
@@ -336,6 +356,12 @@ export default function CurriculumManagementPage() {
         } else {
             params.delete("courseId");
         }
+
+        // Deep-link params belong to the previous course.
+        params.delete("sectionId");
+        params.delete("lessonId");
+        params.delete("questionId");
+        setDeepLink(null);
 
         setSearchParams(params);
         setExpandedSectionId(null);
@@ -968,7 +994,15 @@ export default function CurriculumManagementPage() {
                                     {section.id != null &&
                                         expandedSectionId === section.id && (
                                             <div className="border-t pt-4">
-                                                <SectionLessons sectionId={section.id} />
+                                                <SectionLessons
+                                                    sectionId={section.id}
+                                                    deepLink={
+                                                        deepLink?.sectionId === section.id
+                                                            ? deepLink
+                                                            : null
+                                                    }
+                                                    onDeepLinkConsumed={consumeDeepLink}
+                                                />
                                             </div>
                                         )}
                                 </div>

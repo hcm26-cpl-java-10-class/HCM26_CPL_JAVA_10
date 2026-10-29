@@ -4,5 +4,6 @@ public enum CrudAction {
     CREATE,
     READ,
     UPDATE,
-    DELETE
+    DELETE,
+    APPROVE
 }

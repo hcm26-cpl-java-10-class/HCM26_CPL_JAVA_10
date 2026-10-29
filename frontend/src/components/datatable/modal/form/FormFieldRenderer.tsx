@@ -250,6 +250,21 @@ export function FormFieldRenderer({
         </div>
       );
 
+      case "datetime":
+          return (
+              <div className="grid gap-2">
+                  <Label htmlFor={field.name}>{field.label}</Label>
+                  <Input
+                      id={field.name}
+                      type="datetime-local"
+                      className={errorClass}
+                      value={value || ""}
+                      onChange={(e) => onChange(field.name, e.target.value)}
+                  />
+                  <FieldError errors={fieldErrors} />
+              </div>
+          );
+
     case "password":
       return (
         <div className="grid gap-2">
@@ -289,6 +304,11 @@ export function FormFieldRenderer({
             </p>
           ) : null}
           <FieldHint field={field} rule={rule} />
+          {field.maxLength ? (
+            <p className="text-xs text-muted-foreground text-right">
+              {String(value || "").length}/{field.maxLength} ký tự
+            </p>
+          ) : null}
           <FieldError errors={fieldErrors} />
         </div>
       );
@@ -300,11 +320,12 @@ export function FormFieldRenderer({
           <Label htmlFor={field.name}>{field.label}{requiredMark}</Label>
           <Input
             id={field.name}
+            type={field.name === "email" ? "email" : "text"}
             className={errorClass}
             value={value || ""}
             onChange={(e) => onChange(field.name, e.target.value)}
-            placeholder={`Enter ${field.label.toLowerCase()}...`}
             maxLength={rule.maxLength}
+            placeholder={field.name === "email" ? "name@gmail.com" : `Enter ${field.label.toLowerCase()}...`}
           />
           <FieldHint field={field} rule={rule} />
           <FieldError errors={fieldErrors} />

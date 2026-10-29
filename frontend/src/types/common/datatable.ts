@@ -9,7 +9,8 @@ export type FieldType =
   | "select"
   | "boolean"
   | "relation"
-  | "dynamic";
+  | "dynamic"
+    |"datetime";
 
 export type DynamicValueFieldType = Exclude<
   FieldType,
@@ -109,6 +110,12 @@ export interface FieldSchema {
 
   /** Gợi ý hiển thị dưới ô nhập (vd: "Ví dụ: Java Basics"). Tự động ghép thêm với các rule validation. */
   hint?: string;
+
+  /** Required input in the create/edit form. */
+  required?: boolean;
+
+  /** Maximum text length for text/textarea inputs. */
+  maxLength?: number;
 
   expandable?: boolean;
 

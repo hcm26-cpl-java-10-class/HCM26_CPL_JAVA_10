@@ -20,10 +20,15 @@ export * from "./features/demo/student_score";
 export * from "./features/demo/topic_mark_gradebook";
 export * from "./features/demo/certificate";
 export * from "./features/notification";
+export * from "./features/exam";
+export * from "./features/invitation";
 export * from "./features/menu/module";
 export * from "./features/menu/module_group";
 export * from "./features/rbac/permission";
 export * from "./features/rbac/role";
 export * from "./features/rbac/user";
+export * from "./features/demo/session";
+
+export * from "./features/student";
 export * from "./features/demo/course-report";
 export * from "./features/demo/qna";

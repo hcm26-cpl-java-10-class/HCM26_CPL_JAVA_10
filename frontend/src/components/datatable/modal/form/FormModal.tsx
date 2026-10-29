@@ -111,7 +111,6 @@ export function FormModal({
 }: FormModalProps) {
   const [form, setForm] = useState<Record<string, any>>({});
   const [clientErrors, setClientErrors] = useState<Record<string, string[]>>({});
-  // Field đã được người dùng rời khỏi (blur) -> từ đó validate trực tiếp khi gõ
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const editableFields: FieldSchema[] = schema.fields.filter(
@@ -126,6 +125,7 @@ export function FormModal({
   );
 
   useEffect(() => {
+    setClientErrors({});
     if (initial) {
       const next: Record<string, any> = {};
 
@@ -201,6 +201,35 @@ export function FormModal({
   const mergedErrors: Record<string, string[]> = { ...fieldErrors, ...clientErrors };
 
   const handleSubmit = () => {
+    if (schema.entityName === "student") {
+      const errors: Record<string, string[]> = {};
+      schema.fields.filter((field: FieldSchema) => field.required).forEach((field: FieldSchema) => {
+        const value = form[field.name];
+        if (value === undefined || value === null || String(value).trim() === "") {
+          errors[field.name] = [`${field.label} là bắt buộc.`];
+        }
+      });
+
+      const email = String(form.email ?? "").trim();
+      if (email && !/^[A-Za-z0-9._%+-]+@gmail\.com$/i.test(email)) {
+        errors.email = ["Email phải có định dạng @gmail.com."];
+      }
+
+      const address = String(form.address ?? "");
+      if (address.length > 1000) {
+        errors.address = ["Địa chỉ không được vượt quá 1000 ký tự."];
+      }
+
+      if (Object.keys(errors).length > 0) {
+        setClientErrors(errors);
+        return;
+      }
+      setClientErrors({});
+      onSubmit({ ...form, email });
+      return;
+    }
+
+    setClientErrors({});
     const errors = validateForm(editableFields, form, {
       isEdit: !!initial,
       initial,
@@ -210,8 +239,11 @@ export function FormModal({
     onSubmit(form);
   };
 
+  const getFieldErrors = (fieldName: string) =>
+    clientErrors[fieldName]?.length ? clientErrors[fieldName] : fieldErrors[fieldName];
+
   const hasError = (fieldName: string) =>
-    mergedErrors[fieldName] && mergedErrors[fieldName].length > 0;
+    Boolean(mergedErrors[fieldName]?.length);
 
   const renderField = (field: FieldSchema) => (
     <div key={field.name} onBlur={() => handleFieldBlur(field)}>
@@ -223,7 +255,7 @@ export function FormModal({
           ? "border-destructive focus-visible:ring-destructive"
           : ""
       }
-      fieldErrors={mergedErrors[field.name]}
+      fieldErrors={getFieldErrors(field.name)}
       relationOptions={relationOptions}
       initial={initial}
       onChange={updateField}

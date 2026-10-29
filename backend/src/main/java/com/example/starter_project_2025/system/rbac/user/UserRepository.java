@@ -74,6 +74,31 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
             value = "select new com.example.starter_project_2025.system.demo.department.DepartmentMemberDTO("
                     + "u.id, u.email, u.firstName, u.lastName, null, null) "
                     + "from User u "
+                    + "where u.isActive = true and exists (select role.id from User member "
+                    + "join member.roles role where member.id = u.id and role.name = 'STUDENT') "
+                    + "and (:search is null or lower(u.email) like lower(concat('%', :search, '%')) "
+                    + "or lower(coalesce(u.firstName, '')) "
+                    + "like lower(concat('%', :search, '%')) "
+                    + "or lower(coalesce(u.lastName, '')) "
+                    + "like lower(concat('%', :search, '%')))",
+            countQuery = "select count(u) from User u "
+                    + "where u.isActive = true and exists (select role.id from User member "
+                    + "join member.roles role where member.id = u.id and role.name = 'STUDENT') "
+                    + "and (:search is null or lower(u.email) like lower(concat('%', :search, '%')) "
+                    + "or lower(coalesce(u.firstName, '')) "
+                    + "like lower(concat('%', :search, '%')) "
+                    + "or lower(coalesce(u.lastName, '')) "
+                    + "like lower(concat('%', :search, '%')))"
+    )
+    Page<DepartmentMemberDTO> searchActiveStudents(
+            @Param("search") String search,
+            Pageable pageable
+    );
+
+    @Query(
+            value = "select new com.example.starter_project_2025.system.demo.department.DepartmentMemberDTO("
+                    + "u.id, u.email, u.firstName, u.lastName, null, null) "
+                    + "from User u "
                     + "where not exists (select department.id from User member "
                     + "join member.departments department where member.id = u.id "
                     + "and department.id = :departmentId) "
@@ -101,4 +126,13 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
             @Param("search") String search,
             Pageable pageable
     );
+
+    @Query("select department.id, count(distinct u.id) from User u join u.roles role "
+            + "join u.departments department "
+            + "where u.isActive = true and role.name = 'STUDENT' group by department.id")
+    List<Object[]> countActiveStudentsPerDepartment();
+
+    boolean existsByRoles_Id(Long roleId);
+
+    long countByRoles_Id(Long roleId);
 }

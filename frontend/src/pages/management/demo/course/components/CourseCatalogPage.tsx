@@ -1,5 +1,6 @@
 import { courseApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { useAdminStudentPreview } from "@/pages/student/useAdminStudentPreview";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,6 +65,7 @@ function flattenCategories(nodes: CategoryTreeDTO[], depth = 0): CategoryOption[
  */
 export function CourseCatalogPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const canAssignToStudents = useAdminStudentPreview();
 
   const urlSearch = searchParams.get("q") ?? "";
   const categoryParam = Number(searchParams.get("category"));
@@ -322,6 +324,7 @@ export function CourseCatalogPage() {
                   enrollmentId={enrollmentByCourseId.get(course.id)?.id}
                   canEnroll={canEnroll}
                   isEnrolling={enrollingCourseId === course.id}
+                  canAssign={canAssignToStudents}
                   onEnroll={(courseId) => enrollMutation.mutate(courseId)}
                 />
               ))}

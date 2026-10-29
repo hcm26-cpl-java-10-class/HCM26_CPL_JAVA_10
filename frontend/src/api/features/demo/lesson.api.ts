@@ -6,7 +6,7 @@ import type { LessonDTO, LessonFilter } from "@/types";
 const path = "/lessons";
 
 const base = createBaseApiService<LessonDTO, LessonFilter>({
-  path: path,
+  path,
 });
 
 export const lessonApi = Object.assign({}, base, {

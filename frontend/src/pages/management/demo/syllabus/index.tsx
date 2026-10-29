@@ -1,15 +1,11 @@
-import { useRef, useState, type FormEvent } from "react";
+
+import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import axios from "axios";
 import {
-    Search,
-    Plus,
-    Eye,
-    Pencil,
-    Trash2,
-    Upload,
+    Search, Plus, Eye, Pencil, Trash2, Upload, LockKeyhole,
 } from "lucide-react";
 
 import {
@@ -21,8 +17,19 @@ import {
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirmdialog";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Tabs } from "@/components/ui/tabs";
+import { ImportTab } from "@/components/datatable/dataio/ImportTab";
 import { usePermissions } from "@/hooks/usePermissions";
 
 const empty: SyllabusInput = {
@@ -31,88 +38,75 @@ const empty: SyllabusInput = {
     description: "",
 };
 
-const normalize = (s: string) =>
-    s.trim().replace(/\s+/g, " ");
+const normalize = (value: string) =>
+    value.trim().replace(/\s+/g, " ");
 
-function message(error: unknown): string {
+const MAX_DEMO_FILE_BYTES = 5_000_000;
+
+function errorMessage(error: unknown): string {
     if (axios.isAxiosError(error)) {
         const data = error.response?.data as
             | {
             errors?: Record<string, string[]>;
             message?: string;
+            detail?: string;
         }
             | undefined;
 
-        const first =
-            data?.errors &&
-            Object.values(data.errors).flat()[0];
+        const firstError = data?.errors
+            ? Object.values(data.errors).flat()[0]
+            : undefined;
 
-        if (typeof first === "string") {
-            return first;
-        }
-
-        if (typeof data?.message === "string") {
-            return data.message;
-        }
+        if (typeof firstError === "string") return firstError;
+        if (typeof data?.detail === "string") return data.detail;
+        if (typeof data?.message === "string") return data.message;
 
         if (error.response?.status === 403) {
-            return "You do not have permission";
+            return "Import denied or missing permission. Check the demo-import flag.";
         }
     }
 
-    return "Action failed. Check Backend connection and try again.";
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+
+    return "Operation failed. Check the Backend connection.";
 }
 
 export default function SyllabusesPage() {
     const qc = useQueryClient();
-
     const { hasPermission } = usePermissions();
 
-    const [search, setSearch] = useState("");
+    const canCreate = hasPermission("SYLLABUS_CREATE");
+    const canEdit = hasPermission("SYLLABUS_UPDATE");
+    const canDelete = hasPermission("SYLLABUS_DELETE");
 
-    const [form, setForm] =
-        useState<SyllabusInput>(empty);
+    const [search, setSearch] = useState("");
+    const [form, setForm] = useState<SyllabusInput>({
+        ...empty,
+    });
 
     const [editing, setEditing] =
         useState<SyllabusSummary | null>(null);
 
-    const [formOpen, setFormOpen] =
-        useState(false);
+    const [formOpen, setFormOpen] = useState(false);
 
     const [deleting, setDeleting] =
         useState<SyllabusSummary | null>(null);
 
     const [busy, setBusy] = useState(false);
-
     const [importing, setImporting] = useState(false);
-
-    const importInputRef = useRef<HTMLInputElement>(null);
-
-
-    const canCreate = hasPermission(
-        "SYLLABUS_CREATE"
-    );
-
-    const canEdit = hasPermission(
-        "SYLLABUS_UPDATE"
-    );
-
-    const canDelete = hasPermission(
-        "SYLLABUS_DELETE"
-    );
+    const [importOpen, setImportOpen] = useState(false);
 
     const query = useQuery({
         queryKey: ["syllabuses", search.trim()],
-        queryFn: () =>
-            syllabusApi.list(search.trim()),
+        queryFn: () => syllabusApi.list(search.trim()),
     });
 
     const results = query.data ?? [];
-
-    const suggestions =
-        search.trim().length > 0
-            ? results.slice(0, 5)
-            : [];
+    const suggestions = search.trim()
+        ? results.slice(0, 5)
+        : [];
 
     function openCreate() {
         setEditing(null);
@@ -121,23 +115,37 @@ export default function SyllabusesPage() {
     }
 
     function openEdit(item: SyllabusSummary) {
-        setEditing(item);
+        if (item.status === "PUBLISHED") {
+            toast.error(
+                "Return this Syllabus to Draft before editing."
+            );
+            return;
+        }
 
+        setEditing(item);
         setForm({
             code: item.code,
             name: item.name,
             description: item.description ?? "",
         });
-
         setFormOpen(true);
     }
 
-    async function save(
-        event: FormEvent<HTMLFormElement>
-    ) {
+    async function refreshList() {
+        await qc.invalidateQueries({
+            queryKey: ["syllabuses"],
+        });
+    }
+
+    async function save(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
 
         if (busy) return;
+
+        if (editing?.status === "PUBLISHED") {
+            toast.error("Published Syllabus is read-only.");
+            return;
+        }
 
         const clean: SyllabusInput = {
             code: form.code.trim().toUpperCase(),
@@ -145,13 +153,9 @@ export default function SyllabusesPage() {
             description: form.description.trim(),
         };
 
-        if (
-            !/^[A-Z0-9][A-Z0-9_-]{2,29}$/.test(
-                clean.code
-            )
-        ) {
+        if (!/^[A-Z0-9][A-Z0-9_-]{2,29}$/.test(clean.code)) {
             toast.error(
-                "Code must have 3-30 letters/digits, _ or -"
+                "Code must contain 3-30 valid characters."
             );
             return;
         }
@@ -162,31 +166,29 @@ export default function SyllabusesPage() {
             !/\p{L}/u.test(clean.name)
         ) {
             toast.error(
-                "Name must contain letters and have 3-150 characters"
+                "Name must contain letters and have 3-150 characters."
             );
             return;
         }
 
         if (clean.description.length > 1500) {
-            toast.error("Description is too long");
+            toast.error("Description is too long.");
             return;
         }
 
         const duplicate = results.some(
-            (s) =>
-                s.id !== editing?.id &&
+            (item) =>
+                item.id !== editing?.id &&
                 (
-                    s.code.toLowerCase() ===
+                    item.code.toLowerCase() ===
                     clean.code.toLowerCase() ||
-                    normalize(s.name).toLowerCase() ===
+                    normalize(item.name).toLowerCase() ===
                     clean.name.toLowerCase()
                 )
         );
 
         if (duplicate) {
-            toast.error(
-                "Syllabus name or code already exists"
-            );
+            toast.error("Syllabus code or name already exists.");
             return;
         }
 
@@ -194,167 +196,113 @@ export default function SyllabusesPage() {
 
         try {
             if (editing) {
-                await syllabusApi.update(
-                    editing.id,
-                    clean
-                );
+                await syllabusApi.update(editing.id, clean);
             } else {
                 await syllabusApi.create(clean);
             }
 
-            await qc.invalidateQueries({
-                queryKey: ["syllabuses"],
-            });
-
+            await refreshList();
             setFormOpen(false);
-
-            toast.success("Syllabus saved");
+            toast.success("Syllabus saved successfully.");
         } catch (error) {
-            toast.error(message(error));
+            toast.error(errorMessage(error));
         } finally {
             setBusy(false);
         }
     }
 
-        async function handleImportExcel(file: File) {
-            if (importing) return;
-
-            if (!file.name.toLowerCase().endsWith(".xlsx")) {
-                toast.error("Please select an Excel .xlsx file.");
-                return;
-            }
-
-            if (file.size > 5_000_000) {
-                toast.error("File must be smaller than 5 MB.");
-                return;
-            }
-
-            const confirmed = window.confirm(
-                "Import demo data into your local database?"
-            );
-
-            if (!confirmed) return;
-
-            setImporting(true);
-
-            try {
-                const result = await syllabusApi.importExcel(file);
-
-                setSearch("");
-
-                await qc.invalidateQueries({
-                    queryKey: ["syllabuses"],
-                });
-
-                toast.success(
-                    `Import successful! ` +
-                    `${result.syllabuses} Syllabuses, ` +
-                    `${result.clos} CLOs, ` +
-                    `${result.sections} Sections, ` +
-                    `${result.topics} Topics, ` +
-                    `${result.materials} Materials.`
-                );
-
-            } catch (error) {
-                if (axios.isAxiosError(error)) {
-                    const status = error.response?.status;
-
-                    const data = error.response?.data as
-                        | { message?: string; detail?: string }
-                        | undefined;
-
-                    if (status === 403) {
-                        toast.error(
-                            "Import denied. Check permissions and enable demo import in Backend."
-                        );
-                    } else {
-                        toast.error(
-                            data?.detail ||
-                            data?.message ||
-                            `Import failed (HTTP ${status ?? "unknown"}).`
-                        );
-                    }
-                } else {
-                    toast.error("Import failed. Please try again.");
-                }
-            } finally {
-                setImporting(false);
-            }
-        }
-        async function remove() {
+    async function remove() {
         if (!deleting || busy) return;
+
+        if (deleting.status === "PUBLISHED") {
+            toast.error(
+                "Published Syllabus cannot be deleted."
+            );
+            return;
+        }
 
         setBusy(true);
 
         try {
             await syllabusApi.delete(deleting.id);
-
-            await qc.invalidateQueries({
-                queryKey: ["syllabuses"],
-            });
+            await refreshList();
 
             setDeleting(null);
-
-            toast.success("Syllabus deleted");
+            toast.success("Syllabus deleted successfully.");
         } catch (error) {
-            toast.error(message(error));
+            toast.error(errorMessage(error));
         } finally {
             setBusy(false);
         }
     }
 
+    // Demo import reuses the shared LMS ImportTab.
+    // The specific five-sheet processing remains in M3 Backend.
+    async function handleImportExcel(file: File): Promise<void> {
+        if (importing) return;
+
+        if (!file.name.toLowerCase().endsWith(".xlsx")) {
+            throw new Error(
+                "Only .xlsx files are supported for Syllabus demo import."
+            );
+        }
+
+        if (file.size > MAX_DEMO_FILE_BYTES) {
+            throw new Error(
+                "Demo Excel file must be smaller than 5 MB."
+            );
+        }
+
+        setImporting(true);
+
+        try {
+            const result = await syllabusApi.importExcel(file);
+
+            setSearch("");
+            await refreshList();
+
+            toast.success(
+                `Import successful: ${result.syllabuses} Syllabuses, ` +
+                `${result.clos} CLOs, ` +
+                `${result.sections} Sections, ` +
+                `${result.topics} Topics, ` +
+                `${result.materials} Materials.`
+            );
+
+            setImportOpen(false);
+        } catch (error) {
+            throw new Error(errorMessage(error));
+        } finally {
+            setImporting(false);
+        }
+    }
+
     return (
-        <MainLayout
-            pathName={{
-                syllabuses: "Syllabuses",
-            }}
-        >
-            <div className="mx-auto max-w-6xl space-y-6">
-                {/* Header */}
+        <MainLayout pathName={{ syllabuses: "Syllabuses" }}>
+            <div className="mx-auto w-full max-w-[1500px] space-y-6">
+
+                {/* HEADER */}
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h1 className="text-2xl font-bold">
                             Syllabuses
                         </h1>
-
                         <p className="text-sm text-muted-foreground">
-                            Create outlines before creating courses.
+                            Create, manage and publish course outlines.
                         </p>
                     </div>
 
-
                     <div className="flex flex-wrap items-center gap-2">
-
                         {import.meta.env.DEV && canCreate && canEdit && (
-                            <>
-                                <input
-                                    ref={importInputRef}
-                                    type="file"
-                                    accept=".xlsx"
-                                    className="hidden"
-                                    aria-label="Import Syllabus Excel"
-                                    onChange={(event) => {
-                                        const file = event.currentTarget.files?.[0];
-
-                                        event.currentTarget.value = "";
-
-                                        if (file) {
-                                            void handleImportExcel(file);
-                                        }
-                                    }}
-                                />
-
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    disabled={importing}
-                                    onClick={() => importInputRef.current?.click()}
-                                >
-                                    <Upload className="size-4" />
-
-                                    {importing ? "Importing..." : "Import Excel"}
-                                </Button>
-                            </>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                disabled={importing}
+                                onClick={() => setImportOpen(true)}
+                            >
+                                <Upload className="size-4" />
+                                Import demo Excel
+                            </Button>
                         )}
 
                         {canCreate && (
@@ -363,37 +311,80 @@ export default function SyllabusesPage() {
                                 Create Syllabus
                             </Button>
                         )}
-
                     </div>
-
                 </div>
 
-                {/* Search */}
+                {/* SHARED IMPORT UI FOR DEMO */}
+                {import.meta.env.DEV && canCreate && canEdit && (
+                    <Dialog
+                        open={importOpen}
+                        onOpenChange={(open) => {
+                            if (!importing) setImportOpen(open);
+                        }}
+                    >
+                        <DialogContent className="flex min-h-105 flex-col sm:max-w-xl">
+                            <DialogHeader>
+                                <DialogTitle>
+                                    Import Syllabus Demo
+                                </DialogTitle>
+                                <DialogDescription>
+                                    Only for local demo data. Choose an .xlsx
+                                    file smaller than 5 MB with the five sheets:
+                                    Syllabuses, CLOs, Sections, Topics and
+                                    LearningMaterials.
+                                </DialogDescription>
+                            </DialogHeader>
+
+                            <Tabs
+                                defaultValue="import"
+                                className="flex w-full flex-1 flex-col"
+                            >
+                                <ImportTab
+                                    loading={importing}
+                                    onImport={handleImportExcel}
+                                    allowedExtensions={[".xlsx"]}
+                                    maxFileSizeBytes={MAX_DEMO_FILE_BYTES}
+                                />
+                            </Tabs>
+
+                            <DialogFooter>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled={importing}
+                                    onClick={() => setImportOpen(false)}
+                                >
+                                    Close
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                )}
+
+                {/* SEARCH */}
                 <div className="rounded-xl border bg-card p-4">
                     <label
                         htmlFor="syllabus-search"
-                        className="mb-2 block text-sm font-medium"
+                        className="mb-2 block text-sm font-semibold"
                     >
                         Search by syllabus name or code
                     </label>
 
                     <div className="relative">
-                        <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
+                        <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
 
                         <Input
                             id="syllabus-search"
-                            className="pl-9"
-                            placeholder="e.g. Java, JNP119, Spring"
                             value={search}
-                            maxLength={100}
-                            onChange={(e) =>
-                                setSearch(e.target.value)
+                            placeholder="e.g. Java, JNP119, Spring"
+                            className="pl-9"
+                            onChange={(event) =>
+                                setSearch(event.target.value)
                             }
-                            autoComplete="off"
                         />
 
                         {suggestions.length > 0 && (
-                            <div className="absolute z-20 mt-1 w-full rounded-lg border bg-card shadow-lg">
+                            <div className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border bg-card shadow-lg">
                                 {suggestions.map((item) => (
                                     <Link
                                         key={item.id}
@@ -408,114 +399,144 @@ export default function SyllabusesPage() {
                     </div>
                 </div>
 
-                {/* Table */}
-                {query.isLoading ? (
-                    <p>Loading syllabuses...</p>
+                {/* TABLE */}
+                {query.isPending ? (
+                    <p>Loading Syllabuses...</p>
                 ) : query.isError ? (
-                    <div role="alert">
-                        Could not load syllabuses.
-
+                    <div
+                        role="alert"
+                        className="space-y-3 rounded-xl border p-4"
+                    >
+                        <p>Could not load Syllabuses.</p>
                         <Button
                             variant="outline"
-                            onClick={() =>
-                                void query.refetch()
-                            }
+                            onClick={() => void query.refetch()}
                         >
                             Retry
                         </Button>
                     </div>
                 ) : (
                     <div className="overflow-x-auto rounded-xl border bg-card">
-                        <table className="w-full text-sm">
+                        <table className="w-full min-w-[850px] text-sm">
                             <thead className="bg-muted/40 text-left">
                             <tr>
                                 <th className="p-3">Code</th>
                                 <th className="p-3">Name</th>
                                 <th className="p-3">Sections</th>
+                                <th className="p-3">Status</th>
+                                <th className="p-3">Completion</th>
                                 <th className="p-3">Actions</th>
                             </tr>
                             </thead>
 
                             <tbody>
-                            {results.map((item) => (
-                                <tr
-                                    key={item.id}
-                                    className="border-t"
-                                >
-                                    <td className="p-3 font-medium">
-                                        {item.code}
-                                    </td>
+                            {results.map((item) => {
+                                const published =
+                                    item.status === "PUBLISHED";
 
-                                    <td className="p-3">
-                                        {item.name}
-                                    </td>
+                                return (
+                                    <tr
+                                        key={item.id}
+                                        className="border-t"
+                                    >
+                                        <td className="p-3 font-medium">
+                                            {item.code}
+                                        </td>
 
-                                    <td className="p-3">
-                                        {item.sectionCount}
-                                    </td>
+                                        <td className="p-3">
+                                            {item.name}
+                                        </td>
 
-                                    <td className="p-3">
-                                        <div className="flex gap-2">
-                                            <Button
-                                                asChild
-                                                size="sm"
-                                                variant="outline"
-                                            >
-                                                <Link
-                                                    to={`/syllabuses/${item.id}`}
-                                                >
-                                                    <Eye className="size-4" />
-                                                    Detail
-                                                </Link>
-                                            </Button>
+                                        <td className="p-3">
+                                            {item.sectionCount}
+                                        </td>
 
-                                            {canEdit && (
+                                        <td className="p-3">
+                        <span
+                            className={
+                                published
+                                    ? "inline-flex items-center gap-1 rounded-full border border-green-500/40 bg-green-500/10 px-2 py-1 text-xs text-green-700 dark:text-green-400"
+                                    : "inline-flex rounded-full border px-2 py-1 text-xs"
+                            }
+                        >
+                          {published && (
+                              <LockKeyhole className="size-3" />
+                          )}
+                            {published
+                                ? "Published"
+                                : "Draft"}
+                        </span>
+                                        </td>
+
+                                        <td className="min-w-[140px] p-3">
+                                            <div className="space-y-1">
+                          <span className="text-xs font-semibold">
+                            {item.completionPercent}%
+                          </span>
+                                                <Progress
+                                                    value={item.completionPercent}
+                                                    className="h-2"
+                                                />
+                                            </div>
+                                        </td>
+
+                                        <td className="p-3">
+                                            <div className="flex flex-wrap gap-2">
                                                 <Button
+                                                    asChild
                                                     size="sm"
                                                     variant="outline"
-                                                    onClick={() =>
-                                                        openEdit(item)
-                                                    }
                                                 >
-                                                    <Pencil className="size-4" />
-                                                    Edit
+                                                    <Link
+                                                        to={`/syllabuses/${item.id}`}
+                                                    >
+                                                        <Eye className="size-4" />
+                                                        Detail
+                                                    </Link>
                                                 </Button>
-                                            )}
 
-                                            {canDelete && (
-                                                <Button
-                                                    size="sm"
-                                                    variant="destructive"
-                                                    onClick={() =>
-                                                        setDeleting(item)
-                                                    }
-                                                >
-                                                    <Trash2 className="size-4" />
-                                                    Delete
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
+                                                {canEdit && !published && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => openEdit(item)}
+                                                    >
+                                                        <Pencil className="size-4" />
+                                                        Edit
+                                                    </Button>
+                                                )}
+
+                                                {canDelete && !published && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="destructive"
+                                                        onClick={() => setDeleting(item)}
+                                                    >
+                                                        <Trash2 className="size-4" />
+                                                        Delete
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                             </tbody>
                         </table>
 
                         {results.length === 0 && (
                             <p className="p-8 text-center text-muted-foreground">
-                                No syllabuses found.
+                                No Syllabuses found.
                             </p>
                         )}
                     </div>
                 )}
             </div>
 
-            {/* Create / Edit Modal */}
+            {/* CREATE / EDIT MODAL */}
             <Modal
                 title={
-                    editing
-                        ? "Edit Syllabus"
-                        : "Create Syllabus"
+                    editing ? "Edit Syllabus" : "Create Syllabus"
                 }
                 open={formOpen}
                 onClose={() =>
@@ -524,7 +545,7 @@ export default function SyllabusesPage() {
             >
                 <form
                     className="space-y-4"
-                    onSubmit={(e) => void save(e)}
+                    onSubmit={(event) => void save(event)}
                 >
                     <div>
                         <label
@@ -538,14 +559,13 @@ export default function SyllabusesPage() {
                             id="syllabus-code"
                             value={form.code}
                             maxLength={30}
-                            onChange={(e) =>
-                                setForm((p) => ({
-                                    ...p,
-                                    code: e.target.value,
+                            required
+                            onChange={(event) =>
+                                setForm((previous) => ({
+                                    ...previous,
+                                    code: event.target.value,
                                 }))
                             }
-
-                            required
                         />
                     </div>
 
@@ -561,14 +581,13 @@ export default function SyllabusesPage() {
                             id="syllabus-name"
                             value={form.name}
                             maxLength={150}
-                            onChange={(e) =>
-                                setForm((p) => ({
-                                    ...p,
-                                    name: e.target.value,
+                            required
+                            onChange={(event) =>
+                                setForm((previous) => ({
+                                    ...previous,
+                                    name: event.target.value,
                                 }))
                             }
-
-                            required
                         />
                     </div>
 
@@ -586,10 +605,10 @@ export default function SyllabusesPage() {
                             rows={4}
                             maxLength={1500}
                             value={form.description}
-                            onChange={(e) =>
-                                setForm((p) => ({
-                                    ...p,
-                                    description: e.target.value,
+                            onChange={(event) =>
+                                setForm((previous) => ({
+                                    ...previous,
+                                    description: event.target.value,
                                 }))
                             }
                         />
@@ -599,10 +618,8 @@ export default function SyllabusesPage() {
                         <Button
                             type="button"
                             variant="outline"
-                            onClick={() =>
-                                setFormOpen(false)
-                            }
                             disabled={busy}
+                            onClick={() => setFormOpen(false)}
                         >
                             Cancel
                         </Button>
@@ -617,11 +634,11 @@ export default function SyllabusesPage() {
                 </form>
             </Modal>
 
-            {/* Delete Confirmation */}
+            {/* DELETE CONFIRMATION */}
             <ConfirmDialog
                 open={deleting !== null}
                 title="Delete Syllabus?"
-                description="Syllabuses containing sections cannot be deleted."
+                description="Syllabuses containing CLOs, Sections or Materials cannot be deleted."
                 confirmLabel="Delete"
                 onCancel={() =>
                     !busy && setDeleting(null)

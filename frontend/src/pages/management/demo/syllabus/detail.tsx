@@ -3,19 +3,18 @@ import {
     MaterialsPanel,
 } from "./SyllabusContentPanels";
 import GeneralInformationPanel from "./GeneralInformationPanel";
+import SyllabusWorkflowPanel from "./SyllabusWorkflowPanel";
 import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { toast } from "sonner";
-
 import {
     ArrowLeft,
     Plus,
     Pencil,
     Trash2,
     CheckCircle2,
-    Eye,
 } from "lucide-react";
 
 import {
@@ -145,22 +144,21 @@ export default function SyllabusDetailPage() {
     });
 
     const syllabus = detailQuery.data;
+    const published = syllabus?.status === "PUBLISHED";
 
     const sections = syllabus?.sections ?? [];
 
     async function refresh() {
-        await qc.invalidateQueries({
-            queryKey: ["syllabus", syllabusId],
-        });
-
-        await qc.invalidateQueries({
-            queryKey: ["syllabuses"],
-        });
-
+        await Promise.all([
+            qc.invalidateQueries({ queryKey: ["syllabus", syllabusId] }),
+            qc.invalidateQueries({ queryKey: ["syllabuses"] }),
+            qc.invalidateQueries({ queryKey: ["syllabus-progress", syllabusId] }),
+        ]);
         setValidation(null);
     }
 
     function openSection(section?: SyllabusSection){
+        if (published) return;
         setSectionMission(section?.mission ?? "");
         setEditingSection(section ?? null);
 
@@ -190,7 +188,7 @@ export default function SyllabusDetailPage() {
     ) {
         e.preventDefault();
 
-        if (busy) return;
+        if (busy || published) return;
 
         const title = norm(sectionTitle);
         const order = Number(sectionOrder);
@@ -281,6 +279,7 @@ export default function SyllabusDetailPage() {
     }
 
     function openBulk() {
+        if (published) return;
         setBulkCount(3);
         setBulkOpen(true);
     }
@@ -295,7 +294,7 @@ export default function SyllabusDetailPage() {
     async function saveBulk(e: FormEvent<HTMLFormElement>) {
         e.preventDefault();
 
-        if (busy) return;
+        if (busy || published) return;
 
         if (
             !Number.isInteger(bulkCount) ||
@@ -347,6 +346,7 @@ export default function SyllabusDetailPage() {
         section: SyllabusSection,
         topic?: Topic
     ) {
+        if (published) return;
         setTopicSection(section);
         setEditingTopic(topic ?? null);
         setTopicTitle(topic?.title ?? "");
@@ -357,7 +357,7 @@ export default function SyllabusDetailPage() {
     ) {
         e.preventDefault();
 
-        if (!topicSection || busy) return;
+        if (!topicSection || busy || published) return;
 
         const title = norm(topicTitle);
 
@@ -416,7 +416,7 @@ export default function SyllabusDetailPage() {
     }
 
     async function remove() {
-        if (!confirm || busy) return;
+        if (!confirm || busy || published) return;
 
         setBusy(true);
 
@@ -514,14 +514,10 @@ export default function SyllabusDetailPage() {
                 ) : (
                     <>
                         {/* Student Preview Button */}
-                        <div className="flex justify-end">
-                            <Button asChild variant="outline">
-                                <Link to={`/syllabuses/${syllabusId}/preview`}>
-                                    <Eye className="size-4" />
-                                    Student Preview
-                                </Link>
-                            </Button>
-                        </div>
+
+
+
+
                         {/* Syllabus Header */}
                         <section className="w-full rounded-xl border bg-card p-6">
                             <h1 className="break-words text-2xl font-bold">
@@ -534,10 +530,12 @@ export default function SyllabusDetailPage() {
                         </section>
 
                         {/* General Information */}
-                        <GeneralInformationPanel syllabusId={syllabusId} />
+                        <GeneralInformationPanel syllabusId={syllabusId} readOnly={published} />
 
                         {/* Course Learning Outcomes */}
-                        <CloPanel syllabusId={syllabusId} />
+                        <SyllabusWorkflowPanel syllabusId={syllabusId} />
+
+                        <CloPanel syllabusId={syllabusId} readOnly={published} />
 
 
 
@@ -558,7 +556,7 @@ export default function SyllabusDetailPage() {
                                     Validate
                                 </Button>
 
-                                {canAdd && (
+                                {canAdd && !published && (
                                     <>
                                         <Button
                                             variant="outline"
@@ -588,7 +586,7 @@ export default function SyllabusDetailPage() {
                                 className="rounded-lg border bg-card p-4 text-sm"
                             >
                                 {validation.valid ? (
-                                    "Valid outline: every section has a topic."
+                                    "All publishing requirements are satisfied."
                                 ) : (
                                     <>
                                         <strong>
@@ -636,7 +634,7 @@ export default function SyllabusDetailPage() {
                                         </div>
 
                                         <div className="flex gap-2">
-                                            {canEdit && (
+                                            {canEdit && !published && (
                                                 <Button
                                                     size="sm"
                                                     variant="outline"
@@ -649,7 +647,7 @@ export default function SyllabusDetailPage() {
                                                 </Button>
                                             )}
 
-                                            {canDelete && (
+                                            {canDelete && !published && (
                                                 <Button
                                                     size="sm"
                                                     variant="destructive"
@@ -691,7 +689,7 @@ export default function SyllabusDetailPage() {
                                                      </span>
 
                                                     <div className="flex gap-2">
-                                                        {canEdit && (
+                                                        {canEdit && !published && (
                                                             <Button
                                                                 size="sm"
                                                                 variant="ghost"
@@ -703,7 +701,7 @@ export default function SyllabusDetailPage() {
                                                             </Button>
                                                         )}
 
-                                                        {canDelete && (
+                                                        {canDelete && !published && (
                                                             <Button
                                                                 size="sm"
                                                                 variant="ghost"
@@ -725,6 +723,7 @@ export default function SyllabusDetailPage() {
                                                 <MaterialsPanel
                                                     syllabusId={syllabusId}
                                                     topicId={topic.id}
+                                                    readOnly={published}
                                                 />
                                             </div>
                                         ))}
@@ -736,7 +735,7 @@ export default function SyllabusDetailPage() {
                                             </p>
                                         )}
 
-                                        {canAdd && (
+                                        {canAdd && !published && (
                                             <Button
                                                 variant="outline"
                                                 size="sm"
@@ -753,14 +752,14 @@ export default function SyllabusDetailPage() {
                             )
                         )}
                         {/* General Learning Materials */}
-                        <MaterialsPanel syllabusId={syllabusId} />
+                        <MaterialsPanel syllabusId={syllabusId} readOnly={published} />
                     </>
                 )}
             </div>
 
             {/* Create / Edit Section */}
             <Modal
-                open={sectionOpen}
+                open={sectionOpen && !published}
                 onClose={() =>
                     !busy && setSectionOpen(false)
                 }
@@ -820,31 +819,31 @@ export default function SyllabusDetailPage() {
                         />
                     </div>
                     {/* Section Mission */}
-                        <div className="space-y-2">
-                            <label
-                                htmlFor="section-mission"
-                                className="text-sm font-medium"
-                            >
-                                Mission — Student Tasks (optional)
-                            </label>
+                    <div className="space-y-2">
+                        <label
+                            htmlFor="section-mission"
+                            className="text-sm font-medium"
+                        >
+                            Mission — Student Tasks (optional)
+                        </label>
 
-                            <textarea
-                                id="section-mission"
-                                value={sectionMission}
-                                onChange={(e) => setSectionMission(e.target.value)}
-                                maxLength={2000}
-                                rows={4}
-                                disabled={busy}
-                                placeholder={
-                                    "Tasks students should complete after this section..."
-                                }
-                                className="w-full rounded-md border bg-background p-3 text-sm"
-                            />
+                        <textarea
+                            id="section-mission"
+                            value={sectionMission}
+                            onChange={(e) => setSectionMission(e.target.value)}
+                            maxLength={2000}
+                            rows={4}
+                            disabled={busy}
+                            placeholder={
+                                "Tasks students should complete after this section..."
+                            }
+                            className="w-full rounded-md border bg-background p-3 text-sm"
+                        />
 
-                            <p className="text-xs text-muted-foreground">
-                                This mission will appear in the Student Learning Plan.
-                            </p>
-                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            This mission will appear in the Student Learning Plan.
+                        </p>
+                    </div>
 
                     <div className="flex justify-end gap-2">
                         <Button
@@ -869,7 +868,7 @@ export default function SyllabusDetailPage() {
 
             {/* Bulk Create Sections */}
             <Modal
-                open={bulkOpen}
+                open={bulkOpen && !published}
                 onClose={() => !busy && setBulkOpen(false)}
                 title="Create Sections"
                 size="lg"
@@ -922,7 +921,7 @@ export default function SyllabusDetailPage() {
 
             {/* Create / Edit Topic */}
             <Modal
-                open={topicSection !== null}
+                open={topicSection !== null && !published}
                 onClose={() =>
                     !busy && setTopicSection(null)
                 }
@@ -982,7 +981,7 @@ export default function SyllabusDetailPage() {
 
             {/* Delete Confirmation */}
             <ConfirmDialog
-                open={confirm !== null}
+                open={confirm !== null && !published}
                 title="Delete item?"
                 description="Cannot delete a Section until its Topics are deleted."
                 confirmLabel="Delete"

@@ -1,3 +1,4 @@
+
 package com.example.starter_project_2025.system.demo.syllabus;
 
 import com.example.starter_project_2025.exception.BusinessValidationException;
@@ -9,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -21,6 +23,13 @@ public class SyllabusMaterialService {
     private final SyllabusTopicRepository topics;
     private final SyllabusMaterialRepository materials;
 
+    // Added for Draft / Published workflow
+    private final SyllabusWorkflowService workflow;
+
+    // =============================================
+    // DTOs
+    // =============================================
+
     public record MaterialInput(
             String title,
             String type,
@@ -30,7 +39,8 @@ public class SyllabusMaterialService {
             Boolean mainMaterial,
             String note,
             Long topicId
-    ) {}
+    ) {
+    }
 
     public record MaterialView(
             Long id,
@@ -42,7 +52,12 @@ public class SyllabusMaterialService {
             boolean mainMaterial,
             String note,
             Long topicId
-    ) {}
+    ) {
+    }
+
+    // =============================================
+    // VALIDATION HELPERS
+    // =============================================
 
     private static void fail(String field, String message) {
         throw new BusinessValidationException(
@@ -64,10 +79,14 @@ public class SyllabusMaterialService {
     ) {
         String value = clean(raw);
 
-        if (required &&
-                (value.length() < 3 ||
-                        value.codePoints().noneMatch(Character::isLetter))) {
-            fail(field, "Must contain letters and at least 3 characters");
+        if (required
+                && (value.length() < 3
+                || value.codePoints()
+                .noneMatch(Character::isLetter))) {
+            fail(
+                    field,
+                    "Must contain letters and at least 3 characters"
+            );
         }
 
         if (value.length() > max) {
@@ -81,7 +100,10 @@ public class SyllabusMaterialService {
         String value = raw == null ? "" : raw.strip();
 
         if (value.isEmpty() || value.length() > 2048) {
-            fail("url", "URL is required (max 2048 characters)");
+            fail(
+                    "url",
+                    "URL is required (max 2048 characters)"
+            );
         }
 
         try {
@@ -89,12 +111,15 @@ public class SyllabusMaterialService {
 
             String scheme = uri.getScheme();
 
-            if (scheme == null ||
-                    !(scheme.equalsIgnoreCase("https") ||
-                            scheme.equalsIgnoreCase("http")) ||
-                    uri.getHost() == null ||
-                    uri.getUserInfo() != null) {
-                fail("url", "Enter a valid HTTP or HTTPS URL");
+            if (scheme == null
+                    || !(scheme.equalsIgnoreCase("https")
+                    || scheme.equalsIgnoreCase("http"))
+                    || uri.getHost() == null
+                    || uri.getUserInfo() != null) {
+                fail(
+                        "url",
+                        "Enter a valid HTTP or HTTPS URL"
+                );
             }
 
         } catch (URISyntaxException exception) {
@@ -137,7 +162,10 @@ public class SyllabusMaterialService {
                 .getId();
 
         if (!Objects.equals(parentId, syllabusId)) {
-            fail("topicId", "Topic belongs to another Syllabus");
+            fail(
+                    "topicId",
+                    "Topic belongs to another Syllabus"
+            );
         }
 
         return topic;
@@ -147,13 +175,16 @@ public class SyllabusMaterialService {
             Long syllabusId,
             Long materialId
     ) {
-        SyllabusMaterial material =
-                materials.findById(materialId)
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "Learning Material not found"
-                                )
-                        );
+        if (materialId == null || materialId <= 0) {
+            fail("materialId", "Invalid Learning Material ID");
+        }
+
+        SyllabusMaterial material = materials.findById(materialId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Learning Material not found"
+                        )
+                );
 
         if (!Objects.equals(
                 material.getSyllabus().getId(),
@@ -183,6 +214,10 @@ public class SyllabusMaterialService {
         );
     }
 
+    // =============================================
+    // MAP AND VALIDATE MATERIAL INPUT
+    // =============================================
+
     private void fill(
             SyllabusMaterial material,
             Long syllabusId,
@@ -192,10 +227,17 @@ public class SyllabusMaterialService {
             fail("material", "Request body is required");
         }
 
-        String title = text(input.title(), "title", 200, true);
+        String title = text(
+                input.title(),
+                "title",
+                200,
+                true
+        );
+
         String url = validateUrl(input.url());
 
-        if (input.type() == null) {
+        if (input.type() == null
+                || input.type().isBlank()) {
             fail("type", "Material type is required");
         }
 
@@ -203,7 +245,9 @@ public class SyllabusMaterialService {
 
         try {
             type = SyllabusMaterial.MaterialType.valueOf(
-                    input.type().strip().toUpperCase(java.util.Locale.ROOT)
+                    input.type()
+                            .strip()
+                            .toUpperCase(Locale.ROOT)
             );
         } catch (IllegalArgumentException exception) {
             fail("type", "Unsupported material type");
@@ -218,27 +262,48 @@ public class SyllabusMaterialService {
         material.setTitle(title);
         material.setType(type);
         material.setUrl(url);
-        material.setAuthor(text(input.author(), "author", 150, false));
-        material.setPublisher(text(input.publisher(), "publisher", 150, false));
-        material.setMainMaterial(Boolean.TRUE.equals(input.mainMaterial()));
-        material.setNote(text(input.note(), "note", 1000, false));
+        material.setAuthor(
+                text(input.author(), "author", 150, false)
+        );
+        material.setPublisher(
+                text(input.publisher(), "publisher", 150, false)
+        );
+        material.setMainMaterial(
+                Boolean.TRUE.equals(input.mainMaterial())
+        );
+        material.setNote(
+                text(input.note(), "note", 1000, false)
+        );
         material.setTopic(topic);
     }
+
+    // =============================================
+    // READ MATERIALS
+    // Allowed for DRAFT and PUBLISHED
+    // =============================================
 
     @Transactional(readOnly = true)
     public List<MaterialView> list(Long syllabusId) {
         requireSyllabus(syllabusId);
 
-        return materials.findBySyllabus_IdOrderByIdAsc(syllabusId)
+        return materials
+                .findBySyllabus_IdOrderByIdAsc(syllabusId)
                 .stream()
                 .map(SyllabusMaterialService::view)
                 .toList();
     }
 
+    // =============================================
+    // CREATE MATERIAL
+    // Only allowed for DRAFT
+    // =============================================
+
     public MaterialView create(
             Long syllabusId,
             MaterialInput input
     ) {
+        workflow.requireDraft(syllabusId);
+
         Syllabus syllabus = requireSyllabus(syllabusId);
 
         SyllabusMaterial material = new SyllabusMaterial();
@@ -249,25 +314,43 @@ public class SyllabusMaterialService {
         return view(materials.saveAndFlush(material));
     }
 
+    // =============================================
+    // UPDATE MATERIAL
+    // Only allowed for DRAFT
+    // =============================================
+
     public MaterialView update(
             Long syllabusId,
             Long materialId,
             MaterialInput input
     ) {
-        SyllabusMaterial material =
-                requireMaterial(syllabusId, materialId);
+        workflow.requireDraft(syllabusId);
+
+        SyllabusMaterial material = requireMaterial(
+                syllabusId,
+                materialId
+        );
 
         fill(material, syllabusId, input);
 
         return view(materials.saveAndFlush(material));
     }
 
+    // =============================================
+    // DELETE MATERIAL
+    // Only allowed for DRAFT
+    // =============================================
+
     public void delete(
             Long syllabusId,
             Long materialId
     ) {
-        SyllabusMaterial material =
-                requireMaterial(syllabusId, materialId);
+        workflow.requireDraft(syllabusId);
+
+        SyllabusMaterial material = requireMaterial(
+                syllabusId,
+                materialId
+        );
 
         materials.delete(material);
     }

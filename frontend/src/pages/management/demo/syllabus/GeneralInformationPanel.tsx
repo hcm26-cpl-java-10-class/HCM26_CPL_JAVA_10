@@ -110,13 +110,15 @@ function getErrorMessage(error: unknown): string {
 
 export default function GeneralInformationPanel({
                                                     syllabusId,
+                                                    readOnly = false,
                                                 }: {
     syllabusId: number;
+    readOnly?: boolean;
 }) {
     const qc = useQueryClient();
     const { hasPermission } = usePermissions();
 
-    const canEdit = hasPermission("SYLLABUS_UPDATE");
+    const canEdit = !readOnly && hasPermission("SYLLABUS_UPDATE");
 
     const [open, setOpen] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -246,6 +248,9 @@ export default function GeneralInformationPanel({
                 qc.invalidateQueries({
                     queryKey: ["syllabuses"],
                 }),
+                qc.invalidateQueries({
+                    queryKey: ["syllabus-progress", syllabusId],
+                }),
             ]);
 
             setOpen(false);
@@ -340,7 +345,7 @@ export default function GeneralInformationPanel({
             ) : null}
 
             <Modal
-                open={open}
+                open={open && !readOnly}
                 title="Edit Syllabus Information"
                 size="lg"
                 onClose={() => {

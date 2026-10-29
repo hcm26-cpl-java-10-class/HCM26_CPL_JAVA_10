@@ -38,9 +38,10 @@ public final class SyllabusModels {
             String name,
             String description,
             long sectionCount,
-            boolean isActive
-    ) {
-    }
+            boolean isActive,
+            String status,
+            int completionPercent
+    ) {}
 
     public record TopicView(
             Long id,
@@ -64,9 +65,10 @@ public final class SyllabusModels {
             String name,
             String description,
             List<SectionView> sections,
-            boolean isActive
-    ) {
-    }
+            boolean isActive,
+            String status,
+            int completionPercent
+    ) {}
 
     public record ValidationResult(
             boolean valid,
@@ -100,4 +102,7 @@ public final class SyllabusModels {
             Integer scoringScale
     ) {
     }
+
+
+
 }
