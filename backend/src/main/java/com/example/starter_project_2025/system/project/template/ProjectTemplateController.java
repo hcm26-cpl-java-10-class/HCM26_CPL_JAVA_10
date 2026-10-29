@@ -37,6 +37,7 @@ public class ProjectTemplateController {
     private final TemplateActivationService activationService;
     private final TemplateSampleContentService sampleContentService;
     private final TemplateBacklogImportService backlogImportService;
+    private final ProjectTemplateDeletionService deletionService;
 
     @GetMapping("/options")
     @PreAuthorize("hasAuthority('PROJECT_TEMPLATE_READ')")
@@ -165,8 +166,9 @@ public class ProjectTemplateController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('PROJECT_TEMPLATE_ARCHIVE')")
-    public void rejectDelete(@PathVariable Long id) {
-        service.rejectDelete(id);
+    public ResponseEntity<Void> delete(@PathVariable Long id, @RequestParam Long lockVersion) {
+        deletionService.delete(id, lockVersion);
+        return ResponseEntity.noContent().build();
     }
 
     private int number(String value, String field, int minimum, int maximum) {

@@ -18,15 +18,15 @@ public class TemplateTeamConstraintsMapper {
         JsonNode roles = root.path("role_quotas");
         if (!root.hasNonNull("min_members") || !root.hasNonNull("max_members")
                 || !root.hasNonNull("allow_multi_role") || !roles.isObject()
-                || List.of("pm", "ba", "dev", "qa").stream().anyMatch(role -> !roles.hasNonNull(role))) {
+                || List.of("pm", "ba", "dev", "qa").stream().anyMatch(role -> minimum(roles, role).isMissingNode())) {
             return null;
         }
         if (!root.get("allow_multi_role").isBoolean()) {
             throw new IllegalStateException("Invalid stored multi-role setting");
         }
         return new TemplateTeamConstraints(integer(root.get("min_members")), integer(root.get("max_members")),
-                new TemplateTeamConstraints.RoleQuotas(integer(roles.get("pm")), integer(roles.get("ba")),
-                        integer(roles.get("dev")), integer(roles.get("qa"))),
+                new TemplateTeamConstraints.RoleQuotas(integer(minimum(roles, "pm")), integer(minimum(roles, "ba")),
+                        integer(minimum(roles, "dev")), integer(minimum(roles, "qa"))),
                 root.get("allow_multi_role").booleanValue());
     }
 
@@ -35,14 +35,12 @@ public class TemplateTeamConstraintsMapper {
         root.put("min_members", request.minMembers().intValueExact());
         root.put("max_members", request.maxMembers().intValueExact());
         root.put("allow_multi_role", request.allowMultiRole());
-        // Replace, don't merge: seeded JSON uses uppercase role keys while this
-        // mapper uses lowercase, and merging produced duplicate PM/BA/DEV/QA
-        // entries that made the template disappear from the assignable list.
+        JsonNode existing = root.path("role_quotas");
         ObjectNode roles = objectMapper.createObjectNode();
-        roles.put("pm", request.roleQuotas().pm().intValueExact());
-        roles.put("ba", request.roleQuotas().ba().intValueExact());
-        roles.put("dev", request.roleQuotas().dev().intValueExact());
-        roles.put("qa", request.roleQuotas().qa().intValueExact());
+        quota(roles, existing, "PM", request.roleQuotas().pm().intValueExact());
+        quota(roles, existing, "BA", request.roleQuotas().ba().intValueExact());
+        quota(roles, existing, "DEV", request.roleQuotas().dev().intValueExact());
+        quota(roles, existing, "QA", request.roleQuotas().qa().intValueExact());
         root.set("role_quotas", roles);
         try {
             return objectMapper.writeValueAsString(root);
@@ -66,5 +64,22 @@ public class TemplateTeamConstraintsMapper {
             throw new IllegalStateException("Invalid stored team size or role quota");
         }
         return node.intValue();
+    }
+
+    private JsonNode minimum(JsonNode roles, String role) {
+        JsonNode value = roles.hasNonNull(role) ? roles.path(role) : roles.path(role.toUpperCase(java.util.Locale.ROOT));
+        return value.isObject() ? value.path("min") : value;
+    }
+
+    private void quota(ObjectNode roles, JsonNode existing, String role, int minimum) {
+        JsonNode old = existing.has(role) ? existing.path(role) : existing.path(role.toLowerCase(java.util.Locale.ROOT));
+        if (old instanceof ObjectNode object) {
+            ObjectNode value = object.deepCopy();
+            value.put("min", minimum);
+            if (value.hasNonNull("max") && value.path("max").asInt() < minimum) value.put("max", minimum);
+            roles.set(role, value);
+        } else {
+            roles.put(role, minimum);
+        }
     }
 }

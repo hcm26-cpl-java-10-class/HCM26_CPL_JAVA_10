@@ -14,10 +14,18 @@ import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.project_template_version.audit.ProjectTemplateSnapshotAuditLogDTO;
 import com.example.starter_project_2025.system.project.project_template_version.audit.ProjectTemplateSnapshotAuditService;
 import com.example.starter_project_2025.system.project.project_template_version.event.ProjectTemplateSnapshotOutboxService;
-import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestone;
-import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneRepository;
+import com.example.starter_project_2025.system.project.template.TemplateConfigurationService;
+import com.example.starter_project_2025.system.project.template.ProjectTemplateAccessService;
+import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
+import com.example.starter_project_2025.system.project.template.assignment.TemplateBriefSnapshotWriter;
+import com.example.starter_project_2025.system.rbac.user.User;
+import org.springframework.data.jpa.domain.Specification;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -62,12 +70,6 @@ import java.util.stream.Collectors;
  *     <li>audit log (actor, timestamp, before/after, correlation id) + outbox
  *     event (idempotent)</li>
  * </ul>
- * <p>
- * The ProjectTemplate / Project relations are never validated (both modules are
- * owned by other team members, so {@code templateId} and {@code projectId} are
- * only carried along and any id is accepted), but they are resolved read-only on
- * every response: {@code templateName} / {@code projectName} are filled from the
- * owning rows so the clients never render a raw id.
  */
 @Service
 @Transactional
@@ -105,9 +107,6 @@ public class ProjectTemplateSnapshotServiceImpl
     /** Mirrors the {@code ProjectTemplate.name} column. */
     static final int MAX_NAME_LENGTH = 255;
 
-    /** Fallback when the source template row is unknown (owned by another team). */
-    static final String DEFAULT_CONSTRAINTS_JSON = "{}";
-
     static final String PERMISSION_READ = "PROJECT_TEMPLATE_VERSION_READ";
 
     /** US-07: audit action that distinguishes a derived version from a plain create. */
@@ -130,20 +129,12 @@ public class ProjectTemplateSnapshotServiceImpl
     ProjectTemplateSnapshotRepository snapshotRepository;
     ProjectTemplateSnapshotAuditService snapshotAuditService;
     ProjectTemplateSnapshotOutboxService snapshotOutboxService;
-    /**
-     * Used by {@link #duplicateTemplate(Long, String)} (US-08) to store
-     * the {@code name} of the copy.
-     * <p>
-     * TODO(project-template): when the Project Template module exposes its own
-     * service/DTO layer, replace these repository calls with that service so the
-     * ownership of {@code project_templates} stays in a single module.
-     */
     ProjectTemplateRepository projectTemplateRepository;
     /** Read-only lookup of the {@code project} rows behind {@code projectId}. */
     ProjectRepository projectRepository;
-    /** Used to derive the baseline snapshot payload from the template plan. */
-    TemplateMilestoneRepository templateMilestoneRepository;
     ObjectMapper objectMapper;
+    TemplateConfigurationService configurations;
+    ProjectTemplateAccessService templateAccess;
 
     @Override
     protected BaseCrudRepository<ProjectTemplateSnapshot, Long> getRepository() {
@@ -175,6 +166,7 @@ public class ProjectTemplateSnapshotServiceImpl
 
         validateTemplateId(snapshot.getTemplateId(), errors);
         validateTemplateExists(snapshot.getTemplateId(), errors);
+        if (snapshot.getTemplateId() != null) requireOwnedTemplate(snapshot.getTemplateId());
         validateVersion(snapshot.getVersion(), errors);
         validateContentJson(snapshot.getContentJson(), errors);
 
@@ -189,9 +181,7 @@ public class ProjectTemplateSnapshotServiceImpl
         // US-07: a version that is created (directly or as a new version of an
         // existing one) always starts as DRAFT. Existing snapshots are never
         // touched, which keeps every derived workspace/project isolated.
-        if (snapshot.getStatus() == null) {
-            snapshot.setStatus(ProjectTemplateVersionStatus.DRAFT);
-        }
+        snapshot.setStatus(ProjectTemplateVersionStatus.DRAFT);
     }
 
     // ---------------------------------------------------------------------
@@ -204,6 +194,8 @@ public class ProjectTemplateSnapshotServiceImpl
         checkPermission(CrudAction.CREATE);
 
         ProjectTemplateSnapshot source = findSnapshot(sourceVersionId);
+        requireOwnedTemplate(source.getTemplateId());
+        requireTemplateVersion(source);
 
         Map<String, List<String>> errors = new LinkedHashMap<>();
 
@@ -216,7 +208,7 @@ public class ProjectTemplateSnapshotServiceImpl
 
         ProjectTemplateSnapshot created = ProjectTemplateSnapshot.builder()
                 .templateId(source.getTemplateId())
-                .projectId(source.getProjectId())
+                .projectId(null)
                 // Traceability: point at the version this one was cloned from.
                 .parentTemplateId(source.getId())
                 .version(nextVersion)
@@ -276,9 +268,13 @@ public class ProjectTemplateSnapshotServiceImpl
         }
 
         // Idempotent: a template owns exactly one v1.0 baseline.
-        if (!snapshotRepository.findByTemplateIdOrderByCreatedAtDesc(template.getId()).isEmpty()) {
+        if (snapshotRepository.findByTemplateIdOrderByCreatedAtDesc(template.getId()).stream()
+                .anyMatch(version -> version.getProjectId() == null)) {
             return null;
         }
+
+        String baselineVersion = snapshotRepository.existsByTemplateIdAndVersion(template.getId(), INITIAL_VERSION)
+                ? nextVersionLabel(template.getId()) : INITIAL_VERSION;
 
         ProjectTemplateSnapshot baseline = ProjectTemplateSnapshot.builder()
                 .templateId(template.getId())
@@ -286,13 +282,15 @@ public class ProjectTemplateSnapshotServiceImpl
                 .projectId(null)
                 // First version of the chain: nothing to trace back to.
                 .parentTemplateId(null)
-                .version(INITIAL_VERSION)
+                .version(baselineVersion)
                 .contentJson(initialContentJson(template))
-                .status(ProjectTemplateVersionStatus.DRAFT)
+                .status(template.getStatus() == ProjectTemplateStatus.ACTIVE
+                        ? ProjectTemplateVersionStatus.PUBLISHED : ProjectTemplateVersionStatus.DRAFT)
                 .isActive(true)
                 .build();
 
         ProjectTemplateSnapshot saved = snapshotRepository.save(baseline);
+        syncTemplateVersion(template.getId(), baselineVersion);
 
         Map<String, Object> after = snapshot(saved);
         after.put("sourceTemplateId", template.getId());
@@ -314,12 +312,8 @@ public class ProjectTemplateSnapshotServiceImpl
 
     @Override
     public ProjectTemplateSnapshotDTO createInitialVersion(Long templateId) {
-
-        if (templateId == null) {
-            return null;
-        }
-
-        return createInitialVersion(projectTemplateRepository.findById(templateId).orElse(null));
+        checkPermission(CrudAction.CREATE);
+        return createInitialVersion(requireOwnedTemplate(templateId));
     }
 
     // ---------------------------------------------------------------------
@@ -412,6 +406,8 @@ public class ProjectTemplateSnapshotServiceImpl
         checkPermission(CrudAction.CREATE);
 
         ProjectTemplateSnapshot source = findSnapshot(sourceVersionId);
+        requireTemplateVersion(source);
+        User actor = templateAccess.requireUser("CREATE");
 
         String newName = trimToNull(name);
 
@@ -424,7 +420,7 @@ public class ProjectTemplateSnapshotServiceImpl
 
         // 1) The copy owns a brand new ProjectTemplate (new name).
         ProjectTemplate duplicatedTemplate =
-                createIndependentTemplate(source.getTemplateId(), newName);
+                configurations.duplicate(requireReadableTemplate(source.getTemplateId()), source, newName, actor.getTenantId());
 
         // 2) v1.0 DRAFT snapshot of the new template: configuration copied,
         //    but no parent_template_id link back to the source version.
@@ -436,7 +432,7 @@ public class ProjectTemplateSnapshotServiceImpl
                 .parentTemplateId(null)
                 .version(DUPLICATE_INITIAL_VERSION)
                 // Strings are immutable, the source row can never be mutated.
-                .contentJson(source.getContentJson())
+                .contentJson(configurations.capture(duplicatedTemplate))
                 .status(ProjectTemplateVersionStatus.DRAFT)
                 .isActive(true)
                 .build();
@@ -461,33 +457,6 @@ public class ProjectTemplateSnapshotServiceImpl
                 after);
 
         return toResponse(saved);
-    }
-
-    /**
-     * Creates the {@code ProjectTemplate} row the duplicate hangs from, copying
-     * the business constraints of the source template when it is known.
-     * <p>
-     * The Project Template module is owned by another team member and currently
-     * only exposes the entity + repository, so the row is written directly
-     * here. Swapping these calls for the future {@code ProjectTemplateService}
-     * does not change the API, the database or the rules implemented above.
-     */
-    private ProjectTemplate createIndependentTemplate(Long sourceTemplateId,
-                                                      String name) {
-
-        String constraintsJson = sourceTemplateId == null
-                ? DEFAULT_CONSTRAINTS_JSON
-                : projectTemplateRepository.findById(sourceTemplateId)
-                        .map(ProjectTemplate::getConstraintsJson)
-                        .filter(value -> value != null && !value.isBlank())
-                        .orElse(DEFAULT_CONSTRAINTS_JSON);
-
-        return projectTemplateRepository.save(
-                ProjectTemplate.builder()
-                        .name(name)
-                        .constraintsJson(constraintsJson)
-                        .isActive(true)
-                        .build());
     }
 
     @Override
@@ -522,6 +491,8 @@ public class ProjectTemplateSnapshotServiceImpl
         checkPermission(CrudAction.UPDATE);
 
         ProjectTemplateSnapshot snapshot = findSnapshot(id);
+        requireOwnedTemplate(snapshot.getTemplateId());
+        requireReusableVersion(snapshot);
 
         Long templateId = request.getTemplateId() != null
                 ? request.getTemplateId()
@@ -566,6 +537,9 @@ public class ProjectTemplateSnapshotServiceImpl
         // configuration may only be edited while the version is still DRAFT.
         if (snapshot.getStatus() != null
                 && snapshot.getStatus() != ProjectTemplateVersionStatus.DRAFT) {
+            if (status == ProjectTemplateVersionStatus.DRAFT) {
+                errors.put("status", List.of("Published versions cannot be changed back to draft. Create a new version instead"));
+            }
             if (contentJson != null && !contentJson.equals(snapshot.getContentJson())) {
                 errors.put(CONTENT_JSON_FIELD,
                         List.of("Chỉ phiên bản DRAFT mới được sửa nội dung; hãy tạo phiên bản mới để thay đổi cấu hình"));
@@ -626,6 +600,8 @@ public class ProjectTemplateSnapshotServiceImpl
         checkPermission(CrudAction.DELETE);
 
         ProjectTemplateSnapshot snapshot = findSnapshot(id);
+        requireOwnedTemplate(snapshot.getTemplateId());
+        requireReusableVersion(snapshot);
 
         Map<String, Object> before = snapshot(snapshot);
 
@@ -656,7 +632,25 @@ public class ProjectTemplateSnapshotServiceImpl
                                                    String search,
                                                    ProjectTemplateSnapshotFilter filter) {
 
-        Page<ProjectTemplateSnapshotDTO> page = super.getAll(pageable, search, filter);
+        checkPermission(CrudAction.READ);
+        User user = templateAccess.requireUser("READ");
+        Specification<ProjectTemplateSnapshot> scoped = (root, query, builder) -> {
+            var owner = query.subquery(Long.class);
+            var template = owner.from(ProjectTemplate.class);
+            owner.select(template.get("id")).where(builder.and(
+                    builder.equal(template.get("id"), root.get("templateId")),
+                    builder.isTrue(template.get("isActive")),
+                    builder.or(builder.isNull(template.get("tenantId")), builder.equal(template.get("tenantId"), user.getTenantId()))));
+            return builder.and(builder.exists(owner), templateVersionsOnly(root, builder));
+        };
+        Specification<ProjectTemplateSnapshot> filterSpec = autoSpecBuilder.build(filter);
+        if (filterSpec != null) scoped = scoped.and(filterSpec);
+        if (search != null && !search.isBlank()) {
+            String keyword = "%" + search.strip().toLowerCase(java.util.Locale.ROOT)
+                    .replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
+            scoped = scoped.and((root, query, builder) -> builder.like(builder.lower(root.get("version")), keyword, '\\'));
+        }
+        Page<ProjectTemplateSnapshotDTO> page = snapshotRepository.findAll(scoped, pageable).map(snapshotMapper::toResponse);
 
         enrichOwnerNames(page.getContent());
 
@@ -666,7 +660,8 @@ public class ProjectTemplateSnapshotServiceImpl
     @Override
     public ProjectTemplateSnapshotDTO getById(Long id) {
 
-        ProjectTemplateSnapshotDTO dto = super.getById(id);
+        checkPermission(CrudAction.READ);
+        ProjectTemplateSnapshotDTO dto = snapshotMapper.toResponse(findSnapshot(id));
 
         enrichOwnerNames(List.of(dto));
 
@@ -694,9 +689,11 @@ public class ProjectTemplateSnapshotServiceImpl
                     TEMPLATE_ID_FIELD, "Vui lòng chọn Project Template");
         }
 
+        requireReadableTemplate(templateId);
+
         List<ProjectTemplateSnapshotDTO> versions = snapshotRepository
                 .findByTemplateIdOrderByCreatedAtDesc(templateId)
-                .stream()
+                .stream().filter(this::isTemplateVersion)
                 .map(snapshotMapper::toResponse)
                 .collect(Collectors.toCollection(ArrayList::new));
 
@@ -726,7 +723,13 @@ public class ProjectTemplateSnapshotServiceImpl
 
         check(PERMISSION_READ);
 
-        List<ProjectTemplateSnapshot> snapshots = snapshotRepository.findAll();
+        User actor = templateAccess.requireUser("READ");
+        Set<Long> readableIds = projectTemplateRepository.findAll().stream()
+                .filter(template -> Boolean.TRUE.equals(template.getIsActive())
+                        && (template.getTenantId() == null || actor.getTenantId().equals(template.getTenantId())))
+                .map(ProjectTemplate::getId).collect(Collectors.toSet());
+        List<ProjectTemplateSnapshot> snapshots = snapshotRepository.findAll().stream()
+                .filter(version -> readableIds.contains(version.getTemplateId()) && isTemplateVersion(version)).toList();
 
         Map<Long, String> templateNames =
                 resolveTemplateNames(ownerIds(snapshots, ProjectTemplateSnapshot::getTemplateId));
@@ -736,14 +739,60 @@ public class ProjectTemplateSnapshotServiceImpl
         return snapshots.stream()
                 .map(snapshot -> ProjectTemplateSnapshotExportRow.from(
                         snapshot,
-                        templateNames.get(snapshot.getTemplateId()),
-                        projectNames.get(snapshot.getProjectId())))
+                        snapshot.getTemplateId() == null ? null : templateNames.get(snapshot.getTemplateId()),
+                        snapshot.getProjectId() == null ? null : projectNames.get(snapshot.getProjectId())))
                 .toList();
     }
 
     // ---------------------------------------------------------------------
     // Validation helpers
     // ---------------------------------------------------------------------
+
+    private ProjectTemplate requireReadableTemplate(Long id) {
+        User user = templateAccess.requireUser("READ");
+        return projectTemplateRepository.findReadableById(id, user.getTenantId())
+                .orElseThrow(() -> new ResourceNotFoundException("Project template was not found"));
+    }
+
+    private ProjectTemplate requireOwnedTemplate(Long id) {
+        User user = templateAccess.requireUser("UPDATE");
+        var template = projectTemplateRepository.findForTemplateUpdate(id, user.getTenantId())
+                .orElseThrow(() -> new ResourceNotFoundException("Project template was not found"));
+        if (template.getStatus() == ProjectTemplateStatus.ARCHIVED) {
+            throw new ProjectTemplateSnapshotValidationException("templateId", "Archived templates cannot be changed");
+        }
+        return template;
+    }
+
+    private void requireReusableVersion(ProjectTemplateSnapshot version) {
+        if (version.getProjectId() != null || !isTemplateVersion(version)) {
+            throw new ProjectTemplateSnapshotValidationException("id", "Workspace snapshots cannot be changed or used as template versions");
+        }
+    }
+
+    private void requireTemplateVersion(ProjectTemplateSnapshot version) {
+        if (!isTemplateVersion(version)) {
+            throw new ProjectTemplateSnapshotValidationException("id", "Workspace snapshots cannot be used as template versions");
+        }
+    }
+
+    private boolean isTemplateVersion(ProjectTemplateSnapshot version) {
+        try {
+            var content = objectMapper.readTree(version.getContentJson());
+            return content == null || !TemplateBriefSnapshotWriter.PURPOSE_TEAM_ASSIGNMENT.equals(content.path("purpose").asText());
+        } catch (JsonProcessingException | IllegalArgumentException exception) {
+            return version.getProjectId() == null;
+        }
+    }
+
+    private Predicate templateVersionsOnly(Root<ProjectTemplateSnapshot> root, CriteriaBuilder builder) {
+        Expression<String> content = root.get("contentJson");
+        for (String whitespace : List.of(" ", "\t", "\r", "\n")) {
+            content = builder.function("replace", String.class, content, builder.literal(whitespace), builder.literal(""));
+        }
+        return builder.notLike(content, "%\"purpose\":\""
+                + TemplateBriefSnapshotWriter.PURPOSE_TEAM_ASSIGNMENT.replace("_", "\\_") + "\"%", '\\');
+    }
 
     private ProjectTemplateSnapshot findSnapshot(Long id) {
 
@@ -752,8 +801,10 @@ public class ProjectTemplateSnapshotServiceImpl
                     "id", "Vui lòng chọn phiên bản Project Template");
         }
 
-        return snapshotRepository.findById(id)
+        ProjectTemplateSnapshot snapshot = snapshotRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ProjectTemplateSnapshot", "id", id));
+        requireReadableTemplate(snapshot.getTemplateId());
+        return snapshot;
     }
 
     /**
@@ -997,66 +1048,9 @@ public class ProjectTemplateSnapshotServiceImpl
      * overview, its team constraints and its milestone plan.
      */
     private String initialContentJson(ProjectTemplate template) {
-
-        Map<String, Object> content = new LinkedHashMap<>();
-
-        content.put("templateId", template.getId());
-        content.put("code", template.getCode());
-        content.put("name", template.getName());
-        content.put("description", template.getDescription());
-        content.put("category", template.getCategory());
-        content.put("level", template.getLevel() == null ? null : template.getLevel().name());
-        content.put("estimatedDurationWeeks", template.getEstimatedDurationWeeks());
-        content.put("constraints", readJsonOrNull(template.getConstraintsJson()));
-        content.put("milestones", milestonesOf(template.getId()));
-
-        try {
-            return objectMapper.writeValueAsString(content);
-        } catch (JsonProcessingException ex) {
-            return DEFAULT_CONSTRAINTS_JSON;
-        }
+        return configurations.capture(template);
     }
 
-    private List<Map<String, Object>> milestonesOf(Long templateId) {
-
-        if (templateId == null) {
-            return List.of();
-        }
-
-        List<TemplateMilestone> plan = templateMilestoneRepository
-                .findAllByTemplate_IdOrderByOrderIndexAscIdAsc(templateId);
-
-        List<Map<String, Object>> rows = new ArrayList<>();
-
-        for (TemplateMilestone milestone : plan) {
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("id", milestone.getId());
-            row.put("title", milestone.getTitle());
-            row.put("description", milestone.getDescription());
-            row.put("dueAfter", milestone.getDueAfter());
-            row.put("dueUnit", milestone.getDueUnit() == null ? null : milestone.getDueUnit().name());
-            row.put("weight", milestone.getWeight());
-            row.put("mandatory", milestone.isMandatory());
-            rows.add(row);
-        }
-
-        return rows;
-    }
-
-    private Object readJsonOrNull(String json) {
-
-        if (json == null || json.isBlank()) {
-            return null;
-        }
-
-        try {
-            return objectMapper.readTree(json);
-        } catch (JsonProcessingException ex) {
-            return null;
-        }
-    }
-
-    /** Mapper output enriched with the owning template / project names. */
     private ProjectTemplateSnapshotDTO toResponse(ProjectTemplateSnapshot snapshot) {
 
         ProjectTemplateSnapshotDTO dto = snapshotMapper.toResponse(snapshot);
@@ -1089,8 +1083,8 @@ public class ProjectTemplateSnapshotServiceImpl
                         .collect(Collectors.toSet()));
 
         rows.forEach(row -> {
-            row.setTemplateName(templateNames.get(row.getTemplateId()));
-            row.setProjectName(projectNames.get(row.getProjectId()));
+            row.setTemplateName(row.getTemplateId() == null ? null : templateNames.get(row.getTemplateId()));
+            row.setProjectName(row.getProjectId() == null ? null : projectNames.get(row.getProjectId()));
         });
     }
 
@@ -1123,8 +1117,12 @@ public class ProjectTemplateSnapshotServiceImpl
             return Map.of();
         }
 
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        Long tenantId = authentication != null && authentication.getPrincipal() instanceof UserPrincipal principal
+                ? principal.getUser().getTenantId() : null;
         return projectRepository.findAllById(projectIds)
                 .stream()
+                .filter(project -> tenantId != null && tenantId.equals(project.getTenantId()))
                 .collect(Collectors.toMap(
                         Project::getId, Project::getName, (left, right) -> left));
     }

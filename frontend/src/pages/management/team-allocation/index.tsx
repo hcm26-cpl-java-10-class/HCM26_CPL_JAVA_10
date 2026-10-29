@@ -1,4 +1,4 @@
-import { projectTemplateApi, teamAllocationApi } from "@/api";
+import { teamAllocationApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useAssignableProjectTemplates } from "@/hooks/useAssignableProjectTemplates";
 import type { TrainingClassDTO } from "@/types/features/training-class";
 import type {
   AllocationApiError,
@@ -45,6 +46,7 @@ import {
   ListChecks,
   LoaderCircle,
   Plus,
+  RefreshCw,
   Ban,
   Save,
   Search,
@@ -373,14 +375,8 @@ export default function TeamAllocationPage() {
     queryFn: () => teamAllocationApi.getClassMentors(classId),
     enabled: Number.isSafeInteger(classId) && classId > 0,
   });
-  // US-10: assignable project templates (min/max capacity window). Always
-  // refresh on mount so a template activated in another screen shows up here.
-  const templatesQuery = useQuery({
-    queryKey: ["project-templates", "options"],
-    queryFn: () => projectTemplateApi.getAssignableOptions(),
-    staleTime: 0,
-    refetchOnMount: "always",
-  });
+  // US-10: assignable project templates (min/max capacity window).
+  const templatesQuery = useAssignableProjectTemplates();
 
   useEffect(() => {
     if (!sessionsQuery.data) return;
@@ -2008,15 +2004,13 @@ export default function TeamAllocationPage() {
                           }
                           onRoleChange={clearTeamRoleFailure}
                           templates={templatesQuery.data ?? []}
-                          templatesLoading={templatesQuery.isLoading}
+                          templatesLoading={templatesQuery.isFetching}
+                          onRefreshTemplates={() => void templatesQuery.refetch()}
                           templatesError={
                             templatesQuery.isError
                               ? "Không tải được danh sách đề bài."
                               : null
                           }
-                          onRefreshTemplates={() => {
-                            void templatesQuery.refetch();
-                          }}
                           canAssignTemplate={
                             hasPermission("PEO_TEAM_ALLOCATE") ||
                             hasPermission("PRJ_WORKSPACE_MANAGE")
@@ -2828,8 +2822,8 @@ function SavedTeamCard({
   onRoleChange,
   templates,
   templatesLoading,
-  templatesError,
   onRefreshTemplates,
+  templatesError,
   canAssignTemplate,
   assignTemplatePending,
   assignTemplateError,
@@ -2868,8 +2862,8 @@ function SavedTeamCard({
   onRoleChange: (teamId: number, memberId: number) => void;
   templates: ProjectTemplateOption[];
   templatesLoading: boolean;
-  templatesError: string | null;
   onRefreshTemplates: () => void;
+  templatesError: string | null;
   canAssignTemplate: boolean;
   assignTemplatePending: boolean;
   assignTemplateError?: TeamTemplateApiError;
@@ -2996,7 +2990,10 @@ function SavedTeamCard({
         type="button"
         className="flex w-full items-center justify-between gap-3 rounded-xl border p-4 text-left transition-colors hover:bg-muted/40"
         aria-label={`Xem chi tiết ${team.teamName}`}
-        onClick={() => setDetailsOpen(true)}
+        onClick={() => {
+          onRefreshTemplates();
+          setDetailsOpen(true);
+        }}
       >
         <span className="min-w-0">
           <span className="block truncate font-semibold">{team.teamName}</span>
@@ -3022,13 +3019,7 @@ function SavedTeamCard({
           </span>
         </span>
       </button>
-      <Dialog
-        open={detailsOpen}
-        onOpenChange={(open) => {
-          setDetailsOpen(open);
-          if (open) onRefreshTemplates();
-        }}
-      >
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>{team.teamName}</DialogTitle>
@@ -3081,9 +3072,15 @@ function SavedTeamCard({
             <div className="space-y-2 rounded-lg border bg-background p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-medium">Đề bài dự án</p>
-                <Badge variant={team.projectTemplateId ? "default" : "secondary"}>
-                  {team.projectTemplateId ? "Đã gán" : "Chưa gán"}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant={team.projectTemplateId ? "default" : "secondary"}>
+                    {team.projectTemplateId ? "Đã gán" : "Chưa gán"}
+                  </Badge>
+                  {isDraft && <Button type="button" variant="outline" size="icon-sm" disabled={templatesLoading}
+                    aria-label={`Refresh templates for ${team.teamName}`} title="Refresh templates" onClick={onRefreshTemplates}>
+                    <RefreshCw className={templatesLoading ? "size-4 animate-spin" : "size-4"} />
+                  </Button>}
+                </div>
               </div>
               <p className="text-sm font-medium">
                 {team.projectTemplateName ?? "Chưa gán đề bài"}
@@ -3134,6 +3131,9 @@ function SavedTeamCard({
                     <option value="">
                       {templatesLoading ? "Đang tải đề bài..." : "Chọn đề bài"}
                     </option>
+                    {team.projectTemplateId != null && !templates.some(option => option.id === team.projectTemplateId) && (
+                      <option value={team.projectTemplateId} disabled>{team.projectTemplateName ?? "Current template"} (currently assigned)</option>
+                    )}
                     {templates.map((option) => (
                       <option key={option.id} value={option.id}>
                         {option.name} ({option.minMembers}–{option.maxMembers} thành viên)
@@ -3160,20 +3160,12 @@ function SavedTeamCard({
                   </Button>
                 </div>
               )}
+              {isDraft && !templatesLoading && !templatesError && templates.length === 0 && (
+                <p className="text-xs text-muted-foreground">No active templates are available. Activate a template, then refresh this list.</p>
+              )}
               {templatesError && (
                 <p className="text-xs text-destructive">{templatesError}</p>
               )}
-              {isDraft &&
-                !templatesLoading &&
-                !templatesError &&
-                templates.length === 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    Chưa có đề bài nào ở trạng thái ACTIVE để gán. Đề bài mẫu
-                    dùng chung là chỉ đọc và không thể kích hoạt — hãy nhân bản
-                    một đề bài mẫu, hoàn thiện rồi kích hoạt để đưa vào danh
-                    sách này.
-                  </p>
-                )}
               {!isDraft && (
                 <div className="space-y-1.5 rounded-lg bg-muted/50 p-2.5">
                   <p className="text-xs text-muted-foreground">

@@ -22,15 +22,13 @@ public record ProjectTemplateResponse(
 ) {
     public static ProjectTemplateResponse from(ProjectTemplate template, boolean canUpdate,
             TemplateTeamConstraints teamConstraints) {
-        // Status is the single source of truth for every template, including the
-        // shared catalogue (tenant_id == null): DRAFT rows are editable, ACTIVE
-        // rows are assignable to teams, and nobody may edit an ACTIVE template.
+        boolean shared = template.getTenantId() == null;
         return new ProjectTemplateResponse(
                 template.getId(), template.getCode(), template.getName(), template.getDescription(),
                 template.getCategory(), template.getLevel(), template.getEstimatedDurationWeeks(),
                 template.getTemplateVersion(), template.getStatus(), template.getLockVersion(), teamConstraints,
                 template.getCreatedAt(), template.getUpdatedAt(),
-                canUpdate && template.getStatus() == ProjectTemplateStatus.DRAFT,
-                false);
+                !shared && canUpdate && template.getStatus() == ProjectTemplateStatus.DRAFT,
+                shared);
     }
 }

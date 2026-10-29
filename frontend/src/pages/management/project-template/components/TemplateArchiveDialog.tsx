@@ -9,9 +9,10 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { getTemplateError } from "../project-template.utils";
 
-export function TemplateArchiveDialog({ template, onArchived }: {
+export function TemplateArchiveDialog({ template, onArchived, compact = false }: {
   template: ProjectTemplateDTO;
   onArchived: (saved: ProjectTemplateDTO) => void;
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<ReturnType<typeof getTemplateError> | null>(null);
@@ -37,7 +38,10 @@ export function TemplateArchiveDialog({ template, onArchived }: {
     setOpen(value);
     if (value) setError(null);
   }}>
-    <DialogTrigger asChild><Button variant="outline"><Archive />Archive</Button></DialogTrigger>
+    <DialogTrigger asChild><Button variant="outline" size={compact ? "icon" : "default"}
+      aria-label={compact ? `Archive template ${template.code}` : undefined} title={compact ? "Archive template" : undefined}>
+      <Archive />{!compact && "Archive"}
+    </Button></DialogTrigger>
     <DialogContent className="sm:max-w-lg" showCloseButton={!mutation.isPending}
       onEscapeKeyDown={(event) => { if (submitting.current) event.preventDefault(); }}
       onInteractOutside={(event) => { if (submitting.current) event.preventDefault(); }}>
