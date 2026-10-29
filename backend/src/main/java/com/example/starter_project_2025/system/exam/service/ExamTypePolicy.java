@@ -17,14 +17,18 @@ public final class ExamTypePolicy {
             case MIXED -> true;
             case MULTIPLE_CHOICE -> questionType == QuestionType.MULTIPLE_CHOICE;
             case ESSAY -> questionType == QuestionType.ESSAY;
+            case CODING -> questionType == QuestionType.CODING;
+            case MC_CODING -> questionType == QuestionType.MULTIPLE_CHOICE || questionType == QuestionType.CODING;
         };
     }
 
     public static String describe(ExamType examType) {
         return switch (effective(examType)) {
-            case MIXED -> "cả trắc nghiệm và tự luận";
+            case MIXED -> "cả trắc nghiệm, tự luận và lập trình";
             case MULTIPLE_CHOICE -> "chỉ trắc nghiệm";
             case ESSAY -> "chỉ tự luận";
+            case CODING -> "chỉ lập trình";
+            case MC_CODING -> "trắc nghiệm và lập trình";
         };
     }
 }

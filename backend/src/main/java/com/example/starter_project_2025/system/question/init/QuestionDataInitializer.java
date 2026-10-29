@@ -5,6 +5,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
+import com.example.starter_project_2025.system.question.dto.CodeSpecDTO;
+import com.example.starter_project_2025.system.question.service.CodeSpecSupport;
+
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 @Component
@@ -101,6 +106,189 @@ public class QuestionDataInitializer implements CommandLineRunner {
         repository.save(make("Thư viện Lombok (với các nhãn như @Data, @Getter, @Setter) mang lại lợi ích lớn nhất nào?", QuestionType.MULTIPLE_CHOICE, Difficulty.EASY, "spring_boot", Set.of(0),
                 "Giảm bớt mã lặp dòng (boilerplate code) như sinh thủ công getter, setter", "Tối ưu hóa tốc độ kết nối cơ sở dữ liệu", "Bắt các lỗi logic lúc runtime", "Tự động cấu hình bảo mật tài khoản"));
 
+        repository.save(makeCoding("Viết hàm sum nhận hai số nguyên a và b, trả về tổng của chúng.",
+                Difficulty.EASY, "sum", "int",
+                new String[][]{{"a", "int"}, {"b", "int"}},
+                new String[][]{
+                        {"2", "3", "5"},
+                        {"10", "20", "30"},
+                        {"0", "0", "0"},
+                        {"-5", "5", "0"},
+                        {"-7", "-3", "-10"},
+                        {"100", "250", "350"},
+                        {"999", "1", "1000"},
+                        {"-50", "20", "-30"},
+                        {"12345", "55", "12400"},
+                        {"7", "0", "7"}}));
+
+        repository.save(makeCoding("Viết hàm isEven nhận số nguyên n, trả về true nếu n là số chẵn, ngược lại trả về false.",
+                Difficulty.EASY, "isEven", "boolean",
+                new String[][]{{"n", "int"}},
+                new String[][]{
+                        {"4", "true"},
+                        {"7", "false"},
+                        {"0", "true"},
+                        {"1", "false"},
+                        {"-2", "true"},
+                        {"-3", "false"},
+                        {"100", "true"},
+                        {"99", "false"},
+                        {"1000", "true"},
+                        {"13", "false"}}));
+
+        repository.save(makeCoding("Viết hàm maxOfThree nhận ba số nguyên a, b, c, trả về số lớn nhất trong ba số.",
+                Difficulty.EASY, "maxOfThree", "int",
+                new String[][]{{"a", "int"}, {"b", "int"}, {"c", "int"}},
+                new String[][]{
+                        {"1", "2", "3", "3"},
+                        {"9", "4", "6", "9"},
+                        {"5", "5", "5", "5"},
+                        {"-1", "-2", "-3", "-1"},
+                        {"0", "0", "1", "1"},
+                        {"10", "-10", "0", "10"},
+                        {"7", "7", "2", "7"},
+                        {"100", "99", "101", "101"},
+                        {"-5", "-5", "-4", "-4"},
+                        {"3", "8", "8", "8"}}));
+
+        repository.save(makeCoding("Viết hàm factorial nhận số nguyên n (0 <= n <= 15), trả về n! (giai thừa của n). Quy ước 0! = 1.",
+                Difficulty.EASY, "factorial", "long",
+                new String[][]{{"n", "int"}},
+                new String[][]{
+                        {"5", "120"},
+                        {"3", "6"},
+                        {"0", "1"},
+                        {"1", "1"},
+                        {"2", "2"},
+                        {"4", "24"},
+                        {"6", "720"},
+                        {"10", "3628800"},
+                        {"12", "479001600"},
+                        {"15", "1307674368000"}}));
+
+        repository.save(makeCoding("Viết hàm reverseString nhận chuỗi s, trả về chuỗi đảo ngược của s. Ví dụ: \"abc\" -> \"cba\".",
+                Difficulty.EASY, "reverseString", "String",
+                new String[][]{{"s", "String"}},
+                new String[][]{
+                        {"hello", "olleh"},
+                        {"java", "avaj"},
+                        {"a", "a"},
+                        {"abc", "cba"},
+                        {"racecar", "racecar"},
+                        {"Level", "leveL"},
+                        {"12345", "54321"},
+                        {"OpenAI", "IAnepO"},
+                        {"xyz", "zyx"},
+                        {"Hello-World", "dlroW-olleH"}}));
+
+        repository.save(makeCoding("Viết hàm sumArray nhận mảng số nguyên arr, trả về tổng tất cả phần tử của mảng.",
+                Difficulty.EASY, "sumArray", "int",
+                new String[][]{{"arr", "int[]"}},
+                new String[][]{
+                        {"1,2,3", "6"},
+                        {"10,20,30,40", "100"},
+                        {"5", "5"},
+                        {"-1,-2,-3", "-6"},
+                        {"0,0,0", "0"},
+                        {"100,-50,25", "75"},
+                        {"7,7,7,7", "28"},
+                        {"1,2,3,4,5,6,7,8,9,10", "55"},
+                        {"-10,10", "0"},
+                        {"42,58", "100"}}));
+
+        repository.save(makeCoding("Viết hàm countVowels nhận chuỗi s, trả về số nguyên âm (a, e, i, o, u) trong chuỗi, không phân biệt chữ hoa chữ thường.",
+                Difficulty.EASY, "countVowels", "int",
+                new String[][]{{"s", "String"}},
+                new String[][]{
+                        {"hello", "2"},
+                        {"Java", "2"},
+                        {"sky", "0"},
+                        {"AEIOU", "5"},
+                        {"programming", "3"},
+                        {"rhythm", "0"},
+                        {"Education", "5"},
+                        {"bcd", "0"},
+                        {"Queue", "4"},
+                        {"Hello-World", "3"}}));
+
+        repository.save(makeCoding("Viết hàm isPalindrome nhận chuỗi s (chỉ gồm chữ cái thường, không có khoảng trắng), trả về true nếu s đọc xuôi ngược giống nhau (palindrome).",
+                Difficulty.MEDIUM, "isPalindrome", "boolean",
+                new String[][]{{"s", "String"}},
+                new String[][]{
+                        {"level", "true"},
+                        {"hello", "false"},
+                        {"a", "true"},
+                        {"abba", "true"},
+                        {"abc", "false"},
+                        {"racecar", "true"},
+                        {"noon", "true"},
+                        {"java", "false"},
+                        {"madam", "true"},
+                        {"ab", "false"}}));
+
+        repository.save(makeCoding("Viết hàm fizzBuzz nhận số nguyên n (n >= 1). Trả về \"FizzBuzz\" nếu n chia hết cho cả 3 và 5; \"Fizz\" nếu chỉ chia hết cho 3; \"Buzz\" nếu chỉ chia hết cho 5; ngược lại trả về chính số n dạng chuỗi.",
+                Difficulty.MEDIUM, "fizzBuzz", "String",
+                new String[][]{{"n", "int"}},
+                new String[][]{
+                        {"3", "Fizz"},
+                        {"5", "Buzz"},
+                        {"15", "FizzBuzz"},
+                        {"7", "7"},
+                        {"1", "1"},
+                        {"30", "FizzBuzz"},
+                        {"9", "Fizz"},
+                        {"10", "Buzz"},
+                        {"14", "14"},
+                        {"45", "FizzBuzz"}}));
+
+        repository.save(makeCoding("Viết hàm isPrime nhận số nguyên n, trả về true nếu n là số nguyên tố, ngược lại trả về false. Lưu ý: số nhỏ hơn 2 không phải số nguyên tố.",
+                Difficulty.MEDIUM, "isPrime", "boolean",
+                new String[][]{{"n", "int"}},
+                new String[][]{
+                        {"7", "true"},
+                        {"10", "false"},
+                        {"2", "true"},
+                        {"1", "false"},
+                        {"0", "false"},
+                        {"17", "true"},
+                        {"25", "false"},
+                        {"97", "true"},
+                        {"100", "false"},
+                        {"13", "true"}}));
+    }
+
+    /**
+     * Cau hoi CODING (Java, kieu Coderbyte). params: {ten, kieu}. tests: moi dong = cac gia tri dau vao theo thu tu
+     * tham so, phan tu cuoi la ket qua mong doi. 2 test dau hien thi cho sinh vien, 8 test con lai an.
+     */
+    private Question makeCoding(String content, Difficulty diff, String functionName, String returnType,
+                                String[][] params, String[][] tests) {
+        CodeSpecDTO spec = new CodeSpecDTO();
+        spec.setFunctionName(functionName);
+        spec.setReturnType(returnType);
+        for (String[] p : params) {
+            CodeSpecDTO.Param param = new CodeSpecDTO.Param();
+            param.setName(p[0]);
+            param.setType(p[1]);
+            spec.getParams().add(param);
+        }
+        for (int i = 0; i < tests.length; i++) {
+            CodeSpecDTO.TestCase t = new CodeSpecDTO.TestCase();
+            List<String> inputs = new ArrayList<>();
+            for (int k = 0; k < tests[i].length - 1; k++) inputs.add(tests[i][k]);
+            t.setInputs(inputs);
+            t.setExpected(tests[i][tests[i].length - 1]);
+            t.setVisible(i < CodeSpecSupport.VISIBLE_TESTS);
+            spec.getTests().add(t);
+        }
+        Question q = new Question();
+        q.setIsActive(true);
+        q.setContent(content);
+        q.setType(QuestionType.CODING);
+        q.setDifficulty(diff);
+        q.setTopic("java");
+        q.setCodeSpec(CodeSpecSupport.toJson(spec));
+        return q;
     }
 
     private Question make(String content, QuestionType type, Difficulty diff, String topic,

@@ -84,6 +84,7 @@ public class ExamTemplateService {
             snapshot.setTopic(source.getTopic());
             snapshot.setImageUrl(source.getImageUrl());
             snapshot.setPoints(source.getPoints());
+            snapshot.setCodeSpec(source.getCodeSpec());
             snapshot.setPosition(position++);
 
             int optionPosition = 0;
@@ -155,6 +156,7 @@ public class ExamTemplateService {
             question.setTopic(snapshot.getTopic());
             question.setImageUrl(snapshot.getImageUrl());
             question.setPoints(snapshot.getPoints());
+            question.setCodeSpec(snapshot.getCodeSpec());
 
             // This is a new question created from a template,
             // not a copy of a question-bank item.

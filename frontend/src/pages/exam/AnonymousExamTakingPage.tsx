@@ -1,4 +1,5 @@
 import {
+    runAnonymousCode,
     saveAnonymousAnswers,
     sendAnonymousIntegrityEvents, // NEW (anti-cheat)
     startAnonymousExam,
@@ -14,8 +15,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Save, Star } from "lucide-react";
+import { ArrowLeft, Star } from "lucide-react";
 import { toast } from "sonner";
+import { CodingWorkspace } from '@/pages/student/components/CodingWorkspace';
+import { EssayPopup } from '@/pages/student/components/EssayPopup';
 import { ExamIntegrityNotice, useExamIntegrity } from '@/hooks/useExamIntegrity'; // NEW (anti-cheat)
 
 const attemptQueryKey = (examId: string) => ["anonymous-exam-attempt", examId] as const;
@@ -255,6 +258,9 @@ export default function AnonymousExamTakingPage() {
         scheduleAnswerSave(questionId, next);
     };
 
+    const [essayId, setEssayId] = useState<number | null>(null);
+    const [codeId, setCodeId] = useState<number | null>(null);
+
     const saveEssay = async (questionId: number) => {
         if (!attempt || attempt.status !== 'IN_PROGRESS') return;
         const current = answersRef.current[questionId];
@@ -375,6 +381,25 @@ export default function AnonymousExamTakingPage() {
     const isFinished = attempt.status !== 'IN_PROGRESS';
     const hasText = (questionId: number) =>
         (answers[questionId]?.textAnswer ?? '').trim().length > 0;
+    const codingQuestions = attempt.questions.filter((q) => q.type === 'CODING');
+    const currentCode = attempt.questions.find((q) => q.id === codeId && q.type === 'CODING');
+    const currentEssay = attempt.questions.find((q) => q.id === essayId && q.type === 'ESSAY');
+    const openQuestion = (question: { id: number; type: string }) => {
+        if (question.type === 'CODING') {
+            setEssayId(null);
+            setCodeId(question.id);
+        } else if (question.type === 'ESSAY') {
+            setCodeId(null);
+            setEssayId(question.id);
+        } else {
+            setEssayId(null);
+            setCodeId(null);
+            window.setTimeout(
+                () => document.getElementById(`question-card-${question.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+                50,
+            );
+        }
+    };
 
     const timerBox = (
         <div
@@ -437,11 +462,7 @@ export default function AnonymousExamTakingPage() {
                             type="button"
                             title={`Câu ${index + 1}`}
                             className={`flex h-8 w-8 items-center justify-center rounded-sm text-xs font-medium ${color}`}
-                            onClick={() =>
-                                document
-                                    .getElementById(`question-card-${question.id}`)
-                                    ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                            }
+                            onClick={() => openQuestion(question)}
                         >
                             {index + 1}
                         </button>
@@ -450,6 +471,30 @@ export default function AnonymousExamTakingPage() {
             </div>
         </div>
     );
+
+    if (!isFinished && currentCode) {
+        const answer = answers[currentCode.id];
+        return (
+            <div className="min-h-screen bg-slate-50 px-4 py-4">
+                <CodingWorkspace
+                    key={currentCode.id}
+                    question={currentCode}
+                    index={attempt.questions.indexOf(currentCode)}
+                    value={answer?.textAnswer ?? null}
+                    saved={Boolean(answer?.saved)}
+                    isSaving={isSaving}
+                    hasSaveError={hasSaveError}
+                    timerBox={timerBox}
+                    notice={<ExamIntegrityNotice config={attempt.integrity} state={integrity} />}
+                    onChange={(code) => updateAnswer(currentCode.id, { textAnswer: code })}
+                    onSave={() => void saveEssay(currentCode.id)}
+                    onBack={() => setCodeId(null)}
+                    onRetry={() => void flushPendingAnswers(attempt.id)}
+                    onRun={(request) => runAnonymousCode(attempt.id, sessionToken, request)}
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-slate-50">
@@ -516,9 +561,58 @@ export default function AnonymousExamTakingPage() {
                     </section>
                 ) : (
                     <>
+                        {currentEssay && (
+                            <EssayPopup
+                                question={currentEssay}
+                                index={attempt.questions.indexOf(currentEssay)}
+                                value={answers[currentEssay.id]?.textAnswer ?? ''}
+                                saved={Boolean(answers[currentEssay.id]?.saved)}
+                                isSaving={isSaving}
+                                onChange={(value) => updateAnswer(currentEssay.id, { textAnswer: value })}
+                                onSave={() => void saveEssay(currentEssay.id)}
+                                onClose={() => setEssayId(null)}
+                            />
+                        )}
                         <div className="flex justify-end">{navigationPanel}</div>
 
+                        {codingQuestions.length > 0 && (
+                            <section className="rounded-xl border bg-white p-4">
+                                <h2 className="mb-3 font-semibold">Câu hỏi lập trình (Coding)</h2>
+                                <div className="grid gap-2">
+                                    {codingQuestions.map((question) => {
+                                        const saved = Boolean(answers[question.id]?.saved);
+                                        return (
+                                            <div key={question.id} className="flex items-center justify-between gap-3 rounded-md border p-3">
+                                                <div className="min-w-0">
+                                                    <p className="text-sm font-medium">
+                                                        Câu {attempt.questions.indexOf(question) + 1}
+                                                        <span className="ml-2 font-normal text-muted-foreground">
+                                                            {formatScore(questionScore(attempt.maxScore, question.points, attempt.totalPoints))} điểm
+                                                        </span>
+                                                    </p>
+                                                    <p className="truncate text-sm text-muted-foreground">{question.content}</p>
+                                                </div>
+                                                <div className="flex shrink-0 items-center gap-3">
+                                                    {starButton(question.id, attempt.questions.indexOf(question) + 1)}
+                                                    {saved && <span className="text-sm font-medium text-green-600">Đã lưu</span>}
+                                                    {!saved && hasText(question.id) && <span className="text-sm text-muted-foreground">Đang làm</span>}
+                                                    <Button
+                                                        size="sm"
+                                                        className={saved ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-blue-600 text-white hover:bg-blue-700'}
+                                                        onClick={() => openQuestion(question)}
+                                                    >
+                                                        {saved ? 'Sửa bài' : hasText(question.id) ? 'Tiếp tục' : 'Làm bài'}
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </section>
+                        )}
+
                         {attempt.questions.map((question, index) => {
+                            if (question.type === 'CODING') return null;
                             const answer = answers[question.id] ?? {
                                 questionId: question.id,
                                 selectedOptionIds: [],
@@ -554,18 +648,10 @@ export default function AnonymousExamTakingPage() {
                                     )}
 
                                     {question.type === 'ESSAY' ? (
-                                        <div className="mt-4 space-y-2">
-                                            <textarea
-                                                aria-label={`Câu trả lời tự luận câu ${index + 1}`}
-                                                className="min-h-40 w-full resize-y rounded-md border bg-background p-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                                placeholder="Nhập câu trả lời tự luận của bạn..."
-                                                value={answer.textAnswer ?? ''}
-                                                onChange={(event) =>
-                                                    updateAnswer(question.id, {
-                                                        textAnswer: event.target.value,
-                                                    })
-                                                }
-                                            />
+                                        <div className="mt-4 flex items-center justify-between rounded-lg border bg-muted/30 p-3">
+                                            <span className="text-sm text-muted-foreground">
+                                                {hasText(question.id) ? 'Đã có nội dung trả lời' : 'Chưa có câu trả lời'}
+                                            </span>
                                             <Button
                                                 size="sm"
                                                 className={
@@ -573,10 +659,9 @@ export default function AnonymousExamTakingPage() {
                                                         ? 'bg-green-600 text-white hover:bg-green-700'
                                                         : 'bg-blue-600 text-white hover:bg-blue-700'
                                                 }
-                                                onClick={() => void saveEssay(question.id)}
+                                                onClick={() => openQuestion(question)}
                                             >
-                                                <Save className="mr-1 h-4 w-4" />
-                                                {answer.saved ? 'Đã lưu' : 'Lưu câu trả lời'}
+                                                {answer.saved ? 'Sửa bài tự luận' : hasText(question.id) ? 'Tiếp tục' : 'Mở bài tự luận'}
                                             </Button>
                                         </div>
                                     ) : (

@@ -98,7 +98,9 @@ const LATE_POLICY_LABEL: Record<LatePolicy, string> = {
 const EXAM_TYPE_LABEL: Record<ExamType, string> = {
   MULTIPLE_CHOICE: "Multiple Choice Only",
   ESSAY: "Essay Only",
-  MIXED: "Multiple Choice & Essay",
+  CODING: "Coding Only",
+  MC_CODING: "Multiple Choice & Coding",
+  MIXED: "Mixed (Multiple Choice, Essay & Coding)",
 };
 
 const EXAM_CATEGORY_OPTIONS = Object.keys(EXAM_CATEGORY_LABEL) as ExamCategory[];
@@ -239,8 +241,12 @@ export default function ExamManagementPage() {
   const lockedQuestionType: QuestionType | null =
       activeExam?.examType === "MULTIPLE_CHOICE" ? "MULTIPLE_CHOICE"
           : activeExam?.examType === "ESSAY" ? "ESSAY"
+          : activeExam?.examType === "CODING" ? "CODING"
               : null;
-  const effectiveQuestionType = lockedQuestionType ?? questionType;
+  const isPairExam = activeExam?.examType === "MC_CODING";
+  const effectiveQuestionType =
+      lockedQuestionType ??
+      (isPairExam && questionType !== "MULTIPLE_CHOICE" && questionType !== "CODING" ? "MULTIPLE_CHOICE" : questionType);
 
   const questionFilter: QuestionFilter = {
     isActive: true,
@@ -580,13 +586,14 @@ export default function ExamManagementPage() {
       if (sourceIdsInExam.has(q.id)) return false;
       const typeToFilter = lockedQuestionType ?? (randomQuestionType !== "ALL" ? randomQuestionType : null);
       if (typeToFilter && q.type !== typeToFilter) return false;
+      if (isPairExam && q.type === "ESSAY") return false;
       if (randomDifficulty !== "ALL" && q.difficulty !== randomDifficulty) return false;
       if (randomTopic.trim()) {
         if ((q.topic || "").trim().toLowerCase() !== randomTopic.trim().toLowerCase()) return false;
       }
       return true;
     });
-  }, [allBankQuestions, sourceIdsInExam, lockedQuestionType, randomQuestionType, randomDifficulty, randomTopic]);
+  }, [allBankQuestions, sourceIdsInExam, lockedQuestionType, isPairExam, randomQuestionType, randomDifficulty, randomTopic]);
 
   const handleConfirmRandomAdd = () => {
     if (eligibleForRandom.length === 0) {
@@ -739,7 +746,7 @@ export default function ExamManagementPage() {
                               disabled={!exam.id}
                           >
                             <ClipboardCheck className="size-4" />
-                            Essay Grading
+                            Essay & Coding Grading
                           </Button>
                           <Button
                               variant="outline"
@@ -1099,9 +1106,10 @@ export default function ExamManagementPage() {
                   <Select value={effectiveQuestionType} disabled={lockedQuestionType !== null} onValueChange={(value) => { setQuestionType(value); setQuestionPage(0); }}>
                     <SelectTrigger aria-label="Filter question type"><SelectValue placeholder="Question type" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="ALL">All Types</SelectItem>
+                      {!isPairExam && <SelectItem value="ALL">All Types</SelectItem>}
                       <SelectItem value="MULTIPLE_CHOICE">Multiple Choice</SelectItem>
-                      <SelectItem value="ESSAY">Essay</SelectItem>
+                      {!isPairExam && <SelectItem value="ESSAY">Essay</SelectItem>}
+                      <SelectItem value="CODING">Coding</SelectItem>
                     </SelectContent>
                   </Select>
                   <Select value={difficulty} onValueChange={(value) => { setDifficulty(value); setQuestionPage(0); }}>
@@ -1308,7 +1316,7 @@ export default function ExamManagementPage() {
                               </TableCell>
                               <TableCell>
                                 <Badge variant="outline">
-                                  {q.type === "ESSAY" ? "Essay" : "Multiple Choice"}
+                                  {q.type === "ESSAY" ? "Essay" : q.type === "CODING" ? "Coding" : "Multiple Choice"}
                                 </Badge>
                               </TableCell>
                               <TableCell>
@@ -1489,7 +1497,8 @@ export default function ExamManagementPage() {
                     <SelectContent>
                       <SelectItem value="ALL">All Types</SelectItem>
                       <SelectItem value="MULTIPLE_CHOICE">Multiple Choice</SelectItem>
-                      <SelectItem value="ESSAY">Essay</SelectItem>
+                      {!isPairExam && <SelectItem value="ESSAY">Essay</SelectItem>}
+                      <SelectItem value="CODING">Coding</SelectItem>
                     </SelectContent>
                   </Select>
                   {lockedQuestionType && (

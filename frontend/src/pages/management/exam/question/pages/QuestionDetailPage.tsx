@@ -77,7 +77,28 @@ export function QuestionDetailPage() {
                             </div>
                         </div>
 
-                        <div className="grid gap-2">
+                        {data?.type === "CODING" && data.code && (
+                            <div className="grid gap-2">
+                                <span className="font-medium text-muted-foreground">Coding (Java)</span>
+                                <code className="block overflow-x-auto rounded bg-muted px-3 py-2 text-xs">
+                                    {`public static ${data.code.returnType} ${data.code.functionName}(${data.code.params
+                                        .map((p) => `${p.type} ${p.name}`)
+                                        .join(", ")})`}
+                                </code>
+                                {data.code.tests.map((t, index) => (
+                                    <div key={index} className="rounded border p-3 text-xs">
+                                        <div className="mb-1 flex items-center gap-2">
+                                            <span className="font-medium">Test {index + 1}</span>
+                                            <Badge variant="outline">{t.visible ? "Hiển thị" : "Ẩn"}</Badge>
+                                        </div>
+                                        <div className="font-mono">
+                                            ({t.inputs.join(" | ")}) → {t.expected}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        <div className={data?.type === "CODING" ? "hidden" : "grid gap-2"}>
                             <span className="font-medium text-muted-foreground">Options</span>
                             {(data?.options ?? []).map((option: any, index: number) => (
                                 <div key={option.id ?? index} className="flex items-center gap-2">

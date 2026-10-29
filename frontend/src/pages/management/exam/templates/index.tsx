@@ -831,7 +831,9 @@ export default function ExamTemplatesPage() {
                                                     <Badge variant="secondary" className="text-xs">
                                                         {question.type === "MULTIPLE_CHOICE"
                                                             ? "Multiple Choice"
-                                                            : "Essay"}
+                                                            : question.type === "CODING"
+                                                              ? "Coding"
+                                                              : "Essay"}
                                                     </Badge>
                                                     <Badge
                                                         variant="outline"

@@ -1,4 +1,32 @@
-export type QuestionType = "MULTIPLE_CHOICE" | "ESSAY";
+export type QuestionType = "MULTIPLE_CHOICE" | "ESSAY" | "CODING";
+
+export const CODE_TYPES = [
+  "int",
+  "long",
+  "double",
+  "boolean",
+  "String",
+  "int[]",
+  "String[]",
+] as const;
+export type CodeType = (typeof CODE_TYPES)[number];
+
+export interface CodeParam {
+  name: string;
+  type: string;
+}
+export interface CodeTestCase {
+  inputs: string[];
+  expected: string;
+  visible: boolean;
+}
+export interface CodeSpec {
+  functionName: string;
+  returnType: string;
+  params: CodeParam[];
+  tests: CodeTestCase[];
+  starterCode?: string | null;
+}
 export type QuestionDifficulty = "EASY" | "MEDIUM" | "HARD";
 
 export interface QuestionOptionDTO {
@@ -26,6 +54,7 @@ export interface QuestionDTO {
   gradingCriteria?: EssayGradingCriterion[];
   options: QuestionOptionDTO[];
   imageUrl?: string | null;
+  code?: CodeSpec | null;
 }
 
 export interface QuestionFilter {
@@ -36,7 +65,7 @@ export interface QuestionFilter {
 }
 
 export type LatePolicy = "NOT_ALLOWED" | "ALLOWED_WITH_PENALTY" | "ALLOWED";
-export type ExamType = "MULTIPLE_CHOICE" | "ESSAY" | "MIXED";
+export type ExamType = "MULTIPLE_CHOICE" | "ESSAY" | "CODING" | "MC_CODING" | "MIXED";
 export type ExamCategory = "ASSESSMENT" | "QUIZ" | "MIDTERM" | "FINAL_TEST";
 export type ResultVisibility = "IMMEDIATE" | "AFTER_EXAM_CLOSED" | "MANUAL_RELEASE";
 
@@ -104,6 +133,8 @@ export interface EssayGradingSummary {
   submittedAt: string | null;
   essayCount: number;
   essayAnswered: number;
+  codingCount?: number;
+  codingAnswered?: number;
 }
 
 export interface EssayGradingItem {
@@ -135,6 +166,37 @@ export interface EssayGradingDetail {
   finalScore?: number | null;
   alreadyGraded?: boolean;
   essays: EssayGradingItem[];
+  codings?: CodingGradingItem[];
+}
+
+export interface CodingGradingItem {
+  questionId: number;
+  displayOrder: number;
+  content: string;
+  points: number;
+  maxScore?: number;
+  code: string;
+  score?: number | null;
+  feedback?: string | null;
+  spec?: CodeSpec | null;
+}
+
+export interface CodingTestResult {
+  index: number;
+  visible: boolean;
+  passed: boolean;
+  status: string;
+  inputs: string[];
+  expected: string;
+  actual: string | null;
+  error: string | null;
+}
+
+export interface CodingRunResult {
+  passed: number;
+  total: number;
+  infraError: boolean;
+  tests: CodingTestResult[];
 }
 
 export interface QuestionGradeInput {

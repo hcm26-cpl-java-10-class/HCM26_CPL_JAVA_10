@@ -1,5 +1,6 @@
 import api from './axios';
 import type { ExamCategory } from '@/types';
+import type { CodeSpec } from '@/types/features/exam';
 
 export interface Exam {
     id: number;
@@ -43,8 +44,9 @@ export interface ExamAttemptQuestion {
     id: number;
     content: string;
 
-    type: 'MULTIPLE_CHOICE' | 'ESSAY';
+    type: 'MULTIPLE_CHOICE' | 'ESSAY' | 'CODING';
     points: number;
+    code?: CodeSpec | null;
 
     multiSelect: boolean;
     options: { id: number; content: string; imageUrl?: string | null }[];
@@ -193,6 +195,47 @@ export const getAttemptReview = async (attemptId: number) => {
 
 export const submitExamAttempt = async (attemptId: number, answers: SaveExamAnswerRequest[]) => {
     const response = await api.post<ExamAttempt>(`/exams/attempts/${attemptId}/submit`, answers);
+    return response.data;
+};
+
+export interface CodeRunRequest {
+    questionId: number;
+    code: string;
+    customInputs?: string[] | null;
+}
+
+export interface CodeTestRun {
+    index: number;
+    passed: boolean;
+    status: string;
+    inputs: string[];
+    expected: string;
+    actual: string | null;
+    error: string | null;
+}
+
+export interface CodeRunResponse {
+    tests: CodeTestRun[];
+    custom: CodeTestRun | null;
+    passed: number;
+    total: number;
+}
+
+export const runCode = async (attemptId: number, request: CodeRunRequest) => {
+    const response = await api.post<CodeRunResponse>(`/exams/attempts/${attemptId}/code/run`, request);
+    return response.data;
+};
+
+export const runAnonymousCode = async (
+    attemptId: number,
+    sessionToken: string,
+    request: CodeRunRequest,
+) => {
+    const response = await api.post<CodeRunResponse>(
+        `/exams/anonymous/attempts/${attemptId}/code/run`,
+        request,
+        { headers: { 'X-Anonymous-Session': sessionToken } },
+    );
     return response.data;
 };
 

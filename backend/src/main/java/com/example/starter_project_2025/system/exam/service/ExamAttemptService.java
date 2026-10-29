@@ -1,6 +1,10 @@
 package com.example.starter_project_2025.system.exam.service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import com.example.starter_project_2025.system.exam.code.CodeJudgeService;
+import com.example.starter_project_2025.system.question.dto.CodeSpecDTO;
+import com.example.starter_project_2025.system.question.service.CodeSpecSupport;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.exam.domain.*;
@@ -40,6 +44,7 @@ public class ExamAttemptService {
     private final QuestionTakerMapper questionTakerMapper;
     private final InvitationRepository invitationRepository;
     private final ExamResultAccessService resultAccessService;
+    private final CodeJudgeService codeJudgeService;
 
     public ExamAttemptDTO startOrResume(Long examId, Long studentId) {
         return startOrResume(examId, studentId, null);
@@ -141,6 +146,7 @@ public class ExamAttemptService {
             snap.setImageUrl(q.getImageUrl());
             snap.setType(q.getType());
             snap.setPoints(q.getPoints());
+            snap.setCodeSpec(q.getCodeSpec());
             snap.setDisplayOrder(questionOrder++);
             q.getGradingCriteria().forEach(sourceCriterion -> {
                 EssayGradingCriterion criterion = new EssayGradingCriterion();
@@ -259,7 +265,7 @@ public class ExamAttemptService {
         dto.setPoints(question.getPoints());
         dto.setMaxScore(ExamScoring.gradingCap(maxScore, question.getPoints(), totalWeight));
 
-        if (question.getType() == QuestionType.ESSAY) {
+        if (question.getType() == QuestionType.ESSAY || question.getType() == QuestionType.CODING) {
             dto.setOptions(List.of());
             if (answer != null) {
                 dto.setTextAnswer(answer.getTextAnswer());
@@ -391,9 +397,13 @@ public class ExamAttemptService {
 
             Set<ExamAttemptOption> selectedOptions = validateAndResolveOptions(question, selectedIds);
             String textAnswer = request.getTextAnswer();
-            if (question.getType() == QuestionType.ESSAY) {
+            if (question.getType() == QuestionType.ESSAY || question.getType() == QuestionType.CODING) {
                 if (!selectedIds.isEmpty()) {
-                    throw new BadRequestException("Câu tự luận không nhận lựa chọn trắc nghiệm");
+                    throw new BadRequestException("Câu hỏi này không nhận lựa chọn trắc nghiệm");
+                }
+                if (question.getType() == QuestionType.CODING && textAnswer != null
+                        && textAnswer.length() > CodeJudgeService.MAX_CODE_LENGTH) {
+                    throw new BadRequestException("Code quá dài (tối đa " + CodeJudgeService.MAX_CODE_LENGTH + " ký tự)");
                 }
             } else if (textAnswer != null && !textAnswer.isBlank()) {
                 throw new BadRequestException("Câu trắc nghiệm không nhận câu trả lời dạng văn bản");
@@ -402,7 +412,7 @@ public class ExamAttemptService {
             ExamAttemptAnswer answer = findOrCreateAnswer(attempt, question);
             String previousText = answer.getTextAnswer();
             answer.setSelectedOptions(selectedOptions);
-            answer.setTextAnswer(question.getType() == QuestionType.ESSAY ? textAnswer : null);
+            answer.setTextAnswer(question.getType() == QuestionType.ESSAY || question.getType() == QuestionType.CODING ? textAnswer : null);
             if (question.getType() == QuestionType.ESSAY) {
                 String newText = answer.getTextAnswer();
                 boolean hasText = newText != null && !newText.isBlank();
@@ -415,12 +425,14 @@ public class ExamAttemptService {
                         newText == null ? "" : newText)) {
                     answer.setSaved(false);
                 }
+            } else if (question.getType() == QuestionType.CODING) {
+                answer.setSaved(textAnswer != null && !textAnswer.isBlank());
             }
         }
     }
 
     private Set<ExamAttemptOption> validateAndResolveOptions(ExamAttemptQuestion question, Set<Long> selectedIds) {
-        if (question.getType() == QuestionType.ESSAY) {
+        if (question.getType() == QuestionType.ESSAY || question.getType() == QuestionType.CODING) {
             return new LinkedHashSet<>();
         }
 
@@ -453,8 +465,10 @@ public class ExamAttemptService {
     }
 
     private void gradeAndSubmit(ExamAttempt attempt, Instant submittedAt, boolean expired) {
-        long correctWeight = 0;
+        BigDecimal correctWeight = BigDecimal.ZERO;
         boolean hasEssay = false;
+        boolean codeNeedsReview = false;
+        BigDecimal maxScore = ExamScoring.effectiveMax(attempt.getMaxScore());
 
         Map<Long, Set<Long>> selectedByQuestion = new HashMap<>();
         for (ExamAttemptAnswer answer : attempt.getAnswers()) {
@@ -465,9 +479,15 @@ public class ExamAttemptService {
                             .collect(Collectors.toSet()));
         }
 
-        for (ExamAttemptQuestion question : attempt.getQuestions()) {
+        for (ExamAttemptQuestion question : new ArrayList<>(attempt.getQuestions())) {
             if (question.getType() == QuestionType.ESSAY) {
                 hasEssay = true;
+                continue;
+            }
+            if (question.getType() == QuestionType.CODING) {
+                CodingOutcome outcome = gradeCodingQuestion(attempt, question, maxScore);
+                correctWeight = correctWeight.add(outcome.weight());
+                codeNeedsReview |= outcome.needsReview();
                 continue;
             }
             Set<Long> correctIds = question.getOptions().stream()
@@ -475,11 +495,10 @@ public class ExamAttemptService {
                     .map(ExamAttemptOption::getSourceOptionId)
                     .collect(Collectors.toSet());
             if (correctIds.equals(selectedByQuestion.getOrDefault(question.getSourceQuestionId(), Set.of()))) {
-                correctWeight += question.getPoints();
+                correctWeight = correctWeight.add(BigDecimal.valueOf(question.getPoints()));
             }
         }
 
-        BigDecimal maxScore = ExamScoring.effectiveMax(attempt.getMaxScore());
         BigDecimal objectiveScore = ExamScoring.share(maxScore, correctWeight, attempt.getTotalPoints());
         attempt.setObjectiveScore(objectiveScore);
         Integer penalty = attempt.isLateGraceEligible()
@@ -489,9 +508,39 @@ public class ExamAttemptService {
                 ? attempt.getLatePenaltyPercent()
                 : null;
         attempt.setLatePenaltyPercentApplied(penalty);
-        attempt.setFinalScore(hasEssay ? null : ExamScoring.applyPenalty(objectiveScore, penalty));
-        attempt.setStatus(ExamAttemptLifecycle.finalStatus(hasEssay, expired));
+        boolean needsManual = hasEssay || codeNeedsReview;
+        attempt.setFinalScore(needsManual ? null : ExamScoring.applyPenalty(objectiveScore, penalty));
+        attempt.setStatus(ExamAttemptLifecycle.finalStatus(needsManual, expired));
         attempt.setSubmittedAt(submittedAt);
+    }
+
+    private record CodingOutcome(BigDecimal weight, boolean needsReview) {
+    }
+
+    /** Cham cau lap trinh: moi test dat duoc tinh theo ty le (10 test => moi test 10% diem cau). */
+    private CodingOutcome gradeCodingQuestion(ExamAttempt attempt, ExamAttemptQuestion question, BigDecimal maxScore) {
+        ExamAttemptAnswer answer = findOrCreateAnswer(attempt, question);
+        CodeSpecDTO spec = CodeSpecSupport.fromJson(question.getCodeSpec());
+        if (spec == null || spec.getTests() == null || spec.getTests().isEmpty()) {
+            answer.setScore(BigDecimal.ZERO);
+            answer.setFeedback("Câu hỏi chưa có test case để chấm");
+            return new CodingOutcome(BigDecimal.ZERO, false);
+        }
+
+        CodeJudgeService.GradeResult result = codeJudgeService.grade(spec, answer.getTextAnswer());
+        if (result.infraError()) {
+            answer.setScore(null);
+            answer.setFeedback("Chưa chấm được tự động vì máy chấm code không phản hồi, cần chấm lại");
+            return new CodingOutcome(BigDecimal.ZERO, true);
+        }
+
+        BigDecimal weight = BigDecimal.valueOf(question.getPoints())
+                .multiply(BigDecimal.valueOf(result.passed()))
+                .divide(BigDecimal.valueOf(result.total()), 8, RoundingMode.HALF_UP);
+        answer.setScore(ExamScoring.share(maxScore, weight, attempt.getTotalPoints()));
+        answer.setFeedback("Đạt " + result.passed() + "/" + result.total() + " test"
+                + (result.compileError() != null ? " (lỗi biên dịch)" : ""));
+        return new CodingOutcome(weight, false);
     }
 
     private List<Question> activeQuestions(Exam exam) {

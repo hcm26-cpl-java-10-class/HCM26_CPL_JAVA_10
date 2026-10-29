@@ -45,6 +45,9 @@ public class ExamTemplateQuestion extends BaseEntity {
     @Column(nullable = false)
     private int position;
 
+    @Column(name = "code_spec", columnDefinition = "TEXT")
+    private String codeSpec;
+
     @OneToMany(
             mappedBy = "templateQuestion",
             cascade = CascadeType.ALL,

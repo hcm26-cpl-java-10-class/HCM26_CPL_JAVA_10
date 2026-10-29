@@ -313,6 +313,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		copy.setTopic(source.getTopic());
 		copy.setImageUrl(source.getImageUrl());
 		copy.setPoints(source.getPoints());
+		copy.setCodeSpec(source.getCodeSpec());
 		copy.setSourceQuestionId(source.getId());
 		source.getGradingCriteria().forEach(sourceCriterion -> {
 			EssayGradingCriterion criterion = new EssayGradingCriterion();

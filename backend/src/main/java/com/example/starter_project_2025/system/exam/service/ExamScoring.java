@@ -25,6 +25,16 @@ public final class ExamScoring {
                 .divide(BigDecimal.valueOf(totalWeight), STORE_SCALE, RoundingMode.HALF_UP);
     }
 
+    /** Nhu share(...) nhung trong so co the le (vd. cau lap trinh dat 8/10 test). */
+    public static BigDecimal share(BigDecimal maxScore, BigDecimal weight, long totalWeight) {
+        if (weight == null || weight.signum() <= 0 || totalWeight <= 0) {
+            return BigDecimal.ZERO.setScale(STORE_SCALE);
+        }
+        return effectiveMax(maxScore)
+                .multiply(weight)
+                .divide(BigDecimal.valueOf(totalWeight), STORE_SCALE, RoundingMode.HALF_UP);
+    }
+
     public static BigDecimal gradingCap(BigDecimal maxScore, long weight, long totalWeight) {
         return share(maxScore, weight, totalWeight).setScale(DISPLAY_SCALE, RoundingMode.HALF_UP);
     }

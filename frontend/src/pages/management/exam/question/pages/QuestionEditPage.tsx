@@ -35,6 +35,7 @@ export function QuestionEditPage() {
                 isActive: data.isActive ?? true,
                 imageUrl: data.imageUrl || "",
                 gradingCriteria: data.gradingCriteria ?? [],
+                code: data.code ?? null,
                 options: (data.options ?? []).map((option: QuestionOptionDTO) => ({
                     id: option.id,
                     content: option.content || "",

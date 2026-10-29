@@ -2,7 +2,9 @@ package com.example.starter_project_2025.system.question.mapper;
 
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptQuestion;
 import com.example.starter_project_2025.system.question.domain.Question;
+import com.example.starter_project_2025.system.question.domain.QuestionType;
 import com.example.starter_project_2025.system.question.dto.QuestionTakerDTO;
+import com.example.starter_project_2025.system.question.service.CodeSpecSupport;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -15,6 +17,7 @@ public class QuestionTakerMapper {
         d.setImageUrl(q.getImageUrl());
         d.setType(q.getType());
         d.setPoints(q.getPoints());
+        d.setCode(q.getType() == QuestionType.CODING ? CodeSpecSupport.forTaker(q.getCodeSpec()) : null);
         d.setMultiSelect(q.getOptions().stream().filter(o -> o.isCorrect()).count() > 1);
         d.setOptions(q.getOptions().stream().map(o -> {
             QuestionTakerDTO.OptionTakerDTO od = new QuestionTakerDTO.OptionTakerDTO();
@@ -33,6 +36,7 @@ public class QuestionTakerMapper {
         d.setImageUrl(q.getImageUrl());
         d.setType(q.getType());
         d.setPoints(q.getPoints());
+        d.setCode(q.getType() == QuestionType.CODING ? CodeSpecSupport.forTaker(q.getCodeSpec()) : null);
         d.setMultiSelect(q.getOptions().stream().filter(o -> o.isCorrect()).count() > 1);
         d.setOptions(q.getOptions().stream().map(o -> {
             QuestionTakerDTO.OptionTakerDTO od = new QuestionTakerDTO.OptionTakerDTO();
