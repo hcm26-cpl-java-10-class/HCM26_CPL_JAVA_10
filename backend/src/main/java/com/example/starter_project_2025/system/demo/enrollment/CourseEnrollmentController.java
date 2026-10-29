@@ -4,6 +4,7 @@ import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.demo.department.DepartmentMemberDTO;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import org.springframework.data.domain.Page;
@@ -72,13 +73,20 @@ public class CourseEnrollmentController {
         enrollmentService.cancelEnrollment(userId, id);
     }
 
+    @GetMapping("/departments/assigned")
+    @PreAuthorize("hasAuthority('DEPARTMENT_READ')")
+    public List<Long> getAssignedDepartmentIds(@RequestParam Long courseId) {
+        return enrollmentService.getFullyEnrolledDepartmentIds(courseId);
+    }
+
     @PostMapping("/departments/preview")
     @PreAuthorize("hasAuthority('DEPARTMENT_UPDATE')")
     public DepartmentEnrollmentPreviewDTO previewDepartmentEnrollment(
             @Valid @RequestBody DepartmentEnrollRequest request
     ) {
         return enrollmentService.previewDepartmentEnrollment(
-                request.getDepartmentId(), request.getCourseId());
+                request.getDepartmentId(), request.getCourseId(),
+                request.getExcludedStudentIds());
     }
 
     @PostMapping("/departments")
@@ -88,7 +96,27 @@ public class CourseEnrollmentController {
             @Valid @RequestBody DepartmentEnrollRequest request
     ) {
         return enrollmentService.enrollDepartment(
-                request.getDepartmentId(), request.getCourseId());
+                request.getDepartmentId(), request.getCourseId(),
+                request.getExcludedStudentIds());
+    }
+
+    @PostMapping("/departments/batch/preview")
+    @PreAuthorize("hasAuthority('DEPARTMENT_UPDATE')")
+    public DepartmentBatchEnrollmentResultDTO previewDepartmentsEnrollment(
+            @Valid @RequestBody BatchDepartmentEnrollRequest request
+    ) {
+        return enrollmentService.previewDepartmentsEnrollment(
+                request.getCourseId(), request.getDepartments());
+    }
+
+    @PostMapping("/departments/batch")
+    @PreAuthorize("hasAuthority('DEPARTMENT_UPDATE')")
+    @ResponseStatus(HttpStatus.CREATED)
+    public DepartmentBatchEnrollmentResultDTO enrollDepartments(
+            @Valid @RequestBody BatchDepartmentEnrollRequest request
+    ) {
+        return enrollmentService.enrollDepartments(
+                request.getCourseId(), request.getDepartments());
     }
 
     @GetMapping("/students")
@@ -157,6 +185,16 @@ public class CourseEnrollmentController {
         private Long departmentId;
         @NotNull(message = "Course ID is required")
         private Long courseId;
+        private List<Long> excludedStudentIds;
+    }
+
+    @Getter
+    public static class BatchDepartmentEnrollRequest {
+        @NotNull(message = "Course ID is required")
+        private Long courseId;
+        @NotEmpty(message = "At least one department is required")
+        @Valid
+        private List<DepartmentSelection> departments;
     }
 
     @Getter

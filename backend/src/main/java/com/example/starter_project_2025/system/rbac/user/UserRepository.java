@@ -127,6 +127,11 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
             Pageable pageable
     );
 
+    @Query("select department.id, count(distinct u.id) from User u join u.roles role "
+            + "join u.departments department "
+            + "where u.isActive = true and role.name = 'STUDENT' group by department.id")
+    List<Object[]> countActiveStudentsPerDepartment();
+
     boolean existsByRoles_Id(Long roleId);
 
     long countByRoles_Id(Long roleId);

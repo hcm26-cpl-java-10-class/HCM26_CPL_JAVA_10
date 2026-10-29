@@ -3,6 +3,7 @@ import { createBaseApiService } from "@/api/base-service.api";
 import type {
     DepartmentDTO,
     DepartmentFilter,
+    DepartmentMember,
     DepartmentMemberPage,
     DepartmentStats,
 } from "@/types";
@@ -50,6 +51,22 @@ export const departmentApi = Object.assign({}, base, {
             { params: { page, size: 10, sort: "firstName,asc", search: search || undefined } },
         );
         return response.data;
+    },
+    /** Lấy toàn bộ thành viên (active students) của department, tự duyệt qua các trang. */
+    getAllMembers: async (departmentId: number): Promise<DepartmentMember[]> => {
+        const pageSize = 100;
+        const fetchPage = async (page: number) =>
+            (
+                await axiosInstance.get<DepartmentMemberPage>(
+                    `/departments/${departmentId}/members`,
+                    { params: { page, size: pageSize, sort: "firstName,asc" } },
+                )
+            ).data;
+        const first = await fetchPage(0);
+        const rest = await Promise.all(
+            Array.from({ length: Math.max(0, first.totalPages - 1) }, (_, i) => fetchPage(i + 1)),
+        );
+        return [first, ...rest].flatMap((page) => page.content);
     },
     getAvailableStudents: async (
         departmentId: number,

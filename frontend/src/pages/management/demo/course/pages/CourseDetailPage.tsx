@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ConfirmDialog } from "@/components/ui/confirmdialog";
 import { Input } from "@/components/ui/input";
+import { DepartmentMemberPicker } from "@/pages/student/DepartmentMemberPicker";
 import { StudentCheckboxList } from "@/pages/student/StudentCheckboxList";
 import {
   Select,
@@ -35,7 +36,7 @@ import {
   Video,
   type LucideIcon,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useCourseEnrollment } from "../hooks/useCourseEnrollment.ts";
@@ -329,6 +330,8 @@ function CourseActionCard({ course }: { course: CourseDetail }) {
 function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
   const [targetType, setTargetType] = useState<"department" | "student">("department");
   const [departmentId, setDepartmentId] = useState("");
+  const [excludedIds, setExcludedIds] = useState<number[]>([]);
+  const [sessionAssignedIds, setSessionAssignedIds] = useState<number[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<DepartmentMember[]>([]);
   const [studentSearch, setStudentSearch] = useState("");
   const [studentPage, setStudentPage] = useState(0);
@@ -352,6 +355,19 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
     },
   });
 
+  const assignedQuery = useQuery({
+    queryKey: ["course-assigned-departments", courseId],
+    enabled: targetType === "department",
+    queryFn: () => enrollmentApi.getAssignedDepartmentIds(courseId),
+  });
+
+  const availableDepartments = useMemo(() => {
+    const hidden = new Set([...(assignedQuery.data ?? []), ...sessionAssignedIds]);
+    return (departmentsQuery.data ?? []).filter(
+      (department) => department.id !== undefined && !hidden.has(department.id),
+    );
+  }, [departmentsQuery.data, assignedQuery.data, sessionAssignedIds]);
+
   const studentsQuery = useQuery({
     queryKey: ["course-enrollment-students", studentPage, studentSearch],
     enabled: targetType === "student",
@@ -359,13 +375,25 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
       enrollmentApi.searchStudents(studentPage, studentSearch.trim()),
   });
 
-  const previewQuery = useQuery({
-    queryKey: ["course-department-enrollment-preview", courseId, departmentId],
+  const membersQuery = useQuery({
+    queryKey: ["course-enrollment-members", departmentId],
     enabled: targetType === "department" && Boolean(departmentId),
+    queryFn: () => departmentApi.getAllMembers(Number(departmentId)),
+  });
+  const members = membersQuery.data;
+  const visibleMemberCount = useMemo(
+    () => (members ?? []).filter((member) => !excludedIds.includes(member.id)).length,
+    [members, excludedIds],
+  );
+
+  const previewQuery = useQuery({
+    queryKey: ["course-department-enrollment-preview", courseId, departmentId, [...excludedIds].sort()],
+    enabled: targetType === "department" && Boolean(departmentId) && Boolean(members),
     queryFn: () =>
       enrollmentApi.previewDepartment({
         departmentId: Number(departmentId),
         courseId,
+        excludedStudentIds: excludedIds,
       }),
   });
 
@@ -374,6 +402,7 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
       enrollmentApi.enrollDepartment({
         departmentId: Number(departmentId),
         courseId,
+        excludedStudentIds: excludedIds,
       }),
     onSuccess: async (result) => {
       toast.success(
@@ -383,8 +412,11 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
         queryClient.invalidateQueries({ queryKey: ["department-overview"] }),
         queryClient.invalidateQueries({ queryKey: ["course-catalog"] }),
         queryClient.invalidateQueries({ queryKey: ["course-detail"] }),
+        queryClient.invalidateQueries({ queryKey: ["course-assigned-departments", courseId] }),
       ]);
+      setSessionAssignedIds((ids) => [...ids, result.departmentId]);
       setDepartmentId("");
+      setExcludedIds([]);
       setSelectedStudents([]);
     },
     onError: (error) => {
@@ -422,7 +454,7 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
     },
   });
 
-  const selectedDepartment = departmentsQuery.data?.find(
+  const selectedDepartment = availableDepartments.find(
     (department) => department.id === Number(departmentId),
   );
   const preview = previewQuery.data;
@@ -440,6 +472,7 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
           if (value !== "department" && value !== "student") return;
           setTargetType(value);
           setDepartmentId("");
+          setExcludedIds([]);
           setSelectedStudents([]);
           setStudentSearch("");
           setStudentPage(0);
@@ -455,7 +488,7 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
         </SelectContent>
       </Select>
       {targetType === "department" ? (
-        departmentsQuery.isLoading ? (
+        departmentsQuery.isLoading || assignedQuery.isLoading ? (
           <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
             <LoaderCircle className="size-4 animate-spin" /> Loading departments...
           </p>
@@ -470,12 +503,13 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
               Try again
             </Button>
           </div>
-        ) : departmentsQuery.data?.length ? (
+        ) : availableDepartments.length ? (
           <>
           <Select
             value={departmentId}
             onValueChange={(value) => {
               setDepartmentId(value);
+              setExcludedIds([]);
             }}
             disabled={enrollmentPending}
           >
@@ -483,13 +517,33 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
               <SelectValue placeholder="Choose a department" />
             </SelectTrigger>
             <SelectContent>
-              {departmentsQuery.data.map((department) => (
+              {availableDepartments.map((department) => (
                 <SelectItem key={department.id} value={String(department.id)}>
                   {department.name || department.code || `Department ${department.id}`}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          {departmentId && membersQuery.isLoading && (
+            <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
+              <LoaderCircle className="size-4 animate-spin" /> Loading members...
+            </p>
+          )}
+          {departmentId && membersQuery.isError && (
+            <p role="alert" className="text-xs text-destructive">
+              {membersQuery.error instanceof Error
+                ? membersQuery.error.message
+                : "Could not load department members."}
+            </p>
+          )}
+          {members && (
+            <DepartmentMemberPicker
+              members={members}
+              excludedIds={excludedIds}
+              onExcludedChange={setExcludedIds}
+              disabled={enrollmentPending}
+            />
+          )}
           {departmentId && previewQuery.isLoading && (
             <p role="status" className="text-xs text-muted-foreground">
               Checking department students...
@@ -511,7 +565,7 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
               <Button
                 size="sm"
                 className="w-full"
-                disabled={preview.newEnrollments === 0 || enrollmentPending}
+                disabled={preview.newEnrollments === 0 || visibleMemberCount === 0 || enrollmentPending}
                 onClick={() => departmentEnrollMutation.mutate()}
               >
                 {departmentEnrollMutation.isPending && (
@@ -523,7 +577,11 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
           )}
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">No active departments available.</p>
+          <p className="text-sm text-muted-foreground">
+            {departmentsQuery.data?.length
+              ? "All departments are already assigned to this course."
+              : "No active departments available."}
+          </p>
         )
       ) : (
         <>
