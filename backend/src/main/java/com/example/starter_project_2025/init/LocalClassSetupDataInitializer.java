@@ -15,6 +15,10 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.starter_project_2025.system.trainingprogram.AssignmentRole;
+import com.example.starter_project_2025.system.trainingprogram.TeachingAssignmentRequest;
+
+import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.IntStream;
 
@@ -46,8 +50,17 @@ public class LocalClassSetupDataInitializer implements CommandLineRunner {
         });
         if (classProgramRepository.findByClassId(1L).isEmpty()) {
             classSetupService.assignProgram(1L, program.getId());
+            var classSubjects = classSetupService.getClassProgramSubjects(1L).subjects();
+            if (classSubjects != null) {
+                for (int i = 0; i < classSubjects.size(); i++) {
+                    Long trainerId = (i == classSubjects.size() - 1) ? 2L : 1L;
+                    classSetupService.createAssignment(new TeachingAssignmentRequest(
+                            1L, classSubjects.get(i).programSubjectId(), trainerId, AssignmentRole.MAIN,
+                            LocalDate.now().minusDays(30), null));
+                }
+            }
         }
-        log.info("LOCAL SAMPLE DATA enabled: classes, trainers, rooms and a Java training program. "
+        log.info("LOCAL SAMPLE DATA enabled: classes, trainers, rooms, a Java training program and teaching assignments. "
                 + "Changes in the in-memory database are cleared when the application stops.");
     }
 }

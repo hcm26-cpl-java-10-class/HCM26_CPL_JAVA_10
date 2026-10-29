@@ -29,6 +29,10 @@ export interface CalendarSessionsQuery {
   from: string;
   to: string;
   status?: CalendarSessionStatus;
+  classId?: number;
+  trainerId?: number;
+  topicId?: number;
+  location?: string;
   page?: number;
   size?: number;
 }
@@ -39,6 +43,21 @@ export async function getCalendarSessions(
 ): Promise<CalendarSessionsPage> {
   const response = await axiosInstance.get<CalendarSessionsPage>(
     "/calendar/sessions",
+    {
+      params,
+      signal,
+    },
+  );
+
+  return response.data;
+}
+
+export async function getMyCalendarSessions(
+  params: CalendarSessionsQuery,
+  signal?: AbortSignal,
+): Promise<CalendarSessionsPage> {
+  const response = await axiosInstance.get<CalendarSessionsPage>(
+    "/calendar/my-sessions",
     {
       params,
       signal,

@@ -26,3 +26,4 @@ export * from "./features/schedule-validation";
 export * from "./features/schedule-generation";
 export * from "./features/subject";
 export * from "./features/demo/lesson";
+export * from "./features/demo/schedule_version";

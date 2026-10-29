@@ -28,6 +28,17 @@ public class TeachingAssignmentSessionGuard {
                 && assignments.existsTrainerSlotConflict(candidate.trainerId(), candidate.teachingAssignmentId(),
                     candidate.startTime().toLocalDate(), candidate.startTime().toLocalTime(), candidate.endTime().toLocalTime()))
             throw invalid("The trainer has another teaching slot during this time.");
+        checkCompatible(candidate, true);
+    }
+
+    /** Validate a preview without marking the assignment as used. */
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true,
+            noRollbackFor = BusinessValidationException.class)
+    public void checkCompatible(ScheduleCandidate candidate) {
+        checkCompatible(candidate, false);
+    }
+
+    private void checkCompatible(ScheduleCandidate candidate, boolean markUsed) {
         // Legacy sessions without an explicit link continue through existing schedule validation.
         if (candidate.teachingAssignmentId() == null) return;
         var assignment = assignments.findById(candidate.teachingAssignmentId()).orElseThrow(() -> invalid("The teaching assignment no longer exists."));
@@ -45,6 +56,7 @@ public class TeachingAssignmentSessionGuard {
                 && !AssignmentTeachingSlot.covers(assignment.getTeachingSlots(), candidate.startTime(), candidate.endTime()))
             throw invalid("The session must fit within one of the assigned teaching slots.");
         assignment.setEverUsed(true);
+        if (markUsed) assignment.setEverUsed(true);
     }
 
     public void rememberUse(Long assignmentId) {

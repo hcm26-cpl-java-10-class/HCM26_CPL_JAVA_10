@@ -15,7 +15,7 @@ public class CsvParser implements FileParser {
 
     @Override
     public boolean supports(String filename) {
-        return filename.endsWith(".csv");
+        return filename != null && filename.toLowerCase(java.util.Locale.ROOT).endsWith(".csv");
     }
 
     @Override
@@ -23,13 +23,21 @@ public class CsvParser implements FileParser {
 
         List<Map<String, String>> result = new ArrayList<>();
 
-        try (CSVReader reader = new CSVReader(new InputStreamReader(input))) {
+        try (CSVReader reader = new CSVReader(new InputStreamReader(input, java.nio.charset.StandardCharsets.UTF_8))) {
 
             List<String[]> rows = reader.readAll();
 
             if (rows.size() < 2) return result;
 
-            String[] headers = rows.get(0);
+            String[] headers = java.util.Arrays.stream(rows.get(0))
+                    .map(header -> header.replace("\uFEFF", "").trim()).toArray(String[]::new);
+
+            var seenHeaders = new java.util.HashSet<String>();
+            for (String header : headers) {
+                if (header.isBlank()) throw new IllegalArgumentException("Every column needs a header.");
+                if (!seenHeaders.add(header.replaceAll("\\s+", " ").toLowerCase(java.util.Locale.ROOT)))
+                    throw new IllegalArgumentException("Duplicate column header: " + header);
+            }
 
             for (int i = 1; i < rows.size(); i++) {
                 Map<String, String> rowMap = new HashMap<>();
