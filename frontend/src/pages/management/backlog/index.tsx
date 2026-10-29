@@ -198,6 +198,8 @@ interface BoardSection {
   sprintId: number | null;
   /** Project of the box, used to scope the milestone picker. */
   projectId: number | null;
+  /** Team owning the sprint of the box (used by the assignee picker). */
+  teamId: number | null;
   title: string;
   meta: string | null;
   prefix: string;
@@ -329,13 +331,15 @@ export function BacklogBoard({
 
   /**
    * Active members of the workspace team, so the assignee picker of a work
-   * item offers the people of that team instead of a raw member id. The
-   * `/backlogs` route page is not scoped to a team, so it keeps no options.
+   * item offers the people of that team instead of a raw member id. When the
+   * board is not team-scoped (project scoped board or the global `/backlogs`
+   * page) the project is sent too, so the backend resolves the team that owns
+   * it and the picker still lists real members.
    */
   const assigneesQuery = useQuery({
-    queryKey: [...ASSIGNEE_OPTIONS_QUERY_KEY, teamId ?? "none"],
-    queryFn: () => sprintBacklogApi.getAssigneeOptions(teamId),
-    enabled: teamId != null,
+    queryKey: [...ASSIGNEE_OPTIONS_QUERY_KEY, teamId ?? "none", projectId ?? "none"],
+    queryFn: () => sprintBacklogApi.getAssigneeOptions(teamId, projectId),
+    enabled: teamId != null || projectId != null,
     staleTime: 60_000,
   });
 
@@ -444,6 +448,7 @@ export function BacklogBoard({
         sprint,
         sprintId: sprint?.id ?? null,
         projectId: sprint?.projectId ?? scopedProjectId ?? null,
+        teamId: sprint?.teamId ?? teamId ?? null,
         title:
           sprint?.name?.trim() ||
           (sprint?.id != null ? `Sprint ${sprint.id}` : "Backlog"),
@@ -1115,6 +1120,8 @@ export function BacklogBoard({
                       creating={creatingKey === section.key}
                       assignees={assignees}
                       milestones={milestonesFor(section.projectId)}
+                      projectId={section.projectId}
+                      teamId={section.teamId}
                       onCreate={(values) =>
                         handleCreateItem(
                           section.key,
@@ -1214,6 +1221,7 @@ export function BacklogBoard({
           detailItem?.projectId ?? detailSection?.projectId ?? null,
         )}
         assignees={assignees}
+        teamId={teamId}
         canEdit={canEditTask && !detailSection?.locked}
         canMove={canEditBoard && !detailSection?.locked}
         canDelete={canDelete}

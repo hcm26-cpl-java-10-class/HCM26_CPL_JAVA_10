@@ -13,15 +13,11 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 type BoardColumnKey = "BACKLOG" | Exclude<SprintBacklogStatus, "BLOCKED">;
-const allowedStatusTransitions: Record<SprintBacklogStatus, SprintBacklogStatus[]> = {
-  // Keep the UI options identical to SprintBacklogServiceImpl's transition
-  // matrix so the board never offers a change that the API will reject.
-  TODO: ["IN_PROGRESS"],
-  IN_PROGRESS: ["REVIEW", "BLOCKED", "TODO"],
-  REVIEW: ["DONE", "IN_PROGRESS"],
-  BLOCKED: ["IN_PROGRESS"],
-  DONE: ["IN_PROGRESS"],
-};
+/**
+ * Every workflow status can be picked: a work item may move backwards, skip a
+ * step or be reopened (the backend no longer enforces a transition matrix).
+ */
+const STATUS_ORDER: SprintBacklogStatus[] = ["TODO", "IN_PROGRESS", "REVIEW", "BLOCKED", "DONE"];
 const columns: Array<{ key: BoardColumnKey; label: string; icon: typeof Circle; color: string }> = [
   { key: "BACKLOG", label: "Backlog", icon: Circle, color: "bg-slate-400" },
   { key: "TODO", label: "To do", icon: Circle, color: "bg-sky-500" },
@@ -225,16 +221,6 @@ export function WorkspaceTeamBoardPanel({ teamId, canUpdate, onCreateWorkItem }:
 
   const moveItem = async (item: SprintBacklogDTO, target: BoardColumnKey) => {
     if (!canUpdate || savingItemId != null || item.id == null) return;
-    if (target !== "BACKLOG" && item.sprintId == null && target !== "TODO") {
-      toast.error("Work item trong Backlog phải vào Sprint ở trạng thái To do trước.");
-      return;
-    }
-    if (target !== "BACKLOG" && item.sprintId != null && item.status !== target) {
-      if (!allowedStatusTransitions[item.status ?? "TODO"]?.includes(target)) {
-        toast.error(`Không thể chuyển từ ${statusLabel(item.status)} sang ${statusLabel(target)}.`);
-        return;
-      }
-    }
     try {
       setSavingItemId(item.id);
       if (target === "BACKLOG") {
@@ -266,10 +252,6 @@ export function WorkspaceTeamBoardPanel({ teamId, canUpdate, onCreateWorkItem }:
     if (!canUpdate || item.id == null || item.sprintId == null || savingItemId != null) return;
     const current = item.status ?? "TODO";
     if (current === target) return;
-    if (!allowedStatusTransitions[current].includes(target)) {
-      toast.error(`KhÃ´ng thá»ƒ chuyá»ƒn tá»« ${statusLabel(current)} sang ${statusLabel(target)}.`);
-      return;
-    }
     try {
       setSavingItemId(item.id);
       await sprintBacklogApi.update(String(item.id), { status: target } as SprintBacklogDTO);
@@ -419,7 +401,7 @@ export function WorkspaceTeamBoardPanel({ teamId, canUpdate, onCreateWorkItem }:
                 <td className="max-w-md px-4 py-3"><p className="text-[10px] font-mono text-muted-foreground">#{item.id ?? "—"}</p><p className="font-medium text-slate-800">{item.title || "Untitled work item"}</p>{item.milestoneName ? <p className="mt-1 truncate text-xs text-muted-foreground">{item.milestoneName}</p> : null}</td>
                 <td className="px-4 py-3">{item.workType ? <Badge variant="outline" className={workTypeStyle(item.workType)}>{workTypeLabel(item.workType)}</Badge> : "—"}</td>
                 <td className="px-4 py-3">{item.priority ? <Badge variant="outline" className={priorityStyle(item.priority)}>{priorityLabel(item.priority)}</Badge> : "—"}</td>
-                <td className="px-4 py-3">{canUpdate && item.sprintId != null ? <select aria-label={`Status for ${item.title ?? "work item"}`} className={`rounded-full border px-2 py-1 text-xs font-medium ${item.status === "BLOCKED" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-slate-200 bg-white text-slate-700"}`} value={item.status ?? "TODO"} disabled={savingItemId === item.id || query.isFetching} onChange={(event) => void updateStatus(item, event.target.value as SprintBacklogStatus)}>{([...new Set([item.status ?? "TODO", ...allowedStatusTransitions[item.status ?? "TODO"]])] as SprintBacklogStatus[]).map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select> : <Badge variant="outline" className={item.sprintId == null ? "border-slate-200 bg-slate-100 text-slate-700" : item.status === "BLOCKED" ? "border-rose-200 bg-rose-50 text-rose-700" : item.status === "DONE" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : item.status === "REVIEW" ? "border-amber-200 bg-amber-50 text-amber-800" : item.status === "IN_PROGRESS" ? "border-violet-200 bg-violet-50 text-violet-700" : "border-sky-200 bg-sky-50 text-sky-700"}>{item.sprintId == null ? statusLabel("BACKLOG") : statusLabel(item.status)}</Badge>}</td>
+                <td className="px-4 py-3">{canUpdate && item.sprintId != null ? <select aria-label={`Status for ${item.title ?? "work item"}`} className={`rounded-full border px-2 py-1 text-xs font-medium ${item.status === "BLOCKED" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-slate-200 bg-white text-slate-700"}`} value={item.status ?? "TODO"} disabled={savingItemId === item.id || query.isFetching} onChange={(event) => void updateStatus(item, event.target.value as SprintBacklogStatus)}>{STATUS_ORDER.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select> : <Badge variant="outline" className={item.sprintId == null ? "border-slate-200 bg-slate-100 text-slate-700" : item.status === "BLOCKED" ? "border-rose-200 bg-rose-50 text-rose-700" : item.status === "DONE" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : item.status === "REVIEW" ? "border-amber-200 bg-amber-50 text-amber-800" : item.status === "IN_PROGRESS" ? "border-violet-200 bg-violet-50 text-violet-700" : "border-sky-200 bg-sky-50 text-sky-700"}>{item.sprintId == null ? statusLabel("BACKLOG") : statusLabel(item.status)}</Badge>}</td>
                 <td className="px-4 py-3 text-slate-600">{canUpdate ? <select aria-label={`Assign ${item.title ?? "work item"}`} className="max-w-40 bg-transparent" value={item.assigneeProjectMemberId ?? ""} disabled={savingItemId === item.id || query.isFetching} onChange={(event) => void assignItem(item, event.target.value)}><option value="">Unassigned</option>{(query.data?.members ?? []).map((member) => <option key={member.projectMemberId} value={member.projectMemberId}>{member.displayName}</option>)}</select> : item.assigneeDisplayName || "Unassigned"}</td>
                 <td className="px-4 py-3 text-right text-slate-600">{item.estimatedHours != null ? `${item.estimatedHours}h` : "—"}</td>
               </tr>)}</tbody>

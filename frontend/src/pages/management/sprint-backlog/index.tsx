@@ -144,7 +144,8 @@ export const sprintBacklogSchema: EntitySchema = {
             filterable: true,
             filterType: "select",
             filterOptions: statusOptions,
-            helpText: "Workflow: To do → In progress → Review → Done",
+            helpText:
+                "Statuses: To do / In progress / Review / Done - any status can be picked at any time",
         },
         {
             name: "priority",

@@ -110,25 +110,23 @@ export const backlogWorkTypeMeta = (
 export const backlogPriorityMeta = (priority?: BacklogPriority | null) =>
   (priority && BACKLOG_PRIORITY_META[priority]) || NO_PRIORITY_META;
 
-/** The backend only accepts a one-step forward transition (422 otherwise). */
-export const NEXT_TASK_STATUS: Record<BacklogStatus, BacklogStatus | null> = {
-  BACKLOG: "SPRINT_BACKLOG",
-  SPRINT_BACKLOG: "IN_PROGRESS",
-  IN_PROGRESS: "DONE",
-  DONE: null,
-};
-
-export const backlogStatusMeta = (status?: BacklogStatus | null) =>
-  (status && BACKLOG_STATUS_META[status]) || BACKLOG_STATUS_META.BACKLOG;
-
+/**
+ * The team may move a sprint backlog item to any status of the workflow: a
+ * work item can go backwards, skip a step (To Do -> Done) or be reopened.
+ * Kept in sync with `SprintBacklogServiceImpl`, which no longer enforces a
+ * forward-only transition matrix.
+ */
 export const canMoveToStatus = (
   current: BacklogStatus | null | undefined,
   target: BacklogStatus,
 ) => {
   const from = current ?? "BACKLOG";
 
-  return from === target || NEXT_TASK_STATUS[from] === target;
+  return from === target || TASK_STATUS_ORDER.includes(target);
 };
+
+export const backlogStatusMeta = (status?: BacklogStatus | null) =>
+  (status && BACKLOG_STATUS_META[status]) || BACKLOG_STATUS_META.BACKLOG;
 
 /**
  * Words that name the container, not the work it holds: taking them as key
