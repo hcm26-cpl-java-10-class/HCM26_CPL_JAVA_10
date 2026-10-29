@@ -1,4 +1,6 @@
 import { enrollmentApi } from "@/api";
+import { CourseThumbnail } from "@/components/CourseThumbnail";
+import { Badge } from "@/components/ui/badge";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
@@ -87,9 +89,9 @@ export default function EnrollmentManagementPage() {
                                 <p className="mt-2 text-3xl font-bold">{enrollments.length}</p>
                             </div>
                             <div className="rounded-xl border bg-card p-5">
-                                <p className="text-sm text-muted-foreground">Course access</p>
+                                <p className="text-sm text-muted-foreground">Enrollment status</p>
                                 <p className="mt-2 flex items-center gap-2 text-lg font-semibold">
-                                    <BookOpen className="size-5 text-blue-700" /> Available anytime
+                                    <BookOpen className="size-5 text-blue-700" /> Enrolled
                                 </p>
                             </div>
                             <div className="rounded-xl border bg-card p-5">
@@ -107,24 +109,16 @@ export default function EnrollmentManagementPage() {
                             <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
                                 {enrollments.map((enrollment) => (
                                     <article key={enrollment.id} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-                                        <div className="h-44 overflow-hidden bg-gradient-to-br from-blue-100 via-indigo-100 to-violet-100">
-                                            {enrollment.thumbnailUrl ? (
-                                                <img
-                                                    src={enrollment.thumbnailUrl}
-                                                    alt=""
-                                                    className="h-full w-full object-cover"
-                                                />
-                                            ) : (
-                                                <div className="flex h-full items-center justify-center">
-                                                    <GraduationCap className="size-16 text-blue-900/25" />
-                                                </div>
-                                            )}
-                                        </div>
+                                        <CourseThumbnail src={enrollment.thumbnailUrl} />
                                         <div className="space-y-4 p-5">
                                             <div>
                                                 <h3 className="line-clamp-2 min-h-12 text-lg font-semibold">
                                                     {enrollment.courseName}
                                                 </h3>
+                                                <p className="mt-2 line-clamp-3 text-sm text-muted-foreground">
+                                                    {enrollment.courseDescription || "No description available."}
+                                                </p>
+                                                <Badge variant="secondary" className="mt-2">Enrolled</Badge>
                                                 {enrollment.instructor && (
                                                     <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
                                                         <UserRound className="size-4" /> {enrollment.instructor}
@@ -138,8 +132,8 @@ export default function EnrollmentManagementPage() {
                                                 </p>
                                             )}
                                             <Button asChild className="w-full">
-                                                <Link to="/courses">
-                                                    <BookOpen className="size-4" /> Browse catalog
+                                                <Link to={`/courses/${enrollment.courseId}`}>
+                                                    <BookOpen className="size-4" /> View Course Details
                                                 </Link>
                                             </Button>
                                         </div>

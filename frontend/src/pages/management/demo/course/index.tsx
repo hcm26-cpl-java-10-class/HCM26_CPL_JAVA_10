@@ -10,6 +10,8 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, CheckCircle2, GraduationCap, Search } from "lucide-react";
 import { useState } from "react";
+import { Link } from "react-router-dom";
+import CourseDetailPage from "./CourseDetailPage";
 import { toast } from "sonner";
 import { type EntityConfig, type EntitySchema, auditableFieldsSchema, type FieldSchema } from "@/types";
 
@@ -51,6 +53,9 @@ export const entityConfig: EntityConfig = {
   path: "/courses",
   api: courseApi,
   schema: courseSchema,
+  actionPages: {
+    detail: { path: ":id", component: CourseDetailPage, requiredPermission: "COURSE_READ" },
+  },
 };
 
 export default function CourseManagementPage() {
@@ -201,6 +206,9 @@ function StudentCourseCatalog() {
                       <p className="line-clamp-3 min-h-[3.75rem] text-sm leading-5 text-muted-foreground">
                         {course.description || "Start learning with this instructor-led course."}
                       </p>
+                      <Button asChild variant="outline" className="w-full">
+                        <Link to={`/courses/${course.id}`}>View Course Details</Link>
+                      </Button>
                       {isEnrolled ? (
                         <Button className="w-full" variant="secondary" disabled>
                           <CheckCircle2 className="size-4" /> Enrolled

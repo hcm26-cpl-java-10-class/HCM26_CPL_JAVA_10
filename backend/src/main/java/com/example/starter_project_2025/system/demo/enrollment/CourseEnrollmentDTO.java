@@ -11,6 +11,7 @@ public class CourseEnrollmentDTO {
     private Long id;
     private Long courseId;
     private String courseName;
+    private String courseDescription;
     private String thumbnailUrl;
     private String instructor;
     private LocalDateTime enrolledAt;

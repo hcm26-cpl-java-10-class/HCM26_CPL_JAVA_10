@@ -77,6 +77,7 @@ public class CourseEnrollmentController {
                 .id(enrollment.getId())
                 .courseId(enrollment.getCourse().getId())
                 .courseName(enrollment.getCourse().getName())
+                .courseDescription(enrollment.getCourse().getDescription())
                 .thumbnailUrl(enrollment.getCourse().getThumbnailUrl())
                 .instructor(enrollment.getCourse().getInstructor())
                 .enrolledAt(enrollment.getCreatedAt())
