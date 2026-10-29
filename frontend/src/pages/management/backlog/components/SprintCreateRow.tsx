@@ -1,5 +1,4 @@
-import { Button } from "@/components/ui/button";
-import {
+import { Button } from "@/components/ui/button";import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -13,6 +12,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
+import { sprintBacklogApi } from "@/api";
 import { cn } from "@/lib/utils";
 import type {
   BacklogAssigneeOption,
@@ -29,6 +29,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { BACKLOG_WORK_TYPE_META } from "../backlog.constants";
 
@@ -72,6 +73,14 @@ interface SprintCreateRowProps {
   assignees?: BacklogAssigneeOption[];
   /** Active milestones the item can be linked to (UFR-PRJ-003-02). */
   milestones?: MilestoneOption[];
+  /**
+   * Project of the box. Used to resolve the team members shown by the
+   * assignee picker when the board is not scoped to a team (the members of
+   * the team that owns the project are offered).
+   */
+  projectId?: number | null;
+  /** Team of the box sprint, when the sprint belongs to a team. */
+  teamId?: number | null;
   /** Resolves the outcome so the bar can reset itself or show the API errors. */
   onCreate: (values: BacklogCreateValues) => Promise<BacklogCreateResult>;
 }
@@ -143,12 +152,17 @@ export function SprintCreateRow({
   creating,
   assignees = [],
   milestones = [],
+  projectId = null,
+  teamId = null,
   onCreate,
 }: SprintCreateRowProps) {
   const [expanded, setExpanded] = useState(false);
   const [workType, setWorkType] = useState<SprintBacklogWorkType>("TASK");
   const [title, setTitle] = useState("");
+  /** Description committed with its own Save button (draft lives in the textarea). */
   const [description, setDescription] = useState("");
+  /** Text currently typed in the description editor. */
+  const [descriptionDraft, setDescriptionDraft] = useState("");
   const [milestoneId, setMilestoneId] = useState<string>("");
   const [dueDate, setDueDate] = useState(todayValue);
   const [assignee, setAssignee] = useState("");
@@ -156,6 +170,29 @@ export function SprintCreateRow({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const titleRef = useRef<HTMLInputElement | null>(null);
+
+  /**
+   * Fallback assignee list: the members of the team that owns the box (sprint
+   * team or team of the box project), used when the board is not scoped to a
+   * team (`/backlogs` page).
+   */
+  const projectAssigneesQuery = useQuery({
+    queryKey: [
+      "sprint-backlogs",
+      "assignee-options",
+      "box",
+      teamId ?? "none",
+      projectId ?? "none",
+    ],
+    queryFn: () => sprintBacklogApi.getAssigneeOptions(teamId, projectId),
+    enabled:
+      assignees.length === 0 && (teamId != null || projectId != null),
+    staleTime: 60_000,
+  });
+
+  /** Members offered by the picker (the board list wins when it is present). */
+  const assigneeOptions =
+    assignees.length > 0 ? assignees : projectAssigneesQuery.data ?? [];
 
   /** The bar focuses its title field as soon as it opens, like Jira. */
   useEffect(() => {
@@ -169,11 +206,12 @@ export function SprintCreateRow({
   const selectedMilestone =
     milestones.find((milestone) => milestone.id === milestoneId) ?? null;
   const selectedAssignee =
-    assignees.find((member) => String(member.id) === assignee) ?? null;
+    assigneeOptions.find((member) => String(member.id) === assignee) ?? null;
 
   const reset = () => {
     setTitle("");
     setDescription("");
+    setDescriptionDraft("");
     setMilestoneId("");
     setWorkType("TASK");
     setDueDate(todayValue());
@@ -181,6 +219,9 @@ export function SprintCreateRow({
     setError(null);
     setFieldErrors({});
   };
+
+  /** True while the textarea holds a description that was not saved yet. */
+  const descriptionDirty = descriptionDraft.trim() !== description;
 
   const clearFieldError = (field: string) => {
     setFieldErrors((previous) => {
@@ -193,11 +234,26 @@ export function SprintCreateRow({
     });
   };
 
+  /** "Save" of the description editor: the typed text becomes the saved value. */
+  const saveDescription = () => {
+    setDescription(descriptionDraft.trim());
+    clearFieldError("description");
+    if (error) setError(null);
+  };
+
+  /** "Cancel" of the description editor: discards what was typed. */
+  const cancelDescription = () => {
+    setDescriptionDraft(description);
+    clearFieldError("description");
+    if (error) setError(null);
+  };
+
   const submit = async () => {
     if (creating) return;
 
     const trimmedTitle = title.trim();
-    const trimmedDescription = description.trim();
+    // A description typed but not explicitly saved is still part of this save.
+    const trimmedDescription = descriptionDraft.trim() || description;
     const localErrors: Record<string, string> = {};
 
     // AC02: the API answers 422; the bar pre-validates the name so the user
@@ -489,13 +545,13 @@ export function SprintCreateRow({
               Assignee
             </p>
 
-            {assignees.length === 0 ? (
+            {assigneeOptions.length === 0 ? (
               <p className="px-1 py-2 text-[11px] text-muted-foreground">
                 No team member is available in this workspace.
               </p>
             ) : (
               <div className="max-h-56 overflow-y-auto">
-                {assignees.map((member) => {
+                {assigneeOptions.map((member) => {
                   const isSelected = String(member.id) === assignee;
 
                   return (
@@ -573,7 +629,7 @@ export function SprintCreateRow({
         {/* Structured description (1 - 2000 characters), optional. */}
         <div className="flex items-start gap-2 px-1 pb-0.5">
           <Textarea
-            value={description}
+            value={descriptionDraft}
             rows={2}
             placeholder="Detailed description (optional, up to 2000 characters)…"
             aria-label="Backlog item description"
@@ -583,28 +639,55 @@ export function SprintCreateRow({
               fieldErrors.description && "border-destructive/70",
             )}
             onChange={(event) => {
-              setDescription(event.target.value);
+              setDescriptionDraft(event.target.value);
               clearFieldError("description");
               if (error) setError(null);
             }}
             onKeyDown={(event) => {
               if (event.key === "Escape") {
                 event.preventDefault();
-                reset();
-                setExpanded(false);
+                cancelDescription();
               }
             }}
           />
           <span
             className={cn(
               "w-16 shrink-0 pt-1 text-right text-[10px]",
-              description.length > MAX_DESCRIPTION_LENGTH
+              descriptionDraft.length > MAX_DESCRIPTION_LENGTH
                 ? "font-semibold text-destructive"
                 : "text-muted-foreground",
             )}
           >
-            {description.length}/{MAX_DESCRIPTION_LENGTH}
+            {descriptionDraft.length}/{MAX_DESCRIPTION_LENGTH}
           </span>
+        </div>
+
+        {/* Save / Cancel of the description editor: "Save" keeps the typed
+            text for the work item, "Cancel" discards it. */}
+        <div className="flex items-center justify-end gap-1 px-1 pb-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="h-6 px-2 text-[11px] text-muted-foreground"
+            disabled={!descriptionDirty}
+            aria-label="Cancel description"
+            onClick={cancelDescription}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            className="h-6 gap-1 px-2 text-[11px]"
+            disabled={!descriptionDirty}
+            aria-label="Save description"
+            onClick={saveDescription}
+          >
+            <Check className="size-3" />
+            Save
+          </Button>
         </div>
       </div>
 

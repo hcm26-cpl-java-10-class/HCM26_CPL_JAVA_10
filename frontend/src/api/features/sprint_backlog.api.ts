@@ -41,16 +41,23 @@ export const sprintBacklogApi = Object.assign({}, base, {
 
   /**
    * Active members of the workspace team, offered by the assignee picker of
-   * the backlog create bar. `teamId` comes from the open workspace; without it
-   * the backend returns an empty list (the `/backlogs` route page is not
-   * scoped to a team).
+   * the backlog create bar and of the work item detail panel. `teamId` comes
+   * from the open workspace; on the global `/backlogs` page the `projectId` of
+   * the work item is sent instead, so the backend resolves the team that owns
+   * that project.
    */
   getAssigneeOptions: async (
     teamId?: number | null,
+    projectId?: number | null,
   ): Promise<BacklogAssigneeOption[]> => {
+    const params: Record<string, number> = {};
+
+    if (teamId != null) params.teamId = teamId;
+    if (projectId != null) params.projectId = projectId;
+
     const response = await axiosInstance.get<BacklogAssigneeOption[]>(
       `${path}/assignee-options`,
-      { params: teamId == null ? undefined : { teamId } },
+      { params: Object.keys(params).length > 0 ? params : undefined },
     );
     return response.data ?? [];
   },
