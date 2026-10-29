@@ -25,6 +25,7 @@ public class AuditLogController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Page<AuditLogDTO>> getAuditLogs(
             @RequestParam(required = false) Long actorId,
+            @RequestParam(required = false) String actorName,
             @RequestParam(required = false) String action,
             @RequestParam(required = false) String entityType,
             @RequestParam(required = false) String result,
@@ -53,7 +54,7 @@ public class AuditLogController {
 
         return ResponseEntity.ok(
                 queryService.search(
-                        actorId, action, entityType, result,
+                        actorId, actorName, action, entityType, result,
                         fromDate, toDate, pageable
                 )
         );

@@ -18,6 +18,47 @@ public class AuditLogServiceImpl implements AuditLogService {
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logLogout(
+            Long actorId,
+            String actorEmail,
+            String correlationId,
+            String result
+    ) {
+        AuditLog auditLog = AuditLog.builder()
+                .actorId(actorId)
+                .actorEmail(actorEmail)
+                .action("LOGOUT")
+                .entityType("AUTH")
+                .entityId(actorId != null ? String.valueOf(actorId) : null)
+                .oldValue(null)
+                .newValue(null)
+                .correlationId(correlationId)
+                .build();
+
+        auditLog.setResult(result);
+        auditLogRepository.save(auditLog);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logLoginFailure(String email, String correlationId) {
+        AuditLog auditLog = AuditLog.builder()
+                .actorId(null)
+                .actorEmail("SYSTEM")
+                .action("LOGIN")
+                .entityType("AUTH")
+                .entityId(email)
+                .oldValue(null)
+                .newValue(null)
+                .correlationId(correlationId)
+                .build();
+
+        auditLog.setResult("FAILURE");
+        auditLogRepository.save(auditLog);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void log(
             String action,
             String entityType,

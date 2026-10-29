@@ -6,18 +6,22 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import com.example.starter_project_2025.system.rbac.user.UserRepository;
+import java.util.List;
 import java.time.LocalDate;
+import java.util.ArrayList;
 
 @Service
 @RequiredArgsConstructor
 public class AuditLogQueryService {
 
     private final AuditLogRepository repository;
+    private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
     public Page<AuditLogDTO> search(
             Long actorId,
+            String actorName,
             String action,
             String entityType,
             String result,
@@ -26,6 +30,30 @@ public class AuditLogQueryService {
             Pageable pageable
     ) {
         Specification<AuditLog> spec = Specification.where(null);
+
+        if (actorName != null && !actorName.isBlank()) {
+            String keyword = actorName.trim();
+            List<Long> matchingUserIds =
+                    userRepository.findIdsByActorName(keyword);
+
+            spec = spec.and((root, query, cb) -> {
+                String pattern = "%" + keyword.toLowerCase() + "%";
+
+                var actorNamePredicate = cb.or(
+                        cb.like(cb.lower(root.get("actorEmail")), pattern),
+                        cb.like(cb.lower(root.get("entityId")), pattern)
+                );
+
+                if (matchingUserIds.isEmpty()) {
+                    return actorNamePredicate;
+                }
+
+                return cb.or(
+                        root.get("actorId").in(matchingUserIds),
+                        actorNamePredicate
+                );
+            });
+        }
 
         if (actorId != null) {
             spec = spec.and((root, query, cb) ->

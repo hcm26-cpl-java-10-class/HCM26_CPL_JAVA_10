@@ -578,6 +578,7 @@ export default function AuditLogPage() {
                     type: "select",
                     filterable: true,
                     filterOptions: [
+                        { label: "Login", value: "LOGIN" },
                         { label: "Create", value: "CREATE" },
                         { label: "Update", value: "UPDATE" },
                         { label: "Delete", value: "DELETE" },
@@ -602,7 +603,7 @@ export default function AuditLogPage() {
                     filterable: true,
                     filterOptions: [
                         { label: "Success", value: "SUCCESS" },
-                        { label: "Failed", value: "FAILED" },
+                        { label: "Failure", value: "FAILURE" },
                     ],
                 },
             ] as FieldSchema[],
