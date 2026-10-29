@@ -91,4 +91,13 @@ public class SessionController
         SessionDTO updatedSession = sessionService.cancelSession(id, cancelDTO);
         return ResponseEntity.ok(updatedSession);
     }
+
+    @PatchMapping("/{id}/complete")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('SESSION_UPDATE')")
+    @Operation(summary = "Complete a scheduled session with an optional note")
+    public ResponseEntity<SessionDTO> completeSession(
+            @PathVariable Long id,
+            @Valid @RequestBody(required = false) SessionCompleteDTO completeDTO) {
+        return ResponseEntity.ok(sessionService.completeSession(id, completeDTO));
+    }
 }

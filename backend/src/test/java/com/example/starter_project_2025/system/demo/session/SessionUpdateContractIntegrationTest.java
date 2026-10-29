@@ -20,6 +20,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -50,6 +51,8 @@ class SessionUpdateContractIntegrationTest {
     @BeforeEach
     void arrangeImportedLegacySession() throws Exception {
         sessions.deleteAll();
+        // Keep this legacy-link fixture independent of the local profile's seeded assignments.
+        assignments.deleteAll();
         assertThat(assignments.count()).isZero();
         var fixture = Session.builder()
                 .classId(1L).topicId(1L).trainerId(1L)
@@ -129,6 +132,64 @@ class SessionUpdateContractIntegrationTest {
         var persisted = sessions.findById(imported.getId()).orElseThrow();
         // Includes original imported fields, status, note, created/updated timestamps and audit actors.
         assertThat(persisted).usingRecursiveComparison().isEqualTo(imported);
+        assertThat(assignments.count()).isZero();
+        assertThat(sessions.count()).isEqualTo(1);
+    }
+
+    @Test
+    void completePersistsNoteForDetailReloadAndRepeatedCompletionLeavesSavedDataUnchanged() throws Exception {
+        mvc.perform(patch("/api/sessions/{id}/complete", imported.getId())
+                        .header("Authorization", bearer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("note", "Completed Java exercises"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.note").value("Completed Java exercises"))
+                .andExpect(jsonPath("$.teachingAssignmentId").value(nullValue()));
+
+        // No outer test transaction: this GET and repository read observe the committed completion.
+        mvc.perform(get("/api/sessions/{id}", imported.getId()).header("Authorization", bearer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.note").value("Completed Java exercises"));
+        var completed = sessions.findById(imported.getId()).orElseThrow();
+        assertThat(completed.getStatus()).isEqualTo(Session.SessionStatus.COMPLETED);
+        assertThat(completed.getNote()).isEqualTo("Completed Java exercises");
+        assertThat(completed).usingRecursiveComparison()
+                .ignoringFields("status", "note", "updatedAt", "updatedBy").isEqualTo(imported);
+
+        mvc.perform(patch("/api/sessions/{id}/complete", imported.getId())
+                        .header("Authorization", bearer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("note", "Attempted replacement note"))))
+                .andExpect(status().isConflict());
+
+        assertThat(sessions.findById(imported.getId()).orElseThrow())
+                .usingRecursiveComparison().isEqualTo(completed);
+        assertThat(assignments.count()).isZero();
+        assertThat(sessions.count()).isEqualTo(1);
+    }
+
+    @Test
+    void cancelledSessionCannotCompleteAndRetainsItsPersistedFields() throws Exception {
+        mvc.perform(patch("/api/sessions/{id}/cancel", imported.getId())
+                        .header("Authorization", bearer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("cancelReason", "Class postponed"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
+        var cancelled = sessions.findById(imported.getId()).orElseThrow();
+
+        mvc.perform(patch("/api/sessions/{id}/complete", imported.getId())
+                        .header("Authorization", bearer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("note", "Attempted replacement note"))))
+                .andExpect(status().isConflict());
+
+        assertThat(sessions.findById(imported.getId()).orElseThrow())
+                .usingRecursiveComparison().isEqualTo(cancelled);
+        assertThat(cancelled.getNote()).isEqualTo(imported.getNote());
+        assertThat(cancelled.getCancelReason()).isEqualTo("Class postponed");
         assertThat(assignments.count()).isZero();
         assertThat(sessions.count()).isEqualTo(1);
     }

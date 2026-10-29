@@ -1,6 +1,6 @@
 import { createBaseApiService } from "@/api/base-service.api";
 import axiosInstance from "@/api/axios";
-import type { SessionCancelDTO, SessionDTO, SessionFilter } from "@/types";
+import type { SessionCancelDTO, SessionCompleteDTO, SessionDTO, SessionFilter } from "@/types";
 import type { ImportPreview, ImportInputRow, ImportResult } from "@/types/common/import-result";
 
 const path = "/sessions";
@@ -31,6 +31,10 @@ export const sessionApi = Object.assign({}, base, {
     },
     cancelSession: async (id: string | number, data: SessionCancelDTO): Promise<SessionDTO> => {
         const res = await axiosInstance.patch<SessionDTO>(`${path}/${id}/cancel`, data);
+        return res.data;
+    },
+    completeSession: async (id: string | number, data: SessionCompleteDTO): Promise<SessionDTO> => {
+        const res = await axiosInstance.patch<SessionDTO>(`${path}/${id}/complete`, data);
         return res.data;
     },
 });
