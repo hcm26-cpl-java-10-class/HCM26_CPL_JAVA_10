@@ -28,9 +28,10 @@ public class ProjectCompletionService {
                 .map(grade -> grade.isLocked()).orElse(false);
         if (!gradeLocked) return false;
         boolean mandatorySatisfied = milestones.findAllByProjectIdAndTenantId(projectId, tenantId, Pageable.unpaged())
-                .stream().filter(item -> item.isMandatory()).allMatch(item ->
+                .stream().filter(item -> item.isActive() && item.isMandatory()).allMatch(item ->
+                        item.getStatus() == com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN && (
                         submissions.existsByMilestoneIdAndTeamIdAndStatus(item.getId(), teamId, SubmissionStatus.ACCEPTED)
-                                || waivers.existsByMilestoneIdAndTeamId(item.getId(), teamId));
+                                || waivers.existsByMilestoneIdAndTeamId(item.getId(), teamId)));
         if (!mandatorySatisfied) return false;
         completionPort.complete(projectId, teamId, actorId, now);
         return true;

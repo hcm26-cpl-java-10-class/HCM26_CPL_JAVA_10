@@ -4,6 +4,7 @@ export type TaskStatus = "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE" | "BLOCKED";
 
 export interface TaskPayload {
   projectId: string;
+  backlogItemId?: number | null;
   sprintId: string | null;
   milestoneId: string | null;
   assigneeProjectMemberId: string | null;
@@ -25,7 +26,6 @@ export interface TaskDTO extends TaskPayload {
   updatedBy: number;
   createdAt: string;
   updatedAt: string;
-  predecessorTaskIds: string[];
 }
 
 export interface TaskFilter {
@@ -35,19 +35,9 @@ export interface TaskFilter {
   excludeIds?: string[];
 }
 
-export interface TaskDependencyDTO {
-  taskId: string;
-  title: string;
-  status: TaskStatus;
-  dependencyType: string;
-  createdAt: string;
-}
-
 export interface TaskWorkflowDTO {
   task: TaskDTO;
   allowedTransitions: TaskStatus[];
-  predecessors: TaskDependencyDTO[];
-  successors: TaskDependencyDTO[];
   editable: boolean;
   deletable: boolean;
 }
@@ -67,7 +57,8 @@ export interface TaskStatusPayload {
   version: number;
 }
 
-export interface TaskDependencyPayload {
-  predecessorTaskId: string;
-  version: number;
+export interface BacklogSubtasks {
+  projectId: string;
+  assignees: { id: string; displayName: string }[];
+  items: TaskWorkflowDTO[];
 }

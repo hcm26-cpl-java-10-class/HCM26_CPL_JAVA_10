@@ -53,6 +53,12 @@ public class WorkspaceProjectSelection {
         Workspace existing = workspaces.findFirstByTeamIdOrderByIdAsc(team.getId()).orElse(null);
         if (existing != null) throw new WorkspaceConflictException("This team already has a workspace", access.canRead(user) ? existing.getId() : null);
         if (!access.hasMembers(team)) throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Add at least one active member to this team before creating a workspace.");
-        return new Selection(team, null);
+        Project project = team.getProject();
+        if (project != null) access.requirePair(user, project.getId(), team.getId(), lock);
+        if (project != null && !access.projectCanStart(project)) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                    "The assigned project must be Planning or Active");
+        }
+        return new Selection(team, project);
     }
 }

@@ -41,12 +41,11 @@ import { createElement} from "react";
 import { Navigate } from "react-router-dom";
 import TaskManagementPage from "@/pages/management/task";
 import ProjectAlertsPage from "@/pages/management/alerts";
-import { TaskFormPage } from "@/pages/management/task/pages/TaskFormPage";
-import { TaskDetailPage } from "@/pages/management/task/pages/TaskDetailPage";
 import ProjectTemplateListPage from "@/pages/management/project-template";
 import { ProjectTemplateFormPage } from "@/pages/management/project-template/pages/ProjectTemplateFormPage";
 import { ProjectTemplateDetailPage } from "@/pages/management/project-template/pages/ProjectTemplateDetailPage";
 import ArtifactDraftPage from "@/pages/student/ArtifactDraftPage";
+import StudentTeamMilestoneSubmissionsPage from "@/pages/student/StudentTeamMilestoneSubmissionsPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 
@@ -66,11 +65,11 @@ export const routes: RouteConfig[] = [
   // successful login can temporarily fall through to the blank 404 redirect.
   { path: "/dashboard", component: Dashboard, requiredPermission: "USER_READ" },
   { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
-  { path: "/tasks", component: TaskManagementPage, requiredPermission: "TASK_READ", isModuleDriven: true },
+  { path: "/tasks", component: TaskManagementPage, requiredPermission: "TASK_READ" },
   { path: "/management/alerts", component: ProjectAlertsPage, requiredPermission: "PROJECT_ALERT_READ" },
-  { path: "/tasks/create", component: TaskFormPage, requiredPermission: "TASK_CREATE" },
-  { path: "/tasks/:id/edit", component: TaskFormPage, requiredPermission: "TASK_UPDATE" },
-  { path: "/tasks/:id/detail", component: TaskDetailPage, requiredPermission: "TASK_READ" },
+  { path: "/tasks/create", component: TaskManagementPage, requiredPermission: "TASK_CREATE" },
+  { path: "/tasks/:id/edit", component: TaskManagementPage, requiredPermission: "TASK_UPDATE" },
+  { path: "/tasks/:id/detail", component: TaskManagementPage, requiredPermission: "TASK_READ" },
   { path: "/project-templates", component: ProjectTemplateListPage, requiredPermission: "PROJECT_TEMPLATE_READ" },
   { path: "/project-templates/create", component: ProjectTemplateFormPage, requiredPermission: "PROJECT_TEMPLATE_CREATE" },
   { path: "/project-templates/:id/edit", component: ProjectTemplateFormPage, requiredPermission: "PROJECT_TEMPLATE_UPDATE" },
@@ -146,13 +145,16 @@ export const routes: RouteConfig[] = [
   { path: "/projects/:projectId/milestones", component: MilestoneListPage, requiredPermission: "MILESTONE_READ" },
   { path: "/teams/:teamId/milestones", component: TeamMilestoneListPage, requiredPermission: "MILESTONE_READ" },
   { path: "/teams/:teamId/milestones/new", component: MilestoneCreatePage, requiredPermission: "MILESTONE_WRITE" },
+  { path: "/teams/:teamId/milestones/:milestoneId/edit", component: MilestoneCreatePage, requiredPermission: "MILESTONE_WRITE" },
   { path: "/teams/:teamId/milestones/:milestoneId", component: TeamMilestoneDetailPage, requiredPermission: "MILESTONE_READ" },
   { path: "/teams/:teamId/milestones/:milestoneId/submit", component: TeamArtifactSubmissionPage, requiredPermission: "ARTIFACT_READ" },
   { path: "/teams/:teamId/milestones/:milestoneId/submissions", component: TeamMilestoneSubmissionsPage },
+  { path: "/student/teams/:teamId/milestones/:milestoneId/submissions", component: StudentTeamMilestoneSubmissionsPage, requiredPermission: "ARTIFACT_READ" },
   {
     path: "/projects/:projectId/milestones/new",
     component: MilestoneCreatePage,
   },
+  { path: "/projects/:projectId/milestones/:milestoneId/edit", component: MilestoneCreatePage, requiredPermission: "MILESTONE_WRITE" },
   {
     path: "/projects/:projectId/milestones/:milestoneId",
     component: MilestoneDetailPage,

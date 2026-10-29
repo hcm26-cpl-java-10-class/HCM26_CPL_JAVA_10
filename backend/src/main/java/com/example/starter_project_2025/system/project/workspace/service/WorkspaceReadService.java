@@ -1,23 +1,24 @@
 package com.example.starter_project_2025.system.project.workspace.service;
 
-import com.example.starter_project_2025.system.project.cohort.Cohort;
 import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.ProjectTeam;
 import com.example.starter_project_2025.system.project.domain.ProjectTopicSnapshot;
 import com.example.starter_project_2025.system.project.dto.ProjectHubDtos;
-import com.example.starter_project_2025.system.project.team.Team;
+import com.example.starter_project_2025.system.project.template.assignment.TemplateBriefSnapshotWriter;
 import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
 import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceSection;
 import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceDetailResponse;
 import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceMemberResponse;
 import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceTopicSnapshotResponse;
 import com.example.starter_project_2025.system.project.workspace.repository.ProjectTopicSnapshotRepository;
+import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshotRepository;
 
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
@@ -35,6 +36,7 @@ public class WorkspaceReadService {
     private final WorkspaceAccessService access;
     private final WorkspaceRosterService roster;
     private final ProjectTopicSnapshotRepository snapshots;
+    private final ProjectTemplateSnapshotRepository templateSnapshots;
     private final UserRepository users;
     private final ObjectMapper json;
 
@@ -74,6 +76,47 @@ public class WorkspaceReadService {
         access.requireMemberRead(user);
         Workspace workspace = contexts.require(user, id);
         return roster.response(roster.current(workspace.getTeam()));
+    }
+
+    private WorkspaceTopicSnapshotResponse projectBrief(Project project) {
+        if (project == null) return null;
+        if (project.getTemplateSnapshotId() == null) {
+            return snapshots.findByProjectId(project.getId()).map(this::snapshotResponse).orElse(null);
+        }
+        var snapshot = templateSnapshots.findById(project.getTemplateSnapshotId())
+                .filter(value -> Objects.equals(value.getProjectId(), project.getId()))
+                .orElseThrow(() -> new IllegalStateException("The project brief snapshot does not match this project"));
+        try {
+            JsonNode content = json.readTree(snapshot.getContentJson());
+            if (content == null || !content.isObject()) {
+                throw new IllegalStateException("The project brief snapshot must contain an object");
+            }
+            String version = text(content, "sourceVersion");
+            boolean assignedTemplate = TemplateBriefSnapshotWriter.PURPOSE_TEAM_ASSIGNMENT.equals(text(content, "purpose"));
+            String objectives = assignedTemplate ? null : text(content, "objectives");
+            List<String> requirements = assignedTemplate ? List.of() : snapshotStrings(content, "requirements");
+            List<WorkspaceTopicSnapshotResponse.Attachment> attachments = assignedTemplate ? List.of() : readList(
+                    content.hasNonNull("attachments") ? content.get("attachments").toString() : null,
+                    new TypeReference<List<WorkspaceTopicSnapshotResponse.Attachment>>() { });
+            return new WorkspaceTopicSnapshotResponse(text(content, "code"), text(content, "name"),
+                    version == null ? snapshot.getVersion() : version,
+                    text(content, content.has("context") ? "context" : "description"),
+                    objectives, requirements, attachments);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Stored project brief contains invalid JSON", exception);
+        }
+    }
+
+    private List<String> snapshotStrings(JsonNode content, String field) {
+        return readList(content.hasNonNull(field) ? content.get(field).toString() : null,
+                new TypeReference<List<String>>() { }).stream().filter(value -> !value.isBlank()).toList();
+    }
+
+    private String text(JsonNode content, String field) {
+        JsonNode value = content.get(field);
+        if (value == null || value.isNull()) return null;
+        if (!value.isTextual()) throw new IllegalStateException("Stored project brief field is invalid: " + field);
+        return value.textValue();
     }
 
     private WorkspaceTopicSnapshotResponse snapshotResponse(ProjectTopicSnapshot snapshot) {

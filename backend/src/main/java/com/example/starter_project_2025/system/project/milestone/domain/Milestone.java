@@ -42,7 +42,7 @@ public class Milestone {
     @Column(length = 1000)
     private String description;
 
-    @Column(nullable = false)
+    @Column
     private Instant deadline;
 
     @Column(name = "is_mandatory", nullable = false)
@@ -52,13 +52,17 @@ public class Milestone {
     @Column(nullable = false, length = 30)
     private MilestoneStatus status;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "execution_status", length = 30)
+    private com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus executionStatus;
+
     @Column(name = "is_at_risk", nullable = false, columnDefinition = "boolean default false")
     private boolean atRisk;
 
     @Column(name = "is_active", nullable = false, columnDefinition = "boolean default true")
     private boolean active = true;
 
-    @Column(name = "rubric_snapshot_id", nullable = false, updatable = false)
+    @Column(name = "rubric_snapshot_id")
     private UUID rubricSnapshotId;
 
     // Reviewer assignment belongs to a submission, not to the milestone itself.
@@ -67,7 +71,7 @@ public class Milestone {
     private UUID reviewerId;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "late_policy_type", nullable = false, length = 30)
+    @Column(name = "late_policy_type", length = 30)
     private LatePolicyType latePolicyType;
 
     @Column(name = "late_until")
@@ -159,6 +163,15 @@ public class Milestone {
         checklistItems.add(MilestoneChecklistItem.create(this, content, mandatory, orderIndex));
     }
 
+    public void replaceChecklist(List<com.example.starter_project_2025.system.project.milestone.dto.request.ChecklistItemRequest> items) {
+        checklistItems.clear();
+        if (items != null) for (int index = 0; index < items.size(); index++) {
+            var item = items.get(index);
+            if (item != null && item.content() != null && !item.content().isBlank())
+                addChecklistItem(item.content().trim(), item.mandatory(), item.orderIndex() == null ? index : item.orderIndex());
+        }
+    }
+
     public void configureAssessment(BigDecimal weight, LatePenaltyBasis penaltyBasis) {
         this.weight = weight;
         this.latePenaltyBasis = latePolicyType == LatePolicyType.ALLOW_LATE && penaltyBasis != null
@@ -177,7 +190,38 @@ public class Milestone {
     public void openForWork(UUID actorId, Instant now) {
         if (status != MilestoneStatus.PLANNED && status != MilestoneStatus.OPEN)
             throw new IllegalStateException("Only a planned milestone can be opened");
-        status = MilestoneStatus.OPEN; updatedBy = actorId; updatedAt = now;
+        status = MilestoneStatus.OPEN;
+        executionStatus = com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus.TODO;
+        updatedBy = actorId; updatedAt = now;
+    }
+
+    public void start(UUID actorId, Instant now) {
+        if (status != MilestoneStatus.OPEN || executionStatus != com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus.TODO)
+            throw new IllegalStateException("Only a published TODO milestone can start");
+        executionStatus = com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus.IN_PROGRESS;
+        updatedBy = actorId; updatedAt = now;
+    }
+
+    public void setExecutionStatus(com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus next, UUID actorId, Instant now) {
+        if (status != MilestoneStatus.OPEN) throw new IllegalStateException("Milestone is not published");
+        executionStatus = next; updatedBy = actorId; updatedAt = now;
+    }
+
+    public void editDraft(String title, String description, Instant deadline, boolean mandatory,
+                          UUID rubricSnapshotId, LatePolicyType latePolicyType, Instant lateUntil,
+                          BigDecimal latePenaltyPercent, BigDecimal weight, UUID actorId, Instant now) {
+        if (status != MilestoneStatus.PLANNED || !active) throw new IllegalStateException("Only an active draft can be edited");
+        this.title = title; this.description = description; this.deadline = deadline;
+        this.mandatory = mandatory; this.rubricSnapshotId = rubricSnapshotId;
+        this.latePolicyType = latePolicyType; this.lateUntil = lateUntil;
+        this.latePenaltyPercent = latePenaltyPercent; this.weight = weight;
+        this.updatedBy = actorId; this.updatedAt = now;
+    }
+
+    public void editPublishedMetadata(String title, String description, Instant deadline, UUID actorId, Instant now) {
+        if (status != MilestoneStatus.OPEN || !active) throw new IllegalStateException("Only a published milestone can be edited");
+        this.title = title; this.description = description; this.deadline = deadline;
+        this.updatedBy = actorId; this.updatedAt = now;
     }
 
     public void markAtRisk(UUID actorId, Instant now) {

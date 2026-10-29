@@ -46,10 +46,12 @@ interface HighlightBoxProps {
   label: string;
   value: string;
   tone: "template" | "project";
+  /** Icon shown before the label; defaults to the `#` used for raw ids. */
+  icon?: typeof Hash;
 }
 
 /** Bordered, tinted box used for the template / project identifiers. */
-function HighlightBox({ label, value, tone }: HighlightBoxProps) {
+function HighlightBox({ label, value, tone, icon: Icon = Hash }: HighlightBoxProps) {
   const toneClass =
     tone === "template"
       ? "border-violet-200 bg-violet-50/70 text-violet-700 dark:border-violet-900/60 dark:bg-violet-950/30 dark:text-violet-300"
@@ -62,7 +64,7 @@ function HighlightBox({ label, value, tone }: HighlightBoxProps) {
         toneClass,
       )}
     >
-      <Hash className="h-4 w-4 shrink-0" />
+      <Icon className="h-4 w-4 shrink-0" />
       <div className="min-w-0 leading-tight">
         <p className="text-[10px] font-semibold uppercase tracking-wide opacity-80">
           {label}
@@ -156,21 +158,23 @@ export function ProjectTemplateVersionCard({
         <div className="flex min-w-0 items-center gap-2">
           <FolderGit2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <span className="inline-flex items-center justify-center rounded-full border border-violet-200 bg-violet-50 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-violet-700 dark:border-violet-800 dark:bg-violet-900/40 dark:text-violet-300">
-            TPL-{row.templateId ?? "—"}
+            {row.templateName?.trim() || `TPL-${row.templateId ?? "—"}`}
           </span>
         </div>
 
         {/* Template / project identifiers */}
         <HighlightBox
           label="Template"
-          value={row.templateId != null ? `#${row.templateId}` : "—"}
+          value={row.templateName?.trim() || (row.templateId != null ? `#${row.templateId}` : "—")}
           tone="template"
+          icon={row.templateName?.trim() ? FolderGit2 : Hash}
         />
         <div className="flex flex-col gap-1.5">
           <HighlightBox
             label="Project"
-            value={row.projectId != null ? `#${row.projectId}` : "—"}
+            value={row.projectName?.trim() || (row.projectId != null ? `#${row.projectId}` : "—")}
             tone="project"
+            icon={row.projectName?.trim() ? FolderGit2 : Hash}
           />
           <div className="flex items-center gap-2 px-1 text-[11px] text-muted-foreground">
             <CalendarClock className="h-3 w-3 shrink-0" />

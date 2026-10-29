@@ -84,7 +84,7 @@ export function OverviewTab({
         <StatCard
           label="Templates covered"
           value={String(stats.templates)}
-          hint="Distinct Project Template ids"
+          hint="Distinct Project Templates"
         />
         <StatCard
           label="Valid payloads"
@@ -96,9 +96,10 @@ export function OverviewTab({
           label="Latest version"
           value={stats.latest?.version ?? "—"}
           hint={
-            stats.latest?.templateId != null
+            stats.latest?.templateName?.trim() ||
+            (stats.latest?.templateId != null
               ? `Template #${stats.latest.templateId}`
-              : "No version yet"
+              : "No version yet")
           }
         />
       </div>
@@ -106,7 +107,9 @@ export function OverviewTab({
       <VersionListPanel
         title={
           selected?.templateId != null
-            ? `Versions of template #${selected.templateId}`
+            ? `Versions of ${
+                selected.templateName?.trim() || `template #${selected.templateId}`
+              }`
             : "Versions"
         }
         versions={templateVersions}

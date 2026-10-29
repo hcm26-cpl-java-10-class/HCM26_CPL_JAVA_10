@@ -46,6 +46,10 @@ export function WorkspaceCreateDialog({ candidates, initialSelection, onClose, o
       }}>
         {candidates.map(candidate => <option key={candidate.teamId} value={candidate.teamId}>{candidate.teamName} · {candidate.classCode}</option>)}
       </select>}
+      {team?.projectName && <div className="space-y-2 text-sm">
+        <p><span className="text-muted-foreground">Assigned project brief:</span> {team.projectName}</p>
+        <p className="text-muted-foreground">The workspace will use this brief and its saved project configuration.</p>
+      </div>}
       <p className="text-sm text-muted-foreground">Workspace belongs directly to the team. If a project template is assigned, a separate project is created for the team.</p>
       {error && <Alert variant="destructive"><AlertCircle /><AlertTitle>Workspace was not created</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
       <DialogFooter>

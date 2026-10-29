@@ -32,6 +32,12 @@ public class TeamArtifactSubmissionController {
             @RequestHeader("Idempotency-Key") String key, @Valid @RequestBody ArtifactSubmissionRequest request) {
         return ResponseEntity.status(201).body(service.submit(teamId, milestoneId, key, request));
     }
+    @GetMapping("/{milestoneId}/my-submissions")
+    @PreAuthorize("hasAuthority('ARTIFACT_READ') and hasAnyRole('STUDENT', 'ADMIN')")
+    public ResponseEntity<List<TeamArtifactSubmissionService.MyArtifactSubmissionView>> mySubmissions(
+            @PathVariable Long teamId, @PathVariable UUID milestoneId) {
+        return ResponseEntity.ok(service.mySubmissions(teamId, milestoneId));
+    }
     @GetMapping("/submissions")
     public ResponseEntity<List<TeamArtifactSubmissionService.TeamSubmissionView>> submissions(
             @PathVariable Long teamId, @RequestParam(required = false) UUID milestoneId) {

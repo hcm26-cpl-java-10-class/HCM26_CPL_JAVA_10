@@ -6,6 +6,8 @@ import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import com.example.starter_project_2025.system.project.ProjectMember;
+import com.example.starter_project_2025.system.project.ProjectMemberRepository;
 import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
 import com.example.starter_project_2025.system.project.milestone.integration.port.MilestoneTenantProvider;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
@@ -14,6 +16,7 @@ import com.example.starter_project_2025.system.project.sprint.SprintRepository;
 import com.example.starter_project_2025.system.project.sprint_backlog.audit.SprintBacklogAuditLogDTO;
 import com.example.starter_project_2025.system.project.sprint_backlog.audit.SprintBacklogAuditService;
 import com.example.starter_project_2025.system.project.sprint_backlog.event.SprintBacklogOutboxService;
+import com.example.starter_project_2025.system.project.task.TaskRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -25,6 +28,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -42,7 +46,7 @@ import java.util.UUID;
  *     <li>title mandatory, 1..200 characters (422)</li>
  *     <li>description optional, at most 2000 characters (422)</li>
  *     <li>start date &lt; end date when both are provided (422)</li>
- *     <li>status one of {@link SprintBacklogStatus} (To do / In progress / Review / Done)</li>
+ *     <li>status one of {@link SprintBacklogStatus}; updates follow the shared task workflow transition matrix</li>
  *     <li>work type one of {@link SprintBacklogWorkType} (Story / Bug / Task), task by
  *     default - the set is fixed, no new work type can be created</li>
  *     <li>priority one of {@link SprintBacklogPriority}, medium by default</li>
@@ -82,6 +86,14 @@ public class SprintBacklogServiceImpl
     static final String EVENT_CREATED = "SPRINT_BACKLOG_ITEM_CREATED";
     static final String EVENT_UPDATED = "SPRINT_BACKLOG_ITEM_UPDATED";
 
+    private static final Map<SprintBacklogStatus, Set<SprintBacklogStatus>> STATUS_TRANSITIONS = Map.of(
+            SprintBacklogStatus.TODO, Set.of(SprintBacklogStatus.IN_PROGRESS),
+            SprintBacklogStatus.IN_PROGRESS, Set.of(SprintBacklogStatus.REVIEW, SprintBacklogStatus.BLOCKED, SprintBacklogStatus.TODO),
+            SprintBacklogStatus.REVIEW, Set.of(SprintBacklogStatus.DONE, SprintBacklogStatus.IN_PROGRESS),
+            SprintBacklogStatus.BLOCKED, Set.of(SprintBacklogStatus.IN_PROGRESS),
+            SprintBacklogStatus.DONE, Set.of(SprintBacklogStatus.IN_PROGRESS)
+    );
+
     static final String MILESTONE_NOT_FOUND_MESSAGE =
             "Milestone không tồn tại hoặc đã bị thay đổi";
 
@@ -92,6 +104,8 @@ public class SprintBacklogServiceImpl
     MilestoneTenantProvider milestoneTenantProvider;
     SprintBacklogAuditService sprintBacklogAuditService;
     SprintBacklogOutboxService sprintBacklogOutboxService;
+    TaskRepository subtasks;
+    ProjectMemberRepository projectMemberRepository;
 
     @Override
     protected BaseCrudRepository<SprintBacklog, Long> getRepository() {
@@ -195,7 +209,8 @@ public class SprintBacklogServiceImpl
 
         checkPermission(CrudAction.UPDATE);
 
-        SprintBacklog backlog = requireBacklog(id);
+        SprintBacklog backlog = sprintBacklogRepository.findForSubtaskUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Backlog item was not found"));
 
         String title = request.getTitle() != null
                 ? request.getTitle().trim()
@@ -209,9 +224,11 @@ public class SprintBacklogServiceImpl
         LocalDateTime endDate = request.getEndDate() != null
                 ? request.getEndDate()
                 : backlog.getEndDate();
-        Long assigneeId = request.getAssigneeProjectMemberId() != null
-                ? request.getAssigneeProjectMemberId()
-                : backlog.getAssigneeProjectMemberId();
+        Long assigneeId = Boolean.TRUE.equals(request.getClearAssignee())
+                ? null
+                : request.getAssigneeProjectMemberId() != null
+                    ? request.getAssigneeProjectMemberId()
+                    : backlog.getAssigneeProjectMemberId();
         Double estimatedHours = request.getEstimatedHours() != null
                 ? request.getEstimatedHours()
                 : backlog.getEstimatedHours();
@@ -255,7 +272,18 @@ public class SprintBacklogServiceImpl
                 errors
         );
 
+        if (!java.util.Objects.equals(projectId, backlog.getProjectId()) && subtasks.existsByBacklogItem_Id(id)) {
+            errors.put(PROJECT_ID_FIELD, List.of("A backlog item with subtasks cannot be moved to another project"));
+        }
+
         throwIfInvalid(errors);
+
+        SprintBacklogStatus requestedStatus = request.getStatus();
+        if (requestedStatus != null && requestedStatus != backlog.getStatus()
+                && !STATUS_TRANSITIONS.getOrDefault(backlog.getStatus(), Set.of()).contains(requestedStatus)) {
+            throw new SprintBacklogConflictException(
+                    "Workflow does not allow transition from " + backlog.getStatus() + " to " + requestedStatus);
+        }
 
         Map<String, Object> before = snapshot(backlog);
 
@@ -263,6 +291,10 @@ public class SprintBacklogServiceImpl
         request.setDescription(description);
 
         sprintBacklogMapper.update(backlog, request);
+
+        if (Boolean.TRUE.equals(request.getClearAssignee()) || request.getAssigneeProjectMemberId() != null) {
+            backlog.setAssigneeProjectMemberId(assigneeId);
+        }
 
         backlog.setSprint(sprint);
         backlog.setMilestone(milestone);
@@ -299,7 +331,12 @@ public class SprintBacklogServiceImpl
 
         checkPermission(CrudAction.DELETE);
 
-        SprintBacklog backlog = requireBacklog(id);
+        SprintBacklog backlog = sprintBacklogRepository.findForSubtaskUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Backlog item was not found"));
+        if (subtasks.existsByBacklogItem_Id(id)) {
+            throw new SprintBacklogValidationException(Map.of("subtasks",
+                    List.of("A backlog item with subtask history cannot be deleted")));
+        }
 
         Map<String, Object> before = snapshot(backlog);
 
@@ -368,6 +405,7 @@ public class SprintBacklogServiceImpl
 
         return candidates
                 .stream()
+                .filter(milestone -> milestone.getStatus() == com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN)
                 .map(milestone -> new BacklogMilestoneOptionDTO(
                         milestone.getId(),
                         milestone.getProjectId(),
@@ -376,6 +414,36 @@ public class SprintBacklogServiceImpl
                         milestone.getStatus() == null ? null : milestone.getStatus().name(),
                         milestone.getDeadline(),
                         milestone.isMandatory()
+                ))
+                .toList();
+    }
+
+    /**
+     * Active members of the workspace team, used by the assignee picker of the
+     * backlog create bar instead of a raw project member id.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<BacklogAssigneeOptionDTO> getAssigneeOptions(Long teamId) {
+
+        check("SPRINT_BACKLOG_READ");
+
+        if (teamId == null) {
+            return List.of();
+        }
+
+        List<ProjectMember> members =
+                projectMemberRepository.findAllByTeam_IdAndClassMember_StatusOrderByIdAsc(
+                        teamId,
+                        com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus.ACTIVE);
+
+        return members.stream()
+                .map(member -> new BacklogAssigneeOptionDTO(
+                        member.getId(),
+                        member.getClassMember().getUser().getId(),
+                        member.getClassMember().getUser().getFullName(),
+                        member.getClassMember().getUser().getUserCode(),
+                        member.getRole()
                 ))
                 .toList();
     }

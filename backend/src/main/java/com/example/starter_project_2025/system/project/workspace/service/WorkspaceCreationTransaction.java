@@ -6,6 +6,7 @@ import com.example.starter_project_2025.system.project.ProjectRepository;
 import com.example.starter_project_2025.system.project.ProjectTeam;
 import com.example.starter_project_2025.system.project.ProjectTeamRepository;
 import com.example.starter_project_2025.system.project.ProjectTemplate;
+import com.example.starter_project_2025.system.project.template.assignment.TemplateAssignmentProvisioningService;
 import com.example.starter_project_2025.system.project.team.Team;
 import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
 import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceSection;
@@ -33,6 +34,7 @@ public class WorkspaceCreationTransaction {
     private final WorkspaceProjectSelection selection;
     private final ProjectRepository projects;
     private final ProjectTeamRepository teams;
+    private final TemplateAssignmentProvisioningService provisioning;
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public WorkspaceResponse create(String key, WorkspaceCreateRequest request, String correlationId) {
@@ -52,24 +54,35 @@ public class WorkspaceCreationTransaction {
             return idempotency.response(previous);
         }
         var chosen = selection.resolve(user, request, true);
-        Project project = chosen.project() != null ? chosen.project() : createProjectForTeam(chosen.team(), tenant.getId());
+        if (chosen.project() == null && team.getProjectTemplate() != null) {
+            provisioning.provision(team, team.getProjectTemplate(), user.getId(), correlationId);
+            Workspace workspace = workspaces.findFirstByTeamIdOrderByIdAsc(team.getId())
+                    .orElseThrow(() -> new IllegalStateException("The project workspace was not created"));
+            WorkspaceResponse response = response(workspace);
+            idempotency.save(tenant.getId(), user.getId(), key, request, response);
+            return response;
+        }
         Workspace workspace = new Workspace();
-        workspace.setTenant(tenant); workspace.setProject(project); workspace.setTeam(team);
+        workspace.setTenant(tenant); workspace.setProject(chosen.project()); workspace.setTeam(team);
         workspace.setCode("WS-TEAM-" + request.getTeamId());
         workspace.setName("Workspace / " + team.getTeamName());
         workspace.setStatus(WorkspaceStatus.ACTIVE);
         workspace.setCreatedBy(user.getId());
         workspace.setSections(new ArrayList<>(Arrays.asList(WorkspaceSection.values())));
         workspaces.saveAndFlush(workspace);
-        WorkspaceResponse response = WorkspaceResponse.builder()
-                .id(workspace.getId()).tenantId(tenant.getId())
-                .projectId(project == null ? null : project.getId()).teamId(request.getTeamId())
-                .code(workspace.getCode()).name(workspace.getName()).status(workspace.getStatus())
-                .createdBy(workspace.getCreatedBy()).createdAt(workspace.getCreatedAt())
-                .sections(workspace.getSections().stream().map(WorkspaceSection::getKey).toList()).build();
+        WorkspaceResponse response = response(workspace);
         journal.recordCreation(workspace, user, response, correlationId);
         idempotency.save(tenant.getId(), user.getId(), key, request, response);
         return response;
+    }
+
+    private WorkspaceResponse response(Workspace workspace) {
+        return WorkspaceResponse.builder()
+                .id(workspace.getId()).tenantId(workspace.getTenant().getId())
+                .projectId(workspace.getProject() == null ? null : workspace.getProject().getId())
+                .teamId(workspace.getTeam().getId()).code(workspace.getCode()).name(workspace.getName())
+                .status(workspace.getStatus()).createdBy(workspace.getCreatedBy()).createdAt(workspace.getCreatedAt())
+                .sections(workspace.getSections().stream().map(WorkspaceSection::getKey).toList()).build();
     }
 
     private Project createProjectForTeam(ProjectTeam team, Long tenantId) {

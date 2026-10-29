@@ -102,7 +102,8 @@ export function formatTenantDateTime(value: string | null | undefined, timeZone:
   }
 }
 
-export function formatRelativeDeadline(value: string): string {
+export function formatRelativeDeadline(value: string | null | undefined): string {
+  if (!value) return "No deadline";
   const deadline = new Date(value);
   if (Number.isNaN(deadline.getTime())) return "";
   const difference = deadline.getTime() - Date.now();
@@ -121,7 +122,7 @@ export function formatRelativeDeadline(value: string): string {
 }
 
 export function isPastDeadline(milestone: MilestoneListItem): boolean {
-  return !["CLOSED", "CANCELLED"].includes(milestone.status) &&
+  return milestone.status === "OPEN" &&
     new Date(milestone.deadline).getTime() < Date.now();
 }
 
@@ -131,5 +132,7 @@ export function formatPenalty(value?: number | null, basis?: "FIXED" | "PER_DAY"
 }
 
 export function formatMilestoneStatus(status: MilestoneStatus): string {
+  if (status === "PLANNED") return "Draft";
+  if (status === "OPEN") return "Published";
   return status.charAt(0) + status.slice(1).toLowerCase();
 }

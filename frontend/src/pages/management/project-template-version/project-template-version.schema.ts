@@ -1,3 +1,4 @@
+import { projectTemplateApi } from "@/api";
 import {
   auditableFieldsSchema,
   type EntitySchema,
@@ -34,9 +35,13 @@ const isValidJson = (value: string) => {
  * (Create / Edit version) and by the entity config registered for the
  * `/project-template-versions` route.
  * <p>
- * Validation mirrors `ProjectTemplateSnapshotServiceImpl`: template id,
- * version (1..50 chars) and a JSON payload are mandatory, and the version is
- * unique per template (enforced by the backend with a 409 conflict).
+ * Validation mirrors `ProjectTemplateSnapshotServiceImpl`: the owning template,
+ * the version (1..50 chars) and a JSON payload are mandatory, and the version
+ * is unique per template (enforced by the backend with a 409 conflict).
+ * <p>
+ * The template is selected by name (`relation` on `templateId`); the backend
+ * responses also carry `templateName` / `projectName`, so every read-only view
+ * renders a readable owner instead of a raw id.
  * <p>
  * `status` defaults to `DRAFT` (US-07) and `parentTemplateId` is read-only: it
  * is written by the server when a new version is derived from an existing one.
@@ -47,15 +52,23 @@ export const projectTemplateVersionSchema: EntitySchema = {
   fields: [
     {
       name: "templateId",
-      label: "Template ID",
-      type: "number",
+      label: "Project Template",
+      type: "relation",
+      relation: {
+        api: projectTemplateApi,
+        valueField: "id",
+        labelField: "name",
+      },
       sortable: true,
       bold: true,
       required: true,
-      requiredMessage: "Vui lòng nhập Project Template ID",
+      requiredMessage: "Vui lòng chọn Project Template",
       filterable: true,
-      filterType: "text",
-      helpText: "ID của Project Template sở hữu phiên bản này",
+      filterType: "select",
+      renderCell: (value, row) =>
+        row?.templateName?.trim() ||
+        (value != null ? `TPL-${value}` : "—"),
+      helpText: "Project Template sở hữu phiên bản này (chọn theo tên)",
     },
     {
       name: "version",
@@ -78,6 +91,15 @@ export const projectTemplateVersionSchema: EntitySchema = {
       filterable: true,
       filterType: "text",
       helpText: "ID dự án gắn với snapshot (có thể để trống)",
+    },
+    {
+      name: "projectName",
+      label: "Project Name",
+      type: "text",
+      // Resolved by the backend from `projectId`; never part of create/edit.
+      editable: false,
+      sortable: false,
+      helpText: "Tên dự án được resolve từ Project ID (chỉ đọc)",
     },
     {
       name: "parentTemplateId",

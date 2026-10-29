@@ -1,6 +1,7 @@
 import { createBaseApiService } from "@/api/base-service.api";
 import axiosInstance from "@/api/axios";
 import type {
+  BacklogAssigneeOption,
   SprintBacklogAuditLog,
   SprintBacklogDTO,
   SprintBacklogFilter,
@@ -36,5 +37,21 @@ export const sprintBacklogApi = Object.assign({}, base, {
       `${path}/${id}/audit-logs`,
     );
     return response.data;
+  },
+
+  /**
+   * Active members of the workspace team, offered by the assignee picker of
+   * the backlog create bar. `teamId` comes from the open workspace; without it
+   * the backend returns an empty list (the `/backlogs` route page is not
+   * scoped to a team).
+   */
+  getAssigneeOptions: async (
+    teamId?: number | null,
+  ): Promise<BacklogAssigneeOption[]> => {
+    const response = await axiosInstance.get<BacklogAssigneeOption[]>(
+      `${path}/assignee-options`,
+      { params: teamId == null ? undefined : { teamId } },
+    );
+    return response.data ?? [];
   },
 });

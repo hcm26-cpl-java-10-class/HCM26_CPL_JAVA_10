@@ -1,4 +1,4 @@
-import { projectTemplateVersionApi } from "@/api";
+import { projectTemplateApi, projectTemplateVersionApi } from "@/api";
 import {
     auditableFieldsSchema,
     type EntityConfig,
@@ -39,14 +39,23 @@ export const projectTemplateVersionAdminSchema: EntitySchema = {
     fields: [
         {
             name: "templateId",
-            label: "Template ID",
-            type: "number",
+            label: "Project Template",
+            type: "relation",
+            relation: {
+                api: projectTemplateApi,
+                valueField: "id",
+                labelField: "name",
+            },
             sortable: true,
+            bold: true,
             required: true,
-            requiredMessage: "Vui lòng nhập Project Template ID",
+            requiredMessage: "Vui lòng chọn Project Template",
             filterable: true,
-            filterType: "text",
-            helpText: "ID của Project Template sở hữu phiên bản này",
+            filterType: "select",
+            renderCell: (value, row) =>
+                row?.templateName?.trim() ||
+                (value != null ? `TPL-${value}` : "—"),
+            helpText: "Project Template sở hữu phiên bản này (chọn theo tên)",
         },
         {
             name: "version",
@@ -70,6 +79,15 @@ export const projectTemplateVersionAdminSchema: EntitySchema = {
             filterable: true,
             filterType: "text",
             helpText: "ID dự án gắn với snapshot (có thể để trống)",
+        },
+        {
+            name: "projectName",
+            label: "Project Name",
+            type: "text",
+            // Resolved by the backend from `projectId`; never part of create/edit.
+            editable: false,
+            sortable: false,
+            helpText: "Tên dự án được resolve từ Project ID (chỉ đọc)",
         },
         {
             name: "parentTemplateId",

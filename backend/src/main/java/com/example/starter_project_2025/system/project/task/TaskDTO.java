@@ -18,6 +18,7 @@ public class TaskDTO {
     UUID id;
 
     UUID projectId;
+    Long backlogItemId;
     UUID sprintId;
     UUID milestoneId;
     UUID assigneeProjectMemberId;
@@ -28,8 +29,6 @@ public class TaskDTO {
     TaskPriority priority;
     TaskStatus status;
     List<String> tags;
-    @Builder.Default
-    List<UUID> predecessorTaskIds = List.of();
     Long version;
 
     Boolean isActive;

@@ -20,6 +20,30 @@ import type {
 const backlogMilestoneOptionsPath = "/sprint-backlogs/milestone-options";
 
 export const milestoneApi = {
+  async saveDraft(projectId: string | undefined, teamId: number, payload: Record<string, unknown>): Promise<MilestoneResponse> {
+    const path = projectId ? `/projects/${projectId}/milestones/drafts` : `/teams/${teamId}/milestones/drafts`;
+    return (await axiosInstance.post<MilestoneResponse>(path, payload)).data;
+  },
+  async editDraft(projectId: string | undefined, teamId: number, milestoneId: string, payload: Record<string, unknown>): Promise<MilestoneResponse> {
+    const path = projectId ? `/projects/${projectId}/milestones/${milestoneId}/draft` : `/teams/${teamId}/milestones/${milestoneId}/draft`;
+    return (await axiosInstance.put<MilestoneResponse>(path, payload)).data;
+  },
+  async deleteDraft(projectId: string | undefined, teamId: number, milestoneId: string, expectedVersion: number): Promise<void> {
+    const path = projectId ? `/projects/${projectId}/milestones/${milestoneId}` : `/teams/${teamId}/milestones/${milestoneId}`;
+    await axiosInstance.delete(path, { params: { expectedVersion } });
+  },
+  async editMetadata(projectId: string | undefined, teamId: number, milestoneId: string, payload: {title: string; description: string; deadline: string; expectedVersion: number}): Promise<MilestoneResponse> {
+    const path = projectId ? `/projects/${projectId}/milestones/${milestoneId}/metadata` : `/teams/${teamId}/milestones/${milestoneId}/metadata`;
+    return (await axiosInstance.patch<MilestoneResponse>(path, payload)).data;
+  },
+  async publish(projectId: string | undefined, teamId: number, milestoneId: string, expectedVersion: number): Promise<MilestoneResponse> {
+    const path = projectId ? `/projects/${projectId}/milestones/${milestoneId}/publish` : `/teams/${teamId}/milestones/${milestoneId}/publish`;
+    return (await axiosInstance.post<MilestoneResponse>(path, null, { params: { expectedVersion } })).data;
+  },
+  async start(projectId: string | undefined, teamId: number, milestoneId: string, expectedVersion: number): Promise<MilestoneResponse> {
+    const path = projectId ? `/projects/${projectId}/milestones/${milestoneId}/start` : `/teams/${teamId}/milestones/${milestoneId}/start`;
+    return (await axiosInstance.post<MilestoneResponse>(path, null, { params: { expectedVersion } })).data;
+  },
   async getProjectOptions(signal?: AbortSignal): Promise<MilestoneProjectOption[]> {
     const response = await axiosInstance.get<MilestoneProjectOption[]>(
       "/projects/milestone-options",
@@ -36,7 +60,7 @@ export const milestoneApi = {
     return response.data;
   },
   async getList(
-    projectId: string,
+    projectId: string | undefined,
     params: MilestoneListParams,
   ): Promise<MilestonePageResponse> {
     const query = new URLSearchParams({
@@ -54,7 +78,7 @@ export const milestoneApi = {
     if (params.deadlineTo) query.set("deadlineTo", params.deadlineTo);
 
     const response = await axiosInstance.get<MilestonePageResponse>(
-      `/projects/${projectId}/milestones`,
+      projectId ? `/projects/${projectId}/milestones` : "/milestones",
       { params: query },
     );
     return response.data;
@@ -157,6 +181,10 @@ export const milestoneApi = {
   },
   async getTeamArtifactSubmissions(teamId: number, milestoneId?: string): Promise<Array<{ submission: ArtifactSubmission; reviewSubmissionId?: string | null; submitterId: string; submitterName?: string | null; submitterEmail?: string | null }>> {
     const response = await axiosInstance.get<Array<{ submission: ArtifactSubmission; reviewSubmissionId?: string | null; submitterId: string; submitterName?: string | null; submitterEmail?: string | null }>>(`/teams/${teamId}/milestones/submissions`, { params: milestoneId ? { milestoneId } : undefined });
+    return response.data;
+  },
+  async getMyTeamArtifactSubmissions(teamId: number, milestoneId: string): Promise<Array<{ submission: ArtifactSubmission; reviewFeedback?: string | null; reviewedAt?: string | null }>> {
+    const response = await axiosInstance.get<Array<{ submission: ArtifactSubmission; reviewFeedback?: string | null; reviewedAt?: string | null }>>(`/teams/${teamId}/milestones/${milestoneId}/my-submissions`);
     return response.data;
   },
 

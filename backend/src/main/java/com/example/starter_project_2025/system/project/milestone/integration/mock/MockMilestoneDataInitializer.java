@@ -223,6 +223,9 @@ public class MockMilestoneDataInitializer implements CommandLineRunner {
         for (int index = 0; index < sample.checklist().size(); index++) {
             milestone.addChecklistItem(sample.checklist().get(index), true, index);
         }
+        // Mock submissions are used to demonstrate review/resubmission. Keep their
+        // milestone in the published lifecycle so reviewer actions match production rules.
+        milestone.openForWork(TEACHER_ACTOR_ID, createdAt);
         milestoneRepository.save(milestone);
     }
 

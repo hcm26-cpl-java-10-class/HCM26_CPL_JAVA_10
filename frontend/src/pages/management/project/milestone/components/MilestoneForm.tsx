@@ -25,6 +25,8 @@ interface MilestoneFormProps {
   apiError?: MilestoneApiError | null;
   networkUncertain?: boolean;
   onSubmit: (values: MilestoneFormValues) => void;
+  onSaveDraft?: (values: MilestoneFormValues) => void;
+  submitLabel?: string;
   onCancel: () => void;
   onDirtyChange: (dirty: boolean) => void;
 }
@@ -40,6 +42,8 @@ export function MilestoneForm({
   apiError,
   networkUncertain,
   onSubmit,
+  onSaveDraft,
+  submitLabel,
   onCancel,
   onDirtyChange,
 }: MilestoneFormProps) {
@@ -47,6 +51,7 @@ export function MilestoneForm({
     control,
     register,
     handleSubmit,
+    getValues,
     clearErrors,
     setError,
     setFocus,
@@ -321,8 +326,9 @@ export function MilestoneForm({
 
       <div className="sticky bottom-0 z-20 -mx-1 flex flex-col-reverse gap-2 rounded-xl border bg-background/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:justify-end">
         <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>Cancel</Button>
+        {onSaveDraft && <Button type="button" variant="secondary" onClick={() => onSaveDraft(getValues())} disabled={submitting}>Save Draft</Button>}
         <Button type="submit" disabled={submitting || hasMissingOptions}>
-          <Save className="size-4" /> {submitting ? "Creating..." : networkUncertain ? "Retry safely" : "Create milestone"}
+          <Save className="size-4" /> {submitting ? "Saving..." : networkUncertain ? "Retry safely" : submitLabel ?? "Create milestone"}
         </Button>
       </div>
 

@@ -11,6 +11,11 @@ import java.util.Optional;
 
 @Repository
 public interface SprintBacklogRepository extends BaseCrudRepository<SprintBacklog, Long> {
+    boolean existsByMilestone_Id(java.util.UUID milestoneId);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select item from SprintBacklog item where item.id = :id")
+    Optional<SprintBacklog> findForSubtaskUpdate(@Param("id") Long id);
 
     List<SprintBacklog> findBySprintIdOrderByIdAsc(Long sprintId);
 
@@ -34,6 +39,20 @@ public interface SprintBacklogRepository extends BaseCrudRepository<SprintBacklo
      * demo seed so the same title can exist in two projects.
      */
     Optional<SprintBacklog> findByProjectIdAndSprintIsNullAndTitleIgnoreCase(Long projectId, String title);
+
+    /**
+     * Deterministic lookup for startup demo upserts when a local database
+     * already contains duplicate product-backlog rows from an earlier seed.
+     */
+    Optional<SprintBacklog> findFirstByProjectIdAndSprintIsNullAndTitleIgnoreCaseOrderByIdAsc(
+            Long projectId,
+            String title);
+
+    List<SprintBacklog> findAllByProjectIdAndSprintIsNullAndTitleIgnoreCaseOrderByIdAsc(
+            Long projectId,
+            String title);
+
+    List<SprintBacklog> findAllByProjectIdAndTitleIgnoreCaseAndIsActiveTrue(Long projectId, String title);
 
     long countBySprintId(Long sprintId);
 
@@ -62,6 +81,14 @@ public interface SprintBacklogRepository extends BaseCrudRepository<SprintBacklo
     Optional<SprintBacklog> findBySprintIdAndTitleIgnoreCase(Long sprintId, String title);
 
     /**
+     * Deterministic lookup for startup demo upserts when a local database
+     * already contains duplicate sprint-backlog rows from an earlier seed.
+     */
+    Optional<SprintBacklog> findFirstBySprintIdAndTitleIgnoreCaseOrderByIdAsc(Long sprintId, String title);
+
+    List<SprintBacklog> findAllBySprintIdAndTitleIgnoreCaseOrderByIdAsc(Long sprintId, String title);
+
+    /**
      * Work items that live in a sprint owned by the team, used by the Backlog
      * tab of a team workspace when the team is not linked to a project.
      */
@@ -70,6 +97,7 @@ public interface SprintBacklogRepository extends BaseCrudRepository<SprintBacklo
             from SprintBacklog backlog
             join backlog.sprint sprint
             where sprint.isActive = true
+              and backlog.isActive = true
               and sprint.teamId = :teamId
             order by backlog.id asc
             """)
@@ -84,6 +112,7 @@ public interface SprintBacklogRepository extends BaseCrudRepository<SprintBacklo
             from SprintBacklog backlog
             join backlog.sprint sprint
             where sprint.isActive = true
+              and backlog.isActive = true
               and (sprint.teamId = :teamId or sprint.projectId = :projectId)
             order by backlog.id asc
             """)
@@ -99,6 +128,7 @@ public interface SprintBacklogRepository extends BaseCrudRepository<SprintBacklo
             from SprintBacklog backlog
             where backlog.sprint is null
               and backlog.projectId = :projectId
+              and backlog.isActive = true
             order by backlog.id asc
             """)
     List<SprintBacklog> findProductBacklogByProjectId(@Param("projectId") Long projectId);

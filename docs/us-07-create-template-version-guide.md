@@ -47,7 +47,9 @@ Trước đây `ProjectTemplate` và chuỗi phiên bản là hai module rời n
 | Kích hoạt template → phiên bản mới nhất chuyển `PUBLISHED`, nội dung được làm mới từ cấu hình đang kích hoạt | `TemplateActivationService#activate` → `publishLatestVersion` |
 | `createNewVersion` đồng bộ `project_templates.template_version` (`v2.0` → `2`) | `ProjectTemplateSnapshotServiceImpl#syncTemplateVersion` |
 | **AC02**: không cho sửa `content_json` / `version` của phiên bản không phải `DRAFT` (422) | `ProjectTemplateSnapshotServiceImpl#update` |
-| `templateName` trả kèm trong DTO để UI hiển thị `v1.0 · Capstone` thay vì `TPL-1` | `ProjectTemplateSnapshotDTO` + `enrichTemplateNames` |
+| `templateName` trả kèm trong DTO để UI hiển thị `v1.0 · Capstone` thay vì `TPL-1` | `ProjectTemplateSnapshotDTO` + `enrichOwnerNames` |
+| `projectName` trả kèm trong DTO để UI hiển thị tên dự án thay vì `PRJ-1` | `ProjectTemplateSnapshotDTO` + `enrichOwnerNames` |
+| Form create/edit chọn Project Template theo tên (`relation`), import/export có thêm cột `Template Name` / `Project Name` | `project-template-version.schema.ts`, `ProjectTemplateSnapshotExportRow`, `ProjectTemplateVersionImportTemplateProvider` |
 | Tab **Versions** + nút **Create new version** ngay trên trang chi tiết template | `TemplateVersionsPanel.tsx`, `ProjectTemplateDetailPage.tsx` |
 | `PROGRAM_MANAGER` được cấp quyền `PROJECT_TEMPLATE_VERSION_*` (persona của US-07) | `ProjectTemplateVersionAccessInitializer` |
 | Template cũ chưa có phiên bản nào: `POST /api/project-template-versions/by-template/{templateId}/initial-version` | `ProjectTemplateSnapshotController` |

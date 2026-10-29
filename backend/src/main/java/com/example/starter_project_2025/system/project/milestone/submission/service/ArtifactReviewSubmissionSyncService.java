@@ -5,6 +5,7 @@ import com.example.starter_project_2025.system.project.milestone.domain.Mileston
 import com.example.starter_project_2025.system.project.milestone.submission.domain.*;
 import com.example.starter_project_2025.system.project.milestone.submission.repository.MilestoneArtifactSubmissionRepository;
 import com.example.starter_project_2025.system.project.milestone.submission.repository.MilestoneSubmissionRepository;
+import com.example.starter_project_2025.system.project.milestone.submission.repository.MilestoneReviewRepository;
 import com.example.starter_project_2025.system.project.milestone.submission.repository.SubmissionVersionRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
@@ -23,6 +24,7 @@ public class ArtifactReviewSubmissionSyncService {
 
     private final MilestoneSubmissionRepository submissions;
     private final SubmissionVersionRepository versions;
+    private final MilestoneReviewRepository reviews;
     private final MilestoneArtifactSubmissionRepository artifactSubmissions;
     private final ProjectTeamRepository teams;
     private final UserRepository users;
@@ -80,24 +82,8 @@ public class ArtifactReviewSubmissionSyncService {
                     version.linkArtifactSubmission(artifact.getId());
                     versions.save(version);
                 } else if (!version.getArtifactSubmissionId().equals(artifact.getId())) {
-                    boolean isNewerArtifact = artifactSubmissions.findById(version.getArtifactSubmissionId())
-                            .map(existing -> artifact.getVersion() > existing.getVersion())
-                            .orElse(true);
-                    if (isNewerArtifact) {
-                        version.refreshSubmittedArtifact(
-                                artifact.getId(),
-                                versionTitle(milestone, artifact),
-                                artifact.getReleaseNotes(),
-                                primaryUrl(artifact),
-                                buildArtifactValues(artifact),
-                                artifact.getSubmittedAt(),
-                                artifact.isSubmittedLate(),
-                                artifact.getLatePenaltyPercent()
-                        );
-                        submission.refreshSubmittedAt(artifact.getSubmittedAt());
-                        versions.saveAndFlush(version);
-                        submissions.saveAndFlush(submission);
-                    }
+                    throw new com.example.starter_project_2025.system.project.milestone.exception.MilestoneConflictException(
+                            "Submitted version is immutable; request changes before resubmitting");
                 }
             }
             return submission.getId();
@@ -108,6 +94,7 @@ public class ArtifactReviewSubmissionSyncService {
         version.linkArtifactSubmission(artifact.getId());
         version.submit(artifact.getSubmittedAt(), artifact.isSubmittedLate(), artifact.getLatePenaltyPercent());
         submission.submitted(version.getVersionNumber(), artifact.getSubmittedAt());
+        milestone.setExecutionStatus(MilestoneExecutionStatus.REVIEW, artifact.getSubmitterId(), artifact.getSubmittedAt());
         versions.save(version);
         submissions.saveAndFlush(submission);
         return submission.getId();
@@ -157,6 +144,22 @@ public class ArtifactReviewSubmissionSyncService {
         }
         return new ArtifactReviewState(SubmissionStatus.CHANGES_REQUESTED.name(), null);
     }
+
+    /** Reads a persisted review result for one immutable artifact version without synchronizing or mutating it. */
+    public String persistedStatusFor(MilestoneArtifactSubmission artifact) {
+        return versions.findByArtifactSubmissionId(artifact.getId())
+                .map(version -> version.getStatus().name())
+                .orElse(artifact.getStatus().name());
+    }
+
+    public PersistedReview persistedReviewFor(MilestoneArtifactSubmission artifact) {
+        return versions.findByArtifactSubmissionId(artifact.getId())
+                .flatMap(version -> reviews.findBySubmissionVersionId(version.getId()))
+                .map(review -> new PersistedReview(review.getOverallFeedback(), review.getReviewedAt()))
+                .orElse(new PersistedReview(null, null));
+    }
+
+    public record PersistedReview(String feedback, java.time.Instant reviewedAt) { }
 
     private SubmissionVersion createVersion(MilestoneSubmission submission,
                                             MilestoneArtifactSubmission artifact,

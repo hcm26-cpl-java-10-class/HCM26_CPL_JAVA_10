@@ -3,7 +3,6 @@ package com.example.starter_project_2025.system.project.task.deletion;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.project.task.*;
 import com.example.starter_project_2025.system.project.task.audit.TaskAuditService;
-import com.example.starter_project_2025.system.project.task.dependency.TaskDependencyRepository;
 import com.example.starter_project_2025.system.project.task.event.TaskOutboxService;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
@@ -12,8 +11,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -23,7 +20,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class TaskDeletionService {
     private final TaskRepository taskRepository;
-    private final TaskDependencyRepository dependencyRepository;
     private final TaskMapper taskMapper;
     private final TaskAccessService taskAccess;
     private final TaskAuditService auditService;
@@ -57,18 +53,10 @@ public class TaskDeletionService {
         validateDeletion(task);
 
         TaskDTO before = taskMapper.toResponse(task);
-        Map<Task, TaskDTO> successors = removeDependencies(taskId);
         task.setIsActive(false);
-        var changedTasks = new ArrayList<>(successors.keySet());
-        changedTasks.add(task);
-        LocalDateTime now = LocalDateTime.now();
-        for (Task changed : changedTasks) {
-            changed.setUpdatedBy(actorId);
-            changed.setUpdatedAt(now);
-        }
-        taskRepository.saveAllAndFlush(changedTasks);
-        successors.forEach((successor, previous) -> auditService.record("DEPENDENCY_REMOVED",
-                previous, taskMapper.toResponse(successor), actorId, context.correlationId()));
+        task.setUpdatedBy(actorId);
+        task.setUpdatedAt(LocalDateTime.now());
+        taskRepository.saveAndFlush(task);
         TaskDTO after = taskMapper.toResponse(task);
         auditService.record("DELETE", before, after, actorId, context.correlationId());
         outboxService.enqueue("TASK_DELETED", after, actorId, context, hash);
@@ -84,23 +72,6 @@ public class TaskDeletionService {
             throw new TaskValidationException("artifact",
                     "Tasks linked to an artifact or review cannot be deleted");
         }
-    }
-
-    private Map<Task, TaskDTO> removeDependencies(UUID taskId) {
-        var dependencies = dependencyRepository.findByPredecessorTaskIdOrSuccessorTaskId(taskId, taskId);
-        Map<Task, TaskDTO> successors = new LinkedHashMap<>();
-        for (var dependency : dependencies) {
-            Task successor = dependency.getSuccessorTask();
-            if (!successor.getId().equals(taskId)) {
-                successors.put(successor, taskMapper.toResponse(successor));
-            }
-        }
-        for (var dependency : dependencies) {
-            dependency.getSuccessorTask().getIncomingDependencies()
-                    .removeIf(current -> current.getId().equals(dependency.getId()));
-        }
-        dependencyRepository.deleteAll(dependencies);
-        return successors;
     }
 
     private ResourceNotFoundException missingTask() {

@@ -30,7 +30,20 @@ export function TeamMilestoneDetailPage() {
     retry: false,
   });
   const openMilestone = useMutation({
-    mutationFn: () => milestoneApi.openTeamMilestoneForSubmissions(teamId, milestoneId!),
+    mutationFn: () => milestoneApi.publish(undefined, teamId, milestoneId!, query.data!.version),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-milestone", teamId, milestoneId] }),
+  });
+  const startMilestone = useMutation({
+    mutationFn: () => milestoneApi.start(undefined, teamId, milestoneId!, query.data!.version),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-milestone", teamId, milestoneId] }),
+  });
+  const deleteMilestone = useMutation({
+    mutationFn: () => milestoneApi.deleteDraft(undefined, teamId, milestoneId!, query.data!.version),
+    onSuccess: () => back(),
+  });
+  const editMetadata = useMutation({
+    mutationFn: (payload: {title: string; description: string; deadline: string; expectedVersion: number}) =>
+      milestoneApi.editMetadata(undefined, teamId, milestoneId!, payload),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-milestone", teamId, milestoneId] }),
   });
   const back = () => navigate(workspaceId ? `/management/workspaces/${workspaceId}?tab=milestones` : `/teams/${teamId}/milestones`);
@@ -48,7 +61,7 @@ export function TeamMilestoneDetailPage() {
     <main className="mx-auto grid w-full max-w-6xl gap-6">
       <Card className="overflow-hidden border-primary/20 bg-gradient-to-r from-primary/5 via-background to-background">
         <CardHeader className="gap-4 p-6 md:p-8">
-          <div className="flex flex-wrap items-center gap-2"><Badge variant="outline">Team milestone</Badge><MilestoneStatusBadge status={milestone.status} />{milestone.mandatory && <Badge variant="secondary">Mandatory</Badge>}</div>
+          <div className="flex flex-wrap items-center gap-2"><Badge variant="outline">Team milestone</Badge><MilestoneStatusBadge status={milestone.status} executionStatus={milestone.executionStatus} />{milestone.mandatory && <Badge variant="secondary">Mandatory</Badge>}</div>
           <div className="grid gap-2"><CardTitle className="text-2xl md:text-3xl">{milestone.title}</CardTitle><CardDescription className="max-w-3xl whitespace-pre-wrap text-sm leading-6">{milestone.description || "No description provided."}</CardDescription></div>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground"><span className="inline-flex items-center gap-2"><CalendarClock className="size-4" />Due {formatTenantDateTime(milestone.deadline, milestone.tenantTimeZone)}</span><span className="inline-flex items-center gap-2"><Globe2 className="size-4" />{milestone.tenantTimeZone}</span></div>
         </CardHeader>
@@ -73,7 +86,7 @@ export function TeamMilestoneDetailPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
         <Button variant="outline" onClick={back}><ArrowLeft />Back to workspace</Button>
-        <div className="flex flex-wrap items-center gap-2">{milestone.status === "PLANNED" && <Button onClick={() => openMilestone.mutate()} disabled={openMilestone.isPending}>{openMilestone.isPending ? "Opening…" : "Open milestone"}</Button>}{milestone.status === "PLANNED" && <p className="w-full text-right text-xs text-muted-foreground">Open the milestone before students can submit.</p>}{openMilestone.isError && <p className="w-full text-right text-xs text-destructive">Could not open milestone. Check that the workspace project is active.</p>}<Button variant="outline" onClick={() => navigate(`/teams/${teamId}/milestones/${milestone.id}/submissions?workspaceId=${workspaceId ?? ""}`)}>Review submissions</Button>{canPrepareArtifact && hasPermission("ARTIFACT_READ") && <Button onClick={() => navigate(`/teams/${teamId}/milestones/${milestone.id}/submit`)}>Prepare artifact</Button>}</div>
+        <div className="flex flex-wrap items-center gap-2">{milestone.status === "PLANNED" && hasPermission("MILESTONE_WRITE") && <><Button variant="outline" onClick={() => navigate(`/teams/${teamId}/milestones/${milestone.id}/edit?workspaceId=${workspaceId ?? ""}`)}>Edit Draft</Button><Button variant="destructive" onClick={() => { if (window.confirm("Delete this draft milestone?")) deleteMilestone.mutate(); }} disabled={deleteMilestone.isPending}>Delete Draft</Button><Button onClick={() => openMilestone.mutate()} disabled={openMilestone.isPending}>Publish</Button></>}{milestone.status === "OPEN" && !["DONE", "FAILED"].includes(milestone.executionStatus ?? "") && hasPermission("MILESTONE_WRITE") && <Button variant="outline" onClick={() => { const title = window.prompt("Title", milestone.title); if (title === null) return; const description = window.prompt("Description", milestone.description ?? ""); if (description === null) return; const deadline = window.prompt("Deadline (ISO 8601)", milestone.deadline); if (deadline === null) return; editMetadata.mutate({ title, description, deadline, expectedVersion: milestone.version }); }}>Edit metadata</Button>}{milestone.executionStatus === "TODO" && normalizedRole === ADMIN_ROLE && <Button onClick={() => startMilestone.mutate()} disabled={startMilestone.isPending}>Start</Button>}{openMilestone.isError && <p className="text-xs text-destructive">Publish failed. Check required fields.</p>}<Button variant="outline" onClick={() => navigate(`/teams/${teamId}/milestones/${milestone.id}/submissions?workspaceId=${workspaceId ?? ""}`)}>Review submissions</Button>{canPrepareArtifact && milestone.status === "OPEN" && milestone.executionStatus !== "TODO" && hasPermission("ARTIFACT_READ") && <Button onClick={() => navigate(`/teams/${teamId}/milestones/${milestone.id}/submit`)}>Prepare artifact</Button>}</div>
       </div>
     </main>
   </MainLayout>;

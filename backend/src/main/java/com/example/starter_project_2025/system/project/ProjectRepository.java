@@ -12,6 +12,13 @@ public interface ProjectRepository extends BaseCrudRepository<Project, Long> {
     java.util.Optional<Project> findByCodeAndTenantId(String code, Long tenantId);
     java.util.List<Project> findByTenantIdAndIsActiveTrue(Long tenantId);
 
+    /**
+     * Import-only lookup: resolves the project referenced by name in a
+     * {@code project-template-versions} file. An ambiguous (duplicated) name
+     * fails only the import row that supplied it.
+     */
+    java.util.Optional<Project> findByName(String name);
+
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @org.springframework.data.jpa.repository.Query("select p from Project p where p.id = :id")
     java.util.Optional<Project> findForWorkspaceCreation(@org.springframework.data.repository.query.Param("id") Long id);

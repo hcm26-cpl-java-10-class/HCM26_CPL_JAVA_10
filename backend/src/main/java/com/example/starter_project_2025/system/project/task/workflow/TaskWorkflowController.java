@@ -3,7 +3,6 @@ package com.example.starter_project_2025.system.project.task.workflow;
 import com.example.starter_project_2025.system.project.task.TaskDTO;
 import com.example.starter_project_2025.system.project.task.TaskRequestContext;
 import com.example.starter_project_2025.system.project.task.audit.TaskActivityDTO;
-import com.example.starter_project_2025.system.project.task.dependency.TaskDependencyRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -33,23 +32,6 @@ public class TaskWorkflowController {
             @RequestHeader(value = "X-Correlation-ID", required = false) String correlationId) {
         TaskRequestContext context = TaskRequestContext.create(requestId, correlationId);
         return response(workflowService.changeStatus(taskId, request, context), context);
-    }
-
-    @PostMapping("/dependencies")
-    public ResponseEntity<TaskDTO> addDependency(@PathVariable UUID taskId, @RequestBody TaskDependencyRequest request,
-            @RequestHeader(value = "Idempotency-Key", required = false) UUID requestId,
-            @RequestHeader(value = "X-Correlation-ID", required = false) String correlationId) {
-        TaskRequestContext context = TaskRequestContext.create(requestId, correlationId);
-        return response(workflowService.addDependency(taskId, request, context), context);
-    }
-
-    @DeleteMapping("/dependencies/{predecessorId}")
-    public ResponseEntity<TaskDTO> removeDependency(@PathVariable UUID taskId, @PathVariable UUID predecessorId,
-            @RequestParam Long version,
-            @RequestHeader(value = "Idempotency-Key", required = false) UUID requestId,
-            @RequestHeader(value = "X-Correlation-ID", required = false) String correlationId) {
-        TaskRequestContext context = TaskRequestContext.create(requestId, correlationId);
-        return response(workflowService.removeDependency(taskId, predecessorId, version, context), context);
     }
 
     private ResponseEntity<TaskDTO> response(TaskDTO task, TaskRequestContext context) {

@@ -16,14 +16,24 @@ export function WorkspaceOverviewPanel({ workspace, canViewMembers, onViewMember
       <Card>
         <CardHeader><CardTitle>Project brief</CardTitle></CardHeader>
         <CardContent className="space-y-5">
-          {workspace.projectId != null ? <>
-            <div className="grid gap-3 text-sm sm:grid-cols-3">
-              <div><p className="text-muted-foreground">Project name</p><p>{information(workspace.projectName)}</p></div>
-              <div><p className="text-muted-foreground">Project code</p><p>{information(workspace.projectCode)}</p></div>
-              <div><p className="text-muted-foreground">Status</p><p>{information(workspace.projectStatus)}</p></div>
-            </div>
-            <div><p className="mb-2 text-sm font-medium">Description</p><p className="whitespace-pre-wrap text-sm leading-7">{information(workspace.projectDescription)}</p></div>
-          </> : <p className="text-sm text-muted-foreground">No project is associated with this workspace.</p>}
+          {topic && <div className="grid gap-3 text-sm sm:grid-cols-2">
+            <div><p className="text-muted-foreground">Brief code</p><p>{information(topic.topic_code)}</p></div>
+            <div><p className="text-muted-foreground">Version</p><p>{information(topic.version)}</p></div>
+            <div className="sm:col-span-2"><p className="text-muted-foreground">Brief title</p><p>{information(topic.topic_title)}</p></div>
+          </div>}
+          <div><p className="mb-2 text-sm font-medium">Description</p><p className="whitespace-pre-wrap text-sm leading-7">{information(workspace.projectDescription)}</p></div>
+          <div><p className="mb-2 text-sm font-medium">Objectives</p><p className="whitespace-pre-wrap text-sm leading-7">{information(topic?.objectives)}</p></div>
+          <div><p className="mb-2 text-sm font-medium">Requirements</p>
+            {topic?.requirements.length ? <ul className="list-disc space-y-2 pl-5 text-sm">{topic.requirements.map((item, index) => <li key={index}>{item}</li>)}</ul>
+              : <p className="text-sm text-muted-foreground">No information available</p>}
+          </div>
+          <div><p className="mb-2 text-sm font-medium">Attachments</p>
+            {topic?.attachments.length ? <ul className="space-y-2 text-sm">{topic.attachments.map((item, index) => {
+              const href = attachmentUrl(item.url);
+              return <li key={index}>{href ? <a className="underline" href={href} target="_blank" rel="noopener noreferrer">{information(item.name)}</a>
+                : <span>{information(item.name)}</span>}</li>;
+            })}</ul> : <p className="text-sm text-muted-foreground">No information available</p>}
+          </div>
         </CardContent>
       </Card>
     </div>

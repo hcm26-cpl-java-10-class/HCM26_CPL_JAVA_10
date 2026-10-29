@@ -13,6 +13,14 @@ public interface ProjectTemplateRepository
 
     Optional<ProjectTemplate> findByIdAndIsActiveTrue(Long id);
 
+    /**
+     * Import-only lookup: resolves the template referenced by name in a
+     * {@code project-template-versions} file. Created/updated records still use
+     * the id based methods below, so a duplicated name only affects the import
+     * row that supplied it (the ambiguous lookup fails that row).
+     */
+    Optional<ProjectTemplate> findByName(String name);
+
     Optional<ProjectTemplate> findByCodeAndTenantIdIsNullAndIsActiveTrue(String code);
 
     Optional<ProjectTemplate> findByIdAndTenantIdAndIsActiveTrue(Long id, Long tenantId);

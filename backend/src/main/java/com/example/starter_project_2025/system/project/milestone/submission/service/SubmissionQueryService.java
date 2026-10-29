@@ -187,6 +187,7 @@ public class SubmissionQueryService {
 
     boolean canRequestChanges(MilestoneSubmission value) {
         var milestone = value.getMilestone();
+        if (!milestone.isActive() || milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN) return false;
         if (!milestone.isAllowResubmission()) return false;
         if (milestone.getMaxSubmissionAttempts() != null
                 && value.getSubmissionAttempts() >= milestone.getMaxSubmissionAttempts()) return false;

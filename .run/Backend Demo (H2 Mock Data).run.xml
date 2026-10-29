@@ -1,0 +1,30 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Backend Demo (H2 Mock Data)" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <envs>
+      <env name="DB_URL" value="jdbc:h2:file:./data/demo/fams_lms_legacy_plus_demo;DB_CLOSE_ON_EXIT=FALSE" />
+      <env name="DB_DRIVER" value="org.h2.Driver" />
+      <env name="DB_DIALECT" value="org.hibernate.dialect.H2Dialect" />
+      <env name="DB_USERNAME" value="sa" />
+      <env name="DB_PASSWORD" value="" />
+      <env name="DB_DDL_AUTO" value="update" />
+      <env name="SERVER_PORT" value="8080" />
+      <env name="SPRING_PROFILES_ACTIVE" value="milestone-mock" />
+      <env name="WORKSPACE_DEMO_ENABLED" value="true" />
+      <env name="APP_SEED_BOARD_ENABLED" value="true" />
+      <env name="TEAM_ALLOCATION_DEMO_SEED_ENABLED" value="true" />
+      <env name="TASK_ALERT_DEMO_ENABLED" value="true" />
+      <env name="MEMBER_REMINDER_DEMO_ENABLED" value="true" />
+      <env name="MILESTONE_MOCK_SEED_ENABLED" value="true" />
+      <env name="MILESTONE_SUBMISSION_MOCK_SEED_ENABLED" value="true" />
+      <env name="MILESTONE_MOCK_SUBMISSION_REVIEWER_TEAM_ASSIGNMENTS" value="teacher@example.com=1+3,admin@example.com=1+3" />
+      <env name="TEAM_ARTIFACT_SUBMISSION_DEMO_SEED_ENABLED" value="true" />
+      <env name="TEAM_ARTIFACT_SUBMISSION_DEMO_TEAM_ID" value="3" />
+    </envs>
+    <module name="starter_project_2025" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="com.example.starter_project_2025.StarterProject2025Application" />
+    <option name="WORKING_DIRECTORY" value="file://$PROJECT_DIR$/backend" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>
