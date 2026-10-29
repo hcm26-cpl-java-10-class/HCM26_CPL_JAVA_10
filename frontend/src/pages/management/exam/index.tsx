@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { EXAM_CATEGORY_LABEL, EXAM_CATEGORY_SHOW_ANSWERS_DEFAULT, type ExamCategory, type ExamDTO, type ExamType, type LatePolicy, type QuestionDTO, type QuestionDifficulty, type QuestionFilter, type QuestionType, type ResultVisibility } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, CheckCheck, CheckSquare, ClipboardCheck, Dices, Layers, Mail, MoreVertical, Pencil, Plus, Search, BookmarkPlus, Tags, Trash2, X } from "lucide-react";
+import { AlertTriangle, BookOpen, CheckCheck, CheckSquare, ClipboardCheck, Dices, Layers, Mail, MoreVertical, Pencil, Plus, Search, BookmarkPlus, Tags, Trash2, X } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -851,10 +851,23 @@ export default function ExamManagementPage() {
                   Exam Title
                   <Input required maxLength={200} value={newTitle} onChange={(event) => setNewTitle(event.target.value)} />
                 </label>
+
                 <label className="grid gap-2 text-sm font-medium">
                   Duration (minutes)
                   <Input required type="number" min={1} value={newDuration} onChange={(event) => setNewDuration(event.target.value)} />
                 </label>
+
+                <label className="grid gap-2 text-sm font-medium">
+                  Exam Password / Access Code (leave blank if not required)
+                  <Input
+                      type="text"
+                      placeholder="e.g. EXAM2026"
+                      maxLength={100}
+                      value={cfg.accessCode}
+                      onChange={(event) => setCfg((c) => ({ ...c, accessCode: event.target.value }))}
+                  />
+                </label>
+
                 <label className="grid gap-2 text-sm font-medium">
                   Question Format
                   <Select value={cfg.examType} onValueChange={(value) => setCfg((c) => ({ ...c, examType: value as ExamType }))}>
@@ -866,9 +879,10 @@ export default function ExamManagementPage() {
                     </SelectContent>
                   </Select>
                   <span className="text-xs font-normal text-muted-foreground">
-                    Only matching question types can be selected. Changing type with existing invalid questions will be rejected.
+                    Only matching question types can be selected.
                   </span>
                 </label>
+
                 <label className="grid gap-2 text-sm font-medium">
                   Exam Category
                   <Select value={cfg.category} onValueChange={(value) => {
@@ -887,18 +901,8 @@ export default function ExamManagementPage() {
                     </SelectContent>
                   </Select>
                   <span className="text-xs font-normal text-muted-foreground">
-                    The category sets the default for showing answers; you can change that setting below.
+                    The category sets default for answer review.
                   </span>
-                </label>
-                <label className="grid gap-2 text-sm font-medium sm:col-span-2">
-                  Exam Password / Access Code (leave blank if not required)
-                  <Input
-                      type="text"
-                      placeholder="e.g. EXAM2026"
-                      maxLength={100}
-                      value={cfg.accessCode}
-                      onChange={(event) => setCfg((c) => ({ ...c, accessCode: event.target.value }))}
-                  />
                 </label>
 
                 <div className="grid gap-4 border-t pt-4 sm:col-span-2 sm:grid-cols-2">
@@ -953,22 +957,45 @@ export default function ExamManagementPage() {
                     />
                     <p className="text-[11px] font-normal text-muted-foreground">
                       {cfg.startTime
-                        ? "Must be at current time or later (recommended: at least 1–2 min ahead)."
-                        : "Leave blank = no open/close time limits (students can start anytime)."}
+                        ? "Must be current time or later (rec: at least 1–2 min ahead)."
+                        : "Leave blank = no open limit (students can start anytime)."}
                     </p>
                   </div>
-                  <label className="grid gap-2 text-sm font-medium">
-                    End Time
+
+                  <div className="grid gap-2 text-sm font-medium">
+                    <div className="flex flex-wrap items-center justify-between gap-1">
+                      <span>End Time</span>
+                      {cfg.endTime && (
+                        <button
+                          type="button"
+                          className="text-[11px] text-destructive hover:underline cursor-pointer font-normal"
+                          onClick={() => setCfg((c) => ({ ...c, endTime: "" }))}
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
                     <Input
                         type="datetime-local"
+                        min={cfg.startTime || (editingExam?.endTime && new Date(editingExam.endTime).getTime() < Date.now() ? undefined : getLocalDatetimeString())}
                         value={cfg.endTime}
                         onChange={(event) => setCfg((c) => ({ ...c, endTime: event.target.value }))}
                     />
-                  </label>
+                    <p className="text-[11px] font-normal text-muted-foreground">
+                      {cfg.endTime
+                        ? "Exam will automatically close at this time."
+                        : "Leave blank = no closing deadline."}
+                    </p>
+                  </div>
+
                   <label className="grid gap-2 text-sm font-medium">
                     Maximum Attempts
                     <Input type="number" min={1} value={cfg.maxAttempts} onChange={(event) => setCfg((c) => ({ ...c, maxAttempts: event.target.value }))} />
+                    <span className="text-xs font-normal text-muted-foreground">
+                      Number of times a student can take this exam.
+                    </span>
                   </label>
+
                   <label className="grid gap-2 text-sm font-medium">
                     Max Score (leave blank = 10)
                     <Input type="number" min={0.01} step="0.01" placeholder="10" value={cfg.maxScore} onChange={(event) => setCfg((c) => ({ ...c, maxScore: event.target.value }))} />
@@ -976,10 +1003,15 @@ export default function ExamManagementPage() {
                       Question score = max score × question weight ÷ total weight.
                     </span>
                   </label>
+
                   <label className="grid gap-2 text-sm font-medium">
                     Passing Score (leave blank = no requirement)
                     <Input type="number" min={0} step="0.01" value={cfg.passScore} onChange={(event) => setCfg((c) => ({ ...c, passScore: event.target.value }))} />
+                    <span className="text-xs font-normal text-muted-foreground">
+                      Minimum score required to pass (e.g. 5.0).
+                    </span>
                   </label>
+
                   <div className="grid gap-2 text-sm font-medium">
                     Late Submission Policy
                     <Select value={cfg.latePolicy} onValueChange={(value) => setCfg((c) => ({
@@ -994,20 +1026,31 @@ export default function ExamManagementPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    <span className="text-xs font-normal text-muted-foreground">
+                      Rules for submissions turned in after end time.
+                    </span>
                   </div>
+
                   {cfg.latePolicy === "ALLOWED_WITH_PENALTY" && (
+                    <>
                       <label className="grid gap-2 text-sm font-medium">
                         Late Penalty Percentage (1–100%)
                         <Input type="number" min={1} max={100} value={cfg.latePenaltyPercent} onChange={(event) => setCfg((c) => ({ ...c, latePenaltyPercent: event.target.value }))} />
                       </label>
-                  )}
-                  {cfg.latePolicy !== "NOT_ALLOWED" && (
                       <label className="grid gap-2 text-sm font-medium">
                         Grace Period (minutes)
                         <Input type="number" min={0} value={cfg.lateGraceMinutes} onChange={(event) => setCfg((c) => ({ ...c, lateGraceMinutes: event.target.value }))} />
                       </label>
+                    </>
                   )}
-                  <div className="grid gap-2 text-sm font-medium sm:col-span-2">
+                  {cfg.latePolicy === "ALLOWED" && (
+                    <label className="grid gap-2 text-sm font-medium sm:col-span-2">
+                      Grace Period (minutes)
+                      <Input type="number" min={0} value={cfg.lateGraceMinutes} onChange={(event) => setCfg((c) => ({ ...c, lateGraceMinutes: event.target.value }))} />
+                    </label>
+                  )}
+
+                  <div className="grid gap-2 text-sm font-medium">
                     Result Visibility
                     <Select value={cfg.resultVisibility} onValueChange={(value) => setCfg((c) => ({ ...c, resultVisibility: value as ResultVisibility }))}>
                       <SelectTrigger aria-label="Result visibility"><SelectValue /></SelectTrigger>
@@ -1017,30 +1060,34 @@ export default function ExamManagementPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    <span className="text-xs font-normal text-muted-foreground">
+                      Choose when students can review their scores.
+                    </span>
                   </div>
-                  <label className="flex items-center gap-2 text-sm font-medium">
-                    <input type="checkbox" className="size-4 accent-primary" checked={cfg.shuffleQuestions} onChange={(event) => setCfg((c) => ({ ...c, shuffleQuestions: event.target.checked }))} />
-                    Shuffle Questions
-                  </label>
-                  <label className="flex items-center gap-2 text-sm font-medium">
-                    <input type="checkbox" className="size-4 accent-primary" checked={cfg.shuffleOptions} onChange={(event) => setCfg((c) => ({ ...c, shuffleOptions: event.target.checked }))} />
-                    Shuffle Options
-                  </label>
-                  <label className="flex items-center gap-2 text-sm font-medium">
-                    <input type="checkbox" className="size-4 accent-primary" checked={cfg.showAnswersAfterExam} onChange={(event) => setCfg((c) => ({ ...c, showAnswersAfterExam: event.target.checked }))} />
+
+                  <div className="grid gap-2 text-sm font-medium">
                     Show Answers After Exam
-                  </label>
-                  {cfg.showAnswersAfterExam && (
-                      <p className="text-xs text-muted-foreground">
-                        Students see correct answers only after their score is published and they have no attempts left (or the exam has closed).
-                      </p>
-                  )}
+                    <label className="flex h-9 items-center gap-2 rounded-md border border-input bg-background/50 px-3 py-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="size-4 accent-primary cursor-pointer"
+                        checked={cfg.showAnswersAfterExam}
+                        onChange={(event) => setCfg((c) => ({ ...c, showAnswersAfterExam: event.target.checked }))}
+                      />
+                      <span className="text-xs font-normal text-muted-foreground select-none">
+                        Allow students to see answer keys
+                      </span>
+                    </label>
+                    <span className="text-xs font-normal text-muted-foreground">
+                      Only visible after score is published and no attempts left.
+                    </span>
+                  </div>
                 </div>
 
                 {/* NEW (anti-cheat): cau hinh chong gian lan theo tung de */}
                 <div className="grid gap-3 border-t pt-4 sm:col-span-2">
-                  <label className="flex items-center gap-2 text-sm font-semibold">
-                    <input type="checkbox" className="size-4 accent-primary" checked={cfg.antiCheatEnabled} onChange={(event) => setCfg((c) => ({ ...c, antiCheatEnabled: event.target.checked }))} />
+                  <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
+                    <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.antiCheatEnabled} onChange={(event) => setCfg((c) => ({ ...c, antiCheatEnabled: event.target.checked }))} />
                     Anti-cheating monitoring (chống gian lận)
                   </label>
                   <p className="text-xs text-muted-foreground">
@@ -1048,20 +1095,20 @@ export default function ExamManagementPage() {
                   </p>
                   {cfg.antiCheatEnabled && (
                       <div className="grid gap-3 pl-6 sm:grid-cols-2">
-                        <label className="flex items-center gap-2 text-sm">
-                          <input type="checkbox" className="size-4 accent-primary" checked={cfg.detectTabSwitch} onChange={(event) => setCfg((c) => ({ ...c, detectTabSwitch: event.target.checked }))} />
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.detectTabSwitch} onChange={(event) => setCfg((c) => ({ ...c, detectTabSwitch: event.target.checked }))} />
                           Count tab / window switches
                         </label>
-                        <label className="flex items-center gap-2 text-sm">
-                          <input type="checkbox" className="size-4 accent-primary" checked={cfg.blockCopyPaste} onChange={(event) => setCfg((c) => ({ ...c, blockCopyPaste: event.target.checked }))} />
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.blockCopyPaste} onChange={(event) => setCfg((c) => ({ ...c, blockCopyPaste: event.target.checked }))} />
                           Block copy / paste / right-click / dev shortcuts
                         </label>
-                        <label className="flex items-center gap-2 text-sm">
-                          <input type="checkbox" className="size-4 accent-primary" checked={cfg.requireFullscreen} onChange={(event) => setCfg((c) => ({ ...c, requireFullscreen: event.target.checked }))} />
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.requireFullscreen} onChange={(event) => setCfg((c) => ({ ...c, requireFullscreen: event.target.checked }))} />
                           Require fullscreen
                         </label>
-                        <label className="flex items-center gap-2 text-sm">
-                          <input type="checkbox" className="size-4 accent-primary" checked={cfg.singleSession} onChange={(event) => setCfg((c) => ({ ...c, singleSession: event.target.checked }))} />
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.singleSession} onChange={(event) => setCfg((c) => ({ ...c, singleSession: event.target.checked }))} />
                           Detect multiple tabs / devices
                         </label>
                       </div>
@@ -1088,7 +1135,13 @@ export default function ExamManagementPage() {
             </DialogHeader>
 
             <div className="grid min-h-0 flex-1 gap-5 overflow-y-auto lg:grid-cols-[minmax(0,1.5fr)_minmax(260px,0.8fr)] lg:overflow-hidden">
-              <section className="flex min-h-0 flex-col gap-3">
+              <section className="flex min-h-0 flex-1 flex-col gap-3">
+                {activeExamStarted && (
+                    <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+                      <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                      <span>Exam has started. Adding, editing, and removing questions are disabled to protect student results.</span>
+                    </div>
+                )}
                 <div className="grid gap-2 sm:grid-cols-3">
                   <div className="relative sm:col-span-3">
                     <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -1179,7 +1232,7 @@ export default function ExamManagementPage() {
                         size="sm"
                         className="h-7 text-xs px-2"
                         onClick={handleToggleSelectAllPage}
-                        disabled={selectablePageQuestions.length === 0}
+                        disabled={activeExamStarted || selectablePageQuestions.length === 0}
                     >
                       <CheckSquare className="mr-1 size-3.5" />
                       {isAllPageSelected ? "Deselect Page" : `Page (${selectablePageQuestions.length})`}
@@ -1193,7 +1246,7 @@ export default function ExamManagementPage() {
                               size="sm"
                               className="h-7 text-xs px-2"
                               onClick={() => handleToggleSelectAllInTopic(questionTopic)}
-                              disabled={eligibleTopicQuestions.length === 0}
+                              disabled={activeExamStarted || eligibleTopicQuestions.length === 0}
                               title={`Toggle select all questions in topic "${questionTopic}"`}
                           >
                             <Layers className="mr-1 size-3.5" />
@@ -1209,7 +1262,7 @@ export default function ExamManagementPage() {
                                   size="sm"
                                   className="h-7 text-xs px-2"
                                   onClick={handleToggleSelectAllFiltered}
-                                  disabled={eligibleFilteredQuestions.length === 0}
+                                  disabled={activeExamStarted || eligibleFilteredQuestions.length === 0}
                                   title="Select questions matching search/difficulty inside this topic"
                               >
                                 <CheckCheck className="mr-1 size-3.5" />
@@ -1226,7 +1279,7 @@ export default function ExamManagementPage() {
                             size="sm"
                             className="h-7 text-xs px-2"
                             onClick={handleToggleSelectAllFiltered}
-                            disabled={eligibleFilteredQuestions.length === 0}
+                            disabled={activeExamStarted || eligibleFilteredQuestions.length === 0}
                             title="Select all unadded questions matching the current filter"
                         >
                           <CheckCheck className="mr-1 size-3.5" />
@@ -1258,7 +1311,7 @@ export default function ExamManagementPage() {
                         size="sm"
                         className="h-7 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-sm"
                         onClick={() => openRandomDialog(questionTopic)}
-                        disabled={allAvailableBankQuestions.length === 0}
+                        disabled={activeExamStarted || allAvailableBankQuestions.length === 0}
                     >
                       <Dices className="mr-1 size-3.5" />
                       {questionTopic.trim() ? `Random from "${questionTopic}"...` : "Random Questions..."}
@@ -1276,7 +1329,7 @@ export default function ExamManagementPage() {
                               className="size-4 accent-primary"
                               aria-label="Select all on this page"
                               checked={isAllPageSelected}
-                              disabled={selectablePageQuestions.length === 0}
+                              disabled={activeExamStarted || selectablePageQuestions.length === 0}
                               onChange={handleToggleSelectAllPage}
                           />
                         </TableHead>
@@ -1305,7 +1358,7 @@ export default function ExamManagementPage() {
                                 <input
                                     type="checkbox"
                                     className="size-4 accent-primary"
-                                    disabled={added}
+                                    disabled={added || activeExamStarted}
                                     checked={added || selected}
                                     onChange={(e) => toggleQuestion(q.id, e.target.checked)}
                                 />
@@ -1337,7 +1390,7 @@ export default function ExamManagementPage() {
                     <Button
                         size="sm"
                         onClick={() => addQuestionsMutation.mutate(undefined)}
-                        disabled={selectedQuestionIds.size === 0 || addQuestionsMutation.isPending}
+                        disabled={activeExamStarted || selectedQuestionIds.size === 0 || addQuestionsMutation.isPending}
                     >
                       <Plus className="mr-1 size-4" />
                       {addQuestionsMutation.isPending ? "Adding..." : `Add ${selectedQuestionIds.size} Selected Question(s)`}
@@ -1371,7 +1424,7 @@ export default function ExamManagementPage() {
 
                 {activeExamStarted && (
                     <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
-                      Exam has started. Removing questions is disabled to protect student results.
+                      Exam has started. Adding, editing, and removing questions are disabled to protect student results.
                     </p>
                 )}
 
@@ -1388,7 +1441,8 @@ export default function ExamManagementPage() {
                                 variant="ghost"
                                 size="icon-sm"
                                 aria-label="Edit question points/content"
-                                title="Edit question points/content"
+                                title={activeExamStarted ? "Exam has started, questions cannot be edited" : "Edit question points/content"}
+                                disabled={activeExamStarted}
                                 onClick={() => setEditingQuestion(q)}
                             >
                               <Pencil className="size-3.5" />
@@ -1399,7 +1453,7 @@ export default function ExamManagementPage() {
                                 className="text-destructive hover:text-destructive"
                                 disabled={activeExamStarted || removeQuestionMutation.isPending}
                                 aria-label="Remove question from exam"
-                                title="Remove question from exam"
+                                title={activeExamStarted ? "Exam has started, questions cannot be removed" : "Remove question from exam"}
                                 onClick={() => activeExam?.id && removeQuestionMutation.mutate({ examId: activeExam.id, questionId: q.id })}
                             >
                               <Trash2 className="size-3.5" />
