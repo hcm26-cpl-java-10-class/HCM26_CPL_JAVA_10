@@ -4,6 +4,8 @@ import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.system.demo.certificate.CertificateRepository;
+import com.example.starter_project_2025.system.demo.course.Course;
 import com.example.starter_project_2025.system.demo.section.Section;
 import com.example.starter_project_2025.system.demo.section.SectionRepository;
 import com.example.starter_project_2025.system.demo.course.CourseStatus;
@@ -24,7 +26,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 @Service
 @Transactional
@@ -40,6 +45,9 @@ public class LessonServiceImpl
     CourseContentAccessGuard contentAccessGuard;
     CourseEnrollmentRepository enrollmentRepository;
     NotificationService notificationService;
+    CertificateRepository certificateRepository;
+
+    private static final ThreadLocal<List<String>> PENDING_CHANGES = new ThreadLocal<>();
 
     @Override
     protected BaseCrudRepository<Lesson, Long> getRepository() {
@@ -127,23 +135,106 @@ public class LessonServiceImpl
                 ? request.getTextContent() : lesson.getTextContent();
 
         validateContent(type, url, text, ctx);
+        PENDING_CHANGES.set(detectChanges(lesson, request));
+    }
+
+    @Override
+    public LessonDTO update(Long id, LessonDTO request) {
+        try {
+            return super.update(id, request);
+        } finally {
+            PENDING_CHANGES.remove();
+        }
     }
 
     @Override
     protected void afterCreate(Lesson lesson, LessonDTO request) {
-        if (lesson.getSection().getCourse().getStatus() != CourseStatus.PUBLISHED) {
+        notifyEnrolledStudents(
+                lesson,
+                "lesson-created:" + lesson.getId(),
+                "New lesson available",
+                abbreviate(lesson.getTitle(), 150) + " was added to "
+                        + abbreviate(lesson.getSection().getCourse().getName(), 150) + "."
+        );
+    }
+
+    @Override
+    protected void afterUpdate(Lesson lesson, LessonDTO request) {
+        List<String> changes = PENDING_CHANGES.get();
+        if (changes == null || changes.isEmpty() || !Boolean.TRUE.equals(lesson.getIsActive())) {
             return;
         }
-        for (CourseEnrollment enrollment
-                : enrollmentRepository.findAllByCourse_Id(lesson.getSection().getCourse().getId())) {
+        notifyEnrolledStudents(
+                lesson,
+                "lesson-updated:" + lesson.getId() + ":" + System.currentTimeMillis(),
+                "Lesson updated",
+                abbreviate(lesson.getTitle(), 150) + " in "
+                        + abbreviate(lesson.getSection().getCourse().getName(), 150)
+                        + " was updated (" + String.join(", ", changes) + ")."
+        );
+    }
+
+    @Override
+    protected void afterDelete(Lesson lesson) {
+        notifyEnrolledStudents(
+                lesson,
+                "lesson-deleted:" + lesson.getId() + ":" + System.currentTimeMillis(),
+                "Lesson removed",
+                abbreviate(lesson.getTitle(), 150) + " was removed from "
+                        + abbreviate(lesson.getSection().getCourse().getName(), 150) + "."
+        );
+    }
+
+
+    private void notifyEnrolledStudents(Lesson lesson, String eventKeyBase, String title, String message) {
+        Course course = lesson.getSection().getCourse();
+        if (course.getStatus() != CourseStatus.PUBLISHED) {
+            return;
+        }
+        Set<Long> certifiedUserIds = certificateRepository.findUserIdsByCourseId(course.getId());
+        for (CourseEnrollment enrollment : enrollmentRepository.findAllByCourse_Id(course.getId())) {
+            Long userId = enrollment.getUser().getId();
+            if (certifiedUserIds.contains(userId)) {
+                continue;
+            }
             notificationService.createOnce(
-                    enrollment.getUser().getId(),
-                    "lesson-created:" + lesson.getId() + ":" + enrollment.getUser().getId(),
-                    "New lesson available",
-                    lesson.getTitle() + " was added to " + lesson.getSection().getCourse().getName() + ".",
+                    userId,
+                    eventKeyBase + ":" + userId,
+                    title,
+                    message,
                     "/enrollments/" + enrollment.getId() + "/learn"
             );
         }
+    }
+
+    private static List<String> detectChanges(Lesson lesson, LessonDTO request) {
+        List<String> changes = new ArrayList<>();
+        if (request.getTitle() != null && !request.getTitle().equals(lesson.getTitle())) {
+            changes.add("title");
+        }
+        if (request.getContentType() != null && request.getContentType() != lesson.getContentType()) {
+            changes.add("content type");
+        }
+        if (request.getContentUrl() != null && !request.getContentUrl().equals(lesson.getContentUrl())) {
+            changes.add("content link");
+        }
+        if (request.getTextContent() != null && !request.getTextContent().equals(lesson.getTextContent())) {
+            changes.add("text content");
+        }
+        if (request.getDuration() != null && !request.getDuration().equals(lesson.getDuration())) {
+            changes.add("duration");
+        }
+        if (request.getIsActive() != null && !request.getIsActive().equals(lesson.getIsActive())) {
+            changes.add("visibility");
+        }
+        return changes;
+    }
+
+    private static String abbreviate(String value, int max) {
+        if (value == null || value.length() <= max) {
+            return value;
+        }
+        return value.substring(0, max - 3) + "...";
     }
 
     private void normalizeTitle(LessonDTO request, ValidationContext ctx) {
