@@ -159,7 +159,11 @@ export default function ProjectTemplateVersionWorkspacePage() {
       : "TEMPLATE VERSIONS");
 
   const refreshVersions = async () => {
-    await queryClient.invalidateQueries({ queryKey: VERSIONS_QUERY_KEY });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["project-template-versions"] }),
+      queryClient.invalidateQueries({ queryKey: ["project-templates"] }),
+      queryClient.invalidateQueries({ queryKey: ["project_template_version"] }),
+    ]);
   };
 
   /**

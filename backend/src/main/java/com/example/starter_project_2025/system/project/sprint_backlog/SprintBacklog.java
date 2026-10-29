@@ -69,6 +69,7 @@ import java.time.LocalDateTime;
                 @Index(name = "idx_sprint_backlog_status", columnList = "status"),
                 @Index(name = "idx_sprint_backlog_work_type", columnList = "work_type"),
                 @Index(name = "idx_sprint_backlog_assignee", columnList = "assignee_project_member_id"),
+                @Index(name = "idx_sprint_backlog_reporter", columnList = "reporter_project_member_id"),
                 @Index(name = "idx_sprint_backlog_project", columnList = "project_id"),
                 @Index(name = "idx_sprint_backlog_milestone", columnList = "milestone_id")
         }
@@ -136,6 +137,14 @@ public class SprintBacklog extends BaseEntity {
      */
     @Column(name = "assignee_project_member_id")
     Long assigneeProjectMemberId;
+
+    /**
+     * TEMPORARY reporter: the team member who reported the item, stored as a
+     * raw project member id like the assignee. Picked in the work item panel
+     * of the backlog board.
+     */
+    @Column(name = "reporter_project_member_id")
+    Long reporterProjectMemberId;
 
     /**
      * Item title: mandatory, 1..200 characters.

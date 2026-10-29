@@ -4,7 +4,7 @@ import { PermissionGate } from "@/components/PermissionGate";
 import type { ProjectTemplateVersionDTO } from "@/types";
 import { useQueryClient } from "@tanstack/react-query";
 import { Copy, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { DuplicateTemplateDialog } from "./DuplicateTemplateDialog";
 
@@ -55,9 +55,11 @@ export function CloneTemplateButton({
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const pending = useRef(false);
 
   const handleConfirm = async (payload: { name: string }) => {
-    if (!version?.id || loading) return;
+    if (!version?.id || pending.current) return;
+    pending.current = true;
 
     setLoading(true);
 
@@ -74,15 +76,17 @@ export function CloneTemplateButton({
       await queryClient.invalidateQueries({
         queryKey: ["project-template-versions"],
       });
+      await queryClient.invalidateQueries({ queryKey: ["project-templates"] });
 
       toast.success(
-        `Đã nhân bản thành "${payload.name}" ở trạng thái DRAFT (${created?.version ?? "v1.0"}).`,
+        `Template "${payload.name}" duplicated as a draft (${created?.version ?? "v1.0"}).`,
       );
     } catch (error) {
       toast.error(
-        extractErrorMessage(error, "Không thể nhân bản Project Template."),
+        extractErrorMessage(error, "Unable to duplicate the project template."),
       );
     } finally {
+      pending.current = false;
       setLoading(false);
     }
   };
@@ -103,7 +107,7 @@ export function CloneTemplateButton({
       />
       <DuplicateTemplateDialog
         open={open}
-        onOpenChange={setOpen}
+        onOpenChange={value => { if (!pending.current) setOpen(value); }}
         source={version}
         loading={loading}
         onConfirm={handleConfirm}

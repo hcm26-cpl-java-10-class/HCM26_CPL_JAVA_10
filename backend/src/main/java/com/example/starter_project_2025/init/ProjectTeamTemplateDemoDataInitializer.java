@@ -3,21 +3,31 @@ package com.example.starter_project_2025.init;
 import com.example.starter_project_2025.system.project.ProjectMemberRole;
 import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
-import com.example.starter_project_2025.system.project.tenant.Tenant;
+import com.example.starter_project_2025.system.project.rubric.domain.RubricVersion;
+import com.example.starter_project_2025.system.project.rubric.service.RubricCatalogService;
+import com.example.starter_project_2025.system.project.tenant.TenantRepository;
+import com.example.starter_project_2025.system.project.template.ProjectTemplateAudit;
+import com.example.starter_project_2025.system.project.template.ProjectTemplateAuditRepository;
 import com.example.starter_project_2025.system.project.template.ProjectTemplateLevel;
 import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
-import com.example.starter_project_2025.system.rbac.user.User;
-import com.example.starter_project_2025.system.rbac.user.UserRepository;
+import com.example.starter_project_2025.system.project.template.TemplateConfigurationService;
 import com.example.starter_project_2025.system.project.template.backlog.TemplateBacklogItem;
 import com.example.starter_project_2025.system.project.template.backlog.TemplateBacklogItemRepository;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestone;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneChecklistItem;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneRepository;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneTimeUnit;
-import com.example.starter_project_2025.system.project.template.milestone.TemplateRubricCriterion;
+import com.example.starter_project_2025.system.rbac.user.UserRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,102 +38,68 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * US-10 demo fixtures: project templates with an explicit
- * {@code min_members}/{@code max_members} window so the "assign project
- * template to a DRAFT team" flow has something to pick from.
- * <p>
- * Idempotent (upsert by {@code code}) and disabled with
- * {@code TEAM_ALLOCATION_DEMO_SEED_ENABLED=false} or the {@code prod} profile.
- * Delete this file to remove the fixtures completely.
- */
 @Slf4j
 @Order(15)
 @Component
 @RequiredArgsConstructor
 @Profile("!prod")
-@ConditionalOnProperty(
-        prefix = "app.seed.team-allocation",
-        name = "enabled",
-        havingValue = "true",
-        matchIfMissing = true
-)
+@ConditionalOnProperty(prefix = "app.seed.team-allocation", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner {
-
-    /** code, name, description, category, level, weeks, constraints JSON, lifecycle status */
+    private static final String SEED_ACTION = "PROJECT_TEMPLATE_DEMO_SEEDED";
+    private static final List<String> RUBRIC_NAMES = List.of(
+            "Technical Documentation Rubric", "Milestone Delivery Rubric", "Demo and Presentation Rubric");
     private static final List<TemplateSeed> TEMPLATES = List.of(
-            new TemplateSeed(
-                    "US10-TPL-WEB-4-6",
-                    "Ứng dụng Web Java (4-6 thành viên)",
-                    "Đề bài mẫu cho nhóm phát triển ứng dụng web với Java Spring Boot và React.",
-                    "Web Application",
-                    ProjectTemplateLevel.INTERMEDIATE,
-                    10,
-                    constraints(4, 6, false,
-                            "\"PM\":{\"min\":1,\"max\":1},"
-                                    + "\"BA\":{\"min\":1,\"max\":1},"
-                                    + "\"DEV\":{\"min\":1,\"max\":4},"
-                                    + "\"QA\":{\"min\":1,\"max\":1}"),
-                    ProjectTemplateStatus.ACTIVE),
-            new TemplateSeed(
-                    "US10-TPL-DATA-2-5",
-                    "Phân tích dữ liệu (2-5 thành viên)",
-                    "Đề bài mẫu cho nhóm xây dựng pipeline phân tích dữ liệu và báo cáo.",
-                    "Data Analytics",
-                    ProjectTemplateLevel.BEGINNER,
-                    8,
-                    constraints(2, 5, true,
-                            "\"PM\":{\"min\":1,\"max\":2},"
-                                    + "\"BA\":{\"min\":0,\"max\":1},"
-                                    + "\"DEV\":{\"min\":1,\"max\":4},"
-                                    + "\"QA\":{\"min\":0,\"max\":1}"),
-                    ProjectTemplateStatus.DRAFT),
-            new TemplateSeed(
-                    "US10-TPL-CAPSTONE-5-7",
-                    "Đồ án Capstone (5-7 thành viên)",
-                    "Đề bài mẫu cho đồ án tốt nghiệp với các mốc bảo vệ giữa kỳ và cuối kỳ.",
-                    "Capstone",
-                    ProjectTemplateLevel.ADVANCED,
-                    15,
-                    constraints(5, 7, false,
-                            "\"PM\":{\"min\":1,\"max\":1},"
-                                    + "\"BA\":{\"min\":1,\"max\":1},"
-                                    + "\"DEV\":{\"min\":2,\"max\":4},"
-                                    + "\"QA\":{\"min\":1,\"max\":1}"),
-                    ProjectTemplateStatus.ACTIVE),
-            new TemplateSeed(
-                    "US10-TPL-MOBILE-3-4",
-                    "Ứng dụng Mobile (3-4 thành viên)",
-                    "Đề bài mẫu cho nhóm phát triển ứng dụng di động đa nền tảng.",
-                    "Mobile Application",
-                    ProjectTemplateLevel.INTERMEDIATE,
-                    9,
-                    constraints(3, 4, true,
-                            "\"PM\":{\"min\":1,\"max\":1},"
-                                    + "\"BA\":{\"min\":1,\"max\":1},"
-                                    + "\"DEV\":{\"min\":1,\"max\":2},"
-                                    + "\"QA\":{\"min\":0,\"max\":1}"),
-                    ProjectTemplateStatus.ACTIVE),
-            // US-11 test fixture: 4-8 members and multi-role enabled.
-            new TemplateSeed(
-                    "US11-TPL-MULTIROLE-4-8",
-                    "Đề bài kiêm nhiệm (4-8 thành viên)",
-                    "Đề bài mẫu cho phép một thành viên đảm nhận nhiều vai trò.",
-                    "Cross-functional",
-                    ProjectTemplateLevel.INTERMEDIATE,
-                    12,
-                    constraints(4, 8, true,
-                            "\"PM\":{\"min\":1,\"max\":2},"
-                                    + "\"BA\":{\"min\":1,\"max\":2},"
-                                    + "\"DEV\":{\"min\":1,\"max\":8},"
-                                    + "\"QA\":{\"min\":0,\"max\":2}"),
-                    ProjectTemplateStatus.DRAFT)
+            new TemplateSeed("DEMO-WEB-PORTAL", "Campus Service Portal", "Web Application",
+                    ProjectTemplateLevel.INTERMEDIATE, 10, 4, 6, false, new RoleQuotas(1, 1, 1, 1),
+                    "room booking, support requests and service notifications",
+                    "students, campus staff and service administrators",
+                    List.of("Room availability and booking", "Support request tracking", "Service notifications and reports")),
+            new TemplateSeed("DEMO-MOBILE-BOOKING", "Mobile Appointment Booking", "Mobile Application",
+                    ProjectTemplateLevel.INTERMEDIATE, 9, 3, 4, true, new RoleQuotas(1, 1, 1, 0),
+                    "appointment scheduling, reminders and booking management",
+                    "customers, service providers and reception staff",
+                    List.of("Service and provider discovery", "Appointment booking and cancellation", "Mobile reminders and booking history")),
+            new TemplateSeed("DEMO-DATA-REPORTING", "Sales Analytics Dashboard", "Data Analytics",
+                    ProjectTemplateLevel.BEGINNER, 8, 2, 5, true, new RoleQuotas(1, 0, 1, 0),
+                    "sales data preparation, KPI reporting and interactive dashboards",
+                    "sales analysts, branch managers and business owners",
+                    List.of("Sales data import and validation", "Revenue and conversion analysis", "Interactive KPI dashboard")),
+            new TemplateSeed("DEMO-CAPSTONE-ERP", "Inventory and Order Management", "Capstone",
+                    ProjectTemplateLevel.ADVANCED, 15, 5, 7, false, new RoleQuotas(1, 1, 2, 1),
+                    "inventory control, purchase orders and stock reconciliation",
+                    "warehouse operators, purchasing staff and operations managers",
+                    List.of("Product and supplier management", "Purchase orders and stock movements", "Stock reconciliation and audit reports")),
+            new TemplateSeed("DEMO-TEAM-COLLAB", "Team Collaboration Workspace", "Cross-functional",
+                    ProjectTemplateLevel.INTERMEDIATE, 12, 4, 8, true, new RoleQuotas(1, 1, 1, 1),
+                    "team planning, shared work items and progress reporting",
+                    "team leaders, project members and mentors",
+                    List.of("Team membership and role management", "Shared work planning and progress tracking", "Project discussion and weekly reports")),
+            new TemplateSeed("DEMO-WEB-SHOP", "Student Marketplace", "Web Application",
+                    ProjectTemplateLevel.BEGINNER, 8, 3, 5, false, new RoleQuotas(1, 0, 1, 1),
+                    "product listings, purchase requests and marketplace moderation",
+                    "student buyers, student sellers and marketplace moderators",
+                    List.of("Product listings and search", "Purchase requests and order tracking", "Seller feedback and moderation")),
+            new TemplateSeed("DEMO-MOBILE-LEARNING", "Mobile Learning Companion", "Mobile Application",
+                    ProjectTemplateLevel.INTERMEDIATE, 10, 4, 6, false, new RoleQuotas(1, 1, 1, 1),
+                    "learning schedules, practice quizzes and personal progress tracking",
+                    "learners, instructors and academic support staff",
+                    List.of("Course content and study schedules", "Practice quizzes and instant feedback", "Learning progress and reminders")),
+            new TemplateSeed("DEMO-DATA-INSIGHTS", "Student Performance Analytics", "Data Analytics",
+                    ProjectTemplateLevel.ADVANCED, 12, 4, 6, false, new RoleQuotas(1, 1, 1, 1),
+                    "academic data quality, performance indicators and early risk analysis",
+                    "program managers, mentors and academic advisors",
+                    List.of("Academic dataset preparation", "Performance trends and risk indicators", "Advisor dashboards and summary reports"))
     );
 
-    private final ProjectTemplateRepository projectTemplateRepository;
-    private final TemplateMilestoneRepository templateMilestones;
-    private final TemplateBacklogItemRepository templateBacklogItems;
-    private final UserRepository userRepository;
+    private final ProjectTemplateRepository templates;
+    private final TenantRepository tenants;
+    private final UserRepository users;
+    private final TemplateMilestoneRepository milestones;
+    private final TemplateBacklogItemRepository backlog;
+    private final RubricCatalogService rubricCatalog;
+    private final ProjectTemplateAuditRepository audits;
+    private final TemplateConfigurationService configurations;
+    private final ObjectMapper json;
 
     @Value("${app.seed.admin.email:admin@example.com}")
     private String adminEmail;
@@ -131,235 +107,148 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
     @Override
     @Transactional
     public void run(String... args) {
-        int created = 0;
-        for (TemplateSeed seed : TEMPLATES) {
-            ProjectTemplate template = projectTemplateRepository
-                    .findByCodeAndTenantIdIsNullAndIsActiveTrue(seed.code())
-                    .or(() -> projectTemplateRepository.findAll().stream()
-                            .filter(row -> row.getTenantId() == null && seed.code().equals(row.getCode()))
-                            .findFirst())
-                    .orElseGet(() -> {
-                        ProjectTemplate fresh = new ProjectTemplate();
-                        fresh.setCode(seed.code());
-                        return fresh;
-                    });
-
-            if (template.getId() == null) {
-                created++;
-            }
-            template.setName(seed.name());
-            template.setDescription(seed.description());
-            template.setCategory(seed.category());
-            template.setLevel(seed.level());
-            template.setEstimatedDurationWeeks(seed.estimatedDurationWeeks());
-            template.setConstraintsJson(seed.constraintsJson());
-            template.setIsActive(true);
-            template.setStatus(seed.status());
-            ProjectTemplate savedTemplate = projectTemplateRepository.save(template);
-            seedBriefContent(savedTemplate);
-        }
-
         ensureManualDefaultTemplate();
-        int hiddenCopies = deactivateLegacyTenantCopies();
-        projectTemplateRepository.flush();
-        long active = TEMPLATES.stream().filter(seed -> seed.status() == ProjectTemplateStatus.ACTIVE).count();
-        long draft = TEMPLATES.stream().filter(seed -> seed.status() == ProjectTemplateStatus.DRAFT).count();
-        log.info("US-10 project template fixtures ensured ({} new shared, {} total; {} ACTIVE, {} DRAFT; {} legacy copies hidden).",
-                created, TEMPLATES.size(), active, draft, hiddenCopies);
-    }
-
-    /**
-     * Earlier demo runs created a tenant-owned copy per shared sample, so the
-     * catalogue showed the same brief twice (one ACTIVE copy + one DRAFT
-     * original). The shared samples now carry their own lifecycle status
-     * (3 ACTIVE / 2 DRAFT), so those legacy copies are hidden instead of
-     * deleted to keep existing team assignments intact.
-     *
-     * @return number of legacy copies hidden by this run
-     */
-    private int deactivateLegacyTenantCopies() {
-        Long tenantId = resolveDemoTenantId();
-        if (tenantId == null) {
-            log.warn("Legacy template copies skipped: demo tenant not found.");
-            return 0;
-        }
-
-        int hidden = 0;
-        for (TemplateSeed seed : TEMPLATES) {
-            String copyCode = seed.code() + "-T" + tenantId;
-            ProjectTemplate copy = projectTemplateRepository
-                    .findFirstByCodeAndTenantIdAndIsActiveTrue(copyCode, tenantId)
-                    .orElse(null);
-            if (copy == null) {
-                continue;
-            }
-            copy.setIsActive(false);
-            projectTemplateRepository.save(copy);
-            hidden++;
-        }
-        return hidden;
-    }
-
-    /** Demo tenant = tenant of the seeded admin account (same source as the allocation fixtures). */
-    private Long resolveDemoTenantId() {
-        return userRepository.findByEmail(adminEmail)
-                .map(User::getTenant)
-                .map(Tenant::getId)
-                .orElse(null);
-    }
-
-    /**
-     * The manual allocation session falls back to this template; giving it an
-     * explicit window keeps {@code ProjectTemplateConstraints} happy.
-     */
-    private void ensureManualDefaultTemplate() {
-        projectTemplateRepository.findByCodeAndTenantIdIsNullAndIsActiveTrue("MANUAL-GROUPING-DEFAULT")
-                .ifPresent(template -> {
-                    String expected = "{\"min_members\":1,\"max_members\":5}";
-                    if (!expected.equals(template.getConstraintsJson())) {
-                        template.setConstraintsJson(expected);
-                        projectTemplateRepository.save(template);
-                    }
-                });
-    }
-
-    private static String constraints(
-            int minMembers,
-            int maxMembers,
-            boolean allowMultiRole,
-            String roleQuotas
-    ) {
-        return "{\"min_members\":" + minMembers
-                + ",\"max_members\":" + maxMembers
-                + ",\"allow_multi_role\":" + allowMultiRole
-                + ",\"role_quotas\":{" + roleQuotas + "}}";
-    }
-
-    /**
-     * US-13 sample brief content: the assignment flow copies exactly this data
-     * into the project snapshot and from there into milestones, sprint backlog
-     * items. Idempotent: a template that already owns
-     * milestone rows is left untouched.
-     */
-    private void seedBriefContent(ProjectTemplate template) {
-
-        List<TemplateMilestone> existing =
-                templateMilestones.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId());
-        if (!existing.isEmpty() || template.getId() == null) {
+        var actor = users.findByEmail(adminEmail).orElseThrow();
+        Long tenantId = actor.getTenantId() != null ? actor.getTenantId()
+                : tenants.findByCode("LOCAL_TRAINING").orElseThrow().getId();
+        Map<String, RubricVersion> rubricVersions = new LinkedHashMap<>();
+        rubricCatalog.findPublished(tenantId).forEach(version -> rubricVersions.putIfAbsent(version.getNameSnapshot(), version));
+        if (!rubricVersions.keySet().containsAll(RUBRIC_NAMES)) {
+            log.info("Project template demo data skipped: the published demo rubrics are unavailable.");
             return;
         }
+        int created = 0;
+        for (TemplateSeed seed : TEMPLATES) {
+            String correlationId = UUID.nameUUIDFromBytes(("project-template-demo:" + tenantId + ":" + seed.code())
+                    .getBytes(StandardCharsets.UTF_8)).toString();
+            if (audits.existsByTenantIdAndActionAndCorrelationId(tenantId, SEED_ACTION, correlationId)) continue;
+            ProjectTemplate template = templates.findAll().stream()
+                    .filter(row -> tenantId.equals(row.getTenantId()) && seed.code().equals(row.getCode()))
+                    .findFirst().orElse(null);
+            boolean newTemplate = template == null;
+            if (newTemplate) {
+                template = templates.saveAndFlush(ProjectTemplate.builder().tenantId(tenantId).code(seed.code())
+                        .name(seed.name()).description(description(seed)).category(seed.category()).level(seed.level())
+                        .estimatedDurationWeeks(seed.weeks()).constraintsJson(constraints(seed))
+                        .status(ProjectTemplateStatus.DRAFT).templateVersion(1).build());
+                seedMilestones(template, seed, RUBRIC_NAMES.stream().map(rubricVersions::get).toList());
+                seedBacklog(template, seed);
+                created++;
+            }
+            String state = configurations.capture(template);
+            audits.save(new ProjectTemplateAudit(tenantId, template.getId(), actor.getId(), SEED_ACTION,
+                    newTemplate ? null : state, state, correlationId));
+        }
+        log.info("Project template demo data ensured ({} new, {} configured samples).", created, TEMPLATES.size());
+    }
 
+    private String description(TemplateSeed seed) {
+        String features = String.join(", ", seed.features().stream().map(value -> value.toLowerCase(Locale.ROOT)).toList());
+        return """
+                Build %s for %s. The project covers %s.
+
+                The team will deliver %s. Include authentication, role-based access, input validation, clear loading and error states, and meaningful tests for the main business flows.
+
+                Expected outcomes include a working application or data dashboard, a reviewed data model, documented setup steps, a demonstration script, and a final project retrospective. Use the configured milestone schedule and rubrics to review progress. The sample backlog provides initial work that the team can refine before planning a sprint.
+                """.formatted(seed.name().toLowerCase(Locale.ROOT), seed.users(), seed.scope(), features).strip();
+    }
+
+    private String constraints(TemplateSeed seed) {
+        try {
+            return json.writeValueAsString(Map.of("min_members", seed.minMembers(), "max_members", seed.maxMembers(),
+                    "allow_multi_role", seed.allowMultiRole(), "role_quotas", Map.of("PM", seed.roles().pm(),
+                            "BA", seed.roles().ba(), "DEV", seed.roles().dev(), "QA", seed.roles().qa())));
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Unable to prepare demo team constraints", exception);
+        }
+    }
+
+    private void seedMilestones(ProjectTemplate template, TemplateSeed seed, List<RubricVersion> rubrics) {
+        List<String> titles = List.of("Requirements and solution design", "Core implementation and verification", "Final demonstration and handover");
+        List<String> descriptions = List.of(
+                "Agree the scope for " + seed.scope() + ", document user journeys and review the architecture and data model.",
+                "Implement " + seed.features().get(0).toLowerCase(Locale.ROOT) + " and "
+                        + seed.features().get(1).toLowerCase(Locale.ROOT) + " with input validation, access control and automated checks.",
+                "Complete " + seed.features().get(2).toLowerCase(Locale.ROOT)
+                        + ", demonstrate the full workflow and hand over deployment instructions, test evidence and a retrospective.");
+        List<List<String>> checklists = List.of(
+                List.of("Scope and acceptance criteria approved", "Architecture and data model reviewed", "Team roles and delivery plan agreed"),
+                List.of("Core workflow works end-to-end", "Input validation and permissions verified", "Main business flows covered by tests"),
+                List.of("All required features demonstrated", "Setup and user documentation completed", "Final test evidence and retrospective reviewed"));
+        List<Integer> dueWeeks = List.of(Math.max(1, seed.weeks() / 5), (int) (seed.weeks() * 0.55), seed.weeks());
         List<TemplateMilestone> plan = new ArrayList<>();
-        plan.add(milestone(template, 0,
-                "Kick-off & phân tích yêu cầu",
-                "Chốt phạm vi, đối tượng người dùng và tiêu chí nghiệm thu với mentor.",
-                1, TemplateMilestoneTimeUnit.WEEKS, "20.00",
-                null, null,
-                List.of("Hoàn thành phỏng vấn người dùng", "Ký xác nhận phạm vi với mentor"),
-                List.of("Phân tích yêu cầu", "Kế hoạch dự án")));
-        plan.add(milestone(template, 1,
-                "Bản thảo chức năng chính",
-                "Hoàn thiện luồng nghiệp vụ cốt lõi, API và kiểm thử tự động cho chức năng chính.",
-                3, TemplateMilestoneTimeUnit.WEEKS, "40.00",
-                2, "10.00",
-                List.of("API chính chạy được end-to-end", "Có kiểm thử tự động cho luồng chính"),
-                List.of("Chức năng hoàn chỉnh", "Chất lượng mã nguồn")));
-        plan.add(milestone(template, 2,
-                "Hoàn thiện & bàn giao",
-                "Demo sản phẩm, tài liệu bàn giao và tổng kết bài học kinh nghiệm.",
-                6, TemplateMilestoneTimeUnit.WEEKS, "40.00",
-                2, "10.00",
-                List.of("Tài liệu hướng dẫn sử dụng", "Buổi demo với mentor"),
-                List.of("Mức độ hoàn thiện", "Tài liệu và thuyết trình")));
-
-        templateMilestones.saveAllAndFlush(plan);
-
-        List<TemplateBacklogItem> backlog = List.of(
-                backlogItem(template, "Phân tích yêu cầu & phạm vi",
-                        "Liệt kê actor, use case và tiêu chí nghiệm thu.", ProjectMemberRole.BA, 0),
-                backlogItem(template, "Thiết kế kiến trúc & cơ sở dữ liệu",
-                        "Sơ đồ kiến trúc, mô hình dữ liệu và hợp đồng API.", ProjectMemberRole.DEV, 1),
-                backlogItem(template, "Triển khai API chính",
-                        "Cài đặt các endpoint cốt lõi kèm xác thực và phân quyền.", ProjectMemberRole.DEV, 2),
-                backlogItem(template, "Giao diện người dùng",
-                        "Màn hình chính, điều hướng và xử lý trạng thái lỗi.", ProjectMemberRole.DEV, 3),
-                backlogItem(template, "Kiểm thử & tài liệu",
-                        "Kiểm thử hồi quy, tài liệu bàn giao và kịch bản demo.", ProjectMemberRole.QA, 4));
-        templateBacklogItems.saveAllAndFlush(backlog);
-
+        for (int index = 0; index < titles.size(); index++) {
+            var milestone = new TemplateMilestone();
+            milestone.setTemplate(template);
+            milestone.setTitle(titles.get(index));
+            milestone.setDescription(descriptions.get(index));
+            milestone.setDueAfter(dueWeeks.get(index));
+            milestone.setDueUnit(TemplateMilestoneTimeUnit.WEEKS);
+            milestone.setWeight(BigDecimal.valueOf(index == 0 ? 20 : 40));
+            milestone.setMandatory(true);
+            milestone.setOrderIndex(index);
+            milestone.setRubricVersion(rubrics.get(index));
+            milestone.setAllowLateSubmission(index != 2);
+            milestone.setMaxLateDays(index == 2 ? 0 : 2);
+            milestone.setPenaltyPerDayPercent(BigDecimal.valueOf(index == 2 ? 0 : 5));
+            for (int order = 0; order < checklists.get(index).size(); order++) {
+                var item = new TemplateMilestoneChecklistItem();
+                item.setMilestone(milestone);
+                item.setContent(checklists.get(index).get(order));
+                item.setMandatory(true);
+                item.setOrderIndex(order);
+                milestone.getChecklistItems().add(item);
+            }
+            plan.add(milestone);
+        }
+        milestones.saveAllAndFlush(plan);
     }
 
-    private TemplateMilestone milestone(ProjectTemplate template,
-                                        int orderIndex,
-                                        String title,
-                                        String description,
-                                        int dueAfter,
-                                        TemplateMilestoneTimeUnit dueUnit,
-                                        String weight,
-                                        Integer maxLateDays,
-                                        String penaltyPerDayPercent,
-                                        List<String> checklist,
-                                        List<String> rubricCriteria) {
-
-        TemplateMilestone milestone = new TemplateMilestone();
-        milestone.setTemplate(template);
-        milestone.setTitle(title);
-        milestone.setDescription(description);
-        milestone.setDueAfter(dueAfter);
-        milestone.setDueUnit(dueUnit);
-        milestone.setWeight(new BigDecimal(weight));
-        milestone.setMandatory(true);
-        milestone.setOrderIndex(orderIndex);
-        milestone.setAllowLateSubmission(maxLateDays != null);
-        milestone.setMaxLateDays(maxLateDays == null ? 0 : maxLateDays);
-        milestone.setPenaltyPerDayPercent(maxLateDays == null
-                ? BigDecimal.ZERO
-                : new BigDecimal(penaltyPerDayPercent));
-
-        for (int index = 0; index < checklist.size(); index++) {
-            TemplateMilestoneChecklistItem item = new TemplateMilestoneChecklistItem();
-            item.setMilestone(milestone);
-            item.setContent(checklist.get(index));
-            item.setMandatory(index == 0);
-            item.setOrderIndex(index);
-            milestone.getChecklistItems().add(item);
-        }
-        for (int index = 0; index < rubricCriteria.size(); index++) {
-            TemplateRubricCriterion criterion = new TemplateRubricCriterion();
-            criterion.setMilestone(milestone);
-            criterion.setName(rubricCriteria.get(index));
-            criterion.setDescription("Tiêu chí đánh giá: " + rubricCriteria.get(index));
-            criterion.setMaxScore(new BigDecimal("5.00"));
-            criterion.setOrderIndex(index);
-            milestone.getRubricCriteria().add(criterion);
-        }
-        return milestone;
+    private void seedBacklog(ProjectTemplate template, TemplateSeed seed) {
+        backlog.saveAllAndFlush(List.of(
+                backlogItem(template, 0, "Plan project delivery",
+                        "Confirm team roles, communication rules and the milestone plan for " + seed.name() + ".", ProjectMemberRole.PM),
+                backlogItem(template, 1, "Analyse requirements and acceptance criteria",
+                        "Describe the user journeys and acceptance criteria for " + seed.scope() + ".", ProjectMemberRole.BA),
+                backlogItem(template, 2, "Design architecture and data model",
+                        "Prepare the architecture diagram, database schema and API or data contracts.", ProjectMemberRole.DEV),
+                backlogItem(template, 3, seed.features().get(0),
+                        "Implement " + seed.features().get(0).toLowerCase(Locale.ROOT)
+                                + " with validation, permissions and useful feedback.", ProjectMemberRole.DEV),
+                backlogItem(template, 4, seed.features().get(1),
+                        "Implement " + seed.features().get(1).toLowerCase(Locale.ROOT)
+                                + " and connect the complete business workflow.", ProjectMemberRole.DEV),
+                backlogItem(template, 5, seed.features().get(2),
+                        "Deliver " + seed.features().get(2).toLowerCase(Locale.ROOT)
+                                + " with accessible views and consistent loading and error handling.", ProjectMemberRole.DEV),
+                backlogItem(template, 6, "Verify main workflows and permissions",
+                        "Prepare test cases, exercise validation and access rules, and record regression results.", ProjectMemberRole.QA),
+                backlogItem(template, 7, "Prepare demonstration and handover",
+                        "Document setup steps, prepare demo data and summarize outcomes and lessons learned.", ProjectMemberRole.PM)));
     }
 
-    private TemplateBacklogItem backlogItem(ProjectTemplate template,
-                                            String title,
-                                            String description,
-                                            ProjectMemberRole suggestedRole,
-                                            int orderIndex) {
-
-        TemplateBacklogItem item = new TemplateBacklogItem();
+    private TemplateBacklogItem backlogItem(ProjectTemplate template, int order, String title, String description, ProjectMemberRole role) {
+        var item = new TemplateBacklogItem();
         item.setTemplate(template);
         item.setTitle(title);
         item.setDescription(description);
-        item.setSuggestedRole(suggestedRole);
-        item.setOrderIndex(orderIndex);
+        item.setSuggestedRole(role);
+        item.setOrderIndex(order);
         return item;
     }
 
-    private record TemplateSeed(
-            String code,
-            String name,
-            String description,
-            String category,
-            ProjectTemplateLevel level,
-            Integer estimatedDurationWeeks,
-            String constraintsJson,
-            ProjectTemplateStatus status
-    ) {
+    private void ensureManualDefaultTemplate() {
+        templates.findByCodeAndTenantIdIsNullAndIsActiveTrue("MANUAL-GROUPING-DEFAULT").ifPresent(template -> {
+            if ("{\"max_members\":5}".equals(template.getConstraintsJson())) {
+                template.setConstraintsJson("{\"min_members\":1,\"max_members\":5}");
+                templates.save(template);
+            }
+        });
     }
+
+    private record RoleQuotas(int pm, int ba, int dev, int qa) { }
+
+    private record TemplateSeed(String code, String name, String category, ProjectTemplateLevel level, int weeks,
+                                int minMembers, int maxMembers, boolean allowMultiRole, RoleQuotas roles,
+                                String scope, String users, List<String> features) { }
 }

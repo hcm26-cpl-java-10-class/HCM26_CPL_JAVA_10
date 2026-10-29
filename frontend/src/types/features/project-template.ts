@@ -221,7 +221,7 @@ export interface ProjectTemplateDTO {
   createdAt: string;
   updatedAt: string;
   editable: boolean;
-  /** @deprecated Kept for API compatibility; editability is driven by `status` (DRAFT only). */
+  /** Shared catalogue row (tenant_id is null): readable by every tenant, never editable. */
   readOnly: boolean;
 }
 

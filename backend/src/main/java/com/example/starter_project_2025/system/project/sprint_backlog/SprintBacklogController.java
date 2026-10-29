@@ -91,12 +91,15 @@ public class SprintBacklogController
      * <p>
      * The assignee picker of the backlog create bar calls it with the team of
      * the open workspace, so the student selects a person instead of typing a
-     * raw project member id.
+     * raw project member id. The work item panel of the global `/backlogs`
+     * page passes the {@code projectId} of the item instead, so the picker
+     * still offers the members of the team that owns the project.
      */
     @GetMapping("/assignee-options")
     public ResponseEntity<List<BacklogAssigneeOptionDTO>> getAssigneeOptions(
-            @RequestParam(required = false) Long teamId) {
-        return ResponseEntity.ok(sprintBacklogService.getAssigneeOptions(teamId));
+            @RequestParam(required = false) Long teamId,
+            @RequestParam(required = false) Long projectId) {
+        return ResponseEntity.ok(sprintBacklogService.getAssigneeOptions(teamId, projectId));
     }
 
     /**

@@ -45,9 +45,10 @@ export const projectTemplateApi = {
    * versioned `/project-template-versions` CRUD surface) because it only exposes
    * the assignable catalogue with the `min_members` / `max_members` window.
    */
-  async getAssignableOptions(): Promise<ProjectTemplateOption[]> {
+  async getAssignableOptions(signal?: AbortSignal): Promise<ProjectTemplateOption[]> {
     const response = await axiosInstance.get<ProjectTemplateOption[]>(
       "/v1/project-templates/options",
+      { signal },
     );
     return response.data ?? [];
   },
@@ -123,5 +124,9 @@ export const projectTemplateApi = {
   async archive(id: number, lockVersion: number) {
     const response = await axiosInstance.post<ProjectTemplateDTO>(`${path}/${id}/archive`, { lockVersion });
     return response.data;
+  },
+
+  async delete(id: number, lockVersion: number) {
+    await axiosInstance.delete(`${path}/${id}`, { params: { lockVersion } });
   },
 };

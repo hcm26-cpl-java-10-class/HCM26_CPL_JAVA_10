@@ -39,7 +39,7 @@ export function ProjectTemplateFormPage() {
 
   return (
     <MainLayout pathName={{ "project-templates": "Project Templates", create: "Create", edit: "Edit", ...(id ? { [id]: "Template" } : {}) }}>
-      <section className="mx-auto grid w-full max-w-5xl gap-5">
+      <section className="mx-auto grid min-w-0 w-full max-w-5xl grid-cols-1 gap-5">
         <header className="border-b pb-4">
           <p className="text-sm text-muted-foreground">Project Templates</p>
           <h1 className="mt-1 text-2xl font-semibold">{id ? "Edit project template" : "Create project template"}</h1>
