@@ -31,6 +31,7 @@ public class SubmissionReviewService {
     private final CurrentActorProvider actorProvider;
     private final Clock milestoneClock;
     private final ProjectCompletionService projectCompletionService;
+    private final com.example.starter_project_2025.system.project.milestone.outbox.OutboxEventWriter milestoneOutbox;
 
     @Transactional
     public SubmissionDtos.Detail review(UUID submissionId, String idempotencyKey,
@@ -50,6 +51,12 @@ public class SubmissionReviewService {
         if (submission.getStatus() != SubmissionStatus.SUBMITTED) {
             throw new MilestoneConflictException("Only a submitted milestone can be reviewed");
         }
+        var milestoneState = submission.getMilestone().lifecycleStatus();
+        if (milestoneState != com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus.SUBMITTED
+                && !(milestoneState == com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus.PLANNED
+                    && submission.getMilestone().getStatus()
+                    == com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN))
+            throw new MilestoneConflictException("Milestone is not waiting for review");
         if (request.decision() == ReviewDecision.REQUEST_CHANGES
                 && (request.overallFeedback() == null || request.overallFeedback().trim().isEmpty())) {
             throw validation("overallFeedback", "Revision instructions are required and must not exceed 500 characters");
@@ -90,6 +97,7 @@ public class SubmissionReviewService {
         BigDecimal penalty = version.getPenaltyPercent();
         BigDecimal finalScore = rawScore.multiply(new BigDecimal("100.00").subtract(penalty))
                 .divide(new BigDecimal("100.00"), 2, RoundingMode.HALF_UP);
+        if (request.decision() == ReviewDecision.REJECT) finalScore = BigDecimal.ZERO.setScale(2);
         Instant now = milestoneClock.instant();
         MilestoneReview review = MilestoneReview.create(version, request.decision(), actorId,
                 submission.getAssignedReviewerName(), rawScore, penalty, finalScore,
@@ -104,7 +112,14 @@ public class SubmissionReviewService {
         version.applyChecklistReview(checklist);
         version.applyDecision(request.decision());
         submission.reviewed(request.decision(), now);
-        submission.getMilestone().setExecutionStatus(submission.getExecutionStatus(), actorId, now);
+        if (submission.getMilestone().lifecycleStatus()
+                == com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus.PLANNED
+                && submission.getMilestone().getStatus()
+                == com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN)
+            submission.getMilestone().reconcileLegacySubmission(actorId, now);
+        if (request.decision() == ReviewDecision.REQUEST_CHANGES)
+            submission.getMilestone().requestChanges(actorId, now);
+        else submission.getMilestone().setExecutionStatus(submission.getExecutionStatus(), actorId, now);
         versions.save(version);
         submissions.save(submission);
         audits.save(SubmissionAuditLog.create(submissionId, version.getId(), action, actorId,
@@ -118,6 +133,8 @@ public class SubmissionReviewService {
         if (request.decision() == ReviewDecision.ACCEPT) {
             projectCompletionService.reevaluate(submission.getTenantId(), submission.getProjectId(),
                     submission.getTeamId(), actorId, now);
+        } else if (request.decision() == ReviewDecision.REJECT) {
+            milestoneOutbox.writeMilestoneRejected(submission.getMilestone(), "REVIEWER_REJECTED", now);
         }
         submissions.flush();
         return queryService.getDetail(submissionId);

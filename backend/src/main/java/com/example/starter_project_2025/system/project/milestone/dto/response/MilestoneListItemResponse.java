@@ -27,10 +27,11 @@ public record MilestoneListItemResponse(
         BigDecimal weight,
         LatePenaltyBasis latePenaltyBasis,
         String projectName,
-        com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus executionStatus
+        com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus executionStatus,
+        @com.fasterxml.jackson.annotation.JsonIgnore com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus canonicalStatus
 ) {
     @com.fasterxml.jackson.annotation.JsonProperty("lifecycleStatus")
     public String lifecycleStatus() {
-        return status == MilestoneStatus.PLANNED ? "DRAFT" : executionStatus == null ? status.name() : executionStatus.name();
+        return canonicalStatus.name();
     }
 }

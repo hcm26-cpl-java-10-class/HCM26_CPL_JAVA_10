@@ -4,6 +4,8 @@ import com.example.starter_project_2025.system.project.rubric.domain.RubricVersi
 import com.example.starter_project_2025.system.project.rubric.domain.RubricVersionStatus;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -21,4 +23,15 @@ public interface RubricVersionRepository extends JpaRepository<RubricVersion, UU
             UUID tenantId, RubricVersionStatus status);
 
     boolean existsByRubricIdAndStatus(UUID rubricId, RubricVersionStatus status);
+
+    @Query("""
+            select v from RubricVersion v
+            where v.rubric.tenantId = :tenantId
+              and (:status is null or v.status = :status)
+              and (:search = '' or lower(v.nameSnapshot) like lower(concat('%', :search, '%'))
+                   or lower(coalesce(v.descriptionSnapshot, '')) like lower(concat('%', :search, '%')))
+            """)
+    List<RubricVersion> searchAll(@Param("tenantId") UUID tenantId,
+                                  @Param("search") String search,
+                                  @Param("status") RubricVersionStatus status);
 }

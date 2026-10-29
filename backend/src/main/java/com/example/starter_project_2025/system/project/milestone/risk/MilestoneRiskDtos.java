@@ -1,5 +1,5 @@
 package com.example.starter_project_2025.system.project.milestone.risk;
-import com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus;
+import com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus;
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -9,7 +9,7 @@ public final class MilestoneRiskDtos {
     public record Send(@NotNull @PositiveOrZero Long version,
             @Size(max = 500, message = "Guidance note cannot exceed 500 characters") String warningNote) { }
     public record Progress(long doneTasks, long totalTasks, BigDecimal completionRate, boolean eligible) { }
-    public record Item(UUID id, String title, MilestoneStatus status, Instant deadline, long version,
+    public record Item(UUID id, String title, MilestoneLifecycleStatus status, Instant deadline, long version,
             boolean atRisk, Progress progress, boolean canSend) { }
     public record Page(Long projectId, String projectName, Long actorId, Long tenantId, boolean canSend,
             int warningWindowHours, int completionThreshold, List<Item> content) { }

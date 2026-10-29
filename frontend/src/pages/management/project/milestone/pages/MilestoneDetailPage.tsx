@@ -6,15 +6,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { MilestoneDetailRouteState } from "@/types";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, CalendarClock, Check, Clock, Globe2, RotateCcw } from "lucide-react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { MilestoneDetailError } from "../components/MilestoneDetailError";
 import { MilestoneRubricCard } from "../components/MilestoneRubricCard";
 import { MilestoneStatusBadge } from "../components/MilestoneStatusBadge";
+import { MilestoneDraftHistory } from "../components/MilestoneDraftHistory";
 import { formatPenalty, formatTenantDateTime, getMilestoneApiError } from "../milestone.utils";
-import { usePermissions } from "@/hooks/usePermissions";
-import { ADMIN_ROLE, normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
 
 function DetailPageSkeleton() {
   return (
@@ -33,10 +32,6 @@ export function MilestoneDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const queryClient = useQueryClient();
-  const { hasPermission, activeRole } = usePermissions();
-  const normalizedRole = normalizeRole(activeRole);
-  const canPrepareArtifact = normalizedRole === STUDENT_ROLE || normalizedRole === ADMIN_ROLE;
   const teamIdParam = searchParams.get("teamId");
   const teamId = teamIdParam ? Number(teamIdParam) : undefined;
   const routeState = location.state as MilestoneDetailRouteState | null;
@@ -50,23 +45,6 @@ export function MilestoneDetailPage() {
     queryFn: () => milestoneApi.getDetail(projectId as string, milestoneId as string, teamId),
     enabled: Boolean(projectId && milestoneId),
     retry: false,
-  });
-  const openMilestone = useMutation({
-    mutationFn: () => milestoneApi.publish(projectId, teamId ?? 0, milestoneId as string, detailQuery.data!.version),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects", projectId, "milestones", milestoneId, teamId] }),
-  });
-  const startMilestone = useMutation({
-    mutationFn: () => milestoneApi.start(projectId, teamId ?? 0, milestoneId as string, detailQuery.data!.version),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects", projectId, "milestones", milestoneId, teamId] }),
-  });
-  const deleteMilestone = useMutation({
-    mutationFn: () => milestoneApi.deleteDraft(projectId, teamId ?? 0, milestoneId as string, detailQuery.data!.version),
-    onSuccess: () => navigate(returnUrl),
-  });
-  const editMetadata = useMutation({
-    mutationFn: (payload: {title: string; description: string; deadline: string; expectedVersion: number}) =>
-      milestoneApi.editMetadata(projectId, teamId ?? 0, milestoneId as string, payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects", projectId, "milestones", milestoneId, teamId] }),
   });
 
   if (detailQuery.isLoading) {
@@ -102,7 +80,7 @@ export function MilestoneDetailPage() {
         <Card className="border-primary/20 bg-gradient-to-r from-primary/5 via-background to-background">
           <CardHeader>
             <div className="flex flex-wrap items-center gap-2">
-              <MilestoneStatusBadge status={milestone.status} executionStatus={milestone.executionStatus} />
+              <MilestoneStatusBadge status={milestone.lifecycleStatus} />
               {milestone.mandatory ? <Badge variant="secondary">Mandatory</Badge> : null}
             </div>
             <CardTitle className="mt-2 text-2xl">{milestone.title}</CardTitle>
@@ -139,6 +117,7 @@ export function MilestoneDetailPage() {
             </Card>
 
             {milestone.rubric && <MilestoneRubricCard rubric={milestone.rubric} />}
+            <MilestoneDraftHistory projectId={projectId} teamId={milestone.teamId ?? 0} milestoneId={milestone.id} />
           </div>
 
           <div className="grid gap-6">
@@ -147,6 +126,7 @@ export function MilestoneDetailPage() {
               <CardContent className="grid gap-4 text-sm">
                 <div><p className="text-muted-foreground">Project</p><p className="mt-1 font-medium">{milestone.project.name}</p></div>
                 <div><p className="text-muted-foreground">Deadline</p><p className="mt-1 flex items-start gap-2 font-medium"><CalendarClock className="mt-0.5 size-4 shrink-0" /> {formatTenantDateTime(milestone.deadline, milestone.tenantTimeZone)}</p></div>
+                {milestone.scheduledStartAt && <div><p className="text-muted-foreground">Scheduled opening</p><p className="mt-1 font-medium">{formatTenantDateTime(milestone.scheduledStartAt, milestone.tenantTimeZone)} ({milestone.deadlineOffsetDays} days before deadline)</p></div>}
                 <div><p className="text-muted-foreground">Tenant timezone</p><p className="mt-1 flex items-center gap-2 font-medium"><Globe2 className="size-4" /> {milestone.tenantTimeZone}</p></div>
               </CardContent>
             </Card>
@@ -186,8 +166,9 @@ export function MilestoneDetailPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4"><Button variant="outline" onClick={() => navigate(returnUrl)}><ArrowLeft className="size-4" /> Back to milestones</Button>
-          <div className="flex flex-wrap items-center gap-2">{milestone.status === "PLANNED" && hasPermission("MILESTONE_WRITE") && <><Button variant="outline" onClick={() => navigate(`/projects/${projectId}/milestones/${milestone.id}/edit?teamId=${milestone.teamId ?? ""}`)}>Edit Draft</Button><Button variant="destructive" onClick={() => { if (window.confirm("Delete this draft milestone?")) deleteMilestone.mutate(); }} disabled={deleteMilestone.isPending}>Delete Draft</Button><Button onClick={() => openMilestone.mutate()} disabled={openMilestone.isPending}>Publish</Button></>}{milestone.status === "OPEN" && !["DONE", "FAILED"].includes(milestone.executionStatus ?? "") && hasPermission("MILESTONE_WRITE") && <Button variant="outline" onClick={() => { const title = window.prompt("Title", milestone.title); if (title === null) return; const description = window.prompt("Description", milestone.description ?? ""); if (description === null) return; const deadline = window.prompt("Deadline (ISO 8601)", milestone.deadline); if (deadline === null) return; editMetadata.mutate({ title, description, deadline, expectedVersion: milestone.version }); }}>Edit metadata</Button>}{milestone.executionStatus === "TODO" && normalizedRole === ADMIN_ROLE && <Button onClick={() => startMilestone.mutate()} disabled={startMilestone.isPending}>Start</Button>}{openMilestone.isError && <span className="text-xs text-destructive">Publish failed. Check required fields.</span>}{canPrepareArtifact && milestone.status === "OPEN" && milestone.executionStatus !== "TODO" && hasPermission("ARTIFACT_READ") && <Button onClick={() => navigate(`/projects/${projectId}/milestones/${milestone.id}/submit`)}>Prepare artifact</Button>}</div></div>
+        <div className="border-t pt-4">
+          <Button variant="outline" onClick={() => navigate(returnUrl)}><ArrowLeft className="size-4" /> Back to milestones</Button>
+        </div>
       </div>
     </MainLayout>
   );

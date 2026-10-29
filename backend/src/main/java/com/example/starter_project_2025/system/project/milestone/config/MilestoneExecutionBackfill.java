@@ -1,8 +1,7 @@
 package com.example.starter_project_2025.system.project.milestone.config;
 
-import com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus;
+import com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
-import com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus;
 import com.example.starter_project_2025.system.project.milestone.submission.repository.MilestoneSubmissionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.ApplicationArguments;
@@ -21,12 +20,20 @@ public class MilestoneExecutionBackfill implements ApplicationRunner {
     @Transactional
     public void run(ApplicationArguments args) {
         for (var milestone : milestones.findAll()) {
-            if (milestone.getStatus() != MilestoneStatus.OPEN || milestone.getExecutionStatus() != null) continue;
             var prior = submissions.findByMilestoneIdAndTeamId(milestone.getId(), milestone.getTeamId());
-            MilestoneExecutionStatus status = prior.map(s -> s.getExecutionStatus() == null
-                    ? MilestoneExecutionStatus.IN_PROGRESS : s.getExecutionStatus())
-                    .orElse(MilestoneExecutionStatus.IN_PROGRESS);
-            milestone.setExecutionStatus(status, milestone.getUpdatedBy(), milestone.getUpdatedAt());
+            MilestoneLifecycleStatus state = milestone.getStatus()
+                    == com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.CLOSED
+                    || milestone.getStatus()
+                    == com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.CANCELLED
+                    ? MilestoneLifecycleStatus.of(milestone.getStatus(), milestone.getExecutionStatus())
+                    : prior.map(s -> switch (s.getStatus()) {
+                case SUBMITTED -> MilestoneLifecycleStatus.SUBMITTED;
+                case CHANGES_REQUESTED -> MilestoneLifecycleStatus.CHANGES_REQUESTED;
+                case ACCEPTED -> MilestoneLifecycleStatus.ACCEPTED;
+                case REJECTED -> MilestoneLifecycleStatus.REJECTED;
+                case DRAFT -> MilestoneLifecycleStatus.of(milestone.getStatus(), milestone.getExecutionStatus());
+            }).orElseGet(() -> MilestoneLifecycleStatus.of(milestone.getStatus(), milestone.getExecutionStatus()));
+            milestone.backfillLifecycle(state);
         }
     }
 }

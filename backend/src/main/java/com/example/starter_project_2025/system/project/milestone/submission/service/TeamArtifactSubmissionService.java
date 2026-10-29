@@ -55,6 +55,7 @@ public class TeamArtifactSubmissionService {
     private final ArtifactContributionLock contributionLock;
     private final WorkspaceMilestoneScopeService milestoneScopeService;
     private final ArtifactReviewSubmissionSyncService reviewSyncService;
+    private final MilestoneSubmissionWindow submissionWindow;
 
     @Transactional(readOnly = true)
     public ArtifactSubmissionWorkspaceResponse workspace(Long teamId, UUID milestoneId) {
@@ -70,7 +71,7 @@ public class TeamArtifactSubmissionService {
         var latest = submissionRepository.findTopByTenantIdAndTeamIdAndMilestoneIdAndSubmitterIdOrderByVersionDesc(
                 s.tenantId, teamId, milestoneId, s.actorId).map(this::submissionResponse).orElse(null);
         return new ArtifactSubmissionWorkspaceResponse(milestoneQueryService.getTeamDetail(teamId, milestoneId), draft,
-                new ArtifactUploadPolicyResponse(false, 0, Set.of()), latest);
+                new ArtifactUploadPolicyResponse(false, 0, Set.of()), latest, submissionWindow.canSubmitNow(milestone));
     }
 
     @Transactional
@@ -80,8 +81,7 @@ public class TeamArtifactSubmissionService {
         var milestone = milestoneRepository.findByIdAndTeamIdAndTenantId(milestoneId, teamId, s.tenantId)
                 .filter(com.example.starter_project_2025.system.project.milestone.domain.Milestone::isActive)
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
-        if (milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN
-                || milestone.getExecutionStatus() != com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus.IN_PROGRESS)
+        if (!submissionWindow.canSubmit(milestone))
             throw new ResourceNotFoundException("Milestone not available to students");
         validateUrl("repositoryUrl", request.repositoryUrl()); validateUrl("deploymentUrl", request.deploymentUrl());
         Map<UUID, Boolean> checklist = validateChecklist(milestone, request.checklist());
@@ -122,8 +122,7 @@ public class TeamArtifactSubmissionService {
                     .orElseThrow(() -> new IllegalStateException("Idempotent team submission is missing"));
         }
         requireActiveTeamWorkspace(teamId, s.tenantId);
-        if (milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN
-                || milestone.getExecutionStatus() != com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus.IN_PROGRESS)
+        if (!submissionWindow.canSubmit(milestone))
             throw new MilestoneConflictException("Milestone must be OPEN before students can submit artifacts");
         validateUrl("repositoryUrl", request.repositoryUrl()); validateUrl("deploymentUrl", request.deploymentUrl());
         Map<UUID, Boolean> checklist = validateChecklist(milestone, request.checklist());

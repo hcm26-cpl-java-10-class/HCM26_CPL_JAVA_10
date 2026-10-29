@@ -18,20 +18,21 @@ export function MilestoneEntryPage() {
       const [workspace,alerts]=await Promise.allSettled([workspaceApi.getCandidates(),
         hasPermission("PROJECT_ALERT_READ")?projectAlertApi.options():Promise.resolve(undefined)]);
       if(workspace.status==="rejected"&&(alerts.status==="rejected"||!alerts.value))throw workspace.reason;
-      const teams=new Map<number,{id:number;name:string;classId:number}>();
+      const teams=new Map<number,{id:number;name:string;classId:number;workspaceId?:number}>();
       const classes=new Map<number,{id:number;name:string;studentCount?:number}>();
       if(workspace.status==="fulfilled")for(const row of workspace.value)if(row.classId){
         classes.set(row.classId,{id:row.classId,name:`${row.className??row.classCode??row.classId}`});
-        teams.set(row.teamId,{id:row.teamId,name:row.teamName??row.teamCode??String(row.teamId),classId:row.classId});
+        teams.set(row.teamId,{id:row.teamId,name:row.teamName??row.teamCode??String(row.teamId),classId:row.classId,workspaceId:row.workspaceId});
       }
       if(alerts.status==="fulfilled"&&alerts.value){
         for(const c of alerts.value.classes??[])classes.set(c.id,{id:c.id,name:`${c.name} · ${c.code}`,studentCount:c.studentCount});
-        for(const row of alerts.value.teams)teams.set(row.id,{id:row.id,name:row.name,classId:row.classId});
+        for(const row of alerts.value.teams)teams.set(row.id,{id:row.id,name:row.name,classId:row.classId,workspaceId:teams.get(row.id)?.workspaceId});
       }
       return {classes:[...classes.values()].sort((a,b)=>a.name.localeCompare(b.name)),teams:[...teams.values()]};
     }});
   const teams=query.data?.teams.filter(team=>String(team.classId)===classId)??[];
   const selectedClass=query.data?.classes.find(c=>String(c.id)===classId);
+  const selectedTeam=teams.find(team=>String(team.id)===teamId);
   return <MainLayout pathName={{milestones:"Milestones"}}><Card>
     <CardHeader><CardTitle><h1>Milestones</h1></CardTitle><p className="text-sm text-muted-foreground">Select a class and team to view their configured milestones.</p></CardHeader>
     <CardContent className="space-y-5">
@@ -47,7 +48,8 @@ export function MilestoneEntryPage() {
         {selectedClass&&!teams.length&&<div className="space-y-3 rounded-md border p-4"><p role="status">{selectedClass.studentCount??0} enrolled student(s). This class has no active published teams yet.</p>
           {(hasPermission("PEO_TEAM_ALLOCATE")||hasPermission("PRJ_WORKSPACE_MANAGE"))&&<Button asChild variant="outline"><Link to={`/team-allocation/classes/${selectedClass.id}`}>Open team allocation</Link></Button>}
         </div>}
-        <Button disabled={!teams.some(team=>String(team.id)===teamId)} onClick={()=>navigate(`/teams/${teamId}/milestones`)}>Open team milestones</Button>
+        <Button disabled={!selectedTeam?.workspaceId} onClick={()=>navigate(`/management/workspaces/${selectedTeam?.workspaceId}?tab=milestones`)}>Open workspace milestones</Button>
+        {selectedTeam&&!selectedTeam.workspaceId&&<p className="text-sm text-muted-foreground">This team does not have a workspace yet.</p>}
       </>}
     </CardContent></Card></MainLayout>;
 }

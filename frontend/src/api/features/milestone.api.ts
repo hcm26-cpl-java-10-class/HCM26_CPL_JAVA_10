@@ -9,6 +9,7 @@ import type {
   ArtifactSubmissionWorkspace,
   MilestoneCreateOptions,
   MilestoneDetailResponse,
+  MilestoneDraftRevision,
   MilestoneListParams,
   MilestoneOption,
   MilestonePageResponse,
@@ -28,21 +29,22 @@ export const milestoneApi = {
     const path = projectId ? `/projects/${projectId}/milestones/${milestoneId}/draft` : `/teams/${teamId}/milestones/${milestoneId}/draft`;
     return (await axiosInstance.put<MilestoneResponse>(path, payload)).data;
   },
-  async deleteDraft(projectId: string | undefined, teamId: number, milestoneId: string, expectedVersion: number): Promise<void> {
-    const path = projectId ? `/projects/${projectId}/milestones/${milestoneId}` : `/teams/${teamId}/milestones/${milestoneId}`;
-    await axiosInstance.delete(path, { params: { expectedVersion } });
-  },
-  async editMetadata(projectId: string | undefined, teamId: number, milestoneId: string, payload: {title: string; description: string; deadline: string; expectedVersion: number}): Promise<MilestoneResponse> {
-    const path = projectId ? `/projects/${projectId}/milestones/${milestoneId}/metadata` : `/teams/${teamId}/milestones/${milestoneId}/metadata`;
-    return (await axiosInstance.patch<MilestoneResponse>(path, payload)).data;
-  },
   async publish(projectId: string | undefined, teamId: number, milestoneId: string, expectedVersion: number): Promise<MilestoneResponse> {
     const path = projectId ? `/projects/${projectId}/milestones/${milestoneId}/publish` : `/teams/${teamId}/milestones/${milestoneId}/publish`;
     return (await axiosInstance.post<MilestoneResponse>(path, null, { params: { expectedVersion } })).data;
   },
-  async start(projectId: string | undefined, teamId: number, milestoneId: string, expectedVersion: number): Promise<MilestoneResponse> {
-    const path = projectId ? `/projects/${projectId}/milestones/${milestoneId}/start` : `/teams/${teamId}/milestones/${milestoneId}/start`;
-    return (await axiosInstance.post<MilestoneResponse>(path, null, { params: { expectedVersion } })).data;
+  async editActive(projectId: string | undefined, teamId: number, milestoneId: string,
+      payload: { expectedVersion: number; description?: string | null; deadline: string }): Promise<MilestoneResponse> {
+    const path = projectId ? `/projects/${projectId}/milestones/${milestoneId}` : `/teams/${teamId}/milestones/${milestoneId}`;
+    return (await axiosInstance.patch<MilestoneResponse>(path, payload)).data;
+  },
+  async getDraftRevisions(projectId: string | undefined, teamId: number, milestoneId: string): Promise<MilestoneDraftRevision[]> {
+    const path = projectId ? `/projects/${projectId}/milestones/${milestoneId}/revisions` : `/teams/${teamId}/milestones/${milestoneId}/revisions`;
+    return (await axiosInstance.get<MilestoneDraftRevision[]>(path)).data;
+  },
+  async deleteDraft(projectId: string | undefined, teamId: number, milestoneId: string, expectedVersion: number): Promise<void> {
+    const path = projectId ? `/projects/${projectId}/milestones/${milestoneId}` : `/teams/${teamId}/milestones/${milestoneId}`;
+    await axiosInstance.delete(path, { params: { expectedVersion } });
   },
   async getProjectOptions(signal?: AbortSignal): Promise<MilestoneProjectOption[]> {
     const response = await axiosInstance.get<MilestoneProjectOption[]>(
@@ -55,7 +57,7 @@ export const milestoneApi = {
   async getTeamList(teamId: number, params: MilestoneListParams): Promise<MilestonePageResponse> {
     const response = await axiosInstance.get<MilestonePageResponse>(
       `/teams/${teamId}/milestones`,
-      { params: { page: params.page, size: params.size, status: params.status } },
+      { params: { page: params.page, size: params.size, lifecycleStatus: params.status } },
     );
     return response.data;
   },
@@ -71,7 +73,7 @@ export const milestoneApi = {
     const sort = Array.isArray(params.sort) ? params.sort : params.sort ? [params.sort] : [];
     sort.forEach((item) => query.append("sort", item.replace(",", ":")));
     if (params.search) query.set("search", params.search);
-    params.status?.forEach((status) => query.append("status", status));
+    params.status?.forEach((status) => query.append("lifecycleStatus", status));
     if (params.mandatory !== undefined) query.set("mandatory", String(params.mandatory));
     params.latePolicyType?.forEach((type) => query.append("latePolicyType", type));
     if (params.deadlineFrom) query.set("deadlineFrom", params.deadlineFrom);
@@ -95,15 +97,6 @@ export const milestoneApi = {
     const response = await axiosInstance.get<MilestoneCreateOptions>(
       `/teams/${teamId}/milestones/create-options`,
     );
-    return response.data;
-  },
-
-  async openForSubmissions(projectId: string, milestoneId: string): Promise<MilestoneResponse> {
-    const response = await axiosInstance.post<MilestoneResponse>(`/projects/${projectId}/milestones/${milestoneId}/open`);
-    return response.data;
-  },
-  async openTeamMilestoneForSubmissions(teamId: number, milestoneId: string): Promise<MilestoneResponse> {
-    const response = await axiosInstance.post<MilestoneResponse>(`/teams/${teamId}/milestones/${milestoneId}/open`);
     return response.data;
   },
 

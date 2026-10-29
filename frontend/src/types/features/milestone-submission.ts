@@ -1,4 +1,5 @@
 import type { RubricRatingLevel } from "./rubric";
+import type { MilestoneLifecycleStatus } from "./milestone";
 
 export type SubmissionStatus = "DRAFT" | "SUBMITTED" | "ACCEPTED" | "REJECTED" | "CHANGES_REQUESTED";
 export type MilestoneExecutionStatus = "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE" | "FAILED";
@@ -17,6 +18,7 @@ export interface SubmissionListItem {
   reviewerName: string;
   status: SubmissionStatus;
   executionStatus: MilestoneExecutionStatus;
+  milestoneLifecycleStatus: MilestoneLifecycleStatus;
   currentVersionNumber: number;
   submissionAttempts: number;
   deadline: string;
@@ -144,6 +146,7 @@ export interface SubmissionDetail {
   assignedReviewerName: string;
   status: SubmissionStatus;
   executionStatus: MilestoneExecutionStatus;
+  milestoneLifecycleStatus: MilestoneLifecycleStatus;
   currentVersionNumber: number;
   submissionAttempts: number;
   allowResubmission: boolean;
