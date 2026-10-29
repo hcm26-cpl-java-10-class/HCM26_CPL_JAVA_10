@@ -102,6 +102,8 @@ export default function StudentDraftTeamPage() {
   const templatesQuery = useQuery({
     queryKey: ["project-templates", "options"],
     queryFn: () => projectTemplateApi.getAssignableOptions(),
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const assignMutation = useMutation({
@@ -380,6 +382,14 @@ function DraftTeamTemplateCard({
             Gán đề bài
           </Button>
         </div>
+
+        {!templatesLoading && templates.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            Chưa có đề bài nào ở trạng thái ACTIVE để gán. Đề bài mẫu dùng chung
+            là chỉ đọc và không thể kích hoạt — liên hệ Mentor/Program Manager
+            để được cung cấp đề bài đã kích hoạt.
+          </p>
+        )}
 
         <TeamRoleEditor
           team={team}

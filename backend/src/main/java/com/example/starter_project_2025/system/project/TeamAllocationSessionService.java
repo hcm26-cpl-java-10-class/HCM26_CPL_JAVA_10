@@ -70,8 +70,13 @@ public class TeamAllocationSessionService {
                             "Active ProjectTemplate", "id", selectedTemplateId));
         }
 
-        if (template.getTenantId() != null && (!template.getTenantId().equals(trainingClass.getTenantId())
-                || template.getStatus() != ProjectTemplateStatus.ACTIVE)) {
+        // A template explicitly selected for a team session must be ACTIVE,
+        // including shared catalogue rows. The implicit manual-grouping default
+        // is not a team assignment and may stay DRAFT.
+        if (selectedTemplateId != null && template.getStatus() != ProjectTemplateStatus.ACTIVE) {
+            throw new ResourceNotFoundException("Available ProjectTemplate", "id", selectedTemplateId);
+        }
+        if (template.getTenantId() != null && !template.getTenantId().equals(trainingClass.getTenantId())) {
             throw new ResourceNotFoundException("Available ProjectTemplate", "id", selectedTemplateId);
         }
 

@@ -35,8 +35,10 @@ public class TemplateTeamConstraintsMapper {
         root.put("min_members", request.minMembers().intValueExact());
         root.put("max_members", request.maxMembers().intValueExact());
         root.put("allow_multi_role", request.allowMultiRole());
-        ObjectNode roles = root.path("role_quotas") instanceof ObjectNode existing
-                ? existing : objectMapper.createObjectNode();
+        // Replace, don't merge: seeded JSON uses uppercase role keys while this
+        // mapper uses lowercase, and merging produced duplicate PM/BA/DEV/QA
+        // entries that made the template disappear from the assignable list.
+        ObjectNode roles = objectMapper.createObjectNode();
         roles.put("pm", request.roleQuotas().pm().intValueExact());
         roles.put("ba", request.roleQuotas().ba().intValueExact());
         roles.put("dev", request.roleQuotas().dev().intValueExact());
