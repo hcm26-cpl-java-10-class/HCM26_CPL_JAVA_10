@@ -5,10 +5,10 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * US-10/US-11: single source of truth for the {@code constraints_json} of a
@@ -169,32 +169,31 @@ public final class ProjectTemplateConstraints {
             quotasNode = constraints.get("roleQuotas");
         }
 
+        // Legacy rows can contain the same role twice with different casing
+        // (seed uses PM/BA/DEV/QA, the editor used pm/ba/dev/qa). Keep the last
+        // entry per role so those rows stay assignable instead of being skipped.
+        Map<String, RoleQuota> byRole = new LinkedHashMap<>();
         List<RoleQuota> quotas = new ArrayList<>();
         if (quotasNode != null && !quotasNode.isNull() && !quotasNode.isMissingNode()) {
             if (quotasNode.isObject()) {
                 quotasNode.fields().forEachRemaining(entry ->
-                        quotas.add(readQuota(entry.getKey(), entry.getValue())));
+                        byRole.put(entry.getKey() == null ? "" : entry.getKey().trim().toUpperCase(),
+                                readQuota(entry.getKey(), entry.getValue())));
             } else if (quotasNode.isArray()) {
                 for (JsonNode item : quotasNode) {
                     if (!item.isObject() || !item.hasNonNull("role")) {
                         throw new BadRequestException(
                                 "Project template role_quotas entries must contain a role");
                     }
-                    quotas.add(readQuota(item.get("role").asText(), item));
+                    RoleQuota quota = readQuota(item.get("role").asText(), item);
+                    byRole.put(quota.role(), quota);
                 }
             } else {
                 throw new BadRequestException(
                         "Project template role_quotas must be an object or an array");
             }
         }
-
-        Set<String> seenRoles = new HashSet<>();
-        for (RoleQuota quota : quotas) {
-            if (!seenRoles.add(quota.role())) {
-                throw new BadRequestException(
-                        "Project template role_quotas contains duplicate role " + quota.role());
-            }
-        }
+        quotas.addAll(byRole.values());
         return new RolePolicy(allowMultiRole, List.copyOf(quotas));
     }
 

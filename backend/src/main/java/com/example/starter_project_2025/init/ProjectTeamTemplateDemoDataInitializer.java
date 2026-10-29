@@ -3,7 +3,11 @@ package com.example.starter_project_2025.init;
 import com.example.starter_project_2025.system.project.ProjectMemberRole;
 import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
+import com.example.starter_project_2025.system.project.tenant.Tenant;
 import com.example.starter_project_2025.system.project.template.ProjectTemplateLevel;
+import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
+import com.example.starter_project_2025.system.rbac.user.User;
+import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import com.example.starter_project_2025.system.project.template.backlog.TemplateBacklogItem;
 import com.example.starter_project_2025.system.project.template.backlog.TemplateBacklogItemRepository;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestone;
@@ -16,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
@@ -45,7 +50,7 @@ import org.springframework.transaction.annotation.Transactional;
 )
 public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner {
 
-    /** code, name, description, category, level, weeks, constraints JSON (US-10 window + US-11 quotas) */
+    /** code, name, description, category, level, weeks, constraints JSON, lifecycle status */
     private static final List<TemplateSeed> TEMPLATES = List.of(
             new TemplateSeed(
                     "US10-TPL-WEB-4-6",
@@ -58,7 +63,8 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
                             "\"PM\":{\"min\":1,\"max\":1},"
                                     + "\"BA\":{\"min\":1,\"max\":1},"
                                     + "\"DEV\":{\"min\":1,\"max\":4},"
-                                    + "\"QA\":{\"min\":1,\"max\":1}")),
+                                    + "\"QA\":{\"min\":1,\"max\":1}"),
+                    ProjectTemplateStatus.ACTIVE),
             new TemplateSeed(
                     "US10-TPL-DATA-2-5",
                     "Phân tích dữ liệu (2-5 thành viên)",
@@ -70,7 +76,8 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
                             "\"PM\":{\"min\":1,\"max\":2},"
                                     + "\"BA\":{\"min\":0,\"max\":1},"
                                     + "\"DEV\":{\"min\":1,\"max\":4},"
-                                    + "\"QA\":{\"min\":0,\"max\":1}")),
+                                    + "\"QA\":{\"min\":0,\"max\":1}"),
+                    ProjectTemplateStatus.DRAFT),
             new TemplateSeed(
                     "US10-TPL-CAPSTONE-5-7",
                     "Đồ án Capstone (5-7 thành viên)",
@@ -82,7 +89,8 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
                             "\"PM\":{\"min\":1,\"max\":1},"
                                     + "\"BA\":{\"min\":1,\"max\":1},"
                                     + "\"DEV\":{\"min\":2,\"max\":4},"
-                                    + "\"QA\":{\"min\":1,\"max\":1}")),
+                                    + "\"QA\":{\"min\":1,\"max\":1}"),
+                    ProjectTemplateStatus.ACTIVE),
             new TemplateSeed(
                     "US10-TPL-MOBILE-3-4",
                     "Ứng dụng Mobile (3-4 thành viên)",
@@ -94,7 +102,8 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
                             "\"PM\":{\"min\":1,\"max\":1},"
                                     + "\"BA\":{\"min\":1,\"max\":1},"
                                     + "\"DEV\":{\"min\":1,\"max\":2},"
-                                    + "\"QA\":{\"min\":0,\"max\":1}")),
+                                    + "\"QA\":{\"min\":0,\"max\":1}"),
+                    ProjectTemplateStatus.ACTIVE),
             // US-11 test fixture: 4-8 members and multi-role enabled.
             new TemplateSeed(
                     "US11-TPL-MULTIROLE-4-8",
@@ -107,12 +116,17 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
                             "\"PM\":{\"min\":1,\"max\":2},"
                                     + "\"BA\":{\"min\":1,\"max\":2},"
                                     + "\"DEV\":{\"min\":1,\"max\":8},"
-                                    + "\"QA\":{\"min\":0,\"max\":2}"))
+                                    + "\"QA\":{\"min\":0,\"max\":2}"),
+                    ProjectTemplateStatus.DRAFT)
     );
 
     private final ProjectTemplateRepository projectTemplateRepository;
     private final TemplateMilestoneRepository templateMilestones;
     private final TemplateBacklogItemRepository templateBacklogItems;
+    private final UserRepository userRepository;
+
+    @Value("${app.seed.admin.email:admin@example.com}")
+    private String adminEmail;
 
     @Override
     @Transactional
@@ -140,14 +154,58 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
             template.setEstimatedDurationWeeks(seed.estimatedDurationWeeks());
             template.setConstraintsJson(seed.constraintsJson());
             template.setIsActive(true);
+            template.setStatus(seed.status());
             ProjectTemplate savedTemplate = projectTemplateRepository.save(template);
             seedBriefContent(savedTemplate);
         }
 
         ensureManualDefaultTemplate();
+        int hiddenCopies = deactivateLegacyTenantCopies();
         projectTemplateRepository.flush();
-        log.info("US-10 project template fixtures ensured ({} new, {} total).",
-                created, TEMPLATES.size());
+        long active = TEMPLATES.stream().filter(seed -> seed.status() == ProjectTemplateStatus.ACTIVE).count();
+        long draft = TEMPLATES.stream().filter(seed -> seed.status() == ProjectTemplateStatus.DRAFT).count();
+        log.info("US-10 project template fixtures ensured ({} new shared, {} total; {} ACTIVE, {} DRAFT; {} legacy copies hidden).",
+                created, TEMPLATES.size(), active, draft, hiddenCopies);
+    }
+
+    /**
+     * Earlier demo runs created a tenant-owned copy per shared sample, so the
+     * catalogue showed the same brief twice (one ACTIVE copy + one DRAFT
+     * original). The shared samples now carry their own lifecycle status
+     * (3 ACTIVE / 2 DRAFT), so those legacy copies are hidden instead of
+     * deleted to keep existing team assignments intact.
+     *
+     * @return number of legacy copies hidden by this run
+     */
+    private int deactivateLegacyTenantCopies() {
+        Long tenantId = resolveDemoTenantId();
+        if (tenantId == null) {
+            log.warn("Legacy template copies skipped: demo tenant not found.");
+            return 0;
+        }
+
+        int hidden = 0;
+        for (TemplateSeed seed : TEMPLATES) {
+            String copyCode = seed.code() + "-T" + tenantId;
+            ProjectTemplate copy = projectTemplateRepository
+                    .findFirstByCodeAndTenantIdAndIsActiveTrue(copyCode, tenantId)
+                    .orElse(null);
+            if (copy == null) {
+                continue;
+            }
+            copy.setIsActive(false);
+            projectTemplateRepository.save(copy);
+            hidden++;
+        }
+        return hidden;
+    }
+
+    /** Demo tenant = tenant of the seeded admin account (same source as the allocation fixtures). */
+    private Long resolveDemoTenantId() {
+        return userRepository.findByEmail(adminEmail)
+                .map(User::getTenant)
+                .map(Tenant::getId)
+                .orElse(null);
     }
 
     /**
@@ -300,7 +358,8 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
             String category,
             ProjectTemplateLevel level,
             Integer estimatedDurationWeeks,
-            String constraintsJson
+            String constraintsJson,
+            ProjectTemplateStatus status
     ) {
     }
 }

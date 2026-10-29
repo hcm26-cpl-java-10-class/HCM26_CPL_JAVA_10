@@ -119,7 +119,7 @@ public class ProjectTemplateService {
         }
         String code = request.code().strip();
         if (templates.existsByTenantIdAndCodeAndTemplateVersionAndIdNot(
-                user.getTenantId(), code, template.getTemplateVersion(), id)) {
+                template.getTenantId(), code, template.getTemplateVersion(), id)) {
             throw ProjectTemplateException.duplicateCode();
         }
         scheduleValidator.validateDuration(request.estimatedDurationWeeks().intValueExact(),
@@ -165,11 +165,12 @@ public class ProjectTemplateService {
         template.setStatus(ProjectTemplateStatus.ARCHIVED);
         templates.saveAndFlush(template);
         recordAudit(template, user, "PROJECT_TEMPLATE_ARCHIVED", before);
+        Long tenantId = tenantOf(template, user);
         try {
             String payload = objectMapper.writeValueAsString(Map.of(
-                    "templateId", id, "tenantId", template.getTenantId(), "actorId", user.getId(),
+                    "templateId", id, "tenantId", tenantId, "actorId", user.getId(),
                     "correlationId", CorrelationIdFilter.currentId(), "template", objectMapper.readTree(state(template))));
-            events.save(OutboxEvent.templateArchived(template.getTenantId(), id, payload, Instant.now()));
+            events.save(OutboxEvent.templateArchived(tenantId, id, payload, Instant.now()));
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Unable to record template archive event", exception);
         }
@@ -197,16 +198,23 @@ public class ProjectTemplateService {
         return ProjectTemplateResponse.from(template, canUpdate, teamConstraintsMapper.read(template.getConstraintsJson()));
     }
 
-    /** Tenant-owned template: required for every mutation. */
+    /**
+     * Resolves tenant-owned and shared ({@code tenant_id is null}) templates.
+     * Status, not ownership, decides which actions are allowed: DRAFT templates
+     * can be edited, ACTIVE templates can be assigned to a team.
+     */
     private ProjectTemplate findTemplate(Long id, User user) {
-        return templates.findByIdAndTenantIdAndIsActiveTrue(id, user.getTenantId())
+        return templates.findReadableById(id, user.getTenantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project template was not found"));
     }
 
-    /** Tenant-owned or shared (tenant_id is null) template: read-only access. */
     private ProjectTemplate findReadableTemplate(Long id, User user) {
-        return templates.findReadableById(id, user.getTenantId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project template was not found"));
+        return findTemplate(id, user);
+    }
+
+    /** Audit/event tenant: shared rows are recorded under the acting user's tenant. */
+    private Long tenantOf(ProjectTemplate template, User user) {
+        return template.getTenantId() != null ? template.getTenantId() : user.getTenantId();
     }
 
     private void apply(ProjectTemplate template, ProjectTemplateRequest request) {
@@ -219,7 +227,7 @@ public class ProjectTemplateService {
     }
 
     private void recordAudit(ProjectTemplate template, User user, String action, String beforeState) {
-        audits.save(new ProjectTemplateAudit(template.getTenantId(), template.getId(), user.getId(),
+        audits.save(new ProjectTemplateAudit(tenantOf(template, user), template.getId(), user.getId(),
                 action, beforeState, state(template), CorrelationIdFilter.currentId()));
     }
 
