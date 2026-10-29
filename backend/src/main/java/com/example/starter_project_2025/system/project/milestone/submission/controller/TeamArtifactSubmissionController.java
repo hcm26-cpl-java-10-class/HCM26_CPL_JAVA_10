@@ -39,6 +39,7 @@ public class TeamArtifactSubmissionController {
         return ResponseEntity.ok(service.mySubmissions(teamId, milestoneId));
     }
     @GetMapping("/submissions")
+    @PreAuthorize("hasAuthority('ARTIFACT_READ')")
     public ResponseEntity<List<TeamArtifactSubmissionService.TeamSubmissionView>> submissions(
             @PathVariable Long teamId, @RequestParam(required = false) UUID milestoneId) {
         return ResponseEntity.ok(service.submissions(teamId, milestoneId));
