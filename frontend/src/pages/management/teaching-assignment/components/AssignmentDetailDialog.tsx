@@ -12,7 +12,8 @@ import { Label } from "@/components/ui/label";
 import { AppliedTextInput, AppliedNumberInput } from "./ReferenceInput";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatScheduleDateTime, safeMeetingUrl } from "../assignment-detail";
-import { slotSummary } from "../assignment-slots";
+import { showLinkedSessionHistory } from "../assignment-schedule";
+import { AssignmentSchedule } from "./AssignmentSchedule";
 
 function errorMessage(error: unknown) {
   if (axios.isAxiosError(error)) {
@@ -49,6 +50,7 @@ export function AssignmentDetailDialog({ assignmentId, onClose }: { assignmentId
   const data = sessions.data;
   const total = data?.totalElements ?? 0;
   const pages = data?.totalPages ?? 0;
+  const showHistory = showLinkedSessionHistory({ total, status, page, pending: sessions.isPending, failed: sessions.isError });
 
   return <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
     <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-5xl">
@@ -71,10 +73,10 @@ export function AssignmentDetailDialog({ assignmentId, onClose }: { assignmentId
             <DetailField label="Trainer">{assignment.trainerName || `Trainer #${assignment.trainerId}`}<span className="block font-normal text-muted-foreground">{assignment.trainerEmail || "Profile information not available"}</span></DetailField>
             <DetailField label="Role"><Badge variant={assignment.role === "MAIN" ? "default" : "outline"}>{assignment.role === "MAIN" ? "Main trainer" : "Assistant trainer"}</Badge></DetailField>
             <DetailField label="Effective period">{assignment.effectiveFrom.split("-").reverse().join("/")} → {assignment.effectiveTo ? assignment.effectiveTo.split("-").reverse().join("/") : "No end date"}</DetailField>
-            <DetailField label="Teaching slots">{slotSummary(assignment.teachingSlots)}</DetailField>
+            <div className="border-t pt-4 sm:col-span-2 lg:col-span-3"><DetailField label="Teaching schedule"><AssignmentSchedule slots={assignment.teachingSlots} /></DetailField></div>
           </dl>}
       </section>
-      <section className="space-y-4" aria-label="Linked sessions" aria-busy={sessions.isFetching}>
+      {showHistory && <section className="space-y-4" aria-label="Linked sessions" aria-busy={sessions.isFetching}>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div><h2 className="font-semibold">Linked sessions {data && !sessions.isError && <Badge variant="secondary">{total}</Badge>}</h2><p className="mt-1 text-sm text-muted-foreground">Includes completed, cancelled and archived sessions.</p></div>
           <div className="flex flex-wrap gap-3">
@@ -121,7 +123,7 @@ export function AssignmentDetailDialog({ assignmentId, onClose }: { assignmentId
             <Button variant="outline" size="icon" aria-label="Next sessions page" disabled={page + 1 >= pages || sessions.isFetching} onClick={() => setPage((current) => current + 1)}><ChevronRight className="size-4" /></Button>
           </div>
         </div>}
-      </section>
+      </section>}
       <DialogFooter><Button variant="outline" onClick={onClose}>Close</Button></DialogFooter>
     </DialogContent>
   </Dialog>;

@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import axios from "axios";
-import { AlertCircle, CalendarOff, ChevronLeft, ChevronRight, Eye, LoaderCircle, Pencil, Plus, RefreshCw, Search, Trash2, Users } from "lucide-react";
+import { AlertCircle, ChevronDown, ChevronLeft, ChevronRight, Eye, Filter, LoaderCircle, Pencil, Plus, RefreshCw, Search, Trash2, Users } from "lucide-react";
 import { AssignmentLifecycleDialog, type LifecycleMode } from "./components/AssignmentLifecycleDialog";
 import { EditAssignmentDialog } from "./components/EditAssignmentDialog";
 import { CreateAssignmentDialog } from "./components/CreateAssignmentDialog";
@@ -17,12 +17,14 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AppliedTextInput, AppliedNumberInput } from "./components/ReferenceInput";
 import { trainerTextOptions, type TextOption } from "./assignment-text";
 import { AssignmentRoleSelect } from "./components/AssignmentRoleSelect";
-import { slotSummary } from "./assignment-slots";
+import { AssignmentSchedule } from "./components/AssignmentSchedule";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -54,11 +56,11 @@ function FilterInput({ id, label, value, onChange, options, disabled = false }: 
   </div>;
 }
 
-const sortOptions: TextOption[] = [
-  { value: "effectiveFrom,desc", label: "Start date: newest first", aliases: ["Newest", "Start descending"] },
-  { value: "effectiveFrom,asc", label: "Start date: oldest first", aliases: ["Oldest", "Start ascending"] },
-  { value: "effectiveTo,asc", label: "End date: ascending", aliases: ["End ascending"] },
-  { value: "effectiveTo,desc", label: "End date: descending", aliases: ["End descending"] },
+const sortOptions = [
+  { value: "effectiveFrom,desc", label: "Start date: newest first" },
+  { value: "effectiveFrom,asc", label: "Start date: oldest first" },
+  { value: "effectiveTo,asc", label: "End date: ascending" },
+  { value: "effectiveTo,desc", label: "End date: descending" },
 ];
 
 export default function TeachingAssignmentPage() {
@@ -73,6 +75,7 @@ export default function TeachingAssignmentPage() {
   const [lifecycle, setLifecycle] = useState<{ mode: LifecycleMode; assignment: TeachingAssignment } | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [url, setUrl] = useSearchParams();
   const detailId = positiveId(url.get("assignmentId"));
   const pageValue = Number(url.get("page") ?? 0);
@@ -149,13 +152,13 @@ export default function TeachingAssignmentPage() {
   }
   const total = data?.totalElements ?? 0;
   const pages = data?.totalPages ?? 0;
-  const filtered = Boolean(search || params.classId || params.subjectId || params.trainerId || role || effectiveOn);
+  const activeFilterCount = [params.classId, params.subjectId, params.trainerId, role, effectiveOn].filter(Boolean).length;
+  const filtered = Boolean(search || activeFilterCount);
 
   return <MainLayout pathName={{ "teaching-assignments": "Teaching Assignments" }}>
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div><h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><Users className="size-6 text-primary" />Teaching Assignments</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Find teaching assignments by class, subject, trainer and effective date.</p></div>
+        <div><h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><Users className="size-6 text-primary" />Teaching Assignments</h1></div>
         <div className="flex flex-wrap gap-2">
         <Button variant="outline" disabled={assignments.isFetching || options.isFetching || !canRead} onClick={() => { void assignments.refetch(); void options.refetch(); }}>
           <RefreshCw className={assignments.isFetching || options.isFetching ? "size-4 animate-spin" : "size-4"} />Refresh
@@ -165,13 +168,20 @@ export default function TeachingAssignmentPage() {
         </div>
       </div>
       {!canRead ? <Alert variant="destructive"><AlertCircle /><AlertTitle>Access denied</AlertTitle><AlertDescription>You need permission to view teaching assignments.</AlertDescription></Alert> : <>
-        {options.data?.sampleData && <Alert><AlertCircle /><AlertTitle>Sample data</AlertTitle><AlertDescription>Local mode is enabled. Classes and trainers use sample data.</AlertDescription></Alert>}
         {options.isError && <Alert variant="destructive"><AlertCircle /><AlertTitle>Unable to load filter options</AlertTitle><AlertDescription>{errorMessage(options.error)} <Button size="sm" variant="outline" onClick={() => void options.refetch()}>Retry filters</Button></AlertDescription></Alert>}
         <Card><CardContent className="space-y-4 pt-6">
+          <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen} className="space-y-4">
           <form onSubmit={submitSearch} className="flex flex-wrap items-end gap-2" role="search">
-            <div className="min-w-48 flex-1 space-y-2"><Label htmlFor="assignment-search">Search</Label><Input key={search} id="assignment-search" name="search" defaultValue={search} maxLength={200} placeholder="Class or subject code/name, trainer name/email" /></div>
+            <CollapsibleTrigger asChild>
+              <Button type="button" variant="outline" className={activeFilterCount ? "border-primary/40 text-primary" : undefined}>
+                <Filter className="size-4" />Filters{activeFilterCount > 0 && <span className="tabular-nums">({activeFilterCount})</span>}
+                <ChevronDown className={`size-4 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
+              </Button>
+            </CollapsibleTrigger>
+            <div className="min-w-48 flex-1"><Label className="sr-only" htmlFor="assignment-search">Search assignments</Label><Input key={search} id="assignment-search" name="search" defaultValue={search} maxLength={200} placeholder="Search by class, subject, trainer name or email..." /></div>
             <Button type="submit"><Search className="size-4" />Search</Button>
           </form>
+          <CollapsibleContent className="space-y-3 border-t pt-4">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <FilterInput key={`class:${params.classId ?? ""}`} id="assignment-class" label="Class" value={String(params.classId ?? "")} onChange={(value) => change("classId", value)} options={classOptions} disabled={!options.data} />
             <FilterInput key={`subject:${params.subjectId ?? ""}`} id="assignment-subject" label="Subject" value={String(params.subjectId ?? "")} onChange={(value) => change("subjectId", value)} options={subjectOptions} disabled={!options.data} />
@@ -180,11 +190,19 @@ export default function TeachingAssignmentPage() {
             <div className="space-y-2"><Label htmlFor="assignment-date">Effective on</Label><Input id="assignment-date" type="date" value={effectiveOn ?? ""} onChange={(e) => change("effectiveOn", e.target.value)} /></div>
           </div>
           <p className="text-xs text-muted-foreground">Enter a code, name or email. Press Enter or leave the field to apply; leave blank to show all.</p>
+          </CollapsibleContent>
+          </Collapsible>
         </CardContent></Card>
         <Card><CardContent className="space-y-4 pt-6" aria-busy={assignments.isFetching}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-semibold">Assignment list {data && !assignments.isError && <Badge variant="secondary">{total}</Badge>}</h2>
-            <div className="w-52"><Label className="sr-only" htmlFor="assignment-sort">Sort order</Label><AppliedTextInput key={`sort:${sort}`} id="assignment-sort" value={sort} options={sortOptions} allowEmpty={false} onCommit={(value) => change("sort", value)} placeholder="Newest or Oldest" /></div>
+            <div className="w-full sm:w-64">
+              <Label className="sr-only" htmlFor="assignment-sort">Sort order</Label>
+              <Select value={sort} onValueChange={(value) => change("sort", value)}>
+                <SelectTrigger id="assignment-sort" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>{sortOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
           </div>
           {canDelete && selectedRows.length > 0 && !assignments.isError && <div className="flex flex-wrap items-center gap-3 rounded-md border p-3">
             <span role="status" className="text-sm">{selectedRows.length} selected on this page</span>
@@ -197,19 +215,19 @@ export default function TeachingAssignmentPage() {
               <p className="font-medium">{total > 0 ? "This page has no records" : filtered ? "No matching assignments" : "No teaching assignments yet"}</p>
               <p className="text-sm text-muted-foreground">{total > 0 ? "Return to the first page to view the current list." : "Try changing the filters or refreshing the list."}</p>
               {total > 0 && <Button variant="outline" onClick={() => change("page", "0")}>Go to first page</Button>}
-            </div> : <Table><TableHeader><TableRow>{canDelete && <TableHead className="w-10"><Checkbox aria-label="Select all assignments on this page" checked={allSelected ? true : selectedRows.length ? "indeterminate" : false} disabled={assignments.isFetching}
-              onCheckedChange={(checked) => setSelection({ scope: selectionScope, ids: new Set(checked === true ? data.content.map((a) => a.id) : []) })} /></TableHead>}<TableHead>Class</TableHead><TableHead>Subject</TableHead><TableHead>Trainer</TableHead><TableHead>Role</TableHead><TableHead>Effective from</TableHead><TableHead>Effective to</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+            </div> : <Table className="[&_th]:px-4 [&_th]:py-3 [&_td]:px-4 [&_td]:py-4 [&_td]:align-top"><TableHeader className="bg-muted/40"><TableRow>{canDelete && <TableHead className="w-10"><Checkbox aria-label="Select all assignments on this page" checked={allSelected ? true : selectedRows.length ? "indeterminate" : false} disabled={assignments.isFetching}
+              onCheckedChange={(checked) => setSelection({ scope: selectionScope, ids: new Set(checked === true ? data.content.map((a) => a.id) : []) })} /></TableHead>}<TableHead>Class</TableHead><TableHead>Subject</TableHead><TableHead>Trainer</TableHead><TableHead>Role</TableHead><TableHead>Teaching schedule</TableHead><TableHead>Effective period</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
               <TableBody>{data.content.map((a) => <TableRow key={a.id} data-state={selectedIds.has(a.id) ? "selected" : undefined}>
                 {canDelete && <TableCell><Checkbox aria-label={`Select assignment for ${a.subjectCode} in ${a.classCode || a.classId}`} checked={selectedIds.has(a.id)} disabled={assignments.isFetching} onCheckedChange={(checked) => toggleSelection(a.id, checked === true)} /></TableCell>}
-                <TableCell><div className="font-medium">{a.classCode || `Class #${a.classId}`}</div><div className="text-xs text-muted-foreground">{options.data?.classes.find((c) => c.id === a.classId)?.name}</div></TableCell>
-                <TableCell><div className="font-medium">{a.subjectName}</div><div className="text-xs text-muted-foreground">{a.subjectCode}</div></TableCell>
-                <TableCell>{a.trainerName || `Trainer #${a.trainerId}`}<div className="max-w-64 whitespace-normal text-xs text-muted-foreground">{a.teachingSlots?.length ? slotSummary(a.teachingSlots) : null}</div></TableCell>
+                <TableCell className="min-w-40 max-w-56 whitespace-normal break-words"><div className="font-medium">{a.className || options.data?.classes.find((c) => c.id === a.classId)?.name || a.classCode || `Class #${a.classId}`}</div><div className="mt-1 text-xs text-muted-foreground">{a.classCode}</div></TableCell>
+                <TableCell className="min-w-40 max-w-56 whitespace-normal break-words"><div className="font-medium">{a.subjectName}</div><div className="mt-1 text-xs text-muted-foreground">{a.subjectCode}</div></TableCell>
+                <TableCell className="min-w-44 max-w-60 whitespace-normal break-words"><div className="font-medium">{a.trainerName || `Trainer #${a.trainerId}`}</div>{a.trainerEmail && <div className="mt-1 break-all text-xs text-muted-foreground">{a.trainerEmail}</div>}</TableCell>
                 <TableCell><Badge variant={a.role === "MAIN" ? "default" : "outline"}>{a.role === "MAIN" ? "Main" : "Assistant"}</Badge></TableCell>
-                <TableCell className="whitespace-nowrap">{displayDate(a.effectiveFrom)}</TableCell><TableCell className="whitespace-nowrap">{a.effectiveTo ? displayDate(a.effectiveTo) : "No end date"}</TableCell>
-                <TableCell><div className="flex gap-1"><Button variant="ghost" size="sm" aria-label={`View assignment details for ${a.subjectCode} in ${a.classCode || a.classId}`} onClick={() => showDetails(a.id)}><Eye className="size-4" />Details</Button>
-                {canUpdate && <Button variant="ghost" size="sm" aria-label={`Edit assignment for ${a.subjectCode} in ${a.classCode || a.classId}`} onClick={() => setEditing(a.id)}><Pencil className="size-4" />Edit</Button>}
-                {canUpdate && <Button variant="ghost" size="sm" aria-label={`End assignment for ${a.subjectCode} in ${a.classCode || a.classId}`} onClick={() => setLifecycle({ mode: "end", assignment: a })}><CalendarOff className="size-4" />End</Button>}
-                {canDelete && <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" aria-label={`Delete assignment for ${a.subjectCode} in ${a.classCode || a.classId}`} onClick={() => setLifecycle({ mode: "delete", assignment: a })}><Trash2 className="size-4" />Delete</Button>}</div></TableCell>
+                <TableCell className="min-w-56"><AssignmentSchedule slots={a.teachingSlots} preview onViewAll={() => showDetails(a.id)} /></TableCell>
+                <TableCell><dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs"><dt className="text-muted-foreground">From</dt><dd>{displayDate(a.effectiveFrom)}</dd><dt className="text-muted-foreground">To</dt><dd>{a.effectiveTo ? displayDate(a.effectiveTo) : "No end date"}</dd></dl></TableCell>
+                <TableCell><div className="flex justify-end gap-1"><Button variant="ghost" size="icon" title="Details" aria-label={`View assignment details for ${a.subjectCode} in ${a.classCode || a.classId}`} onClick={() => showDetails(a.id)}><Eye className="size-4" /></Button>
+                {canUpdate && <Button variant="ghost" size="icon" title="Edit" aria-label={`Edit assignment for ${a.subjectCode} in ${a.classCode || a.classId}`} onClick={() => setEditing(a.id)}><Pencil className="size-4" /></Button>}
+                {canDelete && <Button variant="ghost" size="icon" title="Delete" className="text-destructive hover:text-destructive" aria-label={`Delete assignment for ${a.subjectCode} in ${a.classCode || a.classId}`} onClick={() => setLifecycle({ mode: "delete", assignment: a })}><Trash2 className="size-4" /></Button>}</div></TableCell>
               </TableRow>)}</TableBody></Table>}
           {!assignments.isPending && !assignments.isError && data && <div className="flex flex-wrap items-center justify-between gap-4 border-t pt-4">
             <p className="text-sm text-muted-foreground" role="status">{data.content.length ? `${page * size + 1}–${page * size + data.content.length}` : "0"} / {total} assignments</p>
