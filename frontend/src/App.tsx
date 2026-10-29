@@ -34,7 +34,6 @@ function AppRoutes() {
             {/* Dynamic routes from backend Module table */}
             {moduleGroups.flatMap((group) =>
                 group.modules.map((m) => {
-                    if (m.url === "/admin/audit-log") return null;
 
                     if (!m.url) return null;
                     const Component = componentRegistry[m.url];

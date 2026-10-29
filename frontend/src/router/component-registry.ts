@@ -57,9 +57,5 @@ export const routes: RouteConfig[] = [
   { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true,},
   { path: "/unauthorized", component: Unauthorized, isPublic: true },
 
-  {
-    path: "/admin/audit-log",
-    component: AuditLogPage,
-    isPublic: true,
-  },
+  {path: "/admin/audit-log", component: AuditLogPage, isModuleDriven: true },
 ];
