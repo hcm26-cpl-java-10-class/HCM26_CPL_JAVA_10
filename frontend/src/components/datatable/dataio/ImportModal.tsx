@@ -1,3 +1,4 @@
+import type { ImportInputRow } from "@/types/common/import-result";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,6 +14,7 @@ import axios from "axios";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ImportTab } from "./ImportTab";
+import { ImportPreviewDialog } from "./ImportPreviewDialog";
 
 interface ImportModalProps {
   open: boolean;
@@ -73,6 +75,40 @@ export function ImportModal({
       setImportLoading(false);
     }
   };
+
+  const handleImportRows = async (rows: ImportInputRow[]): Promise<ImportResult> => {
+    if (!table.importRows || !canImport) throw new Error("Missing import permission");
+    try {
+      setImportLoading(true);
+      const result: ImportResult = await table.importRows(rows);
+      if (result.failureCount > 0) {
+        toast.error("No sessions were imported. Review the updated validation results.");
+      } else {
+        onImportSuccess?.(result);
+        onOpenChange(false);
+        toast.success(          `Imported ${result.successCount} row(s) successfully.`);
+      }
+      return result;
+    } catch (cause: unknown) {
+      const message = axios.isAxiosError<{ message?: string }>(cause) ? cause.response?.data?.message : undefined;
+      toast.error(message ?? "Failed to import edited data");
+      throw cause;
+    } finally { setImportLoading(false); }
+  };
+
+  if (table.previewImport) {
+    return open ? <ImportPreviewDialog
+      onOpenChange={onOpenChange}
+      title={displayTitle}
+      entityName={entityName}
+      loading={importLoading}
+      onPreview={table.previewImport}
+      onImport={handleImport}
+      onPreviewRows={table.previewImportRows}
+      onImportRows={table.importRows ? handleImportRows : undefined}
+      onDownloadTemplate={onDownloadTemplate}
+    /> : null;
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

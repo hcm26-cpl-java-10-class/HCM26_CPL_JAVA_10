@@ -54,6 +54,9 @@ public class ExternalScheduleReferenceProvider implements ScheduleReferenceProvi
             if (body == null) throw new IllegalStateException("Scheduling reference data is unavailable.");
             return body;
         } catch (RuntimeException ex) {
+            if (resources.isSampleData()) {
+                return List.of();
+            }
             // Do not permit a save when shared reference data cannot be verified.
             throw new ExternalApiException("Scheduling reference data could not be loaded. Please try again later.", ex);
         }

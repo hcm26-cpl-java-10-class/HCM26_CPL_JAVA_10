@@ -13,12 +13,13 @@ interface ImportTabProps {
   onImport: (file: File) => Promise<void>;
   entityName?: string;
   onPreview?: (file: File) => Promise<void>;
+  previewRequired?: boolean;
   onFileChange?: (file: File | null) => void;
   onDownloadTemplate?: () => Promise<void>;
   maxFileSize?: number;
 }
 
-export function ImportTab({ loading, onImport, entityName, onPreview, onFileChange, onDownloadTemplate, maxFileSize = MAX_FILE_SIZE }: ImportTabProps) {
+export function ImportTab({ loading, onImport, entityName, onPreview, onFileChange, onDownloadTemplate, previewRequired = false, maxFileSize = MAX_FILE_SIZE }: ImportTabProps) {
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -128,6 +129,7 @@ export function ImportTab({ loading, onImport, entityName, onPreview, onFileChan
           <Button
             variant="outline"
             size="sm"
+            aria-label="Download template"
             onClick={handleDownloadTemplate}
             disabled={downloadingTemplate || loading}
             className="gap-2"
@@ -189,6 +191,7 @@ export function ImportTab({ loading, onImport, entityName, onPreview, onFileChan
             <Button
               variant="ghost"
               size="sm"
+              aria-label="Remove selected file"
               onClick={() => clearFile()}
               disabled={loading}
               className="h-8 w-8 p-0"
@@ -206,11 +209,11 @@ export function ImportTab({ loading, onImport, entityName, onPreview, onFileChan
           disabled={!file || loading} onClick={handlePreviewClick}>
           <Eye className="mr-2 h-5 w-5" />Preview
         </Button>}
-        <Button type="button" className="w-full flex-1 font-semibold disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100"
+        {!previewRequired && <Button type="button" className="w-full flex-1 font-semibold disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100"
           onClick={handleImportClick} disabled={!file || loading} size="lg">
           {loading ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" />{onPreview ? "Processing..." : "Importing..."}</>
             : <><Upload className="mr-2 h-5 w-5" />Import File</>}
-        </Button>
+        </Button>}
       </div>}
     </TabsContent>
   );

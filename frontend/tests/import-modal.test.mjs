@@ -26,6 +26,7 @@ function setup(importFile) {
       'Dialog', 'DialogContent', 'DialogDescription', 'DialogFooter', 'DialogHeader', 'DialogTitle',
     ].map(name => [name, name])),
     './ImportTab': { ImportTab: 'ImportTab' },
+    './ImportPreviewDialog': { ImportPreviewDialog: 'ImportPreviewDialog' },
   };
   const module = { exports: {} };
   new Function('require', 'module', 'exports', compiled)(id => {

@@ -105,7 +105,15 @@ export default function BulkScheduleGenerationPage() {
   const submission = useRef<BulkSubmission | null>(null);
   const submitting = useRef(false);
   useEffect(() => {
-    classSetupApi.getRooms().then(setRooms).catch(() => toast.error("Unable to load rooms."));
+    classSetupApi
+      .getRooms()
+      .then((data) => {
+        setRooms(data);
+        if (data && data.length > 0) {
+          setSelectedRoomId((current) => (current === 0 ? data[0].id : current));
+        }
+      })
+      .catch(() => toast.error("Unable to load rooms."));
   }, []);
   const [skipHolidays, setSkipHolidays] = useState<boolean>(true);
   const checkConflicts = true;
@@ -195,6 +203,10 @@ export default function BulkScheduleGenerationPage() {
     }
     if (selectedDays.length === 0) {
       toast.error("Vui lòng chọn ít nhất một thứ trong tuần");
+      return;
+    }
+    if (!selectedRoomId && (!meetingUrl || !meetingUrl.trim().match(/^https?:\/\/.+/))) {
+      toast.error("Vui lòng chọn một phòng học cụ thể hoặc nhập Online meeting URL hợp lệ (bắt đầu bằng http:// hoặc https://)");
       return;
     }
 
@@ -625,9 +637,9 @@ export default function BulkScheduleGenerationPage() {
               {previewResult.hasConflicts && (
                 <Alert variant="destructive">
                   <AlertTriangle className="size-4" />
-                  <AlertTitle>Phát hiện xung đột lịch học</AlertTitle>
+                  <AlertTitle>Phát hiện vấn đề trong lịch học ({previewResult.conflictCount} buổi chưa hợp lệ)</AlertTitle>
                   <AlertDescription>
-                    Một số buổi học bị trùng lịch với giảng viên hoặc phòng học khác. Bạn có thể sửa ngày/giờ/phòng trực tiếp trên bảng bên dưới trước khi lưu.
+                    Một số buổi học chưa hợp lệ (thiếu phòng học / link online, hoặc trùng lịch). Bạn có thể chọn phòng học, nhập link online hoặc chỉnh sửa ngày/giờ trực tiếp trên bảng bên dưới trước khi lưu.
                   </AlertDescription>
                 </Alert>
               )}
@@ -754,9 +766,33 @@ export default function BulkScheduleGenerationPage() {
                           </TableCell>
                           <TableCell className="text-center">
                             {isConflict ? (
-                              <Badge variant="destructive" className="text-[10px] whitespace-nowrap">
-                                Trùng lịch
-                              </Badge>
+                              <div className="flex flex-col items-center gap-0.5">
+                                <Badge
+                                  variant="destructive"
+                                  className="text-[10px] whitespace-nowrap"
+                                  title={session.conflictDetails?.message || "Lỗi kiểm tra lịch"}
+                                >
+                                  {session.conflictDetails?.type === "VENUE_REQUIRED"
+                                    ? "Thiếu phòng/Link"
+                                    : session.conflictDetails?.type === "ASSIGNMENT_INVALID"
+                                    ? "Chưa gán GV"
+                                    : session.conflictDetails?.type === "HOLIDAY"
+                                    ? "Trùng ngày lễ"
+                                    : session.conflictDetails?.type === "WORKING_HOURS"
+                                    ? "Ngoài giờ học"
+                                    : session.conflictDetails?.type?.includes("CONFLICT")
+                                    ? "Trùng lịch"
+                                    : "Không hợp lệ"}
+                                </Badge>
+                                {session.conflictDetails?.message && (
+                                  <span
+                                    className="text-[9px] text-rose-600 max-w-[130px] truncate"
+                                    title={session.conflictDetails.message}
+                                  >
+                                    {session.conflictDetails.message}
+                                  </span>
+                                )}
+                              </div>
                             ) : session.status === "PENDING" ? (
                               <Badge variant="outline" className="text-[10px] whitespace-nowrap">Kiểm tra khi lưu</Badge>
                             ) : (
