@@ -373,10 +373,13 @@ export default function TeamAllocationPage() {
     queryFn: () => teamAllocationApi.getClassMentors(classId),
     enabled: Number.isSafeInteger(classId) && classId > 0,
   });
-  // US-10: assignable project templates (min/max capacity window).
+  // US-10: assignable project templates (min/max capacity window). Always
+  // refresh on mount so a template activated in another screen shows up here.
   const templatesQuery = useQuery({
     queryKey: ["project-templates", "options"],
     queryFn: () => projectTemplateApi.getAssignableOptions(),
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   useEffect(() => {
@@ -2011,6 +2014,9 @@ export default function TeamAllocationPage() {
                               ? "Không tải được danh sách đề bài."
                               : null
                           }
+                          onRefreshTemplates={() => {
+                            void templatesQuery.refetch();
+                          }}
                           canAssignTemplate={
                             hasPermission("PEO_TEAM_ALLOCATE") ||
                             hasPermission("PRJ_WORKSPACE_MANAGE")
@@ -2823,6 +2829,7 @@ function SavedTeamCard({
   templates,
   templatesLoading,
   templatesError,
+  onRefreshTemplates,
   canAssignTemplate,
   assignTemplatePending,
   assignTemplateError,
@@ -2862,6 +2869,7 @@ function SavedTeamCard({
   templates: ProjectTemplateOption[];
   templatesLoading: boolean;
   templatesError: string | null;
+  onRefreshTemplates: () => void;
   canAssignTemplate: boolean;
   assignTemplatePending: boolean;
   assignTemplateError?: TeamTemplateApiError;
@@ -3014,7 +3022,13 @@ function SavedTeamCard({
           </span>
         </span>
       </button>
-      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+      <Dialog
+        open={detailsOpen}
+        onOpenChange={(open) => {
+          setDetailsOpen(open);
+          if (open) onRefreshTemplates();
+        }}
+      >
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>{team.teamName}</DialogTitle>
@@ -3149,6 +3163,17 @@ function SavedTeamCard({
               {templatesError && (
                 <p className="text-xs text-destructive">{templatesError}</p>
               )}
+              {isDraft &&
+                !templatesLoading &&
+                !templatesError &&
+                templates.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Chưa có đề bài nào ở trạng thái ACTIVE để gán. Đề bài mẫu
+                    dùng chung là chỉ đọc và không thể kích hoạt — hãy nhân bản
+                    một đề bài mẫu, hoàn thiện rồi kích hoạt để đưa vào danh
+                    sách này.
+                  </p>
+                )}
               {!isDraft && (
                 <div className="space-y-1.5 rounded-lg bg-muted/50 p-2.5">
                   <p className="text-xs text-muted-foreground">
