@@ -34,10 +34,6 @@ export function isProjectId(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
-export function taskListPath(projectId: string): string {
-  return projectId ? `/tasks?${new URLSearchParams({ projectId })}` : "/tasks";
-}
-
 export function toTaskFormValues(task?: TaskDTO): TaskFormValues {
   return {
     title: task?.title ?? "",

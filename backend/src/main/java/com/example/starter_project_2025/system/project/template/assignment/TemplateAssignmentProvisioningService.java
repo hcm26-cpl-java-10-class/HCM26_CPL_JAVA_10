@@ -20,26 +20,22 @@ import com.example.starter_project_2025.system.project.milestone.domain.LatePoli
 import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshot;
-import com.example.starter_project_2025.system.project.rubric.domain.RubricVersion;
-import com.example.starter_project_2025.system.project.rubric.domain.RubricVersionStatus;
-import com.example.starter_project_2025.system.project.rubric.integration.RubricTenantIdentity;
-import com.example.starter_project_2025.system.project.rubric.repository.RubricVersionRepository;
-import com.example.starter_project_2025.system.project.sprint.Sprint;
-import com.example.starter_project_2025.system.project.sprint.SprintRepository;
-import com.example.starter_project_2025.system.project.sprint.SprintStatus;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklog;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogPriority;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogRepository;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogStatus;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogWorkType;
-import com.example.starter_project_2025.system.project.template.artifact.TemplateArtifactRequirement;
-import com.example.starter_project_2025.system.project.template.artifact.TemplateArtifactRequirementRepository;
 import com.example.starter_project_2025.system.project.template.backlog.TemplateBacklogItem;
 import com.example.starter_project_2025.system.project.template.backlog.TemplateBacklogItemRepository;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestone;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneChecklistItem;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneRepository;
+import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestonePlanRequest;
+import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneRubrics;
+import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneScheduleValidator;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneTimeUnit;
+import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneValidator;
+import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
 import com.example.starter_project_2025.system.project.tenant.Tenant;
 import com.example.starter_project_2025.system.project.tenant.TenantRepository;
 import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
@@ -57,7 +53,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -69,31 +64,11 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * US-13 — materialises a team brief into the project/workspace model.
- * <p>
- * Runs inside the same transaction as
- * {@code ProjectTeamTemplateService.applyAssignment} (that is the "background
- * transaction" of the flow) and executes the three steps of the agreed flow:
- * <ol>
- *     <li><b>Snapshot</b> — {@link TemplateBriefSnapshotWriter} copies the active
- *     {@link ProjectTemplate} version into a new immutable
- *     {@link ProjectTemplateSnapshot} and returns its unique id.</li>
- *     <li><b>Project</b> — a {@link Project} row is silently inserted with
- *     {@code team_id}, {@code class_id}, {@code template_snapshot_id} and the
- *     {@link ProjectStatus#PLANNING} status; the team points at it and the
- *     existing team members/roles become the project roster.</li>
- *     <li><b>Workspace</b> — an ACTIVE {@link Workspace} is created for the team
- *     and the brief is fanned out into milestones (with rubric, checklist and
- *     late policy), a first sprint plus backlog items, artifact requirements and
- *     activity-feed rows.</li>
- * </ol>
- * Everything is idempotent per team: a team that already owns a project keeps
- * it and only the team-level brief pointer changes.
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -102,13 +77,8 @@ public class TemplateAssignmentProvisioningService {
     public static final String AUDIT_ACTION = "PROVISION_TEAM_PROJECT";
     public static final String OUTBOX_EVENT = "TEAM_PROJECT_PROVISIONED";
     public static final String ACTIVITY_WORKSPACE_GENERATED = "WORKSPACE_COMPONENTS_GENERATED";
-    public static final String ACTIVITY_ARTIFACT_REQUIRED = "ARTIFACT_REQUIREMENT_IMPORTED";
 
-    private static final int DEFAULT_MAX_LATE_DAYS = 3;
-    private static final BigDecimal DEFAULT_LATE_PENALTY = new BigDecimal("10.00");
-    private static final int DEFAULT_SPRINT_WEEKS = 2;
     private static final int PROJECT_CODE_MAX = 100;
-    private static final int SPRINT_NAME_MAX = 255;
 
     private final ProjectRepository projects;
     private final ProjectTeamRepository teams;
@@ -122,20 +92,15 @@ public class TemplateAssignmentProvisioningService {
     private final WorkspaceJournalService workspaceJournal;
     private final UserRepository users;
     private final MilestoneRepository milestones;
-    private final SprintRepository sprints;
     private final SprintBacklogRepository sprintBacklog;
     private final TemplateMilestoneRepository templateMilestones;
     private final TemplateBacklogItemRepository templateBacklogItems;
-    private final TemplateArtifactRequirementRepository templateArtifacts;
-    private final RubricVersionRepository rubricVersions;
+    private final TemplateMilestoneValidator milestoneValidator;
+    private final TemplateMilestoneScheduleValidator scheduleValidator;
+    private final TemplateMilestoneRubrics milestoneRubrics;
     private final TemplateBriefSnapshotWriter briefSnapshots;
     private final ObjectMapper objectMapper;
 
-    /**
-     * Provisions project + workspace for a team that just received a brief.
-     * Reassigning a brief on a team that already owns a project is a no-op here
-     * (the assignment service still updates {@code project_teams.project_template_id}).
-     */
     @Transactional(propagation = Propagation.MANDATORY)
     public void provision(ProjectTeam team, ProjectTemplate template, Long actorId, String correlationId) {
 
@@ -147,12 +112,23 @@ public class TemplateAssignmentProvisioningService {
 
         Long tenantId = Objects.requireNonNull(team.getTrainingClass().getTenantId(),
                 "The training class must belong to a tenant");
+        if (template.getStatus() != ProjectTemplateStatus.ACTIVE || !Boolean.TRUE.equals(template.getIsActive())
+                || template.getTenantId() != null && !tenantId.equals(template.getTenantId())) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                    "Select an active project template available to this team before creating its workspace");
+        }
         Instant now = Instant.now();
+        List<TemplateMilestone> milestonePlan =
+                templateMilestones.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId());
+        var planRequest = TemplateMilestonePlanRequest.from(template.getLockVersion(), milestonePlan);
+        milestoneValidator.validate(planRequest);
+        scheduleValidator.validate(planRequest, template.getEstimatedDurationWeeks());
+        milestoneRubrics.requirePublished(planRequest, tenantId);
 
         // ---- Step 1: immutable evidence snapshot of the active brief version
         ProjectTemplateSnapshot snapshot = briefSnapshots.snapshotForAssignment(template, team.getId());
 
-        // ---- Step 2: silent project creation (PLANNING until the team is published)
+        // ---- Step 2: project creation
         Project project = createProject(team, template, snapshot, tenantId, actorId);
         briefSnapshots.linkProject(snapshot, project.getId());
 
@@ -162,17 +138,14 @@ public class TemplateAssignmentProvisioningService {
         // ---- Step 3: workspace + generated components
         Workspace workspace = ensureWorkspace(team, project, tenantId, actorId, correlationId);
 
-        List<TemplateMilestone> milestonePlan =
-                templateMilestones.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId());
         int generatedMilestones = generateMilestones(
                 team, project, tenantId, actorId, now, milestonePlan);
-        int generatedBacklogItems = generateSprintAndBacklog(team, project, template, now);
-        int artifactRequirements = recordArtifactActivity(workspace, tenantId, actorId, correlationId, template);
+        int generatedBacklogItems = generateSampleBacklog(project, template);
 
         recordActivity(workspace, tenantId, actorId, correlationId, ACTIVITY_WORKSPACE_GENERATED);
 
         recordProvisioning(team, project, template, snapshot, workspace,
-                generatedMilestones, generatedBacklogItems, artifactRequirements, actorId, correlationId);
+                generatedMilestones, generatedBacklogItems, actorId, correlationId);
     }
 
     // ------------------------------------------------------------------
@@ -191,7 +164,8 @@ public class TemplateAssignmentProvisioningService {
         project.setCode(code);
         project.setName(resolveProjectName(team, template));
         project.setDescription(template.getDescription());
-        project.setTenantId(tenantId);
+        project.setTenant(tenants.findById(tenantId)
+                .orElseThrow(() -> new IllegalStateException("Tenant was not found")));
         project.setCohort(cohortOf(team));
         project.setStatus(ProjectStatus.PLANNING);
         project.setTemplateSnapshotId(snapshot.getId());
@@ -304,28 +278,16 @@ public class TemplateAssignmentProvisioningService {
             return 0;
         }
 
-        UUID rubricSnapshotId = resolveRubricVersion(tenantId, plan);
-        if (rubricSnapshotId == null) {
-            log.warn("US-13 team {}: no published rubric for tenant {} - milestone generation skipped",
-                    team.getId(), tenantId);
-            return 0;
-        }
-
         UUID actorUuid = actorUuid(actorId);
         int created = 0;
 
         for (TemplateMilestone planMilestone : plan) {
-            if (milestones.existsByTenantIdAndProjectIdAndTitle(
-                    tenantId, project.getId(), planMilestone.getTitle())) {
-                continue;
-            }
-
             Instant deadline = deadlineOf(planMilestone, now);
             boolean allowLate = Boolean.TRUE.equals(planMilestone.getAllowLateSubmission());
             Instant lateUntil = allowLate
-                    ? deadline.plus(maxLateDays(planMilestone), ChronoUnit.DAYS)
+                    ? deadline.plus(planMilestone.getMaxLateDays(), ChronoUnit.DAYS)
                     : null;
-            BigDecimal penalty = allowLate ? latePenalty(planMilestone) : null;
+            BigDecimal penalty = allowLate ? planMilestone.getPenaltyPerDayPercent() : null;
 
             Milestone milestone = Milestone.create(
                     tenantId,
@@ -335,7 +297,7 @@ public class TemplateAssignmentProvisioningService {
                     planMilestone.getDescription(),
                     deadline,
                     planMilestone.isMandatory(),
-                    rubricSnapshotId,
+                    planMilestone.getRubricVersion().getId(),
                     null,
                     allowLate ? LatePolicyType.ALLOW_LATE : LatePolicyType.NO_LATE,
                     lateUntil,
@@ -358,82 +320,24 @@ public class TemplateAssignmentProvisioningService {
         return created;
     }
 
-    private Instant deadlineOf(TemplateMilestone milestone, Instant now) {
-
-        int amount = milestone.getDueAfter() == null ? 7 : milestone.getDueAfter();
-        long days = milestone.getDueUnit() == TemplateMilestoneTimeUnit.WEEKS
-                ? amount * 7L
-                : amount;
-        return now.plus(Math.max(days, 1L), ChronoUnit.DAYS);
+    private Instant deadlineOf(TemplateMilestone milestone, Instant startsAt) {
+        long days = milestone.getDueAfter().longValue()
+                * (milestone.getDueUnit() == TemplateMilestoneTimeUnit.WEEKS ? 7L : 1L);
+        return startsAt.plus(days, ChronoUnit.DAYS);
     }
 
-    private int maxLateDays(TemplateMilestone milestone) {
-
-        Integer value = milestone.getMaxLateDays();
-        return value == null || value <= 0 ? DEFAULT_MAX_LATE_DAYS : value;
-    }
-
-    private BigDecimal latePenalty(TemplateMilestone milestone) {
-
-        BigDecimal value = milestone.getPenaltyPerDayPercent();
-        return value == null ? DEFAULT_LATE_PENALTY : value;
-    }
-
-    private UUID resolveRubricVersion(Long tenantId, List<TemplateMilestone> plan) {
-
-        for (TemplateMilestone milestone : plan) {
-            if (milestone.getRubricVersion() != null) {
-                return milestone.getRubricVersion().getId();
-            }
-        }
-        return rubricVersions
-                .findAllByRubricTenantIdAndStatusOrderByNameSnapshotAscVersionNumberDesc(
-                        RubricTenantIdentity.from(tenantId), RubricVersionStatus.PUBLISHED)
-                .stream()
-                .map(RubricVersion::getId)
-                .findFirst()
-                .orElse(null);
-    }
-
-    // ------------------------------------------------------------------
-    // Step 3b — Sprint & backlog
-    // ------------------------------------------------------------------
-
-    private int generateSprintAndBacklog(ProjectTeam team,
-                                         Project project,
-                                         ProjectTemplate template,
-                                         Instant now) {
-
+    private int generateSampleBacklog(Project project, ProjectTemplate template) {
         List<TemplateBacklogItem> items =
                 templateBacklogItems.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId());
-        if (items.isEmpty()) {
-            return 0;
-        }
-
-        LocalDateTime start = LocalDateTime.now();
-        Sprint sprint = sprints.findByName(sprintName(project))
-                .orElseGet(() -> sprints.saveAndFlush(Sprint.builder()
-                        .projectId(project.getId())
-                        .teamId(team.getId())
-                        .name(sprintName(project))
-                        .sprintGoal("Khung làm việc ban đầu cho đề bài "
-                                + (template.getName() == null ? project.getName() : template.getName()))
-                        .startDate(start)
-                        .endDate(start.plusWeeks(DEFAULT_SPRINT_WEEKS))
-                        .status(SprintStatus.PLANNED)
-                        .isActive(true)
-                        .version(0L)
-                        .build()));
-
         int created = 0;
         for (TemplateBacklogItem item : items) {
-            if (sprintBacklog.findBySprintIdAndTitleIgnoreCase(sprint.getId(), item.getTitle()).isPresent()) {
+            String title = truncate(item.getTitle(), 200);
+            if (sprintBacklog.findByProjectIdAndSprintIsNullAndTitleIgnoreCase(project.getId(), title).isPresent()) {
                 continue;
             }
             sprintBacklog.saveAndFlush(SprintBacklog.builder()
-                    .sprint(sprint)
                     .projectId(project.getId())
-                    .title(truncate(item.getTitle(), 200))
+                    .title(title)
                     .description(item.getDescription())
                     .status(SprintBacklogStatus.TODO)
                     .workType(SprintBacklogWorkType.STORY)
@@ -444,30 +348,6 @@ public class TemplateAssignmentProvisioningService {
             created++;
         }
         return created;
-    }
-
-    private String sprintName(Project project) {
-
-        return truncate(project.getCode() + " - Sprint 1", SPRINT_NAME_MAX);
-    }
-
-    // ------------------------------------------------------------------
-    // Step 3c — Artifacts & activity feed
-    // ------------------------------------------------------------------
-
-    private int recordArtifactActivity(Workspace workspace,
-                                       Long tenantId,
-                                       Long actorId,
-                                       String correlationId,
-                                       ProjectTemplate template) {
-
-        List<TemplateArtifactRequirement> requirements =
-                templateArtifacts.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId());
-
-        for (TemplateArtifactRequirement requirement : requirements) {
-            recordActivity(workspace, tenantId, actorId, correlationId, ACTIVITY_ARTIFACT_REQUIRED);
-        }
-        return requirements.size();
     }
 
     private void recordActivity(Workspace workspace,
@@ -499,7 +379,6 @@ public class TemplateAssignmentProvisioningService {
                                     Workspace workspace,
                                     int milestoneCount,
                                     int backlogItemCount,
-                                    int artifactRequirementCount,
                                     Long actorId,
                                     String correlationId) {
 
@@ -516,7 +395,6 @@ public class TemplateAssignmentProvisioningService {
         state.put("workspaceId", workspace.getId());
         state.put("milestones", milestoneCount);
         state.put("backlogItems", backlogItemCount);
-        state.put("artifactRequirements", artifactRequirementCount);
         state.put("members", roster(team));
 
         String payload;

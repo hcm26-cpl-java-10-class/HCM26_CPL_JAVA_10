@@ -95,11 +95,6 @@ public class TemplateMilestoneService {
         Set<Long> retainedMilestones = request.milestones().stream().map(TemplateMilestonePlanRequest.Milestone::savedId)
                 .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
         var removedIds = existing.stream().map(TemplateMilestone::getId).filter(id -> !retainedMilestones.contains(id)).toList();
-        if (!removedIds.isEmpty() && artifactRequirements.existsByMilestone_IdIn(removedIds)) {
-            throw new ProjectTemplateException(422,
-                    "Remove artifact requirements from Backlog & artifacts before deleting their milestone",
-                    Map.of("milestones", List.of("A milestone being removed still has artifact requirements")));
-        }
         scheduleValidator.validate(request, template.getEstimatedDurationWeeks());
         var rubricVersions = rubrics.requirePublished(request, template.getTenantId());
         String before = state(template, existing);
@@ -125,6 +120,7 @@ public class TemplateMilestoneService {
         }
         Set<Long> retainedIds = request.milestones().stream().map(TemplateMilestonePlanRequest.Milestone::savedId)
                 .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        if (!removedIds.isEmpty()) artifactRequirements.deleteByMilestone_IdIn(removedIds);
         milestones.deleteAll(existing.stream().filter(item -> !retainedIds.contains(item.getId())).toList());
         List<TemplateMilestone> saved = milestones.saveAllAndFlush(updated);
         audits.save(new ProjectTemplateAudit(template.getTenantId(), templateId, user.getId(),

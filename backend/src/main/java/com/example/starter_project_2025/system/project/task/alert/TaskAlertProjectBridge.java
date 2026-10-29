@@ -91,7 +91,8 @@ public class TaskAlertProjectBridge implements TaskProjectAccess {
         return teamMembers.findAll().stream().anyMatch(row -> current(row) && matches(row.getTeam(), project)
                 && Objects.equals(row.getUser().getId(), actorId) && row.getProjectRole() == ProjectRole.TEAM_LEADER)
                 || projectMembers.findAll().stream().anyMatch(row -> current(row) && matches(row.getTeam(), project)
-                && Objects.equals(row.getClassMember().getUser().getId(), actorId) && "TEAM_LEADER".equals(row.getRole()));
+                && Objects.equals(row.getClassMember().getUser().getId(), actorId)
+                && ("TEAM_LEADER".equals(row.getRole()) || ProjectMemberRole.hasRole(row.getRole(), "PM")));
     }
     public boolean memberOf(Project project, Long actorId) {
         return teamMembers.findAll().stream().anyMatch(row -> current(row) && matches(row.getTeam(), project)
@@ -155,7 +156,7 @@ public class TaskAlertProjectBridge implements TaskProjectAccess {
                     .filter(this::current).filter(row -> !requireLeader || row.getProjectRole() == ProjectRole.TEAM_LEADER).isPresent();
         return projectMembers.findAllByTeam_IdOrderByIdAsc(recipient.teamId()).stream().anyMatch(row -> current(row)
                 && Objects.equals(row.getClassMember().getUser().getId(), actor.getId())
-                && (!requireLeader || "TEAM_LEADER".equals(row.getRole())));
+                && (!requireLeader || "TEAM_LEADER".equals(row.getRole()) || ProjectMemberRole.hasRole(row.getRole(), "PM")));
     }
     public boolean canRead(User actor, Task task) {
         Project project = project(task.getProjectId());

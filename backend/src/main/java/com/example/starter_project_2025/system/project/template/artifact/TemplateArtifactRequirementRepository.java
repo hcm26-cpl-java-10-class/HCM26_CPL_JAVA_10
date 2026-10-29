@@ -9,5 +9,5 @@ public interface TemplateArtifactRequirementRepository extends JpaRepository<Tem
     @EntityGraph(attributePaths = {"milestone", "allowedMimeTypes"})
     List<TemplateArtifactRequirement> findAllByTemplate_IdOrderByOrderIndexAscIdAsc(Long templateId);
 
-    boolean existsByMilestone_IdIn(Collection<Long> milestoneIds);
+    void deleteByMilestone_IdIn(Collection<Long> milestoneIds);
 }

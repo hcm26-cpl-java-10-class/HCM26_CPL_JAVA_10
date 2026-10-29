@@ -7,8 +7,6 @@ import { getTaskError, type TaskRequestError } from "../task-form.utils";
 
 export type TaskWorkflowAction =
   | { kind: "STATUS"; status: TaskStatus; version: number }
-  | { kind: "ADD"; predecessorTaskId: string; version: number }
-  | { kind: "REMOVE"; predecessorTaskId: string; version: number }
   | { kind: "DELETE"; version: number };
 
 export function useTaskWorkflowMutation(
@@ -25,39 +23,22 @@ export function useTaskWorkflowMutation(
       if (action.kind === "DELETE") {
         return taskApi.delete(taskId, action.version, key);
       }
-      if (action.kind === "STATUS") {
-        return taskApi.changeStatus(
-          taskId,
-          { status: action.status, version: action.version },
-          key,
-        );
-      }
-      if (action.kind === "ADD") {
-        return taskApi.addDependency(
-          taskId,
-          { predecessorTaskId: action.predecessorTaskId, version: action.version },
-          key,
-        );
-      }
-      return taskApi.removeDependency(taskId, action.predecessorTaskId, action.version, key);
+      return taskApi.changeStatus(taskId, { status: action.status, version: action.version }, key);
     },
     onSuccess: async (_, { action }) => {
       if (action.kind === "DELETE") {
-        toast.success("Task deleted successfully.");
+        toast.success("Subtask deleted successfully.");
         onSuccess(action);
         queryClient.removeQueries({
           predicate: (query) => query.queryKey[0] === "tasks" && query.queryKey.includes(taskId),
         });
         await queryClient.invalidateQueries({ queryKey: ["tasks"] });
+        await queryClient.invalidateQueries({ queryKey: ["backlog-subtasks"] });
         return;
       }
       await queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      const messages = {
-        STATUS: "Task status updated successfully.",
-        ADD: "Prerequisite task added successfully.",
-        REMOVE: "Dependency removed successfully.",
-      };
-      toast.success(messages[action.kind]);
+      await queryClient.invalidateQueries({ queryKey: ["backlog-subtasks"] });
+      toast.success("Subtask status updated successfully.");
       onSuccess(action);
     },
   });
@@ -83,6 +64,7 @@ export function useTaskWorkflowMutation(
       }
       if (result.status === 404 || (action.kind === "DELETE" && result.status !== undefined)) {
         void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+        void queryClient.invalidateQueries({ queryKey: ["backlog-subtasks"] });
       }
       return { success: false, status: result.status };
     } finally {

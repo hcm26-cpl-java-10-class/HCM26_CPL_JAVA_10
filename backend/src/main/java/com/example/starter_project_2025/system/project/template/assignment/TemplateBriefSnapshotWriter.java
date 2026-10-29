@@ -4,8 +4,6 @@ import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshot;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshotRepository;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateVersionStatus;
-import com.example.starter_project_2025.system.project.template.artifact.TemplateArtifactRequirement;
-import com.example.starter_project_2025.system.project.template.artifact.TemplateArtifactRequirementRepository;
 import com.example.starter_project_2025.system.project.template.backlog.TemplateBacklogItem;
 import com.example.starter_project_2025.system.project.template.backlog.TemplateBacklogItemRepository;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestone;
@@ -14,7 +12,6 @@ import com.example.starter_project_2025.system.project.template.milestone.Templa
 import com.example.starter_project_2025.system.project.template.milestone.TemplateRubricCriterion;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,12 +24,11 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * US-13 step 1 — "chụp snapshot đề bài".
  * <p>
- * When a mentor/admin assigns a brief to a team (and therefore activates the
- * workspace creation flow), the currently published version of the
+ * When a workspace is created for a team, the currently published version of the
  * {@link ProjectTemplate} is copied into a brand new
  * {@link ProjectTemplateSnapshot} row. The copy contains the whole brief:
- * context, goals, constraints, milestones with rubric/checklist and late
- * policy, backlog items and artifact requirements.
+ * description, constraints, milestones with rubric/checklist and late
+ * policy and backlog items.
  * <p>
  * The row is stored as {@link ProjectTemplateVersionStatus#PUBLISHED} so it can
  * never be edited again (only {@code DRAFT} versions are editable) and with
@@ -52,7 +48,6 @@ public class TemplateBriefSnapshotWriter {
     private final ProjectTemplateSnapshotRepository snapshots;
     private final TemplateMilestoneRepository templateMilestones;
     private final TemplateBacklogItemRepository templateBacklogItems;
-    private final TemplateArtifactRequirementRepository templateArtifacts;
     private final ObjectMapper objectMapper;
 
     /**
@@ -129,8 +124,6 @@ public class TemplateBriefSnapshotWriter {
                 templateMilestones.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId());
         List<TemplateBacklogItem> backlog =
                 templateBacklogItems.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId());
-        List<TemplateArtifactRequirement> artifacts =
-                templateArtifacts.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId());
 
         Map<String, Object> content = new LinkedHashMap<>();
         content.put("purpose", PURPOSE_TEAM_ASSIGNMENT);
@@ -145,30 +138,14 @@ public class TemplateBriefSnapshotWriter {
         content.put("sourceSnapshotId", source == null ? null : source.getId());
         content.put("sourceVersion", source == null ? null : source.getVersion());
         content.put("constraints", readJsonOrNull(template.getConstraintsJson()));
-        content.put("goals", milestones.stream().map(TemplateMilestone::getTitle).toList());
-        content.put("deliverables", deliverables(milestones, artifacts));
         content.put("milestones", milestones.stream().map(this::milestone).toList());
         content.put("backlogItems", backlog.stream().map(this::backlogItem).toList());
-        content.put("artifacts", artifacts.stream().map(this::artifact).toList());
 
         try {
             return objectMapper.writeValueAsString(content);
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Unable to serialize the project brief snapshot", exception);
         }
-    }
-
-    private List<String> deliverables(List<TemplateMilestone> milestones,
-                                      List<TemplateArtifactRequirement> artifacts) {
-
-        List<String> rows = new ArrayList<>();
-        artifacts.stream().map(TemplateArtifactRequirement::getTitle)
-                .filter(title -> title != null && !title.isBlank())
-                .forEach(rows::add);
-        milestones.stream().map(TemplateMilestone::getTitle)
-                .filter(title -> title != null && !title.isBlank() && !rows.contains(title))
-                .forEach(rows::add);
-        return rows;
     }
 
     private Map<String, Object> milestone(TemplateMilestone milestone) {
@@ -220,20 +197,6 @@ public class TemplateBriefSnapshotWriter {
         row.put("description", item.getDescription());
         row.put("suggestedRole", item.getSuggestedRole() == null ? null : item.getSuggestedRole().name());
         row.put("orderIndex", item.getOrderIndex());
-        return row;
-    }
-
-    private Map<String, Object> artifact(TemplateArtifactRequirement requirement) {
-
-        Map<String, Object> row = new LinkedHashMap<>();
-        row.put("milestoneTitle", requirement.getMilestone() == null
-                ? null
-                : requirement.getMilestone().getTitle());
-        row.put("title", requirement.getTitle());
-        row.put("description", requirement.getDescription());
-        row.put("type", requirement.getType() == null ? null : requirement.getType().name());
-        row.put("allowedMimeTypes", List.copyOf(requirement.getAllowedMimeTypes()));
-        row.put("orderIndex", requirement.getOrderIndex());
         return row;
     }
 

@@ -1,89 +1,9 @@
-import { MainLayout } from "@/components/layout/MainLayout";
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { usePermissions } from "@/hooks/usePermissions";
-import { ChevronDown, FolderOpen } from "lucide-react";
-import { useEffect, useState } from "react";
-import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
-import { TaskProjectPicker } from "./components/TaskProjectPicker";
-import { TaskTable } from "./components/TaskTable";
-import { OverdueTaskPanel } from "./components/OverdueTaskPanel";
-import { InactiveMemberPanel } from "./components/InactiveMemberPanel";
-import { isProjectId } from "./task-form.utils";
-import { useTaskProjects } from "./hooks/useTaskProjects";
+import { Navigate, useSearchParams } from "react-router-dom";
 
 export default function TaskManagementPage() {
-  const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const { user, activeRole, hasPermission } = usePermissions();
-  const projects = useTaskProjects();
-  const [projectOpen, setProjectOpen] = useState(false);
-  const projectStorageKey = `task-project:${user.email}`;
-  const projectId =
-    searchParams.get("projectId") ?? sessionStorage.getItem(projectStorageKey) ?? "";
-  const projectSelected = isProjectId(projectId);
-  const overdue = searchParams.get("overdue") === "true";
-  const inactive = searchParams.get("view") === "inactive";
-
-  useEffect(() => {
-    if (projectSelected) sessionStorage.setItem(projectStorageKey, projectId);
-  }, [projectId, projectSelected, projectStorageKey]);
-
-  const selectProject = (id: string) => {
-    sessionStorage.setItem(projectStorageKey, id);
-    setSearchParams({ projectId: id, ...(inactive ? { view: "inactive" } : overdue ? { overdue: "true" } : {}) });
-    setProjectOpen(false);
-  };
-
-  if (overdue || inactive) return <Navigate replace to={`/management/alerts?view=${inactive ? "INACTIVE" : "BACKLOG"}`}/>;
-
-  return (
-    <MainLayout pathName={{ tasks: "Tasks" }}>
-      <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
-        <header className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-xl font-semibold">Tasks</h1>
-          {hasPermission("PROJECT_ALERT_READ") && <Button variant="outline" onClick={() => navigate("/management/alerts")}>Alerts</Button>}
-          {projectSelected && (
-            <Popover open={projectOpen} onOpenChange={setProjectOpen}>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="gap-2" title={projectId}>
-                  <FolderOpen className="size-4 text-muted-foreground" />
-                  <span className="max-w-64 truncate">{projects.isError ? "Change project" : projects.data?.find(project => project.id === projectId)?.name ?? "Change project"}</span>
-                  <ChevronDown className="size-4 text-muted-foreground" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-[min(28rem,calc(100vw-2rem))] p-0">
-                <TaskProjectPicker key={projectId} projectId={projectId} onSelect={selectProject} />
-              </PopoverContent>
-            </Popover>
-          )}
-        </header>
-        {projectSelected ? (
-          <div className="grid min-h-0 gap-4">
-            <div className="flex flex-wrap gap-2" aria-label="Task views">
-              <Button variant={overdue || inactive ? "outline" : "default"} onClick={() => setSearchParams({ projectId })}>All tasks</Button>
-              <Button variant="outline" onClick={() => navigate("/management/alerts?view=BACKLOG")}>Backlog alerts</Button>
-              <Button variant="outline" onClick={() => navigate("/management/alerts?view=MILESTONE")}>Milestone risks</Button>
-              {hasPermission("INACTIVE_MEMBER_READ") && projects.data?.find(project => project.id===projectId)?.canManage &&
-                <Button variant="outline" onClick={() => navigate("/management/alerts?view=INACTIVE")}>Inactive members</Button>}
-            </div>
-            {inactive ? <InactiveMemberPanel key={`${user.email}:${activeRole}:${projectId}`} projectId={projectId} /> : overdue
-              ? <OverdueTaskPanel key={`${user.email}:${activeRole}:${projectId}`} projectId={projectId} />
-              : <TaskTable key={`${user.email}:${activeRole}:${projectId}`} projectId={projectId} />}
-          </div>
-        ) : (
-          <div className="mx-auto grid w-full max-w-xl gap-5 py-12">
-            <div className="text-center">
-              <FolderOpen className="mx-auto mb-3 size-10 text-muted-foreground" />
-              <h2 className="font-semibold">Select a project to get started</h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Choose a project you can access to manage tasks.
-              </p>
-            </div>
-            <TaskProjectPicker key={projectId} projectId={projectId} onSelect={selectProject} />
-          </div>
-        )}
-      </section>
-    </MainLayout>
-  );
+  const [params] = useSearchParams();
+  const destination = params.get("overdue") === "true" || params.get("view") === "inactive"
+    ? `/management/alerts?view=${params.get("view") === "inactive" ? "INACTIVE" : "BACKLOG"}`
+    : "/backlogs";
+  return <Navigate replace to={destination} />;
 }

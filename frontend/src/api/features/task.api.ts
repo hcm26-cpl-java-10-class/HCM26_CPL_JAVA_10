@@ -7,7 +7,7 @@ import type {
   TaskWorkflowDTO,
   TaskActivityDTO,
   TaskStatusPayload,
-  TaskDependencyPayload,
+  BacklogSubtasks,
 } from "@/types/features/task";
 
 const path = "/tasks";
@@ -34,30 +34,8 @@ export const taskApi = {
     return response.data;
   },
 
-  async addDependency(
-    id: string,
-    data: TaskDependencyPayload,
-    requestId: string,
-  ): Promise<TaskDTO> {
-    const response = await axiosInstance.post<TaskDTO>(`${path}/${id}/dependencies`, data, {
-      headers: { "Idempotency-Key": requestId },
-    });
-    return response.data;
-  },
-
-  async removeDependency(
-    id: string,
-    predecessorId: string,
-    version: number,
-    requestId: string,
-  ): Promise<TaskDTO> {
-    const response = await axiosInstance.delete<TaskDTO>(
-      `${path}/${id}/dependencies/${predecessorId}`,
-      {
-        params: { version },
-        headers: { "Idempotency-Key": requestId },
-      },
-    );
+  async getSubtasks(backlogId: number): Promise<BacklogSubtasks> {
+    const response = await axiosInstance.get<BacklogSubtasks>(`/sprint-backlogs/${backlogId}/subtasks`);
     return response.data;
   },
 
