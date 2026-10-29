@@ -1,11 +1,20 @@
 
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
-import axios from "axios";
 import {
-    Search, Plus, Eye, Pencil, Trash2, Upload, LockKeyhole,
+    useQuery,
+    useQueryClient,
+} from "@tanstack/react-query";
+import axios from "axios";
+import { toast } from "sonner";
+import {
+    Eye,
+    LockKeyhole,
+    Pencil,
+    Plus,
+    Search,
+    Trash2,
+    X,
 } from "lucide-react";
 
 import {
@@ -15,35 +24,35 @@ import {
 } from "@/api/features/demo/syllabus.api";
 
 import { MainLayout } from "@/components/layout/MainLayout";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirmdialog";
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
-import { Tabs } from "@/components/ui/tabs";
-import { ImportTab } from "@/components/datatable/dataio/ImportTab";
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { CatalogPagination } from "@/pages/management/demo/course/components/CatalogPagination";
+import { useDebouncedValue } from "@/pages/management/demo/course/hooks/useDebouncedValue";
 import { usePermissions } from "@/hooks/usePermissions";
+import { SyllabusImportAction } from "./SyllabusImportAction";
 
-const empty: SyllabusInput = {
+const BLANK: SyllabusInput = {
     code: "",
     name: "",
     description: "",
 };
 
+const PAGE_SIZE = 10;
 const normalize = (value: string) =>
     value.trim().replace(/\s+/g, " ");
 
-const MAX_DEMO_FILE_BYTES = 5_000_000;
-
-function errorMessage(error: unknown): string {
+function errorMessage(error: unknown) {
     if (axios.isAxiosError(error)) {
         const data = error.response?.data as
             | {
@@ -53,24 +62,22 @@ function errorMessage(error: unknown): string {
         }
             | undefined;
 
-        const firstError = data?.errors
+        const first = data?.errors
             ? Object.values(data.errors).flat()[0]
             : undefined;
 
-        if (typeof firstError === "string") return firstError;
-        if (typeof data?.detail === "string") return data.detail;
-        if (typeof data?.message === "string") return data.message;
+        if (first) return first;
+        if (data?.detail) return data.detail;
+        if (data?.message) return data.message;
 
         if (error.response?.status === 403) {
-            return "Import denied or missing permission. Check the demo-import flag.";
+            return "Action denied or missing permission.";
         }
     }
 
-    if (error instanceof Error && error.message) {
-        return error.message;
-    }
-
-    return "Operation failed. Check the Backend connection.";
+    return error instanceof Error
+        ? error.message
+        : "Operation failed. Check the Backend connection.";
 }
 
 export default function SyllabusesPage() {
@@ -82,8 +89,17 @@ export default function SyllabusesPage() {
     const canDelete = hasPermission("SYLLABUS_DELETE");
 
     const [search, setSearch] = useState("");
+    const debouncedSearch = useDebouncedValue(
+        search.trim(),
+        400
+    );
+
+    const [status, setStatus] = useState("all");
+    const [sortBy, setSortBy] = useState("name");
+    const [page, setPage] = useState(0);
+
     const [form, setForm] = useState<SyllabusInput>({
-        ...empty,
+        ...BLANK,
     });
 
     const [editing, setEditing] =
@@ -95,22 +111,52 @@ export default function SyllabusesPage() {
         useState<SyllabusSummary | null>(null);
 
     const [busy, setBusy] = useState(false);
-    const [importing, setImporting] = useState(false);
-    const [importOpen, setImportOpen] = useState(false);
-
-    const query = useQuery({
-        queryKey: ["syllabuses", search.trim()],
-        queryFn: () => syllabusApi.list(search.trim()),
+const query = useQuery({
+        queryKey: ["syllabuses", debouncedSearch],
+        queryFn: () =>
+            syllabusApi.list(debouncedSearch),
     });
 
-    const results = query.data ?? [];
-    const suggestions = search.trim()
-        ? results.slice(0, 5)
-        : [];
+    const all = query.data ?? [];
+
+    const filtered = all.filter(
+        (s) =>
+            status === "all" ||
+            s.status === status
+    );
+
+    const rows = [...filtered].sort(
+        (a, b) =>
+            sortBy === "code"
+                ? a.code.localeCompare(b.code)
+                : a.name.localeCompare(b.name)
+    );
+
+    const totalPages = Math.ceil(
+        rows.length / PAGE_SIZE
+    );
+
+    const effectivePage = Math.min(
+        page,
+        Math.max(0, totalPages - 1)
+    );
+
+    const paged = rows.slice(
+        effectivePage * PAGE_SIZE,
+        (effectivePage + 1) * PAGE_SIZE
+    );
+
+    const draftCount = all.filter(
+        (s) => s.status === "DRAFT"
+    ).length;
+
+    const publishedCount = all.filter(
+        (s) => s.status === "PUBLISHED"
+    ).length;
 
     function openCreate() {
         setEditing(null);
-        setForm({ ...empty });
+        setForm({ ...BLANK });
         setFormOpen(true);
     }
 
@@ -123,11 +169,13 @@ export default function SyllabusesPage() {
         }
 
         setEditing(item);
+
         setForm({
             code: item.code,
             name: item.name,
             description: item.description ?? "",
         });
+
         setFormOpen(true);
     }
 
@@ -137,13 +185,17 @@ export default function SyllabusesPage() {
         });
     }
 
-    async function save(event: FormEvent<HTMLFormElement>) {
+    async function save(
+        event: FormEvent<HTMLFormElement>
+    ) {
         event.preventDefault();
 
         if (busy) return;
 
         if (editing?.status === "PUBLISHED") {
-            toast.error("Published Syllabus is read-only.");
+            toast.error(
+                "Published Syllabus is read-only."
+            );
             return;
         }
 
@@ -153,9 +205,13 @@ export default function SyllabusesPage() {
             description: form.description.trim(),
         };
 
-        if (!/^[A-Z0-9][A-Z0-9_-]{2,29}$/.test(clean.code)) {
+        if (
+            !/^[A-Z0-9][A-Z0-9_-]{2,29}$/.test(
+                clean.code
+            )
+        ) {
             toast.error(
-                "Code must contain 3-30 valid characters."
+                "Code must contain 3–30 valid characters."
             );
             return;
         }
@@ -166,7 +222,7 @@ export default function SyllabusesPage() {
             !/\p{L}/u.test(clean.name)
         ) {
             toast.error(
-                "Name must contain letters and have 3-150 characters."
+                "Name must contain letters and have 3–150 characters."
             );
             return;
         }
@@ -176,7 +232,7 @@ export default function SyllabusesPage() {
             return;
         }
 
-        const duplicate = results.some(
+        const duplicate = all.some(
             (item) =>
                 item.id !== editing?.id &&
                 (
@@ -188,7 +244,9 @@ export default function SyllabusesPage() {
         );
 
         if (duplicate) {
-            toast.error("Syllabus code or name already exists.");
+            toast.error(
+                "Syllabus code or name already exists."
+            );
             return;
         }
 
@@ -196,14 +254,20 @@ export default function SyllabusesPage() {
 
         try {
             if (editing) {
-                await syllabusApi.update(editing.id, clean);
+                await syllabusApi.update(
+                    editing.id,
+                    clean
+                );
             } else {
                 await syllabusApi.create(clean);
             }
 
             await refreshList();
             setFormOpen(false);
-            toast.success("Syllabus saved successfully.");
+
+            toast.success(
+                "Syllabus saved successfully."
+            );
         } catch (error) {
             toast.error(errorMessage(error));
         } finally {
@@ -228,7 +292,9 @@ export default function SyllabusesPage() {
             await refreshList();
 
             setDeleting(null);
-            toast.success("Syllabus deleted successfully.");
+            toast.success(
+                "Syllabus deleted successfully."
+            );
         } catch (error) {
             toast.error(errorMessage(error));
         } finally {
@@ -236,74 +302,26 @@ export default function SyllabusesPage() {
         }
     }
 
-    // Demo import reuses the shared LMS ImportTab.
-    // The specific five-sheet processing remains in M3 Backend.
-    async function handleImportExcel(file: File): Promise<void> {
-        if (importing) return;
-
-        if (!file.name.toLowerCase().endsWith(".xlsx")) {
-            throw new Error(
-                "Only .xlsx files are supported for Syllabus demo import."
-            );
-        }
-
-        if (file.size > MAX_DEMO_FILE_BYTES) {
-            throw new Error(
-                "Demo Excel file must be smaller than 5 MB."
-            );
-        }
-
-        setImporting(true);
-
-        try {
-            const result = await syllabusApi.importExcel(file);
-
-            setSearch("");
-            await refreshList();
-
-            toast.success(
-                `Import successful: ${result.syllabuses} Syllabuses, ` +
-                `${result.clos} CLOs, ` +
-                `${result.sections} Sections, ` +
-                `${result.topics} Topics, ` +
-                `${result.materials} Materials.`
-            );
-
-            setImportOpen(false);
-        } catch (error) {
-            throw new Error(errorMessage(error));
-        } finally {
-            setImporting(false);
-        }
-    }
 
     return (
-        <MainLayout pathName={{ syllabuses: "Syllabuses" }}>
-            <div className="mx-auto w-full max-w-[1500px] space-y-6">
-
-                {/* HEADER */}
-                <div className="flex flex-wrap items-center justify-between gap-3">
+        <MainLayout
+            pathName={{ syllabuses: "Syllabuses" }}
+        >
+            <div className="mx-auto w-full max-w-7xl space-y-6 pb-10">
+                {/* PAGE HEADER */}
+                <header className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                        <h1 className="text-2xl font-bold">
+                        <h1 className="text-2xl font-bold tracking-tight">
                             Syllabuses
                         </h1>
-                        <p className="text-sm text-muted-foreground">
+
+                        <p className="mt-1 text-sm text-muted-foreground">
                             Create, manage and publish course outlines.
                         </p>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
-                        {import.meta.env.DEV && canCreate && canEdit && (
-                            <Button
-                                type="button"
-                                variant="outline"
-                                disabled={importing}
-                                onClick={() => setImportOpen(true)}
-                            >
-                                <Upload className="size-4" />
-                                Import demo Excel
-                            </Button>
-                        )}
+                    <div className="flex flex-wrap gap-2">
+                        {import.meta.env.DEV && canCreate && canEdit && <SyllabusImportAction />}
 
                         {canCreate && (
                             <Button onClick={openCreate}>
@@ -312,169 +330,254 @@ export default function SyllabusesPage() {
                             </Button>
                         )}
                     </div>
-                </div>
+                </header>
 
-                {/* SHARED IMPORT UI FOR DEMO */}
-                {import.meta.env.DEV && canCreate && canEdit && (
-                    <Dialog
-                        open={importOpen}
-                        onOpenChange={(open) => {
-                            if (!importing) setImportOpen(open);
-                        }}
-                    >
-                        <DialogContent className="flex min-h-105 flex-col sm:max-w-xl">
-                            <DialogHeader>
-                                <DialogTitle>
-                                    Import Syllabus Demo
-                                </DialogTitle>
-                                <DialogDescription>
-                                    Only for local demo data. Choose an .xlsx
-                                    file smaller than 5 MB with the five sheets:
-                                    Syllabuses, CLOs, Sections, Topics and
-                                    LearningMaterials.
-                                </DialogDescription>
-                            </DialogHeader>
+                {/* OVERVIEW */}
+                <section
+                    className="grid gap-3 sm:grid-cols-3"
+                    aria-label="Syllabus overview"
+                >
+                    {(
+                        [
+                            [
+                                "Total syllabuses",
+                                all.length,
+                            ],
+                            ["Draft", draftCount],
+                            ["Published", publishedCount],
+                        ] as const
+                    ).map(([label, value]) => (
+                        <div
+                            key={label}
+                            className="rounded-2xl border bg-card p-4"
+                        >
+                            <p className="text-xs text-muted-foreground">
+                                {label}
+                            </p>
 
-                            <Tabs
-                                defaultValue="import"
-                                className="flex w-full flex-1 flex-col"
-                            >
-                                <ImportTab
-                                    loading={importing}
-                                    onImport={handleImportExcel}
-                                    allowedExtensions={[".xlsx"]}
-                                    maxFileSizeBytes={MAX_DEMO_FILE_BYTES}
-                                />
-                            </Tabs>
+                            <p className="mt-1 text-2xl font-semibold tabular-nums">
+                                {value}
+                            </p>
+                        </div>
+                    ))}
+                </section>
 
-                            <DialogFooter>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    disabled={importing}
-                                    onClick={() => setImportOpen(false)}
-                                >
-                                    Close
-                                </Button>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog>
-                )}
-
-                {/* SEARCH */}
-                <div className="rounded-xl border bg-card p-4">
-                    <label
-                        htmlFor="syllabus-search"
-                        className="mb-2 block text-sm font-semibold"
-                    >
-                        Search by syllabus name or code
-                    </label>
-
+                {/* SEARCH, FILTER AND SORT */}
+                <section className="grid gap-3 rounded-2xl border bg-card p-4 md:grid-cols-[minmax(0,1fr)_170px_170px]">
                     <div className="relative">
-                        <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
+                        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 
                         <Input
-                            id="syllabus-search"
+                            aria-label="Search syllabus name or code"
                             value={search}
-                            placeholder="e.g. Java, JNP119, Spring"
-                            className="pl-9"
-                            onChange={(event) =>
-                                setSearch(event.target.value)
-                            }
+                            placeholder="Search by code or syllabus name..."
+                            className="pl-9 pr-9"
+                            onChange={(event) => {
+                                setSearch(
+                                    event.target.value
+                                );
+                                setPage(0);
+                            }}
                         />
 
-                        {suggestions.length > 0 && (
-                            <div className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border bg-card shadow-lg">
-                                {suggestions.map((item) => (
-                                    <Link
-                                        key={item.id}
-                                        to={`/syllabuses/${item.id}`}
-                                        className="block p-2 text-sm hover:bg-muted"
-                                    >
-                                        {item.code} — {item.name}
-                                    </Link>
-                                ))}
-                            </div>
+                        {search && (
+                            <button
+                                type="button"
+                                aria-label="Clear search"
+                                onClick={() => {
+                                    setSearch("");
+                                    setPage(0);
+                                }}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            >
+                                <X className="size-4" />
+                            </button>
                         )}
                     </div>
+
+                    <Select
+                        value={status}
+                        onValueChange={(value) => {
+                            setStatus(value);
+                            setPage(0);
+                        }}
+                    >
+                        <SelectTrigger
+                            aria-label="Filter status"
+                            className="w-full"
+                        >
+                            <SelectValue />
+                        </SelectTrigger>
+
+                        <SelectContent>
+                            <SelectItem value="all">
+                                All statuses
+                            </SelectItem>
+
+                            <SelectItem value="DRAFT">
+                                Draft
+                            </SelectItem>
+
+                            <SelectItem value="PUBLISHED">
+                                Published
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    <Select
+                        value={sortBy}
+                        onValueChange={(value) => {
+                            setSortBy(value);
+                            setPage(0);
+                        }}
+                    >
+                        <SelectTrigger
+                            aria-label="Sort syllabuses"
+                            className="w-full"
+                        >
+                            <SelectValue />
+                        </SelectTrigger>
+
+                        <SelectContent>
+                            <SelectItem value="name">
+                                Name (A–Z)
+                            </SelectItem>
+
+                            <SelectItem value="code">
+                                Code (A–Z)
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                </section>
+
+                <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+          <span>
+            {query.isPending
+                ? "Loading..."
+                : `${rows.length} syllabuses found`}
+          </span>
+
+                    {(search || status !== "all") && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                                setSearch("");
+                                setStatus("all");
+                                setPage(0);
+                            }}
+                        >
+                            Clear filters
+                        </Button>
+                    )}
                 </div>
 
-                {/* TABLE */}
+                {/* SYLLABUS TABLE */}
                 {query.isPending ? (
-                    <p>Loading Syllabuses...</p>
+                    <div className="rounded-2xl border bg-card p-8 text-sm text-muted-foreground">
+                        Loading syllabuses...
+                    </div>
                 ) : query.isError ? (
                     <div
                         role="alert"
-                        className="space-y-3 rounded-xl border p-4"
+                        className="space-y-3 rounded-2xl border bg-card p-6"
                     >
-                        <p>Could not load Syllabuses.</p>
+                        <p>Could not load syllabuses.</p>
+
                         <Button
                             variant="outline"
-                            onClick={() => void query.refetch()}
+                            onClick={() =>
+                                void query.refetch()
+                            }
                         >
-                            Retry
+                            Try again
                         </Button>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto rounded-xl border bg-card">
+                    <div className="overflow-x-auto rounded-2xl border bg-card">
                         <table className="w-full min-w-[850px] text-sm">
                             <thead className="bg-muted/40 text-left">
                             <tr>
-                                <th className="p-3">Code</th>
-                                <th className="p-3">Name</th>
-                                <th className="p-3">Sections</th>
-                                <th className="p-3">Status</th>
-                                <th className="p-3">Completion</th>
-                                <th className="p-3">Actions</th>
+                                <th scope="col" className="p-3">
+                                    Code
+                                </th>
+                                <th scope="col" className="p-3">
+                                    Name
+                                </th>
+                                <th scope="col" className="p-3">
+                                    Sections
+                                </th>
+                                <th scope="col" className="p-3">
+                                    Status
+                                </th>
+                                <th scope="col" className="p-3">
+                                    Completion
+                                </th>
+                                <th scope="col" className="p-3">
+                                    Actions
+                                </th>
                             </tr>
                             </thead>
 
                             <tbody>
-                            {results.map((item) => {
+                            {paged.map((item) => {
                                 const published =
                                     item.status === "PUBLISHED";
 
                                 return (
                                     <tr
                                         key={item.id}
-                                        className="border-t"
+                                        className="border-t hover:bg-muted/20"
                                     >
-                                        <td className="p-3 font-medium">
+                                        <td className="p-3 font-mono text-xs font-semibold">
                                             {item.code}
                                         </td>
 
-                                        <td className="p-3">
+                                        <td className="p-3 font-medium">
                                             {item.name}
                                         </td>
 
-                                        <td className="p-3">
+                                        <td className="p-3 tabular-nums">
                                             {item.sectionCount}
                                         </td>
 
                                         <td className="p-3">
-                        <span
-                            className={
-                                published
-                                    ? "inline-flex items-center gap-1 rounded-full border border-green-500/40 bg-green-500/10 px-2 py-1 text-xs text-green-700 dark:text-green-400"
-                                    : "inline-flex rounded-full border px-2 py-1 text-xs"
-                            }
-                        >
-                          {published && (
-                              <LockKeyhole className="size-3" />
-                          )}
-                            {published
-                                ? "Published"
-                                : "Draft"}
-                        </span>
+                                            <Badge
+                                                variant={
+                                                    published
+                                                        ? "secondary"
+                                                        : "outline"
+                                                }
+                                            >
+                                                {published && (
+                                                    <LockKeyhole className="mr-1 size-3" />
+                                                )}
+
+                                                {published
+                                                    ? "Published"
+                                                    : "Draft"}
+                                            </Badge>
+
+                                            {!item.isActive && (
+                                                <Badge
+                                                    variant="outline"
+                                                    className="ml-2"
+                                                >
+                                                    Inactive
+                                                </Badge>
+                                            )}
                                         </td>
 
-                                        <td className="min-w-[140px] p-3">
+                                        <td className="min-w-36 p-3">
                                             <div className="space-y-1">
-                          <span className="text-xs font-semibold">
+                          <span className="text-xs font-medium tabular-nums">
                             {item.completionPercent}%
                           </span>
+
                                                 <Progress
-                                                    value={item.completionPercent}
+                                                    value={
+                                                        item.completionPercent
+                                                    }
                                                     className="h-2"
                                                 />
                                             </div>
@@ -495,27 +598,33 @@ export default function SyllabusesPage() {
                                                     </Link>
                                                 </Button>
 
-                                                {canEdit && !published && (
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        onClick={() => openEdit(item)}
-                                                    >
-                                                        <Pencil className="size-4" />
-                                                        Edit
-                                                    </Button>
-                                                )}
+                                                {canEdit &&
+                                                    !published && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() =>
+                                                                openEdit(item)
+                                                            }
+                                                        >
+                                                            <Pencil className="size-4" />
+                                                            Edit
+                                                        </Button>
+                                                    )}
 
-                                                {canDelete && !published && (
-                                                    <Button
-                                                        size="sm"
-                                                        variant="destructive"
-                                                        onClick={() => setDeleting(item)}
-                                                    >
-                                                        <Trash2 className="size-4" />
-                                                        Delete
-                                                    </Button>
-                                                )}
+                                                {canDelete &&
+                                                    !published && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="destructive"
+                                                            onClick={() =>
+                                                                setDeleting(item)
+                                                            }
+                                                        >
+                                                            <Trash2 className="size-4" />
+                                                            Delete
+                                                        </Button>
+                                                    )}
                                             </div>
                                         </td>
                                     </tr>
@@ -524,128 +633,144 @@ export default function SyllabusesPage() {
                             </tbody>
                         </table>
 
-                        {results.length === 0 && (
-                            <p className="p-8 text-center text-muted-foreground">
-                                No Syllabuses found.
-                            </p>
+                        {rows.length === 0 && (
+                            <div className="p-10 text-center text-sm text-muted-foreground">
+                                {search.trim() ||
+                                status !== "all"
+                                    ? "No matching syllabuses."
+                                    : "No syllabuses yet."}
+                            </div>
                         )}
                     </div>
                 )}
-            </div>
 
-            {/* CREATE / EDIT MODAL */}
-            <Modal
-                title={
-                    editing ? "Edit Syllabus" : "Create Syllabus"
-                }
-                open={formOpen}
-                onClose={() =>
-                    !busy && setFormOpen(false)
-                }
-            >
-                <form
-                    className="space-y-4"
-                    onSubmit={(event) => void save(event)}
+                <CatalogPagination
+                    page={effectivePage}
+                    totalPages={totalPages}
+                    onPageChange={setPage}
+                />
+
+                {/* CREATE / EDIT */}
+                <Modal
+                    title={
+                        editing
+                            ? "Edit Syllabus"
+                            : "Create Syllabus"
+                    }
+                    open={formOpen}
+                    onClose={() => {
+                        if (!busy) setFormOpen(false);
+                    }}
                 >
-                    <div>
-                        <label
-                            htmlFor="syllabus-code"
-                            className="mb-1 block text-sm font-medium"
-                        >
-                            Syllabus Code
-                        </label>
+                    <form
+                        className="space-y-4"
+                        onSubmit={(event) =>
+                            void save(event)
+                        }
+                    >
+                        <div>
+                            <label
+                                htmlFor="syllabus-code"
+                                className="mb-1 block text-sm font-medium"
+                            >
+                                Syllabus Code
+                            </label>
 
-                        <Input
-                            id="syllabus-code"
-                            value={form.code}
-                            maxLength={30}
-                            required
-                            onChange={(event) =>
-                                setForm((previous) => ({
-                                    ...previous,
-                                    code: event.target.value,
-                                }))
-                            }
-                        />
-                    </div>
+                            <Input
+                                id="syllabus-code"
+                                required
+                                maxLength={30}
+                                value={form.code}
+                                onChange={(event) =>
+                                    setForm((previous) => ({
+                                        ...previous,
+                                        code: event.target.value,
+                                    }))
+                                }
+                            />
+                        </div>
 
-                    <div>
-                        <label
-                            htmlFor="syllabus-name"
-                            className="mb-1 block text-sm font-medium"
-                        >
-                            Syllabus Name
-                        </label>
+                        <div>
+                            <label
+                                htmlFor="syllabus-name"
+                                className="mb-1 block text-sm font-medium"
+                            >
+                                Syllabus Name
+                            </label>
 
-                        <Input
-                            id="syllabus-name"
-                            value={form.name}
-                            maxLength={150}
-                            required
-                            onChange={(event) =>
-                                setForm((previous) => ({
-                                    ...previous,
-                                    name: event.target.value,
-                                }))
-                            }
-                        />
-                    </div>
+                            <Input
+                                id="syllabus-name"
+                                required
+                                maxLength={150}
+                                value={form.name}
+                                onChange={(event) =>
+                                    setForm((previous) => ({
+                                        ...previous,
+                                        name: event.target.value,
+                                    }))
+                                }
+                            />
+                        </div>
 
-                    <div>
-                        <label
-                            htmlFor="syllabus-description"
-                            className="mb-1 block text-sm font-medium"
-                        >
-                            Description
-                        </label>
+                        <div>
+                            <label
+                                htmlFor="syllabus-description"
+                                className="mb-1 block text-sm font-medium"
+                            >
+                                Description
+                            </label>
 
-                        <textarea
-                            id="syllabus-description"
-                            className="w-full rounded-md border bg-background p-2"
-                            rows={4}
-                            maxLength={1500}
-                            value={form.description}
-                            onChange={(event) =>
-                                setForm((previous) => ({
-                                    ...previous,
-                                    description: event.target.value,
-                                }))
-                            }
-                        />
-                    </div>
+                            <textarea
+                                id="syllabus-description"
+                                rows={4}
+                                maxLength={1500}
+                                className="w-full rounded-md border bg-background p-2"
+                                value={form.description}
+                                onChange={(event) =>
+                                    setForm((previous) => ({
+                                        ...previous,
+                                        description:
+                                        event.target.value,
+                                    }))
+                                }
+                            />
+                        </div>
 
-                    <div className="flex justify-end gap-2">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            disabled={busy}
-                            onClick={() => setFormOpen(false)}
-                        >
-                            Cancel
-                        </Button>
+                        <div className="flex justify-end gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                disabled={busy}
+                                onClick={() =>
+                                    setFormOpen(false)
+                                }
+                            >
+                                Cancel
+                            </Button>
 
-                        <Button
-                            type="submit"
-                            disabled={busy}
-                        >
-                            Save
-                        </Button>
-                    </div>
-                </form>
-            </Modal>
+                            <Button
+                                type="submit"
+                                disabled={busy}
+                            >
+                                Save
+                            </Button>
+                        </div>
+                    </form>
+                </Modal>
 
-            {/* DELETE CONFIRMATION */}
-            <ConfirmDialog
-                open={deleting !== null}
-                title="Delete Syllabus?"
-                description="Syllabuses containing CLOs, Sections or Materials cannot be deleted."
-                confirmLabel="Delete"
-                onCancel={() =>
-                    !busy && setDeleting(null)
-                }
-                onConfirm={() => void remove()}
-                loading={busy}
-            />
+                {/* DELETE CONFIRMATION */}
+                <ConfirmDialog
+                    open={deleting !== null}
+                    title="Delete Syllabus?"
+                    description="Syllabuses containing CLOs, Sections or Materials cannot be deleted."
+                    confirmLabel="Delete"
+                    onCancel={() => {
+                        if (!busy) setDeleting(null);
+                    }}
+                    onConfirm={() => void remove()}
+                    loading={busy}
+                />
+            </div>
         </MainLayout>
     );
 }
