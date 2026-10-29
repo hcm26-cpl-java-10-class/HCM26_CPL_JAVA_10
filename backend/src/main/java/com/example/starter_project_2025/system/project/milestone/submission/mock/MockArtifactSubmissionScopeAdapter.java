@@ -22,12 +22,15 @@ import java.util.stream.Collectors;
 public class MockArtifactSubmissionScopeAdapter implements ArtifactSubmissionScopePort {
     private final Map<UUID, Set<Long>> projectAssignments;
     private final Map<UUID, Set<Long>> teamAssignments;
+    private final Map<UUID, Set<Long>> reviewerTeamAssignments;
 
     public MockArtifactSubmissionScopeAdapter(
             @Value("${milestone.mock.submission.assignments:student@example.com=1}") String assignments,
-            @Value("${milestone.mock.submission.team-assignments:student@example.com=1}") String teamAssignments) {
+            @Value("${milestone.mock.submission.team-assignments:student@example.com=1}") String teamAssignments,
+            @Value("${milestone.mock.submission.reviewer-team-assignments:teacher@example.com=1}") String reviewerTeamAssignments) {
         this.projectAssignments = parse(assignments);
         this.teamAssignments = parse(teamAssignments);
+        this.reviewerTeamAssignments = parse(reviewerTeamAssignments);
     }
 
     private Map<UUID, Set<Long>> parse(String assignments) {
@@ -70,10 +73,16 @@ public class MockArtifactSubmissionScopeAdapter implements ArtifactSubmissionSco
     }
 
     @Override
-    public void requireReviewerTeamAccess(Long teamId,UUID actorId,Long tenantId) {
-        if(!MockMilestoneData.TENANT_ID.equals(tenantId)
-                ||teamAssignments.values().stream().noneMatch(ids->ids.contains(teamId)))
+    public void requireReviewerTeamAccess(Long teamId, UUID actorId, Long tenantId) {
+        if (!MockMilestoneData.TENANT_ID.equals(tenantId)) {
+            throw new AccessDeniedException("Reviewer is outside this demo tenant");
+        }
+        if (isAdministrator()) {
+            return;
+        }
+        if (!reviewerTeamAssignments.getOrDefault(actorId, Set.of()).contains(teamId)) {
             throw new AccessDeniedException("Reviewer is outside this demo team");
+        }
     }
 
     private boolean isAdministrator() {

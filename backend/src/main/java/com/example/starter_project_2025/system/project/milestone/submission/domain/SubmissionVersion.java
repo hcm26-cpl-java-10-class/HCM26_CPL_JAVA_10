@@ -133,26 +133,6 @@ public class SubmissionVersion {
         this.artifactSubmissionId = artifactSubmissionId;
     }
 
-    public void unlinkArtifactSubmission() {
-        this.artifactSubmissionId = null;
-    }
-
-    public void refreshSubmittedArtifact(UUID artifactSubmissionId, String title, String notes,
-                                         String url, List<ArtifactValue> values, Instant now,
-                                         boolean isLate, BigDecimal penalty) {
-        if (status != SubmissionStatus.SUBMITTED) {
-            throw new IllegalStateException("Only an unreviewed submitted version can be refreshed");
-        }
-        this.artifactSubmissionId = artifactSubmissionId;
-        this.title = title.trim();
-        this.notes = normalize(notes);
-        this.submissionUrl = normalize(url);
-        this.submittedAt = now;
-        this.late = isLate;
-        this.penaltyPercent = penalty == null ? BigDecimal.ZERO.setScale(2) : penalty.setScale(2);
-        applyArtifactValues(values);
-    }
-
     private void applyArtifactValues(List<ArtifactValue> values) {
         // Keep occupied order slots instead of inserting replacements before
         // Hibernate has removed their orphans (unique version + order index).

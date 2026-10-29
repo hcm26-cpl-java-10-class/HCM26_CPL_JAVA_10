@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
@@ -100,12 +101,16 @@ public class ProjectTeamTemplateDemoDataInitializer implements CommandLineRunner
     private final TemplateConfigurationService configurations;
     private final ObjectMapper json;
 
+    @Value("${app.seed.admin.email:admin@example.com}")
+    private String adminEmail;
+
     @Override
     @Transactional
     public void run(String... args) {
         ensureManualDefaultTemplate();
-        Long tenantId = tenants.findByCode("LOCAL_TRAINING").orElseThrow().getId();
-        var actor = users.findByEmail("admin@example.com").orElseThrow();
+        var actor = users.findByEmail(adminEmail).orElseThrow();
+        Long tenantId = actor.getTenantId() != null ? actor.getTenantId()
+                : tenants.findByCode("LOCAL_TRAINING").orElseThrow().getId();
         Map<String, RubricVersion> rubricVersions = new LinkedHashMap<>();
         rubricCatalog.findPublished(tenantId).forEach(version -> rubricVersions.putIfAbsent(version.getNameSnapshot(), version));
         if (!rubricVersions.keySet().containsAll(RUBRIC_NAMES)) {

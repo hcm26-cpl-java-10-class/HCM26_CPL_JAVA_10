@@ -26,6 +26,7 @@ public record TeamBacklogBoard(
         Long teamId,
         Long projectId,
         List<SprintDTO> sprints,
-        List<SprintBacklogDTO> items
+        List<SprintBacklogDTO> items,
+        List<TeamBacklogMemberOption> members
 ) {
 }

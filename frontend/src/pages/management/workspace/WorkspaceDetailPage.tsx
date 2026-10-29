@@ -14,6 +14,7 @@ import { WORKSPACE_SECTIONS, WorkspaceStatusBadge } from "./workspace.shared";
 import { WorkspaceSectionState, sectionForbidden } from "./WorkspaceSectionState";
 import { WorkspaceBusinessSectionPanel } from "./WorkspaceBusinessSectionPanel";
 import { WorkspaceMilestonesPanel } from "./WorkspaceMilestonesPanel";
+import { WorkspaceArtifactsPanel } from "./WorkspaceArtifactsPanel";
 import { WorkspaceOverviewSection } from "./WorkspaceOverviewSection";
 import { WorkspaceMembersPanel } from "./WorkspaceMembersPanel";
 import { sectionAccess } from "./workspace.section-access";
@@ -101,7 +102,11 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                   </>
                 : tab === "milestones" ? <WorkspaceMilestonesPanel workspaceId={workspaceId} projectId={context.projectId}
                     teamId={context.teamId} access={current} />
-                : tab === "sprints" ? <WorkspaceTeamBoardPanel teamId={context.teamId} />
+                : tab === "artifacts" ? <WorkspaceArtifactsPanel workspaceId={workspaceId} projectId={context.projectId}
+                    teamId={context.teamId} access={current} />
+                : tab === "sprints" ? <WorkspaceTeamBoardPanel teamId={context.teamId}
+                    canUpdate={hasPermission("SPRINT_BACKLOG_UPDATE")}
+                    onCreateWorkItem={sections.find(item => item.key === "backlog")?.canRead ? () => changeTab("backlog") : undefined} />
                 : tab === "backlog" ? <WorkspaceBacklogPanel projectId={context.projectId}
                     teamId={context.teamId} />
                 : tab === "activity" ? <WorkspaceProjectLogsPanel workspaceId={workspaceId} />

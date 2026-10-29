@@ -37,7 +37,6 @@ public class TemplateSampleContentService {
     public TemplateSampleContentResponse get(Long id) {
         User user = access.requireUser("READ");
         ProjectTemplate template = findReadableTemplate(id, user);
-        // Shared (tenant_id == null) templates are view-only.
         return load(template, access.can(user, "UPDATE") && template.getTenantId() != null);
     }
 
@@ -88,12 +87,13 @@ public class TemplateSampleContentService {
         var response = TemplateSampleContentResponse.from(template, savedBacklog, true, importPolicy.maxBytes());
         String after = state(response);
         String correlationId = CorrelationIdFilter.currentId();
-        audits.save(new ProjectTemplateAudit(template.getTenantId(), id, user.getId(),
+        Long tenantId = tenantOf(template, user);
+        audits.save(new ProjectTemplateAudit(tenantId, id, user.getId(),
                 "PROJECT_TEMPLATE_SAMPLE_CONTENT_UPDATED", before, after, correlationId));
         try {
-            String payload = objectMapper.writeValueAsString(Map.of("templateId", id, "tenantId", template.getTenantId(),
+            String payload = objectMapper.writeValueAsString(Map.of("templateId", id, "tenantId", tenantId,
                     "actorId", user.getId(), "correlationId", correlationId, "content", objectMapper.readTree(after)));
-            events.save(OutboxEvent.templateSampleContentUpdated(template.getTenantId(), id, payload, Instant.now()));
+            events.save(OutboxEvent.templateSampleContentUpdated(tenantId, id, payload, Instant.now()));
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Unable to record template content changes", exception);
         }
@@ -118,10 +118,14 @@ public class TemplateSampleContentService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project template was not found"));
     }
 
-    /** Read-only: also resolves the shared catalogue ({@code tenant_id is null}). */
     private ProjectTemplate findReadableTemplate(Long id, User user) {
         return templates.findReadableById(id, user.getTenantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project template was not found"));
+    }
+
+    /** Audit/outbox tenant: shared rows use the acting user's tenant. */
+    private Long tenantOf(ProjectTemplate template, User user) {
+        return template.getTenantId() != null ? template.getTenantId() : user.getTenantId();
     }
 
     private TemplateSampleContentResponse load(ProjectTemplate template, boolean canEdit) {

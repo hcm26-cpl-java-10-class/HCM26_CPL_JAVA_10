@@ -2990,7 +2990,10 @@ function SavedTeamCard({
         type="button"
         className="flex w-full items-center justify-between gap-3 rounded-xl border p-4 text-left transition-colors hover:bg-muted/40"
         aria-label={`Xem chi tiết ${team.teamName}`}
-        onClick={() => setDetailsOpen(true)}
+        onClick={() => {
+          onRefreshTemplates();
+          setDetailsOpen(true);
+        }}
       >
         <span className="min-w-0">
           <span className="block truncate font-semibold">{team.teamName}</span>

@@ -95,10 +95,10 @@ export function ProjectTemplateDetailPage() {
               {template.status !== "DRAFT" && (
                 <Alert><LockKeyhole /><AlertDescription>{template.status === "ARCHIVED"
                   ? "This template is archived and cannot be selected for new classes or cohorts. Its saved configuration remains available below."
-                  : "This template is read-only. Only draft templates can be edited."}</AlertDescription></Alert>
+                  : "This template is active and can be assigned to a team, but its configuration is locked. Duplicate it if you need to change the brief."}</AlertDescription></Alert>
               )}
               {template.readOnly && (
-                <Alert><LockKeyhole /><AlertDescription>This template comes from the shared catalogue and is read-only. Duplicate-free sample data stays owned by the platform.</AlertDescription></Alert>
+                <Alert><LockKeyhole /><AlertDescription>This template comes from the shared catalogue and is read-only. Duplicate it to create an editable draft in your organization.</AlertDescription></Alert>
               )}
               <Tabs value={tab} onValueChange={selectTab} className="min-w-0 gap-4">
                 <TabsList aria-label="Template configuration"

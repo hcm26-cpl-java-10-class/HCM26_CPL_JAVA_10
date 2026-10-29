@@ -44,7 +44,8 @@ public class TemplateActivationService {
     public TemplateActivationChecklist getChecklist(Long id) {
         User user = access.requireUser("READ");
         ProjectTemplate template = findReadableTemplate(id, user);
-        return checklist(template, loadMilestones(id), access.can(user, "ACTIVATE") && template.getTenantId() != null);
+        return checklist(template, loadMilestones(id), access.can(user, "ACTIVATE") && template.getTenantId() != null,
+                tenantOf(template, user));
     }
 
     @Transactional
@@ -59,23 +60,25 @@ public class TemplateActivationService {
             throw ProjectTemplateException.conflict("This template has changed. Reload it before activating");
         }
         List<TemplateMilestone> plan = loadMilestones(id);
-        TemplateActivationChecklist checklist = checklist(template, plan, true);
+        Long tenantId = tenantOf(template, user);
+        TemplateActivationChecklist checklist = checklist(template, plan, true, tenantId);
         if (!checklist.ready()) {
             Map<String, List<String>> errors = new LinkedHashMap<>();
             checklist.items().forEach(item -> errors.putAll(item.errors()));
             throw new ProjectTemplateException(422, "Complete the required configuration before activating this template", errors);
         }
-        String before = state(template, plan);
+        String before = state(template, plan, tenantId);
         template.setStatus(ProjectTemplateStatus.ACTIVE);
         template = templates.saveAndFlush(template);
-        audits.save(new ProjectTemplateAudit(template.getTenantId(), template.getId(), user.getId(),
-                "PROJECT_TEMPLATE_ACTIVATED", before, state(template, plan), CorrelationIdFilter.currentId()));
+        audits.save(new ProjectTemplateAudit(tenantId, template.getId(), user.getId(),
+                "PROJECT_TEMPLATE_ACTIVATED", before, state(template, plan, tenantId), CorrelationIdFilter.currentId()));
         // US-07: the version the workspaces will snapshot becomes PUBLISHED.
         snapshotService.publishLatestVersion(template);
         return ProjectTemplateResponse.from(template, false, teamConstraintsMapper.read(template.getConstraintsJson()));
     }
 
-    private TemplateActivationChecklist checklist(ProjectTemplate template, List<TemplateMilestone> plan, boolean canActivate) {
+    private TemplateActivationChecklist checklist(ProjectTemplate template, List<TemplateMilestone> plan,
+            boolean canActivate, Long tenantId) {
         var overview = errors(() -> validator.validate(new ProjectTemplateRequest(template.getCode(), template.getName(),
                 template.getDescription(), template.getCategory(), template.getLevel(),
                 decimal(template.getEstimatedDurationWeeks()), null), false));
@@ -84,7 +87,7 @@ public class TemplateActivationService {
         var milestoneErrors = errors(() -> milestoneValidator.validate(input));
         milestoneErrors.putAll(errors(() -> scheduleValidator.validate(input, template.getEstimatedDurationWeeks())));
         if (milestoneErrors.isEmpty()) {
-            milestoneErrors.putAll(errors(() -> rubrics.requirePublished(input, template.getTenantId())));
+            milestoneErrors.putAll(errors(() -> rubrics.requirePublished(input, tenantId)));
         }
         List<TemplateActivationChecklist.Item> items = List.of(
                 item("overview", "General information", overview),
@@ -144,10 +147,14 @@ public class TemplateActivationService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project template was not found"));
     }
 
-    /** Read-only: also resolves the shared catalogue ({@code tenant_id is null}). */
     private ProjectTemplate findReadableTemplate(Long id, User user) {
         return templates.findReadableById(id, user.getTenantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project template was not found"));
+    }
+
+    /** Audit/rubric tenant: shared rows use the acting user's tenant. */
+    private Long tenantOf(ProjectTemplate template, User user) {
+        return template.getTenantId() != null ? template.getTenantId() : user.getTenantId();
     }
 
     private List<TemplateMilestone> loadMilestones(Long id) {
@@ -160,11 +167,11 @@ public class TemplateActivationService {
         return value == null ? null : BigDecimal.valueOf(value);
     }
 
-    private String state(ProjectTemplate template, List<TemplateMilestone> plan) {
+    private String state(ProjectTemplate template, List<TemplateMilestone> plan, Long tenantId) {
         try {
             return objectMapper.writeValueAsString(Map.of(
                     "template", ProjectTemplateResponse.from(template, false, teamConstraintsMapper.read(template.getConstraintsJson())),
-                    "milestonePlan", TemplateMilestonePlanResponse.from(template, plan, false)));
+                    "milestonePlan", TemplateMilestonePlanResponse.from(template, plan, false, tenantId)));
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Unable to record template activation", exception);
         }

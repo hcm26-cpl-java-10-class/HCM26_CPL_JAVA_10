@@ -190,13 +190,17 @@ export default function TeamMilestoneSubmissionsPage() {
               <div>
                 <h2 className="text-lg font-semibold">Could not load submissions</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  There was a problem retrieving the submissions for this milestone. Please check your connection or permissions and try again.
+                  {(submissionsQuery.error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+                    "There was a problem retrieving the submissions for this milestone. Please check your connection, milestone UUID, or permissions and try again."}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" onClick={handleBackToMilestone}>
                   <ArrowLeft className="mr-2 size-4" />
                   Back to milestone
+                </Button>
+                <Button variant="ghost" onClick={handleBackToWorkspace}>
+                  Back to workspace
                 </Button>
                 <Button onClick={() => void submissionsQuery.refetch()}>
                   <RotateCw className="mr-2 size-4" />
@@ -315,7 +319,14 @@ export default function TeamMilestoneSubmissionsPage() {
                 <TableRow>
                   <TableHead className="w-28">Version</TableHead>
                   <TableHead className="w-28">Status</TableHead>
-                  <TableHead className="w-32">Timing</TableHead>
+                  <TableHead className="w-36">
+                    <span
+                      className="inline-flex cursor-help items-center gap-1 border-b border-dotted border-muted-foreground"
+                      title="Thời gian nộp bài so với hạn chót (Deadline) của Milestone. Bài nộp sau deadline sẽ bị đánh dấu Late và áp dụng trừ điểm phạt theo Late Policy."
+                    >
+                      Timing
+                    </span>
+                  </TableHead>
                   <TableHead>Submitted by</TableHead>
                   <TableHead className="w-48">Submitted at</TableHead>
                   <TableHead className="w-32">Artifacts</TableHead>
@@ -332,10 +343,9 @@ export default function TeamMilestoneSubmissionsPage() {
                     submitterEmail,
                   } = item;
                   const isLatest = submission.version === maxVersion;
-                  const displayStatus =
-                    !isLatest && submission.status === "SUBMITTED"
-                      ? "CHANGES_REQUESTED"
-                      : submission.status;
+                  // The API resolves review state from the linked reviewer workflow.
+                  // Keep the immutable artifact status when no review record exists.
+                  const displayStatus = submission.status;
                   const latestReviewId = isLatest
                     ? reviewSubmissionId || sharedReviewSubmissionId
                     : null;
@@ -380,7 +390,11 @@ export default function TeamMilestoneSubmissionsPage() {
                       {/* Timing column */}
                       <TableCell>
                         {submission.submittedLate ? (
-                          <Badge variant="destructive" className="text-xs font-normal">
+                          <Badge
+                            variant="destructive"
+                            className="cursor-help text-xs font-normal"
+                            title={`Nộp sau deadline (${milestone ? formatTenantDateTime(milestone.deadline, milestone.tenantTimeZone) : "hạn chót"}). Điểm phạt trừ: ${submission.latePenaltyPercent ?? 0}%.`}
+                          >
                             Late
                             {submission.latePenaltyPercent != null
                               ? ` · ${submission.latePenaltyPercent}%`
@@ -389,7 +403,8 @@ export default function TeamMilestoneSubmissionsPage() {
                         ) : (
                           <Badge
                             variant="outline"
-                            className="text-xs font-normal text-muted-foreground"
+                            className="cursor-help border-emerald-300 bg-emerald-50 text-xs font-normal text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-300"
+                            title="Nộp đúng hạn trước hoặc đúng thời điểm deadline của Milestone. Không bị trừ điểm phạt."
                           >
                             On time
                           </Badge>
@@ -557,14 +572,7 @@ export default function TeamMilestoneSubmissionsPage() {
                         Latest version
                       </Badge>
                     )}
-                    <SubmissionStatusBadge
-                      status={
-                        selectedSubmission.submission.version !== maxVersion &&
-                        selectedSubmission.submission.status === "SUBMITTED"
-                          ? "CHANGES_REQUESTED"
-                          : selectedSubmission.submission.status
-                      }
-                    />
+                    <SubmissionStatusBadge status={selectedSubmission.submission.status} />
                     {selectedSubmission.submission.submittedLate ? (
                       <Badge variant="destructive">
                         Late ·{" "}

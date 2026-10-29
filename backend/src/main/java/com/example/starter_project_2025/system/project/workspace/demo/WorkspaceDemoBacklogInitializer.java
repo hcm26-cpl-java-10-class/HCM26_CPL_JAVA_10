@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Seeds one sprint timeline (plus its sprint backlog and product backlog) per
@@ -124,28 +125,73 @@ public class WorkspaceDemoBacklogInitializer implements CommandLineRunner {
     }
 
     private void upsertSprintItem(Sprint sprint, Long projectId, ItemSeed item) {
+        List<SprintBacklog> matches = sprint.getId() == null
+                ? List.of()
+                : backlogs.findAllBySprintIdAndTitleIgnoreCaseOrderByIdAsc(sprint.getId(), item.title());
         SprintBacklog backlog = sprint.getId() == null
                 ? backlogs.findBySprintIsNullAndTitleIgnoreCase(item.title()).orElseGet(SprintBacklog::new)
-                : backlogs.findBySprintIdAndTitleIgnoreCase(sprint.getId(), item.title())
-                        .orElseGet(SprintBacklog::new);
+                : matches.stream().findFirst().orElseGet(SprintBacklog::new);
 
         backlog.setSprint(sprint);
         backlog.setProjectId(projectId);
         applyItem(backlog, item);
 
         backlogs.save(backlog);
+
+        matches.stream()
+                .skip(1)
+                .filter(duplicate -> matchesSeed(duplicate, item))
+                .forEach(duplicate -> archiveDuplicate(duplicate, projectId, item.title()));
     }
 
     private void upsertProductBacklogItem(Long projectId, ItemSeed item) {
-        SprintBacklog backlog = backlogs
-                .findByProjectIdAndSprintIsNullAndTitleIgnoreCase(projectId, item.title())
-                .orElseGet(SprintBacklog::new);
+        List<SprintBacklog> matches = backlogs
+                .findAllByProjectIdAndSprintIsNullAndTitleIgnoreCaseOrderByIdAsc(projectId, item.title());
+
+        boolean alreadyInSprint = backlogs.findAllByProjectIdAndTitleIgnoreCaseAndIsActiveTrue(projectId, item.title())
+                .stream()
+                .anyMatch(candidate -> candidate.getSprint() != null
+                        && Objects.equals(candidate.getDescription(), item.description()));
+        if (alreadyInSprint) {
+            matches.stream()
+                    .filter(duplicate -> matchesSeed(duplicate, item))
+                    .forEach(duplicate -> archiveDuplicate(duplicate, projectId, item.title()));
+            return;
+        }
+
+        SprintBacklog backlog = matches.isEmpty() ? new SprintBacklog() : matches.get(0);
 
         backlog.setSprint(null);
         backlog.setProjectId(projectId);
         applyItem(backlog, item);
 
         backlogs.save(backlog);
+
+        // Older demo runs could insert the same fixture more than once. Keep
+        // user-edited rows intact; only soft-archive duplicates that still
+        // exactly match the seeded fixture. Workspace reads exclude inactive
+        // rows, while their history and database records remain available.
+        matches.stream()
+                .skip(1)
+                .filter(duplicate -> matchesSeed(duplicate, item))
+                .forEach(duplicate -> archiveDuplicate(duplicate, projectId, item.title()));
+    }
+
+    private void archiveDuplicate(SprintBacklog duplicate, Long projectId, String title) {
+        duplicate.setIsActive(false);
+        backlogs.save(duplicate);
+        log.info("Archived duplicate workspace demo backlog item id={} projectId={} title={}",
+                duplicate.getId(), projectId, title);
+    }
+
+    private boolean matchesSeed(SprintBacklog backlog, ItemSeed item) {
+        return Objects.equals(backlog.getDescription(), item.description())
+                && Objects.equals(backlog.getStartDate(), item.start())
+                && Objects.equals(backlog.getEndDate(), item.end())
+                && backlog.getStatus() == item.status()
+                && backlog.getPriority() == item.priority()
+                && backlog.getWorkType() == item.workType()
+                && Objects.equals(backlog.getEstimatedHours(), item.estimatedHours());
     }
 
     private void applyItem(SprintBacklog backlog, ItemSeed item) {

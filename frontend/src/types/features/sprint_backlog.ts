@@ -3,9 +3,9 @@ import type { TaskPriority } from "./task";
 
 /**
  * Lifecycle of a Sprint Backlog item (kept in sync with the backend
- * `SprintBacklogStatus` enum): To do -> In progress -> Review -> Done.
+ * `SprintBacklogStatus` enum): To do -> In progress -> Review -> Done, with Blocked.
  */
-export type SprintBacklogStatus = "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE";
+export type SprintBacklogStatus = "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE" | "BLOCKED";
 
 /**
  * Work type of a Sprint Backlog item (kept in sync with the backend
@@ -36,6 +36,10 @@ export interface SprintBacklogDTO extends BaseDTO {
   /** Set to `true` to remove the milestone link (update only). */
   clearMilestone?: boolean;
   assigneeProjectMemberId?: number | null;
+  /** Set true on update to explicitly clear the current assignee. */
+  clearAssignee?: boolean;
+  /** Read-only display name resolved for the assigned project member. */
+  assigneeDisplayName?: string | null;
   title?: string;
   description?: string | null;
   startDate?: string | null;

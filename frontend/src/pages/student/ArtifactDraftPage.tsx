@@ -224,8 +224,16 @@ export default function ArtifactDraftPage() {
 
       <Card><CardHeader><CardTitle>Acceptance checklist</CardTitle><CardDescription>Các tiêu chí này do reviewer đánh giá sau khi bạn nộp sản phẩm.</CardDescription></CardHeader>
         <CardContent className="grid gap-3">{milestone.checklist.length ? milestone.checklist.map((item) => <div key={item.id} className="flex items-start gap-3 rounded-lg border p-3">
-          <Checkbox disabled checked={false} aria-label={`${item.content} — reviewer assessment`} />
-          <span className="flex-1 text-sm">{item.content}{item.mandatory && <span className="ml-2 text-xs text-muted-foreground">Bắt buộc</span>}</span>
+          <Checkbox
+            checked={checklist[item.id] ?? false}
+            onCheckedChange={(checked) => {
+              markSubmissionEdited();
+              markDraftEdited();
+              setChecklist((prev) => ({ ...prev, [item.id]: Boolean(checked) }));
+            }}
+            aria-label={`${item.content} — self assessment`}
+          />
+          <span className="flex-1 text-sm">{item.content}{item.mandatory && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-200">Bắt buộc</span>}</span>
         </div>) : <p className="text-sm text-muted-foreground">Milestone chưa cấu hình checklist.</p>}{saveError?.errors?.checklist?.map((message) => <p key={message} className="text-sm text-destructive">{message}</p>)}</CardContent>
       </Card>
 

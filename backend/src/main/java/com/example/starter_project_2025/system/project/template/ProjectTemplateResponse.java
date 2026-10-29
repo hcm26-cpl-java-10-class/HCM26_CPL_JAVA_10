@@ -22,8 +22,6 @@ public record ProjectTemplateResponse(
 ) {
     public static ProjectTemplateResponse from(ProjectTemplate template, boolean canUpdate,
             TemplateTeamConstraints teamConstraints) {
-        // tenant_id == null marks the shared catalogue (sample/demo templates):
-        // every tenant can read it, nobody can mutate it.
         boolean shared = template.getTenantId() == null;
         return new ProjectTemplateResponse(
                 template.getId(), template.getCode(), template.getName(), template.getDescription(),
