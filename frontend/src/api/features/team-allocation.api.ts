@@ -265,10 +265,11 @@ export const teamAllocationApi = {
     sessionId: number,
     teamId: number,
     projectTemplateId: number,
+    versionId?: number,
   ): Promise<TeamProjectTemplate> {
     const response = await axiosInstance.put<TeamProjectTemplate>(
       `${classPath(classId)}/allocation-sessions/${sessionId}/teams/${teamId}/project-template`,
-      { projectTemplateId },
+      { projectTemplateId, versionId },
     );
     return response.data;
   },

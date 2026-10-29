@@ -78,7 +78,8 @@ public class TemplateActivationService {
     private TemplateActivationChecklist checklist(ProjectTemplate template, List<TemplateMilestone> plan, boolean canActivate) {
         var overview = errors(() -> validator.validate(new ProjectTemplateRequest(template.getCode(), template.getName(),
                 template.getDescription(), template.getCategory(), template.getLevel(),
-                decimal(template.getEstimatedDurationWeeks()), null), false));
+                decimal(template.getEstimatedDurationWeeks()), null, template.getCohortId(),
+                template.getTechnologies(), template.getTargetRoles(), template.getLearningOutcomes()), false));
         var team = teamErrors(template);
         var input = TemplateMilestonePlanRequest.from(template.getLockVersion(), plan);
         var milestoneErrors = errors(() -> milestoneValidator.validate(input));

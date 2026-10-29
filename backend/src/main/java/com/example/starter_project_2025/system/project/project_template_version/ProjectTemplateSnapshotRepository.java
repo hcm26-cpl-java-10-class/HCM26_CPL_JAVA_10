@@ -21,6 +21,12 @@ public interface ProjectTemplateSnapshotRepository
     Optional<ProjectTemplateSnapshot> findFirstByTemplateIdAndStatusAndIsActiveTrueOrderByCreatedAtDesc(
             Long templateId, ProjectTemplateVersionStatus status);
 
+    Optional<ProjectTemplateSnapshot> findFirstByTemplateIdAndStatusAndIsActiveTrueOrderByCreatedAtDescIdDesc(
+            Long templateId, ProjectTemplateVersionStatus status);
+
+    List<ProjectTemplateSnapshot> findByTemplateIdInAndStatusAndIsActiveTrueOrderByCreatedAtDescIdDesc(
+            List<Long> templateIds, ProjectTemplateVersionStatus status);
+
     /**
      * Used by the sample data seeder to upsert a version per template without
      * duplicating rows (mirrors {@code SprintRepository#findByName}).

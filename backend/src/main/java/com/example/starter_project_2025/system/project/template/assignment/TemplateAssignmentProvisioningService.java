@@ -126,7 +126,8 @@ public class TemplateAssignmentProvisioningService {
         milestoneRubrics.requirePublished(planRequest, tenantId);
 
         // ---- Step 1: immutable evidence snapshot of the active brief version
-        ProjectTemplateSnapshot snapshot = briefSnapshots.snapshotForAssignment(template, team.getId());
+        ProjectTemplateSnapshot snapshot = briefSnapshots.snapshotForAssignment(
+                template, team.getId(), team.getProjectTemplateVersionId());
 
         // ---- Step 2: project creation
         Project project = createProject(team, template, snapshot, tenantId, actorId);

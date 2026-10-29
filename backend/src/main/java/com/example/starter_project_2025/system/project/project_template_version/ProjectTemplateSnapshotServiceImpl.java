@@ -1007,6 +1007,9 @@ public class ProjectTemplateSnapshotServiceImpl
         content.put("category", template.getCategory());
         content.put("level", template.getLevel() == null ? null : template.getLevel().name());
         content.put("estimatedDurationWeeks", template.getEstimatedDurationWeeks());
+        content.put("technologies", template.getTechnologies());
+        content.put("targetRoles", template.getTargetRoles());
+        content.put("learningOutcomes", template.getLearningOutcomes());
         content.put("constraints", readJsonOrNull(template.getConstraintsJson()));
         content.put("milestones", milestonesOf(template.getId()));
 

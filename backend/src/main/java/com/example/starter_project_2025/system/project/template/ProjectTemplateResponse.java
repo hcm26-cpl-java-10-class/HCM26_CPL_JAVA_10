@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.project.template;
 
 import com.example.starter_project_2025.system.project.ProjectTemplate;
 import java.time.LocalDateTime;
+import java.util.Set;
 
 public record ProjectTemplateResponse(
         Long id,
@@ -18,7 +19,11 @@ public record ProjectTemplateResponse(
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
         boolean editable,
-        boolean readOnly
+        boolean readOnly,
+        Long cohortId,
+        Set<String> technologies,
+        Set<String> targetRoles,
+        Set<String> learningOutcomes
 ) {
     public static ProjectTemplateResponse from(ProjectTemplate template, boolean canUpdate,
             TemplateTeamConstraints teamConstraints) {
@@ -31,6 +36,7 @@ public record ProjectTemplateResponse(
                 template.getTemplateVersion(), template.getStatus(), template.getLockVersion(), teamConstraints,
                 template.getCreatedAt(), template.getUpdatedAt(),
                 !shared && canUpdate && template.getStatus() == ProjectTemplateStatus.DRAFT,
-                shared);
+                shared, template.getCohortId(), Set.copyOf(template.getTechnologies()),
+                Set.copyOf(template.getTargetRoles()), Set.copyOf(template.getLearningOutcomes()));
     }
 }

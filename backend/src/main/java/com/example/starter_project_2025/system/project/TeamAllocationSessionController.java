@@ -1,6 +1,10 @@
 package com.example.starter_project_2025.system.project;
 
 import jakarta.validation.Valid;
+import com.example.starter_project_2025.system.project.template.ProjectTemplateLevel;
+import com.example.starter_project_2025.system.project.template.assignment.TemplateCandidateService;
+import org.springframework.data.domain.Page;
+import org.springframework.web.bind.annotation.RequestParam;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -32,6 +36,7 @@ public class TeamAllocationSessionController {
     private final ProjectTeamMentorService mentorService;
     private final ProjectTeamRoleService roleService;
     private final ProjectTeamTemplateService teamTemplateService;
+    private final TemplateCandidateService templateCandidateService;
     private final AllocationReadinessService readinessService;
 
     @GetMapping("/mentors")
@@ -149,6 +154,31 @@ public class TeamAllocationSessionController {
                 classId, sessionId, teamId, authentication);
     }
 
+    @GetMapping("/{sessionId}/teams/{teamId}/project-template-candidates")
+    @PreAuthorize("isAuthenticated()")
+    public Page<TemplateCandidateService.Candidate> searchTemplateCandidates(
+            @PathVariable Long classId, @PathVariable Long sessionId, @PathVariable Long teamId,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) java.util.List<String> technology,
+            @RequestParam(required = false) ProjectTemplateLevel level,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) java.util.List<String> role,
+            @RequestParam(required = false) java.util.List<String> outcome,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "12") int size,
+            Authentication authentication) {
+        return templateCandidateService.search(classId, sessionId, teamId, authentication,
+                q, technology, level, category, role, outcome, page, size);
+    }
+
+    @GetMapping("/{sessionId}/teams/{teamId}/project-template-candidates/{templateId}")
+    @PreAuthorize("isAuthenticated()")
+    public TemplateCandidateService.Preview previewTemplateCandidate(
+            @PathVariable Long classId, @PathVariable Long sessionId, @PathVariable Long teamId,
+            @PathVariable Long templateId, Authentication authentication) {
+        return templateCandidateService.preview(classId, sessionId, teamId, templateId, authentication);
+    }
+
     /**
      * US-10: assign a project template to a DRAFT team.
      * <p>
@@ -167,7 +197,7 @@ public class TeamAllocationSessionController {
             Authentication authentication
     ) {
         return teamTemplateService.assignTemplate(
-                classId, sessionId, teamId, request.projectTemplateId(), authentication);
+                classId, sessionId, teamId, request.projectTemplateId(), request.versionId(), authentication);
     }
 
     @PutMapping("/{sessionId}/teams/{teamId}/roles")

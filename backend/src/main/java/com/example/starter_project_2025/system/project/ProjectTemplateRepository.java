@@ -37,6 +37,8 @@ public interface ProjectTemplateRepository
 
     boolean existsByTenantIdAndCodeAndTemplateVersion(Long tenantId, String code, Integer templateVersion);
 
+    Optional<ProjectTemplate> findByTenantIdAndCodeAndTemplateVersion(Long tenantId, String code, Integer templateVersion);
+
     boolean existsByTenantIdAndCodeAndTemplateVersionAndIdNot(
             Long tenantId, String code, Integer templateVersion, Long id);
 

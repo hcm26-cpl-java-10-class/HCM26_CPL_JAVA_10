@@ -16,4 +16,8 @@ public interface TrainingClassRepository
     Optional<TrainingClass> findByCode(String code);
 
     boolean existsByCodeAndTenantId(String code, Long tenantId);
+
+    boolean existsByTenantIdAndCohortId(Long tenantId, Long cohortId);
+
+    java.util.List<TrainingClass> findAllByTenantIdAndCohortIdIsNotNull(Long tenantId);
 }
