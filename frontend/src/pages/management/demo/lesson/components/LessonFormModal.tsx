@@ -21,7 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { LessonContentType, LessonDTO, ValidationErrorResponse } from "@/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
-import { type SyntheticEvent, useEffect, useState } from "react";
+import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { formatDuration, LessonPreview } from "./LessonPreview";
 
@@ -129,6 +129,9 @@ export function LessonFormModal({
   const [audioDurationStatus, setAudioDurationStatus] = useState<
     "idle" | "loading" | "loaded" | "error"
   >("idle");
+  const [audioUploadStatus, setAudioUploadStatus] = useState<"idle" | "uploading" | "error">("idle");
+  const [audioFileName, setAudioFileName] = useState("");
+  const audioFileInputRef = useRef<HTMLInputElement>(null);
 
   // Reset form mỗi lần mở modal hoặc đổi bài học đang sửa
   useEffect(() => {
@@ -137,6 +140,8 @@ export function LessonFormModal({
       setErrors({});
       setShowPreview(false);
       setAudioDurationStatus("idle");
+      setAudioUploadStatus("idle");
+      setAudioFileName("");
     }
   }, [open, lesson, defaultOrderIndex]);
 
@@ -228,8 +233,42 @@ export function LessonFormModal({
     setAudioDurationStatus("loaded");
   };
 
+  const handleAudioFile = async (file?: File) => {
+    if (!file) return;
+    setAudioFileName(file.name);
+    if (!file.type.startsWith("audio/") || file.size > 25 * 1024 * 1024) {
+      setAudioUploadStatus("error");
+      toast.error("Choose an audio file up to 25 MB.");
+      return;
+    }
+
+    const localUrl = URL.createObjectURL(file);
+    const audio = new Audio(localUrl);
+    audio.preload = "metadata";
+    audio.onloadedmetadata = () => {
+      if (Number.isFinite(audio.duration) && audio.duration > 0) {
+        setField("duration", String(Math.ceil(audio.duration)));
+      }
+      URL.revokeObjectURL(localUrl);
+    };
+    audio.onerror = () => URL.revokeObjectURL(localUrl);
+
+    setAudioUploadStatus("uploading");
+    try {
+      const uploaded = await lessonApi.uploadAudio(file);
+      setField("contentUrl", uploaded.url);
+      setAudioUploadStatus("idle");
+      toast.success("Audio file uploaded.");
+    } catch (error) {
+      setAudioUploadStatus("error");
+      toast.error(axios.isAxiosError(error) ? error.response?.data?.message || "Could not upload audio file." : "Could not upload audio file.");
+    }
+  };
+
+  const isBusy = mutation.isPending || audioUploadStatus === "uploading";
+
   return (
-    <Dialog open={open} onOpenChange={(next) => !mutation.isPending && onOpenChange(next)}>
+    <Dialog open={open} onOpenChange={(next) => !isBusy && onOpenChange(next)}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit lesson" : "Add lesson"}</DialogTitle>
@@ -320,6 +359,44 @@ export function LessonFormModal({
 
           {needsUrl(form.contentType) ? (
             <div className="grid gap-1.5">
+              {form.contentType === "AUDIO" && (
+                <>
+                  <Label htmlFor="lesson-audio-file">Audio file</Label>
+                  <Input
+                    ref={audioFileInputRef}
+                    id="lesson-audio-file"
+                    type="file"
+                    accept="audio/mpeg,audio/wav,audio/ogg,audio/mp4,audio/aac,audio/flac,audio/webm"
+                    className="hidden"
+                    disabled={isBusy}
+                    onChange={(event) => void handleAudioFile(event.target.files?.[0])}
+                  />
+                  <div className="flex min-h-9 items-center gap-3 rounded-md border px-3 py-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isBusy}
+                      onClick={() => audioFileInputRef.current?.click()}
+                    >
+                      Choose audio file
+                    </Button>
+                    <span className="truncate text-sm text-muted-foreground">
+                      {audioFileName || "No audio file chosen"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground" aria-live="polite">
+                    {audioUploadStatus === "uploading"
+                      ? "Uploading audio file..."
+                      : audioUploadStatus === "error"
+                        ? "Upload failed · choose another file or use a URL"
+                        : "MP3, WAV, OGG, M4A, AAC, FLAC or WEBM · max 25 MB"}
+                  </p>
+                  <div className="relative my-1 text-center text-xs text-muted-foreground before:absolute before:left-0 before:right-0 before:top-1/2 before:border-t">
+                    <span className="relative bg-background px-2">or use an audio URL</span>
+                  </div>
+                </>
+              )}
               <Label htmlFor="lesson-url">
                 {form.contentType === "VIDEO"
                   ? "Video URL"
@@ -384,7 +461,7 @@ export function LessonFormModal({
             type="button"
             variant="ghost"
             onClick={() => setShowPreview((v) => !v)}
-            disabled={mutation.isPending}
+            disabled={isBusy}
           >
             {showPreview ? "Hide preview" : "Preview content"}
           </Button>
@@ -393,12 +470,12 @@ export function LessonFormModal({
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
-              disabled={mutation.isPending}
+              disabled={isBusy}
             >
               Cancel
             </Button>
-            <Button type="button" onClick={handleSubmit} disabled={mutation.isPending}>
-              {mutation.isPending ? "Saving..." : isEdit ? "Save changes" : "Create lesson"}
+            <Button type="button" onClick={handleSubmit} disabled={isBusy}>
+              {audioUploadStatus === "uploading" ? "Uploading..." : mutation.isPending ? "Saving..." : isEdit ? "Save changes" : "Create lesson"}
             </Button>
           </div>
         </DialogFooter>
