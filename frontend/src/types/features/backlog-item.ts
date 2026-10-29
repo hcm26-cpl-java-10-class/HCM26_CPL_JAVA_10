@@ -4,7 +4,7 @@ import type { BaseDTO, BaseFilter } from "@/types/common/base";
  * Backlog item lifecycle (UFR-PRJ-003-02):
  * Backlog -> Sprint Backlog -> In Progress -> Done.
  */
-export type BacklogStatus = "BACKLOG" | "SPRINT_BACKLOG" | "IN_PROGRESS" | "DONE";
+export type BacklogStatus = "BACKLOG" | "SPRINT_BACKLOG" | "IN_PROGRESS" | "REVIEW" | "DONE" | "BLOCKED";
 
 export type BacklogPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 

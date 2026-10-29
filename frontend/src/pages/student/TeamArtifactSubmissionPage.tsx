@@ -452,6 +452,17 @@ export default function TeamArtifactSubmissionPage() {
               />
             </div>
 
+            {/* Rejected Alert (Fix Bug #31) */}
+            {latestSubmission?.status === "REJECTED" && (
+              <Alert variant="destructive">
+                <AlertCircle className="size-4" />
+                <AlertTitle>Bài nộp đã bị từ chối (REJECTED - 0 điểm)</AlertTitle>
+                <AlertDescription className="text-xs mt-1">
+                  Bài nộp cho milestone này đã bị reviewer đánh giá REJECTED (0 điểm). Nhóm không được phép nộp lại hoặc chỉnh sửa bản nháp.
+                </AlertDescription>
+              </Alert>
+            )}
+
             {/* Amber Alert ONLY when submission is truly blocked (Fix Bug #29) */}
             {!canSubmit && !latestSubmission && (
               <Alert className="border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
@@ -489,7 +500,7 @@ export default function TeamArtifactSubmissionPage() {
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <Button
                 variant="outline"
-                disabled={save.isPending || submit.isPending}
+                disabled={save.isPending || submit.isPending || latestSubmission?.status === "REJECTED"}
                 onClick={() => save.mutate()}
               >
                 {save.isPending ? (
@@ -504,7 +515,7 @@ export default function TeamArtifactSubmissionPage() {
               </Button>
 
               <Button
-                disabled={submit.isPending || save.isPending || !canSubmit}
+                disabled={submit.isPending || save.isPending || !canSubmit || latestSubmission?.status === "REJECTED"}
                 onClick={handleValidateAndOpenPreview}
               >
                 <Eye className="mr-2 size-4" /> Xem trước & Nộp bài

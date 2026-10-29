@@ -19,6 +19,9 @@ public interface TaskRepository extends BaseCrudRepository<Task, UUID> {
     List<Task> findAllByBacklogItem_IdAndIsActiveTrueOrderByCreatedAtAscIdAsc(Long backlogItemId);
     boolean existsByBacklogItem_Id(Long backlogItemId);
 
+    @Query("select task from ProjectTask task where task.backlogItem.id in :backlogItemIds and task.isActive = true and task.status <> com.example.starter_project_2025.system.project.task.TaskStatus.DONE")
+    List<Task> findUnfinishedByBacklogItemIds(@Param("backlogItemIds") List<Long> backlogItemIds);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select task from ProjectTask task where task.projectId = :projectId order by task.id")
     List<Task> lockProjectTasks(@Param("projectId") UUID projectId);

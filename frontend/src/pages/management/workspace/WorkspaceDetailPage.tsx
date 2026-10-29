@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, RefreshCw } from "lucide-react";
@@ -62,6 +62,14 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
   const members = sections.find(item => item.key === "members");
   const denied = blocked === tab || !current?.canRead;
   const validContext = context && Number.isSafeInteger(context.teamId);
+  useEffect(() => {
+    if (workspaceId) {
+      try {
+        const saved = localStorage.getItem("workspace_task_prefix_" + workspaceId);
+        localStorage.setItem("workspace_task_prefix", saved || "FA");
+      } catch {}
+    }
+  }, [workspaceId]);
   async function refresh() {
     await navigation.refetch();
     await Promise.all(["workspace-detail", "workspace-members", "workspace-section"].map(key =>

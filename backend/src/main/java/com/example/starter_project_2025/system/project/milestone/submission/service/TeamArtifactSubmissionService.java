@@ -56,6 +56,7 @@ public class TeamArtifactSubmissionService {
     private final ArtifactContributionLock contributionLock;
     private final WorkspaceMilestoneScopeService milestoneScopeService;
     private final ArtifactReviewSubmissionSyncService reviewSyncService;
+    private final MilestoneSubmissionRepository milestoneSubmissionRepository;
 
     @Transactional(readOnly = true)
     public ArtifactSubmissionWorkspaceResponse workspace(Long teamId, UUID milestoneId) {
@@ -134,6 +135,11 @@ public class TeamArtifactSubmissionService {
         if (late && (milestone.getLatePolicyType() != LatePolicyType.ALLOW_LATE || milestone.getLateUntil() == null || now.isAfter(milestone.getLateUntil())))
             throw validation("deadline", "The late policy does not accept submissions now");
         var previous = submissionRepository.findTopByTenantIdAndTeamIdAndMilestoneIdAndSubmitterIdOrderByVersionDesc(s.tenantId, teamId, milestoneId, s.actorId);
+        milestoneSubmissionRepository.findByMilestoneIdAndTeamId(milestoneId, teamId).ifPresent(sub -> {
+            if (sub.getStatus() == com.example.starter_project_2025.system.project.milestone.submission.domain.SubmissionStatus.REJECTED) {
+                throw new MilestoneConflictException("Submission was REJECTED (0 points). Resubmission is not permitted.");
+            }
+        });
         long version = previous.map(row -> row.getVersion() + 1).orElse(1L);
         String checklistJson = write(checklist);
         var row = submissionRepository.saveAndFlush(MilestoneArtifactSubmission.submit(s.tenantId, s.projectId, teamId,

@@ -90,6 +90,10 @@ public class SubmissionReviewService {
         BigDecimal penalty = version.getPenaltyPercent();
         BigDecimal finalScore = rawScore.multiply(new BigDecimal("100.00").subtract(penalty))
                 .divide(new BigDecimal("100.00"), 2, RoundingMode.HALF_UP);
+        if (request.decision() == ReviewDecision.REJECT) {
+            rawScore = BigDecimal.ZERO;
+            finalScore = BigDecimal.ZERO;
+        }
         Instant now = milestoneClock.instant();
         MilestoneReview review = MilestoneReview.create(version, request.decision(), actorId,
                 submission.getAssignedReviewerName(), rawScore, penalty, finalScore,

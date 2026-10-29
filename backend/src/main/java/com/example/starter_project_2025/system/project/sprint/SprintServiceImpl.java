@@ -87,6 +87,7 @@ public class SprintServiceImpl
     SprintAuditService sprintAuditService;
     SprintOutboxService sprintOutboxService;
     SprintBacklogRepository sprintBacklogRepository;
+    com.example.starter_project_2025.system.project.task.TaskRepository taskRepository;
 
     @Override
     protected BaseCrudRepository<Sprint, Long> getRepository() {
