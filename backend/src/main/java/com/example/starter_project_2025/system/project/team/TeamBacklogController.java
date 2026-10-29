@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 
 /**
  * Backlog board of one team workspace.
@@ -33,4 +35,15 @@ public class TeamBacklogController {
     public ResponseEntity<TeamBacklogBoard> getBoard(@PathVariable Long teamId) {
         return ResponseEntity.ok(teamBacklogService.read(teamId));
     }
+
+    @PutMapping("/items/{itemId}/assignee")
+    @Operation(summary = "Assign a work item to an active member of this workspace team")
+    public ResponseEntity<com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogDTO> assign(
+            @PathVariable Long teamId,
+            @PathVariable Long itemId,
+            @RequestBody AssignTeamWorkItemRequest request) {
+        return ResponseEntity.ok(teamBacklogService.assign(teamId, itemId, request.projectMemberId()));
+    }
+
+    public record AssignTeamWorkItemRequest(Long projectMemberId) { }
 }

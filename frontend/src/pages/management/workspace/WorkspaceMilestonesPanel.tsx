@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { WorkspaceSectionAccess } from "@/types/features/workspace";
+import { usePermissions } from "@/hooks/usePermissions";
+import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
 
 export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, access: _access }: {
   projectId?: number | null;
@@ -13,6 +15,8 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
   workspaceId: number;
   access: WorkspaceSectionAccess;
 }) {
+  const { activeRole } = usePermissions();
+  const isStudent = normalizeRole(activeRole) === STUDENT_ROLE;
   const query = useQuery({
     queryKey: ["workspace-milestones", projectId, teamId],
     queryFn: () => milestoneApi.getTeamList(teamId, { page: 0, size: 100 }),
@@ -21,7 +25,7 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
   const reviewQuery = useQuery({
     queryKey: ["team-artifact-submissions", teamId],
     queryFn: () => milestoneApi.getTeamArtifactSubmissions(teamId),
-    retry: false, refetchInterval: 20_000,
+    retry: false, refetchInterval: 20_000, enabled: !isStudent,
   });
   const submissionCounts = new Map<string, number>();
   reviewQuery.data?.forEach(({ submission }) => submissionCounts.set(submission.milestoneId, (submissionCounts.get(submission.milestoneId) ?? 0) + 1));
@@ -43,7 +47,7 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
             <Button asChild type="button" variant="outline">
               <Link to={`/teams/${teamId}/milestones`}>View all</Link>
             </Button>
-            {createButton}
+            {!isStudent && createButton}
           </div>
         </CardHeader>
         <CardContent>
@@ -60,7 +64,7 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
           <Button asChild type="button" variant="outline">
             <Link to={`/teams/${teamId}/milestones`}>View all</Link>
           </Button>
-          {createButton}
+          {!isStudent && createButton}
         </div>
       </CardHeader>
       <CardContent className="px-4 pb-4 pt-0">
@@ -78,7 +82,9 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
                 </button>
                 <div className="flex shrink-0 items-center gap-1.5"><Badge variant="outline" className="h-6 px-2 text-[11px]">{milestone.status}</Badge>
                   <Button size="sm" variant="ghost" className="h-8 px-2" title="View milestone" onClick={() => navigate(`/teams/${teamId}/milestones/${milestone.id}?workspaceId=${workspaceId}`)}><Eye className="size-3.5" /><span className="hidden lg:inline">View</span></Button>
-                  <Button size="sm" variant="secondary" className="h-8 px-2" title="Review submissions" onClick={() => navigate(`/teams/${teamId}/milestones/${milestone.id}/submissions?workspaceId=${workspaceId}`)}><ClipboardCheck className="size-3.5" /><span className="hidden lg:inline">Review</span><span>{submissionCounts.get(milestone.id) ?? 0}</span></Button>
+                  {isStudent
+                    ? <Button asChild size="sm" variant="secondary" className="h-8 px-2" title="View my submissions"><Link to={`/student/teams/${teamId}/milestones/${milestone.id}/submissions?workspaceId=${workspaceId}`}><ClipboardCheck className="size-3.5" /><span>My submissions</span></Link></Button>
+                    : <Button size="sm" variant="secondary" className="h-8 px-2" title="Review submissions" onClick={() => navigate(`/teams/${teamId}/milestones/${milestone.id}/submissions?workspaceId=${workspaceId}`)}><ClipboardCheck className="size-3.5" /><span className="hidden lg:inline">Review</span><span>{submissionCounts.get(milestone.id) ?? 0}</span></Button>}
                 </div>
               </div>
             ))}

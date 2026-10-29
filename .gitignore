@@ -1,5 +1,6 @@
  === IDE ===
 .idea/
+.run/*.saved
 *.iml
 .vscode/
 
@@ -11,6 +12,13 @@ Thumbs.db
 backend/target/
 backend/*.jar
 backend/*.war
+
+# === Local databases and demo logs ===
+/data/
+*.mv.db
+*.trace.db
+*.lock.db
+backend/demo-start.log
 
 # === Backend .env (secrets) ===
 backend/.env

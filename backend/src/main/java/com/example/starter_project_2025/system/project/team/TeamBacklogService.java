@@ -1,30 +1,32 @@
 package com.example.starter_project_2025.system.project.team;
 
-import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.project.ProjectTeam;
-import com.example.starter_project_2025.system.project.ProjectTeamRepository;
-import com.example.starter_project_2025.system.project.ProjectTeamStatus;
+import com.example.starter_project_2025.system.project.ProjectMember;
+import com.example.starter_project_2025.system.project.ProjectMemberRepository;
 import com.example.starter_project_2025.system.project.sprint.Sprint;
 import com.example.starter_project_2025.system.project.sprint.SprintMapper;
 import com.example.starter_project_2025.system.project.sprint.SprintRepository;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklog;
+import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogDTO;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogMapper;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogRepository;
+import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogService;
+import com.example.starter_project_2025.system.project.workspace.service.WorkspaceAccessService;
+import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
 import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.http.HttpStatus;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Reads the Backlog tab of a team workspace (sprints + work items of that team
@@ -44,25 +46,18 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class TeamBacklogService {
 
-    ProjectTeamRepository teams;
     SprintRepository sprints;
     SprintBacklogRepository backlogs;
     SprintMapper sprintMapper;
     SprintBacklogMapper backlogMapper;
+    WorkspaceAccessService workspaceAccess;
+    ProjectMemberRepository projectMembers;
+    SprintBacklogService sprintBacklogService;
 
-    /**
-     * @throws ResponseStatusException 404 when the team does not exist in the
-     *                                tenant of the caller
-     * @throws AccessDeniedException   when the request is not authenticated
-     */
     @Transactional(readOnly = true)
     public TeamBacklogBoard read(Long teamId) {
-        User actor = requireActor();
-
-        ProjectTeam team = teams.findByIdAndTrainingClass_TenantId(teamId, actor.getTenantId())
-                .filter(candidate -> Boolean.TRUE.equals(candidate.getIsActive())
-                        && candidate.getStatus() == ProjectTeamStatus.ACTIVE)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Team was not found"));
+        User actor = workspaceAccess.requireUser(false);
+        ProjectTeam team = workspaceAccess.requireTeam(actor, teamId, false);
 
         Long projectId = team.getProjectId();
 
@@ -74,31 +69,91 @@ public class TeamBacklogService {
                 ? backlogs.findActiveBySprintTeamId(teamId)
                 : backlogs.findActiveBySprintTeamIdOrProjectId(teamId, projectId));
         if (projectId != null) {
-            items.addAll(backlogs.findProductBacklogByProjectId(projectId));
+            Set<String> sprintItemKeys = items.stream()
+                    .filter(item -> item.getSprint() != null)
+                    .map(TeamBacklogService::workItemKey)
+                    .collect(Collectors.toSet());
+            backlogs.findProductBacklogByProjectId(projectId).stream()
+                    // A product-backlog row can be left behind when its work
+                    // item was moved into a sprint. Prefer the sprint row,
+                    // which carries the current workflow state and history.
+                    .filter(item -> !sprintItemKeys.contains(workItemKey(item)))
+                    .forEach(items::add);
         }
         items.sort(Comparator.comparing(SprintBacklog::getId));
+
+        List<ProjectMember> activeMembers = projectMembers
+                .findAllByTeam_IdAndClassMember_StatusOrderByIdAsc(teamId, ClassMemberStatus.ACTIVE);
+        Map<Long, String> assigneeNames = activeMembers.stream().collect(Collectors.toMap(
+                        ProjectMember::getId,
+                        TeamBacklogService::displayName,
+                        (first, ignored) -> first
+                ));
+        List<TeamBacklogMemberOption> memberOptions = activeMembers.stream()
+                .filter(TeamBacklogService::eligibleMember)
+                .map(member -> new TeamBacklogMemberOption(member.getId(), displayName(member)))
+                .toList();
+        List<SprintBacklogDTO> itemDtos = items.stream().map(backlogMapper::toResponse).toList();
+        itemDtos.forEach(item -> item.setAssigneeDisplayName(assigneeNames.get(item.getAssigneeProjectMemberId())));
 
         return new TeamBacklogBoard(
                 teamId,
                 projectId,
                 teamSprints.stream().map(sprintMapper::toResponse).toList(),
-                items.stream().map(backlogMapper::toResponse).toList()
+                itemDtos,
+                memberOptions
         );
     }
 
-    private User requireActor() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-
-        if (authentication == null
-                || !authentication.isAuthenticated()
-                || "anonymousUser".equals(authentication.getPrincipal())) {
-            throw new AccessDeniedException("Authentication is required to view the team backlog");
+    @Transactional
+    public SprintBacklogDTO assign(Long teamId, Long itemId, Long projectMemberId) {
+        User actor = workspaceAccess.requireUser(false);
+        ProjectTeam team = workspaceAccess.requireTeam(actor, teamId, false);
+        if (!workspaceAccess.permitted(actor, "SPRINT_BACKLOG_UPDATE")) {
+            throw new org.springframework.security.access.AccessDeniedException("Work item update is not allowed");
         }
 
-        if (!(authentication.getPrincipal() instanceof UserPrincipal principal)) {
-            throw new AccessDeniedException("Authenticated user context is unavailable");
+        SprintBacklog item = backlogs.findById(itemId)
+                .filter(row -> Boolean.TRUE.equals(row.getIsActive()))
+                .orElseThrow(() -> new com.example.starter_project_2025.exception.ResourceNotFoundException("Sprint Backlog", "id", itemId));
+        Long teamProjectId = team.getProjectId();
+        boolean inTeamBoard = item.getSprint() != null
+                ? (teamId.equals(item.getSprint().getTeamId()))
+                    || (teamProjectId != null && teamProjectId.equals(item.getProjectId()))
+                : teamProjectId != null && teamProjectId.equals(item.getProjectId());
+        if (!inTeamBoard) {
+            throw new org.springframework.security.access.AccessDeniedException("Work item is outside this workspace");
+        }
+        if (projectMemberId != null && projectMembers.findAllByTeam_IdAndClassMember_StatusOrderByIdAsc(
+                        teamId, ClassMemberStatus.ACTIVE).stream()
+                .noneMatch(member -> projectMemberId.equals(member.getId()) && eligibleMember(member))) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY,
+                    "Assignee must be an active member of this workspace team");
         }
 
-        return principal.getUser();
+        SprintBacklogDTO update = SprintBacklogDTO.builder()
+                .assigneeProjectMemberId(projectMemberId)
+                .clearAssignee(projectMemberId == null)
+                .build();
+        return sprintBacklogService.update(itemId, update);
+    }
+
+    private static String displayName(ProjectMember member) {
+        var user = member.getClassMember().getUser();
+        return (user.getFirstName() + " " + (user.getLastName() == null ? "" : user.getLastName())).trim();
+    }
+
+    private static String workItemKey(SprintBacklog item) {
+        return normalize(item.getTitle()) + "\u0000" + normalize(item.getDescription());
+    }
+
+    private static String normalize(String value) {
+        return value == null ? "" : value.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
+    }
+
+    private static boolean eligibleMember(ProjectMember member) {
+        var user = member.getClassMember().getUser();
+        return Boolean.TRUE.equals(user.getIsActive()) && !Boolean.TRUE.equals(user.getLocked());
     }
 }

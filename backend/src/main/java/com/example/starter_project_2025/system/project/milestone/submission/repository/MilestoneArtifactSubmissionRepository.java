@@ -11,6 +11,8 @@ public interface MilestoneArtifactSubmissionRepository extends JpaRepository<Mil
             Long tenantId, Long projectId, UUID milestoneId, UUID submitterId);
     Optional<MilestoneArtifactSubmission> findTopByTenantIdAndTeamIdAndMilestoneIdAndSubmitterIdOrderByVersionDesc(
             Long tenantId, Long teamId, UUID milestoneId, UUID submitterId);
+    java.util.List<MilestoneArtifactSubmission> findByTenantIdAndTeamIdAndMilestoneIdAndSubmitterIdOrderByVersionDesc(
+            Long tenantId, Long teamId, UUID milestoneId, UUID submitterId);
     Optional<MilestoneArtifactSubmission> findTopByTenantIdAndProjectIdAndMilestoneIdOrderBySubmittedAtDesc(
             Long tenantId, Long projectId, UUID milestoneId);
     Optional<MilestoneArtifactSubmission> findTopByTenantIdAndTeamIdAndMilestoneIdOrderBySubmittedAtDesc(

@@ -327,6 +327,7 @@ class MilestoneSubmissionIntegrationTest {
                 "Mandatory completion gate", null, now.plusSeconds(3600), true,
                 MockMilestoneData.RUBRIC_ID, MockMilestoneData.TECHNICAL_REVIEWER_ID,
                 LatePolicyType.NO_LATE, null, null, actor, now);
+        milestone.openForWork(actor, now);
         milestone = milestones.saveAndFlush(milestone);
 
         mockMvc.perform(post("/api/projects/{projectId}/teams/{teamId}/final-grade/lock", projectId, teamId)

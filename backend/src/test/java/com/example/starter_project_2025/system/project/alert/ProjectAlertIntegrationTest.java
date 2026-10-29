@@ -122,7 +122,7 @@ class ProjectAlertIntegrationTest {
             upcomingId=item(sprint,ma.getId(),"Upcoming parent item",SprintBacklogStatus.IN_PROGRESS,now.plusSeconds(7200)).getId();
             doneId=item(sprint,ma.getId(),"Finished parent item",SprintBacklogStatus.DONE,now.minusSeconds(3600)).getId();
             var m=Milestone.create(tenantId,projectId,teamId,"Real milestone",null,now.plus(Duration.ofHours(24)),true,UUID.randomUUID(),null,
-                    LatePolicyType.NO_LATE,null,null,UUID.randomUUID(),now);m.openForWork(UUID.randomUUID(),now);milestoneId=milestones.saveAndFlush(m).getId();
+                    LatePolicyType.NO_LATE,null,null,UUID.randomUUID(),now);m.openForWork(UUID.randomUUID(),now);m.start(UUID.randomUUID(),now);milestoneId=milestones.saveAndFlush(m).getId();
         });
         oldBatches=batches.count();oldRecipients=recipients.count();oldAudits=audits.count();oldEvents=outbox.count();
     }
@@ -487,10 +487,14 @@ class ProjectAlertIntegrationTest {
         list("milestones",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
         send(mentorToken,UUID.randomUUID().toString(),milestonePayload()).andExpect(status().isConflict());unchanged();
     }
-    @Test void submittedVersionsDoNotResetTaskStartInactivityOrCompleteTheMilestone() throws Exception {
+    @Test void pendingSubmissionCannotBeReplacedAndDoesNotCompleteTheMilestone() throws Exception {
         links(mentorToken,overdueId,doneId).andExpect(status().isOk());
+        long before = submissions.count();
         submitArtifact(UUID.randomUUID().toString(),"First hand-in").andExpect(status().isCreated());
-        submitArtifact(UUID.randomUUID().toString(),"Second hand-in").andExpect(status().isCreated());
+        assertThat(submissions.count()).isEqualTo(before + 1);
+        // A fresh submission is only allowed after the reviewer requests changes.
+        submitArtifact(UUID.randomUUID().toString(),"Second hand-in").andExpect(status().isConflict());
+        assertThat(submissions.count()).isEqualTo(before + 1);
         list("inactive-members",mentorToken,teamId).andExpect(jsonPath("$.total").value(2));
         list("milestones",mentorToken,teamId).andExpect(jsonPath("$.content[0].progress.percentage").value(50));
         assertThat(milestones.findById(milestoneId).orElseThrow().getStatus()).isEqualTo(MilestoneStatus.OPEN);
@@ -619,6 +623,11 @@ class ProjectAlertIntegrationTest {
     @Test void completingBacklogsRemovesMilestoneAlertAndEditsDoNotResetTaskStarts() throws Exception {
         links(mentorToken,overdueId,doneId).andExpect(status().isOk());
         tx.executeWithoutResult(status->item(sprints.findById(sprintId).orElseThrow(),aMembershipId,"Other waiting work",SprintBacklogStatus.TODO,null));
+        for (String nextStatus : List.of("IN_PROGRESS", "REVIEW")) {
+            mvc.perform(put("/api/sprint-backlogs/{id}",overdueId).header("Authorization","Bearer "+mentorToken)
+                    .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("status",nextStatus,"isActive",true))))
+                    .andExpect(status().isOk());
+        }
         mvc.perform(put("/api/sprint-backlogs/{id}",overdueId).header("Authorization","Bearer "+mentorToken)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"DONE\",\"isActive\":true}")).andExpect(status().isOk());
         list("milestones",mentorToken,teamId).andExpect(jsonPath("$.total").value(0));
@@ -761,6 +770,11 @@ class ProjectAlertIntegrationTest {
     @Test void workResultsRefreshFromBacklogEditsAndReassignmentWithoutChangingActivityRules() throws Exception {
         Long bMembership=tx.execute(status->members.findByTeam_IdAndClassMember_User_Id(teamId,bId).orElseThrow().getId());
         memberResults(mentorToken,teamId,aId).andExpect(jsonPath("$.summary.assigned").value(3));
+        for (String nextStatus : List.of("IN_PROGRESS", "REVIEW")) {
+            mvc.perform(put("/api/sprint-backlogs/{id}",overdueId).header("Authorization","Bearer "+mentorToken)
+                    .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("isActive",true,"status",nextStatus))))
+                    .andExpect(status().isOk());
+        }
         mvc.perform(put("/api/sprint-backlogs/{id}",overdueId).header("Authorization","Bearer "+mentorToken)
                 .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("isActive",true,
                         "status","DONE","assigneeProjectMemberId",bMembership)))).andExpect(status().isOk());

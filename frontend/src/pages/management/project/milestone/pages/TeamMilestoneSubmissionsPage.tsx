@@ -332,10 +332,9 @@ export default function TeamMilestoneSubmissionsPage() {
                     submitterEmail,
                   } = item;
                   const isLatest = submission.version === maxVersion;
-                  const displayStatus =
-                    !isLatest && submission.status === "SUBMITTED"
-                      ? "CHANGES_REQUESTED"
-                      : submission.status;
+                  // The API resolves review state from the linked reviewer workflow.
+                  // Keep the immutable artifact status when no review record exists.
+                  const displayStatus = submission.status;
                   const latestReviewId = isLatest
                     ? reviewSubmissionId || sharedReviewSubmissionId
                     : null;
@@ -557,14 +556,7 @@ export default function TeamMilestoneSubmissionsPage() {
                         Latest version
                       </Badge>
                     )}
-                    <SubmissionStatusBadge
-                      status={
-                        selectedSubmission.submission.version !== maxVersion &&
-                        selectedSubmission.submission.status === "SUBMITTED"
-                          ? "CHANGES_REQUESTED"
-                          : selectedSubmission.submission.status
-                      }
-                    />
+                    <SubmissionStatusBadge status={selectedSubmission.submission.status} />
                     {selectedSubmission.submission.submittedLate ? (
                       <Badge variant="destructive">
                         Late ·{" "}
