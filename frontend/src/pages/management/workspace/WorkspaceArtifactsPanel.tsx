@@ -34,7 +34,7 @@ import {
 import { usePermissions } from "@/hooks/usePermissions";
 import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
 import type { WorkspaceSectionAccess } from "@/types/features/workspace";
-import type { ArtifactSubmission, MilestoneResponse } from "@/types";
+import type { ArtifactSubmission, MilestoneListItem } from "@/types";
 
 interface MilestoneSubmissionHistoryItem {
   submission: ArtifactSubmission;
@@ -59,7 +59,7 @@ export function WorkspaceArtifactsPanel({
   const { activeRole } = usePermissions();
   const isStudent = normalizeRole(activeRole) === STUDENT_ROLE;
 
-  const [historyMilestone, setHistoryMilestone] = useState<MilestoneResponse | null>(null);
+  const [historyMilestone, setHistoryMilestone] = useState<MilestoneListItem | null>(null);
 
   // Load team milestones
   const milestonesQuery = useQuery({
@@ -69,16 +69,16 @@ export function WorkspaceArtifactsPanel({
   });
 
   // Load team submissions (if reviewer/admin)
-  const reviewerSubmissionsQuery = useQuery({
+  const submissionsQuery = useQuery({
     queryKey: ["team-artifact-submissions-workspace", teamId],
     queryFn: () => milestoneApi.getTeamArtifactSubmissions(teamId),
     retry: false,
-    enabled: !isStudent && teamId > 0,
+    enabled: teamId > 0,
   });
 
   // Map submissions per milestoneId
   const submissionsByMilestone = new Map<string, MilestoneSubmissionHistoryItem[]>();
-  reviewerSubmissionsQuery.data?.forEach((item) => {
+  submissionsQuery.data?.forEach((item) => {
     const list = submissionsByMilestone.get(item.submission.milestoneId) ?? [];
     list.push(item);
     submissionsByMilestone.set(item.submission.milestoneId, list);
@@ -157,7 +157,7 @@ export function WorkspaceArtifactsPanel({
             size="sm"
             onClick={() => {
               void milestonesQuery.refetch();
-              if (!isStudent) void reviewerSubmissionsQuery.refetch();
+              void submissionsQuery.refetch();
             }}
           >
             <RotateCw className="mr-1.5 size-3.5" /> Làm mới
@@ -241,7 +241,7 @@ export function WorkspaceArtifactsPanel({
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleOpenSubmissionsPage(m.id)}
+                        onClick={() => setHistoryMilestone(m)}
                         title="Xem lịch sử tất cả các phiên bản đã nộp"
                       >
                         <History className="mr-1.5 size-4" />
@@ -364,7 +364,19 @@ export function WorkspaceArtifactsPanel({
             )}
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex flex-wrap items-center justify-between gap-2 sm:justify-between">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                const targetMilestoneId = historyMilestone?.id;
+                setHistoryMilestone(null);
+                if (targetMilestoneId) handleOpenSubmissionsPage(targetMilestoneId);
+              }}
+            >
+              <ExternalLink className="mr-1.5 size-4" /> Mở trang bài nộp đầy đủ
+            </Button>
+            <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setHistoryMilestone(null)}>
               Đóng
             </Button>
@@ -373,6 +385,7 @@ export function WorkspaceArtifactsPanel({
                 <Send className="mr-1.5 size-4" /> Nộp phiên bản mới
               </Button>
             )}
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
