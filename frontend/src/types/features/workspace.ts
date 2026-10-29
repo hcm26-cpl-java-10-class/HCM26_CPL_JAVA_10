@@ -81,6 +81,18 @@ export interface WorkspaceDetail extends WorkspaceResponse {
   charter: TeamCharter;
   cohortId?: number;
   cohortName?: string;
+  topic_snapshot?: {
+    topic_code: string;
+    topic_title: string;
+    version: string;
+    description?: string | null;
+    objectives?: string | null;
+    requirements?: string[] | null;
+    attachments?: Array<{
+      name: string;
+      url: string;
+    }> | null;
+  } | null;
   createdAt?: string;
   createdByName?: string;
   member_count: number;
