@@ -4,6 +4,8 @@ import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.exception.ConflictException;
+import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.demo.session.SessionService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -177,6 +179,25 @@ public class SessionServiceImpl
 
         Session updatedSession = sessionRepository.save(session);
         return sessionMapper.toDto(updatedSession);
+    }
+
+    @Override
+    public SessionDTO completeSession(Long id, SessionCompleteDTO completeDTO) {
+        checkPermission(CrudAction.UPDATE);
+        // Serialize with cancel/edit/import before reading the current status.
+        conflicts.lockForWrite();
+        Session session = sessionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Session not found. Session ID: " + id));
+
+        if (session.getStatus() != Session.SessionStatus.SCHEDULED) {
+            throw new ConflictException("Only scheduled sessions can be completed.");
+        }
+
+        if (completeDTO != null && completeDTO.getNote() != null) {
+            session.setNote(completeDTO.getNote());
+        }
+        session.setStatus(Session.SessionStatus.COMPLETED);
+        return sessionMapper.toDto(sessionRepository.save(session));
     }
 
     /**

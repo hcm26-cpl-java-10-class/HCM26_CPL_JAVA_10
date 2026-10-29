@@ -6,6 +6,10 @@ export interface SessionCancelDTO {
     cancelReason: string;
 }
 
+export interface SessionCompleteDTO {
+    note?: string;
+}
+
 export interface SessionDTO extends BaseDTO {
     classId?: number;
     topicId?: number;
