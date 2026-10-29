@@ -13,10 +13,10 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -26,8 +26,6 @@ public class SyllabusBundleImportService {
     private final SyllabusRepository syllabusRepository;
     private final SyllabusCloRepository cloRepository;
     private final SyllabusMaterialService materialService;
-
-    // Draft / Published workflow
     private final SyllabusWorkflowService workflow;
 
     @Value("${app.syllabus.demo-import-enabled:false}")
@@ -49,6 +47,7 @@ public class SyllabusBundleImportService {
     @Transactional
     public ImportSummary importExcel(MultipartFile file) {
 
+        // Keep the existing demo-import restriction.
         if (!enabled) {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
@@ -56,6 +55,7 @@ public class SyllabusBundleImportService {
             );
         }
 
+        // Validate the uploaded file.
         if (file == null
                 || file.isEmpty()
                 || file.getSize() > 5_000_000
@@ -63,12 +63,16 @@ public class SyllabusBundleImportService {
                 || !file.getOriginalFilename()
                 .toLowerCase(Locale.ROOT)
                 .endsWith(".xlsx")) {
-            throw bad("Choose a .xlsx file smaller than 5 MB");
+
+            throw bad(
+                    "Choose a .xlsx file smaller than 5 MB"
+            );
         }
 
         try (Workbook workbook =
                      WorkbookFactory.create(file.getInputStream())) {
 
+            // Require all five M3 sheets.
             Sheet syllabusSheet =
                     requiredSheet(workbook, "Syllabuses");
 
@@ -84,11 +88,37 @@ public class SyllabusBundleImportService {
             Sheet materialSheet =
                     requiredSheet(workbook, "LearningMaterials");
 
-            int syllabusCount = importSyllabuses(syllabusSheet);
-            int cloCount = importClos(cloSheet);
-            int sectionCount = importSections(sectionSheet);
-            int topicCount = importTopics(topicSheet);
-            int materialCount = importMaterials(materialSheet);
+            // Import in dependency order.
+            int syllabusCount =
+                    importSyllabuses(syllabusSheet);
+
+            int cloCount =
+                    importClos(cloSheet);
+
+            int sectionCount =
+                    importSections(sectionSheet);
+
+            int topicCount =
+                    importTopics(topicSheet);
+
+            int materialCount =
+                    importMaterials(materialSheet);
+
+            // NEW:
+            // Do not report an empty template as a
+            // successful import.
+            int totalImported =
+                    syllabusCount
+                            + cloCount
+                            + sectionCount
+                            + topicCount
+                            + materialCount;
+
+            if (totalImported == 0) {
+                throw bad(
+                        "Excel file does not contain any data to import"
+                );
+            }
 
             return new ImportSummary(
                     syllabusCount,
@@ -105,7 +135,9 @@ public class SyllabusBundleImportService {
             throw exception;
 
         } catch (Exception exception) {
-            throw bad("Import failed: " + exception.getMessage());
+            throw bad(
+                    "Import failed: " + exception.getMessage()
+            );
         }
     }
 
@@ -113,7 +145,9 @@ public class SyllabusBundleImportService {
     // VALIDATION HELPERS
     // =========================================
 
-    private static ResponseStatusException bad(String message) {
+    private static ResponseStatusException bad(
+            String message
+    ) {
         return new ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
                 message
@@ -131,7 +165,9 @@ public class SyllabusBundleImportService {
         }
 
         if (sheet.getLastRowNum() > 5000) {
-            throw bad("Too many rows in sheet: " + name);
+            throw bad(
+                    "Too many rows in sheet: " + name
+            );
         }
 
         return sheet;
@@ -145,12 +181,16 @@ public class SyllabusBundleImportService {
 
         if (headerRow == null) {
             throw bad(
-                    "Missing headers in " + sheet.getSheetName()
+                    "Missing headers in " +
+                            sheet.getSheetName()
             );
         }
 
-        Map<String, Integer> result = new HashMap<>();
-        DataFormatter formatter = new DataFormatter();
+        Map<String, Integer> result =
+                new HashMap<>();
+
+        DataFormatter formatter =
+                new DataFormatter();
 
         for (Cell cell : headerRow) {
             result.put(
@@ -161,7 +201,9 @@ public class SyllabusBundleImportService {
 
         for (String column : requiredColumns) {
             if (!result.containsKey(column)) {
-                throw bad("Missing column: " + column);
+                throw bad(
+                        "Missing column: " + column
+                );
             }
         }
 
@@ -189,7 +231,9 @@ public class SyllabusBundleImportService {
         }
 
         if (cell.getCellType() == CellType.FORMULA) {
-            throw bad("Excel formulas are not allowed");
+            throw bad(
+                    "Excel formulas are not allowed"
+            );
         }
 
         return new DataFormatter()
@@ -202,10 +246,16 @@ public class SyllabusBundleImportService {
             Map<String, Integer> headers,
             String name
     ) {
-        String result = value(row, headers, name);
+        String result = value(
+                row,
+                headers,
+                name
+        );
 
         if (result.isBlank()) {
-            throw bad(name + " is required");
+            throw bad(
+                    name + " is required"
+            );
         }
 
         return result;
@@ -217,7 +267,11 @@ public class SyllabusBundleImportService {
             String name,
             boolean optional
     ) {
-        String result = value(row, headers, name);
+        String result = value(
+                row,
+                headers,
+                name
+        );
 
         if (result.isBlank() && optional) {
             return null;
@@ -226,7 +280,9 @@ public class SyllabusBundleImportService {
         try {
             return Integer.valueOf(result);
         } catch (NumberFormatException exception) {
-            throw bad(name + " must be an integer");
+            throw bad(
+                    name + " must be an integer"
+            );
         }
     }
 
@@ -235,7 +291,11 @@ public class SyllabusBundleImportService {
             Map<String, Integer> headers,
             String name
     ) {
-        String result = value(row, headers, name);
+        String result = value(
+                row,
+                headers,
+                name
+        );
 
         if (result.equalsIgnoreCase("TRUE")
                 || result.equalsIgnoreCase("YES")
@@ -250,17 +310,29 @@ public class SyllabusBundleImportService {
             return false;
         }
 
-        throw bad(name + " must be TRUE or FALSE");
+        throw bad(
+                name + " must be TRUE or FALSE"
+        );
     }
 
-    private static void checkDemoCode(String code) {
+    // Keep the demo-only code rule.
+    private static void checkDemoCode(
+            String code
+    ) {
         if (code == null
-                || !code.matches("DEMO-[A-Z0-9_-]{3,25}")) {
-            throw bad("Only DEMO-* syllabus codes are allowed");
+                || !code.matches(
+                "DEMO-[A-Z0-9_-]{3,25}"
+        )) {
+
+            throw bad(
+                    "Only DEMO-* syllabus codes are allowed"
+            );
         }
     }
 
-    private static String normalize(String text) {
+    private static String normalize(
+            String text
+    ) {
         return text.strip()
                 .replaceAll("(?U)\\s+", " ")
                 .toLowerCase(Locale.ROOT);
@@ -274,18 +346,28 @@ public class SyllabusBundleImportService {
         );
     }
 
+    // Process non-empty data rows.
     private static int each(
             Sheet sheet,
             String[] requiredHeaders,
             RowImporter importer
     ) {
         Map<String, Integer> columns =
-                headers(sheet, requiredHeaders);
+                headers(
+                        sheet,
+                        requiredHeaders
+                );
 
-        DataFormatter formatter = new DataFormatter();
+        DataFormatter formatter =
+                new DataFormatter();
+
         int processed = 0;
 
-        for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+        for (
+                int i = 1;
+                i <= sheet.getLastRowNum();
+                i++
+        ) {
             Row row = sheet.getRow(i);
 
             if (row == null) {
@@ -295,7 +377,10 @@ public class SyllabusBundleImportService {
             boolean empty = true;
 
             for (Cell cell : row) {
-                if (!formatter.formatCellValue(cell).isBlank()) {
+                if (!formatter
+                        .formatCellValue(cell)
+                        .isBlank()) {
+
                     empty = false;
                     break;
                 }
@@ -306,13 +391,20 @@ public class SyllabusBundleImportService {
             }
 
             try {
-                importer.apply(row, columns);
+                importer.apply(
+                        row,
+                        columns
+                );
+
                 processed++;
+
             } catch (Exception exception) {
                 throw bad(
                         sheet.getSheetName()
-                                + " row " + (i + 1)
-                                + ": " + exception.getMessage()
+                                + " row "
+                                + (i + 1)
+                                + ": "
+                                + exception.getMessage()
                 );
             }
         }
@@ -324,7 +416,9 @@ public class SyllabusBundleImportService {
     // FIND HELPERS
     // =========================================
 
-    private Summary findSyllabus(String rawCode) {
+    private Summary findSyllabus(
+            String rawCode
+    ) {
         String code = rawCode
                 .strip()
                 .toUpperCase(Locale.ROOT);
@@ -334,20 +428,28 @@ public class SyllabusBundleImportService {
         return syllabusService.list("")
                 .stream()
                 .filter(item ->
-                        item.code().equalsIgnoreCase(code)
+                        item.code()
+                                .equalsIgnoreCase(code)
                 )
                 .findFirst()
-                .orElseThrow(() ->
-                        bad("Unknown syllabus: " + code)
+                .orElseThrow(
+                        () -> bad(
+                                "Unknown syllabus: " + code
+                        )
                 );
     }
 
-    // IMPORTANT:
-    // Prevent imports into PUBLISHED syllabuses.
-    private long syllabusId(String code) {
-        Summary syllabus = findSyllabus(code);
+    // All related content must be imported
+    // into a Draft syllabus only.
+    private long syllabusId(
+            String code
+    ) {
+        Summary syllabus =
+                findSyllabus(code);
 
-        workflow.requireDraft(syllabus.id());
+        workflow.requireDraft(
+                syllabus.id()
+        );
 
         return syllabus.id();
     }
@@ -361,11 +463,15 @@ public class SyllabusBundleImportService {
                 .stream()
                 .filter(item ->
                         normalize(item.title())
-                                .equals(normalize(title))
+                                .equals(
+                                        normalize(title)
+                                )
                 )
                 .findFirst()
-                .orElseThrow(() ->
-                        bad("Unknown section: " + title)
+                .orElseThrow(
+                        () -> bad(
+                                "Unknown section: " + title
+                        )
                 );
     }
 
@@ -374,16 +480,23 @@ public class SyllabusBundleImportService {
             String sectionTitle,
             String topicTitle
     ) {
-        return findSection(syllabusId, sectionTitle)
+        return findSection(
+                syllabusId,
+                sectionTitle
+        )
                 .topics()
                 .stream()
                 .filter(item ->
                         normalize(item.title())
-                                .equals(normalize(topicTitle))
+                                .equals(
+                                        normalize(topicTitle)
+                                )
                 )
                 .findFirst()
-                .orElseThrow(() ->
-                        bad("Unknown topic: " + topicTitle)
+                .orElseThrow(
+                        () -> bad(
+                                "Unknown topic: " + topicTitle
+                        )
                 );
     }
 
@@ -391,7 +504,9 @@ public class SyllabusBundleImportService {
     // 1. IMPORT SYLLABUSES
     // =========================================
 
-    private int importSyllabuses(Sheet sheet) {
+    private int importSyllabuses(
+            Sheet sheet
+    ) {
         return each(
                 sheet,
                 new String[]{
@@ -402,31 +517,38 @@ public class SyllabusBundleImportService {
                 (row, headers) -> {
 
                     String code = required(
-                            row, headers, "Code"
+                            row,
+                            headers,
+                            "Code"
                     ).toUpperCase(Locale.ROOT);
 
                     checkDemoCode(code);
 
                     String name = required(
-                            row, headers, "Name"
+                            row,
+                            headers,
+                            "Name"
                     );
 
                     String description = value(
-                            row, headers, "Description"
+                            row,
+                            headers,
+                            "Description"
                     );
 
-                    Summary existing = syllabusService.list("")
-                            .stream()
-                            .filter(item ->
-                                    item.code().equalsIgnoreCase(code)
-                            )
-                            .findFirst()
-                            .orElse(null);
+                    Summary existing =
+                            syllabusService.list("")
+                                    .stream()
+                                    .filter(item ->
+                                            item.code()
+                                                    .equalsIgnoreCase(code)
+                                    )
+                                    .findFirst()
+                                    .orElse(null);
 
                     long id;
 
                     if (existing == null) {
-
                         id = syllabusService.create(
                                 new SyllabusInput(
                                         code,
@@ -436,9 +558,10 @@ public class SyllabusBundleImportService {
                         ).id();
 
                     } else {
-
-                        // Do not overwrite PUBLISHED content
-                        workflow.requireDraft(existing.id());
+                        // Never update Published.
+                        workflow.requireDraft(
+                                existing.id()
+                        );
 
                         id = syllabusService.update(
                                 existing.id(),
@@ -497,7 +620,9 @@ public class SyllabusBundleImportService {
     // 2. IMPORT CLOs
     // =========================================
 
-    private int importClos(Sheet sheet) {
+    private int importClos(
+            Sheet sheet
+    ) {
         return each(
                 sheet,
                 new String[]{
@@ -517,11 +642,15 @@ public class SyllabusBundleImportService {
                     );
 
                     String code = required(
-                            row, headers, "CLO Code"
+                            row,
+                            headers,
+                            "CLO Code"
                     ).toUpperCase(Locale.ROOT);
 
                     String details = required(
-                            row, headers, "Details"
+                            row,
+                            headers,
+                            "Details"
                     );
 
                     int order = number(
@@ -531,27 +660,37 @@ public class SyllabusBundleImportService {
                             false
                     );
 
-                    if (!code.matches("CLO[1-9][0-9]*")
-                            || code.length() > 20
-                            || order < 0
-                            || details.length() < 10
-                            || details.length() > 2000) {
+                    if (
+                            !code.matches(
+                                    "CLO[1-9][0-9]*"
+                            )
+                                    || code.length() > 20
+                                    || order < 0
+                                    || details.length() < 10
+                                    || details.length() > 2000
+                    ) {
                         throw bad("Invalid CLO data");
                     }
 
-                    SyllabusClo clo = cloRepository
-                            .findBySyllabus_IdOrderByOrderIndexAsc(id)
-                            .stream()
-                            .filter(item ->
-                                    item.getCode()
-                                            .equalsIgnoreCase(code)
-                            )
-                            .findFirst()
-                            .orElseGet(SyllabusClo::new);
+                    SyllabusClo clo =
+                            cloRepository
+                                    .findBySyllabus_IdOrderByOrderIndexAsc(
+                                            id
+                                    )
+                                    .stream()
+                                    .filter(item ->
+                                            item.getCode()
+                                                    .equalsIgnoreCase(code)
+                                    )
+                                    .findFirst()
+                                    .orElseGet(
+                                            SyllabusClo::new
+                                    );
 
                     if (clo.getId() == null) {
                         clo.setSyllabus(
-                                syllabusRepository.getReferenceById(id)
+                                syllabusRepository
+                                        .getReferenceById(id)
                         );
                     }
 
@@ -559,17 +698,19 @@ public class SyllabusBundleImportService {
                     clo.setDetails(details);
                     clo.setOrderIndex(order);
 
-                    // Safe because syllabusId() checked DRAFT.
+                    // Draft was verified above.
                     cloRepository.saveAndFlush(clo);
                 }
         );
     }
 
     // =========================================
-    // 3. IMPORT SECTIONS & MISSIONS
+    // 3. IMPORT SECTIONS / MISSIONS
     // =========================================
 
-    private int importSections(Sheet sheet) {
+    private int importSections(
+            Sheet sheet
+    ) {
         return each(
                 sheet,
                 new String[]{
@@ -607,24 +748,33 @@ public class SyllabusBundleImportService {
                             "Mission"
                     );
 
-                    SectionView existing = syllabusService.get(id)
-                            .sections()
-                            .stream()
-                            .filter(item ->
-                                    normalize(item.title())
-                                            .equals(normalize(title))
-                            )
-                            .findFirst()
-                            .orElse(null);
+                    SectionView existing =
+                            syllabusService.get(id)
+                                    .sections()
+                                    .stream()
+                                    .filter(item ->
+                                            normalize(
+                                                    item.title()
+                                            ).equals(
+                                                    normalize(title)
+                                            )
+                                    )
+                                    .findFirst()
+                                    .orElse(null);
 
-                    SectionInput input = new SectionInput(
-                            title,
-                            order,
-                            mission
-                    );
+                    SectionInput input =
+                            new SectionInput(
+                                    title,
+                                    order,
+                                    mission
+                            );
 
                     if (existing == null) {
-                        syllabusService.createSection(id, input);
+                        syllabusService.createSection(
+                                id,
+                                input
+                        );
+
                     } else {
                         syllabusService.updateSection(
                                 id,
@@ -640,7 +790,9 @@ public class SyllabusBundleImportService {
     // 4. IMPORT TOPICS
     // =========================================
 
-    private int importTopics(Sheet sheet) {
+    private int importTopics(
+            Sheet sheet
+    ) {
         return each(
                 sheet,
                 new String[]{
@@ -681,19 +833,24 @@ public class SyllabusBundleImportService {
                             false
                     );
 
-                    TopicView existing = section.topics()
-                            .stream()
-                            .filter(item ->
-                                    normalize(item.title())
-                                            .equals(normalize(title))
-                            )
-                            .findFirst()
-                            .orElse(null);
+                    TopicView existing =
+                            section.topics()
+                                    .stream()
+                                    .filter(item ->
+                                            normalize(
+                                                    item.title()
+                                            ).equals(
+                                                    normalize(title)
+                                            )
+                                    )
+                                    .findFirst()
+                                    .orElse(null);
 
-                    TopicInput input = new TopicInput(
-                            title,
-                            order
-                    );
+                    TopicInput input =
+                            new TopicInput(
+                                    title,
+                                    order
+                            );
 
                     if (existing == null) {
                         syllabusService.createTopic(
@@ -701,6 +858,7 @@ public class SyllabusBundleImportService {
                                 section.id(),
                                 input
                         );
+
                     } else {
                         syllabusService.updateTopic(
                                 id,
@@ -717,7 +875,9 @@ public class SyllabusBundleImportService {
     // 5. IMPORT LEARNING MATERIALS
     // =========================================
 
-    private int importMaterials(Sheet sheet) {
+    private int importMaterials(
+            Sheet sheet
+    ) {
         return each(
                 sheet,
                 new String[]{
@@ -771,11 +931,15 @@ public class SyllabusBundleImportService {
                     }
 
                     String url = required(
-                            row, headers, "URL"
+                            row,
+                            headers,
+                            "URL"
                     );
 
                     String type = required(
-                            row, headers, "Type"
+                            row,
+                            headers,
+                            "Type"
                     );
 
                     SyllabusMaterialService.MaterialInput input =
@@ -818,7 +982,8 @@ public class SyllabusBundleImportService {
                     SyllabusMaterialService.MaterialView existing =
                             existingList.stream()
                                     .filter(item ->
-                                            item.url().equalsIgnoreCase(url)
+                                            item.url()
+                                                    .equalsIgnoreCase(url)
                                                     && Objects.equals(
                                                     item.topicId(),
                                                     linkedTopicId
@@ -828,7 +993,11 @@ public class SyllabusBundleImportService {
                                     .orElse(null);
 
                     if (existing == null) {
-                        materialService.create(id, input);
+                        materialService.create(
+                                id,
+                                input
+                        );
+
                     } else {
                         materialService.update(
                                 id,

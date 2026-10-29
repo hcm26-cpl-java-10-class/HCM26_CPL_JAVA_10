@@ -1,8 +1,13 @@
 
+import { useRef, useState } from "react";
+import { toast } from "sonner";
+
 import { downloadTemplate } from "@/api/features/dataio/dataio-api";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TabsContent } from "@/components/ui/tabs";
+
 import {
   Download,
   FileSpreadsheet,
@@ -10,20 +15,22 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useRef, useState } from "react";
-import { toast } from "sonner";
 
-const DEFAULT_EXTENSIONS = [".xlsx", ".xls", ".csv"];
-const DEFAULT_MAX_FILE_SIZE = 50 * 1024 * 1024;
+const DEFAULT_EXTENSIONS = [
+  ".xlsx",
+  ".xls",
+  ".csv",
+];
+
+const DEFAULT_MAX_SIZE = 50 * 1024 * 1024;
 
 interface ImportTabProps {
   loading: boolean;
   onImport: (file: File) => Promise<void>;
   entityName?: string;
-
-  // Optional settings for different modules.
   allowedExtensions?: string[];
   maxFileSizeBytes?: number;
+  onDownloadTemplate?: () => Promise<void>;
 }
 
 export function ImportTab({
@@ -31,106 +38,153 @@ export function ImportTab({
                             onImport,
                             entityName,
                             allowedExtensions = DEFAULT_EXTENSIONS,
-                            maxFileSizeBytes = DEFAULT_MAX_FILE_SIZE,
+                            maxFileSizeBytes = DEFAULT_MAX_SIZE,
+                            onDownloadTemplate,
                           }: ImportTabProps) {
   const [file, setFile] = useState<File | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [downloadingTemplate, setDownloadingTemplate] =
-      useState(false);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const [dragging, setDragging] = useState(false);
+
+  const [downloading, setDownloading] = useState(false);
+
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const accept = allowedExtensions.join(",");
 
   const extensions = allowedExtensions.map((ext) =>
       ext.toLowerCase()
   );
 
-  const displayExtensions = allowedExtensions.join(", ");
-
   const maxSizeLabel =
-      maxFileSizeBytes === DEFAULT_MAX_FILE_SIZE
+      maxFileSizeBytes === DEFAULT_MAX_SIZE
           ? "50 MB"
           : `${Number(
               (maxFileSizeBytes / 1_000_000).toFixed(2)
           )} MB`;
 
-  const clearFile = () => {
+  // Reset native file input.
+  function resetFileInput() {
+    if (inputRef.current) {
+      inputRef.current.value = "";
+    }
+  }
+
+  function clearFile() {
     setFile(null);
     setError(null);
+    resetFileInput();
+  }
 
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+  function rejectFile(message: string) {
+    setFile(null);
+    setError(message);
+
+    // Allow selecting the same file again
+    // after correcting the issue.
+    resetFileInput();
+  }
+
+  // =========================================
+  // FILE VALIDATION
+  // =========================================
+
+  function selectFile(selected: File | null) {
+    if (!selected || loading) {
+      return;
     }
-  };
 
-  const handleFileSelect = (selected: File | null) => {
-    if (!selected || loading) return;
-
-    const validExtension = extensions.some((extension) =>
-        selected.name.toLowerCase().endsWith(extension)
+    const validExtension = extensions.some((ext) =>
+        selected.name.toLowerCase().endsWith(ext)
     );
 
     if (!validExtension) {
-      setFile(null);
-      setError(
-          `Only ${displayExtensions} files are allowed.`
+      rejectFile(
+          `Only ${allowedExtensions.join(", ")} files are allowed.`
       );
       return;
     }
 
     if (selected.size > maxFileSizeBytes) {
-      setFile(null);
-      setError(
+      rejectFile(
           `File size must not exceed ${maxSizeLabel}.`
+      );
+      return;
+    }
+
+    if (selected.size === 0) {
+      rejectFile(
+          "The selected file is empty."
       );
       return;
     }
 
     setFile(selected);
     setError(null);
-  };
+  }
 
-  const handleImportClick = async () => {
-    if (!file || loading) return;
+  // =========================================
+  // IMPORT
+  // =========================================
+
+  async function handleImport() {
+    if (!file || loading) {
+      return;
+    }
 
     try {
       setError(null);
+
       await onImport(file);
+
       clearFile();
-    } catch (err: unknown) {
-      const message =
-          err instanceof Error
-              ? err.message
-              : "Failed to import data";
 
-      setError(message);
+    } catch (error: unknown) {
+      setError(
+          error instanceof Error
+              ? error.message
+              : "Failed to import data."
+      );
     }
-  };
+  }
 
-  const handleDownloadTemplate = async () => {
-    if (!entityName) return;
+  // =========================================
+  // TEMPLATE DOWNLOAD
+  // =========================================
+
+  async function handleDownloadTemplate() {
+    if (downloading || loading) {
+      return;
+    }
+
+    if (!onDownloadTemplate && !entityName) {
+      return;
+    }
 
     try {
-      setDownloadingTemplate(true);
+      setDownloading(true);
 
-      await downloadTemplate(entityName);
+      if (onDownloadTemplate) {
+        await onDownloadTemplate();
+
+      } else if (entityName) {
+        await downloadTemplate(entityName);
+      }
 
       toast.success(
-          "Template downloaded successfully"
-      );
-    } catch (error) {
-      console.error(
-          "Error downloading template:",
-          error
+          "Template downloaded successfully."
       );
 
+    } catch {
       toast.error(
-          "Unable to download template. Please try again."
+          "Unable to download template."
       );
+
     } finally {
-      setDownloadingTemplate(false);
+      setDownloading(false);
     }
-  };
+  }
 
   return (
       <TabsContent
@@ -138,14 +192,15 @@ export function ImportTab({
           className="mt-4 flex flex-1 flex-col gap-4"
       >
         {/* DOWNLOAD TEMPLATE */}
-        {entityName && (
-            <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-3">
-              <div className="flex-1">
+        {(entityName || onDownloadTemplate) && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
+              <div>
                 <p className="text-sm font-medium">
                   Download Template
                 </p>
+
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Download Excel template to see data format
+                  Download the Excel template to see the required format.
                 </p>
               </div>
 
@@ -153,57 +208,76 @@ export function ImportTab({
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={handleDownloadTemplate}
-                  disabled={downloadingTemplate || loading}
-                  className="gap-2"
+                  aria-label="Download import template"
+                  disabled={loading || downloading}
+                  onClick={() =>
+                      void handleDownloadTemplate()
+                  }
               >
-                {downloadingTemplate ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                {downloading ? (
+                    <Loader2 className="size-4 animate-spin" />
                 ) : (
-                    <Download className="h-4 w-4" />
+                    <Download className="size-4" />
                 )}
               </Button>
             </div>
         )}
 
-        {/* FILE UPLOAD AREA */}
+        {/* FILE UPLOAD */}
         {!file ? (
             <div
+                role="button"
+                tabIndex={loading ? -1 : 0}
+                aria-label="Select an import file"
+                onClick={() => {
+                  if (!loading) {
+                    inputRef.current?.click();
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (
+                      !loading &&
+                      (
+                          event.key === "Enter" ||
+                          event.key === " "
+                      )
+                  ) {
+                    event.preventDefault();
+                    inputRef.current?.click();
+                  }
+                }}
                 onDragOver={(event) => {
-                  if (loading) return;
-
                   event.preventDefault();
-                  setIsDragging(true);
+
+                  if (!loading) {
+                    setDragging(true);
+                  }
                 }}
-                onDragLeave={() => {
-                  if (!loading) setIsDragging(false);
-                }}
+                onDragLeave={() =>
+                    setDragging(false)
+                }
                 onDrop={(event) => {
                   event.preventDefault();
+                  setDragging(false);
 
-                  if (loading) return;
-
-                  setIsDragging(false);
-
-                  handleFileSelect(
-                      event.dataTransfer.files?.[0] ?? null
-                  );
+                  if (!loading) {
+                    selectFile(
+                        event.dataTransfer.files?.[0] ?? null
+                    );
+                  }
                 }}
-                className={`flex flex-1 cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
-                    isDragging
-                        ? "border-blue-600 bg-blue-50 dark:bg-blue-950"
-                        : "border-muted hover:border-primary hover:bg-accent"
+                className={`flex min-h-44 flex-1 cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
+                    dragging
+                        ? "border-primary bg-accent/30"
+                        : "border-muted hover:border-primary hover:bg-accent/30"
                 } ${
                     loading
                         ? "pointer-events-none opacity-50"
                         : ""
                 }`}
-                onClick={() =>
-                    fileInputRef.current?.click()
-                }
             >
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                <Upload className="h-6 w-6 text-muted-foreground" />
+              <div className="flex size-12 items-center justify-center rounded-full bg-primary/10">
+                <Upload className="size-6 text-muted-foreground" />
               </div>
 
               <p className="text-sm font-medium">
@@ -211,17 +285,22 @@ export function ImportTab({
               </p>
 
               <p className="text-xs text-muted-foreground">
-                {displayExtensions} — max {maxSizeLabel}
+                {allowedExtensions.join(", ")}
+                {" — max "}
+                {maxSizeLabel}
               </p>
 
               <Input
-                  ref={fileInputRef}
+                  ref={inputRef}
                   type="file"
-                  accept={allowedExtensions.join(",")}
+                  accept={accept}
                   className="hidden"
                   disabled={loading}
+                  onClick={(event) =>
+                      event.stopPropagation()
+                  }
                   onChange={(event) =>
-                      handleFileSelect(
+                      selectFile(
                           event.target.files?.[0] ?? null
                       )
                   }
@@ -230,14 +309,11 @@ export function ImportTab({
         ) : (
             /* SELECTED FILE */
             <div className="flex flex-1 flex-col gap-4">
-              <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-3">
-                <FileSpreadsheet className="h-5 w-5 shrink-0 text-primary" />
+              <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
+                <FileSpreadsheet className="size-5 shrink-0 text-primary" />
 
                 <div className="min-w-0 flex-1">
-                  <p
-                      className="truncate text-sm font-medium"
-                      title={file.name}
-                  >
+                  <p className="truncate text-sm font-medium">
                     {file.name}
                   </p>
 
@@ -250,29 +326,30 @@ export function ImportTab({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={clearFile}
                     disabled={loading}
-                    className="h-8 w-8 p-0"
+                    aria-label="Remove selected file"
+                    onClick={clearFile}
                 >
-                  <X className="h-4 w-4" />
+                  <X className="size-4" />
                 </Button>
               </div>
 
               <Button
                   type="button"
                   className="mt-auto w-full"
-                  onClick={handleImportClick}
                   disabled={loading}
-                  size="lg"
+                  onClick={() =>
+                      void handleImport()
+                  }
               >
                 {loading ? (
                     <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      <Loader2 className="mr-2 size-4 animate-spin" />
                       Importing...
                     </>
                 ) : (
                     <>
-                      <Upload className="mr-2 h-5 w-5" />
+                      <Upload className="mr-2 size-4" />
                       Import File
                     </>
                 )}
@@ -280,11 +357,11 @@ export function ImportTab({
             </div>
         )}
 
-        {/* VALIDATION / API ERROR */}
+        {/* ERROR MESSAGE */}
         {error && (
             <p
                 role="alert"
-                className="text-sm text-red-600"
+                className="text-sm text-destructive"
             >
               {error}
             </p>
