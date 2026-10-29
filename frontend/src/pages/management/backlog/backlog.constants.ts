@@ -168,8 +168,15 @@ const GENERIC_KEY_TOKENS = new Set([
  */
 export const projectKeyOf = (
   sprintName?: string | null,
-  fallback = "SB",
+  fallback = "FA",
 ) => {
+  // Bug 44: use workspace task prefix stored in localStorage (set when workspace is opened)
+  const stored = typeof window !== "undefined"
+    ? (localStorage.getItem("workspace_task_prefix") ?? "").replace(/[^A-Za-z0-9]/g, "").toUpperCase()
+    : "";
+  if (stored.length >= 1) return stored;
+
+  // Fallback: derive from sprint name (legacy behaviour)
   const meaningful = (sprintName ?? "")
     .split(/[^A-Za-z0-9]+/)
     .filter(

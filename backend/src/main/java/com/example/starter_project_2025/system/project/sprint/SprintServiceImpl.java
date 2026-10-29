@@ -638,11 +638,24 @@ public class SprintServiceImpl
         List<SprintBacklog> unfinished = sprintBacklogRepository.findUnfinishedBySprintId(
                 sprintId, List.of(SprintBacklogStatus.DONE));
 
-        if (unfinished.isEmpty()) {
+        if (!unfinished.isEmpty()) {
+            addError(errors, STATUS_FIELD, unfinishedBacklogMessage(unfinished));
             return;
         }
 
-        addError(errors, STATUS_FIELD, unfinishedBacklogMessage(unfinished));
+        // Also require every subtask inside the sprint's backlog items to be DONE (Bug 43).
+        List<Long> backlogIds = sprintBacklogRepository
+                .findBySprintIdOrderByIdAsc(sprintId)
+                .stream().map(b -> b.getId()).collect(java.util.stream.Collectors.toList());
+        if (!backlogIds.isEmpty()) {
+            List<com.example.starter_project_2025.system.project.task.Task> unfinishedTasks =
+                    taskRepository.findUnfinishedByBacklogItemIds(backlogIds);
+            if (!unfinishedTasks.isEmpty()) {
+                addError(errors, STATUS_FIELD,
+                    "Cannot complete Sprint: " + unfinishedTasks.size() +
+                    " subtask(s) are not yet DONE.");
+            }
+        }
     }
 
     private String unfinishedBacklogMessage(List<SprintBacklog> unfinished) {

@@ -288,11 +288,18 @@ public class SprintBacklogServiceImpl
 
         throwIfInvalid(errors);
 
-        // Any workflow status can be selected (the team may move an item
-        // backwards, skip a step or reopen a finished item).
+        // Validate status transition against allowed matrix (Bug 37/38).
         SprintBacklogStatus requestedStatus = request.getStatus();
         if (requestedStatus == null) {
             request.setStatus(backlog.getStatus());
+        } else if (!requestedStatus.equals(backlog.getStatus())) {
+            Set<SprintBacklogStatus> allowed = STATUS_TRANSITIONS.getOrDefault(backlog.getStatus(), Set.of());
+            if (!allowed.contains(requestedStatus)) {
+                errors.put("status", java.util.List.of(
+                    "Cannot transition from " + backlog.getStatus() + " to " + requestedStatus
+                    + ". Allowed next: " + allowed));
+                throwIfInvalid(errors);
+            }
         }
 
         Map<String, Object> before = snapshot(backlog);

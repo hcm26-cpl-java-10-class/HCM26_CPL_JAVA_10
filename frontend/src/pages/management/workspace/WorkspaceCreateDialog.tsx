@@ -26,6 +26,9 @@ export function WorkspaceCreateDialog({ candidates, initialSelection, onClose, o
   const create = useMutation({
     mutationFn: () => workspaceApi.create({ teamId }, key.current),
     onSuccess: async result => {
+      // Bug 44: persist the task prefix so backlog key generation picks it up
+      const prefix = (taskPrefix || "FA").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+      localStorage.setItem("workspace_task_prefix", prefix);
       await queryClient.invalidateQueries({ queryKey: ["workspace-candidates"] });
       toast.success("Workspace created successfully");
       onOpenWorkspace(result.id!);
