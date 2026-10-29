@@ -9,6 +9,8 @@ import java.util.Optional;
 public interface TrainingClassRepository
         extends BaseCrudRepository<TrainingClass, Long> {
 
+    boolean existsByProjectTemplate_Id(Long templateId);
+
     Optional<TrainingClass> findByIdAndTenantId(Long id, Long tenantId);
 
     Optional<TrainingClass> findByCodeAndTenantId(String code, Long tenantId);

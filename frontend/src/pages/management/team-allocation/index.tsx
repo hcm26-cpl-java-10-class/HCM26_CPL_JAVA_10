@@ -1,4 +1,4 @@
-import { projectTemplateApi, teamAllocationApi } from "@/api";
+import { teamAllocationApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useAssignableProjectTemplates } from "@/hooks/useAssignableProjectTemplates";
 import type { TrainingClassDTO } from "@/types/features/training-class";
 import type {
   AllocationApiError,
@@ -45,6 +46,7 @@ import {
   ListChecks,
   LoaderCircle,
   Plus,
+  RefreshCw,
   Ban,
   Save,
   Search,
@@ -374,10 +376,7 @@ export default function TeamAllocationPage() {
     enabled: Number.isSafeInteger(classId) && classId > 0,
   });
   // US-10: assignable project templates (min/max capacity window).
-  const templatesQuery = useQuery({
-    queryKey: ["project-templates", "options"],
-    queryFn: () => projectTemplateApi.getAssignableOptions(),
-  });
+  const templatesQuery = useAssignableProjectTemplates();
 
   useEffect(() => {
     if (!sessionsQuery.data) return;
@@ -2005,7 +2004,8 @@ export default function TeamAllocationPage() {
                           }
                           onRoleChange={clearTeamRoleFailure}
                           templates={templatesQuery.data ?? []}
-                          templatesLoading={templatesQuery.isLoading}
+                          templatesLoading={templatesQuery.isFetching}
+                          onRefreshTemplates={() => void templatesQuery.refetch()}
                           templatesError={
                             templatesQuery.isError
                               ? "Không tải được danh sách đề bài."
@@ -2822,6 +2822,7 @@ function SavedTeamCard({
   onRoleChange,
   templates,
   templatesLoading,
+  onRefreshTemplates,
   templatesError,
   canAssignTemplate,
   assignTemplatePending,
@@ -2861,6 +2862,7 @@ function SavedTeamCard({
   onRoleChange: (teamId: number, memberId: number) => void;
   templates: ProjectTemplateOption[];
   templatesLoading: boolean;
+  onRefreshTemplates: () => void;
   templatesError: string | null;
   canAssignTemplate: boolean;
   assignTemplatePending: boolean;
@@ -3067,9 +3069,15 @@ function SavedTeamCard({
             <div className="space-y-2 rounded-lg border bg-background p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-medium">Đề bài dự án</p>
-                <Badge variant={team.projectTemplateId ? "default" : "secondary"}>
-                  {team.projectTemplateId ? "Đã gán" : "Chưa gán"}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant={team.projectTemplateId ? "default" : "secondary"}>
+                    {team.projectTemplateId ? "Đã gán" : "Chưa gán"}
+                  </Badge>
+                  {isDraft && <Button type="button" variant="outline" size="icon-sm" disabled={templatesLoading}
+                    aria-label={`Refresh templates for ${team.teamName}`} title="Refresh templates" onClick={onRefreshTemplates}>
+                    <RefreshCw className={templatesLoading ? "size-4 animate-spin" : "size-4"} />
+                  </Button>}
+                </div>
               </div>
               <p className="text-sm font-medium">
                 {team.projectTemplateName ?? "Chưa gán đề bài"}
@@ -3120,6 +3128,9 @@ function SavedTeamCard({
                     <option value="">
                       {templatesLoading ? "Đang tải đề bài..." : "Chọn đề bài"}
                     </option>
+                    {team.projectTemplateId != null && !templates.some(option => option.id === team.projectTemplateId) && (
+                      <option value={team.projectTemplateId} disabled>{team.projectTemplateName ?? "Current template"} (currently assigned)</option>
+                    )}
                     {templates.map((option) => (
                       <option key={option.id} value={option.id}>
                         {option.name} ({option.minMembers}–{option.maxMembers} thành viên)
@@ -3145,6 +3156,9 @@ function SavedTeamCard({
                     Gán đề bài
                   </Button>
                 </div>
+              )}
+              {isDraft && !templatesLoading && !templatesError && templates.length === 0 && (
+                <p className="text-xs text-muted-foreground">No active templates are available. Activate a template, then refresh this list.</p>
               )}
               {templatesError && (
                 <p className="text-xs text-destructive">{templatesError}</p>

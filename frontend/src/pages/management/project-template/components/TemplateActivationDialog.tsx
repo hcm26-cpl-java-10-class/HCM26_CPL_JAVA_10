@@ -23,10 +23,11 @@ function ActivationIssues({ errors }: { errors: Record<string, string[]> }) {
   </ul>;
 }
 
-export function TemplateActivationDialog({ template, onActivated, onOpenSection }: {
+export function TemplateActivationDialog({ template, onActivated, onOpenSection, compact = false }: {
   template: ProjectTemplateDTO;
   onActivated: (template: ProjectTemplateDTO) => void;
   onOpenSection: (section: TemplateConfigurationSection) => void;
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [submitError, setSubmitError] = useState<ReturnType<typeof getTemplateError> | null>(null);
@@ -75,7 +76,10 @@ export function TemplateActivationDialog({ template, onActivated, onOpenSection 
       setOpen(value);
       if (value) setSubmitError(null);
     }}>
-      <DialogTrigger asChild><Button><Rocket /> Activate</Button></DialogTrigger>
+      <DialogTrigger asChild><Button variant={compact ? "outline" : "default"} size={compact ? "icon" : "default"}
+        aria-label={compact ? `Activate template ${template.code}` : undefined} title={compact ? "Activate template" : undefined}>
+        <Rocket />{!compact && "Activate"}
+      </Button></DialogTrigger>
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl" showCloseButton={!mutation.isPending}
         onEscapeKeyDown={(event) => { if (submitting.current) event.preventDefault(); }}
         onInteractOutside={(event) => { if (submitting.current) event.preventDefault(); }}>

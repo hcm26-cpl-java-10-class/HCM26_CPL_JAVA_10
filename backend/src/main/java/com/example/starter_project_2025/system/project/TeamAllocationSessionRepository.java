@@ -16,6 +16,8 @@ import java.util.Optional;
 public interface TeamAllocationSessionRepository
         extends BaseCrudRepository<TeamAllocationSession, Long> {
 
+    boolean existsByProjectTemplate_Id(Long templateId);
+
     Optional<TeamAllocationSession> findByIdAndTrainingClass_Id(
             Long sessionId,
             Long classId

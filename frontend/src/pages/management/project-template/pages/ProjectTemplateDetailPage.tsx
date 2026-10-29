@@ -1,4 +1,5 @@
 import { projectTemplateApi } from "@/api/features/project-template.api";
+import { TemplateDeleteDialog } from "../components/TemplateDeleteDialog";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +18,7 @@ import { TemplateArchiveDialog } from "../components/TemplateArchiveDialog";
 import { TemplateSampleContentPanel } from "../components/TemplateSampleContentPanel";
 import { TemplateVersionsPanel } from "../components/TemplateVersionsPanel";
 import { useProjectTemplateOptions } from "../hooks/useProjectTemplateOptions";
-import { templateLevelLabel } from "../project-template.utils";
+import { descriptionWordCount, maxDescriptionWords, templateLevelLabel } from "../project-template.utils";
 
 export function ProjectTemplateDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -56,7 +57,7 @@ export function ProjectTemplateDetailPage() {
 
   return (
     <MainLayout pathName={{ "project-templates": "Project Templates", ...(id ? { [id]: "Template" } : {}), detail: "Details" }}>
-      <section className="mx-auto grid w-full max-w-5xl gap-5">
+      <section className="mx-auto grid min-w-0 w-full max-w-5xl grid-cols-1 gap-5">
         <header className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
           <div>
             <p className="text-sm text-muted-foreground">Project Templates</p>
@@ -70,6 +71,9 @@ export function ProjectTemplateDetailPage() {
             {tab === "overview" && canEdit && (
               <Button onClick={() => navigate(`/project-templates/${id}/edit`)}><Pen /> Edit draft</Button>
             )}
+            {template && template.status === "DRAFT" && !template.readOnly && options.data?.canArchive
+              && options.hasPermission("PROJECT_TEMPLATE_ARCHIVE") && <TemplateDeleteDialog template={template}
+                onDeleted={() => navigate("/project-templates")} />}
             {canActivate && template && <TemplateActivationDialog template={template}
               onOpenSection={selectTab}
               onActivated={(saved) => {
@@ -106,19 +110,25 @@ export function ProjectTemplateDetailPage() {
                   <TabsTrigger value="versions" className="h-full min-h-9 whitespace-normal">Versions</TabsTrigger>
                 </TabsList>
                 <TabsContent value="overview">
-                  <Card>
+                  <Card className="min-w-0">
                     <CardHeader className="gap-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge variant="outline" className="max-w-full font-mono"><span className="truncate">{template.code}</span></Badge>
                         <ProjectTemplateStatusBadge status={template.status} />
-                        <Badge variant="outline">Version {template.templateVersion}</Badge>
+                        <Button variant="outline" size="xs" onClick={() => selectTab("versions")}
+                          aria-label="View version history">Version {template.templateVersion} · View history</Button>
                       </div>
                       <CardTitle className="break-words text-xl leading-relaxed">{template.name}</CardTitle>
                     </CardHeader>
-                    <CardContent className="grid gap-6">
-                      <div>
-                        <h2 className="text-sm font-medium">Description</h2>
-                        <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-7 text-muted-foreground">{template.description}</p>
+                    <CardContent className="grid min-w-0 grid-cols-1 gap-6">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h2 className="text-sm font-medium">Description</h2>
+                          <span className="text-xs tabular-nums text-muted-foreground">
+                            {descriptionWordCount(template.description ?? "").toLocaleString("en-US")} / {maxDescriptionWords.toLocaleString("en-US")} words
+                          </span>
+                        </div>
+                        <p className="mt-2 min-w-0 max-w-full whitespace-pre-wrap text-sm leading-7 text-muted-foreground [overflow-wrap:anywhere]">{template.description}</p>
                       </div>
                       <dl className="grid gap-5 rounded-lg border bg-muted/20 p-4 text-sm sm:grid-cols-2 md:grid-cols-3">
                         {[

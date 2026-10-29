@@ -62,6 +62,8 @@ interface ProTableProps<TData = any> {
     /** Optional: Complete override of row actions. If provided, you have full control */
     renderRowActions?: (row: TData) => React.ReactNode;
 
+    actionsColumnWidth?: number;
+
     /**
      * Optional: extra entity-specific row buttons appended after the default
      * view / edit / delete actions (e.g. "Clone template").
@@ -157,6 +159,7 @@ export function ProTable<TData = any>({
     extraHeaderActions,
     browseActions,
     renderRowActions,
+    actionsColumnWidth,
     renderExtraRowActions,
     renderCell,
     compactToolbar = false,
@@ -310,7 +313,7 @@ export function ProTable<TData = any>({
     // Entities that add their own row buttons (e.g. Project Template Versions
     // with "Create new version" + "Clone") need a wider action column, otherwise
     // the trailing icon button is clipped by the cell's overflow-hidden.
-    const ACTION_COLUMN_WIDTH = renderExtraRowActions ? 236 : 152;
+    const ACTION_COLUMN_WIDTH = actionsColumnWidth ?? (renderExtraRowActions ? 236 : 152);
 
     // Default row actions renderer (uses internal modal system or custom overrides)
     const defaultRenderRowActions = (row: TData) => (

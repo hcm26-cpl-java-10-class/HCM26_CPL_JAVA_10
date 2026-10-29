@@ -1,4 +1,5 @@
-import { projectTemplateApi, teamAllocationApi } from "@/api";
+import { teamAllocationApi } from "@/api";
+import { useAssignableProjectTemplates } from "@/hooks/useAssignableProjectTemplates";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,7 @@ import type {
 } from "@/types/features/team-allocation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
-import { AlertCircle, ClipboardList, LoaderCircle, Save, UsersRound } from "lucide-react";
+import { AlertCircle, ClipboardList, LoaderCircle, RefreshCw, Save, UsersRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -99,10 +100,7 @@ export default function StudentDraftTeamPage() {
     queryKey: ["student", "draft-teams"],
     queryFn: () => teamAllocationApi.getMyDraftTeams(),
   });
-  const templatesQuery = useQuery({
-    queryKey: ["project-templates", "options"],
-    queryFn: () => projectTemplateApi.getAssignableOptions(),
-  });
+  const templatesQuery = useAssignableProjectTemplates();
 
   const assignMutation = useMutation({
     mutationFn: ({
@@ -197,6 +195,16 @@ export default function StudentDraftTeamPage() {
           </div>
         </section>
 
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-muted-foreground">Only active templates can be assigned to a new team.</p>
+          <Button variant="outline" disabled={templatesQuery.isFetching} onClick={() => void templatesQuery.refetch()}>
+            <RefreshCw className={templatesQuery.isFetching ? "animate-spin" : undefined} /> Refresh templates
+          </Button>
+        </div>
+        {templatesQuery.isError && <p role="alert" className="text-sm text-destructive">Unable to load project templates. Refresh to try again.</p>}
+        {!templatesQuery.isFetching && !templatesQuery.isError && templates.length === 0 && (
+          <p className="text-sm text-muted-foreground">No active templates are available.</p>
+        )}
         {teamsQuery.isLoading ? (
           <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
             <LoaderCircle className="size-4 animate-spin" />
@@ -231,8 +239,8 @@ export default function StudentDraftTeamPage() {
                 key={team.teamId}
                 team={team}
                 templates={templates}
-                templatesLoading={templatesQuery.isLoading}
-                selection={selection[team.teamId] ?? ""}
+                templatesLoading={templatesQuery.isFetching}
+                selection={selection[team.teamId] ?? (team.projectTemplateId == null ? "" : String(team.projectTemplateId))}
                 onSelect={(value) => {
                   setSelection((current) => ({ ...current, [team.teamId]: value }));
                   setFailures((current) => {
@@ -363,6 +371,9 @@ function DraftTeamTemplateCard({
             <option value="">
               {templatesLoading ? "Đang tải đề bài..." : "Chọn đề bài"}
             </option>
+            {team.projectTemplateId != null && !templates.some(option => option.id === team.projectTemplateId) && (
+              <option value={team.projectTemplateId} disabled>{team.projectTemplateName ?? "Current template"} (currently assigned)</option>
+            )}
             {templates.map((option) => (
               <option key={option.id} value={option.id}>
                 {option.name} ({option.minMembers}–{option.maxMembers} thành viên)

@@ -44,10 +44,11 @@ public class TemplateMilestoneService {
     private final TemplateMilestoneRubrics rubrics;
     private final TemplateMilestoneMapper mapper;
     private final TemplateArtifactRequirementRepository artifactRequirements;
+    private final com.example.starter_project_2025.system.project.template.TemplateConfigurationService configurations;
 
     public List<TemplateMilestoneCreation> prepareForProject(Long templateId, Long teamId, Instant startsAt) {
         User user = access.requireUser("READ");
-        ProjectTemplate template = findTemplate(templateId, user);
+        ProjectTemplate template = findReadableTemplate(templateId, user);
         if (template.getStatus() != ProjectTemplateStatus.ACTIVE) {
             throw ProjectTemplateException.conflict("Only active templates can be used to create a project");
         }
@@ -123,6 +124,7 @@ public class TemplateMilestoneService {
         if (!removedIds.isEmpty()) artifactRequirements.deleteByMilestone_IdIn(removedIds);
         milestones.deleteAll(existing.stream().filter(item -> !retainedIds.contains(item.getId())).toList());
         List<TemplateMilestone> saved = milestones.saveAllAndFlush(updated);
+        configurations.refreshDraft(template);
         audits.save(new ProjectTemplateAudit(template.getTenantId(), templateId, user.getId(),
                 "PROJECT_TEMPLATE_MILESTONES_UPDATED", before, state(template, saved), CorrelationIdFilter.currentId()));
         return TemplateMilestonePlanResponse.from(template, saved, true);
@@ -173,7 +175,7 @@ public class TemplateMilestoneService {
     }
 
     private ProjectTemplate findTemplate(Long templateId, User user) {
-        return templates.findByIdAndTenantIdAndIsActiveTrue(templateId, user.getTenantId())
+        return templates.findForTemplateUpdate(templateId, user.getTenantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project template was not found"));
     }
 

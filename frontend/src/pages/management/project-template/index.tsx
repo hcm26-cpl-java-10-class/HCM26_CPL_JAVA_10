@@ -1,4 +1,7 @@
 import { projectTemplateApi } from "@/api/features/project-template.api";
+import { TemplateDeleteDialog } from "./components/TemplateDeleteDialog";
+import { TemplateActivationDialog } from "./components/TemplateActivationDialog";
+import { TemplateArchiveDialog } from "./components/TemplateArchiveDialog";
 import ActionButton from "@/components/datatable/common/ActionButton";
 import { useProTable } from "@/components/datatable/hook/useProTable";
 import { ProTable } from "@/components/datatable/ProTable";
@@ -66,6 +69,7 @@ export default function ProjectTemplateListPage() {
               compactToolbar
               responsiveCards
               selectable={false}
+              actionsColumnWidth={190}
               onView={view}
               onEdit={edit}
               onRowClick={view}
@@ -76,6 +80,13 @@ export default function ProjectTemplateListPage() {
                 if (field.name === "level") return templateLevelLabel(template.level);
                 if (field.name === "estimatedDurationWeeks") return template.estimatedDurationWeeks == null ? "—" : `${template.estimatedDurationWeeks} weeks`;
                 if (field.name === "code") return <span className="font-mono text-xs">{template.code}</span>;
+                if (field.name === "templateVersion") return (
+                  <button className="font-medium underline-offset-4 hover:text-primary hover:underline"
+                    aria-label={`View version history for ${template.code}`}
+                    onClick={() => navigate(`/project-templates/${template.id}/detail?tab=versions`)}>
+                    {template.templateVersion}
+                  </button>
+                );
                 if (field.name === "name") return (
                   <button className="block w-full truncate text-left font-medium hover:text-primary hover:underline" onClick={() => view(template)}>
                     {template.name}
@@ -96,6 +107,13 @@ export default function ProjectTemplateListPage() {
                   <ActionButton tooltip={`View template ${template.code}`} onClick={() => view(template)} icon={<Eye className="size-4 text-muted-foreground" />} />
                   {template.editable && table.permission.canUpdate && <ActionButton tooltip={`Edit template ${template.code}`}
                     onClick={() => edit(template)} icon={<Pen className="size-4 text-muted-foreground" />} />}
+                  {!template.readOnly && template.status === "DRAFT" && options.data?.canActivate && options.hasPermission("PROJECT_TEMPLATE_ACTIVATE") &&
+                    <TemplateActivationDialog compact template={template} onActivated={() => void table.refetch()}
+                      onOpenSection={section => navigate(`/project-templates/${template.id}/detail?tab=${section}`)} />}
+                  {!template.readOnly && template.status === "ACTIVE" && options.data?.canArchive && options.hasPermission("PROJECT_TEMPLATE_ARCHIVE") &&
+                    <TemplateArchiveDialog compact template={template} onArchived={() => void table.refetch()} />}
+                  {!template.readOnly && template.status === "DRAFT" && options.data?.canArchive && options.hasPermission("PROJECT_TEMPLATE_ARCHIVE") &&
+                    <TemplateDeleteDialog template={template} />}
                 </>
               )}
               renderError={<ProjectTemplateError error={table.error} onRetry={() => void table.refetch()} />}

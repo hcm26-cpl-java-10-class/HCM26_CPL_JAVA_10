@@ -1,5 +1,6 @@
 import { projectTemplateVersionApi } from "@/api";
 import { PermissionGate } from "@/components/PermissionGate";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CreateVersionDialog } from "@/pages/management/project-template-version/workspace/CreateVersionDialog";
@@ -10,8 +11,8 @@ import {
 } from "@/pages/management/project-template-version/workspace/version.constants";
 import type { ProjectTemplateDTO } from "@/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUpRight, CopyPlus, GitBranch, Layers, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { ArrowUpRight, CopyPlus, GitBranch, Layers, Loader2, RefreshCw } from "lucide-react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -55,15 +56,17 @@ const errorMessage = (error: unknown, fallback: string) => {
 export function TemplateVersionsPanel({ template }: { template: ProjectTemplateDTO }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user, activeRole } = usePermissions();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const pending = useRef(false);
 
   const query = useQuery({
-    queryKey: ["project-template-versions", "by-template", template.id],
+    queryKey: ["project-template-versions", "by-template", template.id, user.email, activeRole],
     queryFn: () => projectTemplateVersionApi.getByTemplate(template.id),
     retry: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   const versions = query.data ?? [];
@@ -71,8 +74,8 @@ export function TemplateVersionsPanel({ template }: { template: ProjectTemplateD
   const source = versions[0] ?? null;
 
   const handleCreate = async () => {
-    if (submitting) return;
-
+    if (pending.current || query.isLoading || query.isError || template.readOnly || template.status === "ARCHIVED") return;
+    pending.current = true;
     setSubmitting(true);
 
     try {
@@ -88,33 +91,37 @@ export function TemplateVersionsPanel({ template }: { template: ProjectTemplateD
       await queryClient.invalidateQueries({ queryKey: ["project_template_version"] });
       await queryClient.invalidateQueries({ queryKey: ["project-templates"] });
 
-      toast.success(`Đã tạo phiên bản ${created?.version ?? "v1.0"} ở trạng thái DRAFT.`);
+      toast.success(`Version ${created?.version ?? "v1.0"} created as a draft.`);
     } catch (error) {
-      toast.error(errorMessage(error, "Không thể tạo phiên bản mới."));
+      toast.error(errorMessage(error, "Unable to create a new version."));
     } finally {
+      pending.current = false;
       setSubmitting(false);
     }
   };
 
   return (
-    <section className="rounded-xl border bg-card shadow-xs">
+    <section className="min-w-0 rounded-xl border bg-card shadow-xs" aria-label="Template version history">
       <header className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
         <div className="flex flex-wrap items-center gap-2">
           <Layers className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-semibold">Versions</h2>
+          <h2 className="text-sm font-semibold">Version history</h2>
           <Badge variant="secondary" className="h-5 px-1.5 text-[11px]">{versions.length}</Badge>
           <Badge variant="outline" className="h-5 px-1.5 text-[11px]">Template version {template.templateVersion}</Badge>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button variant="outline" disabled={query.isFetching || submitting} onClick={() => void query.refetch()}>
+            <RefreshCw className={query.isFetching ? "animate-spin" : undefined} /> Refresh versions
+          </Button>
           <Button variant="outline" onClick={() => navigate("/project-template-versions")}>
             <ArrowUpRight /> Open version workspace
           </Button>
-          <PermissionGate permission="PROJECT_TEMPLATE_VERSION_CREATE">
-            <Button onClick={() => setOpen(true)} disabled={submitting}>
+          {!template.readOnly && template.status !== "ARCHIVED" && <PermissionGate permission="PROJECT_TEMPLATE_VERSION_CREATE">
+            <Button onClick={() => setOpen(true)} disabled={submitting || query.isLoading || query.isError}>
               {submitting ? <Loader2 className="animate-spin" /> : <CopyPlus />}
               {source ? "Create new version" : "Create first version"}
             </Button>
-          </PermissionGate>
+          </PermissionGate>}
         </div>
       </header>
 
@@ -122,7 +129,7 @@ export function TemplateVersionsPanel({ template }: { template: ProjectTemplateD
         <p className="px-4 py-8 text-center text-xs text-muted-foreground">Loading versions...</p>
       ) : query.isError ? (
         <div className="flex flex-col items-center gap-2 px-4 py-8 text-center text-xs text-muted-foreground">
-          <p>{errorMessage(query.error, "Không thể tải danh sách phiên bản.")}</p>
+          <p>{errorMessage(query.error, "Unable to load version history.")}</p>
           <Button variant="outline" size="sm" onClick={() => void query.refetch()}>Retry</Button>
         </div>
       ) : versions.length === 0 ? (
@@ -167,7 +174,7 @@ export function TemplateVersionsPanel({ template }: { template: ProjectTemplateD
 
       <CreateVersionDialog
         open={open}
-        onOpenChange={setOpen}
+        onOpenChange={value => { if (!pending.current) setOpen(value); }}
         source={source}
         versions={versions}
         loading={submitting}

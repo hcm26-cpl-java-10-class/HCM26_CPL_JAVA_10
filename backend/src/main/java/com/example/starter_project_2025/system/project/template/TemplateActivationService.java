@@ -140,7 +140,7 @@ public class TemplateActivationService {
     }
 
     private ProjectTemplate findTemplate(Long id, User user) {
-        return templates.findByIdAndTenantIdAndIsActiveTrue(id, user.getTenantId())
+        return templates.findForTemplateUpdate(id, user.getTenantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project template was not found"));
     }
 
