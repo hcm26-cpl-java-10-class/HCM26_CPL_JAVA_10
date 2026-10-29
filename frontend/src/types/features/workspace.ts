@@ -27,6 +27,7 @@ export interface WorkspaceCandidateItem {
 export interface WorkspaceCreateRequest {
   projectId?: number | null;
   teamId: number;
+  taskKeyPrefix?: string;
 }
 
 export interface WorkspaceProjectOption {
@@ -44,6 +45,7 @@ export interface WorkspaceResponse {
   tenantId?: number;
   code?: string;
   name?: string;
+  taskKeyPrefix?: string;
   status?: string;
   createdBy?: number;
   createdAt?: string;
@@ -103,8 +105,9 @@ export type WorkspaceSectionKey = "overview" | "members" | "milestones" | "sprin
 export interface WorkspaceSectionAccess { key: WorkspaceSectionKey; canRead: boolean; actions: Record<string, boolean> }
 export interface WorkspaceNavigation {
   workspaceId: number; projectId?: number | null; teamId: number; projectCode?: string | null; projectName?: string | null;
-  teamName: string; projectStatus?: string | null; sections: WorkspaceSectionAccess[];
+  teamName: string; projectStatus?: string | null; taskKeyPrefix?: string | null; sections: WorkspaceSectionAccess[];
 }
+export interface WorkspaceBoardColumn { key: "BACKLOG" | "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE"; label: string; visible: boolean }
 export interface WorkspaceSectionItem {
   id: string; title: string; description: string | null; status: string; published: boolean; score?: number; occurredAt?: string;
 }

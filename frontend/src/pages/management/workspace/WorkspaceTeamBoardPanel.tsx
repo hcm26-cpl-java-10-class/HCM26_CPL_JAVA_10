@@ -1,4 +1,5 @@
 import { teamBacklogApi } from "@/api/features/team-backlog.api";
+import { workspaceApi } from "@/api/features/workspace.api";
 import { sprintBacklogApi } from "@/api/features/sprint_backlog.api";
 import { sprintApi } from "@/api/features/sprint.api";
 import { Badge } from "@/components/ui/badge";
@@ -7,7 +8,8 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { SprintBacklogDTO, SprintBacklogStatus, SprintDTO } from "@/types";
-import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { WorkspaceBoardColumn } from "@/types/features/workspace";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, Check, ChevronLeft, ChevronRight, Circle, CircleDot, Clock3, LayoutGrid, List, Plus, RefreshCw, Search, SlidersHorizontal, UserRound } from "lucide-react";
 import { BacklogItemDetailSheet } from "@/pages/management/backlog/components/BacklogItemDetailSheet";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -156,7 +158,7 @@ function auditSummary(action: string, beforeState?: string | null, afterState?: 
   return { actionLabel, changes: [] as string[] };
 }
 
-export function WorkspaceTeamBoardPanel({ teamId, canUpdate, onCreateWorkItem }: { teamId: number; canUpdate: boolean; onCreateWorkItem?: () => void }) {
+export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, onCreateWorkItem }: { workspaceId: number; teamId: number; canUpdate: boolean; onCreateWorkItem?: () => void }) {
   const queryClient = useQueryClient();
   const [sprintId, setSprintId] = useState<number>();
   const [memberFilter, setMemberFilter] = useState("ALL");
@@ -170,34 +172,36 @@ export function WorkspaceTeamBoardPanel({ teamId, canUpdate, onCreateWorkItem }:
   const [savingItemId, setSavingItemId] = useState<number | null>(null);
   const [detailItem, setDetailItem] = useState<SprintPlanningItem | null>(null);
   const [columnsDialogOpen, setColumnsDialogOpen] = useState(false);
-  const [boardColumns, setBoardColumns] = useState<BoardColumnConfig[]>(() => {
-    try {
-      const saved = localStorage.getItem("workspace_board_columns_" + teamId);
-      if (saved) {
-        const parsed = JSON.parse(saved) as { key: BoardColumnKey; label: string; visible?: boolean }[];
-        return DEFAULT_COLUMNS.map(def => {
-          const match = parsed.find(p => p.key === def.key);
-          return match ? { ...def, label: match.label || def.label, visible: match.visible ?? true } : def;
-        });
-      }
-    } catch {
-      // fallback
+  const [boardColumns, setBoardColumns] = useState<BoardColumnConfig[]>(DEFAULT_COLUMNS);
+  const columnsQuery = useQuery({
+    queryKey: ["workspace-board-columns", workspaceId],
+    queryFn: () => workspaceApi.boardColumns(workspaceId), retry: false,
+  });
+  useEffect(() => {
+    if (columnsQuery.data) {
+      setBoardColumns(DEFAULT_COLUMNS.map(def => {
+        const match = columnsQuery.data.find(column => column.key === def.key);
+        return match ? { ...def, label: match.label || def.label, visible: match.visible } : def;
+      }));
     }
-    return DEFAULT_COLUMNS;
+  }, [columnsQuery.data]);
+
+  const saveColumns = useMutation({
+    mutationFn: (columns: BoardColumnConfig[]) => workspaceApi.updateBoardColumns(workspaceId,
+      columns.map(({ key, label, visible }) => ({ key, label, visible }) as WorkspaceBoardColumn)),
+    onSuccess: columns => {
+      setBoardColumns(DEFAULT_COLUMNS.map(def => {
+        const match = columns.find(column => column.key === def.key);
+        return match ? { ...def, label: match.label, visible: match.visible } : def;
+      }));
+      void queryClient.invalidateQueries({ queryKey: ["workspace-board-columns", workspaceId] });
+      toast.success("Board settings saved for this workspace.");
+      setColumnsDialogOpen(false);
+    },
+    onError: () => toast.error("Could not save Board settings. Sprint write permission is required; existing settings are unchanged."),
   });
 
-  const saveColumnsConfig = (newCols: BoardColumnConfig[]) => {
-    setBoardColumns(newCols);
-    try {
-      localStorage.setItem("workspace_board_columns_" + teamId, JSON.stringify(
-        newCols.map(c => ({ key: c.key, label: c.label, visible: c.visible }))
-      ));
-      toast.success("Đã lưu cấu hình cột Board.");
-    } catch {
-      // ignore
-    }
-  };
-
+  const saveColumnsConfig = (newCols: BoardColumnConfig[]) => saveColumns.mutate(newCols);
   const visibleColumns = useMemo(() => boardColumns.filter(c => c.visible), [boardColumns]);
   const query = useQuery({
     queryKey: ["team-backlog-board", teamId],
@@ -352,7 +356,7 @@ export function WorkspaceTeamBoardPanel({ teamId, canUpdate, onCreateWorkItem }:
             {!sprints.length ? <option value="">Team chưa có Sprint</option> : null}
             {sprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name} · {sprint.status}</option>)}
           </select>
-          <Button variant="outline" size="sm" onClick={() => setColumnsDialogOpen(true)} title="Thêm, xóa hoặc đổi tên cột trạng thái">
+          <Button variant="outline" size="sm" onClick={() => setColumnsDialogOpen(true)} title="Đổi tên hoặc ẩn/hiện cột workflow có sẵn">
             <SlidersHorizontal className="mr-1.5 size-4" /> Tùy chỉnh cột
           </Button>
           <Button variant="outline" size="icon" aria-label="Làm mới Board" onClick={() => void query.refetch()} disabled={query.isFetching}>
@@ -504,7 +508,8 @@ export function WorkspaceTeamBoardPanel({ teamId, canUpdate, onCreateWorkItem }:
             <SlidersHorizontal className="size-5 text-primary" /> Tùy chỉnh cột Kanban Board
           </DialogTitle>
           <DialogDescription>
-            Đổi tên cột hoặc bật/tắt hiển thị các cột trên bảng Kanban theo nhu cầu nhóm.
+            Đổi tên hoặc ẩn/hiện các cột workflow hiện có. Cấu hình được lưu cho workspace và dùng chung với thành viên khác.
+            Các trạng thái mới cần được hỗ trợ trong workflow backend trước khi xuất hiện tại đây.
           </DialogDescription>
         </DialogHeader>
 
@@ -552,24 +557,22 @@ export function WorkspaceTeamBoardPanel({ teamId, canUpdate, onCreateWorkItem }:
             type="button"
             variant="ghost"
             size="sm"
+            disabled={saveColumns.isPending}
             onClick={() => {
-              setBoardColumns(DEFAULT_COLUMNS);
               saveColumnsConfig(DEFAULT_COLUMNS);
             }}
           >
             Khôi phục mặc định
           </Button>
           <div className="flex gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => setColumnsDialogOpen(false)}>
+            <Button type="button" variant="outline" size="sm" disabled={saveColumns.isPending} onClick={() => setColumnsDialogOpen(false)}>
               Đóng
             </Button>
             <Button
               type="button"
               size="sm"
-              onClick={() => {
-                saveColumnsConfig(boardColumns);
-                setColumnsDialogOpen(false);
-              }}
+              disabled={saveColumns.isPending}
+              onClick={() => saveColumnsConfig(boardColumns)}
             >
               Lưu thay đổi
             </Button>

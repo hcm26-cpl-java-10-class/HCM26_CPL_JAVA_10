@@ -252,6 +252,7 @@ public class TemplateAssignmentProvisioningService {
                 .teamId(team.getId())
                 .code(workspace.getCode())
                 .name(workspace.getName())
+                .taskKeyPrefix(workspace.getTaskKeyPrefix() == null ? "FA" : workspace.getTaskKeyPrefix())
                 .status(workspace.getStatus())
                 .createdBy(workspace.getCreatedBy())
                 .createdAt(workspace.getCreatedAt())

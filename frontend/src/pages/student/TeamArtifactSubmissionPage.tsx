@@ -408,7 +408,7 @@ export default function TeamArtifactSubmissionPage() {
                 }}
               />
               <p className="text-xs text-muted-foreground">
-                URL tuyệt đối hợp lệ bắt đầu bằng <code>https://</code> hoặc <code>http://</code>.
+                Hệ thống chỉ kiểm tra định dạng URL HTTP(S); reviewer cần xác nhận repository tồn tại và có đúng nội dung.
               </p>
             </div>
 
@@ -427,7 +427,7 @@ export default function TeamArtifactSubmissionPage() {
                 }}
               />
               <p className="text-xs text-muted-foreground">
-                URL tuyệt đối của bản demo hoặc staging có thể truy cập được.
+                Nhập URL HTTP(S) của bản demo hoặc staging. Hệ thống kiểm tra định dạng, không tự truy cập URL này.
               </p>
             </div>
 

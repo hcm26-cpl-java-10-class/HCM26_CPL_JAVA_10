@@ -8,6 +8,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.List;
+import java.util.Set;
 import java.util.Arrays;
 import static com.example.starter_project_2025.system.project.workspace.dto.WorkspaceSectionDtos.*;
 
@@ -18,6 +23,7 @@ public class WorkspaceSectionService {
     private final WorkspaceContextService contexts;
     private final WorkspaceSectionPolicy policy;
     private final WorkspaceSectionDataSource source;
+    private final ObjectMapper objectMapper;
 
     private Context context(Long id) {
         User user = access.requireUser(false);
@@ -38,8 +44,46 @@ public class WorkspaceSectionService {
         return new Navigation(id, context.scope().projectId(), context.scope().teamId(),
                 project == null ? null : project.getCode(), project == null ? null : project.getName(),
                 context.workspace().getTeam().getTeamName(), project == null ? null : project.getStatus(),
-                Arrays.stream(WorkspaceSection.values())
+                context.workspace().getTaskKeyPrefix(), Arrays.stream(WorkspaceSection.values())
                 .map(section -> policy.describe(context.user(), section)).toList());
+    }
+
+    public BoardColumns boardColumns(Long id) {
+        String json = context(id).workspace().getBoardColumnsConfig();
+        if (json == null || json.isBlank()) return defaultBoardColumns();
+        try {
+            return new BoardColumns(objectMapper.readValue(json, new TypeReference<List<BoardColumn>>() { }));
+        } catch (JsonProcessingException | RuntimeException ex) {
+            return defaultBoardColumns();
+        }
+    }
+
+    @Transactional
+    public BoardColumns updateBoardColumns(Long id, BoardColumns request) {
+        Context context = context(id);
+        if (!access.permitted(context.user(), "SPRINT_WRITE")
+                && !access.permitted(context.user(), "SPRINT_BACKLOG_UPDATE"))
+            throw new AccessDeniedException("Sprint board update permission is required to configure the team board");
+        Set<String> allowed = Set.of("BACKLOG", "TODO", "IN_PROGRESS", "REVIEW", "DONE");
+        List<BoardColumn> columns = request.columns();
+        if (columns.stream().anyMatch(column -> !allowed.contains(column.key()))
+                || columns.stream().map(BoardColumn::key).distinct().count() != columns.size()
+                || columns.stream().noneMatch(BoardColumn::visible))
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY,
+                    "Use each supported board column once and keep at least one column visible");
+        try {
+            context.workspace().setBoardColumnsConfig(objectMapper.writeValueAsString(columns));
+            return new BoardColumns(columns);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Could not save board configuration", ex);
+        }
+    }
+
+    private BoardColumns defaultBoardColumns() {
+        return new BoardColumns(List.of(new BoardColumn("BACKLOG", "Backlog", true),
+                new BoardColumn("TODO", "To do", true), new BoardColumn("IN_PROGRESS", "In progress", true),
+                new BoardColumn("REVIEW", "Review", true), new BoardColumn("DONE", "Done", true)));
     }
     public Content read(Long id, String key) {
         Context context = context(id);

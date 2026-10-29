@@ -233,6 +233,7 @@ export interface BacklogBoardProps {
    * (`null` = tenant-wide, the `/backlogs` route page).
    */
   teamId?: number | null;
+  taskKeyPrefix?: string | null;
 }
 
 /**
@@ -249,6 +250,7 @@ export function BacklogBoard({
   embedded = false,
   projectId = null,
   teamId = null,
+  taskKeyPrefix = null,
 }: BacklogBoardProps) {
   const queryClient = useQueryClient();
   const { hasAllPermissions, user } = usePermissions();
@@ -441,7 +443,7 @@ export function BacklogBoard({
       items: SprintPlanningItem[],
     ): BoardSection => {
       const sprintStatus = sprint?.status ?? null;
-      const prefix = sprint ? projectKeyOf(sprint.name) : "PRJ";
+      const prefix = taskKeyPrefix?.trim() || (sprint ? projectKeyOf(sprint.name) : "PRJ");
 
       return {
         key: sprint?.id != null ? sprintSectionKey(sprint.id) : BACKLOG_SECTION_KEY,
