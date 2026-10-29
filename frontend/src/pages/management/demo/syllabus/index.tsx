@@ -1,25 +1,11 @@
 
-import {
-    useRef,
-    useState,
-    type FormEvent,
-} from "react";
+import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import {
-    useQuery,
-    useQueryClient,
-} from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import axios from "axios";
-
 import {
-    Search,
-    Plus,
-    Eye,
-    Pencil,
-    Trash2,
-    Upload,
-    LockKeyhole,
+    Search, Plus, Eye, Pencil, Trash2, Upload, LockKeyhole,
 } from "lucide-react";
 
 import {
@@ -34,6 +20,16 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirmdialog";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Tabs } from "@/components/ui/tabs";
+import { ImportTab } from "@/components/datatable/dataio/ImportTab";
 import { usePermissions } from "@/hooks/usePermissions";
 
 const empty: SyllabusInput = {
@@ -44,6 +40,8 @@ const empty: SyllabusInput = {
 
 const normalize = (value: string) =>
     value.trim().replace(/\s+/g, " ");
+
+const MAX_DEMO_FILE_BYTES = 5_000_000;
 
 function errorMessage(error: unknown): string {
     if (axios.isAxiosError(error)) {
@@ -59,21 +57,17 @@ function errorMessage(error: unknown): string {
             ? Object.values(data.errors).flat()[0]
             : undefined;
 
-        if (typeof firstError === "string") {
-            return firstError;
-        }
-
-        if (typeof data?.detail === "string") {
-            return data.detail;
-        }
-
-        if (typeof data?.message === "string") {
-            return data.message;
-        }
+        if (typeof firstError === "string") return firstError;
+        if (typeof data?.detail === "string") return data.detail;
+        if (typeof data?.message === "string") return data.message;
 
         if (error.response?.status === 403) {
-            return "You do not have permission to perform this action.";
+            return "Import denied or missing permission. Check the demo-import flag.";
         }
+    }
+
+    if (error instanceof Error && error.message) {
+        return error.message;
     }
 
     return "Operation failed. Check the Backend connection.";
@@ -102,8 +96,7 @@ export default function SyllabusesPage() {
 
     const [busy, setBusy] = useState(false);
     const [importing, setImporting] = useState(false);
-
-    const importInputRef = useRef<HTMLInputElement>(null);
+    const [importOpen, setImportOpen] = useState(false);
 
     const query = useQuery({
         queryKey: ["syllabuses", search.trim()],
@@ -111,11 +104,9 @@ export default function SyllabusesPage() {
     });
 
     const results = query.data ?? [];
-
-    const suggestions =
-        search.trim().length > 0
-            ? results.slice(0, 5)
-            : [];
+    const suggestions = search.trim()
+        ? results.slice(0, 5)
+        : [];
 
     function openCreate() {
         setEditing(null);
@@ -132,13 +123,11 @@ export default function SyllabusesPage() {
         }
 
         setEditing(item);
-
         setForm({
             code: item.code,
             name: item.name,
             description: item.description ?? "",
         });
-
         setFormOpen(true);
     }
 
@@ -164,9 +153,7 @@ export default function SyllabusesPage() {
             description: form.description.trim(),
         };
 
-        if (
-            !/^[A-Z0-9][A-Z0-9_-]{2,29}$/.test(clean.code)
-        ) {
+        if (!/^[A-Z0-9][A-Z0-9_-]{2,29}$/.test(clean.code)) {
             toast.error(
                 "Code must contain 3-30 valid characters."
             );
@@ -201,9 +188,7 @@ export default function SyllabusesPage() {
         );
 
         if (duplicate) {
-            toast.error(
-                "Syllabus code or name already exists."
-            );
+            toast.error("Syllabus code or name already exists.");
             return;
         }
 
@@ -211,16 +196,12 @@ export default function SyllabusesPage() {
 
         try {
             if (editing) {
-                await syllabusApi.update(
-                    editing.id,
-                    clean
-                );
+                await syllabusApi.update(editing.id, clean);
             } else {
                 await syllabusApi.create(clean);
             }
 
             await refreshList();
-
             setFormOpen(false);
             toast.success("Syllabus saved successfully.");
         } catch (error) {
@@ -234,7 +215,9 @@ export default function SyllabusesPage() {
         if (!deleting || busy) return;
 
         if (deleting.status === "PUBLISHED") {
-            toast.error("Published Syllabus cannot be deleted.");
+            toast.error(
+                "Published Syllabus cannot be deleted."
+            );
             return;
         }
 
@@ -253,65 +236,51 @@ export default function SyllabusesPage() {
         }
     }
 
-    async function handleImportExcel(file: File) {
+    // Demo import reuses the shared LMS ImportTab.
+    // The specific five-sheet processing remains in M3 Backend.
+    async function handleImportExcel(file: File): Promise<void> {
         if (importing) return;
 
         if (!file.name.toLowerCase().endsWith(".xlsx")) {
-            toast.error("Please select an Excel .xlsx file.");
-            return;
+            throw new Error(
+                "Only .xlsx files are supported for Syllabus demo import."
+            );
         }
 
-        if (file.size > 5_000_000) {
-            toast.error("File must be smaller than 5 MB.");
-            return;
-        }
-
-        if (
-            !window.confirm(
-                "Import Excel demo data into the local database?"
-            )
-        ) {
-            return;
+        if (file.size > MAX_DEMO_FILE_BYTES) {
+            throw new Error(
+                "Demo Excel file must be smaller than 5 MB."
+            );
         }
 
         setImporting(true);
 
         try {
-            const result =
-                await syllabusApi.importExcel(file);
+            const result = await syllabusApi.importExcel(file);
 
             setSearch("");
             await refreshList();
 
             toast.success(
-                `Import successful: ` +
-                `${result.syllabuses} Syllabuses, ` +
+                `Import successful: ${result.syllabuses} Syllabuses, ` +
                 `${result.clos} CLOs, ` +
                 `${result.sections} Sections, ` +
                 `${result.topics} Topics, ` +
                 `${result.materials} Materials.`
             );
+
+            setImportOpen(false);
         } catch (error) {
-            if (
-                axios.isAxiosError(error) &&
-                error.response?.status === 403
-            ) {
-                toast.error(
-                    "Import denied. Check permissions and the Backend demo-import flag."
-                );
-            } else {
-                toast.error(errorMessage(error));
-            }
+            throw new Error(errorMessage(error));
         } finally {
             setImporting(false);
         }
     }
 
     return (
-        <MainLayout
-            pathName={{ syllabuses: "Syllabuses" }}
-        >
+        <MainLayout pathName={{ syllabuses: "Syllabuses" }}>
             <div className="mx-auto w-full max-w-[1500px] space-y-6">
+
                 {/* HEADER */}
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -324,43 +293,17 @@ export default function SyllabusesPage() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
-                        {import.meta.env.DEV &&
-                            canCreate &&
-                            canEdit && (
-                                <>
-                                    <input
-                                        ref={importInputRef}
-                                        type="file"
-                                        accept=".xlsx"
-                                        className="hidden"
-                                        aria-label="Import Syllabus Excel"
-                                        onChange={(event) => {
-                                            const file =
-                                                event.currentTarget.files?.[0];
-
-                                            event.currentTarget.value = "";
-
-                                            if (file) {
-                                                void handleImportExcel(file);
-                                            }
-                                        }}
-                                    />
-
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        disabled={importing}
-                                        onClick={() =>
-                                            importInputRef.current?.click()
-                                        }
-                                    >
-                                        <Upload className="size-4" />
-                                        {importing
-                                            ? "Importing..."
-                                            : "Import Excel"}
-                                    </Button>
-                                </>
-                            )}
+                        {import.meta.env.DEV && canCreate && canEdit && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                disabled={importing}
+                                onClick={() => setImportOpen(true)}
+                            >
+                                <Upload className="size-4" />
+                                Import demo Excel
+                            </Button>
+                        )}
 
                         {canCreate && (
                             <Button onClick={openCreate}>
@@ -370,6 +313,53 @@ export default function SyllabusesPage() {
                         )}
                     </div>
                 </div>
+
+                {/* SHARED IMPORT UI FOR DEMO */}
+                {import.meta.env.DEV && canCreate && canEdit && (
+                    <Dialog
+                        open={importOpen}
+                        onOpenChange={(open) => {
+                            if (!importing) setImportOpen(open);
+                        }}
+                    >
+                        <DialogContent className="flex min-h-105 flex-col sm:max-w-xl">
+                            <DialogHeader>
+                                <DialogTitle>
+                                    Import Syllabus Demo
+                                </DialogTitle>
+                                <DialogDescription>
+                                    Only for local demo data. Choose an .xlsx
+                                    file smaller than 5 MB with the five sheets:
+                                    Syllabuses, CLOs, Sections, Topics and
+                                    LearningMaterials.
+                                </DialogDescription>
+                            </DialogHeader>
+
+                            <Tabs
+                                defaultValue="import"
+                                className="flex w-full flex-1 flex-col"
+                            >
+                                <ImportTab
+                                    loading={importing}
+                                    onImport={handleImportExcel}
+                                    allowedExtensions={[".xlsx"]}
+                                    maxFileSizeBytes={MAX_DEMO_FILE_BYTES}
+                                />
+                            </Tabs>
+
+                            <DialogFooter>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled={importing}
+                                    onClick={() => setImportOpen(false)}
+                                >
+                                    Close
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                )}
 
                 {/* SEARCH */}
                 <div className="rounded-xl border bg-card p-4">
@@ -418,12 +408,9 @@ export default function SyllabusesPage() {
                         className="space-y-3 rounded-xl border p-4"
                     >
                         <p>Could not load Syllabuses.</p>
-
                         <Button
                             variant="outline"
-                            onClick={() =>
-                                void query.refetch()
-                            }
+                            onClick={() => void query.refetch()}
                         >
                             Retry
                         </Button>
@@ -465,33 +452,29 @@ export default function SyllabusesPage() {
                                         </td>
 
                                         <td className="p-3">
-                                                <span
-                                                    className={
-                                                        published
-                                                            ? "inline-flex items-center gap-1 rounded-full border border-green-500/40 bg-green-500/10 px-2 py-1 text-xs text-green-700 dark:text-green-400"
-                                                            : "inline-flex rounded-full border px-2 py-1 text-xs"
-                                                    }
-                                                >
-                                                    {published && (
-                                                        <LockKeyhole className="size-3" />
-                                                    )}
-
-                                                    {published
-                                                        ? "Published"
-                                                        : "Draft"}
-                                                </span>
+                        <span
+                            className={
+                                published
+                                    ? "inline-flex items-center gap-1 rounded-full border border-green-500/40 bg-green-500/10 px-2 py-1 text-xs text-green-700 dark:text-green-400"
+                                    : "inline-flex rounded-full border px-2 py-1 text-xs"
+                            }
+                        >
+                          {published && (
+                              <LockKeyhole className="size-3" />
+                          )}
+                            {published
+                                ? "Published"
+                                : "Draft"}
+                        </span>
                                         </td>
 
                                         <td className="min-w-[140px] p-3">
                                             <div className="space-y-1">
-                                                    <span className="text-xs font-semibold">
-                                                        {item.completionPercent}%
-                                                    </span>
-
+                          <span className="text-xs font-semibold">
+                            {item.completionPercent}%
+                          </span>
                                                 <Progress
-                                                    value={
-                                                        item.completionPercent
-                                                    }
+                                                    value={item.completionPercent}
                                                     className="h-2"
                                                 />
                                             </div>
@@ -516,9 +499,7 @@ export default function SyllabusesPage() {
                                                     <Button
                                                         size="sm"
                                                         variant="outline"
-                                                        onClick={() =>
-                                                            openEdit(item)
-                                                        }
+                                                        onClick={() => openEdit(item)}
                                                     >
                                                         <Pencil className="size-4" />
                                                         Edit
@@ -529,9 +510,7 @@ export default function SyllabusesPage() {
                                                     <Button
                                                         size="sm"
                                                         variant="destructive"
-                                                        onClick={() =>
-                                                            setDeleting(item)
-                                                        }
+                                                        onClick={() => setDeleting(item)}
                                                     >
                                                         <Trash2 className="size-4" />
                                                         Delete
@@ -557,9 +536,7 @@ export default function SyllabusesPage() {
             {/* CREATE / EDIT MODAL */}
             <Modal
                 title={
-                    editing
-                        ? "Edit Syllabus"
-                        : "Create Syllabus"
+                    editing ? "Edit Syllabus" : "Create Syllabus"
                 }
                 open={formOpen}
                 onClose={() =>
@@ -568,9 +545,7 @@ export default function SyllabusesPage() {
             >
                 <form
                     className="space-y-4"
-                    onSubmit={(event) =>
-                        void save(event)
-                    }
+                    onSubmit={(event) => void save(event)}
                 >
                     <div>
                         <label
@@ -633,8 +608,7 @@ export default function SyllabusesPage() {
                             onChange={(event) =>
                                 setForm((previous) => ({
                                     ...previous,
-                                    description:
-                                    event.target.value,
+                                    description: event.target.value,
                                 }))
                             }
                         />
@@ -645,9 +619,7 @@ export default function SyllabusesPage() {
                             type="button"
                             variant="outline"
                             disabled={busy}
-                            onClick={() =>
-                                setFormOpen(false)
-                            }
+                            onClick={() => setFormOpen(false)}
                         >
                             Cancel
                         </Button>
@@ -671,9 +643,7 @@ export default function SyllabusesPage() {
                 onCancel={() =>
                     !busy && setDeleting(null)
                 }
-                onConfirm={() =>
-                    void remove()
-                }
+                onConfirm={() => void remove()}
                 loading={busy}
             />
         </MainLayout>
