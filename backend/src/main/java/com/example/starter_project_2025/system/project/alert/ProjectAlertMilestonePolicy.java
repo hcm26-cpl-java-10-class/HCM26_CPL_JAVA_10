@@ -1,7 +1,7 @@
 package com.example.starter_project_2025.system.project.alert;
 
 import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
-import com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus;
+import com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklog;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogStatus;
 import org.springframework.stereotype.Component;
@@ -19,7 +19,7 @@ public class ProjectAlertMilestonePolicy {
                 .divide(BigDecimal.valueOf(total),2,RoundingMode.HALF_UP);
         boolean upcoming=milestone.getDeadline().isAfter(now)
                 &&!milestone.getDeadline().isAfter(now.plus(Duration.ofHours(48)));
-        boolean open=milestone.getStatus()==MilestoneStatus.OPEN;
+        boolean open=milestone.lifecycleStatus()==MilestoneLifecycleStatus.IN_PROGRESS;
         // Compare counts before rounding: a displayed 80.00% may still be below 80%.
         boolean below=total==0||BigDecimal.valueOf(done).multiply(BigDecimal.valueOf(100))
                 .compareTo(BigDecimal.valueOf(total).multiply(BigDecimal.valueOf(80)))<0;

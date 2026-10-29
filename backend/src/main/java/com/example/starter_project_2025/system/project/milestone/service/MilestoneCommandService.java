@@ -2,8 +2,6 @@ package com.example.starter_project_2025.system.project.milestone.service;
 
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.project.milestone.audit.MilestoneAuditWriter;
-import com.example.starter_project_2025.system.project.milestone.audit.MilestoneAuditLog;
-import com.example.starter_project_2025.system.project.milestone.audit.MilestoneAuditRepository;
 import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
 import com.example.starter_project_2025.system.project.milestone.dto.request.CreateMilestoneRequest;
 import com.example.starter_project_2025.system.project.milestone.dto.response.MilestoneResponse;
@@ -15,7 +13,6 @@ import com.example.starter_project_2025.system.project.milestone.integration.mod
 import com.example.starter_project_2025.system.project.milestone.integration.port.*;
 import com.example.starter_project_2025.system.project.milestone.outbox.OutboxEventWriter;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
-import com.example.starter_project_2025.web.CorrelationIdFilter;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -48,36 +45,11 @@ public class MilestoneCommandService {
     private final IdempotencyRepository idempotencyRepository;
     private final RequestHashService requestHashService;
     private final MilestoneAuditWriter auditWriter;
-    private final MilestoneAuditRepository auditRepository;
     private final OutboxEventWriter outboxWriter;
     private final MilestoneMapper mapper;
     private final TransactionTemplate transactionTemplate;
     private final Clock milestoneClock;
     private final MilestoneLifecycleService lifecycle;
-
-    @org.springframework.transaction.annotation.Transactional
-    public MilestoneResponse openForSubmissions(Long projectId, Long teamId, UUID milestoneId) {
-        if ((projectId == null) == (teamId == null)) throw new IllegalArgumentException("Exactly one milestone scope is required");
-        UUID actorId = actorProvider.requireCurrentActorId(); Long tenantId = tenantProvider.requireCurrentTenantId();
-        if (projectId != null) {
-            var project = projectPort.requireProjectForRead(projectId, actorId, tenantId);
-            accessPolicy.requireReadAccess(project); accessPolicy.requireSubmittableState(project);
-        } else {
-            var scope = scopeService.requireTeamScope(null, teamId, tenantId);
-            if (scope.projectId() != null) {
-                var project = projectPort.requireProjectForRead(scope.projectId(), actorId, tenantId);
-                accessPolicy.requireReadAccess(project);
-                accessPolicy.requireSubmittableState(project);
-            }
-        }
-        Milestone milestone = projectId != null
-                ? milestoneRepository.lockForProjectOpen(milestoneId, projectId, tenantId).orElseThrow(() -> new ResourceNotFoundException("Milestone not found"))
-                : milestoneRepository.lockForTeamOpen(milestoneId, teamId, tenantId).orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
-        if (milestone.getStatus() == com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN) return mapper.toResponse(milestone);
-        if (milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.PLANNED)
-            throw new MilestoneConflictException("Only a planned milestone can be opened for submissions");
-        return lifecycle.publish(projectId, teamId, milestoneId, milestone.getVersion());
-    }
 
     public MilestoneResponse create(Long projectId, String idempotencyKey, CreateMilestoneRequest request) {
         validateIdempotencyKey(idempotencyKey);
@@ -151,6 +123,8 @@ public class MilestoneCommandService {
                 actorId,
                 now
         );
+        milestone.configureAutoStart(request.deadlineOffsetDays(), request.deadlineOffsetDays() != null);
+        milestone.startAutomatically(now);
         if (request.resubmissionPolicy() != null) {
             milestone.configureResubmission(
                     request.resubmissionPolicy().allowed(),
@@ -164,6 +138,7 @@ public class MilestoneCommandService {
         // Return the database-normalized timestamp/decimal representation so an
         // idempotent replay is byte-for-byte equivalent to the first response.
         entityManager.refresh(milestone);
+        lifecycle.recordInitialRevision(milestone, actorId, now);
         auditWriter.writeCreated(milestone, actorId, idempotencyKey, now);
         outboxWriter.writeMilestoneCreated(milestone, now);
         idempotencyRepository.save(IdempotencyRecord.completed(

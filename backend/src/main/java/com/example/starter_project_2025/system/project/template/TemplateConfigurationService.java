@@ -17,9 +17,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.math.BigDecimal;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -46,6 +48,9 @@ public class TemplateConfigurationService {
         content.put("category", template.getCategory());
         content.put("level", template.getLevel());
         content.put("estimatedDurationWeeks", template.getEstimatedDurationWeeks());
+        content.put("technologies", template.getTechnologies());
+        content.put("targetRoles", template.getTargetRoles());
+        content.put("learningOutcomes", template.getLearningOutcomes());
         content.put("constraints", parse(template.getConstraintsJson()));
         content.put("milestones", plan.stream().map(this::milestoneData).toList());
         content.put("backlogItems", backlog.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId()).stream()
@@ -82,10 +87,15 @@ public class TemplateConfigurationService {
         } while (templates.existsByTenantIdAndCodeAndTemplateVersion(tenantId, code, 1));
         validator.validate(new ProjectTemplateRequest(code, name, configuration.description(), configuration.category(),
                 configuration.level(), configuration.estimatedDurationWeeks() == null ? null
-                        : BigDecimal.valueOf(configuration.estimatedDurationWeeks()), null), false);
+                        : BigDecimal.valueOf(configuration.estimatedDurationWeeks()), null, source.getCohortId(),
+                configuration.technologies(), configuration.targetRoles(), configuration.learningOutcomes()), false);
         var template = templates.saveAndFlush(ProjectTemplate.builder().tenantId(tenantId).code(code).name(name)
                 .description(configuration.description()).category(configuration.category()).level(configuration.level())
                 .estimatedDurationWeeks(configuration.estimatedDurationWeeks())
+                .cohortId(source.getCohortId())
+                .technologies(new HashSet<>(configuration.technologies() == null ? Set.of() : configuration.technologies()))
+                .targetRoles(new HashSet<>(configuration.targetRoles() == null ? Set.of() : configuration.targetRoles()))
+                .learningOutcomes(new HashSet<>(configuration.learningOutcomes() == null ? Set.of() : configuration.learningOutcomes()))
                 .constraintsJson(write(configuration.constraints() == null ? Map.of() : configuration.constraints()))
                 .status(ProjectTemplateStatus.DRAFT).templateVersion(1).build());
         for (int index = 0; index < configuration.milestones().size(); index++) {
@@ -183,6 +193,7 @@ public class TemplateConfigurationService {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record Configuration(String description, String category, ProjectTemplateLevel level, Integer estimatedDurationWeeks,
+                                 Set<String> technologies, Set<String> targetRoles, Set<String> learningOutcomes,
                                  JsonNode constraints, List<MilestoneData> milestones, List<BacklogData> backlogItems) { }
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record MilestoneData(String title, String description, Integer dueAfter, TemplateMilestoneTimeUnit dueUnit,

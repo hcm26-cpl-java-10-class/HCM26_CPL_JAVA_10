@@ -42,9 +42,43 @@ public class OutboxEventWriter {
             payload.put("milestoneId", milestone.getId()); payload.put("projectId", milestone.getProjectId());
             payload.put("teamId", milestone.getTeamId()); payload.put("tenantId", milestone.getTenantId());
             payload.put("actorId", milestone.getUpdatedBy()); payload.put("status", milestone.getStatus());
+            payload.put("lifecycleStatus", milestone.lifecycleStatus());
             payload.put("occurredAt", now);
             repository.save(OutboxEvent.milestoneOpened(milestone.getId(), objectMapper.writeValueAsString(payload), now));
         } catch (JsonProcessingException ex) { throw new IllegalStateException("Unable to serialize milestone open event", ex); }
+    }
+
+    public void writeMilestoneStarted(Milestone milestone, Instant now) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("milestoneId", milestone.getId());
+            payload.put("projectId", milestone.getProjectId());
+            payload.put("teamId", milestone.getTeamId());
+            payload.put("tenantId", milestone.getTenantId());
+            payload.put("actorId", milestone.getUpdatedBy());
+            payload.put("lifecycleStatus", milestone.lifecycleStatus());
+            payload.put("occurredAt", now);
+            repository.save(OutboxEvent.milestoneStarted(milestone.getId(), objectMapper.writeValueAsString(payload), now));
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Unable to serialize milestone start event", ex);
+        }
+    }
+
+    public void writeMilestoneRejected(Milestone milestone, String reason, Instant now) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("milestoneId", milestone.getId());
+            payload.put("projectId", milestone.getProjectId());
+            payload.put("teamId", milestone.getTeamId());
+            payload.put("tenantId", milestone.getTenantId());
+            payload.put("lifecycleStatus", milestone.lifecycleStatus());
+            payload.put("reason", reason);
+            payload.put("severity", "HIGH");
+            payload.put("occurredAt", now);
+            repository.save(OutboxEvent.milestoneRejected(milestone.getId(), objectMapper.writeValueAsString(payload), now));
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Unable to serialize milestone rejection event", ex);
+        }
     }
 
     public void writeArtifactDraftSaved(java.util.UUID milestoneId, Long projectId,

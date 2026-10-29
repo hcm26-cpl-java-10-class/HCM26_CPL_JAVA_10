@@ -24,6 +24,7 @@ public class SubmissionVersionService {
     private final SubmissionOutboxRepository outbox;
     private final CurrentActorProvider actorProvider;
     private final Clock milestoneClock;
+    private final MilestoneSubmissionWindow submissionWindow;
 
     @Transactional
     public SubmissionDtos.Detail createNextVersion(UUID id, SubmissionDtos.CreateVersionRequest request) {
@@ -72,6 +73,8 @@ public class SubmissionVersionService {
         if (submission.getStatus() != SubmissionStatus.DRAFT) {
             throw new MilestoneConflictException("Only a draft submission can be edited");
         }
+        if (!submissionWindow.canSubmit(submission.getMilestone()))
+            throw new MilestoneConflictException("Milestone is not accepting submission drafts");
         SubmissionVersion version = versions.findById(versionId)
                 .filter(value -> value.getSubmission().getId().equals(id)
                         && value.getVersionNumber() == submission.getCurrentVersionNumber())
@@ -110,8 +113,7 @@ public class SubmissionVersionService {
         if (submission.getStatus() != SubmissionStatus.DRAFT) {
             throw new MilestoneConflictException("Only a draft submission can be submitted");
         }
-        if (submission.getMilestone().getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN
-                || submission.getMilestone().getExecutionStatus() != MilestoneExecutionStatus.IN_PROGRESS)
+        if (!submissionWindow.canSubmit(submission.getMilestone()))
             throw new MilestoneConflictException("Milestone is not accepting submissions");
         var version = versions.findBySubmissionIdAndVersionNumber(id, submission.getCurrentVersionNumber())
                 .orElseThrow(() -> new com.example.starter_project_2025.exception.ResourceNotFoundException(

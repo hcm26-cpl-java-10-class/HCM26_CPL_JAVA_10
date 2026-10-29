@@ -23,7 +23,6 @@ import { MilestoneCreatePage } from "@/pages/management/project/milestone/pages/
 import { MilestoneDetailPage } from "@/pages/management/project/milestone/pages/MilestoneDetailPage";
 import { MilestoneListPage } from "@/pages/management/project/milestone/pages/MilestoneListPage";
 import { MilestoneEntryPage } from "@/pages/management/project/milestone/pages/MilestoneEntryPage";
-import { TeamMilestoneListPage } from "@/pages/management/project/milestone/pages/TeamMilestoneListPage";
 import { TeamMilestoneDetailPage } from "@/pages/management/project/milestone/pages/TeamMilestoneDetailPage";
 import TeamArtifactSubmissionPage from "@/pages/student/TeamArtifactSubmissionPage";
 import TeamMilestoneSubmissionsPage from "@/pages/management/project/milestone/pages/TeamMilestoneSubmissionsPage";
@@ -143,7 +142,6 @@ export const routes: RouteConfig[] = [
   { path: "/milestones", component: MilestoneListPage, requiredPermission: "MILESTONE_READ" },
   { path: "/milestones/teams", component: MilestoneEntryPage, requiredPermission: "MILESTONE_READ" },
   { path: "/projects/:projectId/milestones", component: MilestoneListPage, requiredPermission: "MILESTONE_READ" },
-  { path: "/teams/:teamId/milestones", component: TeamMilestoneListPage, requiredPermission: "MILESTONE_READ" },
   { path: "/teams/:teamId/milestones/new", component: MilestoneCreatePage, requiredPermission: "MILESTONE_WRITE" },
   { path: "/teams/:teamId/milestones/:milestoneId/edit", component: MilestoneCreatePage, requiredPermission: "MILESTONE_WRITE" },
   { path: "/teams/:teamId/milestones/:milestoneId", component: TeamMilestoneDetailPage, requiredPermission: "MILESTONE_READ" },

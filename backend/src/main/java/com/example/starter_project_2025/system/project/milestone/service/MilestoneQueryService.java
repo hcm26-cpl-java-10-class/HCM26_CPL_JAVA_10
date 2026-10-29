@@ -103,7 +103,8 @@ public class MilestoneQueryService {
                                 query.mandatory(),
                                 query.latePolicyType(),
                                 deadlineFrom,
-                                deadlineToExclusive
+                                deadlineToExclusive,
+                                query.lifecycleStatus()
                         ).and(studentVisibility()),
                         pageable
                 )
@@ -134,7 +135,7 @@ public class MilestoneQueryService {
         Specification<Milestone> allowedProjects = (root, ignored, cb) -> root.get("projectId").in(projectIds);
         return mapper.toPageResponse(null, repository.findAll(
                 MilestoneSpecifications.matching(tenantId, null, query.teamId(), search, query.status(),
-                        query.mandatory(), query.latePolicyType(), deadlineFrom, deadlineToExclusive)
+                        query.mandatory(), query.latePolicyType(), deadlineFrom, deadlineToExclusive, query.lifecycleStatus())
                         .and(allowedProjects).and(studentVisibility()),
                 PageRequest.of(query.page(), query.size(), buildSort(query.sort()))), projectNames);
     }
@@ -147,7 +148,7 @@ public class MilestoneQueryService {
         scopeService.requireTeamScope(null, teamId, tenantId);
         return mapper.toPageResponse(null, repository.findAll(
                 MilestoneSpecifications.matching(tenantId, null, teamId, search, query.status(),
-                        query.mandatory(), query.latePolicyType(), null, null).and(studentVisibility()),
+                        query.mandatory(), query.latePolicyType(), null, null, query.lifecycleStatus()).and(studentVisibility()),
                 PageRequest.of(query.page(), query.size(), buildSort(query.sort()))));
     }
 

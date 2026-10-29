@@ -45,6 +45,12 @@ public class ProjectTemplateController {
         return service.getOptions();
     }
 
+    @GetMapping("/cohorts")
+    @PreAuthorize("hasAuthority('PROJECT_TEMPLATE_READ')")
+    public List<ProjectTemplateService.CohortOption> getCohorts() {
+        return service.getCohortOptions();
+    }
+
     @GetMapping("/available")
     @PreAuthorize("hasAuthority('PROJECT_TEMPLATE_READ')")
     public Page<ProjectTemplateResponse> getAvailable(

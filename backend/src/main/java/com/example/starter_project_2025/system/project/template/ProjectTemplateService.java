@@ -2,6 +2,8 @@ package com.example.starter_project_2025.system.project.template;
 
 import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
+import com.example.starter_project_2025.system.project.cohort.CohortRepository;
+import com.example.starter_project_2025.system.project.trainingclass.TrainingClassRepository;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshotService;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneRepository;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneScheduleValidator;
@@ -36,6 +38,8 @@ public class ProjectTemplateService {
             "estimatedDurationWeeks", "templateVersion", "status", "createdAt", "updatedAt");
 
     private final ProjectTemplateRepository templates;
+    private final CohortRepository cohorts;
+    private final TrainingClassRepository trainingClasses;
     private final ProjectTemplateAuditRepository audits;
     private final ProjectTemplateAccessService access;
     private final ProjectTemplateValidator validator;
@@ -53,6 +57,20 @@ public class ProjectTemplateService {
         return new ProjectTemplateOptions(user.getTenantId(), user.getTenant().getName(),
                 categories(user.getTenantId()), access.can(user, "CREATE"), access.can(user, "UPDATE"),
                 access.can(user, "ACTIVATE"), access.can(user, "ARCHIVE"));
+    }
+
+    public record CohortOption(Long id, String name) {}
+
+    public List<CohortOption> getCohortOptions() {
+        User user = access.requireUser("READ");
+        var options = new java.util.TreeMap<Long, String>();
+        cohorts.findAllByTenant_IdAndIsActiveTrueOrderByNameAsc(user.getTenantId())
+                .forEach(cohort -> options.put(cohort.getId(), cohort.getName()));
+        trainingClasses.findAllByTenantIdAndCohortIdIsNotNull(user.getTenantId())
+                .forEach(trainingClass -> options.putIfAbsent(trainingClass.getCohortId(),
+                        trainingClass.getCohortName() == null ? "Cohort " + trainingClass.getCohortId()
+                                : trainingClass.getCohortName()));
+        return options.entrySet().stream().map(entry -> new CohortOption(entry.getKey(), entry.getValue())).toList();
     }
 
     public Page<ProjectTemplateResponse> getPage(String search, ProjectTemplateStatus status,
@@ -224,12 +242,38 @@ public class ProjectTemplateService {
     }
 
     private void apply(ProjectTemplate template, ProjectTemplateRequest request) {
+        if (request.cohortId() != null && (request.cohortId() <= 0
+                || (!trainingClasses.existsByTenantIdAndCohortId(template.getTenantId(), request.cohortId())
+                    && cohorts.findById(request.cohortId())
+                        .filter(cohort -> cohort.getTenant() != null
+                                && cohort.getTenant().getId().equals(template.getTenantId()))
+                        .isEmpty()))) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                    "Cohort must belong to the template tenant");
+        }
         template.setCode(request.code().strip());
         template.setName(request.name().strip());
         template.setDescription(request.description().strip());
         template.setCategory(request.category().strip());
         template.setLevel(request.level());
         template.setEstimatedDurationWeeks(request.estimatedDurationWeeks().intValueExact());
+        template.setCohortId(request.cohortId());
+        template.setTechnologies(normalizeTags(request.technologies(), 80));
+        template.setTargetRoles(normalizeTags(request.targetRoles(), 80));
+        template.setLearningOutcomes(normalizeTags(request.learningOutcomes(), 120));
+    }
+
+    private java.util.Set<String> normalizeTags(java.util.Set<String> values, int maxLength) {
+        if (values == null) return new java.util.HashSet<>();
+        if (values.size() > 30) throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Too many tags");
+        java.util.Set<String> result = new java.util.HashSet<>();
+        for (String value : values) {
+            if (value == null || value.isBlank() || value.strip().length() > maxLength) {
+                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Invalid template tag");
+            }
+            result.add(value.strip().toUpperCase(Locale.ROOT));
+        }
+        return result;
     }
 
     private void recordAudit(ProjectTemplate template, User user, String action, String beforeState) {

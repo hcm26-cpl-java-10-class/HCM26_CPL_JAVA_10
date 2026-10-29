@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import type { RubricCriterionInput, RubricRatingInput, RubricRatingLevel, SaveRubricDraftRequest } from "@/types";
-import { AlertCircle, ArrowDown, ArrowLeft, ArrowUp, Calculator, Plus, Save, Sparkles, Trash2 } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowLeft, ArrowUp, Calculator, Plus, Save, Trash2 } from "lucide-react";
 import { type FormEvent, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -97,17 +97,6 @@ function applyMaximumPoints(criteria: RubricCriterionInput[], totalScore: number
   }
 
   return next;
-}
-
-function starterGuidance(level: RubricRatingLevel, criterionName: string): string {
-  const subject = criterionName.trim() || "The submission";
-  const guidance: Record<RubricRatingLevel, string> = {
-    EXCELLENT: `${subject} fully meets the criterion with complete, clear, and verifiable evidence.`,
-    GOOD: `${subject} meets the main expectations with only minor gaps that do not affect the overall outcome.`,
-    FAIR: `${subject} partially meets the criterion, but important gaps or inconsistencies remain.`,
-    NOT_MET: `${subject} does not meet the criterion or provides no verifiable evidence.`,
-  };
-  return guidance[level];
 }
 
 function validateForm(
@@ -262,17 +251,6 @@ export function RubricForm({ initialValue, submitting, onSubmit, onCancel }: {
     const ratings = normalizeRatings(criteria[criterionIndex].ratings).map((rating) =>
       rating.level === level ? { ...rating, description: value } : rating,
     );
-    change(criterionIndex, { ratings });
-  };
-
-  const fillStarterGuidance = (criterionIndex: number) => {
-    const criterion = criteria[criterionIndex];
-    const ratings = normalizeRatings(criterion.ratings).map((rating) => ({
-      ...rating,
-      description: rating.description.trim()
-        ? rating.description
-        : starterGuidance(rating.level, criterion.name),
-    }));
     change(criterionIndex, { ratings });
   };
 
@@ -438,10 +416,7 @@ export function RubricForm({ initialValue, submitting, onSubmit, onCancel }: {
                 </div>
 
                 <div className="grid gap-3 rounded-lg bg-muted/30 p-3">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium">Rating guidance</p><Badge variant={completedRatings === RATING_LEVELS.length ? "secondary" : "outline"}>{completedRatings} / {RATING_LEVELS.length} completed</Badge></div><p className="mt-1 text-xs text-muted-foreground">Describe observable evidence at each fixed performance level.</p></div>
-                    <Button type="button" variant="outline" size="sm" onClick={() => fillStarterGuidance(index)}><Sparkles /> Fill empty guidance</Button>
-                  </div>
+                  <div><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium">Rating guidance</p><Badge variant={completedRatings === RATING_LEVELS.length ? "secondary" : "outline"}>{completedRatings} / {RATING_LEVELS.length} completed</Badge></div><p className="mt-1 text-xs text-muted-foreground">Describe observable evidence at each fixed performance level.</p></div>
 
                   {RATING_LEVELS.map((rating) => {
                     const current = normalizedRatings.find((entry) => entry.level === rating.level)!;
