@@ -21,7 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { LessonContentType, LessonDTO, ValidationErrorResponse } from "@/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
-import { useEffect, useState } from "react";
+import { type SyntheticEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { formatDuration, LessonPreview } from "./LessonPreview";
 
@@ -126,6 +126,9 @@ export function LessonFormModal({
   const [form, setForm] = useState<FormState>(() => buildInitialState(lesson, defaultOrderIndex));
   const [errors, setErrors] = useState<FieldErrors>({});
   const [showPreview, setShowPreview] = useState(false);
+  const [audioDurationStatus, setAudioDurationStatus] = useState<
+    "idle" | "loading" | "loaded" | "error"
+  >("idle");
 
   // Reset form mỗi lần mở modal hoặc đổi bài học đang sửa
   useEffect(() => {
@@ -133,8 +136,15 @@ export function LessonFormModal({
       setForm(buildInitialState(lesson, defaultOrderIndex));
       setErrors({});
       setShowPreview(false);
+      setAudioDurationStatus("idle");
     }
   }, [open, lesson, defaultOrderIndex]);
+
+  useEffect(() => {
+    setAudioDurationStatus(
+      form.contentType === "AUDIO" && isHttpUrl(form.contentUrl) ? "loading" : "idle",
+    );
+  }, [form.contentType, form.contentUrl]);
 
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -208,6 +218,16 @@ export function LessonFormModal({
       ? `= ${formatDuration(Number(form.duration))}`
       : "In seconds";
 
+  const detectAudioDuration = (event: SyntheticEvent<HTMLAudioElement>) => {
+    const seconds = event.currentTarget.duration;
+    if (!Number.isFinite(seconds) || seconds <= 0) {
+      setAudioDurationStatus("error");
+      return;
+    }
+    setField("duration", String(Math.ceil(seconds)));
+    setAudioDurationStatus("loaded");
+  };
+
   return (
     <Dialog open={open} onOpenChange={(next) => !mutation.isPending && onOpenChange(next)}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
@@ -269,7 +289,13 @@ export function LessonFormModal({
               {errors.duration ? (
                 <FieldMessage message={errors.duration} />
               ) : (
-                <p className="text-xs text-muted-foreground">Optional · whole seconds ≥ 0 {durationHint !== "In seconds" ? durationHint : ""}</p>
+                <p className="text-xs text-muted-foreground" aria-live="polite">
+                  {audioDurationStatus === "loading"
+                    ? "Detecting audio duration..."
+                    : audioDurationStatus === "error"
+                      ? "Could not detect duration · enter whole seconds manually"
+                      : `Optional · whole seconds ≥ 0 ${durationHint !== "In seconds" ? durationHint : ""}`}
+                </p>
               )}
             </div>
 
@@ -319,6 +345,16 @@ export function LessonFormModal({
                 Required · must start with http:// or https:// · max 500 characters
               </p>
               <FieldMessage message={errors.contentUrl} />
+              {form.contentType === "AUDIO" && isHttpUrl(form.contentUrl) && (
+                <audio
+                  key={form.contentUrl.trim()}
+                  src={form.contentUrl.trim()}
+                  preload="metadata"
+                  className="hidden"
+                  onLoadedMetadata={detectAudioDuration}
+                  onError={() => setAudioDurationStatus("error")}
+                />
+              )}
             </div>
           ) : (
             <div className="grid gap-1.5">
