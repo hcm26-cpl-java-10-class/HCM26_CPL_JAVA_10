@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react"
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, Flag } from "lucide-react";
 import {
     Activity,
     AlertTriangle,
@@ -142,6 +142,7 @@ export const iconMap = {
     bell: Bell,
     mail: Mail,
     message: MessageCircle,
+    flag: Flag,
     phone: Phone,
     globe: Globe,
     link: Link,

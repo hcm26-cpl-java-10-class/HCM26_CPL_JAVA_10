@@ -32,3 +32,4 @@ export * from "./features/demo/session";
 export * from "./features/student";
 export * from "./features/demo/course-report";
 export * from "./features/demo/qna";
+export * from "./features/demo/lesson-report";
