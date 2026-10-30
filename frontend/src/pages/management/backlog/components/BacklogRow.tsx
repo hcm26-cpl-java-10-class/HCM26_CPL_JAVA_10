@@ -1,3 +1,4 @@
+import { workItemAssigneeLabel } from "@/lib/work-item-assignee";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
@@ -81,13 +82,11 @@ export function BacklogRow({
   const estimate =
     typeof item.estimatedHours === "number" ? `${item.estimatedHours}h` : "-";
   const assignee = item.assigneeProjectMemberId ?? null;
-  const assigneeMember =
-    assignee == null
-      ? null
-      : assignees.find((member) => member.id === assignee) ?? null;
-  // `NA` bubble like the work item panel; the raw member id is only kept as a
-  // fallback when the member list of the board does not know the person.
-  const assigneeInitials = assigneeInitialsOf(assigneeMember?.fullName);
+  const assigneeMember = assignee == null ? null : assignees.find(member => member.id === assignee);
+  const assigneeLabel = workItemAssigneeLabel({
+    ...item, assigneeDisplayName: assigneeMember?.fullName || item.assigneeDisplayName,
+  });
+  const assigneeInitials = assignee == null ? "" : assigneeInitialsOf(assigneeMember?.fullName || item.assigneeDisplayName);
 
   const handleDragStart = (event: DragEvent<HTMLDivElement>) => {
     if (!draggable) {
@@ -234,22 +233,19 @@ export function BacklogRow({
       </span>
 
       <span
-        className={cn(
+        className="flex w-32 shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
+        title={assigneeLabel}
+        aria-label={`Assignee: ${assigneeLabel}`}
+      >
+        <span className={cn(
           "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold",
           assignee != null
             ? "border-sky-200 bg-sky-100 text-sky-700 dark:border-sky-800 dark:bg-sky-900/40 dark:text-sky-300"
             : "bg-muted text-muted-foreground",
-        )}
-        title={
-          assigneeMember
-            ? `Assignee: ${assigneeMember.fullName}`
-            : assignee != null
-              ? `Assignee #${assignee}`
-              : "Unassigned"
-        }
-      >
-        {assigneeInitials ||
-          (assignee != null ? assignee : <User className="h-3 w-3" />)}
+        )}>
+          {assigneeInitials || (assignee != null ? assignee : <User className="h-3 w-3" />)}
+        </span>
+        <span className="min-w-0 truncate">{assigneeLabel}</span>
       </span>
     </div>
   );

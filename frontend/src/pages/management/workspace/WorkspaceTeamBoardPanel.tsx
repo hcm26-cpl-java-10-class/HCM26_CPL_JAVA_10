@@ -1,3 +1,5 @@
+import { refreshBacklogItem } from "@/lib/refresh-backlog-item";
+import { workItemAssigneeLabel, workItemAssigneeOptions } from "@/lib/work-item-assignee";
 import { teamBacklogApi } from "@/api/features/team-backlog.api";
 import { workspaceApi } from "@/api/features/workspace.api";
 import { sprintBacklogApi } from "@/api/features/sprint_backlog.api";
@@ -434,9 +436,8 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
     if (!canUpdate || item.id == null || savingItemId != null) return;
     try {
       setSavingItemId(item.id);
-      await teamBacklogApi.assign(teamId, item.id, value ? Number(value) : null);
-      await query.refetch();
-      await queryClient.invalidateQueries({ queryKey: ["sprint-backlog-audit"] });
+      const saved = await teamBacklogApi.assign(teamId, item.id, value ? Number(value) : null);
+      await refreshBacklogItem(queryClient, saved);
       toast.success("Assignee updated.");
     } catch {
       toast.error("Could not update assignee. Existing assignment is unchanged.");
@@ -461,6 +462,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
       milestoneId: item.milestoneId ?? null,
       milestoneName: item.milestoneName ?? null,
       assigneeProjectMemberId: item.assigneeProjectMemberId ?? null,
+      assigneeDisplayName: workItemAssigneeLabel(item, query.data?.members ?? []),
       startDate: item.startDate ?? null,
       endDate: item.endDate ?? null,
       estimatedHours: item.estimatedHours ?? null,
@@ -586,10 +588,10 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
                           <select aria-label={`Assign ${item.title ?? "work item"}`} className="max-w-36 truncate bg-transparent" value={item.assigneeProjectMemberId ?? ""} disabled={savingItemId === item.id || query.isFetching}
                             onChange={(event) => void assignItem(item, event.target.value)}>
                             <option value="">Unassigned</option>
-                            {(query.data?.members ?? []).map((member) => <option key={member.projectMemberId} value={member.projectMemberId}>{member.displayName}</option>)}
+                            {workItemAssigneeOptions(item, query.data?.members ?? []).map((member) => <option key={member.projectMemberId} value={member.projectMemberId} disabled={member.disabled}>{member.displayName}</option>)}
                           </select>
                         </label>
-                        </> : <span>{item.assigneeDisplayName || (item.assigneeProjectMemberId ? `Member #${item.assigneeProjectMemberId}` : "Unassigned")}</span>}
+                        </> : <span>{workItemAssigneeLabel(item, query.data?.members ?? [])}</span>}
                         {item.estimatedHours != null ? <span>{item.estimatedHours}h</span> : null}
                       </div>
                     </article>)}
@@ -606,7 +608,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
                 <td className="px-4 py-3">{item.workType ? <Badge variant="outline" className={workTypeStyle(item.workType)}>{workTypeLabel(item.workType)}</Badge> : "—"}</td>
                 <td className="px-4 py-3">{item.priority ? <Badge variant="outline" className={priorityStyle(item.priority)}>{priorityLabel(item.priority)}</Badge> : "—"}</td>
                 <td className="px-4 py-3">{canUpdate && item.sprintId != null ? <select aria-label={`Status for ${item.title ?? "work item"}`} className={`rounded-full border px-2 py-1 text-xs font-medium ${item.status === "BLOCKED" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-slate-200 bg-white text-slate-700"}`} value={item.status ?? "TODO"} disabled={savingItemId === item.id || query.isFetching} onChange={(event) => void updateStatus(item, event.target.value as SprintBacklogStatus)}>{([...new Set([item.status ?? "TODO", ...transitionOptions(item.status ?? "TODO")])] as SprintBacklogStatus[]).map((status) => <option key={status} value={status}>{configuredStatusLabel(status)}</option>)}</select> : <Badge variant="outline" className={item.sprintId == null ? "border-slate-200 bg-slate-100 text-slate-700" : item.status === "BLOCKED" ? "border-rose-200 bg-rose-50 text-rose-700" : item.status === "DONE" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : item.status === "REVIEW" ? "border-amber-200 bg-amber-50 text-amber-800" : item.status === "IN_PROGRESS" ? "border-violet-200 bg-violet-50 text-violet-700" : "border-sky-200 bg-sky-50 text-sky-700"}>{item.sprintId == null ? statusLabel("BACKLOG") : configuredStatusLabel(item.status)}</Badge>}</td>
-                <td className="px-4 py-3 text-slate-600">{canUpdate ? <select aria-label={`Assign ${item.title ?? "work item"}`} className="max-w-40 bg-transparent" value={item.assigneeProjectMemberId ?? ""} disabled={savingItemId === item.id || query.isFetching} onChange={(event) => void assignItem(item, event.target.value)}><option value="">Unassigned</option>{(query.data?.members ?? []).map((member) => <option key={member.projectMemberId} value={member.projectMemberId}>{member.displayName}</option>)}</select> : item.assigneeDisplayName || "Unassigned"}</td>
+                <td className="px-4 py-3 text-slate-600">{canUpdate ? <select aria-label={`Assign ${item.title ?? "work item"}`} className="max-w-40 bg-transparent" value={item.assigneeProjectMemberId ?? ""} disabled={savingItemId === item.id || query.isFetching} onChange={(event) => void assignItem(item, event.target.value)}><option value="">Unassigned</option>{workItemAssigneeOptions(item, query.data?.members ?? []).map((member) => <option key={member.projectMemberId} value={member.projectMemberId} disabled={member.disabled}>{member.displayName}</option>)}</select> : workItemAssigneeLabel(item, query.data?.members ?? [])}</td>
                 <td className="px-4 py-3 text-right text-slate-600">{item.estimatedHours != null ? `${item.estimatedHours}h` : "—"}</td>
               </tr>)}</tbody>
             </table>

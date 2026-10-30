@@ -497,6 +497,65 @@ class WorkspaceSectionsIntegrationTest {
                 .andExpect(jsonPath("$.status").value("TODO"));
     }
 
+    @Test void boardAssignmentAndClearingMatchTheDetailRecord() throws Exception {
+        Long itemId = workItem();
+        mvc.perform(put("/api/teams/{teamId}/backlog-board/items/{id}/assignee", teamId, itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("projectMemberId", membershipId))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.assigneeProjectMemberId").value(membershipId));
+        mvc.perform(get("/api/sprint-backlogs/{id}", itemId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.assigneeProjectMemberId").value(membershipId));
+        mvc.perform(get("/api/teams/{teamId}/backlog-board", teamId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].assigneeDisplayName").value("Workspace Reader"));
+        mvc.perform(put("/api/teams/{teamId}/backlog-board/items/{id}/assignee", teamId, itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"projectMemberId\":null}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.assigneeProjectMemberId").doesNotExist());
+        mvc.perform(get("/api/sprint-backlogs/{id}", itemId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.assigneeProjectMemberId").doesNotExist());
+        mvc.perform(get("/api/teams/{teamId}/backlog-board", teamId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].assigneeProjectMemberId").doesNotExist())
+                .andExpect(jsonPath("$.items[0].assigneeDisplayName").doesNotExist());
+    }
+
+    @Test void unavailableAssigneeKeepsTheirNameButCannotReceiveNewAssignments() throws Exception {
+        Long assigneeId = tx.execute(status -> {
+            var team = teams.findById(teamId).orElseThrow();
+            var user = new User();
+            user.setEmail(UUID.randomUUID() + "@assignee.test");
+            user.setUserCode("ASSIGNEE-" + UUID.randomUUID());
+            user.setFirstName("Assigned"); user.setLastName("Member");
+            user.setPasswordHash("unused-test-password"); user.setTenant(tenants.findById(tenantId).orElseThrow());
+            users.saveAndFlush(user);
+            var cm = new ClassMember(); cm.setTrainingClass(team.getTrainingClass()); cm.setUser(user);
+            cm.setStatus(ClassMemberStatus.ACTIVE); classMembers.saveAndFlush(cm);
+            var member = new ProjectMember(); member.setTeam(team); member.setClassMember(cm);
+            return memberships.saveAndFlush(member).getId();
+        });
+        Long itemId = workItem();
+        mvc.perform(put("/api/sprint-backlogs/{id}", itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("assigneeProjectMemberId", assigneeId))))
+                .andExpect(status().isOk());
+        tx.executeWithoutResult(status -> memberships.findById(assigneeId).orElseThrow()
+                .getClassMember().setStatus(ClassMemberStatus.INACTIVE));
+        var board = mvc.perform(get("/api/teams/{teamId}/backlog-board", teamId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].assigneeProjectMemberId").value(assigneeId))
+                .andExpect(jsonPath("$.items[0].assigneeDisplayName").value("Assigned Member"))
+                .andReturn();
+        assertThat(json.readTree(board.getResponse().getContentAsString()).get("members").findValuesAsText("projectMemberId"))
+                .doesNotContain(assigneeId.toString());
+        mvc.perform(put("/api/teams/{teamId}/backlog-board/items/{id}/assignee", teamId, itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("projectMemberId", assigneeId))))
+                // This controller uses the existing global validation envelope (400).
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("active member")));
+        mvc.perform(get("/api/sprint-backlogs/{id}", itemId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.assigneeProjectMemberId").value(assigneeId));
+    }
+
     @Test void cardDetailEditsAndAssigneeAreReflectedOnTheTeamBoard() throws Exception {
         Long itemId = workItem();
         mvc.perform(get("/api/sprint-backlogs/{id}", itemId).header("Authorization", "Bearer " + token))

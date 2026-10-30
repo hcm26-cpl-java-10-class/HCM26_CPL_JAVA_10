@@ -28,7 +28,8 @@ import type {
   SprintDTO,
   SprintPlanningItem,
 } from "@/types";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { refreshBacklogItem } from "@/lib/refresh-backlog-item";
 import {
   Copy,
   Link2,
@@ -208,6 +209,7 @@ export function BacklogItemDetailSheet({
   onChanged,
   onDeleted,
 }: BacklogItemDetailSheetProps) {
+  const queryClient = useQueryClient();
   const detailQuery = useQuery({
     queryKey: ["sprint-backlog", "detail", item?.id ?? null],
     queryFn: () => sprintBacklogApi.getById(String(item!.id)),
@@ -287,8 +289,8 @@ export function BacklogItemDetailSheet({
     setSaving(true);
 
     try {
-      await sprintBacklogApi.update(String(item.id), patch as SprintBacklogDTO);
-      await detailQuery.refetch();
+      const saved = await sprintBacklogApi.update(String(item.id), patch as SprintBacklogDTO);
+      await refreshBacklogItem(queryClient, saved);
       await onChanged?.();
     } catch (error) {
       toast.error(extractErrorMessage(error, "Không thể cập nhật công việc."));
@@ -906,7 +908,7 @@ export function BacklogItemDetailSheet({
                           <SelectItem value={draft.assignee}>
                             <span className="flex items-center gap-2">
                               <User className="h-4 w-4" />
-                              Member #{draft.assignee}
+                              {item.assigneeDisplayName || `Member #${draft.assignee}`}
                             </span>
                           </SelectItem>
                         )}
