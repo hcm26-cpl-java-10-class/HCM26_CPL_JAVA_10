@@ -89,7 +89,7 @@ class LessonProgressServiceTest {
                 .lesson(lesson)
                 .completed(false)
                 .build();
-        when(enrollmentRepository.findByIdAndUser_Id(40L, 7L)).thenReturn(Optional.of(enrollment));
+        when(enrollmentRepository.findOwnedByIdForUpdate(40L, 7L)).thenReturn(Optional.of(enrollment));
         when(lessonRepository.findById(30L)).thenReturn(Optional.of(lesson));
         when(progressRepository.findByEnrollment_IdAndLesson_Id(40L, 30L))
                 .thenReturn(Optional.of(progress));
@@ -113,7 +113,7 @@ class LessonProgressServiceTest {
                 .lesson(lesson)
                 .completed(true)
                 .build();
-        when(enrollmentRepository.findByIdAndUser_Id(40L, 7L)).thenReturn(Optional.of(enrollment));
+        when(enrollmentRepository.findOwnedByIdForUpdate(40L, 7L)).thenReturn(Optional.of(enrollment));
         when(lessonRepository.findById(30L)).thenReturn(Optional.of(lesson));
         when(progressRepository.findByEnrollment_IdAndLesson_Id(40L, 30L))
                 .thenReturn(Optional.of(progress));
@@ -128,6 +128,7 @@ class LessonProgressServiceTest {
 
     @Test
     void recordsAndReturnsLastAccessedLesson() {
+        when(enrollmentRepository.findOwnedByIdForUpdate(40L, 7L)).thenReturn(Optional.of(enrollment));
         when(enrollmentRepository.findByIdAndUser_Id(40L, 7L)).thenReturn(Optional.of(enrollment));
         when(lessonRepository.findById(30L)).thenReturn(Optional.of(lesson));
         when(progressRepository.findByEnrollment_IdAndLesson_Id(40L, 30L))
@@ -146,6 +147,7 @@ class LessonProgressServiceTest {
         assertNotNull(result.lastAccessedAt());
         assertEquals(30L, lastLesson.lessonId());
         verify(enrollmentRepository).save(enrollment);
+        verify(enrollmentRepository).findOwnedByIdForUpdate(40L, 7L);
         verify(progressRepository).save(any(LessonProgress.class));
     }
 
@@ -155,7 +157,7 @@ class LessonProgressServiceTest {
                 .enrollment(enrollment)
                 .lesson(lesson)
                 .build();
-        when(enrollmentRepository.findByIdAndUser_Id(40L, 7L)).thenReturn(Optional.of(enrollment));
+        when(enrollmentRepository.findOwnedByIdForUpdate(40L, 7L)).thenReturn(Optional.of(enrollment));
         when(lessonRepository.findById(30L)).thenReturn(Optional.of(lesson));
         when(progressRepository.findByEnrollment_IdAndLesson_Id(40L, 30L))
                 .thenReturn(Optional.of(progress));

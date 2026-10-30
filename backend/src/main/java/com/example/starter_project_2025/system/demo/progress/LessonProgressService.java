@@ -42,7 +42,7 @@ public class LessonProgressService {
             Long lessonId,
             boolean completed
     ) {
-        CourseEnrollment enrollment = getOwnedEnrollment(userId, enrollmentId);
+        CourseEnrollment enrollment = getOwnedEnrollmentForUpdate(userId, enrollmentId);
         Lesson lesson = getCourseLesson(enrollment, lessonId);
 
         LessonProgress progress = progressRepository
@@ -80,7 +80,7 @@ public class LessonProgressService {
 
     @Transactional
     public LessonProgressDTO recordAccess(Long userId, Long enrollmentId, Long lessonId) {
-        CourseEnrollment enrollment = getOwnedEnrollment(userId, enrollmentId);
+        CourseEnrollment enrollment = getOwnedEnrollmentForUpdate(userId, enrollmentId);
         Lesson lesson = getCourseLesson(enrollment, lessonId);
         LocalDateTime now = LocalDateTime.now();
 
@@ -99,7 +99,7 @@ public class LessonProgressService {
 
     @Transactional
     public LessonProgressDTO saveAnswer(Long userId, Long enrollmentId, Long lessonId, String answer) {
-        CourseEnrollment enrollment = getOwnedEnrollment(userId, enrollmentId);
+        CourseEnrollment enrollment = getOwnedEnrollmentForUpdate(userId, enrollmentId);
         Lesson lesson = getCourseLesson(enrollment, lessonId);
         if (lesson.getContentType() != LessonContentType.TEXT) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Answers are only supported for text lessons");
@@ -138,6 +138,11 @@ public class LessonProgressService {
 
     private CourseEnrollment getOwnedEnrollment(Long userId, Long enrollmentId) {
         return enrollmentRepository.findByIdAndUser_Id(enrollmentId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Enrollment not found"));
+    }
+
+    private CourseEnrollment getOwnedEnrollmentForUpdate(Long userId, Long enrollmentId) {
+        return enrollmentRepository.findOwnedByIdForUpdate(enrollmentId, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Enrollment not found"));
     }
 

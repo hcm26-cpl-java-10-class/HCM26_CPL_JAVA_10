@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.demo.enrollment;
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -24,6 +26,13 @@ public interface CourseEnrollmentRepository
     Optional<CourseEnrollment> findByIdAndUser_Id(
             Long enrollmentId,
             Long userId
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select e from CourseEnrollment e where e.id = :enrollmentId and e.user.id = :userId")
+    Optional<CourseEnrollment> findOwnedByIdForUpdate(
+            @Param("enrollmentId") Long enrollmentId,
+            @Param("userId") Long userId
     );
 
     @Query("select count(distinct e.course.id) from CourseEnrollment e "
