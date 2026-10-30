@@ -1,0 +1,33 @@
+import { createBaseApiService } from "@/api/base-service.api";
+import axiosInstance from "../axios";
+import type { SubjectDTO, SubjectFilter } from "@/types";
+import { normalizeSubjectIdentity } from "@/utils/subject-identity.utils";
+
+const path = "/subjects";
+
+const base = createBaseApiService<SubjectDTO, SubjectFilter>({
+  path: path,
+});
+
+export const subjectApi = Object.assign({}, base, {
+  create: (data: SubjectDTO) => base.create(normalizeSubjectIdentity(data)),
+
+  update: (id: string, data: SubjectDTO) => base.update(id, normalizeSubjectIdentity(data)),
+
+  getActiveSubjects: async (): Promise<SubjectDTO[]> => {
+    const response = await axiosInstance.get<SubjectDTO[]>(`${path}/active`);
+    return response.data;
+  },
+
+  changeStatus: async (id: number | string, active: boolean): Promise<SubjectDTO> => {
+    const response = await axiosInstance.patch<SubjectDTO>(`${path}/${id}/status`, null, {
+      params: { active },
+    });
+    return response.data;
+  },
+
+  isSubjectReferenced: async (id: number | string): Promise<boolean> => {
+    const response = await axiosInstance.get<boolean>(`${path}/${id}/is-referenced`);
+    return response.data;
+  },
+});

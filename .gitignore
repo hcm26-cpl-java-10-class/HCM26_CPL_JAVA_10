@@ -1,4 +1,4 @@
- === IDE ===
+# === IDE ===
 .idea/
 *.iml
 .vscode/
@@ -7,20 +7,28 @@
 .DS_Store
 Thumbs.db
 
+# === Docs / Office files ===
+*.docx
+*.doc
+
 # === Backend (Java/Maven) ===
 backend/target/
 backend/*.jar
 backend/*.war
+backend/data/
 
 # === Backend .env (secrets) ===
 backend/.env
 
 # === Frontend (Node) ===
+node_modules/
 frontend/node_modules/
 frontend/dist/
 
 # === Docker .env (secrets) ===
 docker/.env
 
-
 /backend.zip
+
+# === Runtime logs ===
+*.log

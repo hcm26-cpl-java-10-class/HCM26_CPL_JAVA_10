@@ -9,4 +9,6 @@ import org.springframework.stereotype.Service;
 public interface SessionService extends BaseCrudService<Long, SessionDTO, SessionFilter> {
 
     SessionDTO cancelSession(Long id, SessionCancelDTO cancelDTO);
+
+    java.util.List<SessionDTO> createValidatedBatch(java.util.List<SessionDTO> requests);
 }

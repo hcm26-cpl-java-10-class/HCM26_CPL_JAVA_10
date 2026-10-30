@@ -15,6 +15,11 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class CourseDTO extends BaseDTO {
 
+    @Size(max = 50, message = "Code must not exceed 50 characters")
+    String code;
+
+    Long subjectId;
+
     @NotBlank(groups = OnCreate.class, message = "Course name is required")
     @Size(max = 150, message = "Name must not exceed 150 characters")
     String name;

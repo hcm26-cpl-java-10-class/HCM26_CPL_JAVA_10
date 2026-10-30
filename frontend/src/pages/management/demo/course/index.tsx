@@ -16,11 +16,23 @@ const courseSchema: EntitySchema = {
   idField: "id",
   fields: [
     {
+      name: "code",
+      label: "Course Code",
+      type: "text",
+      sortable: true,
+    },
+    {
       name: "name",
       label: "Course Name",
       type: "text",
       sortable: true,
       bold: true,
+    },
+    {
+      name: "subjectId",
+      label: "Topic / Subject ID",
+      type: "number",
+      sortable: true,
     },
     {
       name: "instructor",
@@ -182,7 +194,7 @@ function StudentCourseCatalog() {
                         </div>
                       )}
                       <Badge className="absolute left-3 top-3 bg-white/95 text-slate-800 hover:bg-white">
-                        Course
+                        {course.code || "Course"}
                       </Badge>
                     </div>
                     <div className="space-y-3 p-5">

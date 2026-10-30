@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs } from "@/components/ui/tabs";
 import type { ImportResult } from "@/types";
+import axios from "axios";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ImportTab } from "./ImportTab";
@@ -53,13 +54,19 @@ export function ImportModal({
       const result = await table.importFile(file);
       onImportSuccess?.(result);
       onOpenChange(false);
-      toast.success("Import successful!");
-    } catch (err: any) {
-      if (err?.response?.data) {
-        onImportSuccess?.(err.response.data);
-        onOpenChange(false);
+      if (result.failureCount > 0) {
+        const message = `Imported ${result.successCount} row(s); ${result.failureCount} row(s) failed. Check the import result for details.`;
+        if (result.successCount > 0) toast.warning(message);
+        else toast.error(message);
+      } else {
+        toast.success(`Imported ${result.successCount} row(s) successfully.`);
       }
-      toast.error(err?.response?.data?.message ?? "Failed to import data");
+    } catch (err: unknown) {
+      const message = axios.isAxiosError<{ message?: string }>(err)
+        ? err.response?.data?.message : undefined;
+      toast.error(message ?? "Failed to import data");
+      // Let ImportTab keep the selected file and display the request error.
+      throw err;
     } finally {
       setImportLoading(false);
     }

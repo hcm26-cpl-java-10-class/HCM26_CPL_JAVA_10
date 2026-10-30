@@ -29,6 +29,12 @@ import lombok.experimental.SuperBuilder;
 )
 public class Course extends BaseEntity {
 
+    @Column(unique = true, length = 50)
+    String code;
+
+    @Column(name = "subject_id")
+    Long subjectId;
+
     @Column(unique = true, nullable = false, length = 150)
     String name;
 
