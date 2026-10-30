@@ -26,6 +26,7 @@ import StudentSyllabusPage from "@/pages/student/StudentSyllabusPage";
 
 import CourseReportPage from "@/pages/management/demo/report";
 import UnansweredQuestionsPage from "@/pages/management/demo/unanswered-questions";
+import LessonReportsPage from "@/pages/management/demo/lesson-reports";
 import CertificateDetailPage from "@/pages/management/demo/certificate/pages/CertificateDetailPage";
 import VerifyCertificatePage from "@/pages/student/VerifyCertificatePage";
 import EnrollmentLogPage from "@/pages/management/demo/enrollment/EnrollmentLogPage.tsx";
@@ -218,6 +219,14 @@ export const routes: RouteConfig[] = [
     path: "/unanswered-questions",
     component: UnansweredQuestionsPage,
     requiredPermission: "LESSON_ANSWER_CREATE",
+    isModuleDriven: true,
+  },
+
+  // LESSON REPORTS
+  {
+    path: "/lesson-reports",
+    component: LessonReportsPage,
+    requiredPermission: "LESSON_REPORT_READ",
     isModuleDriven: true,
   },
 
