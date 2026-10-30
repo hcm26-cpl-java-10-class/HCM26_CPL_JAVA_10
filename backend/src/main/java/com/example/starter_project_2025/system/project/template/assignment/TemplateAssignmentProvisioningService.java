@@ -122,7 +122,8 @@ public class TemplateAssignmentProvisioningService {
                 templateMilestones.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId());
 
         // ---- Step 1: immutable evidence snapshot of the active brief version
-        ProjectTemplateSnapshot snapshot = briefSnapshots.snapshotForAssignment(template, team.getId());
+        ProjectTemplateSnapshot snapshot = briefSnapshots.snapshotForAssignment(
+                template, team.getId(), team.getProjectTemplateVersionId());
 
         // ---- Step 2: project creation
         Project project = createProject(team, template, snapshot, tenantId, actorId);
@@ -309,6 +310,10 @@ public class TemplateAssignmentProvisioningService {
                     penalty,
                     actorUuid,
                     now);
+
+            // Template milestones follow the same scheduled PLANNED -> IN_PROGRESS flow
+            // as milestones created directly in a workspace.
+            milestone.configureAutoStart(7, true);
 
             milestone.configureAssessment(
                     planMilestone.getWeight(),

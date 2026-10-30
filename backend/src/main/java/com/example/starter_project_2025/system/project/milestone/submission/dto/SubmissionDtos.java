@@ -23,7 +23,8 @@ public final class SubmissionDtos {
                            MilestoneExecutionStatus executionStatus, int currentVersionNumber,
                            int submissionAttempts, Instant deadline, Instant submittedAt,
                            boolean late, BigDecimal penaltyPercent, long lockVersion,
-                           int checklistCompleted, int checklistTotal) { }
+                           int checklistCompleted, int checklistTotal,
+                           com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus milestoneLifecycleStatus) { }
 
     public record Detail(UUID id, Long projectId, UUID milestoneId, String milestoneTitle,
                          String milestoneDescription, boolean mandatory, Long teamId, String teamName,
@@ -34,7 +35,8 @@ public final class SubmissionDtos {
                          Integer maxSubmissionAttempts, Instant deadline, String latePolicyType,
                          Instant lateUntil, BigDecimal latePenaltyPercent, long lockVersion,
                          ProductInfo product, Version currentVersion, List<Version> versions, Rubric rubric,
-                         List<Review> reviews, Map<String, Boolean> availableActions) { }
+                         List<Review> reviews, Map<String, Boolean> availableActions,
+                         com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus milestoneLifecycleStatus) { }
 
     /** Immutable product snapshot created by the artifact-submission workflow. */
     public record ProductInfo(long version, String repositoryUrl, String deploymentUrl,

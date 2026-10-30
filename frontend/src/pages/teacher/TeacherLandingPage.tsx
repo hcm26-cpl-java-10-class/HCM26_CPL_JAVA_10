@@ -32,7 +32,6 @@ export default function TeacherLandingPage() {
   const { user, activeRole, hasPermission } = usePermissions();
 
   const displayName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email;
-  const mockProjectId = import.meta.env.VITE_MILESTONE_MOCK_PROJECT_ID || "11111111-1111-1111-1111-111111111111";
 
   return (
     <MainLayout>
@@ -71,7 +70,7 @@ export default function TeacherLandingPage() {
             </Link>
           </Button>
           <Button asChild variant="outline" className="mt-3 border-slate-300 bg-white/80 sm:ml-3 sm:mt-0">
-            <Link to={`/projects/${mockProjectId}/milestones`}>
+            <Link to="/milestones">
               <Flag className="mr-2 size-4" /> Manage milestones
             </Link>
           </Button>

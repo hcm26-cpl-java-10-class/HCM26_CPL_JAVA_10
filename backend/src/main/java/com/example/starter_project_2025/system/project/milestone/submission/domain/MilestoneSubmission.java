@@ -27,7 +27,7 @@ public class MilestoneSubmission {
     @Column(name = "tenant_id", nullable = false, updatable = false)
     private Long tenantId;
 
-    @Column(name = "project_id", nullable = false, updatable = false)
+    @Column(name = "project_id", updatable = false)
     private Long projectId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

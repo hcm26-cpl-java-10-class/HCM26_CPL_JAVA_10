@@ -12,6 +12,11 @@ import java.util.UUID;
 import java.util.List;
 
 public interface MilestoneRepository extends JpaRepository<Milestone, UUID>, JpaSpecificationExecutor<Milestone> {
+    List<Milestone> findByActiveTrueAndAutoStartEnabledTrueAndLifecycleState(
+            com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus state);
+    List<Milestone> findByActiveTrueAndStatusAndExecutionStatus(
+            com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus status,
+            com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus executionStatus);
     List<Milestone> findAllByProjectIdIsNull();
 
     @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)

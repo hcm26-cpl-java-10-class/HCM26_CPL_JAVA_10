@@ -231,10 +231,9 @@ export default function TeamArtifactSubmissionPage() {
   const m = query.data.milestone;
   const draft = query.data.draft;
   const latestSubmission = query.data.latestSubmission;
-  const canSubmit = m.status === "OPEN" && m.executionStatus === "IN_PROGRESS";
+  const canSubmit = query.data.canSubmit;
   const deadlineDate = new Date(m.deadline);
   const isPastDeadline = Date.now() > deadlineDate.getTime();
-  const checkedCount = Object.values(checklist).filter(Boolean).length;
 
   return (
     <MainLayout
@@ -252,10 +251,7 @@ export default function TeamArtifactSubmissionPage() {
             {workspaceId ? "Quay lại Workspace" : "Quay lại"}
           </Button>
           <div className="flex items-center gap-2">
-            <Badge variant="outline">{m.status}</Badge>
-            {m.executionStatus && (
-              <Badge variant="secondary">{m.executionStatus}</Badge>
-            )}
+            <Badge variant="outline">{m.lifecycleStatus}</Badge>
           </div>
         </div>
 
@@ -295,9 +291,9 @@ export default function TeamArtifactSubmissionPage() {
                   {latestSubmission.submittedLate ? "Nộp muộn" : "Đúng hạn"}
                 </Badge>
               </p>
-              <p className="text-emerald-800 dark:text-emerald-200">
-                Bạn có thể cập nhật thông tin và <strong>nộp lại phiên bản mới (v{latestSubmission.version + 1})</strong> nếu cần bổ sung hoặc sửa đổi.
-              </p>
+              {canSubmit && <p className="text-emerald-800 dark:text-emerald-200">
+                Bạn có thể nộp phiên bản mới (v{latestSubmission.version + 1}) theo yêu cầu chỉnh sửa của reviewer.
+              </p>}
             </AlertDescription>
           </Alert>
         )}
@@ -330,11 +326,11 @@ export default function TeamArtifactSubmissionPage() {
               <div>
                 <CardTitle className="text-lg">Tiêu chí nghiệm thu (Checklist)</CardTitle>
                 <CardDescription className="text-sm">
-                  Đánh dấu các tiêu chí bạn đã tự kiểm tra và đáp ứng trước khi nộp. Reviewer sẽ đánh giá chính thức dựa trên các tiêu chí này.
+                  Reviewer sẽ đánh giá các tiêu chí này sau khi nộp bài.
                 </CardDescription>
               </div>
               <Badge variant="outline" className="text-xs">
-                {checkedCount}/{m.checklist.length} tiêu chí
+                {m.checklist.length} tiêu chí
               </Badge>
             </div>
           </CardHeader>
@@ -349,17 +345,14 @@ export default function TeamArtifactSubmissionPage() {
                 >
                   <Checkbox
                     id={`check-${item.id}`}
-                    checked={checklist[item.id] ?? false}
-                    onCheckedChange={(checked) => {
-                      edited();
-                      setChecklist((prev) => ({ ...prev, [item.id]: Boolean(checked) }));
-                    }}
+                    disabled
+                    checked={false}
                     className="mt-0.5"
-                    aria-label={item.content}
+                    aria-label={`${item.content} — reviewer assessment`}
                   />
                   <label
                     htmlFor={`check-${item.id}`}
-                    className="flex-1 text-sm cursor-pointer select-none leading-relaxed"
+                    className="flex-1 text-sm leading-relaxed"
                   >
                     {item.content}
                     {item.mandatory && (
@@ -453,12 +446,12 @@ export default function TeamArtifactSubmissionPage() {
             </div>
 
             {/* Amber Alert ONLY when submission is truly blocked (Fix Bug #29) */}
-            {!canSubmit && !latestSubmission && (
+            {!canSubmit && (
               <Alert className="border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
                 <AlertCircle className="size-4" />
                 <AlertTitle>Chưa mở nộp bài chính thức</AlertTitle>
                 <AlertDescription className="text-xs mt-1">
-                  Chức năng nộp bài chính thức chỉ khả dụng khi milestone ở trạng thái OPEN và tiến độ IN_PROGRESS. Hiện tại bạn vẫn có thể chuẩn bị và lưu bản nháp.
+                  Chức năng nộp bài chỉ khả dụng khi milestone đang thực hiện hoặc reviewer yêu cầu nộp lại, trong thời hạn cho phép.
                 </AlertDescription>
               </Alert>
             )}
@@ -489,7 +482,7 @@ export default function TeamArtifactSubmissionPage() {
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <Button
                 variant="outline"
-                disabled={save.isPending || submit.isPending}
+                disabled={save.isPending || submit.isPending || !canSubmit}
                 onClick={() => save.mutate()}
               >
                 {save.isPending ? (
@@ -536,7 +529,7 @@ export default function TeamArtifactSubmissionPage() {
                   <strong>Milestone:</strong> {m.title}
                 </p>
                 <p>
-                  <strong>Checklist:</strong> Đã đánh dấu {checkedCount}/{m.checklist.length} tiêu chí
+                  <strong>Checklist:</strong> Reviewer sẽ đánh giá {m.checklist.length} tiêu chí
                 </p>
                 <p>
                   <strong>Repository URL:</strong>{" "}

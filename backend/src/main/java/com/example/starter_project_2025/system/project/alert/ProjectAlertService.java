@@ -272,7 +272,7 @@ public class ProjectAlertService {
     }
     private MilestoneRow milestoneRow(User actor,ProjectAlertReadStore.Scope scope,Milestone milestone,Instant now,Progress progress) {
         return new MilestoneRow(milestone.getId().toString(),access.describe(scope.teams().get(milestone.getTeamId())),milestone.getTitle(),
-                milestone.getStatus().name(),milestone.getDeadline(),deadlineStatus(milestone.getDeadline(),now),milestone.getVersion(),progress,
+                milestone.lifecycleStatus().name(),milestone.getDeadline(),deadlineStatus(milestone.getDeadline(),now),milestone.getVersion(),progress,
                 progress.atRisk()&&access.monitoring(scope.teams().get(milestone.getTeamId()))&&access.has(actor,access.sendPermission(Kind.MILESTONE)),
                 milestone.isMandatory(),progress.atRisk()?"AT_RISK":"NONE");
     }

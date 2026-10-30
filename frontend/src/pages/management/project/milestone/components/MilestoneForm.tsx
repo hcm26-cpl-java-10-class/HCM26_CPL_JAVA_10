@@ -25,7 +25,6 @@ interface MilestoneFormProps {
   apiError?: MilestoneApiError | null;
   networkUncertain?: boolean;
   onSubmit: (values: MilestoneFormValues) => void;
-  onSaveDraft?: (values: MilestoneFormValues) => void;
   submitLabel?: string;
   onCancel: () => void;
   onDirtyChange: (dirty: boolean) => void;
@@ -42,7 +41,6 @@ export function MilestoneForm({
   apiError,
   networkUncertain,
   onSubmit,
-  onSaveDraft,
   submitLabel,
   onCancel,
   onDirtyChange,
@@ -51,7 +49,6 @@ export function MilestoneForm({
     control,
     register,
     handleSubmit,
-    getValues,
     clearErrors,
     setError,
     setFocus,
@@ -172,6 +169,13 @@ export function MilestoneForm({
                   <Input id="milestone-deadline" type="datetime-local" required min={minimumDateTime} aria-invalid={!!errors.deadline} {...register("deadline")} />
                   <p className="text-xs text-muted-foreground">Uses your device time zone. The server validates it again when you submit.</p>
                   <FieldMessage message={errors.deadline?.message} />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="milestone-offset">Open before deadline (days)</Label>
+                  <Input id="milestone-offset" type="number" min={0} max={365} step={1}
+                    {...register("deadlineOffsetDays", { valueAsNumber: true })} />
+                  <p className="text-xs text-muted-foreground">The milestone starts automatically this many days before its deadline.</p>
+                  <FieldMessage message={errors.deadlineOffsetDays?.message} />
                 </div>
                 <div className="flex items-start justify-between gap-4 rounded-xl border bg-muted/30 p-4">
                   <div>
@@ -326,7 +330,6 @@ export function MilestoneForm({
 
       <div className="sticky bottom-0 z-20 -mx-1 flex flex-col-reverse gap-2 rounded-xl border bg-background/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:justify-end">
         <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>Cancel</Button>
-        {onSaveDraft && <Button type="button" variant="secondary" onClick={() => onSaveDraft(getValues())} disabled={submitting}>Save Draft</Button>}
         <Button type="submit" disabled={submitting || hasMissingOptions}>
           <Save className="size-4" /> {submitting ? "Saving..." : networkUncertain ? "Retry safely" : submitLabel ?? "Create milestone"}
         </Button>

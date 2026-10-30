@@ -46,8 +46,17 @@ public record CreateMilestoneRequest(
         @Valid ResubmissionPolicyRequest resubmissionPolicy,
 
         @DecimalMin("0") @DecimalMax("100") @Digits(integer = 3, fraction = 2)
-        BigDecimal weight
+        BigDecimal weight,
+        @jakarta.validation.constraints.Min(0) @jakarta.validation.constraints.Max(365)
+        Integer deadlineOffsetDays
 ) {
+    public CreateMilestoneRequest(Long teamId, String title, String description, Instant deadline,
+            boolean mandatory, List<ChecklistItemRequest> checklist, UUID rubricSnapshotId,
+            UUID reviewerId, LatePolicyRequest latePolicy, ResubmissionPolicyRequest resubmissionPolicy,
+            BigDecimal weight) {
+        this(teamId, title, description, deadline, mandatory, checklist, rubricSnapshotId,
+                reviewerId, latePolicy, resubmissionPolicy, weight, null);
+    }
     public CreateMilestoneRequest(Long teamId, String title, String description, Instant deadline,
                                   boolean mandatory, List<ChecklistItemRequest> checklist,
                                   UUID rubricSnapshotId, UUID reviewerId, LatePolicyRequest latePolicy,

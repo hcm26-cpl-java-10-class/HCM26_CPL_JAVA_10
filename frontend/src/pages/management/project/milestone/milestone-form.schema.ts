@@ -13,6 +13,7 @@ export const milestoneFormSchema = z
     title: z.string().trim().min(1, "Milestone name is required").max(MILESTONE_FORM_LIMITS.title, "Milestone name must not exceed 120 characters"),
     description: z.string().max(MILESTONE_FORM_LIMITS.description, "Description must not exceed 1,000 characters"),
     deadline: z.string().min(1, "Deadline is required"),
+    deadlineOffsetDays: z.number().int().min(0).max(365),
     mandatory: z.boolean(),
     checklist: z
       .array(
@@ -70,6 +71,7 @@ export interface MilestoneFormValues {
   title: string;
   description: string;
   deadline: string;
+  deadlineOffsetDays: number;
   mandatory: boolean;
   checklist: Array<{ content: string; mandatory: boolean }>;
   rubricSnapshotId: string;
@@ -88,6 +90,7 @@ export const milestoneDefaultValues: MilestoneFormValues = {
   title: "",
   description: "",
   deadline: "",
+  deadlineOffsetDays: 7,
   mandatory: true,
   checklist: [{ content: "", mandatory: true }],
   rubricSnapshotId: "",

@@ -42,6 +42,10 @@ public class ProjectTeam extends BaseEntity {
     @JoinColumn(name = "project_template_id")
     ProjectTemplate projectTemplate;
 
+    /** Published brief selected at assignment time; copied when the workspace is provisioned. */
+    @Column(name = "project_template_version_id")
+    Long projectTemplateVersionId;
+
     public Long getProjectId() {
         return project == null ? null : project.getId();
     }

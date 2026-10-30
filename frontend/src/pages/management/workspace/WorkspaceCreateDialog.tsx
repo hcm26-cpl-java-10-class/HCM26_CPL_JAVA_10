@@ -26,6 +26,7 @@ export function WorkspaceCreateDialog({ candidates, initialSelection, onClose, o
     mutationFn: () => workspaceApi.create({ teamId }, key.current),
     onSuccess: async result => {
       await queryClient.invalidateQueries({ queryKey: ["workspace-candidates"] });
+      await queryClient.invalidateQueries({ queryKey: ["milestone-project-options"] });
       toast.success("Workspace created successfully");
       onOpenWorkspace(result.id!);
     },
