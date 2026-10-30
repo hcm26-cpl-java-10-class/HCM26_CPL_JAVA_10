@@ -128,34 +128,6 @@ export function ImportTab({ loading, onImport, entityName }: ImportTabProps) {
         </div>
       )}
 
-      {entityName === "user" && (
-        <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-foreground">How passwords work</p>
-          <p>
-            <strong>New account, Password filled:</strong> the password is checked (8+ characters,
-            a letter and a number) and saved. The account is ready to use. No email is sent when an
-            account is created.
-          </p>
-          <p>
-            <strong>New account, Password empty:</strong> the system generates a random temporary
-            password for each person (no email is sent, so large files are fine). You download the
-            list once after the import; at the first sign-in each person must create their own
-            password.
-          </p>
-          <p>
-            <strong>Existing account, Password filled:</strong> the password is changed and the user is
-            signed out everywhere. They get a notice email (it never contains the password). You need
-            the user update permission.
-          </p>
-          <p>
-            <strong>Existing account, Password empty:</strong> nothing changes and no email is sent.
-          </p>
-          <p>
-            Each email can appear only once in the file; errors are listed by Excel row.
-          </p>
-        </div>
-      )}
-
       {!file && (
         <div
           onDragOver={handleDragOver}

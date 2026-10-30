@@ -87,8 +87,7 @@ export function toPayload(v: UserFormValues, mode: "create" | "edit"): UserDTO {
     phone: v.phone.trim(),
     description: v.description.trim(),
     status: v.status,
-    // INACTIVE mới là isActive=false; LOCKED = isActive true + locked true (BE xử lý theo status).
-    isActive: v.status !== "INACTIVE",
+    isActive: v.status === "ACTIVE",
     roleIds: v.roleIds,
     departmentIds: v.departmentIds,
   };

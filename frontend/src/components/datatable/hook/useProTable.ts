@@ -585,10 +585,8 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
     patchFieldMutation.mutate(
       { id, data: updateData },
       {
-        onError: (error) => {
-          // Revert on error and tell the user why the change was rejected
+        onError: () => {
           invalidate();
-          toast.error(getMutationErrorMessage(error, `Update ${entityLabel} failed.`));
         },
       },
     );

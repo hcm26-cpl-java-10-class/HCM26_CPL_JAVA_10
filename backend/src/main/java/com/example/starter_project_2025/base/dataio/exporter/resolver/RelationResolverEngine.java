@@ -1,7 +1,6 @@
 package com.example.starter_project_2025.base.dataio.exporter.resolver;
 
 import com.example.starter_project_2025.base.dataio.exporter.metadata.ExportFieldMeta;
-import org.hibernate.Hibernate;
 import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Field;
@@ -33,15 +32,12 @@ public class RelationResolverEngine {
             return obj;
 
         try {
-            // Lazy associations may hand us a Hibernate proxy. A proxy is a generated subclass that has
-            // none of the entity's fields, so reading "code" or "name" from it used to fail and the
-            // whole export came out empty. Unwrap it to the real entity first.
-            Object current = Hibernate.unproxy(obj);
+            Object current = obj;
 
             for (String part : path.split("\\.")) {
-                Field f = findField(current.getClass(), part);
+                Field f = current.getClass().getDeclaredField(part);
                 f.setAccessible(true);
-                current = Hibernate.unproxy(f.get(current));
+                current = f.get(current);
 
                 if (current == null) return null;
             }
@@ -51,18 +47,5 @@ public class RelationResolverEngine {
         } catch (Exception e) {
             throw new RuntimeException("Cannot resolve relation path: " + path, e);
         }
-    }
-
-    /** Looks in the class and its parents (for example BaseEntity holds id and audit fields). */
-    private Field findField(Class<?> type, String name) throws NoSuchFieldException {
-        Class<?> current = type;
-        while (current != null && current != Object.class) {
-            try {
-                return current.getDeclaredField(name);
-            } catch (NoSuchFieldException ignored) {
-                current = current.getSuperclass();
-            }
-        }
-        throw new NoSuchFieldException(name);
     }
 }

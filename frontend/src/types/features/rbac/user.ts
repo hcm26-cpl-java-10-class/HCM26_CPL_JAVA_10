@@ -9,10 +9,12 @@ export const USER_STATUS_OPTIONS: { value: UserStatus; label: string }[] = [
 ];
 
 export interface UserDTO extends BaseDTO {
+  username?: string;
   email?: string;
   password?: string;
   firstName?: string;
   lastName?: string;
+  employeeCode?: string;
   phone?: string;
   description?: string;
   status?: UserStatus;
@@ -20,11 +22,13 @@ export interface UserDTO extends BaseDTO {
   roleIds?: Array<string | number>;
 
   departmentIds?: Array<string | number>;
+  lastLoginAt?: string;
 }
 
 export interface UserFilter extends BaseFilter {
   roleIds?: string[];
   departmentIds?: string[];
+  status?: UserStatus;
 }
 
 export interface StudentSummaryDTO {

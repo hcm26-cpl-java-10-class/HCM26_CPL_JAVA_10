@@ -32,8 +32,7 @@ public class ValueConverter {
 
         if (type.isEnum()) {
             @SuppressWarnings({ "unchecked", "rawtypes" })
-            Enum enumVal = Enum.valueOf((Class<Enum>) type,
-                    val.toUpperCase().replace(' ', '_').replace('-', '_'));
+            Enum enumVal = Enum.valueOf((Class<Enum>) type, val);
             return enumVal;
         }
 

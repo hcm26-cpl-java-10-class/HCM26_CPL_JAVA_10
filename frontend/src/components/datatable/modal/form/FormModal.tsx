@@ -7,10 +7,9 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import type { FieldSchema } from "@/types";
 import { FormFieldRenderer } from "./FormFieldRenderer";
-import { isFieldRequired, validateForm } from "@/utils/form-validation";
 
 type SectionField = {
   name: string;
@@ -107,11 +106,6 @@ export function FormModal({
   fieldErrors = {},
 }: FormModalProps) {
   const [form, setForm] = useState<Record<string, any>>({});
-  // Fields the user has typed in (live errors are shown for these) and fields changed since the
-  // server last reported errors (their old server error is hidden).
-  const [touched, setTouched] = useState<Record<string, boolean>>({});
-  const [submitted, setSubmitted] = useState(false);
-  const isEdit = !!initial;
 
   const editableFields: FieldSchema[] = schema.fields.filter(
     (f: FieldSchema) =>
@@ -153,72 +147,18 @@ export function FormModal({
       });
       setForm(defaults);
     }
-    setTouched({});
-    setSubmitted(false);
   }, [initial, open]);
 
-  // When the server reports new errors, show them again for those fields.
-  const serverErrorKey = JSON.stringify(fieldErrors ?? {});
-  useEffect(() => {
-    const keys = Object.keys(fieldErrors ?? {});
-    if (keys.length === 0) return;
-    setTouched((prev) => {
-      const next = { ...prev };
-      keys.forEach((key) => delete next[key]);
-      return next;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverErrorKey]);
-
-  // Live validation: recalculated on every keystroke.
-  const clientErrors = useMemo(
-    () => validateForm(editableFields, form, isEdit),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [form, isEdit, schema]
-  );
-
   const updateField = (name: string, value: any) => {
-    const rules = editableFieldMap.get(name)?.validation;
-    let next = value;
-
-    // Limit what can be typed: filter characters first, then enforce the max length.
-    if (typeof next === "string" && rules) {
-      if (rules.inputFilter) next = rules.inputFilter(next);
-      if (rules.maxLength !== undefined && next.length > rules.maxLength) {
-        next = next.slice(0, rules.maxLength);
-      }
-    }
-
-    setForm((prev) => ({ ...prev, [name]: next }));
-    setTouched((prev) => ({ ...prev, [name]: true }));
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = () => {
-    setSubmitted(true);
-
-    if (Object.keys(clientErrors).length > 0) return;
-
-    const payload: Record<string, any> = { ...form };
-    editableFields.forEach((field) => {
-      // Form-only fields (like "confirm password") are not sent to the server.
-      // A blank password on edit means "keep the current password".
-      if (field.transient || (field.type === "password" && !payload[field.name])) {
-        delete payload[field.name];
-      }
-    });
-
-    onSubmit(payload);
+    onSubmit(form);
   };
 
-  // Errors shown under a field: live client errors first, then (unchanged) server errors.
-  const errorsFor = (fieldName: string): string[] => {
-    const live = clientErrors[fieldName];
-    if (live && live.length > 0 && (touched[fieldName] || submitted)) return live;
-    if (touched[fieldName]) return [];
-    return fieldErrors[fieldName] ?? [];
-  };
-
-  const hasError = (fieldName: string) => errorsFor(fieldName).length > 0;
+  const hasError = (fieldName: string) =>
+    fieldErrors[fieldName] && fieldErrors[fieldName].length > 0;
 
   const renderField = (field: FieldSchema) => (
     <FormFieldRenderer
@@ -230,8 +170,7 @@ export function FormModal({
           ? "border-destructive focus-visible:ring-destructive"
           : ""
       }
-      fieldErrors={errorsFor(field.name)}
-      required={isFieldRequired(field, isEdit)}
+      fieldErrors={fieldErrors[field.name]}
       relationOptions={relationOptions}
       onChange={updateField}
     />

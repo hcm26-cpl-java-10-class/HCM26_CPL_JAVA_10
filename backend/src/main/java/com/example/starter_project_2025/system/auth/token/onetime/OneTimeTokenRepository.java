@@ -17,9 +17,4 @@ public interface OneTimeTokenRepository extends JpaRepository<OneTimeToken, Long
     @Modifying
     @Query("DELETE FROM OneTimeToken t WHERE t.expiryDate < :now OR t.used = true")
     int deleteAllExpiredOrUsed(@Param("now") Instant now);
-
-    /** Xóa toàn bộ token một lần của một user (cần trước khi xóa user vì có khóa ngoại). */
-    @Modifying(flushAutomatically = true)
-    @Query("DELETE FROM OneTimeToken t WHERE t.user.id = ?1")
-    int deleteAllByUserId(Long userId);
 }
