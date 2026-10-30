@@ -138,6 +138,7 @@ const toPlanningItem = (dto: SprintBacklogDTO): SprintPlanningItem => ({
   workType: (dto.workType as SprintBacklogWorkType | null | undefined) ?? "TASK",
   sprintId: dto.sprintId ?? null,
   assigneeProjectMemberId: dto.assigneeProjectMemberId ?? null,
+  assigneeDisplayName: dto.assigneeDisplayName ?? null,
   startDate: dto.startDate ?? null,
   endDate: dto.endDate ?? null,
   projectId: dto.projectId ?? null,
@@ -446,12 +447,15 @@ export function BacklogBoard({
           : null;
       const list = grouped.get(key) ?? [];
 
-      list.push(toPlanningItem(dto));
+      const item = toPlanningItem(dto);
+      item.assigneeDisplayName = assignees.find(member => member.id === item.assigneeProjectMemberId)?.fullName
+        || item.assigneeDisplayName;
+      list.push(item);
       grouped.set(key, list);
     });
 
     return grouped;
-  }, [items, sprints]);
+  }, [items, sprints, assignees]);
 
   const itemIdsOf = useCallback(
     (sprintId: number | null) =>

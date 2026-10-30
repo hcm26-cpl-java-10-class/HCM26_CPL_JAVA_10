@@ -1,3 +1,4 @@
+import { workItemAssigneeLabel } from "@/lib/work-item-assignee";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
@@ -70,6 +71,7 @@ export function BacklogRow({
   const estimate =
     typeof item.estimatedHours === "number" ? `${item.estimatedHours}h` : "-";
   const assignee = item.assigneeProjectMemberId ?? null;
+  const assigneeLabel = workItemAssigneeLabel(item);
 
   const handleDragStart = (event: DragEvent<HTMLDivElement>) => {
     if (!draggable) {
@@ -205,15 +207,19 @@ export function BacklogRow({
       </span>
 
       <span
-        className={cn(
+        className="flex w-32 shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
+        title={assigneeLabel}
+        aria-label={`Assignee: ${assigneeLabel}`}
+      >
+        <span className={cn(
           "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold",
           assignee != null
             ? "border-sky-200 bg-sky-100 text-sky-700 dark:border-sky-800 dark:bg-sky-900/40 dark:text-sky-300"
             : "bg-muted text-muted-foreground",
-        )}
-        title={assignee != null ? `Assignee #${assignee}` : "Unassigned"}
-      >
-        {assignee != null ? assignee : <User className="h-3 w-3" />}
+        )}>
+          {assignee != null ? (item.assigneeDisplayName?.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join("").toUpperCase() || assignee) : <User className="h-3 w-3" />}
+        </span>
+        <span className="min-w-0 truncate">{assigneeLabel}</span>
       </span>
     </div>
   );
