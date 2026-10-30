@@ -111,7 +111,8 @@ public class WorkspaceDemoBacklogInitializer implements CommandLineRunner {
     }
 
     private Sprint upsertSprint(Long projectId, SprintSeed seed) {
-        Sprint sprint = sprints.findByName(seed.name()).orElseGet(Sprint::new);
+        Sprint sprint = sprints.findFirstByProjectIdAndNameOrderByIdAsc(projectId, seed.name())
+                .orElseGet(Sprint::new);
 
         sprint.setName(seed.name());
         sprint.setSprintGoal(seed.goal());

@@ -268,7 +268,8 @@ public class BoardDemoDataInitializer implements CommandLineRunner {
             SprintStatus status
     ) {
         LocalDate today = LocalDate.now();
-        Sprint sprint = sprintRepository.findByName(name).orElseGet(Sprint::new);
+        Sprint sprint = sprintRepository.findFirstByProjectIdAndNameOrderByIdAsc(projectId, name)
+                .orElseGet(Sprint::new);
         sprint.setProjectId(projectId);
         sprint.setName(name);
         sprint.setSprintGoal(goal);

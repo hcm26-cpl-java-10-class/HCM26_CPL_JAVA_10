@@ -1,7 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import type { BacklogStatus, SprintPlanningItem } from "@/types";
+import type {
+  BacklogAssigneeOption,
+  BacklogStatus,
+  SprintPlanningItem,
+} from "@/types";
 import { ChevronDown } from "lucide-react";
 import type { DragEvent, ReactNode } from "react";
 import { backlogItemKey } from "../backlog.constants";
@@ -16,7 +20,7 @@ interface BacklogSectionProps {
   collapsed: boolean;
   canEditTask: boolean;
   busyItemId: number | null;
-  counts?: { todo: number; inProgress: number; done: number };
+  counts?: { todo: number; inProgress: number; review: number; done: number };
   actions?: ReactNode;
   /**
    * Rendered BELOW the box, left aligned (e.g. the Jira style "+ Create" row).
@@ -26,6 +30,8 @@ interface BacklogSectionProps {
   footer?: ReactNode;
   emptyMessage: string;
   dueDate?: string | null;
+  /** Team members of the board, resolved to the initials avatar of a row. */
+  assignees?: BacklogAssigneeOption[];
   draggable: boolean;
   isDropTarget: boolean;
   onToggleCollapse: () => void;
@@ -43,6 +49,7 @@ interface BacklogSectionProps {
 const countStyles = {
   todo: "text-slate-500",
   inProgress: "text-sky-600",
+  review: "text-amber-600",
   done: "text-emerald-600",
 } as const;
 
@@ -64,6 +71,7 @@ export function BacklogSection({
   footer,
   emptyMessage,
   dueDate,
+  assignees = [],
   draggable,
   isDropTarget,
   onToggleCollapse,
@@ -155,6 +163,15 @@ export function BacklogSection({
                 <span
                   className={cn(
                     "rounded border bg-background px-1.5 text-[11px] font-semibold",
+                    countStyles.review,
+                  )}
+                  title="Review"
+                >
+                  {counts.review}
+                </span>
+                <span
+                  className={cn(
+                    "rounded border bg-background px-1.5 text-[11px] font-semibold",
                     countStyles.done,
                   )}
                   title="Done"
@@ -184,6 +201,7 @@ export function BacklogSection({
                   canEditTask={canEditTask}
                   busy={busyItemId === item.id}
                   dueDate={dueDate}
+                  assignees={assignees}
                   draggable={draggable}
                   onToggleSelect={onToggleSelect}
                   onStatusChange={onStatusChange}

@@ -11,11 +11,30 @@ import java.util.List;
 @Repository
 public interface SprintRepository extends BaseCrudRepository<Sprint, Long> {
 
-    Optional<Sprint> findByName(String name);
+    /**
+     * Sprint names are unique inside the project workspace (UFR-PRJ-003-01,
+     * AC03), not across the whole tenant: two different projects may both run a
+     * "Sprint 1".
+     */
+    boolean existsByProjectIdAndName(Long projectId, String name);
 
+    boolean existsByProjectIdAndNameAndIdNot(Long projectId, String name, Long id);
+
+    /**
+     * Team-only workspaces (no project linked yet) scope their sprint names to
+     * the owning team instead.
+     */
+    boolean existsByTeamIdAndName(Long teamId, String name);
+
+    boolean existsByTeamIdAndNameAndIdNot(Long teamId, String name, Long id);
+
+    /** Fallback for sprints without a project and without a team. */
     boolean existsByName(String name);
 
     boolean existsByNameAndIdNot(String name, Long id);
+
+    /** Seeding lookup: the first sprint of one project with that name. */
+    Optional<Sprint> findFirstByProjectIdAndNameOrderByIdAsc(Long projectId, String name);
 
     List<Sprint> findAllByProjectIdAndIsActiveTrueOrderByStartDateDescIdDesc(Long projectId);
 

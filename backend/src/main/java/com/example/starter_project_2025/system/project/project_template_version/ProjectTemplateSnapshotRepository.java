@@ -32,7 +32,8 @@ public interface ProjectTemplateSnapshotRepository
 
     /**
      * Used by the sample data seeder to upsert a version per template without
-     * duplicating rows (mirrors {@code SprintRepository#findByName}).
+     * duplicating rows (mirrors
+     * {@code SprintRepository#findFirstByProjectIdAndNameOrderByIdAsc}).
      */
     Optional<ProjectTemplateSnapshot> findFirstByTemplateIdAndVersion(Long templateId, String version);
 

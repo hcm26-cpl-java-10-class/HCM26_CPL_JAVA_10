@@ -6,11 +6,17 @@ import type {
 } from "@/types";
 import { Bookmark, Bug, SquareCheck, type LucideIcon } from "lucide-react";
 
-/** Workflow order of a backlog item (UFR-PRJ-003-02). */
+/**
+ * Workflow order of a backlog item (UFR-PRJ-003-02).
+ * <p>
+ * Mirrors the columns of the workspace Kanban board: Backlog, To do, In
+ * progress, Review, Done, so both boards report the same statuses.
+ */
 export const TASK_STATUS_ORDER: BacklogStatus[] = [
   "BACKLOG",
   "SPRINT_BACKLOG",
   "IN_PROGRESS",
+  "REVIEW",
   "DONE",
 ];
 
@@ -137,6 +143,8 @@ export const canMoveToStatus = (
 ) => {
   const from = current ?? "BACKLOG";
 
+  // Any workflow status can be picked, in any direction (no forward-only
+  // matrix): the team owns its board and may move work back and forth.
   return from === target || TASK_STATUS_ORDER.includes(target);
 };
 
@@ -173,6 +181,20 @@ export const backlogItemKey = (
   prefix: string,
   item: SprintPlanningItem,
 ) => `${prefix}-${item.id}`;
+
+/**
+ * `Nguyen Van An` -> `NA`, the letters of an assignee avatar bubble (same
+ * bubble the work item panel and the create bar show). Returns an empty string
+ * for a blank name so callers can fall back to another label.
+ */
+export const assigneeInitialsOf = (name?: string | null) =>
+  (name ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter((part) => part !== "")
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join("")
 
 const shortDate = (value?: string | null) => {
   if (!value) return "";
@@ -218,7 +240,7 @@ export const isOverdue = (value?: string | null) => {
   return date.getTime() < today.getTime();
 };
 
-/** Status tallies of the three grey counters in the sprint section header. */
+/** Status tallies of the grey counters in the sprint section header. */
 export const statusCounts = (items: SprintPlanningItem[]) => ({
   todo: items.filter(
     (item) =>
@@ -226,5 +248,6 @@ export const statusCounts = (items: SprintPlanningItem[]) => ({
       item.status === "SPRINT_BACKLOG",
   ).length,
   inProgress: items.filter((item) => item.status === "IN_PROGRESS").length,
+  review: items.filter((item) => item.status === "REVIEW").length,
   done: items.filter((item) => item.status === "DONE").length,
 });

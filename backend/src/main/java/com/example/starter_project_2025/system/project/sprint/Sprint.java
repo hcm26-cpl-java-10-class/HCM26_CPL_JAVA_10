@@ -40,10 +40,16 @@ import java.util.List;
 @AllArgsConstructor
 @Table(
         name = "sprint",
-        uniqueConstraints = @UniqueConstraint(
-                name = "uk_sprint_name",
-                columnNames = {"name"}
-        )
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_sprint_project_name",
+                        columnNames = {"project_id", "name"}
+                ),
+                @UniqueConstraint(
+                        name = "uk_sprint_team_name",
+                        columnNames = {"team_id", "name"}
+                )
+        }
 )
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @AttributeOverride(name = "id", column = @Column(name = "sprint_id"))

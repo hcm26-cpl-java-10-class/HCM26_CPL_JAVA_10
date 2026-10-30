@@ -1087,8 +1087,11 @@ export function BacklogItemDetailSheet({
 const statusToBoard = (status: SprintBacklogStatus) => {
   switch (status) {
     case "IN_PROGRESS":
-    case "REVIEW":
       return "IN_PROGRESS" as const;
+    case "REVIEW":
+      return "REVIEW" as const;
+    case "BLOCKED":
+      return "BLOCKED" as const;
     case "DONE":
       return "DONE" as const;
     default:

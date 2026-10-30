@@ -242,7 +242,7 @@ public class SprintBacklogDataInitializer implements CommandLineRunner {
     }
 
     private Sprint findSprint(String sprintName) {
-        return sprintRepository.findByName(sprintName).orElse(null);
+        return sprintRepository.findFirstByProjectIdAndNameOrderByIdAsc(DEMO_PROJECT_ID, sprintName).orElse(null);
     }
 
     /**

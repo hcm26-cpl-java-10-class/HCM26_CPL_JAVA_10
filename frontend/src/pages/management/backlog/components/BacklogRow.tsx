@@ -6,7 +6,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import type { BacklogStatus, SprintPlanningItem } from "@/types";
+import type {
+  BacklogAssigneeOption,
+  BacklogStatus,
+  SprintPlanningItem,
+} from "@/types";
 import {
   ChevronDown,
   Loader2,
@@ -17,6 +21,7 @@ import {
 import type { DragEvent } from "react";
 import {
   TASK_STATUS_ORDER,
+  assigneeInitialsOf,
   backlogPriorityMeta,
   backlogStatusMeta,
   backlogWorkTypeMeta,
@@ -32,6 +37,11 @@ interface BacklogRowProps {
   canEditTask: boolean;
   busy: boolean;
   dueDate?: string | null;
+  /**
+   * Team members of the board, used to show the assignee as the same initials
+   * bubble as the work item panel instead of the raw `project_members.id`.
+   */
+  assignees?: BacklogAssigneeOption[];
   draggable: boolean;
   onToggleSelect: (id: number) => void;
   onStatusChange: (item: SprintPlanningItem, status: BacklogStatus) => void;
@@ -51,6 +61,7 @@ export function BacklogRow({
   canEditTask,
   busy,
   dueDate,
+  assignees = [],
   draggable,
   onToggleSelect,
   onStatusChange,
@@ -70,6 +81,13 @@ export function BacklogRow({
   const estimate =
     typeof item.estimatedHours === "number" ? `${item.estimatedHours}h` : "-";
   const assignee = item.assigneeProjectMemberId ?? null;
+  const assigneeMember =
+    assignee == null
+      ? null
+      : assignees.find((member) => member.id === assignee) ?? null;
+  // `NA` bubble like the work item panel; the raw member id is only kept as a
+  // fallback when the member list of the board does not know the person.
+  const assigneeInitials = assigneeInitialsOf(assigneeMember?.fullName);
 
   const handleDragStart = (event: DragEvent<HTMLDivElement>) => {
     if (!draggable) {
@@ -171,7 +189,18 @@ export function BacklogRow({
             </button>
           </DropdownMenuTrigger>
 
-          <DropdownMenuContent align="end" className="w-44">
+          {/*
+            The menu content is rendered through a portal but React still
+            bubbles its events up this component tree, so picking a status
+            would also fire the row `onClick` and open the detail panel.
+            Stop both the mouse and the keyboard events at the menu root.
+          */}
+          <DropdownMenuContent
+            align="end"
+            className="w-44"
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
             {TASK_STATUS_ORDER.map((value) => {
               const option = backlogStatusMeta(value);
 
@@ -211,9 +240,16 @@ export function BacklogRow({
             ? "border-sky-200 bg-sky-100 text-sky-700 dark:border-sky-800 dark:bg-sky-900/40 dark:text-sky-300"
             : "bg-muted text-muted-foreground",
         )}
-        title={assignee != null ? `Assignee #${assignee}` : "Unassigned"}
+        title={
+          assigneeMember
+            ? `Assignee: ${assigneeMember.fullName}`
+            : assignee != null
+              ? `Assignee #${assignee}`
+              : "Unassigned"
+        }
       >
-        {assignee != null ? assignee : <User className="h-3 w-3" />}
+        {assigneeInitials ||
+          (assignee != null ? assignee : <User className="h-3 w-3" />)}
       </span>
     </div>
   );
