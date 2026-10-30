@@ -236,11 +236,18 @@ export interface BacklogBoardProps {
    */
   teamId?: number | null;
   /**
-   * Name of the workspace project. It is the source of the work item key
-   * prefix (`Student Support Portal` -> `SSP`), so the workspace page passes
-   * the name it already has instead of relying on a second lookup.
+   * Name of the workspace project. It is the fallback source of the work item
+   * key prefix (`Student Support Portal` -> `SSP`) when the workspace does not
+   * configure one, so the workspace page passes the name it already has
+   * instead of relying on a second lookup.
    */
   projectName?: string | null;
+  /**
+   * Key prefix configured for the workspace (`FA` by default). It is the same
+   * prefix the backend numbers the tasks of the workspace with, so it wins
+   * over the project acronym when it is present (`FA-21`).
+   */
+  taskKeyPrefix?: string | null;
 }
 
 /**
@@ -258,6 +265,7 @@ export function BacklogBoard({
   projectId = null,
   teamId = null,
   projectName = null,
+  taskKeyPrefix = null,
 }: BacklogBoardProps) {
   const queryClient = useQueryClient();
   const { hasAllPermissions, user } = usePermissions();
@@ -487,12 +495,17 @@ export function BacklogBoard({
       const sprintStatus = sprint?.status ?? null;
       const sectionProjectId = sprint?.projectId ?? scopedProjectId ?? null;
       /**
-       * Work item key prefix of the box: the acronym of the workspace project
-       * (`Student Support Portal` -> `SSP`), never the sprint name.
+       * Work item key prefix of the box: the prefix configured for the
+       * workspace (`FA`) wins, because it is the one the backend numbers the
+       * tasks with; otherwise the acronym of the workspace project
+       * (`Student Support Portal` -> `SSP`). The sprint name is never used, so
+       * two sprints of the same project share the same key prefix.
        */
-      const prefix = projectKeyOf(
-        sectionProjectId == null ? null : projectNames.get(sectionProjectId),
-      );
+      const prefix =
+        taskKeyPrefix?.trim() ||
+        projectKeyOf(
+          sectionProjectId == null ? null : projectNames.get(sectionProjectId),
+        );
 
       return {
         key: sprint?.id != null ? sprintSectionKey(sprint.id) : BACKLOG_SECTION_KEY,
@@ -519,7 +532,14 @@ export function BacklogBoard({
       .map((sprint) => build(sprint, groupedItems.get(sprint.id as number) ?? []));
 
     return [...sprintSections, build(null, groupedItems.get(null) ?? [])];
-  }, [groupedItems, matchesFilters, projectNames, scopedProjectId, sprints]);
+  }, [
+    groupedItems,
+    matchesFilters,
+    projectNames,
+    scopedProjectId,
+    sprints,
+    taskKeyPrefix,
+  ]);
 
   const allCollapsed =
     sections.length > 0 && sections.every((section) => !!collapsed[section.key]);

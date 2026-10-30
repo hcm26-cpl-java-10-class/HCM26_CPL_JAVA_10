@@ -2,6 +2,8 @@ package com.example.starter_project_2025.system.project.template;
 
 import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
+import com.example.starter_project_2025.system.project.cohort.CohortRepository;
+import com.example.starter_project_2025.system.project.trainingclass.TrainingClassRepository;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshotService;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneRepository;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneScheduleValidator;
@@ -36,6 +38,8 @@ public class ProjectTemplateService {
             "estimatedDurationWeeks", "templateVersion", "status", "createdAt", "updatedAt");
 
     private final ProjectTemplateRepository templates;
+    private final CohortRepository cohorts;
+    private final TrainingClassRepository trainingClasses;
     private final ProjectTemplateAuditRepository audits;
     private final ProjectTemplateAccessService access;
     private final ProjectTemplateValidator validator;
@@ -44,14 +48,29 @@ public class ProjectTemplateService {
     private final TemplateTeamConstraintsMapper teamConstraintsMapper;
     private final ObjectMapper objectMapper;
     private final OutboxEventRepository events;
+    private final TemplateConfigurationService configurations;
     /** US-07: every template owns a version chain, seeded with its v1.0 baseline. */
     private final ProjectTemplateSnapshotService snapshotService;
 
     public ProjectTemplateOptions getOptions() {
         User user = access.requireUser("READ");
         return new ProjectTemplateOptions(user.getTenantId(), user.getTenant().getName(),
-                templates.findCategories(user.getTenantId()), access.can(user, "CREATE"), access.can(user, "UPDATE"),
+                categories(user.getTenantId()), access.can(user, "CREATE"), access.can(user, "UPDATE"),
                 access.can(user, "ACTIVATE"), access.can(user, "ARCHIVE"));
+    }
+
+    public record CohortOption(Long id, String name) {}
+
+    public List<CohortOption> getCohortOptions() {
+        User user = access.requireUser("READ");
+        var options = new java.util.TreeMap<Long, String>();
+        cohorts.findAllByTenant_IdAndIsActiveTrueOrderByNameAsc(user.getTenantId())
+                .forEach(cohort -> options.put(cohort.getId(), cohort.getName()));
+        trainingClasses.findAllByTenantIdAndCohortIdIsNotNull(user.getTenantId())
+                .forEach(trainingClass -> options.putIfAbsent(trainingClass.getCohortId(),
+                        trainingClass.getCohortName() == null ? "Cohort " + trainingClass.getCohortId()
+                                : trainingClass.getCohortName()));
+        return options.entrySet().stream().map(entry -> new CohortOption(entry.getKey(), entry.getValue())).toList();
     }
 
     public Page<ProjectTemplateResponse> getPage(String search, ProjectTemplateStatus status,
@@ -68,6 +87,7 @@ public class ProjectTemplateService {
                     builder.isNull(root.get("tenantId")),
                     builder.equal(root.get("tenantId"), user.getTenantId())));
             conditions.add(builder.isTrue(root.get("isActive")));
+            conditions.add(builder.or(builder.isNull(root.get("code")), builder.notEqual(root.get("code"), "MANUAL-GROUPING-DEFAULT")));
             if (status != null) conditions.add(builder.equal(root.get("status"), status));
             if (level != null) conditions.add(builder.equal(root.get("level"), level));
             if (category != null && !category.isBlank()) {
@@ -93,6 +113,7 @@ public class ProjectTemplateService {
     public ProjectTemplateResponse create(ProjectTemplateRequest request) {
         User user = access.requireUser("CREATE");
         validator.validate(request, false);
+        requireCategory(request.category(), user.getTenantId());
         String code = request.code().strip();
         if (templates.existsByTenantIdAndCodeAndTemplateVersion(user.getTenantId(), code, 1)) {
             throw ProjectTemplateException.duplicateCode();
@@ -114,6 +135,7 @@ public class ProjectTemplateService {
             throw ProjectTemplateException.conflict("Only draft templates can be edited");
         }
         validator.validate(request, true);
+        requireCategory(request.category(), user.getTenantId());
         if (!template.getLockVersion().equals(request.lockVersion().longValueExact())) {
             throw ProjectTemplateException.conflict("This template has changed. Reload it before saving your changes");
         }
@@ -127,6 +149,7 @@ public class ProjectTemplateService {
         String beforeState = state(template);
         apply(template, request);
         template = templates.saveAndFlush(template);
+        configurations.refreshDraft(template);
         recordAudit(template, user, "PROJECT_TEMPLATE_UPDATED", beforeState);
         return response(template, true);
     }
@@ -146,6 +169,7 @@ public class ProjectTemplateService {
         template.setConstraintsJson(teamConstraintsMapper.write(template.getConstraintsJson(), request));
         template.setUpdatedAt(LocalDateTime.now());
         template = templates.saveAndFlush(template);
+        configurations.refreshDraft(template);
         recordAudit(template, user, "PROJECT_TEMPLATE_TEAM_RULES_UPDATED", beforeState);
         return response(template, true);
     }
@@ -177,14 +201,6 @@ public class ProjectTemplateService {
         return response(template, false);
     }
 
-    public void rejectDelete(Long id) {
-        User user = access.requireUser("ARCHIVE");
-        findTemplate(id, user);
-        throw new ProjectTemplateException(422,
-                "Project templates cannot be permanently deleted. Archive an active template instead to preserve linked data",
-                Map.of());
-    }
-
     private void requireArchiveRevision(TemplateArchiveRequest request) {
         try {
             if (request != null && request.lockVersion() != null && request.lockVersion().longValueExact() >= 0) return;
@@ -198,18 +214,14 @@ public class ProjectTemplateService {
         return ProjectTemplateResponse.from(template, canUpdate, teamConstraintsMapper.read(template.getConstraintsJson()));
     }
 
-    /**
-     * Resolves tenant-owned and shared ({@code tenant_id is null}) templates.
-     * Status, not ownership, decides which actions are allowed: DRAFT templates
-     * can be edited, ACTIVE templates can be assigned to a team.
-     */
     private ProjectTemplate findTemplate(Long id, User user) {
-        return templates.findReadableById(id, user.getTenantId())
+        return templates.findForTemplateUpdate(id, user.getTenantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project template was not found"));
     }
 
     private ProjectTemplate findReadableTemplate(Long id, User user) {
-        return findTemplate(id, user);
+        return templates.findReadableById(id, user.getTenantId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project template was not found"));
     }
 
     /** Audit/event tenant: shared rows are recorded under the acting user's tenant. */
@@ -217,13 +229,51 @@ public class ProjectTemplateService {
         return template.getTenantId() != null ? template.getTenantId() : user.getTenantId();
     }
 
+    private List<String> categories(Long tenantId) {
+        return java.util.stream.Stream.concat(java.util.stream.Stream.of("Web Application", "Mobile Application", "Data Analytics", "Capstone", "Cross-functional"),
+                templates.findCategories(tenantId).stream()).filter(value -> value != null && !value.isBlank())
+                .distinct().sorted().toList();
+    }
+
+    private void requireCategory(String category, Long tenantId) {
+        if (!categories(tenantId).contains(category.strip())) {
+            throw new ProjectTemplateException(422, "Select a category from the list", Map.of("category", List.of("Select an available category")));
+        }
+    }
+
     private void apply(ProjectTemplate template, ProjectTemplateRequest request) {
+        if (request.cohortId() != null && (request.cohortId() <= 0
+                || (!trainingClasses.existsByTenantIdAndCohortId(template.getTenantId(), request.cohortId())
+                    && cohorts.findById(request.cohortId())
+                        .filter(cohort -> cohort.getTenant() != null
+                                && cohort.getTenant().getId().equals(template.getTenantId()))
+                        .isEmpty()))) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                    "Cohort must belong to the template tenant");
+        }
         template.setCode(request.code().strip());
         template.setName(request.name().strip());
         template.setDescription(request.description().strip());
         template.setCategory(request.category().strip());
         template.setLevel(request.level());
         template.setEstimatedDurationWeeks(request.estimatedDurationWeeks().intValueExact());
+        template.setCohortId(request.cohortId());
+        template.setTechnologies(normalizeTags(request.technologies(), 80));
+        template.setTargetRoles(normalizeTags(request.targetRoles(), 80));
+        template.setLearningOutcomes(normalizeTags(request.learningOutcomes(), 120));
+    }
+
+    private java.util.Set<String> normalizeTags(java.util.Set<String> values, int maxLength) {
+        if (values == null) return new java.util.HashSet<>();
+        if (values.size() > 30) throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Too many tags");
+        java.util.Set<String> result = new java.util.HashSet<>();
+        for (String value : values) {
+            if (value == null || value.isBlank() || value.strip().length() > maxLength) {
+                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Invalid template tag");
+            }
+            result.add(value.strip().toUpperCase(Locale.ROOT));
+        }
+        return result;
     }
 
     private void recordAudit(ProjectTemplate template, User user, String action, String beforeState) {

@@ -70,6 +70,13 @@ public class Workspace extends BaseEntity {
     @Column(nullable = false, length = 32)
     private WorkspaceStatus status;
 
+    @Column(name = "task_key_prefix", length = 8)
+    @Builder.Default
+    private String taskKeyPrefix = "FA";
+
+    @Column(name = "board_columns_config", length = 2000)
+    private String boardColumnsConfig;
+
     @Builder.Default
     @ElementCollection
     @CollectionTable(name = "workspace_sections", joinColumns = @JoinColumn(name = "workspace_id"),

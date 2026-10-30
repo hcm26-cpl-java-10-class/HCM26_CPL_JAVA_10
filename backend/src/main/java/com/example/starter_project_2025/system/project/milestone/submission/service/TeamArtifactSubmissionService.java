@@ -24,6 +24,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,6 +56,8 @@ public class TeamArtifactSubmissionService {
     private final ArtifactContributionLock contributionLock;
     private final WorkspaceMilestoneScopeService milestoneScopeService;
     private final ArtifactReviewSubmissionSyncService reviewSyncService;
+    private final MilestoneSubmissionRepository milestoneSubmissionRepository;
+    private final MilestoneSubmissionWindow submissionWindow;
 
     @Transactional(readOnly = true)
     public ArtifactSubmissionWorkspaceResponse workspace(Long teamId, UUID milestoneId) {
@@ -70,7 +73,7 @@ public class TeamArtifactSubmissionService {
         var latest = submissionRepository.findTopByTenantIdAndTeamIdAndMilestoneIdAndSubmitterIdOrderByVersionDesc(
                 s.tenantId, teamId, milestoneId, s.actorId).map(this::submissionResponse).orElse(null);
         return new ArtifactSubmissionWorkspaceResponse(milestoneQueryService.getTeamDetail(teamId, milestoneId), draft,
-                new ArtifactUploadPolicyResponse(false, 0, Set.of()), latest);
+                new ArtifactUploadPolicyResponse(false, 0, Set.of()), latest, submissionWindow.canSubmitNow(milestone));
     }
 
     @Transactional
@@ -80,8 +83,7 @@ public class TeamArtifactSubmissionService {
         var milestone = milestoneRepository.findByIdAndTeamIdAndTenantId(milestoneId, teamId, s.tenantId)
                 .filter(com.example.starter_project_2025.system.project.milestone.domain.Milestone::isActive)
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
-        if (milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN
-                || milestone.getExecutionStatus() != com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus.IN_PROGRESS)
+        if (!submissionWindow.canSubmit(milestone))
             throw new ResourceNotFoundException("Milestone not available to students");
         validateUrl("repositoryUrl", request.repositoryUrl()); validateUrl("deploymentUrl", request.deploymentUrl());
         Map<UUID, Boolean> checklist = validateChecklist(milestone, request.checklist());
@@ -122,8 +124,7 @@ public class TeamArtifactSubmissionService {
                     .orElseThrow(() -> new IllegalStateException("Idempotent team submission is missing"));
         }
         requireActiveTeamWorkspace(teamId, s.tenantId);
-        if (milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN
-                || milestone.getExecutionStatus() != com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus.IN_PROGRESS)
+        if (!submissionWindow.canSubmit(milestone))
             throw new MilestoneConflictException("Milestone must be OPEN before students can submit artifacts");
         validateUrl("repositoryUrl", request.repositoryUrl()); validateUrl("deploymentUrl", request.deploymentUrl());
         Map<UUID, Boolean> checklist = validateChecklist(milestone, request.checklist());
@@ -133,6 +134,11 @@ public class TeamArtifactSubmissionService {
         if (late && (milestone.getLatePolicyType() != LatePolicyType.ALLOW_LATE || milestone.getLateUntil() == null || now.isAfter(milestone.getLateUntil())))
             throw validation("deadline", "The late policy does not accept submissions now");
         var previous = submissionRepository.findTopByTenantIdAndTeamIdAndMilestoneIdAndSubmitterIdOrderByVersionDesc(s.tenantId, teamId, milestoneId, s.actorId);
+        milestoneSubmissionRepository.findByMilestoneIdAndTeamId(milestoneId, teamId).ifPresent(sub -> {
+            if (sub.getStatus() == com.example.starter_project_2025.system.project.milestone.submission.domain.SubmissionStatus.REJECTED) {
+                throw new MilestoneConflictException("Submission was REJECTED (0 points). Resubmission is not permitted.");
+            }
+        });
         long version = previous.map(row -> row.getVersion() + 1).orElse(1L);
         String checklistJson = write(checklist);
         var row = submissionRepository.saveAndFlush(MilestoneArtifactSubmission.submit(s.tenantId, s.projectId, teamId,
@@ -151,7 +157,7 @@ public class TeamArtifactSubmissionService {
 
     @Transactional
     public List<TeamSubmissionView> submissions(Long teamId, UUID milestoneId) {
-        Scope s = reviewerScope(teamId);
+        Scope s = submissionScope(teamId);
         var rows = milestoneId == null ? submissionRepository.findByTenantIdAndTeamIdOrderBySubmittedAtDesc(s.tenantId, teamId)
                 : submissionRepository.findByTenantIdAndTeamIdAndMilestoneIdOrderBySubmittedAtDesc(s.tenantId, teamId, milestoneId);
         Map<UUID, com.example.starter_project_2025.system.rbac.user.User> actors = new HashMap<>();
@@ -193,6 +199,17 @@ public class TeamArtifactSubmissionService {
         UUID actor = actorProvider.requireCurrentActorId(); Long tenant = tenantProvider.requireCurrentTenantId();
         var milestoneScope = milestoneScopeService.requireTeamScope(null, teamId, tenant);
         scopePort.requireStudentTeamAccess(teamId, actor, tenant);
+        return new Scope(actor, tenant, milestoneScope.projectId());
+    }
+    private Scope submissionScope(Long teamId) {
+        UUID actor = actorProvider.requireCurrentActorId(); Long tenant = tenantProvider.requireCurrentTenantId();
+        var milestoneScope = milestoneScopeService.requireTeamScope(null, teamId, tenant);
+        try {
+            scopePort.requireReviewerTeamAccess(teamId, actor, tenant);
+        } catch (AccessDeniedException e) {
+            scopePort.requireStudentTeamAccess(teamId, actor, tenant);
+        }
+        if (!milestoneRepository.existsByTeamIdAndTenantIdAndActiveTrue(teamId, tenant)) throw new ResourceNotFoundException("Team milestone not found");
         return new Scope(actor, tenant, milestoneScope.projectId());
     }
     private Scope reviewerScope(Long teamId) {

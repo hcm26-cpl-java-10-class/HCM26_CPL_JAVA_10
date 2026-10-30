@@ -1089,8 +1089,10 @@ public class ProjectTemplateSnapshotServiceImpl
                         .collect(Collectors.toSet()));
 
         rows.forEach(row -> {
-            row.setTemplateName(templateNames.get(row.getTemplateId()));
-            row.setProjectName(projectNames.get(row.getProjectId()));
+            Long templateId = row.getTemplateId();
+            Long projectId = row.getProjectId();
+            row.setTemplateName(templateId == null ? null : templateNames.get(templateId));
+            row.setProjectName(projectId == null ? null : projectNames.get(projectId));
         });
     }
 

@@ -8,6 +8,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ProjectRepository extends BaseCrudRepository<Project, Long> {
 
+    boolean existsByTemplateSnapshotIdIn(java.util.Collection<Long> snapshotIds);
+
     java.util.Optional<Project> findByCode(String code);
     java.util.Optional<Project> findByCodeAndTenantId(String code, Long tenantId);
     java.util.List<Project> findByTenantIdAndIsActiveTrue(Long tenantId);

@@ -44,7 +44,8 @@ public class TemplateActivationService {
     public TemplateActivationChecklist getChecklist(Long id) {
         User user = access.requireUser("READ");
         ProjectTemplate template = findReadableTemplate(id, user);
-        return checklist(template, loadMilestones(id), access.can(user, "ACTIVATE"), tenantOf(template, user));
+        return checklist(template, loadMilestones(id), access.can(user, "ACTIVATE") && template.getTenantId() != null,
+                tenantOf(template, user));
     }
 
     @Transactional
@@ -80,7 +81,8 @@ public class TemplateActivationService {
             boolean canActivate, Long tenantId) {
         var overview = errors(() -> validator.validate(new ProjectTemplateRequest(template.getCode(), template.getName(),
                 template.getDescription(), template.getCategory(), template.getLevel(),
-                decimal(template.getEstimatedDurationWeeks()), null), false));
+                decimal(template.getEstimatedDurationWeeks()), null, template.getCohortId(),
+                template.getTechnologies(), template.getTargetRoles(), template.getLearningOutcomes()), false));
         var team = teamErrors(template);
         var input = TemplateMilestonePlanRequest.from(template.getLockVersion(), plan);
         var milestoneErrors = errors(() -> milestoneValidator.validate(input));
@@ -141,14 +143,14 @@ public class TemplateActivationService {
                 Map.of("lockVersion", List.of("A valid template revision is required. Please reload the template")));
     }
 
-    /** Resolves tenant-owned and shared templates; only DRAFT rows may be activated. */
     private ProjectTemplate findTemplate(Long id, User user) {
-        return templates.findReadableById(id, user.getTenantId())
+        return templates.findForTemplateUpdate(id, user.getTenantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project template was not found"));
     }
 
     private ProjectTemplate findReadableTemplate(Long id, User user) {
-        return findTemplate(id, user);
+        return templates.findReadableById(id, user.getTenantId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project template was not found"));
     }
 
     /** Audit/rubric tenant: shared rows use the acting user's tenant. */

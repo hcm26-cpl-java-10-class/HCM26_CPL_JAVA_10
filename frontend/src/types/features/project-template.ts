@@ -221,8 +221,12 @@ export interface ProjectTemplateDTO {
   createdAt: string;
   updatedAt: string;
   editable: boolean;
-  /** @deprecated Kept for API compatibility; editability is driven by `status` (DRAFT only). */
+  /** Shared catalogue row (tenant_id is null): readable by every tenant, never editable. */
   readOnly: boolean;
+  cohortId: number | null;
+  technologies: string[];
+  targetRoles: string[];
+  learningOutcomes: string[];
 }
 
 export interface ProjectTemplatePayload {
@@ -233,6 +237,10 @@ export interface ProjectTemplatePayload {
   level: ProjectTemplateLevel;
   estimatedDurationWeeks: number;
   lockVersion?: number;
+  cohortId?: number | null;
+  technologies?: string[];
+  targetRoles?: string[];
+  learningOutcomes?: string[];
 }
 
 export interface ProjectTemplateFilter {

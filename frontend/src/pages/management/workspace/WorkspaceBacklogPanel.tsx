@@ -10,9 +10,16 @@ interface WorkspaceBacklogPanelProps {
   teamId?: number | null;
   /**
    * Name of the workspace project. The board turns it into the key prefix of
-   * its work items (`Student Support Portal` -> `SSP`).
+   * its work items (`Student Support Portal` -> `SSP`) when the workspace does
+   * not configure a prefix of its own.
    */
   projectName?: string | null;
+  /**
+   * Key prefix the workspace numbers its tasks with (`FA` by default). It is
+   * forwarded so the work item keys of the board match the task keys the
+   * backend generates for the same workspace.
+   */
+  taskKeyPrefix?: string | null;
 }
 
 /**
@@ -29,6 +36,7 @@ export function WorkspaceBacklogPanel({
   projectId = null,
   teamId = null,
   projectName = null,
+  taskKeyPrefix = null,
 }: WorkspaceBacklogPanelProps) {
   return (
     <BacklogBoard
@@ -36,6 +44,7 @@ export function WorkspaceBacklogPanel({
       projectId={projectId}
       teamId={teamId}
       projectName={projectName}
+      taskKeyPrefix={taskKeyPrefix}
     />
   );
 }

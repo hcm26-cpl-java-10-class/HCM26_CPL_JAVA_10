@@ -6,7 +6,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 public record RubricListItemResponse(
-        UUID id, String name, String description, int versionCount,
+        UUID id, UUID rowId, String name, String description, int versionCount, boolean hasDraft,
         UUID latestVersionId, int latestVersionNumber, RubricVersionStatus latestStatus,
         BigDecimal totalMaxScore, int criteriaCount, long milestoneUsageCount, Instant updatedAt
 ) {}

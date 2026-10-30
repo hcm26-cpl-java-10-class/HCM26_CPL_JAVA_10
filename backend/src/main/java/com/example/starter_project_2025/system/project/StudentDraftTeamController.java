@@ -27,6 +27,12 @@ public class StudentDraftTeamController {
     private final ProjectTeamTemplateService teamTemplateService;
     private final ProjectTeamRoleService teamRoleService;
 
+    @GetMapping("/template-options")
+    @PreAuthorize("hasRole('STUDENT')")
+    public List<ProjectTemplateOptionResponse> getTemplateOptions() {
+        return teamTemplateService.getAssignableTemplates();
+    }
+
     @GetMapping
     @PreAuthorize("isAuthenticated()")
     public List<TeamProjectTemplateResponse> getMyDraftTeams(Authentication authentication) {

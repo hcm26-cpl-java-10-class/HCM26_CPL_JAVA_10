@@ -53,7 +53,7 @@ public record SprintPlanningItemDTO(
 
         return switch (status) {
             case TODO -> "SPRINT_BACKLOG";
-            case IN_PROGRESS, REVIEW -> "IN_PROGRESS";
+            case IN_PROGRESS, REVIEW, CUSTOM_1, CUSTOM_2, CUSTOM_3, CUSTOM_4, CUSTOM_5 -> "IN_PROGRESS";
             case BLOCKED -> "BLOCKED";
             case DONE -> "DONE";
         };

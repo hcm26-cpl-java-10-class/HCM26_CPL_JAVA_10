@@ -9,22 +9,27 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { ProjectTemplateDTO, ProjectTemplateLevel, ProjectTemplateOptions, ProjectTemplatePayload } from "@/types/features/project-template";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, ArrowLeft, Loader2, Save } from "lucide-react";
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 import { getTemplateError, templateLevelOptions, toTemplateFormValues, validateTemplateForm,
+  descriptionWordCount, maxDescriptionWords,
   type TemplateFieldErrors, type TemplateFormValues } from "../project-template.utils";
 
-function TemplateField({ name, label, errors, children }: {
+function TemplateField({ name, label, errors, suffix, children }: {
   name: string;
   label: string;
   errors?: string[];
+  suffix?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <div className="grid content-start gap-2">
-      <Label htmlFor={`template-${name}`}>{label} <span className="text-destructive">*</span></Label>
+    <div className="grid min-w-0 content-start gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Label htmlFor={`template-${name}`}>{label} <span className="text-destructive">*</span></Label>
+        {suffix}
+      </div>
       {children}
       <div id={`template-${name}-error`} aria-live="polite"><FieldError errors={errors} /></div>
     </div>
@@ -40,8 +45,13 @@ export function ProjectTemplateForm({ template, options, minimumDurationWeeks = 
 }) {
   const queryClient = useQueryClient();
   const [values, setValues] = useState(() => toTemplateFormValues(template));
+  const wordCount = descriptionWordCount(values.description);
+  const categories = [...new Set([...options.categories, ...(template?.category ? [template.category] : [])])];
   const [lockVersion] = useState(template?.lockVersion);
   const [minimumDuration] = useState(minimumDurationWeeks);
+  const [cohortId, setCohortId] = useState<number | null>(template?.cohortId ?? null);
+  const cohorts = useQuery({ queryKey: ["project-templates", "cohorts", options.tenantId],
+    queryFn: ({ signal }) => projectTemplateApi.getCohorts(signal) });
   const [errors, setErrors] = useState<TemplateFieldErrors>({});
   const [submitError, setSubmitError] = useState<ReturnType<typeof getTemplateError> | null>(null);
   const submitting = useRef(false);
@@ -75,6 +85,7 @@ export function ProjectTemplateForm({ template, options, minimumDurationWeeks = 
       return;
     }
     submitting.current = true;
+    const tags = (value: string) => value.split(",").map((tag) => tag.trim()).filter(Boolean);
     mutation.mutate({
       code: values.code.trim(),
       name: values.name.trim(),
@@ -82,17 +93,21 @@ export function ProjectTemplateForm({ template, options, minimumDurationWeeks = 
       category: values.category.trim(),
       level: values.level as ProjectTemplateLevel,
       estimatedDurationWeeks: Number(values.estimatedDurationWeeks),
+      cohortId,
+      technologies: tags(values.technologies),
+      targetRoles: tags(values.targetRoles),
+      learningOutcomes: tags(values.learningOutcomes),
       ...(template ? { lockVersion } : {}),
     });
   };
   const inputProps = (field: keyof TemplateFormValues) => ({
     id: `template-${field}`,
-    "aria-invalid": !!errors[field]?.length,
-    "aria-describedby": `template-${field}-error`,
+    "aria-invalid": !!errors[field]?.length || field === "description" && wordCount > maxDescriptionWords,
+    "aria-describedby": `template-${field}-error${field === "description" ? " template-description-count" : ""}`,
   });
 
   return (
-    <form onSubmit={submit} noValidate aria-busy={mutation.isPending} className="grid gap-5">
+    <form onSubmit={submit} noValidate aria-busy={mutation.isPending} className="grid min-w-0 grid-cols-1 gap-5">
       {submitError && (
         <Alert variant="destructive">
           <AlertCircle />
@@ -101,7 +116,7 @@ export function ProjectTemplateForm({ template, options, minimumDurationWeeks = 
         </Alert>
       )}
       <fieldset disabled={mutation.isPending} className="min-w-0">
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -111,7 +126,7 @@ export function ProjectTemplateForm({ template, options, minimumDurationWeeks = 
               <div className="flex flex-wrap gap-2"><Badge variant="secondary">Draft</Badge><Badge variant="outline">Version {template?.templateVersion ?? 1}</Badge></div>
             </div>
           </CardHeader>
-          <CardContent className="grid gap-5">
+          <CardContent className="grid min-w-0 grid-cols-1 gap-5">
             <div className="grid gap-5 md:grid-cols-2">
               <TemplateField name="code" label="Code" errors={errors.code}>
                 <Input {...inputProps("code")} value={values.code} onChange={(event) => change("code", event.target.value)} placeholder="E.g. PRJ-WEB-01" autoComplete="off" />
@@ -121,14 +136,23 @@ export function ProjectTemplateForm({ template, options, minimumDurationWeeks = 
                 <Input {...inputProps("name")} value={values.name} onChange={(event) => change("name", event.target.value)} placeholder="E.g. Learning Resource Portal" />
               </TemplateField>
             </div>
-            <TemplateField name="description" label="Description" errors={errors.description}>
-              <Textarea {...inputProps("description")} rows={7} value={values.description} onChange={(event) => change("description", event.target.value)}
+            <TemplateField name="description" label="Description" errors={errors.description} suffix={
+              <span id="template-description-count" role="status"
+                className={`text-xs tabular-nums ${wordCount > maxDescriptionWords ? "text-destructive" : "text-muted-foreground"}`}>
+                {wordCount.toLocaleString("en-US")} / {maxDescriptionWords.toLocaleString("en-US")} words
+              </span>
+            }>
+              <Textarea {...inputProps("description")} rows={7} wrap="soft"
+                className="min-w-0 max-w-full resize-y whitespace-pre-wrap [field-sizing:fixed] [overflow-wrap:anywhere]"
+                value={values.description} onChange={(event) => change("description", event.target.value)}
                 placeholder="Describe the project background, objectives and expected scope." />
             </TemplateField>
             <div className="grid gap-5 md:grid-cols-3">
               <TemplateField name="category" label="Domain / category" errors={errors.category}>
-                <Input {...inputProps("category")} list="template-categories" value={values.category} onChange={(event) => change("category", event.target.value)} placeholder="Select or enter a category" autoComplete="off" />
-                <datalist id="template-categories">{options.categories.map((category) => <option key={category} value={category} />)}</datalist>
+                <Select value={values.category} onValueChange={(value) => change("category", value)} disabled={mutation.isPending}>
+                  <SelectTrigger {...inputProps("category")} className="w-full"><SelectValue placeholder="Select a category" /></SelectTrigger>
+                  <SelectContent>{categories.map((category) => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent>
+                </Select>
               </TemplateField>
               <TemplateField name="level" label="Level" errors={errors.level}>
                 <Select value={values.level} onValueChange={(value) => change("level", value as ProjectTemplateLevel)} disabled={mutation.isPending}>
@@ -143,6 +167,35 @@ export function ProjectTemplateForm({ template, options, minimumDurationWeeks = 
                   Saved milestones require at least {minimumDuration} weeks. To use a shorter duration, update the milestone schedule first.
                 </p>}
               </TemplateField>
+            </div>
+            <div className="grid gap-5 md:grid-cols-3">
+              <div className="grid gap-2">
+                <Label htmlFor="template-cohort">Cohort scope</Label>
+                <select id="template-cohort" className="h-9 rounded-md border bg-background px-3 text-sm"
+                  value={cohortId ?? ""} onChange={(event) => setCohortId(event.target.value ? Number(event.target.value) : null)}>
+                  <option value="">All cohorts in this tenant</option>
+                  {cohorts.data?.map((cohort) => <option key={cohort.id} value={cohort.id}>{cohort.name}</option>)}
+                </select>
+                {cohorts.isError && <p className="text-xs text-destructive">Could not load cohorts.</p>}
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="template-technologies">Technologies</Label>
+                <Input {...inputProps("technologies")} value={values.technologies}
+                  onChange={(event) => change("technologies", event.target.value)} placeholder="React, Java" />
+                <FieldError errors={errors.technologies} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="template-targetRoles">Target roles</Label>
+                <Input {...inputProps("targetRoles")} value={values.targetRoles}
+                  onChange={(event) => change("targetRoles", event.target.value)} placeholder="FULLSTACK, QA" />
+                <FieldError errors={errors.targetRoles} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="template-learningOutcomes">Learning outcomes</Label>
+                <Input {...inputProps("learningOutcomes")} value={values.learningOutcomes}
+                  onChange={(event) => change("learningOutcomes", event.target.value)} placeholder="REST API, Testing" />
+                <FieldError errors={errors.learningOutcomes} />
+              </div>
             </div>
           </CardContent>
         </Card>

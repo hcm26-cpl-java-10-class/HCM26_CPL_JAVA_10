@@ -199,9 +199,9 @@ export default function ArtifactDraftPage() {
   return <MainLayout pathName={{ projects: "Dự án", [projectId ?? "project"]: milestone.project.name, milestones: "Milestone", [milestone.id]: milestone.title, submit: "Chuẩn bị artifact" }}>
     <main className="mx-auto grid w-full max-w-5xl gap-5">
       {reviewSubmissionQuery.data?.status === "CHANGES_REQUESTED" ? <Alert className="border-amber-400 bg-amber-50 dark:bg-amber-950/20"><RotateCcw /><AlertTitle>Đang chuẩn bị bài nộp lại Version {reviewSubmissionQuery.data.currentVersionNumber + 1}</AlertTitle><AlertDescription><p>{reviewSubmissionQuery.data.reviews[0]?.overallFeedback || "Hãy cập nhật sản phẩm theo feedback của reviewer."}</p><Button className="mt-2" size="sm" variant="outline" onClick={() => navigate(`/student/milestone-submissions/${reviewSubmissionQuery.data?.id}`)}>Xem toàn bộ feedback</Button></AlertDescription></Alert> : null}
-      {milestone.status !== "OPEN" && <Alert><AlertCircle /><AlertTitle>Milestone chưa mở nhận bài</AlertTitle><AlertDescription>Bạn vẫn có thể chuẩn bị và lưu nháp. Chỉ có thể Review &amp; submit sau khi người phụ trách mở milestone.</AlertDescription></Alert>}
+      {!workspaceQuery.data.canSubmit && <Alert><AlertCircle /><AlertTitle>Milestone chưa mở nhận bài</AlertTitle><AlertDescription>Bạn chỉ có thể chuẩn bị và nộp artifact khi milestone đang IN_PROGRESS hoặc được yêu cầu nộp lại và còn trong hạn.</AlertDescription></Alert>}
       <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-background"><CardHeader>
-        <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><span>Trạng thái milestone: {milestone.status}</span><span>·</span><span>Hạn: {formatTenantDateTime(milestone.deadline, milestone.tenantTimeZone)}</span></div><Button asChild size="sm" variant="outline"><Link to="/student/milestone-submissions"><Eye className="size-4" /> Xem bài nộp của tôi</Link></Button></div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><span>Trạng thái milestone: {milestone.lifecycleStatus}</span><span>·</span><span>Hạn: {formatTenantDateTime(milestone.deadline, milestone.tenantTimeZone)}</span></div><Button asChild size="sm" variant="outline"><Link to="/student/milestone-submissions"><Eye className="size-4" /> Xem bài nộp của tôi</Link></Button></div>
         <CardTitle className="text-2xl">Chuẩn bị sản phẩm: {milestone.title}</CardTitle><CardDescription>{milestone.description}</CardDescription>
         <div className="flex items-center gap-2 pt-2 text-xs text-muted-foreground"><ShieldCheck className="size-4 text-emerald-600" /> Dữ liệu được kiểm tra quyền truy cập ở backend</div>
       </CardHeader></Card>
@@ -261,14 +261,14 @@ export default function ArtifactDraftPage() {
 
       {reviewing && <Card className="border-primary/30"><CardHeader><CardTitle>Xem lại sản phẩm sẽ nộp</CardTitle><CardDescription>Xác nhận để tạo một phiên bản SUBMITTED mới. Phiên bản đã nộp trước đây sẽ được giữ nguyên.</CardDescription></CardHeader><CardContent className="grid gap-2 text-sm">
         <p><strong>Repository:</strong> {repositoryUrl || "Chưa cung cấp"}</p><p><strong>Deployment:</strong> {deploymentUrl || "Chưa cung cấp"}</p><p><strong>Tệp:</strong> {attachments.length} tệp đã tải lên và quét sạch</p><p><strong>Checklist:</strong> {Object.values(checklist).filter(Boolean).length}/{milestone.checklist.length} tiêu chí</p>
-        <Button onClick={submitOfficially} disabled={milestone.status !== "OPEN" || submissionMutation.isPending || uploadMutation.isPending}>
+        <Button onClick={submitOfficially} disabled={!workspaceQuery.data.canSubmit || submissionMutation.isPending || uploadMutation.isPending}>
           {submissionMutation.isPending ? "Đang gửi…" : "Xác nhận nộp"}
         </Button>
       </CardContent></Card>}
 
       <div className="flex flex-wrap justify-between gap-3"><Button variant="outline" onClick={() => navigate(-1)}><ArrowLeft /> Quay lại</Button><div className="flex flex-wrap gap-2">
-        <Button variant="outline" onClick={() => setReviewing((value) => !value)} disabled={milestone.status !== "OPEN" || submissionMutation.isPending}><Eye /> {reviewing ? "Đóng xem trước" : "Review & submit"}</Button>
-        <Button onClick={submitDraft} disabled={saveMutation.isPending || submissionMutation.isPending}><Save /> {saveMutation.isPending ? "Đang lưu…" : "Lưu nháp"}</Button>
+        <Button variant="outline" onClick={() => setReviewing((value) => !value)} disabled={!workspaceQuery.data.canSubmit || submissionMutation.isPending}><Eye /> {reviewing ? "Đóng xem trước" : "Review & submit"}</Button>
+        <Button onClick={submitDraft} disabled={!workspaceQuery.data.canSubmit || saveMutation.isPending || submissionMutation.isPending}><Save /> {saveMutation.isPending ? "Đang lưu…" : "Lưu nháp"}</Button>
       </div></div>
     </main>
   </MainLayout>;

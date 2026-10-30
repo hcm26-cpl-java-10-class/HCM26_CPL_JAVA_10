@@ -63,6 +63,18 @@ public class OutboxEvent {
         return event;
     }
 
+    public static OutboxEvent milestoneStarted(UUID milestoneId, String payloadJson, Instant now) {
+        OutboxEvent event = milestoneCreated(milestoneId, payloadJson, now);
+        event.eventType = "MILESTONE_STARTED";
+        return event;
+    }
+
+    public static OutboxEvent milestoneRejected(UUID milestoneId, String payloadJson, Instant now) {
+        OutboxEvent event = milestoneCreated(milestoneId, payloadJson, now);
+        event.eventType = "MILESTONE_REJECTED";
+        return event;
+    }
+
     public static OutboxEvent templateSampleContentUpdated(Long tenantId, Long templateId, String payloadJson, Instant now) {
         UUID aggregateId = UUID.nameUUIDFromBytes(("project-template:" + tenantId + ":" + templateId)
                 .getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -75,6 +87,12 @@ public class OutboxEvent {
     public static OutboxEvent templateArchived(Long tenantId, Long templateId, String payloadJson, Instant now) {
         OutboxEvent event = templateSampleContentUpdated(tenantId, templateId, payloadJson, now);
         event.eventType = "PROJECT_TEMPLATE_ARCHIVED";
+        return event;
+    }
+
+    public static OutboxEvent templateDeleted(Long tenantId, Long templateId, String payloadJson, Instant now) {
+        OutboxEvent event = templateSampleContentUpdated(tenantId, templateId, payloadJson, now);
+        event.eventType = "PROJECT_TEMPLATE_DELETED";
         return event;
     }
 

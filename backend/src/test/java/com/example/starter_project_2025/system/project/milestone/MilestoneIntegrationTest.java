@@ -35,6 +35,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -67,17 +68,107 @@ class MilestoneIntegrationTest {
     private String studentToken;
 
     @Test
+    void createWithOffsetStartsWhenOpeningTimeHasArrived() throws Exception {
+        Map<String, Object> request = new LinkedHashMap<>(validRequest());
+        request.put("deadlineOffsetDays", 2);
+        request.put("deadline", Instant.now().plus(1, ChronoUnit.DAYS).toString());
+        String result = mockMvc.perform(post(endpoint())
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .header("Idempotency-Key", "scheduled-create-immediate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.lifecycleStatus").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.deadlineOffsetDays").value(2))
+                .andReturn().getResponse().getContentAsString();
+        var id = java.util.UUID.fromString(objectMapper.readTree(result).get("id").asText());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus.IN_PROGRESS,
+                milestoneRepository.findById(id).orElseThrow().lifecycleStatus());
+    }
+
+    @Test
+    void activeEditCreatesRevisionAndKeepsRubricSnapshot() throws Exception {
+        String id = createMilestoneAndGetId("Active revision", Instant.now().plusSeconds(7200), "active-revision");
+        openProjectMilestone(id);
+        var before = milestoneRepository.findById(java.util.UUID.fromString(id)).orElseThrow();
+        var rubricId = before.getRubricSnapshotId();
+        Instant extended = before.getDeadline().plusSeconds(3600);
+
+        mockMvc.perform(patch(endpoint() + "/" + id)
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "expectedVersion", before.getVersion(), "description", "Updated delivery guidance",
+                                "deadline", extended.toString()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lifecycleStatus").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.description").value("Updated delivery guidance"));
+
+        mockMvc.perform(get(endpoint() + "/" + id + "/revisions")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].revisionNumber").value(2))
+                .andExpect(jsonPath("$[0].snapshotJson").value(org.hamcrest.Matchers.containsString("Updated delivery guidance")))
+                .andExpect(jsonPath("$[1].revisionNumber").value(1));
+        org.junit.jupiter.api.Assertions.assertEquals(rubricId,
+                milestoneRepository.findById(java.util.UUID.fromString(id)).orElseThrow().getRubricSnapshotId());
+    }
+
+    @Test
+    void activeEditCanChangeDescriptionWithoutExtendingDeadline() throws Exception {
+        String id = createMilestoneAndGetId("Description only", Instant.now().plusSeconds(7200), "description-only");
+        openProjectMilestone(id);
+        var before = milestoneRepository.findById(java.util.UUID.fromString(id)).orElseThrow();
+        var deadline = before.getDeadline();
+        var rubricId = before.getRubricSnapshotId();
+
+        mockMvc.perform(patch(endpoint() + "/" + id)
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "expectedVersion", before.getVersion(),
+                                "description", "Updated instructions",
+                                "deadline", deadline.toString()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.description").value("Updated instructions"));
+
+        var after = milestoneRepository.findById(java.util.UUID.fromString(id)).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals(deadline, after.getDeadline());
+        org.junit.jupiter.api.Assertions.assertEquals(rubricId, after.getRubricSnapshotId());
+    }
+
+    @Test
     void incompleteMilestoneDraftIsPrivateCannotPublishAndCanBeSoftDeleted() throws Exception {
         String created = mockMvc.perform(post(endpoint() + "/drafts")
                         .header("Authorization", "Bearer " + teacherToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"teamId\":" + MockMilestoneData.TEAM_ID + ",\"title\":\"Incomplete draft\",\"mandatory\":true}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.lifecycleStatus").value("DRAFT"))
+                .andExpect(jsonPath("$.lifecycleStatus").value("PLANNED"))
                 .andReturn().getResponse().getContentAsString();
         var json = objectMapper.readTree(created);
         String id = json.get("id").asText();
         long version = json.get("version").asLong();
+        String edited = mockMvc.perform(put(endpoint() + "/" + id + "/draft")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"teamId\":" + MockMilestoneData.TEAM_ID
+                                + ",\"title\":\"Revised draft\",\"expectedVersion\":" + version + "}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        version = objectMapper.readTree(edited).get("version").asLong();
+        mockMvc.perform(get(endpoint() + "/" + id + "/draft-revisions")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].revisionNumber").value(2))
+                .andExpect(jsonPath("$[0].snapshotJson").value(org.hamcrest.Matchers.containsString("Revised draft")))
+                .andExpect(jsonPath("$[1].revisionNumber").value(1))
+                .andExpect(jsonPath("$[1].snapshotJson").value(org.hamcrest.Matchers.containsString("Incomplete draft")));
+        mockMvc.perform(get(endpoint()).param("lifecycleStatus", "PLANNED")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id == '" + id + "')]").exists());
         mockMvc.perform(get(endpoint() + "/" + id).header("Authorization", "Bearer " + studentToken))
                 .andExpect(status().isNotFound());
         mockMvc.perform(post(endpoint() + "/" + id + "/publish")
@@ -546,7 +637,7 @@ class MilestoneIntegrationTest {
         org.junit.jupiter.api.Assertions.assertEquals(1, artifactDraftRepository.count());
         org.junit.jupiter.api.Assertions.assertEquals(4, auditRepository.countByMilestoneId(
                 java.util.UUID.fromString(milestoneId)));
-        org.junit.jupiter.api.Assertions.assertEquals(3, outboxRepository.count());
+        org.junit.jupiter.api.Assertions.assertEquals(1, outboxRepository.countByEventType("ARTIFACT_DRAFT_SAVED"));
     }
 
     @Test
@@ -679,7 +770,7 @@ class MilestoneIntegrationTest {
         org.junit.jupiter.api.Assertions.assertEquals(1, idempotencyRepository.countByOperation("ARTIFACT_SUBMISSION"));
         org.junit.jupiter.api.Assertions.assertEquals(4, auditRepository.countByMilestoneId(
                 java.util.UUID.fromString(milestoneId)));
-        org.junit.jupiter.api.Assertions.assertEquals(3, outboxRepository.count());
+        org.junit.jupiter.api.Assertions.assertEquals(1, outboxRepository.countByEventType("ARTIFACT_SUBMITTED"));
         mockMvc.perform(get(endpoint() + "/" + milestoneId + "/artifact-draft")
                         .header("Authorization", "Bearer " + studentToken))
                 .andExpect(status().isOk())
@@ -735,7 +826,7 @@ class MilestoneIntegrationTest {
         org.junit.jupiter.api.Assertions.assertEquals(0, idempotencyRepository.countByOperation("ARTIFACT_SUBMISSION"));
         org.junit.jupiter.api.Assertions.assertEquals(3, auditRepository.countByMilestoneId(
                 java.util.UUID.fromString(milestoneId)));
-        org.junit.jupiter.api.Assertions.assertEquals(2, outboxRepository.count());
+        org.junit.jupiter.api.Assertions.assertEquals(0, outboxRepository.countByEventType("ARTIFACT_SUBMITTED"));
     }
 
     @Test
@@ -773,7 +864,7 @@ class MilestoneIntegrationTest {
         org.junit.jupiter.api.Assertions.assertEquals(1, idempotencyRepository.countByOperation("ARTIFACT_SUBMISSION"));
         org.junit.jupiter.api.Assertions.assertEquals(4, auditRepository.countByMilestoneId(
                 java.util.UUID.fromString(milestoneId)));
-        org.junit.jupiter.api.Assertions.assertEquals(3, outboxRepository.count());
+        org.junit.jupiter.api.Assertions.assertEquals(1, outboxRepository.countByEventType("ARTIFACT_SUBMITTED"));
     }
 
     @Test

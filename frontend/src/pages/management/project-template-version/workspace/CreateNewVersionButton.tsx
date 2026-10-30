@@ -4,7 +4,7 @@ import { PermissionGate } from "@/components/PermissionGate";
 import type { ProjectTemplateVersionDTO } from "@/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CopyPlus, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { CreateVersionDialog } from "./CreateVersionDialog";
 
@@ -58,6 +58,7 @@ export function CreateNewVersionButton({
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const pending = useRef(false);
 
   const templateId = version?.templateId ?? null;
 
@@ -78,7 +79,8 @@ export function CreateNewVersionButton({
     siblings.length > 0 ? siblings : version ? [version] : [];
 
   const handleConfirm = async () => {
-    if (!version?.id || loading) return;
+    if (!version?.id || pending.current) return;
+    pending.current = true;
 
     setLoading(true);
 
@@ -96,15 +98,17 @@ export function CreateNewVersionButton({
       await queryClient.invalidateQueries({
         queryKey: ["project-template-versions"],
       });
+      await queryClient.invalidateQueries({ queryKey: ["project-templates"] });
 
       toast.success(
-        `Đã tạo phiên bản ${created?.version ?? "mới"} ở trạng thái DRAFT.`,
+        `Version ${created?.version ?? "new"} created as a draft.`,
       );
     } catch (error) {
       toast.error(
-        extractErrorMessage(error, "Không thể tạo phiên bản mới."),
+        extractErrorMessage(error, "Unable to create a new version."),
       );
     } finally {
+      pending.current = false;
       setLoading(false);
     }
   };
@@ -125,7 +129,7 @@ export function CreateNewVersionButton({
       />
       <CreateVersionDialog
         open={open}
-        onOpenChange={setOpen}
+        onOpenChange={value => { if (!pending.current) setOpen(value); }}
         source={version}
         versions={knownVersions}
         loading={loading || versionsQuery.isFetching}

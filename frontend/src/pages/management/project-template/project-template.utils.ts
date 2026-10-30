@@ -20,9 +20,18 @@ export interface TemplateFormValues {
   category: string;
   level: ProjectTemplateLevel | "";
   estimatedDurationWeeks: string;
+  technologies: string;
+  targetRoles: string;
+  learningOutcomes: string;
 }
 
 export type TemplateFieldErrors = Partial<Record<keyof TemplateFormValues, string[]>>;
+
+export const maxDescriptionWords = 1000;
+
+export function descriptionWordCount(value: string): number {
+  return value.trim() ? value.trim().split(/\s+/u).length : 0;
+}
 
 export function toTemplateFormValues(template?: ProjectTemplateDTO): TemplateFormValues {
   return {
@@ -32,6 +41,9 @@ export function toTemplateFormValues(template?: ProjectTemplateDTO): TemplateFor
     category: template?.category ?? "",
     level: template?.level ?? "",
     estimatedDurationWeeks: template?.estimatedDurationWeeks?.toString() ?? "",
+    technologies: template?.technologies?.join(", ") ?? "",
+    targetRoles: template?.targetRoles?.join(", ") ?? "",
+    learningOutcomes: template?.learningOutcomes?.join(", ") ?? "",
   };
 }
 
@@ -54,10 +66,19 @@ export function validateTemplateForm(values: TemplateFormValues, minimumDuration
     }
   }
   if (!values.description.trim()) errors.description = ["Description is required"];
+  else if (descriptionWordCount(values.description) > maxDescriptionWords) {
+    errors.description = ["Description must not exceed 1000 words"];
+  }
   if (!templateLevelOptions.some((option) => option.value === values.level)) {
     errors.level = ["Select Beginner, Intermediate or Advanced"];
   }
   const duration = values.estimatedDurationWeeks.trim();
+  for (const field of ["technologies", "targetRoles", "learningOutcomes"] as const) {
+    const tags = values[field].split(",").map((tag) => tag.trim()).filter(Boolean);
+    if (tags.length > 30 || tags.some((tag) => tag.length > (field === "learningOutcomes" ? 120 : 80))) {
+      errors[field] = ["Use at most 30 comma-separated values with valid lengths"];
+    }
+  }
   if (!/^\d+$/.test(duration) || Number(duration) <= 0 || Number(duration) > 2147483647) {
     errors.estimatedDurationWeeks = ["Estimated duration must be a positive whole number of weeks"];
   } else if (Number(duration) < minimumDurationWeeks) {

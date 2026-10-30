@@ -34,7 +34,7 @@ import {
 import { usePermissions } from "@/hooks/usePermissions";
 import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
 import type { WorkspaceSectionAccess } from "@/types/features/workspace";
-import type { ArtifactSubmission, MilestoneResponse } from "@/types";
+import type { ArtifactSubmission, MilestoneListItem } from "@/types";
 
 interface MilestoneSubmissionHistoryItem {
   submission: ArtifactSubmission;
@@ -59,7 +59,7 @@ export function WorkspaceArtifactsPanel({
   const { activeRole } = usePermissions();
   const isStudent = normalizeRole(activeRole) === STUDENT_ROLE;
 
-  const [historyMilestone, setHistoryMilestone] = useState<MilestoneResponse | null>(null);
+  const [historyMilestone, setHistoryMilestone] = useState<MilestoneListItem | null>(null);
 
   // Load team milestones
   const milestonesQuery = useQuery({
@@ -69,16 +69,16 @@ export function WorkspaceArtifactsPanel({
   });
 
   // Load team submissions (if reviewer/admin)
-  const reviewerSubmissionsQuery = useQuery({
+  const submissionsQuery = useQuery({
     queryKey: ["team-artifact-submissions-workspace", teamId],
     queryFn: () => milestoneApi.getTeamArtifactSubmissions(teamId),
     retry: false,
-    enabled: !isStudent && teamId > 0,
+    enabled: teamId > 0,
   });
 
   // Map submissions per milestoneId
   const submissionsByMilestone = new Map<string, MilestoneSubmissionHistoryItem[]>();
-  reviewerSubmissionsQuery.data?.forEach((item) => {
+  submissionsQuery.data?.forEach((item) => {
     const list = submissionsByMilestone.get(item.submission.milestoneId) ?? [];
     list.push(item);
     submissionsByMilestone.set(item.submission.milestoneId, list);
@@ -157,7 +157,7 @@ export function WorkspaceArtifactsPanel({
             size="sm"
             onClick={() => {
               void milestonesQuery.refetch();
-              if (!isStudent) void reviewerSubmissionsQuery.refetch();
+              void submissionsQuery.refetch();
             }}
           >
             <RotateCw className="mr-1.5 size-3.5" /> Làm mới
@@ -241,25 +241,51 @@ export function WorkspaceArtifactsPanel({
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleOpenSubmissionsPage(m.id)}
+                        onClick={() => setHistoryMilestone(m)}
                         title="Xem lịch sử tất cả các phiên bản đã nộp"
                       >
                         <History className="mr-1.5 size-4" />
                         Lịch sử nộp ({hasSubmission ? milestoneSubmissions.length : 0})
                       </Button>
 
-                      {/* Resubmit button if already submitted (Fix Bug #26) */}
+                      {/* Action buttons (Fix Bug #26 & Bug #31: REJECTED blocks resubmit) */}
                       {hasSubmission ? (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => handleOpenSubmit(m.id)}
-                          className="font-medium"
-                          title="Nộp lại phiên bản mới tiếp theo"
-                        >
-                          <Send className="mr-1.5 size-4" />
-                          Nộp lại (Resubmit v{latestSub!.submission.version + 1})
-                        </Button>
+                        (() => {
+                          const status = latestSub!.submission.status;
+                          if (status === "REJECTED") {
+                            return (
+                              <Badge variant="destructive" className="px-3 py-1 text-xs" title="Reviewer đánh giá REJECTED (0 điểm). Rớt milestone và không được nộp lại.">
+                                Đã rớt (0 điểm) · Bị từ chối
+                              </Badge>
+                            );
+                          }
+                          if (status === "ACCEPTED") {
+                            return (
+                              <Badge className="bg-emerald-600 text-white px-3 py-1 text-xs">
+                                Đã đạt (ACCEPTED)
+                              </Badge>
+                            );
+                          }
+                          if (status === "CHANGES_REQUESTED") {
+                            return (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => handleOpenSubmit(m.id)}
+                                className="font-medium border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
+                                title="Reviewer yêu cầu nộp lại. Bấm để nộp phiên bản mới tiếp theo"
+                              >
+                                <Send className="mr-1.5 size-4" />
+                                Nộp lại (Resubmit v{latestSub!.submission.version + 1})
+                              </Button>
+                            );
+                          }
+                          return (
+                            <Badge variant="outline" className="border-amber-300 text-amber-700 px-2.5 py-1 text-xs">
+                              Đang chờ chấm bài
+                            </Badge>
+                          );
+                        })()
                       ) : (
                         <Button
                           size="sm"
@@ -364,7 +390,19 @@ export function WorkspaceArtifactsPanel({
             )}
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex flex-wrap items-center justify-between gap-2 sm:justify-between">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                const targetMilestoneId = historyMilestone?.id;
+                setHistoryMilestone(null);
+                if (targetMilestoneId) handleOpenSubmissionsPage(targetMilestoneId);
+              }}
+            >
+              <ExternalLink className="mr-1.5 size-4" /> Mở trang bài nộp đầy đủ
+            </Button>
+            <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setHistoryMilestone(null)}>
               Đóng
             </Button>
@@ -373,6 +411,7 @@ export function WorkspaceArtifactsPanel({
                 <Send className="mr-1.5 size-4" /> Nộp phiên bản mới
               </Button>
             )}
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

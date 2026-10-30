@@ -22,7 +22,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.server.ResponseStatusException;
 
 @Slf4j
-@RestControllerAdvice(assignableTypes = ProjectTemplateController.class)
+@RestControllerAdvice(assignableTypes = {ProjectTemplateController.class,
+        com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshotController.class})
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class ProjectTemplateExceptionHandler {
     @ExceptionHandler(ProjectTemplateException.class)
@@ -106,6 +107,11 @@ public class ProjectTemplateExceptionHandler {
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ErrorResponse> status(ResponseStatusException exception) {
         return error(exception.getStatusCode().value(), exception.getReason());
+    }
+
+    @ExceptionHandler(com.example.starter_project_2025.exception.ResourceNotFoundException.class)
+    public ResponseEntity<ErrorResponse> notFound(com.example.starter_project_2025.exception.ResourceNotFoundException exception) {
+        return error(404, exception.getMessage());
     }
 
     @ExceptionHandler(AuthenticationCredentialsNotFoundException.class)

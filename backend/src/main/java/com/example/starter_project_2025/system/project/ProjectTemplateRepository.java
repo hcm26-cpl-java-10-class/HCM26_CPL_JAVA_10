@@ -25,24 +25,23 @@ public interface ProjectTemplateRepository
 
     Optional<ProjectTemplate> findByIdAndTenantIdAndIsActiveTrue(Long id, Long tenantId);
 
-    /**
-     * Tenant-owned lookup by business code: used by the demo seeders to upsert
-     * the organization copies of the shared sample briefs.
-     */
-    Optional<ProjectTemplate> findFirstByCodeAndTenantIdAndIsActiveTrue(String code, Long tenantId);
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select t from ProjectTemplate t where t.id = :id and t.tenantId = :tenantId and t.isActive = true")
+    Optional<ProjectTemplate> findForTemplateUpdate(Long id, Long tenantId);
 
     /**
-     * Read/write lookup that also resolves the shared catalogue: rows without a
+     * Read-only lookup that also resolves the shared catalogue: rows without a
      * tenant ({@code tenant_id is null}, e.g. the demo/sample templates seeded
-     * by {@code ProjectTeamTemplateDemoDataInitializer}) are visible to every
-     * tenant and follow the same status rules (DRAFT editable, ACTIVE
-     * assignable).
+     * by {@code ProjectTeamTemplateDemoDataInitializer}) are readable by every
+     * tenant. Mutations keep using {@link #findByIdAndTenantIdAndIsActiveTrue}.
      */
     @Query("select t from ProjectTemplate t where t.id = :id and t.isActive = true "
             + "and (t.tenantId = :tenantId or t.tenantId is null)")
     Optional<ProjectTemplate> findReadableById(Long id, Long tenantId);
 
     boolean existsByTenantIdAndCodeAndTemplateVersion(Long tenantId, String code, Integer templateVersion);
+
+    Optional<ProjectTemplate> findByTenantIdAndCodeAndTemplateVersion(Long tenantId, String code, Integer templateVersion);
 
     boolean existsByTenantIdAndCodeAndTemplateVersionAndIdNot(
             Long tenantId, String code, Integer templateVersion, Long id);

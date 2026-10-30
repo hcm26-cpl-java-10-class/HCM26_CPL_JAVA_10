@@ -51,13 +51,22 @@ public class TemplateBriefSnapshotWriter {
     private final ObjectMapper objectMapper;
 
     /**
-     * Copies the active version of {@code template} (or the template itself when
-     * no version exists yet) into a fresh, immutable assignment snapshot.
+     * Copies the version pinned when the team chose the template into a fresh,
+     * immutable assignment snapshot. Legacy teams without a pinned version use
+     * the current published version.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public ProjectTemplateSnapshot snapshotForAssignment(ProjectTemplate template, Long teamId) {
+    public ProjectTemplateSnapshot snapshotForAssignment(ProjectTemplate template, Long teamId, Long versionId) {
 
-        ProjectTemplateSnapshot source = resolveActiveVersion(template.getId());
+        ProjectTemplateSnapshot source = versionId == null
+                ? resolveActiveVersion(template.getId())
+                : snapshots.findById(versionId)
+                        .filter(version -> template.getId().equals(version.getTemplateId()))
+                        .filter(version -> version.getStatus() == ProjectTemplateVersionStatus.PUBLISHED
+                                || version.getStatus() == ProjectTemplateVersionStatus.ARCHIVED)
+                        .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                                org.springframework.http.HttpStatus.CONFLICT,
+                                "Assigned published version is unavailable"));
 
         ProjectTemplateSnapshot snapshot = ProjectTemplateSnapshot.builder()
                 .templateId(template.getId())
@@ -92,10 +101,10 @@ public class TemplateBriefSnapshotWriter {
     private ProjectTemplateSnapshot resolveActiveVersion(Long templateId) {
 
         return snapshots
-                .findFirstByTemplateIdAndStatusAndIsActiveTrueOrderByCreatedAtDesc(
+                .findFirstByTemplateIdAndStatusAndIsActiveTrueOrderByCreatedAtDescIdDesc(
                         templateId, ProjectTemplateVersionStatus.PUBLISHED)
-                .or(() -> snapshots.findFirstByTemplateIdAndIsActiveTrueOrderByCreatedAtDesc(templateId))
-                .orElse(null);
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.CONFLICT, "Template has no published version"));
     }
 
     /**
@@ -135,6 +144,9 @@ public class TemplateBriefSnapshotWriter {
         content.put("category", template.getCategory());
         content.put("level", template.getLevel() == null ? null : template.getLevel().name());
         content.put("estimatedDurationWeeks", template.getEstimatedDurationWeeks());
+        content.put("technologies", template.getTechnologies());
+        content.put("targetRoles", template.getTargetRoles());
+        content.put("learningOutcomes", template.getLearningOutcomes());
         content.put("sourceSnapshotId", source == null ? null : source.getId());
         content.put("sourceVersion", source == null ? null : source.getVersion());
         content.put("constraints", readJsonOrNull(template.getConstraintsJson()));

@@ -10,6 +10,9 @@ import java.util.Optional;
 public interface ProjectTemplateSnapshotRepository
         extends BaseCrudRepository<ProjectTemplateSnapshot, Long> {
 
+    boolean existsByTemplateIdAndProjectIdIsNotNull(Long templateId);
+
+    @org.springframework.data.jpa.repository.Query("select version from ProjectTemplateSnapshot version where version.templateId = :templateId order by version.createdAt desc, version.id desc")
     List<ProjectTemplateSnapshot> findByTemplateIdOrderByCreatedAtDesc(Long templateId);
 
     Optional<ProjectTemplateSnapshot> findFirstByTemplateIdAndIsActiveTrueOrderByCreatedAtDesc(Long templateId);
@@ -20,6 +23,12 @@ public interface ProjectTemplateSnapshotRepository
      */
     Optional<ProjectTemplateSnapshot> findFirstByTemplateIdAndStatusAndIsActiveTrueOrderByCreatedAtDesc(
             Long templateId, ProjectTemplateVersionStatus status);
+
+    Optional<ProjectTemplateSnapshot> findFirstByTemplateIdAndStatusAndIsActiveTrueOrderByCreatedAtDescIdDesc(
+            Long templateId, ProjectTemplateVersionStatus status);
+
+    List<ProjectTemplateSnapshot> findByTemplateIdInAndStatusAndIsActiveTrueOrderByCreatedAtDescIdDesc(
+            List<Long> templateIds, ProjectTemplateVersionStatus status);
 
     /**
      * Used by the sample data seeder to upsert a version per template without

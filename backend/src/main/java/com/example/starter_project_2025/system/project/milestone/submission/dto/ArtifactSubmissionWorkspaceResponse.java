@@ -6,5 +6,6 @@ public record ArtifactSubmissionWorkspaceResponse(
         MilestoneDetailResponse milestone,
         ArtifactDraftResponse draft,
         ArtifactUploadPolicyResponse uploadPolicy,
-        ArtifactSubmissionResponse latestSubmission
+        ArtifactSubmissionResponse latestSubmission,
+        boolean canSubmit
 ) { }

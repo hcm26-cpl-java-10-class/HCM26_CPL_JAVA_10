@@ -18,6 +18,11 @@ import com.example.starter_project_2025.system.project.sprint_backlog.audit.Spri
 import com.example.starter_project_2025.system.project.sprint_backlog.audit.SprintBacklogAuditService;
 import com.example.starter_project_2025.system.project.sprint_backlog.event.SprintBacklogOutboxService;
 import com.example.starter_project_2025.system.project.task.TaskRepository;
+import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceRepository;
+import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceSectionDtos.BoardColumn;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -29,6 +34,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -88,6 +95,13 @@ public class SprintBacklogServiceImpl
     static final String EVENT_CREATED = "SPRINT_BACKLOG_ITEM_CREATED";
     static final String EVENT_UPDATED = "SPRINT_BACKLOG_ITEM_UPDATED";
 
+    private static final Map<SprintBacklogStatus, Set<SprintBacklogStatus>> STATUS_TRANSITIONS = Map.of(
+            SprintBacklogStatus.TODO, Set.of(SprintBacklogStatus.IN_PROGRESS),
+            SprintBacklogStatus.IN_PROGRESS, Set.of(SprintBacklogStatus.REVIEW, SprintBacklogStatus.BLOCKED, SprintBacklogStatus.TODO),
+            SprintBacklogStatus.REVIEW, Set.of(SprintBacklogStatus.DONE, SprintBacklogStatus.IN_PROGRESS),
+            SprintBacklogStatus.BLOCKED, Set.of(SprintBacklogStatus.IN_PROGRESS),
+            SprintBacklogStatus.DONE, Set.of(SprintBacklogStatus.REVIEW)
+    );
     static final String MILESTONE_NOT_FOUND_MESSAGE =
             "Milestone không tồn tại hoặc đã bị thay đổi";
 
@@ -101,6 +115,8 @@ public class SprintBacklogServiceImpl
     TaskRepository subtasks;
     ProjectMemberRepository projectMemberRepository;
     ProjectTeamRepository projectTeamRepository;
+    WorkspaceRepository workspaceRepository;
+    ObjectMapper objectMapper;
 
     @Override
     protected BaseCrudRepository<SprintBacklog, Long> getRepository() {
@@ -131,6 +147,11 @@ public class SprintBacklogServiceImpl
         Map<String, List<String>> errors = new LinkedHashMap<>();
 
         Sprint sprint = resolveSprint(request.getSprintId(), errors);
+
+        if (request.getStatus() != null && request.getStatus().isCustom()
+                && !isConfiguredCustomStatus(sprint, request.getStatus())) {
+            errors.put(STATUS_FIELD, List.of("This custom status is not configured for the sprint workspace"));
+        }
 
         // AC03: a milestone that no longer exists / was cancelled fails the
         // whole request with 404 instead of an inline field error.
@@ -280,11 +301,25 @@ public class SprintBacklogServiceImpl
 
         throwIfInvalid(errors);
 
-        // Any workflow status can be selected (the team may move an item
-        // backwards, skip a step or reopen a finished item).
+        // Validate status transition against allowed matrix (Bug 37/38).
         SprintBacklogStatus requestedStatus = request.getStatus();
         if (requestedStatus == null) {
             request.setStatus(backlog.getStatus());
+        } else if (!requestedStatus.equals(backlog.getStatus())) {
+            boolean allowedTransition;
+            if (requestedStatus.isCustom() || backlog.getStatus().isCustom()) {
+                allowedTransition = isAdjacentWorkspaceStatus(sprint, backlog.getStatus(), requestedStatus);
+            } else {
+                Set<SprintBacklogStatus> allowed = STATUS_TRANSITIONS.getOrDefault(backlog.getStatus(), Set.of());
+                allowedTransition = allowed.contains(requestedStatus);
+            }
+            if (!allowedTransition) {
+                Set<SprintBacklogStatus> allowed = STATUS_TRANSITIONS.getOrDefault(backlog.getStatus(), Set.of());
+                errors.put("status", java.util.List.of(
+                    "Cannot transition from " + backlog.getStatus() + " to " + requestedStatus
+                    + ". Allowed next: " + allowed));
+                throwIfInvalid(errors);
+            }
         }
 
         Map<String, Object> before = snapshot(backlog);
@@ -417,7 +452,7 @@ public class SprintBacklogServiceImpl
                         milestone.getProjectId(),
                         milestone.getTitle(),
                         milestoneLabel(milestone),
-                        milestone.getStatus() == null ? null : milestone.getStatus().name(),
+                        milestone.lifecycleStatus().name(),
                         milestone.getDeadline(),
                         milestone.isMandatory()
                 ))
@@ -681,6 +716,51 @@ public class SprintBacklogServiceImpl
 
         return sprintBacklogRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("SprintBacklog", "id", id));
+    }
+
+    private List<BoardColumn> workspaceBoardColumns(Sprint sprint) {
+        if (sprint == null) return List.of();
+
+        // Project-backed sprints often have a projectId but no teamId. Resolve
+        // their workspace by project first so custom workflow transitions use
+        // the same board configuration displayed by the workspace UI.
+        var workspace = sprint.getProjectId() == null
+                ? Optional.<Workspace>empty()
+                : workspaceRepository.findFirstByProjectIdOrderByIdAsc(sprint.getProjectId());
+        if (workspace.isEmpty() && sprint.getTeamId() != null) {
+            workspace = workspaceRepository.findFirstByTeamIdOrderByIdAsc(sprint.getTeamId());
+        }
+
+        return workspace
+                .map(boardWorkspace -> {
+                    String json = boardWorkspace.getBoardColumnsConfig();
+                    if (json == null || json.isBlank()) return List.<BoardColumn>of();
+                    try {
+                        return objectMapper.readValue(json, new TypeReference<List<BoardColumn>>() { });
+                    } catch (Exception ignored) {
+                        return List.<BoardColumn>of();
+                    }
+                }).orElseGet(List::of);
+    }
+
+    private boolean isConfiguredCustomStatus(Sprint sprint, SprintBacklogStatus status) {
+        return status != null && status.isCustom()
+                && workspaceBoardColumns(sprint).stream().anyMatch(column -> column.key().equals(status.name()));
+    }
+
+    private boolean isAdjacentWorkspaceStatus(Sprint sprint, SprintBacklogStatus current, SprintBacklogStatus target) {
+        List<SprintBacklogStatus> statuses = workspaceBoardColumns(sprint).stream()
+                .map(BoardColumn::key)
+                .filter(key -> !"BACKLOG".equals(key))
+                .map(key -> {
+                    try { return SprintBacklogStatus.valueOf(key); }
+                    catch (IllegalArgumentException ignored) { return null; }
+                })
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        int currentIndex = statuses.indexOf(current);
+        int targetIndex = statuses.indexOf(target);
+        return currentIndex >= 0 && targetIndex >= 0 && Math.abs(currentIndex - targetIndex) == 1;
     }
 
     private Long sprintIdOf(SprintBacklog backlog) {

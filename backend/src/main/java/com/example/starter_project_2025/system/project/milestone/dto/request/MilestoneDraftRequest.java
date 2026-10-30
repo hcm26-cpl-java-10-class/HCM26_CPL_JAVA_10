@@ -9,4 +9,5 @@ import java.util.UUID;
 public record MilestoneDraftRequest(Long teamId, String title, String description, Instant deadline,
         Boolean mandatory, UUID rubricSnapshotId, LatePolicyType latePolicyType, Instant lateUntil,
         BigDecimal latePenaltyPercent, Boolean allowResubmission, Integer maxSubmissionAttempts,
-        BigDecimal weight, List<ChecklistItemRequest> checklist, Long expectedVersion) { }
+        BigDecimal weight, List<ChecklistItemRequest> checklist, Long expectedVersion,
+        Integer deadlineOffsetDays) { }

@@ -22,11 +22,17 @@ public class WorkspaceIdempotencyService {
     }
 
     private String hash(WorkspaceCreateRequest request) {
-        return DigestUtils.sha256Hex(request.getProjectId() + ":" + request.getTeamId());
+        String prefix = request.getTaskKeyPrefix() == null || request.getTaskKeyPrefix().isBlank()
+                ? "FA" : request.getTaskKeyPrefix().trim().toUpperCase(java.util.Locale.ROOT);
+        return DigestUtils.sha256Hex(request.getProjectId() + ":" + request.getTeamId() + ":" + prefix);
     }
 
     public void checkPayload(WorkspaceCreationRequest saved, WorkspaceCreateRequest request) {
-        if (!saved.getPayloadHash().equals(hash(request))) {
+        boolean legacyDefaultPrefix = request.getTaskKeyPrefix() == null || request.getTaskKeyPrefix().isBlank()
+                || "FA".equalsIgnoreCase(request.getTaskKeyPrefix().trim());
+        String legacyHash = DigestUtils.sha256Hex(request.getProjectId() + ":" + request.getTeamId());
+        if (!saved.getPayloadHash().equals(hash(request))
+                && !(legacyDefaultPrefix && saved.getPayloadHash().equals(legacyHash))) {
             throw new WorkspaceConflictException("Idempotency key đã được dùng với dữ liệu khác", null);
         }
     }

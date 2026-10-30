@@ -17,6 +17,15 @@ public class WorkspaceSectionsController {
     private final WorkspaceSectionService service;
     @GetMapping("/sections") public Navigation navigation(@PathVariable Long id) { return service.navigation(id); }
 
+    @GetMapping("/board-columns") public BoardColumns boardColumns(@PathVariable Long id) {
+        return service.boardColumns(id);
+    }
+
+    @PutMapping("/board-columns") public BoardColumns updateBoardColumns(
+            @PathVariable Long id, @Valid @RequestBody BoardColumns request) {
+        return service.updateBoardColumns(id, request);
+    }
+
     @GetMapping({"/milestones", "/sprints", "/backlog", "/artifacts", "/feedback", "/activity"})
     public Content read(@PathVariable Long id, jakarta.servlet.http.HttpServletRequest request) {
         String path = request.getRequestURI();

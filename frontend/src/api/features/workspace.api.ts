@@ -1,9 +1,13 @@
 import axiosInstance from "@/api/axios";
-import type { WorkspaceCandidateItem, WorkspaceCreateRequest, WorkspaceDetail, WorkspaceResponse, WorkspaceProjectOption, WorkspaceMember, WorkspaceNavigation, WorkspaceSectionKey, WorkspaceSectionContent, WorkspaceSectionItem, SectionCreate, SectionReview, ProjectLog, ProjectLogCreateRequest, ProjectLogFilters, ProjectLogPage, ProjectLogOptions, ProjectLogAudit } from "@/types/features/workspace";
+import type { WorkspaceCandidateItem, WorkspaceCreateRequest, WorkspaceDetail, WorkspaceResponse, WorkspaceProjectOption, WorkspaceMember, WorkspaceNavigation, WorkspaceBoardColumn, WorkspaceSectionKey, WorkspaceSectionContent, WorkspaceSectionItem, SectionCreate, SectionReview, ProjectLog, ProjectLogCreateRequest, ProjectLogFilters, ProjectLogPage, ProjectLogOptions, ProjectLogAudit } from "@/types/features/workspace";
 
 export const workspaceApi = {
   navigation: async (id: number, signal?: AbortSignal) =>
     (await axiosInstance.get<WorkspaceNavigation>("/workspaces/" + id + "/sections", { signal })).data,
+  boardColumns: async (id: number) =>
+    (await axiosInstance.get<{ columns: WorkspaceBoardColumn[] }>(`/workspaces/${id}/board-columns`)).data.columns,
+  updateBoardColumns: async (id: number, columns: WorkspaceBoardColumn[]) =>
+    (await axiosInstance.put<{ columns: WorkspaceBoardColumn[] }>(`/workspaces/${id}/board-columns`, { columns })).data.columns,
   section: async (id: number, key: WorkspaceSectionKey, signal?: AbortSignal) =>
     (await axiosInstance.get<WorkspaceSectionContent>("/workspaces/" + id + "/" + key, { signal })).data,
   createSectionItem: async (id: number, path: string, input: SectionCreate) =>

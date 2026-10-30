@@ -5,7 +5,6 @@ import com.example.starter_project_2025.system.project.milestone.dto.response.Mi
 import com.example.starter_project_2025.system.project.milestone.service.MilestoneCommandService;
 import com.example.starter_project_2025.system.project.milestone.service.MilestoneLifecycleService;
 import com.example.starter_project_2025.system.project.milestone.dto.request.MilestoneDraftRequest;
-import com.example.starter_project_2025.system.project.milestone.dto.request.MilestoneMetadataRequest;
 import com.example.starter_project_2025.system.project.milestone.service.MilestoneCreateOptionsService;
 import com.example.starter_project_2025.system.project.milestone.dto.response.MilestoneCreateOptionsResponse;
 import jakarta.validation.Valid;
@@ -35,22 +34,38 @@ public class TeamMilestoneController {
         return lifecycle.editDraft(null, teamId, milestoneId, request);
     }
 
+    @GetMapping({"/{milestoneId}/draft-revisions", "/{milestoneId}/revisions"})
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('MILESTONE_WRITE')")
+    public java.util.List<com.example.starter_project_2025.system.project.milestone.domain.MilestoneDraftRevision> draftRevisions(
+            @PathVariable Long teamId, @PathVariable java.util.UUID milestoneId) {
+        return lifecycle.listDraftRevisions(null, teamId, milestoneId);
+    }
+
     @PostMapping("/{milestoneId}/publish")
     @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('MILESTONE_WRITE')")
-    public MilestoneResponse publish(@PathVariable Long teamId, @PathVariable java.util.UUID milestoneId, @RequestParam long expectedVersion) {
+    public MilestoneResponse publish(@PathVariable Long teamId, @PathVariable java.util.UUID milestoneId,
+            @RequestParam long expectedVersion) {
         return lifecycle.publish(null, teamId, milestoneId, expectedVersion);
+    }
+
+    @PostMapping("/{milestoneId}/open")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('MILESTONE_WRITE')")
+    public MilestoneResponse open(@PathVariable Long teamId, @PathVariable java.util.UUID milestoneId) {
+        return lifecycle.open(null, teamId, milestoneId);
     }
 
     @PostMapping("/{milestoneId}/start")
     @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN','ADMINISTRATOR','SUPER_ADMIN','SYSTEM_ADMIN')")
-    public MilestoneResponse start(@PathVariable Long teamId, @PathVariable java.util.UUID milestoneId, @RequestParam long expectedVersion) {
+    public MilestoneResponse start(@PathVariable Long teamId, @PathVariable java.util.UUID milestoneId,
+            @RequestParam long expectedVersion) {
         return lifecycle.start(null, teamId, milestoneId, expectedVersion);
     }
 
-    @PatchMapping("/{milestoneId}/metadata")
+    @PatchMapping("/{milestoneId}")
     @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('MILESTONE_WRITE')")
-    public MilestoneResponse editMetadata(@PathVariable Long teamId, @PathVariable java.util.UUID milestoneId, @RequestBody MilestoneMetadataRequest request) {
-        return lifecycle.editPublished(null, teamId, milestoneId, request);
+    public MilestoneResponse editActive(@PathVariable Long teamId, @PathVariable java.util.UUID milestoneId,
+            @RequestBody com.example.starter_project_2025.system.project.milestone.dto.request.MilestoneLifecycleEditRequest request) {
+        return lifecycle.editActive(null, teamId, milestoneId, request);
     }
 
     @DeleteMapping("/{milestoneId}")
@@ -76,9 +91,4 @@ public class TeamMilestoneController {
         return ResponseEntity.created(URI.create("/api/teams/" + teamId + "/milestones/" + response.id())).body(response);
     }
 
-    @PostMapping("/{milestoneId}/open")
-    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('MILESTONE_WRITE')")
-    public ResponseEntity<MilestoneResponse> openForSubmissions(@PathVariable Long teamId, @PathVariable java.util.UUID milestoneId) {
-        return ResponseEntity.ok(commandService.openForSubmissions(null, teamId, milestoneId));
-    }
 }

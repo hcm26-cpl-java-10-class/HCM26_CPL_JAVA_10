@@ -74,6 +74,8 @@ interface BacklogItemDetailSheetProps {
   milestones?: MilestoneOption[];
   /** Active members of the workspace team (assignee picker). */
   assignees?: BacklogAssigneeOption[];
+  /** Workspace-specific workflow statuses shown in the status selector. */
+  workflowStatuses?: { value: SprintBacklogStatus; label: string }[];
   /**
    * Team of the open workspace. The panel resolves the assignee options by
    * project when the board is not scoped to a team (global `/backlogs` page),
@@ -195,6 +197,7 @@ export function BacklogItemDetailSheet({
   sprints = [],
   milestones = [],
   assignees = [],
+  workflowStatuses = [],
   teamId = null,
   canEdit,
   canMove,
@@ -700,9 +703,9 @@ export function BacklogItemDetailSheet({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {SPRINT_BACKLOG_STATUS_OPTIONS.map((option) => (
+                    {[...SPRINT_BACKLOG_STATUS_OPTIONS, ...workflowStatuses.filter((custom) => !SPRINT_BACKLOG_STATUS_OPTIONS.some((known) => known.value === custom.value))].map((option) => (
                       <SelectItem key={option.value} value={option.value}>
-                        {backlogStatusMeta(statusToBoard(option.value)).label}
+                        {option.label}
                       </SelectItem>
                     ))}
                   </SelectContent>

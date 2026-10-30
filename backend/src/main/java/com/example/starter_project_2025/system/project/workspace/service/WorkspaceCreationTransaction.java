@@ -52,6 +52,8 @@ public class WorkspaceCreationTransaction {
             provisioning.provision(team, team.getProjectTemplate(), user.getId(), correlationId);
             Workspace workspace = workspaces.findFirstByTeamIdOrderByIdAsc(team.getId())
                     .orElseThrow(() -> new IllegalStateException("The project workspace was not created"));
+            workspace.setTaskKeyPrefix(normalizeTaskKeyPrefix(request.getTaskKeyPrefix()));
+            workspaces.save(workspace);
             WorkspaceResponse response = response(workspace);
             idempotency.save(tenant.getId(), user.getId(), key, request, response);
             return response;
@@ -61,6 +63,7 @@ public class WorkspaceCreationTransaction {
         workspace.setCode("WS-TEAM-" + request.getTeamId());
         workspace.setName("Workspace / " + team.getTeamName());
         workspace.setStatus(WorkspaceStatus.ACTIVE);
+        workspace.setTaskKeyPrefix(normalizeTaskKeyPrefix(request.getTaskKeyPrefix()));
         workspace.setCreatedBy(user.getId());
         workspace.setSections(new ArrayList<>(Arrays.asList(WorkspaceSection.values())));
         workspaces.saveAndFlush(workspace);
@@ -75,7 +78,17 @@ public class WorkspaceCreationTransaction {
                 .id(workspace.getId()).tenantId(workspace.getTenant().getId())
                 .projectId(workspace.getProject() == null ? null : workspace.getProject().getId())
                 .teamId(workspace.getTeam().getId()).code(workspace.getCode()).name(workspace.getName())
+                .taskKeyPrefix(normalizeTaskKeyPrefix(workspace.getTaskKeyPrefix()))
                 .status(workspace.getStatus()).createdBy(workspace.getCreatedBy()).createdAt(workspace.getCreatedAt())
                 .sections(workspace.getSections().stream().map(WorkspaceSection::getKey).toList()).build();
+    }
+
+    private String normalizeTaskKeyPrefix(String prefix) {
+        if (prefix == null || prefix.isBlank()) return "FA";
+        String normalized = prefix.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!normalized.matches("[A-Z0-9]{1,8}"))
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                    "Task key prefix must contain 1 to 8 letters or digits");
+        return normalized;
     }
 }

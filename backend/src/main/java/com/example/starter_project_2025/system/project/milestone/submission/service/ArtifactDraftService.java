@@ -54,6 +54,7 @@ public class ArtifactDraftService {
     private final ArtifactContributionLock contributionLock;
     private final ClamAvScanner clamAvScanner;
     private final WorkspaceMilestoneScopeService scopeService;
+    private final MilestoneSubmissionWindow submissionWindow;
     @org.springframework.beans.factory.annotation.Value("${app.artifact.upload.enabled:false}")
     private boolean uploadEnabled;
     @org.springframework.beans.factory.annotation.Value("${app.artifact.upload.max-bytes:0}")
@@ -66,7 +67,8 @@ public class ArtifactDraftService {
         Scope scope = requireScope(projectId);
         var milestone = resolveMilestone(projectId, milestoneId, scope.tenantId());
         if (milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN
-                || milestone.getExecutionStatus() == com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus.TODO)
+                || (milestone.lifecycleStatus() == com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus.PLANNED
+                    && milestone.getStatus() == com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN))
             throw new ResourceNotFoundException("Milestone not available to students");
         var draft = draftRepository.findByMilestoneIdAndProjectIdAndTenantId(milestoneId, projectId, scope.tenantId())
                 .map(this::toResponse).orElse(null);
@@ -76,7 +78,7 @@ public class ArtifactDraftService {
                 .map(submissionService::toResponse).orElse(null);
         return new ArtifactSubmissionWorkspaceResponse(
                 milestoneQueryService.getDetail(projectId, milestoneId, null), draft,
-                uploadPolicy(), latestSubmission);
+                uploadPolicy(), latestSubmission, submissionWindow.canSubmitNow(milestone));
     }
 
     @Transactional
@@ -84,8 +86,7 @@ public class ArtifactDraftService {
         Scope scope = requireScope(projectId);
         contributionLock.lockCurrentActor();
         var milestone = resolveMilestone(projectId, milestoneId, scope.tenantId());
-        if (milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN
-                || milestone.getExecutionStatus() != com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus.IN_PROGRESS)
+        if (!submissionWindow.canSubmit(milestone))
             throw new ResourceNotFoundException("Milestone not available to students");
         validateUrl("repositoryUrl", request.repositoryUrl());
         validateUrl("deploymentUrl", request.deploymentUrl());
