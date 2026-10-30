@@ -7,12 +7,12 @@ function information(value?: string | null) {
 }
 
 function attachmentUrl(value?: string | null) {
-  if (!value?.trim()) return undefined;
+  if (!value?.trim()) return null;
   try {
     const url = new URL(value, window.location.origin);
-    return ["http:", "https:"].includes(url.protocol) ? url.href : undefined;
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
   } catch {
-    return undefined;
+    return null;
   }
 }
 
@@ -22,6 +22,9 @@ export function WorkspaceOverviewPanel({ workspace, canViewMembers, onViewMember
   onViewMembers: () => void;
 }) {
   const topic = workspace.topic_snapshot;
+  const requirements = topic?.requirements ?? [];
+  const attachments = topic?.attachments ?? [];
+
   return <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
     <div className="space-y-5">
       <Card>
@@ -32,14 +35,14 @@ export function WorkspaceOverviewPanel({ workspace, canViewMembers, onViewMember
             <div><p className="text-muted-foreground">Version</p><p>{information(topic.version)}</p></div>
             <div className="sm:col-span-2"><p className="text-muted-foreground">Brief title</p><p>{information(topic.topic_title)}</p></div>
           </div>}
-          <div><p className="mb-2 text-sm font-medium">Description</p><p className="whitespace-pre-wrap text-sm leading-7">{information(workspace.projectDescription)}</p></div>
+          <div><p className="mb-2 text-sm font-medium">Description</p><p className="whitespace-pre-wrap text-sm leading-7">{information(topic?.description ?? workspace.projectDescription)}</p></div>
           <div><p className="mb-2 text-sm font-medium">Objectives</p><p className="whitespace-pre-wrap text-sm leading-7">{information(topic?.objectives)}</p></div>
           <div><p className="mb-2 text-sm font-medium">Requirements</p>
-            {topic?.requirements.length ? <ul className="list-disc space-y-2 pl-5 text-sm">{topic.requirements.map((item, index) => <li key={index}>{item}</li>)}</ul>
+            {requirements.length ? <ul className="list-disc space-y-2 pl-5 text-sm">{requirements.map((item, index) => <li key={index}>{item}</li>)}</ul>
               : <p className="text-sm text-muted-foreground">No information available</p>}
           </div>
           <div><p className="mb-2 text-sm font-medium">Attachments</p>
-            {topic?.attachments.length ? <ul className="space-y-2 text-sm">{topic.attachments.map((item, index) => {
+            {attachments.length ? <ul className="space-y-2 text-sm">{attachments.map((item, index) => {
               const href = attachmentUrl(item.url);
               return <li key={index}>{href ? <a className="underline" href={href} target="_blank" rel="noopener noreferrer">{information(item.name)}</a>
                 : <span>{information(item.name)}</span>}</li>;

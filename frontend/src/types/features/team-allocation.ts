@@ -4,6 +4,7 @@ export type ProjectTeamStatus = "DRAFT" | "ACTIVE" | "ARCHIVED";
 export interface AllocationSession {
   id: number;
   classId: number;
+  sessionNumber: number;
   projectTemplateId: number | null;
   maxMembers: number;
   status: AllocationSessionStatus;

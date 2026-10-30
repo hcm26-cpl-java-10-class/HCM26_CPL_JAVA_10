@@ -71,33 +71,34 @@ export interface WorkspaceMember {
   status: ParticipationStatus;
 }
 
-export interface WorkspaceTopicSnapshot {
-  topic_code: string;
-  topic_title: string;
-  version: string;
-  description: string | null;
-  objectives: string | null;
-  requirements: string[];
-  attachments: { name: string; url: string }[];
-}
-
 export interface WorkspaceDetail extends WorkspaceResponse {
   id: number;
-  projectCode: string;
-  projectName: string;
-  projectDescription?: string;
-  projectStatus: string;
+  projectCode?: string | null;
+  projectName?: string | null;
+  projectDescription?: string | null;
+  projectStatus?: string | null;
   teamCode: string;
   teamName: string;
   mentorName?: string;
   charter: TeamCharter;
   cohortId?: number;
   cohortName?: string;
+  topic_snapshot?: {
+    topic_code: string;
+    topic_title: string;
+    version: string;
+    description?: string | null;
+    objectives?: string | null;
+    requirements?: string[] | null;
+    attachments?: Array<{
+      name: string;
+      url: string;
+    }> | null;
+  } | null;
   createdAt?: string;
   createdByName?: string;
   member_count: number;
   can_view_members: boolean;
-  topic_snapshot: WorkspaceTopicSnapshot | null;
   activities: WorkspaceActivity[] | null;
 }
 

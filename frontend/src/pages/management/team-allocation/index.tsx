@@ -1241,7 +1241,7 @@ export default function TeamAllocationPage() {
                 >
                   {sessionsQuery.data.map((item) => (
                     <option key={item.id} value={item.id}>
-                      Phiên #{item.id} · {item.status} · tối đa {item.maxMembers}/nhóm
+                      Phiên #{item.sessionNumber} · {item.status} · tối đa {item.maxMembers}/nhóm
                     </option>
                   ))}
                   {!session && (
@@ -1331,7 +1331,7 @@ export default function TeamAllocationPage() {
                   <Badge variant={session.status === "OPEN" ? "default" : "secondary"}>
                     {session.status}
                   </Badge>
-                  <span className="font-medium">Phiên #{session.id}</span>
+                  <span className="font-medium">Phiên #{session.sessionNumber}</span>
                   <span className="text-muted-foreground">Lớp #{session.classId}</span>
                   {teamsQuery.isLoading && <LoaderCircle className="size-4 animate-spin text-muted-foreground" />}
                 </div>

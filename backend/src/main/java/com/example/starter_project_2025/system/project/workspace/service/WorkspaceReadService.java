@@ -46,9 +46,8 @@ public class WorkspaceReadService {
         Project project = workspace.getProject();
         ProjectTeam team = workspace.getTeam();
         var trainingClass = team.getTrainingClass();
-        var snapshot = projectBrief(project);
-        // A blank snapshot description stays blank; do not substitute newer project content.
-        String description = snapshot != null ? snapshot.description() : project == null ? null : project.getDescription();
+        var snapshot = project == null ? null : snapshots.findByProjectId(project.getId()).map(this::snapshotResponse).orElse(null);
+        String description = project == null ? null : project.getDescription();
         return WorkspaceDetailResponse.builder()
                 .id(workspace.getId()).code(workspace.getCode()).name(workspace.getName())
                 .status(workspace.getStatus())

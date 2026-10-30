@@ -1,7 +1,11 @@
 package com.example.starter_project_2025.system.project.workspace.service;
 
 import com.example.starter_project_2025.system.project.domain.Project;
+import com.example.starter_project_2025.system.project.domain.ProjectStatus;
+import com.example.starter_project_2025.system.project.ProjectRepository;
 import com.example.starter_project_2025.system.project.ProjectTeam;
+import com.example.starter_project_2025.system.project.ProjectTeamRepository;
+import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.example.starter_project_2025.system.project.template.assignment.TemplateAssignmentProvisioningService;
 import com.example.starter_project_2025.system.project.team.Team;
 import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
@@ -28,6 +32,8 @@ public class WorkspaceCreationTransaction {
     private final WorkspaceIdempotencyService idempotency;
     private final WorkspaceJournalService journal;
     private final WorkspaceProjectSelection selection;
+    private final ProjectRepository projects;
+    private final ProjectTeamRepository teams;
     private final TemplateAssignmentProvisioningService provisioning;
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
@@ -85,9 +91,30 @@ public class WorkspaceCreationTransaction {
     }
 
     private void activateProjectForWorkspace(Project project) {
-        if (project != null && project.getStatus() == com.example.starter_project_2025.system.project.domain.ProjectStatus.PLANNING) {
-            project.setStatus(com.example.starter_project_2025.system.project.domain.ProjectStatus.ACTIVE);
+        if (project != null && project.getStatus() == ProjectStatus.PLANNING) {
+            project.setStatus(ProjectStatus.ACTIVE);
         }
+    }
+
+    private Project createProjectForTeam(ProjectTeam team, Long tenantId) {
+        if (team.getProject() != null) {
+            return team.getProject();
+        }
+        ProjectTemplate template = team.getProjectTemplate();
+        if (template == null) {
+            return null;
+        }
+
+        Project project = new Project();
+        project.setCode("TEAM-" + team.getId());
+        project.setName(template.getName());
+        project.setDescription(template.getDescription());
+        project.setTenantId(tenantId);
+        project.setStatus(ProjectStatus.PLANNING);
+        project = projects.saveAndFlush(project);
+        team.setProject(project);
+        teams.saveAndFlush(team);
+        return project;
     }
 
     private String normalizeTaskKeyPrefix(String prefix) {
