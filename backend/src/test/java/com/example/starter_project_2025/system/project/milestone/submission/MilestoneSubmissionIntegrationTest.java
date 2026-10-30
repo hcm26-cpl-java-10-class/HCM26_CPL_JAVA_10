@@ -138,8 +138,27 @@ class MilestoneSubmissionIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("REJECTED"))
                 .andExpect(jsonPath("$.executionStatus").value("FAILED"))
-                .andExpect(jsonPath("$.reviews[0].decision").value("REJECT"));
+                .andExpect(jsonPath("$.reviews[0].decision").value("REJECT"))
+                .andExpect(jsonPath("$.reviews[0].rawScore").value(0))
+                .andExpect(jsonPath("$.reviews[0].finalScore").value(0));
 
+        assertEquals(auditBefore + 1, audits.count());
+        assertEquals(eventBefore + 1, outbox.count());
+        long artifactCount = artifactSubmissions.count();
+        mockMvc.perform(post("/api/projects/{projectId}/milestones/{milestoneId}/artifact-draft/submissions",
+                        detail.get("projectId").asLong(), detail.get("milestoneId").asText())
+                        .header("Authorization", studentBearer())
+                        .header("Idempotency-Key", "cannot-resubmit-rejected-artifact")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"repositoryUrl\":\"https://github.com/example/rejected-v2\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Submission was REJECTED (0 points). Resubmission is not permitted."));
+        mockMvc.perform(post("/api/milestone-submissions/{id}/versions", detail.get("id").asText())
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Rejected resubmission\"}"))
+                .andExpect(status().isConflict());
+        assertEquals(artifactCount, artifactSubmissions.count());
         assertEquals(auditBefore + 1, audits.count());
         assertEquals(eventBefore + 1, outbox.count());
     }
@@ -269,7 +288,7 @@ class MilestoneSubmissionIntegrationTest {
                 MockMilestoneData.PROJECT_ID, MockMilestoneData.TEAM_ID, "Not open " + UUID.randomUUID(),
                 null, now.plusSeconds(3600), true, MockMilestoneData.RUBRIC_ID,
                 MockMilestoneData.TECHNICAL_REVIEWER_ID, LatePolicyType.NO_LATE, null, null, actor, now));
-        MilestoneSubmission submission = submissions.saveAndFlush(MilestoneSubmission.create(milestone, 901L,
+        MilestoneSubmission submission = submissions.saveAndFlush(MilestoneSubmission.create(milestone, MockMilestoneData.TEAM_ID,
                 "Team", UUID.randomUUID(), "Student", MockMilestoneData.TECHNICAL_REVIEWER_ID, "Reviewer", now));
         SubmissionVersion version = SubmissionVersion.draft(submission, 1, "Work", null, null, actor, now);
         version.submit(now, false, BigDecimal.ZERO);
@@ -286,7 +305,8 @@ class MilestoneSubmissionIntegrationTest {
                 .header("Authorization", bearer()).header("Idempotency-Key", "not-open")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(reviewRequest(detail, "REQUEST_CHANGES", "Please revise."))))
-                .andExpect(status().isUnprocessableEntity());
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Milestone is not waiting for review"));
         mockMvc.perform(get("/api/milestone-submissions/{id}", submission.getId())
                 .header("Authorization", bearer())).andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SUBMITTED"))
@@ -296,7 +316,7 @@ class MilestoneSubmissionIntegrationTest {
     }
 
     @Test
-    void requestChangesIsBlockedAfterNoLateDeadline() throws Exception {
+    void reviewerCanRequestChangesAfterDeadlineButStudentCannotSubmitUntilDeadlineIsExtended() throws Exception {
         Instant now = Instant.now();
         UUID actor = UUID.randomUUID();
         Milestone milestone = Milestone.create(MockMilestoneData.TENANT_ID, MockMilestoneData.PROJECT_ID,
@@ -304,8 +324,13 @@ class MilestoneSubmissionIntegrationTest {
                 "Closed request-changes test " + UUID.randomUUID(), null, now.minusSeconds(3600), true,
                 MockMilestoneData.RUBRIC_ID, MockMilestoneData.TECHNICAL_REVIEWER_ID,
                 LatePolicyType.NO_LATE, null, null, actor, now.minusSeconds(7200));
+        milestone.openForWork(actor, now.minusSeconds(7200));
+        milestone.start(actor, now.minusSeconds(7100));
+        milestone.setExecutionStatus(
+                com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus.REVIEW,
+                actor, now.minusSeconds(600));
         milestone = milestones.saveAndFlush(milestone);
-        MilestoneSubmission submission = MilestoneSubmission.create(milestone, 901L, "Closed Team",
+        MilestoneSubmission submission = MilestoneSubmission.create(milestone, MockMilestoneData.TEAM_ID, "Closed Team",
                 UUID.randomUUID(), "Student", MockMilestoneData.TECHNICAL_REVIEWER_ID, "Reviewer", now.minusSeconds(1800));
         submission = submissions.saveAndFlush(submission);
         SubmissionVersion version = SubmissionVersion.draft(submission, 1, "Late work", null, null, actor, now.minusSeconds(1200));
@@ -323,8 +348,24 @@ class MilestoneSubmissionIntegrationTest {
                         .header("Idempotency-Key", "request-changes-closed")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(reviewRequest(detail, "REQUEST_CHANGES", "Please revise."))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CHANGES_REQUESTED"));
+        mockMvc.perform(post("/api/milestone-submissions/{id}/versions", submission.getId())
+                        .header("Authorization", bearer()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Revision after feedback\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.availableActions.submit").value(false));
+        mockMvc.perform(post("/api/milestone-submissions/{id}/submit", submission.getId())
+                        .header("Authorization", bearer()).header("Idempotency-Key", "expired-revision"))
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.errors.decision").isArray());
+                .andExpect(jsonPath("$.errors.submission").isArray());
+        milestone.extendResubmission(now.plusSeconds(3600), actor, now);
+        milestones.saveAndFlush(milestone);
+        mockMvc.perform(post("/api/milestone-submissions/{id}/submit", submission.getId())
+                        .header("Authorization", bearer()).header("Idempotency-Key", "extended-revision"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUBMITTED"))
+                .andExpect(jsonPath("$.currentVersionNumber").value(2));
     }
 
     @Test

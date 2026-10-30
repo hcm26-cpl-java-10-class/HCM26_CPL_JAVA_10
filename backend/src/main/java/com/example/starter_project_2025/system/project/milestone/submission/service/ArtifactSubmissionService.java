@@ -25,6 +25,8 @@ import com.example.starter_project_2025.system.project.milestone.submission.port
 import com.example.starter_project_2025.system.project.milestone.submission.repository.ArtifactAttachmentRepository;
 import com.example.starter_project_2025.system.project.milestone.submission.repository.MilestoneArtifactSubmissionRepository;
 import com.example.starter_project_2025.system.project.milestone.submission.repository.MilestoneArtifactDraftRepository;
+import com.example.starter_project_2025.system.project.milestone.submission.repository.MilestoneSubmissionRepository;
+import com.example.starter_project_2025.system.project.milestone.submission.domain.SubmissionStatus;
 import com.example.starter_project_2025.web.CorrelationIdFilter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -60,6 +62,7 @@ public class ArtifactSubmissionService {
     private final ArtifactContributionLock contributionLock;
     private final ArtifactReviewSubmissionSyncService reviewSyncService;
     private final MilestoneSubmissionWindow submissionWindow;
+    private final MilestoneSubmissionRepository milestoneSubmissionRepository;
 
     @Transactional
     public ArtifactSubmissionResponse submit(Long projectId, UUID milestoneId, String idempotencyKey,
@@ -84,6 +87,17 @@ public class ArtifactSubmissionService {
             UUID resourceId = previous.get().getResourceId();
             return submissionRepository.findById(resourceId).map(this::toResponse)
                     .orElseThrow(() -> new IllegalStateException("Idempotent submission record is missing"));
+        }
+
+        // A rejected review is terminal for this milestone/team. Keep this
+        // guard on the project-backed submit path too, before creating an
+        // artifact version that could no longer be reviewed.
+        if (milestone.getTeamId() != null && milestoneSubmissionRepository
+                .findByMilestoneIdAndTeamId(milestoneId, milestone.getTeamId())
+                .map(row -> row.getStatus() == SubmissionStatus.REJECTED)
+                .orElse(false)) {
+            throw new MilestoneConflictException(
+                    "Submission was REJECTED (0 points). Resubmission is not permitted.");
         }
 
         accessPolicy.requireSubmittableState(scope.project());
