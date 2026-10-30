@@ -20,7 +20,7 @@ interface BacklogSectionProps {
   collapsed: boolean;
   canEditTask: boolean;
   busyItemId: number | null;
-  counts?: { todo: number; inProgress: number; done: number };
+  counts?: { todo: number; inProgress: number; review: number; done: number };
   actions?: ReactNode;
   /**
    * Rendered BELOW the box, left aligned (e.g. the Jira style "+ Create" row).
@@ -49,6 +49,7 @@ interface BacklogSectionProps {
 const countStyles = {
   todo: "text-slate-500",
   inProgress: "text-sky-600",
+  review: "text-amber-600",
   done: "text-emerald-600",
 } as const;
 
@@ -158,6 +159,15 @@ export function BacklogSection({
                   title="In Progress"
                 >
                   {counts.inProgress}
+                </span>
+                <span
+                  className={cn(
+                    "rounded border bg-background px-1.5 text-[11px] font-semibold",
+                    countStyles.review,
+                  )}
+                  title="Review"
+                >
+                  {counts.review}
                 </span>
                 <span
                   className={cn(

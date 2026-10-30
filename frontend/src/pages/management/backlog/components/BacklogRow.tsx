@@ -189,7 +189,18 @@ export function BacklogRow({
             </button>
           </DropdownMenuTrigger>
 
-          <DropdownMenuContent align="end" className="w-44">
+          {/*
+            The menu content is rendered through a portal but React still
+            bubbles its events up this component tree, so picking a status
+            would also fire the row `onClick` and open the detail panel.
+            Stop both the mouse and the keyboard events at the menu root.
+          */}
+          <DropdownMenuContent
+            align="end"
+            className="w-44"
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
             {TASK_STATUS_ORDER.map((value) => {
               const option = backlogStatusMeta(value);
 

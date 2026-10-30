@@ -95,15 +95,20 @@ const toDateTimeLocal = (value?: string | null) => {
 };
 
 /**
- * Board buckets map onto the backend lifecycle: "To Do" is `TODO`, ongoing
- * work is `IN_PROGRESS`, finished work is `DONE`.
+ * Board statuses map onto the backend lifecycle: the product backlog is
+ * `TODO`, and the workflow columns are `TODO` (To do), `IN_PROGRESS`,
+ * `REVIEW` and `DONE` - the same statuses the workspace Kanban board uses.
  */
 const toSprintBacklogStatus = (status: BacklogStatus): SprintBacklogStatus => {
   switch (status) {
     case "IN_PROGRESS":
       return "IN_PROGRESS";
+    case "REVIEW":
+      return "REVIEW";
     case "DONE":
       return "DONE";
+    case "BLOCKED":
+      return "BLOCKED";
     default:
       return "TODO";
   }
@@ -112,6 +117,10 @@ const toSprintBacklogStatus = (status: BacklogStatus): SprintBacklogStatus => {
 /**
  * Reverse mapping used when the `/backlogs` page reads the flat list of Sprint
  * Backlog records (the backend has no `BACKLOG` status).
+ * <p>
+ * `REVIEW` is kept as its own column so the Backlogs tab shows the same
+ * statuses as the workspace Kanban board instead of reporting review work as
+ * in progress.
  */
 const toBoardStatus = (
   status: SprintBacklogStatus | null | undefined,
@@ -119,8 +128,11 @@ const toBoardStatus = (
 ): BacklogStatus => {
   switch (status) {
     case "IN_PROGRESS":
-    case "REVIEW":
       return "IN_PROGRESS";
+    case "REVIEW":
+      return "REVIEW";
+    case "BLOCKED":
+      return "BLOCKED";
     case "DONE":
       return "DONE";
     case "TODO":
@@ -812,9 +824,9 @@ export function BacklogBoard({
           ?.projectId ?? null);
 
   /**
-   * The board works with three buckets (`SPRINT_BACKLOG` / `IN_PROGRESS` /
-   * `DONE`); they map onto the four {@link SprintBacklogStatus} values of the
-   * backend.
+   * The board uses the same workflow as the workspace Kanban board:
+   * `SPRINT_BACKLOG` (To do) / `IN_PROGRESS` / `REVIEW` / `DONE`.
+   * Any of them can be picked in any direction - the team owns its board.
    */
   const handleItemStatusChange = async (
     item: SprintPlanningItem,
@@ -822,11 +834,25 @@ export function BacklogBoard({
   ) => {
     if (!canEditTask || item.status === status) return;
 
+    const target = toSprintBacklogStatus(status);
+
+    /**
+     * A product backlog item is outside the sprint workflow: the backend only
+     * lets it sit in To do until it joins a sprint, so the other statuses are
+     * explained instead of letting the API reject them.
+     */
+    if (item.sprintId == null && target !== "TODO") {
+      toast.error(
+        "Công việc trong Backlog cần được thêm vào Sprint trước khi đổi sang trạng thái này.",
+      );
+      return;
+    }
+
     setBusyItemId(item.id);
 
     try {
       await sprintBacklogApi.update(String(item.id), {
-        status: toSprintBacklogStatus(status),
+        status: target,
       } as SprintBacklogDTO);
       await refreshBoard();
 
