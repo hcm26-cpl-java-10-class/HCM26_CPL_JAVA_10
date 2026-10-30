@@ -44,7 +44,9 @@ public class WorkspaceSectionService {
     public Navigation navigation(Long id) {
         Context context = context(id);
         var project = context.workspace().getProject();
+        var team = context.workspace().getTeam();
         return new Navigation(id, context.scope().projectId(), context.scope().teamId(),
+                team.getTrainingClass().getId(), team.getAllocationSession().getId(),
                 project == null ? null : project.getCode(), project == null ? null : project.getName(),
                 context.workspace().getTeam().getTeamName(), project == null ? null : project.getStatus(),
                 context.workspace().getTaskKeyPrefix(), Arrays.stream(WorkspaceSection.values())

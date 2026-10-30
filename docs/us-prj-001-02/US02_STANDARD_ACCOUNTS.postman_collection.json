@@ -274,12 +274,11 @@
             "exec": [
               "pm.test(\"Members returns 200\", () => pm.response.to.have.status(200));",
               "const rows = pm.response.json();",
-              "pm.test(\"Exactly four approved fields and active roster\", () => {",
+              "pm.test(\"Member code, name and allocation roles are returned\", () => {",
               " pm.expect(rows).to.be.an(\"array\");",
               " for (const member of rows) {",
-              "  pm.expect(Object.keys(member).sort()).to.eql([\"display_name\",\"project_role\",\"status\",\"user_code\"]);",
-              "  pm.expect(member.status).to.equal(\"ACTIVE\");",
-              "  pm.expect([\"UNASSIGNED\",\"TEAM_LEADER\",\"DEV\",\"FE_DEV\",\"BE_DEV\",\"BA\",\"QA\",\"TESTER\"]).to.include(member.project_role);",
+              "  pm.expect(Object.keys(member).sort()).to.eql([\"display_name\",\"roles\",\"user_code\"]);",
+              "  pm.expect(member.roles).to.be.an(\"array\");",
               " }",
               " pm.expect(rows.length).to.equal(Number(pm.collectionVariables.get(\"activeMemberCount\")));",
               " const codes = rows.map(row => row.user_code).filter(Boolean);",
@@ -363,12 +362,11 @@
             "exec": [
               "pm.test(\"Members returns 200\", () => pm.response.to.have.status(200));",
               "const rows = pm.response.json();",
-              "pm.test(\"Exactly four approved fields and active roster\", () => {",
+              "pm.test(\"Member code, name and allocation roles are returned\", () => {",
               " pm.expect(rows).to.be.an(\"array\");",
               " for (const member of rows) {",
-              "  pm.expect(Object.keys(member).sort()).to.eql([\"display_name\",\"project_role\",\"status\",\"user_code\"]);",
-              "  pm.expect(member.status).to.equal(\"ACTIVE\");",
-              "  pm.expect([\"UNASSIGNED\",\"TEAM_LEADER\",\"DEV\",\"FE_DEV\",\"BE_DEV\",\"BA\",\"QA\",\"TESTER\"]).to.include(member.project_role);",
+              "  pm.expect(Object.keys(member).sort()).to.eql([\"display_name\",\"roles\",\"user_code\"]);",
+              "  pm.expect(member.roles).to.be.an(\"array\");",
               " }",
               " pm.expect(rows.length).to.equal(Number(pm.collectionVariables.get(\"activeMemberCount\")));",
               " const codes = rows.map(row => row.user_code).filter(Boolean);",
@@ -389,7 +387,7 @@
       ]
     },
     {
-      "name": "07 - Management roster - teacher",
+      "name": "07 - Legacy management roster is unavailable - teacher",
       "request": {
         "method": "GET",
         "header": [],
@@ -411,16 +409,14 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test(\"Assigned teacher may manage the roster\", () => pm.response.to.have.status(200));",
-              "const row = pm.response.json().find(member => member.userCode && member.userCode.startsWith(\"SE\"));",
-              "if(row) pm.collectionVariables.set(\"studentUserId\", row.userId);"
+              "pm.test(\"Legacy management API is unavailable\", () => pm.response.to.have.status(404));"
             ]
           }
         }
       ]
     },
     {
-      "name": "08 - Student cannot access management roster",
+      "name": "08 - Legacy management roster is unavailable - student",
       "request": {
         "method": "GET",
         "header": [],
@@ -442,7 +438,7 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test(\"Student has no management permission\", () => pm.response.to.have.status(403));",
+              "pm.test(\"Legacy management API is unavailable\", () => pm.response.to.have.status(404));",
               "pm.test(\"No member list returned\", () => pm.expect(pm.response.json()).not.to.be.an(\"array\"));"
             ]
           }

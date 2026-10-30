@@ -43,6 +43,10 @@ public class ProjectTemplate extends BaseEntity {
     @Column(name = "tenant_id", updatable = false)
     Long tenantId;
 
+    /** Root template id shared by all rows of one version family; null on legacy roots. */
+    @Column(name = "version_family_id")
+    Long versionFamilyId;
+
     /** Null means available to every cohort in the owning tenant. */
     @Column(name = "cohort_id")
     Long cohortId;
@@ -94,12 +98,7 @@ public class ProjectTemplate extends BaseEntity {
     @Column(name = "estimated_duration_weeks")
     Integer estimatedDurationWeeks;
 
-    /**
-     * US-07: business version of the template, kept aligned with the newest
-     * {@code project_template_version} snapshot ({@code v2.0} -> {@code 2}) by
-     * {@code ProjectTemplateSnapshotServiceImpl}. The column is updatable so the
-     * template row and its version chain can never report different numbers.
-     */
+    /** Business version of this template row. New revisions use a new row. */
     @Builder.Default
     @Column(name = "template_version", nullable = false, columnDefinition = "integer default 1")
     Integer templateVersion = 1;

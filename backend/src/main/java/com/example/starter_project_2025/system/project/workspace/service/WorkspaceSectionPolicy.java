@@ -41,7 +41,6 @@ public class WorkspaceSectionPolicy {
         Predicate<String> has = permission -> readable && access.permitted(user, permission);
         Map<String, Boolean> actions = new LinkedHashMap<>();
         switch (section) {
-            case MEMBERS -> actions.put("manage", has.test("TEAM_UPDATE"));
             case MILESTONE -> {
                 actions.put("create", has.test("MILESTONE_WRITE"));
                 actions.put("review", has.test("MILESTONE_WRITE"));

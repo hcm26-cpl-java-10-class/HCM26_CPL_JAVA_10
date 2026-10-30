@@ -43,9 +43,9 @@ export function RubricTableCard({
           <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900">
             <FileCheck2 className="size-5" />
           </div>
-          <div className="min-w-0">
-            <CardTitle className="line-clamp-1 text-base leading-tight">{rubric.name}</CardTitle>
-            <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+          <div className="min-w-0 flex-1">
+            <CardTitle className="line-clamp-1 text-base leading-tight [overflow-wrap:anywhere]">{rubric.name}</CardTitle>
+            <p className="mt-1 line-clamp-2 text-sm text-muted-foreground [overflow-wrap:anywhere]">
               {rubric.description || "No description available."}
             </p>
           </div>

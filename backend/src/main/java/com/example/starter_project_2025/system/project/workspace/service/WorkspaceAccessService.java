@@ -29,6 +29,7 @@ public class WorkspaceAccessService {
     private final TenantRepository tenants;
     private final ProjectTeamRepository teams;
     private final ProjectMemberRepository members;
+    private final WorkspaceRosterService roster;
     private final ProjectRepository projects;
     private final ScopeAuthorizationService classScope;
     private static final Set<String> READ = Set.of("WORKSPACE_READ", "VIEW_PROJECT_WORKSPACE");
@@ -120,8 +121,8 @@ public class WorkspaceAccessService {
                 || "ADMIN".equals(role.getName())
                 || "PO".equals(role.getName())));
         return admin || (team.getAssignedMentorId() != null && team.getAssignedMentorId().equals(user.getId()))
-                || members.existsByTeam_IdAndClassMember_User_IdAndClassMember_Status(
-                        team.getId(), user.getId(),
+                || members.existsByTeam_IdAndIsActiveTrueAndClassMember_TrainingClass_IdAndClassMember_User_IdAndClassMember_Status(
+                        team.getId(), team.getTrainingClass().getId(), user.getId(),
                         com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus.ACTIVE)
                 || classScope.canManageClass(SecurityContextHolder.getContext().getAuthentication(),
                         team.getTrainingClass(), "WORKSPACE_READ", "WORKSPACE_CREATE", "PRJ_WORKSPACE_MANAGE");
@@ -137,8 +138,7 @@ public class WorkspaceAccessService {
     }
 
     public boolean hasMembers(ProjectTeam team) {
-        return !members.findAllByTeam_IdAndClassMember_StatusOrderByIdAsc(
-                team.getId(), com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus.ACTIVE).isEmpty();
+        return !roster.current(team).isEmpty();
     }
 
     public boolean projectCanStart(Project project) {

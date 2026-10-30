@@ -23,6 +23,9 @@ public class ProjectTemplateSchemaInitializer implements CommandLineRunner {
         try (Connection connection = dataSource.getConnection()) {
             ensureTenantConstraint(connection);
             removeGlobalCodeConstraint(connection);
+            try (var statement = connection.createStatement()) {
+                statement.executeUpdate("UPDATE project_templates SET version_family_id = id WHERE version_family_id IS NULL");
+            }
         }
     }
 

@@ -17,7 +17,6 @@ import com.example.starter_project_2025.system.project.workspace.repository.Work
 import com.example.starter_project_2025.system.project.workspace.spec.WorkspaceCandidateSpec;
 
 import com.example.starter_project_2025.system.project.trainingclass.TrainingClass;
-import com.example.starter_project_2025.system.project.ProjectMemberRepository;
 import com.example.starter_project_2025.system.project.ProjectTeam;
 import com.example.starter_project_2025.system.project.ProjectTeamRepository;
 import com.example.starter_project_2025.system.project.ProjectTeamStatus;
@@ -42,7 +41,7 @@ import java.util.List;
 public class WorkspaceServiceImpl implements WorkspaceService {
     private final WorkspaceRepository workspaceRepository;
     private final ProjectTeamRepository teamRepository;
-    private final ProjectMemberRepository memberRepository;
+    private final WorkspaceRosterService roster;
     private final WorkspaceReadService reads;
     private final WorkspaceAccessService access;
     private final WorkspaceCreationTransaction creation;
@@ -94,8 +93,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
                 : template.getCode() != null && !template.getCode().isBlank() ? template.getCode()
                 : "Template #" + template.getId();
         Workspace existing = workspaceRepository.findFirstByTeamIdOrderByIdAsc(team.getId()).orElse(null);
-        long memberCount = memberRepository.findAllByTeam_IdAndClassMember_StatusOrderByIdAsc(
-                team.getId(), com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus.ACTIVE).size();
+        long memberCount = roster.current(team).size();
         boolean eligible = Boolean.TRUE.equals(team.getIsActive()) && team.getStatus() == ProjectTeamStatus.ACTIVE
                 && existing == null && memberCount > 0
                 && (project == null || (Boolean.TRUE.equals(project.getIsActive()) && access.projectCanStart(project)));

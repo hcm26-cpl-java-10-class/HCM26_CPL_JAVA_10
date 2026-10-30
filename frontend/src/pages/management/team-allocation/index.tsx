@@ -283,13 +283,24 @@ export default function TeamAllocationPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const classId = Number(classIdParam);
+  const allocationLink = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const sessionId = Number(params.get("sessionId"));
+    const teamId = Number(params.get("teamId"));
+    return {
+      sessionId: Number.isSafeInteger(sessionId) && sessionId > 0 ? sessionId : null,
+      teamId: Number.isSafeInteger(teamId) && teamId > 0 ? teamId : null,
+    };
+  }, [location.search]);
+  const requestedSessionRef = useRef(allocationLink.sessionId);
   const selectedClass = (location.state as { trainingClass?: TrainingClassDTO } | null)
     ?.trainingClass;
   const queryClient = useQueryClient();
   const initialSession = useMemo(() => {
     const saved = getSavedSession();
-    return saved?.classId === classId ? saved : null;
-  }, [classId]);
+    return saved?.classId === classId &&
+      (allocationLink.sessionId === null || saved.id === allocationLink.sessionId) ? saved : null;
+  }, [classId, allocationLink.sessionId]);
   const [capacityInput, setCapacityInput] = useState(initialSession?.maxMembers.toString() ?? "");
   const [session, setSession] = useState<AllocationSession | null>(initialSession);
   const [createAnotherSession, setCreateAnotherSession] = useState(false);
@@ -378,7 +389,10 @@ export default function TeamAllocationPage() {
 
   useEffect(() => {
     if (!sessionsQuery.data) return;
-    const matchingSession = (session
+    const requestedSession = requestedSessionRef.current;
+    requestedSessionRef.current = null;
+    const matchingSession = (requestedSession === null ? undefined
+      : sessionsQuery.data.find((item) => item.id === requestedSession)) ?? (session
       ? sessionsQuery.data.find((item) => item.id === session.id)
       : undefined) ?? sessionsQuery.data[0];
     if (!matchingSession) {
@@ -1916,6 +1930,7 @@ export default function TeamAllocationPage() {
                           sessionId={sessionId!}
                           key={team.teamId}
                           team={team}
+                          openInitially={allocationLink.teamId === team.teamId}
                           memberName={nameForMember}
                           mentors={mentorsQuery.data ?? []}
                           memberOptions={rosterQuery.data ?? []}
@@ -2796,6 +2811,7 @@ function SavedTeamCard({
   classId,
   sessionId,
   team,
+  openInitially,
   memberName,
   mentors,
   memberOptions,
@@ -2830,6 +2846,7 @@ function SavedTeamCard({
   classId: number;
   sessionId: number;
   team: AllocationTeam;
+  openInitially: boolean;
   memberName: (memberId: number) => string;
   mentors: MentorOption[];
   memberOptions: ClassRosterMember[];
@@ -2873,7 +2890,7 @@ function SavedTeamCard({
     team.projectTemplateId == null ? "" : String(team.projectTemplateId),
   );
   const [selectedCandidate, setSelectedCandidate] = useState<TemplateCandidate | null>(null);
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(openInitially);
   const [pickerOpen, setPickerOpen] = useState(false);
   const identity = usePermissions();
   const templatesQuery = useQuery({

@@ -62,6 +62,9 @@ public final class WorkspaceCandidateSpec {
             var membership = query.subquery(Long.class);
             var member = membership.from(ProjectMember.class);
             membership.select(member.get("id")).where(cb.equal(member.get("team").get("id"), root.get("id")),
+                    cb.isTrue(member.get("isActive")),
+                    cb.equal(member.get("classMember").get("trainingClass").get("id"),
+                            root.get("trainingClass").get("id")),
                     cb.equal(member.get("classMember").get("user").get("id"), userId),
                     cb.equal(member.get("classMember").get("status"),
                             com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus.ACTIVE));

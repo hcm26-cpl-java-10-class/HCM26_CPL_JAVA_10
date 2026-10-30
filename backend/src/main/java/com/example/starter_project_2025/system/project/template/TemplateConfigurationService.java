@@ -67,6 +67,17 @@ public class TemplateConfigurationService {
     }
 
     public ProjectTemplate duplicate(ProjectTemplate source, ProjectTemplateSnapshot version, String name, Long tenantId) {
+        return duplicate(source, version, name, tenantId, null, 1, null);
+    }
+
+    public ProjectTemplate duplicateVersion(ProjectTemplate source, ProjectTemplateSnapshot version,
+                                            int nextVersion, Long familyId) {
+        return duplicate(source, version, source.getName(), source.getTenantId(),
+                source.getCode(), nextVersion, familyId);
+    }
+
+    private ProjectTemplate duplicate(ProjectTemplate source, ProjectTemplateSnapshot version, String name, Long tenantId,
+                                      String versionCode, int templateVersion, Long familyId) {
         ObjectNode content = parse(version.getContentJson());
         ObjectNode fallback = parse(capture(source));
         fallback.fieldNames().forEachRemaining(field -> {
@@ -81,10 +92,12 @@ public class TemplateConfigurationService {
         if (configuration.milestones() == null || configuration.backlogItems() == null) throw invalidContent();
         String prefix = source.getCode() == null ? "TPL" : source.getCode();
         prefix = prefix.substring(0, Math.min(prefix.length(), 58));
-        String code;
-        do {
-            code = prefix + "-COPY-" + UUID.randomUUID();
-        } while (templates.existsByTenantIdAndCodeAndTemplateVersion(tenantId, code, 1));
+        String code = versionCode;
+        if (code == null) {
+            do {
+                code = prefix + "-COPY-" + UUID.randomUUID();
+            } while (templates.existsByTenantIdAndCodeAndTemplateVersion(tenantId, code, 1));
+        }
         validator.validate(new ProjectTemplateRequest(code, name, configuration.description(), configuration.category(),
                 configuration.level(), configuration.estimatedDurationWeeks() == null ? null
                         : BigDecimal.valueOf(configuration.estimatedDurationWeeks()), null, source.getCohortId(),
@@ -97,7 +110,8 @@ public class TemplateConfigurationService {
                 .targetRoles(new HashSet<>(configuration.targetRoles() == null ? Set.of() : configuration.targetRoles()))
                 .learningOutcomes(new HashSet<>(configuration.learningOutcomes() == null ? Set.of() : configuration.learningOutcomes()))
                 .constraintsJson(write(configuration.constraints() == null ? Map.of() : configuration.constraints()))
-                .status(ProjectTemplateStatus.DRAFT).templateVersion(1).build());
+                .status(ProjectTemplateStatus.DRAFT).templateVersion(templateVersion)
+                .versionFamilyId(familyId).build());
         for (int index = 0; index < configuration.milestones().size(); index++) {
             copyMilestone(configuration.milestones().get(index), template, index);
         }

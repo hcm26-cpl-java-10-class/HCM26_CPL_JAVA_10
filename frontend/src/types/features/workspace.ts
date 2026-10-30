@@ -61,14 +61,10 @@ export interface WorkspaceActivity {
   correlationId: string;
 }
 
-export type ProjectRole = "UNASSIGNED" | "TEAM_LEADER" | "DEV" | "FE_DEV" | "BE_DEV" | "BA" | "QA" | "TESTER";
-export type ParticipationStatus = "ACTIVE" | "INACTIVE" | "LEFT";
-
 export interface WorkspaceMember {
   user_code: string | null;
   display_name: string;
-  project_role: ProjectRole;
-  status: ParticipationStatus;
+  roles: Array<"PM" | "BA" | "DEV" | "QA">;
 }
 
 export interface WorkspaceDetail extends WorkspaceResponse {
@@ -77,6 +73,8 @@ export interface WorkspaceDetail extends WorkspaceResponse {
   projectName?: string | null;
   projectDescription?: string | null;
   projectStatus?: string | null;
+  projectClassName?: string | null;
+  projectCohortName?: string | null;
   teamCode: string;
   teamName: string;
   mentorName?: string;
@@ -105,7 +103,8 @@ export interface WorkspaceDetail extends WorkspaceResponse {
 export type WorkspaceSectionKey = "overview" | "members" | "milestones" | "sprints" | "backlog" | "artifacts" | "feedback" | "activity";
 export interface WorkspaceSectionAccess { key: WorkspaceSectionKey; canRead: boolean; actions: Record<string, boolean> }
 export interface WorkspaceNavigation {
-  workspaceId: number; projectId?: number | null; teamId: number; projectCode?: string | null; projectName?: string | null;
+  workspaceId: number; projectId?: number | null; teamId: number; classId: number; allocationSessionId: number;
+  projectCode?: string | null; projectName?: string | null;
   teamName: string; projectStatus?: string | null; taskKeyPrefix?: string | null; sections: WorkspaceSectionAccess[];
 }
   export interface WorkspaceBoardColumn { key: "BACKLOG" | "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE" | "CUSTOM_1" | "CUSTOM_2" | "CUSTOM_3" | "CUSTOM_4" | "CUSTOM_5"; label: string; visible: boolean }

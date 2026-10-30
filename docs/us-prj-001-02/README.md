@@ -1,6 +1,6 @@
 # US-PRJ-001-02 — Workspace overview and members
 
-Updated 2026-10-24. The UI is in English and reuses the shared application layout/components.
+Updated 2026-10-30. The UI is in English and reuses the shared application layout/components.
 
 ## Start here
 
@@ -11,27 +11,18 @@ Import US02_STANDARD_ACCOUNTS.postman_collection.json into Postman. It has 13 re
 | Existing account | Workspace access |
 | --- | --- |
 | admin@example.com | Full permissions within the tenant |
-| teacher@example.com | Read/create workspace, read members, manage team memberships within assigned scope |
+| teacher@example.com | Read/create workspace and read members within assigned scope |
 | student@example.com | Read Overview and members of teams where membership is ACTIVE; no creation or team writes |
 
 Use the existing password (seed default password123). Restart the backend after taking the code and log in again to refresh frontend permissions.
 
-Project Management now contains only Workspace. The former /management/project-teams UI redirects to Workspace. The page/breadcrumb says Workspace; Create workspace remains the creation action. Edit memberships at Open workspace → Members → Manage members.
+Project Management now contains only Workspace. The former /management/project-teams UI redirects to Workspace. The page/breadcrumb says Workspace; Create workspace remains the creation action. Manage team membership and roles in Project Team Allocation.
 
-## Membership management
+## Membership ownership
 
-A permitted manager can add an existing active user, choose a project role and set participation ACTIVE/INACTIVE/LEFT. Memberships are reused rather than duplicated; LEFT records and historical workspace activity are retained. Closing Manage members refreshes Overview; the separate member list refreshes after saves.
+Project Team Allocation owns team membership and role writes. Workspace Members displays the member code, name and allocation roles, including multiple roles per member. Search works within the loaded roster. Managers can open the matching team in Project Team Allocation. The former Project Hub member-management endpoints have been removed.
 
-Project roles are independent of system roles. The default project role is UNASSIGNED; selecting TEAM_LEADER does not grant system ADMIN rights.
-
-The Team Management write API is:
-- GET /api/project-hub/teams/{teamId}/members
-- GET /api/project-hub/teams/{teamId}/member-options
-- PUT /api/project-hub/teams/{teamId}/members/{userId}
-
-It requires WORKSPACE_READ, WORKSPACE_MEMBER_READ and TEAM_UPDATE, plus an active tenant and valid team scope. Updates validate tenant membership, account eligibility and project-role/status enums on the backend.
-
-Workspace GET endpoints remain read-only. GET /api/workspaces/{id}/members still returns only user_code, display_name, project_role, status. Overview returns member_count without embedding the roster.
+GET /api/workspaces/{id}/members returns `user_code`, `display_name` and `roles` (an array of PM/BA/DEV/QA codes) for active allocation members of the workspace team. Overview returns `member_count` from the same roster without embedding member details. Reading members still requires WORKSPACE_MEMBER_READ and workspace scope.
 
 ## Local fixtures
 
@@ -45,7 +36,7 @@ The former demo-h2.sql has been replaced with read-only standard-accounts.sql. T
 
 ## Ownership and verification
 
-Curriculum owns snapshot capture; Workspace reads its fixed project-specific snapshot. There is no template designer in this feature. TeamMembershipService owns explicit roster writes independently of workspace viewing.
+Curriculum owns snapshot capture; Workspace reads its fixed project-specific snapshot. There is no template designer in this feature. Project Team Allocation owns roster and role writes; Workspace only reads the resulting roster.
 
 See VERIFICATION.md for executed backend/frontend/live checks. IMPLEMENTATION_GUIDE.md describes the initial architecture; current source and MANUAL_TEST_AC01_AC10.md take precedence over its original code examples.
 

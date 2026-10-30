@@ -19,6 +19,7 @@ public final class WorkspaceSectionDtos {
     }
     public record Access(String key, boolean canRead, Map<String, Boolean> actions) { }
     public record Navigation(Long workspaceId, Long projectId, Long teamId,
+                             Long classId, Long allocationSessionId,
                              String projectCode, String projectName, String teamName,
                              ProjectStatus projectStatus, String taskKeyPrefix, List<Access> sections) { }
     public record BoardColumn(@NotBlank String key, @NotBlank @Size(max = 32) String label, boolean visible) { }
