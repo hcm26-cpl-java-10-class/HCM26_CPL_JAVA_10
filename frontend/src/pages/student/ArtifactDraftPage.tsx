@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { MilestoneRubricCard } from "@/pages/management/project/milestone/components/MilestoneRubricCard";
 import { formatTenantDateTime, getMilestoneApiError } from "@/pages/management/project/milestone/milestone.utils";
 import { countReleaseNoteWords, RELEASE_NOTES_MAX_WORDS, releaseNotesWithinLimit } from "@/lib/release-notes";
+import { artifactFormSource } from "@/lib/artifact-form-source";
 import type { ArtifactAttachment, ArtifactDraftRequest, ArtifactSubmission, ArtifactSubmissionRequest } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, ArrowLeft, CheckCircle2, Eye, FileUp, RotateCcw, Save, ShieldCheck } from "lucide-react";
@@ -44,6 +45,7 @@ export default function ArtifactDraftPage() {
   const [submission, setSubmission] = useState<ArtifactSubmission | null>(null);
   const idempotencyKey = useRef<string | undefined>(undefined);
   const pendingSubmission = useRef<PendingArtifactSubmission | null>(null);
+  const initializedFormScope = useRef<string | null>(null);
 
   const pendingStorageKey = projectId && milestoneId
     ? "artifact-submit-pending:" + projectId + ":" + milestoneId
@@ -66,6 +68,8 @@ export default function ArtifactDraftPage() {
 
   useEffect(() => {
     if (!workspaceQuery.data) return;
+    if (initializedFormScope.current === pendingStorageKey) return;
+    initializedFormScope.current = pendingStorageKey;
     const { draft, milestone } = workspaceQuery.data;
     let pending: PendingArtifactSubmission | null = null;
     if (pendingStorageKey) {
@@ -97,12 +101,13 @@ export default function ArtifactDraftPage() {
       return;
     }
     pendingSubmission.current = null;
-    setRepositoryUrl(draft?.repositoryUrl ?? "");
-    setDeploymentUrl(draft?.deploymentUrl ?? "");
-    setReleaseNotes(draft?.releaseNotes ?? "");
+    const source = artifactFormSource(draft, workspaceQuery.data.latestSubmission);
+    setRepositoryUrl(source?.repositoryUrl ?? "");
+    setDeploymentUrl(source?.deploymentUrl ?? "");
+    setReleaseNotes(source?.releaseNotes ?? "");
     setDraftVersion(draft?.version);
     setAttachments(draft?.attachments ?? []);
-    setChecklist(Object.fromEntries(milestone.checklist.map((item) => [item.id, draft?.checklist[item.id] ?? false])));
+    setChecklist(Object.fromEntries(milestone.checklist.map((item) => [item.id, source === draft ? draft?.checklist[item.id] ?? false : false])));
     setSubmission(workspaceQuery.data.latestSubmission);
   }, [workspaceQuery.data, pendingStorageKey]);
 

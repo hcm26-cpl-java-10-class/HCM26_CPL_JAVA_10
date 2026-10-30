@@ -34,7 +34,9 @@ import {
 import { usePermissions } from "@/hooks/usePermissions";
 import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
 import type { WorkspaceSectionAccess } from "@/types/features/workspace";
-import type { ArtifactSubmission, MilestoneListItem } from "@/types";
+import type { ArtifactSubmission, MilestoneDetailResponse, MilestoneListItem } from "@/types";
+
+type ArtifactMilestone = Pick<MilestoneListItem, "id" | "title" | "description" | "deadline" | "lifecycleStatus" | "mandatory">;
 
 interface MilestoneSubmissionHistoryItem {
   submission: ArtifactSubmission;
@@ -50,32 +52,43 @@ export function WorkspaceArtifactsPanel({
   workspaceId,
   teamId,
   access: _access,
+  milestone,
+  onRefreshMilestone,
 }: {
-  workspaceId: number;
+  workspaceId?: number;
   projectId?: number | null;
   teamId: number;
-  access: WorkspaceSectionAccess;
+  access?: WorkspaceSectionAccess;
+  milestone?: MilestoneDetailResponse;
+  onRefreshMilestone?: () => void;
 }) {
   const navigate = useNavigate();
-  const { activeRole } = usePermissions();
+  const { activeRole, hasPermission } = usePermissions();
   const isStudent = normalizeRole(activeRole) === STUDENT_ROLE;
 
-  const [historyMilestone, setHistoryMilestone] = useState<MilestoneListItem | null>(null);
+  const [historyMilestone, setHistoryMilestone] = useState<ArtifactMilestone | null>(null);
 
   // Load team milestones
   const milestonesQuery = useQuery({
     queryKey: ["workspace-artifacts-milestones", teamId],
     queryFn: () => milestoneApi.getTeamList(teamId, { page: 0, size: 100 }),
+    enabled: !milestone && teamId > 0,
     retry: false,
   });
 
-  const milestones = milestonesQuery.data?.content ?? [];
+  // The detail page supplies its current milestone, so it does not depend on
+  // the workspace list's pagination or load submissions for other milestones.
+  const milestones: ArtifactMilestone[] = milestone ? [milestone] : milestonesQuery.data?.content ?? [];
+  const refreshMilestones = () => {
+    if (milestone) onRefreshMilestone?.();
+    else void milestonesQuery.refetch();
+  };
 
   // Students only load their own history; reviewers/admins load the team queue.
   const submissionsQuery = useQuery({
     queryKey: ["team-artifact-submissions-workspace", teamId, isStudent, milestones.map((m) => m.id)],
     queryFn: async (): Promise<MilestoneSubmissionHistoryItem[]> => {
-      if (!isStudent) return milestoneApi.getTeamArtifactSubmissions(teamId);
+      if (!isStudent) return milestoneApi.getTeamArtifactSubmissions(teamId, milestone?.id);
       const ownHistory = await Promise.all(
         milestones.map((milestone) => milestoneApi.getMyTeamArtifactSubmissions(teamId, milestone.id)),
       );
@@ -86,7 +99,7 @@ export function WorkspaceArtifactsPanel({
       })));
     },
     retry: false,
-    enabled: teamId > 0 && !milestonesQuery.isPending && !milestonesQuery.isError,
+    enabled: teamId > 0 && (Boolean(milestone) || (!milestonesQuery.isPending && !milestonesQuery.isError)),
   });
 
   // Map submissions per milestoneId
@@ -105,18 +118,18 @@ export function WorkspaceArtifactsPanel({
     : [];
 
   const handleOpenSubmit = (milestoneId: string) => {
-    navigate(`/teams/${teamId}/milestones/${milestoneId}/submit?workspaceId=${workspaceId}`);
+    navigate(`/teams/${teamId}/milestones/${milestoneId}/submit${workspaceId ? `?workspaceId=${workspaceId}` : ""}`);
   };
 
   const handleOpenSubmissionsPage = (milestoneId: string) => {
     if (isStudent) {
-      navigate(`/student/teams/${teamId}/milestones/${milestoneId}/submissions?workspaceId=${workspaceId}`);
+      navigate(`/student/teams/${teamId}/milestones/${milestoneId}/submissions${workspaceId ? `?workspaceId=${workspaceId}` : ""}`);
     } else {
-      navigate(`/teams/${teamId}/milestones/${milestoneId}/submissions?workspaceId=${workspaceId}`);
+      navigate(`/teams/${teamId}/milestones/${milestoneId}/submissions${workspaceId ? `?workspaceId=${workspaceId}` : ""}`);
     }
   };
 
-  if (milestonesQuery.isPending) {
+  if (!milestone && milestonesQuery.isPending) {
     return (
       <Card>
         <CardHeader>
@@ -132,7 +145,7 @@ export function WorkspaceArtifactsPanel({
     );
   }
 
-  if (milestonesQuery.isError) {
+  if (!milestone && milestonesQuery.isError) {
     return (
       <Card>
         <CardHeader>
@@ -154,20 +167,20 @@ export function WorkspaceArtifactsPanel({
     <div className="grid gap-6">
       {/* Overview Header */}
       <Card>
-        <CardHeader className="flex-row items-center justify-between space-y-0 pb-4">
-          <div>
+        <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 space-y-0 pb-4">
+          <div className="min-w-0 flex-1">
             <CardTitle className="flex items-center gap-2 text-xl font-bold">
-              <FolderOpen className="size-5 text-primary" /> Quản lý sản phẩm bàn giao (Artifacts)
+              <FolderOpen className="size-5 shrink-0 text-primary" /> {milestone ? "Nộp và theo dõi sản phẩm (Artifact)" : "Quản lý sản phẩm bàn giao (Artifacts)"}
             </CardTitle>
             <CardDescription className="mt-1">
-              Theo dõi tình trạng bàn giao mã nguồn, demo và lịch sử nộp bài theo từng Milestone của nhóm.
+              {milestone ? "Nộp sản phẩm, xem feedback và lịch sử phiên bản của milestone này ngay tại đây." : "Theo dõi tình trạng bàn giao mã nguồn, demo và lịch sử nộp bài theo từng Milestone của nhóm."}
             </CardDescription>
           </div>
           <Button
             variant="outline"
             size="sm"
             onClick={() => {
-              void milestonesQuery.refetch();
+              refreshMilestones();
               void submissionsQuery.refetch();
             }}
           >
@@ -287,7 +300,7 @@ export function WorkspaceArtifactsPanel({
                               </Badge>
                             );
                           }
-                          if (status === "CHANGES_REQUESTED" && isStudent) {
+                          if (status === "CHANGES_REQUESTED" && isStudent && hasPermission("ARTIFACT_SUBMIT")) {
                             return (
                               <Button
                                 size="sm"
@@ -313,13 +326,15 @@ export function WorkspaceArtifactsPanel({
                       ) : (
                         <Button
                           size="sm"
+                          disabled={!hasPermission("ARTIFACT_SUBMIT") || submissionsQuery.isPending || submissionsQuery.isError || (m.lifecycleStatus !== "IN_PROGRESS" && m.lifecycleStatus !== "CHANGES_REQUESTED")}
                           onClick={() => handleOpenSubmit(m.id)}
-                          title="Soạn thảo và nộp sản phẩm cho milestone"
+                          title={m.lifecycleStatus === "PLANNED" ? "Milestone chưa mở. Admin cần Open milestone trước khi nộp." : "Soạn thảo và nộp sản phẩm cho milestone"}
                         >
                           <Upload className="mr-1.5 size-4" />
                           Nộp sản phẩm
                         </Button>
                       )}
+                      {m.lifecycleStatus === "PLANNED" && <span className="text-xs text-muted-foreground">Milestone chưa mở nhận bài.</span>}
                     </div>
                   </div>
                 </CardContent>
@@ -331,44 +346,54 @@ export function WorkspaceArtifactsPanel({
 
       {/* History Dialog (Fix Bug #28) */}
       <Dialog open={Boolean(historyMilestone)} onOpenChange={(open) => !open && setHistoryMilestone(null)}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="flex max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 shadow-xl sm:max-w-5xl">
+          <div className="border-b bg-gradient-to-r from-primary/10 via-background to-sky-500/10 px-6 py-5">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg">
-              <History className="size-5 text-primary" />
-              Lịch sử bài nộp: {historyMilestone?.title}
+            <DialogTitle className="flex min-w-0 items-start gap-2 pr-6 text-lg leading-snug">
+              <History className="mt-0.5 size-5 shrink-0 text-primary" />
+              <span className="min-w-0 break-words [overflow-wrap:anywhere]">Submission history: {historyMilestone?.title}</span>
             </DialogTitle>
             <DialogDescription>
-              Danh sách tất cả các phiên bản artifact đã được nhóm nộp lên hệ thống.
+              Review status, submission time, delivery links, and release notes for every submitted version.
             </DialogDescription>
           </DialogHeader>
+          {activeMilestoneSubmissions.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-2 text-xs">
+              <Badge variant="secondary">{activeMilestoneSubmissions.length} {activeMilestoneSubmissions.length === 1 ? "version" : "versions"}</Badge>
+              <Badge variant="outline">Latest: v{activeMilestoneSubmissions[0].submission.version}</Badge>
+            </div>
+          )}
+          </div>
 
-          <div className="py-2">
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
             {submissionsQuery.isPending ? (
               <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
-                <RotateCw className="size-4 animate-spin" /> Đang tải lịch sử phiên bản…
+                <RotateCw className="size-4 animate-spin" /> Loading submission history…
               </div>
             ) : submissionsQuery.isError ? (
               <div className="grid justify-items-center gap-3 py-8 text-center text-sm text-destructive">
-                <p>Không tải được lịch sử artifact. Hãy thử lại để xem dữ liệu mới nhất.</p>
+                <p>Could not load submission history. Try again to refresh the latest data.</p>
                 <Button variant="outline" size="sm" onClick={() => void submissionsQuery.refetch()}>
-                  <RotateCw className="mr-1.5 size-4" /> Thử lại
+                  <RotateCw className="mr-1.5 size-4" /> Try again
                 </Button>
               </div>
             ) : activeMilestoneSubmissions.length === 0 ? (
-              <div className="py-8 text-center text-sm text-muted-foreground">
-                Chưa có phiên bản nào được nộp cho milestone này.
+              <div className="grid justify-items-center gap-2 rounded-xl border border-dashed py-10 text-center text-sm text-muted-foreground">
+                <FileCheck2 className="size-7" />
+                <p className="font-medium text-foreground">No submissions yet</p>
+                <p>No submitted versions are available for this milestone.</p>
               </div>
             ) : (
-              <div className="max-h-96 overflow-y-auto rounded-md border">
-                <Table>
+              <div className="overflow-x-auto rounded-xl border">
+                <Table className="min-w-[850px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-20">Phiên bản</TableHead>
-                      <TableHead className="w-36">Trạng thái</TableHead>
-                      <TableHead className="w-24">Thời điểm</TableHead>
-                      <TableHead className="w-28">Đúng hạn</TableHead>
-                      <TableHead>Repository / Deploy</TableHead>
-                      <TableHead className="w-32">Ghi chú</TableHead>
+                      <TableHead className="w-20">Version</TableHead>
+                      <TableHead className="w-36">Review status</TableHead>
+                      <TableHead className="w-44">Submitted</TableHead>
+                      <TableHead className="w-28">Timing</TableHead>
+                      <TableHead>Delivery links</TableHead>
+                      <TableHead className="w-48">Release notes</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -386,12 +411,12 @@ export function WorkspaceArtifactsPanel({
                           ) : null}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                          {new Date(submission.submittedAt).toLocaleString("vi-VN")}
+                          {new Date(submission.submittedAt).toLocaleString()}
                         </TableCell>
                         <TableCell>
                           {submission.submittedLate ? (
                             <Badge variant="destructive" className="text-[11px]">
-                              Late {submission.latePenaltyPercent != null ? `(-${submission.latePenaltyPercent}%)` : ""}
+                              Late{submission.latePenaltyPercent != null ? ` (-${submission.latePenaltyPercent}%)` : ""}
                             </Badge>
                           ) : (
                             <Badge variant="outline" className="border-emerald-300 text-emerald-700 bg-emerald-50 text-[11px]">
@@ -399,7 +424,7 @@ export function WorkspaceArtifactsPanel({
                             </Badge>
                           )}
                         </TableCell>
-                        <TableCell className="text-xs space-y-1">
+                        <TableCell className="space-y-1 text-xs">
                           {submission.repositoryUrl && (
                             <div>
                               <a
@@ -425,7 +450,7 @@ export function WorkspaceArtifactsPanel({
                             </div>
                           )}
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground max-w-[180px] truncate" title={submission.releaseNotes ?? ""}>
+                        <TableCell className="max-w-48 whitespace-pre-wrap break-words text-xs text-muted-foreground" title={submission.releaseNotes ?? ""}>
                           {submission.releaseNotes || "—"}
                         </TableCell>
                       </TableRow>
@@ -436,7 +461,7 @@ export function WorkspaceArtifactsPanel({
             )}
           </div>
 
-          <DialogFooter className="flex flex-wrap items-center justify-between gap-2 sm:justify-between">
+          <DialogFooter className="m-0 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-none border-t bg-muted/20 px-6 py-4 sm:justify-between">
             <Button
               variant="ghost"
               size="sm"
@@ -446,17 +471,17 @@ export function WorkspaceArtifactsPanel({
                 if (targetMilestoneId) handleOpenSubmissionsPage(targetMilestoneId);
               }}
             >
-              <ExternalLink className="mr-1.5 size-4" /> Mở trang bài nộp đầy đủ
+              <ExternalLink className="mr-1.5 size-4" /> Open full submission page
             </Button>
             <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => setHistoryMilestone(null)}>
-              Đóng
-            </Button>
-            {isStudent && historyMilestone && activeMilestoneSubmissions[0]?.submission.status === "CHANGES_REQUESTED" && (
-              <Button onClick={() => handleOpenSubmit(historyMilestone.id)}>
-                <Send className="mr-1.5 size-4" /> Nộp phiên bản mới
+              <Button variant="outline" onClick={() => setHistoryMilestone(null)}>
+                Close
               </Button>
-            )}
+              {isStudent && historyMilestone && activeMilestoneSubmissions[0]?.submission.status === "CHANGES_REQUESTED" && (
+                <Button onClick={() => handleOpenSubmit(historyMilestone.id)}>
+                  <Send className="mr-1.5 size-4" /> Submit a new version
+                </Button>
+              )}
             </div>
           </DialogFooter>
         </DialogContent>
