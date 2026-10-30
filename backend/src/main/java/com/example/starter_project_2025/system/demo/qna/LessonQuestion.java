@@ -11,6 +11,8 @@ import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
+import java.time.LocalDateTime;
+
 /** Câu hỏi của học viên dưới một bài học. */
 @Entity
 @Table(
@@ -40,4 +42,21 @@ public class LessonQuestion extends BaseEntity {
 
     @Column(nullable = false, length = 2000)
     String content;
+
+    /** Câu hỏi được giảng viên / admin ghim lên đầu danh sách. */
+    @Column(nullable = false)
+    boolean pinned;
+
+    /** Thời điểm ghim; null nếu không được ghim. */
+    LocalDateTime pinnedAt;
+
+    /** Số lượt upvote (số liệu phi chuẩn hóa từ {@link LessonQuestionVote}, để sắp xếp nhanh). */
+    @Column(nullable = false)
+    int upvoteCount;
+
+    /**
+     * Id của câu trả lời được đánh dấu là đúng (accepted answer); null nếu chưa có.
+     * Lưu dạng id thay vì quan hệ để xóa câu trả lời không dính ràng buộc khóa ngoại vòng tròn.
+     */
+    Long acceptedAnswerId;
 }
