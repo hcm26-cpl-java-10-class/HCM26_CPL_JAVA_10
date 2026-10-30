@@ -273,9 +273,9 @@ public class SprintBacklogServiceImpl
                 && (sprint == null || !request.getSprintId().equals(sprint.getId()))) {
             sprint = resolveSprint(request.getSprintId(), errors);
         }
+        boolean movingProductBacklogToSprint = backlog.getSprint() == null && request.getSprintId() != null;
         if (backlog.getSprint() == null
-                && ((request.getSprintId() != null && backlog.getStatus() != SprintBacklogStatus.TODO)
-                    || (request.getStatus() != null && request.getStatus() != SprintBacklogStatus.TODO))) {
+                && request.getStatus() != null && request.getStatus() != SprintBacklogStatus.TODO) {
             errors.put(STATUS_FIELD, List.of("A product backlog item can only move to the TODO column"));
         }
 
@@ -311,7 +311,11 @@ public class SprintBacklogServiceImpl
 
         // Validate status transition against allowed matrix (Bug 37/38).
         SprintBacklogStatus requestedStatus = request.getStatus();
-        if (requestedStatus == null) {
+        if (movingProductBacklogToSprint) {
+            // The product backlog is outside the sprint workflow. Ignore a
+            // stale status left on a legacy row and start it in TODO.
+            request.setStatus(SprintBacklogStatus.TODO);
+        } else if (requestedStatus == null) {
             request.setStatus(backlog.getStatus());
         } else if (!requestedStatus.equals(backlog.getStatus())) {
             Set<SprintBacklogStatus> allowed = allowedTransitionsFor(sprint, backlog.getStatus());

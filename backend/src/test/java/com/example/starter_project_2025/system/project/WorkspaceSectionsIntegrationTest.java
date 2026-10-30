@@ -459,6 +459,28 @@ class WorkspaceSectionsIntegrationTest {
         changeStatus(itemId, "IN_PROGRESS", 200);
     }
 
+    @Test void productBacklogWithStaleStatusCanReenterSprintOnlyAsTodo() throws Exception {
+        Long itemId = workItem();
+        Long sprintId = tx.execute(status -> backlogItems.findById(itemId).orElseThrow().getSprint().getId());
+
+        mvc.perform(put("/api/sprints/{id}/backlog-items", sprintId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"taskIds\":[]}"))
+                .andExpect(status().isOk());
+        tx.executeWithoutResult(status -> backlogItems.findById(itemId).orElseThrow()
+                .setStatus(SprintBacklogStatus.IN_PROGRESS));
+
+        mvc.perform(put("/api/sprint-backlogs/{id}", itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("sprintId", sprintId, "status", "IN_PROGRESS"))))
+                .andExpect(status().isUnprocessableEntity());
+        mvc.perform(put("/api/sprint-backlogs/{id}", itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("sprintId", sprintId, "status", "TODO"))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.sprintId").value(sprintId))
+                .andExpect(jsonPath("$.status").value("TODO"));
+    }
+
     @Test void cardDetailEditsAndAssigneeAreReflectedOnTheTeamBoard() throws Exception {
         Long itemId = workItem();
         mvc.perform(get("/api/sprint-backlogs/{id}", itemId).header("Authorization", "Bearer " + token))
