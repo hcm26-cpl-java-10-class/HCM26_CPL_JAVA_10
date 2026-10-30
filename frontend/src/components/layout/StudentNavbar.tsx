@@ -123,7 +123,7 @@ export function StudentNavbar() {
       const projectGroup = groups.find((group) => /project|dự án/i.test(group.name));
       const item = {
         id: "student-my-submissions",
-        title: "Bài nộp của tôi",
+        title: "My Submissions",
         url: MY_SUBMISSIONS_URL,
         icon: resolveIcon("menu"),
         isActive: pathname === MY_SUBMISSIONS_URL || pathname.startsWith(`${MY_SUBMISSIONS_URL}/`),

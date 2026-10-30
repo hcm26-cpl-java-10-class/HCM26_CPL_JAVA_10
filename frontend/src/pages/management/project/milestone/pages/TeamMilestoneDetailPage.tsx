@@ -10,8 +10,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { usePermissions } from "@/hooks/usePermissions";
 import { MilestoneRubricCard } from "@/pages/management/project/milestone/components/MilestoneRubricCard";
 import { MilestoneStatusBadge } from "@/pages/management/project/milestone/components/MilestoneStatusBadge";
+import { OpenTeamMilestoneButton } from "@/pages/management/project/milestone/components/OpenTeamMilestoneButton";
 import { MilestoneDraftHistory } from "@/pages/management/project/milestone/components/MilestoneDraftHistory";
 import { formatPenalty, formatTenantDateTime } from "@/pages/management/project/milestone/milestone.utils";
+import { WorkspaceArtifactsPanel } from "@/pages/management/workspace/WorkspaceArtifactsPanel";
 
 export function TeamMilestoneDetailPage() {
   const { teamId: teamIdParam, milestoneId } = useParams<{ teamId: string; milestoneId: string }>();
@@ -41,12 +43,16 @@ export function TeamMilestoneDetailPage() {
     <main className="mx-auto grid w-full max-w-6xl gap-6">
       <Card className="overflow-hidden border-primary/20 bg-gradient-to-r from-primary/5 via-background to-background">
         <CardHeader className="gap-4 p-6 md:p-8">
-          <div className="flex flex-wrap items-center gap-2"><Badge variant="outline">Team milestone</Badge><MilestoneStatusBadge status={milestone.lifecycleStatus} />{milestone.mandatory && <Badge variant="secondary">Mandatory</Badge>}</div>
+          <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap items-center gap-2"><Badge variant="outline">Team milestone</Badge><MilestoneStatusBadge status={milestone.lifecycleStatus} />{milestone.mandatory && <Badge variant="secondary">Mandatory</Badge>}</div><OpenTeamMilestoneButton teamId={teamId} milestoneId={milestone.id} title={milestone.title} lifecycleStatus={milestone.lifecycleStatus} /></div>
           <div className="grid gap-2"><CardTitle className="text-2xl md:text-3xl">{milestone.title}</CardTitle><CardDescription className="max-w-3xl whitespace-pre-wrap text-sm leading-6">{milestone.description || "No description provided."}</CardDescription></div>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground"><span className="inline-flex items-center gap-2"><CalendarClock className="size-4" />Due {formatTenantDateTime(milestone.deadline, milestone.tenantTimeZone)}</span><span className="inline-flex items-center gap-2"><Globe2 className="size-4" />{milestone.tenantTimeZone}</span></div>
           {milestone.scheduledStartAt && <p className="text-sm text-muted-foreground">Opens automatically {formatTenantDateTime(milestone.scheduledStartAt, milestone.tenantTimeZone)} ({milestone.deadlineOffsetDays} days before deadline)</p>}
         </CardHeader>
       </Card>
+
+      {hasPermission("ARTIFACT_READ") && <WorkspaceArtifactsPanel teamId={teamId} milestone={milestone}
+        workspaceId={workspaceId && Number.isSafeInteger(Number(workspaceId)) && Number(workspaceId) > 0 ? Number(workspaceId) : undefined}
+        onRefreshMilestone={() => { void query.refetch(); }} />}
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
         <div className="grid gap-6">

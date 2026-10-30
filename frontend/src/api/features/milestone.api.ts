@@ -21,6 +21,10 @@ import type {
 const backlogMilestoneOptionsPath = "/sprint-backlogs/milestone-options";
 
 export const milestoneApi = {
+  async startTeam(teamId: number, milestoneId: string, expectedVersion: number): Promise<MilestoneResponse> {
+    return (await axiosInstance.post<MilestoneResponse>(`/teams/${teamId}/milestones/${milestoneId}/start`, null,
+      { params: { expectedVersion } })).data;
+  },
   async saveDraft(projectId: string | undefined, teamId: number, payload: Record<string, unknown>): Promise<MilestoneResponse> {
     const path = projectId ? `/projects/${projectId}/milestones/drafts` : `/teams/${teamId}/milestones/drafts`;
     return (await axiosInstance.post<MilestoneResponse>(path, payload)).data;

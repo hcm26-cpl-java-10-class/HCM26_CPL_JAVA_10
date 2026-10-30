@@ -383,7 +383,7 @@ class WorkspaceSectionsIntegrationTest {
         var duplicateName = new ArrayList<>(columns);
         duplicateName.set(4, new WorkspaceSectionDtos.BoardColumn("CUSTOM_1", "Review", true));
         saveColumns(duplicateName, 422);
-        saveColumns(columns.stream().filter(column -> !column.key().equals("REVIEW")).toList(), 422);
+        saveColumns(columns.stream().filter(column -> !column.key().equals("TODO")).toList(), 422);
         var nullColumn = new ArrayList<>(columns);
         nullColumn.set(4, null);
         saveColumns(nullColumn, 422);
@@ -392,6 +392,22 @@ class WorkspaceSectionsIntegrationTest {
         grant("WORKSPACE_READ", "SPRINT_READ");
         saveColumns(workflowColumns(), 403);
         assertThat(read("/board-columns").at("/columns/4/label").asText()).isEqualTo("QA approved");
+    }
+
+    @Test void emptyStandardColumnCanBeDeletedButOccupiedColumnAndAnchorsAreProtected() throws Exception {
+        var columns = workflowColumns().stream().filter(c -> !c.key().startsWith("CUSTOM_")).toList();
+        saveColumns(columns, 200);
+        Long itemId = workItem();
+        changeStatus(itemId, "IN_PROGRESS", 200);
+        saveColumns(columns.stream().filter(c -> !c.key().equals("IN_PROGRESS")).toList(), 409);
+        var withoutReview = columns.stream().filter(c -> !c.key().equals("REVIEW")).toList();
+        saveColumns(withoutReview, 200);
+        assertThat(read("/board-columns").get("columns")).hasSize(4);
+        changeStatus(itemId, "REVIEW", 422);
+        changeStatus(itemId, "DONE", 200);
+        changeStatus(itemId, "IN_PROGRESS", 200);
+        saveColumns(withoutReview.stream().filter(c -> !c.key().equals("DONE")).toList(), 422);
+        assertThat(read("/board-columns").get("columns")).hasSize(4);
     }
 
     @Test void customStatusesEnforceAdjacentTransitionsAndCannotBeRemovedWhileInUse() throws Exception {
