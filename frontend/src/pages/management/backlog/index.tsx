@@ -63,6 +63,8 @@ const MILESTONE_OPTIONS_QUERY_KEY = ["milestones", "backlog-options"] as const;
 const ASSIGNEE_OPTIONS_QUERY_KEY = ["sprint-backlogs", "assignee-options"] as const;
 /** Team-scoped board of a workspace (only its own sprints and items). */
 const TEAM_BOARD_QUERY_KEY = ["team-backlog-board"] as const;
+/** Projects the user can see, used to build the work item key prefix. */
+const PROJECT_NAMES_QUERY_KEY = ["projects", "backlog-key-prefix"] as const;
 
 const MILESTONE_CHANGED_MESSAGE =
   "Milestone không tồn tại hoặc đã bị thay đổi";
@@ -233,6 +235,12 @@ export interface BacklogBoardProps {
    * (`null` = tenant-wide, the `/backlogs` route page).
    */
   teamId?: number | null;
+  /**
+   * Name of the workspace project. It is the source of the work item key
+   * prefix (`Student Support Portal` -> `SSP`), so the workspace page passes
+   * the name it already has instead of relying on a second lookup.
+   */
+  projectName?: string | null;
 }
 
 /**
@@ -249,6 +257,7 @@ export function BacklogBoard({
   embedded = false,
   projectId = null,
   teamId = null,
+  projectName = null,
 }: BacklogBoardProps) {
   const queryClient = useQueryClient();
   const { hasAllPermissions, user } = usePermissions();
@@ -294,6 +303,18 @@ export function BacklogBoard({
     queryKey: [...TEAM_BOARD_QUERY_KEY, teamId ?? "none"],
     queryFn: () => teamBacklogApi.getBoard(teamId as number),
     enabled: teamId != null,
+  });
+
+  /**
+   * Names of the projects the user can see. The work item key prefix is taken
+   * from the project of a box (`Student Support Portal` -> `SSP`), so a sprint
+   * name can never leak into the key of its work items.
+   */
+  const projectNamesQuery = useQuery({
+    queryKey: [...PROJECT_NAMES_QUERY_KEY],
+    queryFn: ({ signal }) => milestoneApi.getProjectOptions(signal),
+    staleTime: 60_000,
+    retry: false,
   });
 
   const sprintsQuery = useQuery({
@@ -358,6 +379,29 @@ export function BacklogBoard({
    * scope comes from the team itself when the workspace has no project.
    */
   const scopedProjectId = projectId ?? teamQuery.data?.projectId ?? null;
+
+  /**
+   * `projectId -> project name` lookup behind the work item key prefix. The
+   * name the workspace page already knows wins over the options response.
+   */
+  const projectNames = useMemo(() => {
+    const names = new Map<number, string>();
+
+    (projectNamesQuery.data ?? []).forEach((option) => {
+      const id = Number(option.id);
+      const name = option.name?.trim();
+
+      if (Number.isFinite(id) && name) {
+        names.set(id, name);
+      }
+    });
+
+    if (projectId != null && projectName?.trim()) {
+      names.set(projectId, projectName.trim());
+    }
+
+    return names;
+  }, [projectId, projectName, projectNamesQuery.data]);
 
   const sprints = useMemo<SprintDTO[]>(
     () =>
@@ -441,13 +485,20 @@ export function BacklogBoard({
       items: SprintPlanningItem[],
     ): BoardSection => {
       const sprintStatus = sprint?.status ?? null;
-      const prefix = sprint ? projectKeyOf(sprint.name) : "PRJ";
+      const sectionProjectId = sprint?.projectId ?? scopedProjectId ?? null;
+      /**
+       * Work item key prefix of the box: the acronym of the workspace project
+       * (`Student Support Portal` -> `SSP`), never the sprint name.
+       */
+      const prefix = projectKeyOf(
+        sectionProjectId == null ? null : projectNames.get(sectionProjectId),
+      );
 
       return {
         key: sprint?.id != null ? sprintSectionKey(sprint.id) : BACKLOG_SECTION_KEY,
         sprint,
         sprintId: sprint?.id ?? null,
-        projectId: sprint?.projectId ?? scopedProjectId ?? null,
+        projectId: sectionProjectId,
         teamId: sprint?.teamId ?? teamId ?? null,
         title:
           sprint?.name?.trim() ||
@@ -468,7 +519,7 @@ export function BacklogBoard({
       .map((sprint) => build(sprint, groupedItems.get(sprint.id as number) ?? []));
 
     return [...sprintSections, build(null, groupedItems.get(null) ?? [])];
-  }, [groupedItems, matchesFilters, scopedProjectId, sprints]);
+  }, [groupedItems, matchesFilters, projectNames, scopedProjectId, sprints]);
 
   const allCollapsed =
     sections.length > 0 && sections.every((section) => !!collapsed[section.key]);

@@ -129,45 +129,30 @@ export const backlogStatusMeta = (status?: BacklogStatus | null) =>
   (status && BACKLOG_STATUS_META[status]) || BACKLOG_STATUS_META.BACKLOG;
 
 /**
- * Words that name the container, not the work it holds: taking them as key
- * prefix turned every row into `SPRINT-1`, `SPRINT-2`, ... which reads like a
- * <em>sprint</em> code instead of a work item code.
- */
-const GENERIC_KEY_TOKENS = new Set([
-  "sprint",
-  "sprints",
-  "backlog",
-  "backlogs",
-  "product",
-  "iteration",
-  "phase",
-]);
-
-/**
- * Short key prefix of a backlog box, used by the row keys (`DISCOVERY-21`)
+ * Short key prefix of the backlog board, used by the row keys (`SSP-21`)
  * exactly like the Jira project key.
  * <p>
- * `Sprint 1 - Discovery` -> `DISCOVERY`, `Sprint 2 - Design System` ->
- * `DESIGN`. The generic words above and the sprint numbers are skipped so a
- * work item key can never be confused with a sprint code; when nothing is left
- * the `SB` (sprint backlog) fallback is used.
+ * The prefix belongs to the <em>project</em> of the workspace, never to the
+ * sprint: `Student Support Portal` -> `SSP` (first letter of every word), so
+ * every sprint box of the same project numbers its work items with the same
+ * key and a work item can not be mistaken for a sprint code.
+ * <p>
+ * When the project name is unknown (product backlog without a project) the
+ * `SB` (sprint backlog) fallback is used.
  */
 export const projectKeyOf = (
-  sprintName?: string | null,
+  projectName?: string | null,
   fallback = "SB",
 ) => {
-  const meaningful = (sprintName ?? "")
+  const acronym = (projectName ?? "")
     .split(/[^A-Za-z0-9]+/)
-    .filter(
-      (token) =>
-        token !== "" &&
-        !/^\d+$/.test(token) &&
-        !GENERIC_KEY_TOKENS.has(token.toLowerCase()),
-    );
+    .filter((token) => token !== "" && !/^\d+$/.test(token))
+    .map((token) => token.charAt(0))
+    .join("");
 
-  const token = (meaningful[0] ?? "").replace(/[^A-Za-z0-9]/g, "");
-
-  return (token.length >= 2 && token.length <= 10 ? token : fallback).toUpperCase();
+  return acronym.length >= 2
+    ? acronym.slice(0, 10).toUpperCase()
+    : fallback;
 };
 
 export const backlogItemKey = (

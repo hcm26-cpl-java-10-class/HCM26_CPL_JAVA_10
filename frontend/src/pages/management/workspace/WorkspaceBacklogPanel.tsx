@@ -8,6 +8,11 @@ interface WorkspaceBacklogPanelProps {
    * that team instead of every record of the tenant.
    */
   teamId?: number | null;
+  /**
+   * Name of the workspace project. The board turns it into the key prefix of
+   * its work items (`Student Support Portal` -> `SSP`).
+   */
+  projectName?: string | null;
 }
 
 /**
@@ -23,6 +28,14 @@ interface WorkspaceBacklogPanelProps {
 export function WorkspaceBacklogPanel({
   projectId = null,
   teamId = null,
+  projectName = null,
 }: WorkspaceBacklogPanelProps) {
-  return <BacklogBoard embedded projectId={projectId} teamId={teamId} />;
+  return (
+    <BacklogBoard
+      embedded
+      projectId={projectId}
+      teamId={teamId}
+      projectName={projectName}
+    />
+  );
 }

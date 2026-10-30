@@ -108,7 +108,7 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                     canUpdate={hasPermission("SPRINT_BACKLOG_UPDATE")}
                     onCreateWorkItem={sections.find(item => item.key === "backlog")?.canRead ? () => changeTab("backlog") : undefined} />
                 : tab === "backlog" ? <WorkspaceBacklogPanel projectId={context.projectId}
-                    teamId={context.teamId} />
+                    teamId={context.teamId} projectName={context.projectName} />
                 : tab === "activity" ? <WorkspaceProjectLogsPanel workspaceId={workspaceId} />
                 : <WorkspaceBusinessSectionPanel key={workspaceId + ":" + tab} workspaceId={workspaceId}
                     projectId={context.projectId} teamId={context.teamId} section={tab}
