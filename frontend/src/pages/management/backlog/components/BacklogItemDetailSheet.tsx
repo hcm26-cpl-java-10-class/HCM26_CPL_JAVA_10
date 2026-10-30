@@ -76,6 +76,8 @@ interface BacklogItemDetailSheetProps {
   assignees?: BacklogAssigneeOption[];
   /** Workspace-specific workflow statuses shown in the status selector. */
   workflowStatuses?: { value: SprintBacklogStatus; label: string }[];
+  /** Optional workspace transition policy; generic backlog keeps its legacy selector. */
+  allowedStatusTransitions?: (status: SprintBacklogStatus) => SprintBacklogStatus[];
   /**
    * Team of the open workspace. The panel resolves the assignee options by
    * project when the board is not scoped to a team (global `/backlogs` page),
@@ -198,6 +200,7 @@ export function BacklogItemDetailSheet({
   milestones = [],
   assignees = [],
   workflowStatuses = [],
+  allowedStatusTransitions,
   teamId = null,
   canEdit,
   canMove,
@@ -270,6 +273,13 @@ export function BacklogItemDetailSheet({
   const workType = backlogWorkTypeMeta(draft?.workType ?? item.workType);
   const WorkTypeIcon = workType.icon;
   const currentSprintId = detail?.sprintId ?? null;
+  const statusOptions = allowedStatusTransitions
+    ? [...new Set([draft?.status ?? detail?.status ?? "TODO", ...allowedStatusTransitions(draft?.status ?? detail?.status ?? "TODO")])]
+        .map((value) => workflowStatuses.find((option) => option.value === value)
+          ?? SPRINT_BACKLOG_STATUS_OPTIONS.find((option) => option.value === value))
+        .filter((option): option is { value: SprintBacklogStatus; label: string } => option != null)
+    : [...SPRINT_BACKLOG_STATUS_OPTIONS, ...workflowStatuses.filter((custom) => !SPRINT_BACKLOG_STATUS_OPTIONS.some((known) => known.value === custom.value))]
+        .filter((option) => draft?.status !== "DONE" || option.value === "DONE" || option.value === "REVIEW");
 
   const save = async (patch: Partial<SprintBacklogDTO>) => {
     if (!item || !canEdit) return;
@@ -653,9 +663,17 @@ export function BacklogItemDetailSheet({
         </div>
 
         {!draft ? (
-          <div className="flex flex-1 items-center justify-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading the work item…
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center text-sm text-muted-foreground">
+            {detailQuery.isError ? (
+              <>
+                <p role="alert" className="text-destructive">Could not load this work item. Check your access and connection, then retry.</p>
+                <Button type="button" variant="outline" size="sm" onClick={() => void detailQuery.refetch()} disabled={detailQuery.isFetching}>
+                  {detailQuery.isFetching ? "Retrying…" : "Try again"}
+                </Button>
+              </>
+            ) : (
+              <><Loader2 className="h-4 w-4 animate-spin" />Loading the work item…</>
+            )}
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto">
@@ -683,7 +701,7 @@ export function BacklogItemDetailSheet({
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <Select
                   value={draft.status}
-                  disabled={!canEdit || saving}
+                  disabled={!canEdit || saving || currentSprintId == null}
                   onValueChange={(value) => {
                     setDraft((previous) =>
                       previous
@@ -703,7 +721,7 @@ export function BacklogItemDetailSheet({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {[...SPRINT_BACKLOG_STATUS_OPTIONS, ...workflowStatuses.filter((custom) => !SPRINT_BACKLOG_STATUS_OPTIONS.some((known) => known.value === custom.value))].map((option) => (
+                    {statusOptions.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
                         {option.label}
                       </SelectItem>
@@ -908,7 +926,7 @@ export function BacklogItemDetailSheet({
                       <SelectValue placeholder="Add sprint" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={NO_SPRINT}>
+                      <SelectItem value={NO_SPRINT} disabled={draft.status !== "TODO"}>
                         Backlog (no sprint)
                       </SelectItem>
                       {sprints

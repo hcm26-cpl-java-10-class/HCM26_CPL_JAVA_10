@@ -33,6 +33,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { MilestoneRubricCard } from "@/pages/management/project/milestone/components/MilestoneRubricCard";
+import { countReleaseNoteWords, RELEASE_NOTES_MAX_WORDS, releaseNotesWithinLimit } from "@/lib/release-notes";
 
 function submissionErrorMessage(error: unknown): string {
   const response = (error as { response?: { status?: number; data?: unknown } } | null)?.response;
@@ -117,7 +118,8 @@ export default function TeamArtifactSubmissionPage() {
       const timeStr = new Date().toLocaleTimeString("vi-VN");
       setSaveSuccessTime(timeStr);
       toast.success("Bản nháp đã được lưu thành công!");
-      return qc.invalidateQueries({ queryKey: ["team-artifact-workspace", teamId, milestoneId] });
+      void qc.invalidateQueries({ queryKey: ["team-artifact-workspace", teamId, milestoneId] });
+      navigate(`/student/teams/${teamId}/milestones/${milestoneId}/submissions${workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ""}`);
     },
     onError: () => {
       toast.error("Không thể lưu bản nháp. Vui lòng thử lại.");
@@ -158,6 +160,10 @@ export default function TeamArtifactSubmissionPage() {
 
   const handleValidateAndOpenPreview = () => {
     setClientValidationError(null);
+    if (!releaseNotesWithinLimit(releaseNotes)) {
+      setClientValidationError(`Release notes không được vượt quá ${RELEASE_NOTES_MAX_WORDS} từ.`);
+      return;
+    }
     const repo = repositoryUrl.trim();
     const deploy = deploymentUrl.trim();
 
@@ -436,13 +442,17 @@ export default function TeamArtifactSubmissionPage() {
                 placeholder="Mô tả tóm tắt các tính năng đã hoàn thiện trong đợt bàn giao này..."
                 value={releaseNotes}
                 rows={4}
-                maxLength={10000}
-                className="resize-none"
+                className="max-h-40 resize-none overflow-y-auto"
                 onChange={(e) => {
                   edited();
+                  if (!releaseNotesWithinLimit(e.target.value) && countReleaseNoteWords(e.target.value) > countReleaseNoteWords(releaseNotes)) {
+                    setClientValidationError(`Release notes tối đa ${RELEASE_NOTES_MAX_WORDS} từ (${countReleaseNoteWords(releaseNotes)}/${RELEASE_NOTES_MAX_WORDS} đang dùng).`);
+                    return;
+                  }
                   setReleaseNotes(e.target.value);
                 }}
               />
+              <p className="text-xs text-muted-foreground">{countReleaseNoteWords(releaseNotes)}/{RELEASE_NOTES_MAX_WORDS} từ</p>
             </div>
 
             {/* Rejected Alert (Fix Bug #31) */}
@@ -457,7 +467,7 @@ export default function TeamArtifactSubmissionPage() {
             )}
 
             {/* Amber Alert ONLY when submission is truly blocked (Fix Bug #29) */}
-            {!canSubmit && (
+            {!canSubmit && !latestSubmission && (
               <Alert className="border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
                 <AlertCircle className="size-4" />
                 <AlertTitle>Chưa mở nộp bài chính thức</AlertTitle>
@@ -493,7 +503,7 @@ export default function TeamArtifactSubmissionPage() {
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <Button
                 variant="outline"
-                disabled={save.isPending || submit.isPending || !canSubmit || latestSubmission?.status === "REJECTED"}
+                disabled={save.isPending || submit.isPending || !canSubmit || !releaseNotesWithinLimit(releaseNotes) || latestSubmission?.status === "REJECTED"}
                 onClick={() => save.mutate()}
               >
                 {save.isPending ? (
@@ -508,7 +518,7 @@ export default function TeamArtifactSubmissionPage() {
               </Button>
 
               <Button
-                disabled={submit.isPending || save.isPending || !canSubmit || latestSubmission?.status === "REJECTED"}
+                disabled={submit.isPending || save.isPending || !canSubmit || !releaseNotesWithinLimit(releaseNotes) || latestSubmission?.status === "REJECTED"}
                 onClick={handleValidateAndOpenPreview}
               >
                 <Eye className="mr-2 size-4" /> Xem trước & Nộp bài
@@ -539,9 +549,9 @@ export default function TeamArtifactSubmissionPage() {
                 <p>
                   <strong>Milestone:</strong> {m.title}
                 </p>
-                <p>
+                <div>
                   <strong>Checklist:</strong> Reviewer sẽ đánh giá {m.checklist.length} tiêu chí
-                </p>
+                  {m.checklist.length > 0 ? <ul className="mt-2 list-disc space-y-1 pl-5">{m.checklist.map((item) => <li key={item.id}>{item.content}{item.mandatory ? " (bắt buộc)" : " (không bắt buộc)"}</li>)}</ul> : <span className="ml-1 text-muted-foreground">(không có tiêu chí)</span>}</div>
                 <p>
                   <strong>Repository URL:</strong>{" "}
                   {repositoryUrl.trim() ? (

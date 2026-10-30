@@ -30,7 +30,7 @@ export default function StudentTeamMilestoneSubmissionsPage() {
     retry: false,
   });
   const backToWorkspace = () => workspaceId
-    ? navigate(`/management/workspaces/${encodeURIComponent(workspaceId)}?tab=milestones`)
+    ? navigate(`/management/workspaces/${encodeURIComponent(workspaceId)}?tab=artifacts`)
     : navigate(-1);
   const loading = workspaceQuery.isPending || submissionsQuery.isPending;
   const failed = !validParams || workspaceQuery.isError || submissionsQuery.isError;
@@ -51,15 +51,17 @@ export default function StudentTeamMilestoneSubmissionsPage() {
                 <CardTitle>{workspaceQuery.data?.milestone.title ?? "Milestone"}</CardTitle>
                 <CardDescription>Lịch sử các phiên bản artifact do bạn nộp trong milestone này.</CardDescription>
               </div>
-              <Button
-                size="sm"
-                onClick={() => navigate(`/teams/${teamId}/milestones/${milestoneId}/submit?workspaceId=${encodeURIComponent(workspaceId ?? "")}`)}
-              >
+              <Button size="sm" disabled={latestSubmission?.submission.status === "REJECTED" || !workspaceQuery.data?.canSubmit}
+                onClick={() => navigate(`/teams/${teamId}/milestones/${milestoneId}/submit?workspaceId=${encodeURIComponent(workspaceId ?? "")}`)}>
                 {submissionsQuery.data && submissionsQuery.data.length > 0 ? "Nộp lại phiên bản mới (Resubmit)" : "Nộp sản phẩm"}
               </Button>
             </CardHeader>
-            <CardContent className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground"><Badge variant="outline">{workspaceQuery.data?.milestone.status}</Badge><span className="flex items-center gap-2"><CalendarClock className="size-4" /> Hạn nộp: {workspaceQuery.data?.milestone.deadline ? new Date(workspaceQuery.data.milestone.deadline).toLocaleString("vi-VN") : "—"}</span></CardContent>
+            <CardContent className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground"><Badge variant="outline">{workspaceQuery.data?.milestone.lifecycleStatus.replaceAll("_", " ")}</Badge><span className="flex items-center gap-2"><CalendarClock className="size-4" /> Hạn nộp: {workspaceQuery.data?.milestone.deadline ? new Date(workspaceQuery.data.milestone.deadline).toLocaleString("vi-VN") : "—"}</span></CardContent>
           </Card>
+          {workspaceQuery.data?.draft && (!latestSubmission || new Date(workspaceQuery.data.draft.updatedAt).getTime() >= new Date(latestSubmission.submission.submittedAt).getTime()) ? <Card className="border-sky-300 bg-sky-50/50 dark:bg-sky-950/10">
+            <CardHeader className="flex flex-row items-start justify-between gap-3 p-4 pb-2"><div><CardTitle className="text-base">Bản nháp v{workspaceQuery.data.draft.version}</CardTitle><CardDescription>Cập nhật lúc {new Date(workspaceQuery.data.draft.updatedAt).toLocaleString("vi-VN")} · Chưa phải bài nộp chính thức</CardDescription></div><Badge variant="outline">DRAFT</Badge></CardHeader>
+            <CardContent className="grid gap-2 p-4 pt-1 text-sm"><p><strong>Repository:</strong> {workspaceQuery.data.draft.repositoryUrl || "—"}</p><p><strong>Deployment:</strong> {workspaceQuery.data.draft.deploymentUrl || "—"}</p><p><strong>Release notes:</strong> {workspaceQuery.data.draft.releaseNotes || "—"}</p><Button className="w-fit" size="sm" variant="outline" onClick={() => navigate(`/teams/${teamId}/milestones/${milestoneId}/submit?workspaceId=${encodeURIComponent(workspaceId ?? "")}`)}>Mở và chỉnh sửa bản nháp</Button></CardContent>
+          </Card> : null}
           {latestSubmission?.submission.status === "REJECTED" ? (
             <Alert variant="destructive">
               <AlertCircle />

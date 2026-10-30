@@ -37,7 +37,7 @@ public class MilestoneArtifactDraft {
     @Column(name = "deployment_url", length = 2048)
     private String deploymentUrl;
 
-    @Column(name = "release_notes", length = 10000)
+    @Column(name = "release_notes", columnDefinition = "text")
     private String releaseNotes;
 
     @Column(name = "checklist_json", nullable = false, columnDefinition = "text")

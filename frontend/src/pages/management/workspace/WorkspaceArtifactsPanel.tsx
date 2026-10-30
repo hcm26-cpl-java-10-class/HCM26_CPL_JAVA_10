@@ -43,6 +43,7 @@ interface MilestoneSubmissionHistoryItem {
   submitterName?: string | null;
   submitterEmail?: string | null;
   reviewFeedback?: string | null;
+  reviewedAt?: string | null;
 }
 
 export function WorkspaceArtifactsPanel({
@@ -68,12 +69,24 @@ export function WorkspaceArtifactsPanel({
     retry: false,
   });
 
-  // Load team submissions (if reviewer/admin)
+  const milestones = milestonesQuery.data?.content ?? [];
+
+  // Students only load their own history; reviewers/admins load the team queue.
   const submissionsQuery = useQuery({
-    queryKey: ["team-artifact-submissions-workspace", teamId],
-    queryFn: () => milestoneApi.getTeamArtifactSubmissions(teamId),
+    queryKey: ["team-artifact-submissions-workspace", teamId, isStudent, milestones.map((m) => m.id)],
+    queryFn: async (): Promise<MilestoneSubmissionHistoryItem[]> => {
+      if (!isStudent) return milestoneApi.getTeamArtifactSubmissions(teamId);
+      const ownHistory = await Promise.all(
+        milestones.map((milestone) => milestoneApi.getMyTeamArtifactSubmissions(teamId, milestone.id)),
+      );
+      return ownHistory.flatMap((items) => items.map(({ submission, reviewFeedback, reviewedAt }) => ({
+        submission,
+        reviewFeedback,
+        reviewedAt,
+      })));
+    },
     retry: false,
-    enabled: teamId > 0,
+    enabled: teamId > 0 && !milestonesQuery.isPending && !milestonesQuery.isError,
   });
 
   // Map submissions per milestoneId
@@ -137,8 +150,6 @@ export function WorkspaceArtifactsPanel({
     );
   }
 
-  const milestones = milestonesQuery.data?.content ?? [];
-
   return (
     <div className="grid gap-6">
       {/* Overview Header */}
@@ -163,6 +174,16 @@ export function WorkspaceArtifactsPanel({
             <RotateCw className="mr-1.5 size-3.5" /> Làm mới
           </Button>
         </CardHeader>
+        {submissionsQuery.isError && (
+          <CardContent className="pt-0">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
+              <span className="text-destructive">Không tải được lịch sử artifact. Dữ liệu chưa được xác nhận.</span>
+              <Button variant="outline" size="sm" onClick={() => void submissionsQuery.refetch()}>
+                <RotateCw className="mr-1.5 size-4" /> Thử lại
+              </Button>
+            </div>
+          </CardContent>
+        )}
       </Card>
 
       {/* Milestone Artifact Cards */}
@@ -196,7 +217,7 @@ export function WorkspaceArtifactsPanel({
                       <div className="flex flex-wrap items-center gap-2">
                         <h4 className="font-semibold text-base text-foreground truncate">{m.title}</h4>
                         <Badge variant="outline" className="text-xs">
-                          {m.status}
+                          {m.lifecycleStatus.replaceAll("_", " ")}
                         </Badge>
                         {m.mandatory && (
                           <Badge variant="secondary" className="text-[11px]">
@@ -266,7 +287,7 @@ export function WorkspaceArtifactsPanel({
                               </Badge>
                             );
                           }
-                          if (status === "CHANGES_REQUESTED") {
+                          if (status === "CHANGES_REQUESTED" && isStudent) {
                             return (
                               <Button
                                 size="sm"
@@ -279,6 +300,9 @@ export function WorkspaceArtifactsPanel({
                                 Nộp lại (Resubmit v{latestSub!.submission.version + 1})
                               </Button>
                             );
+                          }
+                          if (status === "CHANGES_REQUESTED") {
+                            return <Badge variant="outline" className="border-amber-300 text-amber-700 px-2.5 py-1 text-xs">Cần chỉnh sửa</Badge>;
                           }
                           return (
                             <Badge variant="outline" className="border-amber-300 text-amber-700 px-2.5 py-1 text-xs">
@@ -319,7 +343,18 @@ export function WorkspaceArtifactsPanel({
           </DialogHeader>
 
           <div className="py-2">
-            {activeMilestoneSubmissions.length === 0 ? (
+            {submissionsQuery.isPending ? (
+              <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+                <RotateCw className="size-4 animate-spin" /> Đang tải lịch sử phiên bản…
+              </div>
+            ) : submissionsQuery.isError ? (
+              <div className="grid justify-items-center gap-3 py-8 text-center text-sm text-destructive">
+                <p>Không tải được lịch sử artifact. Hãy thử lại để xem dữ liệu mới nhất.</p>
+                <Button variant="outline" size="sm" onClick={() => void submissionsQuery.refetch()}>
+                  <RotateCw className="mr-1.5 size-4" /> Thử lại
+                </Button>
+              </div>
+            ) : activeMilestoneSubmissions.length === 0 ? (
               <div className="py-8 text-center text-sm text-muted-foreground">
                 Chưa có phiên bản nào được nộp cho milestone này.
               </div>
@@ -329,6 +364,7 @@ export function WorkspaceArtifactsPanel({
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-20">Phiên bản</TableHead>
+                      <TableHead className="w-36">Trạng thái</TableHead>
                       <TableHead className="w-24">Thời điểm</TableHead>
                       <TableHead className="w-28">Đúng hạn</TableHead>
                       <TableHead>Repository / Deploy</TableHead>
@@ -339,6 +375,16 @@ export function WorkspaceArtifactsPanel({
                     {activeMilestoneSubmissions.map(({ submission }) => (
                       <TableRow key={submission.id}>
                         <TableCell className="font-semibold">v{submission.version}</TableCell>
+                        <TableCell>
+                          <Badge variant={submission.status === "REJECTED" ? "destructive" : submission.status === "ACCEPTED" ? "default" : submission.status === "CHANGES_REQUESTED" ? "secondary" : "outline"}>
+                            {submission.status.replaceAll("_", " ")}
+                          </Badge>
+                          {activeRole && normalizeRole(activeRole) === STUDENT_ROLE && activeMilestoneSubmissions.find((item) => item.submission.id === submission.id)?.reviewFeedback ? (
+                            <p className="mt-1 max-w-48 whitespace-pre-wrap text-xs text-muted-foreground">
+                              {activeMilestoneSubmissions.find((item) => item.submission.id === submission.id)?.reviewFeedback}
+                            </p>
+                          ) : null}
+                        </TableCell>
                         <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                           {new Date(submission.submittedAt).toLocaleString("vi-VN")}
                         </TableCell>
@@ -406,7 +452,7 @@ export function WorkspaceArtifactsPanel({
             <Button variant="outline" onClick={() => setHistoryMilestone(null)}>
               Đóng
             </Button>
-            {historyMilestone && (
+            {isStudent && historyMilestone && activeMilestoneSubmissions[0]?.submission.status === "CHANGES_REQUESTED" && (
               <Button onClick={() => handleOpenSubmit(historyMilestone.id)}>
                 <Send className="mr-1.5 size-4" /> Nộp phiên bản mới
               </Button>

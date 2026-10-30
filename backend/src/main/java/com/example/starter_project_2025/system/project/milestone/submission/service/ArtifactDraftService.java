@@ -84,6 +84,7 @@ public class ArtifactDraftService {
     @Transactional
     public ArtifactDraftResponse save(Long projectId, UUID milestoneId, ArtifactDraftRequest request) {
         Scope scope = requireScope(projectId);
+        ReleaseNotesWordLimit.validate(request.releaseNotes());
         contributionLock.lockCurrentActor();
         var milestone = resolveMilestone(projectId, milestoneId, scope.tenantId());
         if (!submissionWindow.canSubmit(milestone))

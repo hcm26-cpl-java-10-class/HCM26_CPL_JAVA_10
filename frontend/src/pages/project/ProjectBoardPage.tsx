@@ -676,6 +676,11 @@ export default function ProjectBoardPage() {
         window.dragTask = null;
         return;
       }
+      if (task.status !== "TODO") {
+        toast.error("Chỉ được chuyển từ To do về Backlog. Hãy đi từng cột liền kề.");
+        window.dragTask = null;
+        return;
+      }
       try {
         await projectBoardApi.moveTaskToSprint(board!.projectId!, task.id, { sprintId: null, expectedVersion: task.version }, createCorrelationId());
         toast.success(`${task.code}: đã chuyển về Backlog`);
@@ -701,6 +706,24 @@ export default function ProjectBoardPage() {
     // If dragging to a status column
     if (isTargetStatus) {
       const targetStatus = targetColumnKey as BoardTaskStatus;
+      if (task.sprintId == null) {
+        if (targetStatus !== "TODO" || task.status !== "TODO") {
+          toast.error("Backlog chỉ có thể chuyển sang To do.");
+          window.dragTask = null;
+          return;
+        }
+        try {
+          await projectBoardApi.moveTaskToSprint(board!.projectId!, task.id,
+            { sprintId: board!.sprint.id, expectedVersion: task.version }, createCorrelationId());
+          setRequestVersion((value) => value + 1);
+          toast.success("Đã chuyển task từ Backlog sang To do.");
+        } catch (error) {
+          toast.error(getStatusUpdateError(error));
+        } finally {
+          window.dragTask = null;
+        }
+        return;
+      }
       
       // Check if status actually changes
       if (task.status === targetStatus) {
@@ -739,7 +762,7 @@ export default function ProjectBoardPage() {
       IN_PROGRESS: ["REVIEW", "BLOCKED", "TODO"],
       REVIEW: ["DONE", "BLOCKED", "IN_PROGRESS"],
       BLOCKED: ["TODO", "IN_PROGRESS"],
-      DONE: ["IN_PROGRESS"], // Reopen (exceptional case)
+      DONE: ["REVIEW"],
     };
     return transitions[from]?.includes(to) ?? false;
   };

@@ -277,6 +277,10 @@ class MilestoneIntegrationTest {
                         .param("milestoneId", milestoneId).header("Authorization", "Bearer " + teacherToken))
                 .andExpect(status().isOk()).andExpect(jsonPath("$[0].submission.version").value(1))
                 .andExpect(jsonPath("$[0].submission.repositoryUrl").value("https://github.com/demo/team"));
+        mockMvc.perform(get("/api/teams/" + MockMilestoneData.TEAM_ID + "/milestones/submissions")
+                        .param("milestoneId", milestoneId).header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].submission.version").value(1))
+                .andExpect(jsonPath("$[0].submission.status").value("SUBMITTED"));
     }
 
     @Test
