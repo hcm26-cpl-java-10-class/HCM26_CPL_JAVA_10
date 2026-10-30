@@ -174,6 +174,20 @@ export const backlogItemKey = (
   item: SprintPlanningItem,
 ) => `${prefix}-${item.id}`;
 
+/**
+ * `Nguyen Van An` -> `NA`, the letters of an assignee avatar bubble (same
+ * bubble the work item panel and the create bar show). Returns an empty string
+ * for a blank name so callers can fall back to another label.
+ */
+export const assigneeInitialsOf = (name?: string | null) =>
+  (name ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter((part) => part !== "")
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join("")
+
 const shortDate = (value?: string | null) => {
   if (!value) return "";
 

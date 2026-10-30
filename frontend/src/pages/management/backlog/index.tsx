@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { usePermissions } from "@/hooks/usePermissions";
 import type {
+  BacklogAssigneeOption,
   BacklogPriority,
   BacklogStatus,
   MilestoneOption,
@@ -24,7 +25,7 @@ import type {
   SprintPlanningItem,
   SprintStatus,
 } from "@/types";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import {
   ArrowLeft,
@@ -543,6 +544,44 @@ export function BacklogBoard({
 
   const allCollapsed =
     sections.length > 0 && sections.every((section) => !!collapsed[section.key]);
+
+  /**
+   * Assignee names of the rows. Boards that are not scoped to a workspace (the
+   * global `/backlogs` page) have no board level team / project, so the query
+   * above stays empty; the members of every project rendered on the board are
+   * then fetched so a row can still show the `NA` initials bubble of its
+   * assignee instead of the raw `project_members.id`.
+   */
+  const boardProjectIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          sections
+            .map((section) => section.projectId)
+            .filter((id): id is number => id != null),
+        ),
+      ),
+    [sections],
+  );
+
+  const projectAssigneeQueries = useQueries({
+    queries: (assignees.length > 0 ? [] : boardProjectIds).map((projectId) => ({
+      queryKey: [...ASSIGNEE_OPTIONS_QUERY_KEY, "project", projectId],
+      queryFn: () => sprintBacklogApi.getAssigneeOptions(null, projectId),
+      staleTime: 60_000,
+    })),
+  });
+
+  const rowAssignees: BacklogAssigneeOption[] =
+    assignees.length > 0
+      ? assignees
+      : Array.from(
+          new Map(
+            projectAssigneeQueries
+              .flatMap((query) => query.data ?? [])
+              .map((member) => [member.id, member] as const),
+          ).values(),
+        );
 
   const refreshBoard = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: BACKLOG_ITEMS_QUERY_KEY });
@@ -1209,6 +1248,7 @@ export function BacklogBoard({
                       : "The product backlog is empty. Use Create below to add a work item."
                   }
                   dueDate={section.dueDate}
+                  assignees={rowAssignees}
                   draggable={sectionEditable}
                   isDropTarget={dragTarget === section.key}
                   onToggleCollapse={() =>

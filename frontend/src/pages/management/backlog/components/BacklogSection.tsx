@@ -1,7 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import type { BacklogStatus, SprintPlanningItem } from "@/types";
+import type {
+  BacklogAssigneeOption,
+  BacklogStatus,
+  SprintPlanningItem,
+} from "@/types";
 import { ChevronDown } from "lucide-react";
 import type { DragEvent, ReactNode } from "react";
 import { backlogItemKey } from "../backlog.constants";
@@ -26,6 +30,8 @@ interface BacklogSectionProps {
   footer?: ReactNode;
   emptyMessage: string;
   dueDate?: string | null;
+  /** Team members of the board, resolved to the initials avatar of a row. */
+  assignees?: BacklogAssigneeOption[];
   draggable: boolean;
   isDropTarget: boolean;
   onToggleCollapse: () => void;
@@ -64,6 +70,7 @@ export function BacklogSection({
   footer,
   emptyMessage,
   dueDate,
+  assignees = [],
   draggable,
   isDropTarget,
   onToggleCollapse,
@@ -184,6 +191,7 @@ export function BacklogSection({
                   canEditTask={canEditTask}
                   busy={busyItemId === item.id}
                   dueDate={dueDate}
+                  assignees={assignees}
                   draggable={draggable}
                   onToggleSelect={onToggleSelect}
                   onStatusChange={onStatusChange}
