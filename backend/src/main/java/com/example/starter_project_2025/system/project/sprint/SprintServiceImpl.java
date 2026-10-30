@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
  * Business rules covered:
  * <ul>
  *     <li>start date &lt; end date (422)</li>
- *     <li>sprint name unique (409)</li>
+ *     <li>sprint name unique inside its project workspace (409)</li>
  *     <li>sprint goal 1..500 characters (422)</li>
  *     <li>a new sprint always starts as Planned (the client cannot pick another
  *     status)</li>
@@ -124,7 +124,7 @@ public class SprintServiceImpl
 
         throwIfInvalid(errors);
 
-        ensureUniqueName(sprint.getName(), null);
+        ensureUniqueName(sprint.getName(), sprint.getProjectId(), sprint.getTeamId(), null);
 
         // A sprint is always created as Planned: any status sent by the client
         // is ignored so the lifecycle can only be advanced through an update.
@@ -181,7 +181,9 @@ public class SprintServiceImpl
         throwIfInvalid(errors);
 
         if (request.getName() != null) {
-            ensureUniqueName(name, sprint.getId());
+            Long scopeProjectId = request.getProjectId() != null ? request.getProjectId() : sprint.getProjectId();
+            Long scopeTeamId = request.getTeamId() != null ? request.getTeamId() : sprint.getTeamId();
+            ensureUniqueName(name, scopeProjectId, scopeTeamId, sprint.getId());
         }
 
         Map<String, Object> before = snapshot(sprint);
@@ -722,11 +724,28 @@ public class SprintServiceImpl
         return message.toString();
     }
 
-    private void ensureUniqueName(String name, Long excludedId) {
+    /**
+     * The name only has to be unique inside the workspace that owns the sprint:
+     * the project when the sprint belongs to one, otherwise the team, and only
+     * sprints without either scope fall back to the tenant-wide check.
+     */
+    private void ensureUniqueName(String name, Long projectId, Long teamId, Long excludedId) {
 
-        boolean exists = excludedId == null
-                ? sprintRepository.existsByName(name)
-                : sprintRepository.existsByNameAndIdNot(name, excludedId);
+        boolean exists;
+
+        if (projectId != null) {
+            exists = excludedId == null
+                    ? sprintRepository.existsByProjectIdAndName(projectId, name)
+                    : sprintRepository.existsByProjectIdAndNameAndIdNot(projectId, name, excludedId);
+        } else if (teamId != null) {
+            exists = excludedId == null
+                    ? sprintRepository.existsByTeamIdAndName(teamId, name)
+                    : sprintRepository.existsByTeamIdAndNameAndIdNot(teamId, name, excludedId);
+        } else {
+            exists = excludedId == null
+                    ? sprintRepository.existsByName(name)
+                    : sprintRepository.existsByNameAndIdNot(name, excludedId);
+        }
 
         if (exists) {
             throw SprintConflictException.duplicateName();
