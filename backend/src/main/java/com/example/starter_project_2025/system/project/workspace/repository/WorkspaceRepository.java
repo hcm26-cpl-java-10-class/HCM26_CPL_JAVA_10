@@ -13,6 +13,8 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long>, Jpa
 
     Optional<Workspace> findByProjectIdAndTeamId(Long projectId, Long teamId);
 
+    Optional<Workspace> findFirstByProjectIdOrderByIdAsc(Long projectId);
+
     boolean existsByProjectIdAndTeamId(Long projectId, Long teamId);
     boolean existsByProjectId(Long projectId);
     Optional<Workspace> findFirstByTeamIdOrderByIdAsc(Long teamId);

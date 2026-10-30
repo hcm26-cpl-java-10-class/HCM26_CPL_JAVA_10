@@ -316,6 +316,23 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canCon
 
   const moveItem = async (item: SprintBacklogDTO, target: BoardColumnKey) => {
     if (!canUpdate || savingItemId != null || item.id == null) return;
+
+    // Validate status transition before calling API.
+    const currentStatus = (item.status ?? "TODO") as SprintBacklogStatus;
+    const isMovingToSprint = item.sprintId !== sprintId && sprintId != null && target !== "BACKLOG";
+    if (!isMovingToSprint && target !== "BACKLOG" && target !== currentStatus) {
+      const allowed = transitionOptions(currentStatus);
+      if (!allowed.includes(target as SprintBacklogStatus)) {
+        const nextStatuses = allowed.map(configuredStatusLabel).join(", ") || "không có";
+        toast.error(
+          `Không thể chuyển từ ${configuredStatusLabel(currentStatus)} sang ${configuredStatusLabel(target)}. ` +
+          `Trạng thái tiếp theo hợp lệ: ${nextStatuses}.`,
+        );
+        setDraggedItem(null);
+        return;
+      }
+    }
+
     try {
       setSavingItemId(item.id);
       if (target === "BACKLOG") {
@@ -325,18 +342,24 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canCon
             .filter((id): id is number => id != null && id !== item.id));
         }
       } else {
-        if (item.sprintId !== sprintId && sprintId != null) {
-          // The update endpoint changes sprint and status in one transaction.
-          await sprintBacklogApi.update(String(item.id), { sprintId, status: target } as SprintBacklogDTO);
+        if (isMovingToSprint) {
+          // Moving from Backlog to a sprint: keep the item's current status so
+          // the backend does not validate an invalid status transition here.
+          await sprintBacklogApi.update(String(item.id), { sprintId } as SprintBacklogDTO);
         } else if (item.status !== target) {
           await sprintBacklogApi.update(String(item.id), { status: target } as SprintBacklogDTO);
         }
       }
       await query.refetch();
       await queryClient.invalidateQueries({ queryKey: ["sprint-backlog-audit"] });
-      toast.success("Đã cập nhật work item trên Board.");
-    } catch {
-      toast.error("Không cập nhật được work item. Dữ liệu hiện tại vẫn được giữ nguyên.");
+      toast.success("\u0110\u00e3 c\u1eadp nh\u1eadt work item tr\u00ean Board.");
+    } catch (error) {
+      const msg =
+        axios.isAxiosError(error) &&
+        typeof (error.response?.data as Record<string, unknown>)?.message === "string"
+          ? (error.response!.data as Record<string, string>).message
+          : "Kh\u00f4ng c\u1eadp nh\u1eadt \u0111\u01b0\u1ee3c work item. D\u1eef li\u1ec7u hi\u1ec7n t\u1ea1i v\u1eabn \u0111\u01b0\u1ee3c gi\u1eef nguy\u00ean.";
+      toast.error(msg);
     } finally {
       setSavingItemId(null);
       setDraggedItem(null);
@@ -345,21 +368,37 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canCon
 
   const updateStatus = async (item: SprintBacklogDTO, target: SprintBacklogStatus) => {
     if (!canUpdate || item.id == null || item.sprintId == null || savingItemId != null) return;
-    const current = item.status ?? "TODO";
+    const current = (item.status ?? "TODO") as SprintBacklogStatus;
     if (current === target) return;
+
+    // Validate transition before calling API.
+    const allowed = transitionOptions(current);
+    if (!allowed.includes(target)) {
+      const nextStatuses = allowed.map(configuredStatusLabel).join(", ") || "không có";
+      toast.error(
+        `Không thể chuyển từ ${configuredStatusLabel(current)} sang ${configuredStatusLabel(target)}. ` +
+        `Trạng thái tiếp theo hợp lệ: ${nextStatuses}.`,
+      );
+      return;
+    }
+
     try {
       setSavingItemId(item.id);
       await sprintBacklogApi.update(String(item.id), { status: target } as SprintBacklogDTO);
       await query.refetch();
       await queryClient.invalidateQueries({ queryKey: ["sprint-backlog-audit"] });
-      toast.success("ÄÃ£ cáº­p nháº­t tráº¡ng thÃ¡i work item.");
-    } catch {
-      toast.error("KhÃ´ng cáº­p nháº­t Ä‘Æ°á»£c tráº¡ng thÃ¡i. Dá»¯ liá»‡u hiá»‡n táº¡i váº«n Ä‘Æ°á»£c giá»¯ nguyÃªn.");
+      toast.success("\u0110\u00e3 c\u1eadp nh\u1eadt tr\u1ea1ng th\u00e1i work item.");
+    } catch (error) {
+      const msg =
+        axios.isAxiosError(error) &&
+        typeof (error.response?.data as Record<string, unknown>)?.message === "string"
+          ? (error.response!.data as Record<string, string>).message
+          : "Kh\u00f4ng c\u1eadp nh\u1eadt \u0111\u01b0\u1ee3c tr\u1ea1ng th\u00e1i. D\u1eef li\u1ec7u hi\u1ec7n t\u1ea1i v\u1eabn \u0111\u01b0\u1ee3c gi\u1eef nguy\u00ean.";
+      toast.error(msg);
     } finally {
       setSavingItemId(null);
     }
   };
-
   const assignItem = async (item: SprintBacklogDTO, value: string) => {
     if (!canUpdate || item.id == null || savingItemId != null) return;
     try {

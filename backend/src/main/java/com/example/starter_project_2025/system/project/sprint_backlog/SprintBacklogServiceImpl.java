@@ -18,6 +18,7 @@ import com.example.starter_project_2025.system.project.sprint_backlog.audit.Spri
 import com.example.starter_project_2025.system.project.sprint_backlog.audit.SprintBacklogAuditService;
 import com.example.starter_project_2025.system.project.sprint_backlog.event.SprintBacklogOutboxService;
 import com.example.starter_project_2025.system.project.task.TaskRepository;
+import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
 import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceRepository;
 import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceSectionDtos.BoardColumn;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -33,6 +34,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -717,10 +719,21 @@ public class SprintBacklogServiceImpl
     }
 
     private List<BoardColumn> workspaceBoardColumns(Sprint sprint) {
-        if (sprint == null || sprint.getTeamId() == null) return List.of();
-        return workspaceRepository.findFirstByTeamIdOrderByIdAsc(sprint.getTeamId())
-                .map(workspace -> {
-                    String json = workspace.getBoardColumnsConfig();
+        if (sprint == null) return List.of();
+
+        // Project-backed sprints often have a projectId but no teamId. Resolve
+        // their workspace by project first so custom workflow transitions use
+        // the same board configuration displayed by the workspace UI.
+        var workspace = sprint.getProjectId() == null
+                ? Optional.<Workspace>empty()
+                : workspaceRepository.findFirstByProjectIdOrderByIdAsc(sprint.getProjectId());
+        if (workspace.isEmpty() && sprint.getTeamId() != null) {
+            workspace = workspaceRepository.findFirstByTeamIdOrderByIdAsc(sprint.getTeamId());
+        }
+
+        return workspace
+                .map(boardWorkspace -> {
+                    String json = boardWorkspace.getBoardColumnsConfig();
                     if (json == null || json.isBlank()) return List.<BoardColumn>of();
                     try {
                         return objectMapper.readValue(json, new TypeReference<List<BoardColumn>>() { });

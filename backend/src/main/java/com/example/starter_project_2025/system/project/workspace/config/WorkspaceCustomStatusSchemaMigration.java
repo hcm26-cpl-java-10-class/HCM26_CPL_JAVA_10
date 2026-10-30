@@ -1,8 +1,9 @@
 package com.example.starter_project_2025.system.project.workspace.config;
 
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -16,13 +17,14 @@ import java.sql.DatabaseMetaData;
  */
 @Slf4j
 @Component
+@Order(19)
 @RequiredArgsConstructor
-public class WorkspaceCustomStatusSchemaMigration {
+public class WorkspaceCustomStatusSchemaMigration implements CommandLineRunner {
     private final DataSource dataSource;
     private final JdbcTemplate jdbc;
 
-    @PostConstruct
-    public void migrate() throws Exception {
+    @Override
+    public void run(String... args) throws Exception {
         try (var connection = dataSource.getConnection()) {
             DatabaseMetaData metadata = connection.getMetaData();
             if (!"H2".equalsIgnoreCase(metadata.getDatabaseProductName())) return;
