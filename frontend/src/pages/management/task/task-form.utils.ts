@@ -56,8 +56,18 @@ export function normalizeTags(tags: string[]): string[] {
   return [...names.values()];
 }
 
+export function countWords(text: string): number {
+  const trimmed = text.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).length;
+}
+
 export function validateTaskForm(values: TaskFormValues): TaskFieldErrors {
   const errors: TaskFieldErrors = {};
+  const wordCount = countWords(values.description);
+  if (wordCount > 1000) {
+    errors.description = ["Mô tả subtask không được vượt quá 1000 từ (hiện tại: " + wordCount + " từ)"];
+  }
   const title = values.title.trim();
   if (!title || title.length > 250) {
     errors.title = ["Task title must contain 1 to 250 characters"];

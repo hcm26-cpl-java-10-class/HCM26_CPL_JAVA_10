@@ -20,6 +20,7 @@ public class WorkspaceResponse {
     private Long tenantId;
     private String code;
     private String name;
+    private String taskKeyPrefix;
     private WorkspaceStatus status;
     private Long createdBy;
     private LocalDateTime createdAt;

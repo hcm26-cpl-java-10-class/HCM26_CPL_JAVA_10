@@ -111,10 +111,20 @@ export const TASK_STATUS_META: Record<
     chip: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/40 dark:text-sky-300",
     column: "doing",
   },
+  REVIEW: {
+    label: "Review",
+    chip: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+    column: "review",
+  },
   DONE: {
     label: "Done",
     chip: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
     column: "done",
+  },
+  BLOCKED: {
+    label: "Blocked",
+    chip: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-900/40 dark:text-rose-300",
+    column: "blocked",
   },
 };
 
@@ -232,6 +242,10 @@ export const countByStatus = (items: SprintPlanningItem[]) => ({
 /**
  * Sprint Backlog items that are still open. A sprint can only be completed once
  * this list is empty - the backend rejects the transition with 422 otherwise.
+ * <p>
+ * The backend additionally requires every subtask of those items to be Done, so
+ * a sprint whose items are all Done can still be rejected with the subtasks
+ * that are left open (the API message is forwarded to the toast).
  */
 export const unfinishedSprintItems = (items: SprintPlanningItem[]) =>
   items.filter((item) => item.status !== "DONE");
