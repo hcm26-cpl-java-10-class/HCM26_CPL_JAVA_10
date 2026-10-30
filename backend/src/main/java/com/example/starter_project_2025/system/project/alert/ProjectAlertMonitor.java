@@ -15,7 +15,7 @@ public class ProjectAlertMonitor {
     private final ProjectAlertReadStore store;
     private final AlertMilestoneProgressSource progressSource;
     private final ProjectAlertMilestonePolicy policy;
-    private final ProjectAlertActivityService activity;
+    private final ProjectAlertBacklogPolicy backlogPolicy;
     public record Candidate(Milestone milestone,Progress progress) { }
     public record TeamAlerts(Instant checkedAt,Set<Long> overdueBacklogs,Set<UUID> milestones,Set<Long> inactiveMembers) { }
     private final Map<Long,TeamAlerts> detected=new ConcurrentHashMap<>();
@@ -36,13 +36,10 @@ public class ProjectAlertMonitor {
         for(var team:teams) {
             current.add(team.getId());var scope=store.load(List.of(team));
             Set<Long> overdue=new HashSet<>();
-            scope.items().stream().filter(item->item.getStatus()!=com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogStatus.DONE)
-                    .filter(item->item.getEndDate()!=null&&item.getEndDate().atZone(zone).toInstant().isBefore(now))
+            scope.items().stream().filter(item->backlogPolicy.eligible(item,now,zone))
                     .forEach(item->overdue.add(item.getId()));
             Set<UUID> milestoneIds=new HashSet<>();milestones(scope,now).forEach(item->milestoneIds.add(item.milestone().getId()));
-            Set<Long> inactive=new HashSet<>();activity.members(team,scope,now).stream().filter(MemberRow::inactive)
-                    .forEach(member->inactive.add(Long.valueOf(member.id())));
-            detected.put(team.getId(),new TeamAlerts(now,Set.copyOf(overdue),Set.copyOf(milestoneIds),Set.copyOf(inactive)));
+            detected.put(team.getId(),new TeamAlerts(now,Set.copyOf(overdue),Set.copyOf(milestoneIds),Set.of()));
         }
         detected.keySet().retainAll(current);
     }

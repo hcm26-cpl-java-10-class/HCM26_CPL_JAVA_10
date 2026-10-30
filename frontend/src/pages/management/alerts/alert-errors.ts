@@ -4,7 +4,7 @@ export function getAlertError(error: unknown): {
   status?: number; message: string; fieldErrors: Record<string, string[]>;
 } {
   if (!axios.isAxiosError<{ message?: string; errors?: Record<string, string[]> }>(error)) {
-    return { message: "Unable to load or queue alerts. Please try again.", fieldErrors: {} };
+    return { message: "Unable to load or send alerts. Please try again.", fieldErrors: {} };
   }
   const status = error.response?.status;
   const fallback: Record<number, string> = {

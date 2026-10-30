@@ -21,6 +21,7 @@ import { sectionAccess } from "./workspace.section-access";
 import { WorkspaceTeamBoardPanel } from "./WorkspaceTeamBoardPanel";
 import { WorkspaceBacklogPanel } from "./WorkspaceBacklogPanel";
 import { WorkspaceProjectLogsPanel } from "./WorkspaceProjectLogsPanel";
+import { WorkspaceAlertsPanel } from "@/pages/management/alerts/WorkspaceAlertsPanel";
 
 export default function WorkspaceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -52,9 +53,8 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
   const context = navigation.data?.workspaceId === workspaceId ? navigation.data : undefined;
   const sections = context?.sections.map(item => {
     const resolved = sectionAccess(item, hasPermission);
-    // Team-only workspaces own their Board through the workspace Team, so the
-    // Board remains available even when legacy section permissions are absent.
-    return item.key === "sprints" && Number.isSafeInteger(context.teamId)
+    // Board and received Alerts use the workspace Team's access boundary.
+    return (item.key === "sprints" || item.key === "feedback") && Number.isSafeInteger(context.teamId)
       ? { ...resolved, canRead: hasPermission("WORKSPACE_READ") || hasPermission("VIEW_PROJECT_WORKSPACE") }
       : resolved;
   }) ?? [];
@@ -112,6 +112,7 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                     teamId={context.teamId} projectName={context.projectName}
                     taskKeyPrefix={context.taskKeyPrefix} />
                 : tab === "activity" ? <WorkspaceProjectLogsPanel workspaceId={workspaceId} />
+                : tab === "feedback" ? <WorkspaceAlertsPanel workspaceId={workspaceId} teamId={context.teamId} />
                 : <WorkspaceBusinessSectionPanel key={workspaceId + ":" + tab} workspaceId={workspaceId}
                     projectId={context.projectId} teamId={context.teamId} section={tab}
                     label={WORKSPACE_SECTIONS.find(section => section.id === tab)!.label}

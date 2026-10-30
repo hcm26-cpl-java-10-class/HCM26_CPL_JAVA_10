@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.project.alert;
 
+import com.example.starter_project_2025.init.SprintBacklogDataInitializer;
 import com.example.starter_project_2025.system.project.*;
 import com.example.starter_project_2025.system.project.activity.*;
 import com.example.starter_project_2025.system.project.domain.*;
@@ -7,6 +8,7 @@ import com.example.starter_project_2025.system.project.tenant.*;
 import com.example.starter_project_2025.system.project.trainingclass.*;
 import com.example.starter_project_2025.system.project.sprint.Sprint;
 import com.example.starter_project_2025.system.project.sprint.SprintRepository;
+import com.example.starter_project_2025.system.project.sprint.SprintStatus;
 import com.example.starter_project_2025.system.project.sprint_backlog.*;
 import com.example.starter_project_2025.system.project.milestone.domain.*;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
@@ -18,6 +20,8 @@ import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenSe
 import com.fasterxml.jackson.databind.*;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -54,6 +58,7 @@ class ProjectAlertIntegrationTest {
     @Autowired MilestoneRepository milestones; @Autowired ProjectActivityRepository activity;
     @Autowired com.example.starter_project_2025.system.project.workspace.config.ExistingClassRosterContextRepair contextRepair;
     @Autowired ProjectAlertBatchRepository batches; @Autowired ProjectAlertRecipientRepository recipients;
+    @Autowired com.example.starter_project_2025.system.project.workspace.repository.WorkspaceRepository workspaces;
     @Autowired ProjectAlertMonitor monitor; @Autowired LegacyMilestoneBacklogMigration legacyMigration;
     @Autowired ProjectAlertAuditRepository audits; @Autowired AlertMilestoneConfigRepository configs;
     @Autowired com.example.starter_project_2025.system.project.milestone.submission.repository.MilestoneArtifactSubmissionRepository submissions;
@@ -61,6 +66,8 @@ class ProjectAlertIntegrationTest {
     @SpyBean OutboxEventRepository outbox;
     @MockBean(name="memberReminderClock") Clock clock;
     @MockBean AlertExternalContributions external;
+    // Legacy demo rows use placeholder member IDs that can collide with these isolated fixtures.
+    @MockBean SprintBacklogDataInitializer backlogSeed;
     @Autowired UserDetailsService details; @Autowired RefreshTokenService tokens;
     Instant now; Long tenantId,classId,otherClassId,teamId,otherTeamId,projectId,sprintId,mentorId,mentorRoleId,aId,bId,leaderId,aMembershipId,adminId;
     Long overdueId,upcomingId,doneId; UUID milestoneId;
@@ -79,7 +86,12 @@ class ProjectAlertIntegrationTest {
     ProjectTeam team(TrainingClass c,Project project) {
         var session=new TeamAllocationSession();session.setTrainingClass(c);session.setMaxMembers(8);session.setStatus(TeamAllocationSessionStatus.PUBLISHED);session.setVersion(0L);session=sessions.saveAndFlush(session);
         var t=new ProjectTeam();t.setTrainingClass(c);t.setAllocationSession(session);t.setTeamName("Team "+c.getProgramId());t.setProject(project);
-        t.setAssignedMentorId(c.getMentorId());t.setMaxMembers(8);t.setStatus(ProjectTeamStatus.ACTIVE);t.setVersion(0L);return teams.saveAndFlush(t);
+        t.setAssignedMentorId(c.getMentorId());t.setMaxMembers(8);t.setStatus(ProjectTeamStatus.ACTIVE);t.setVersion(0L);t=teams.saveAndFlush(t);
+        workspaces.saveAndFlush(com.example.starter_project_2025.system.project.workspace.domain.Workspace.builder()
+                .code("ALERT-WS-"+UUID.randomUUID()).name("Team alerts").team(t).project(project)
+                .tenant(tenants.findById(c.getTenantId()).orElseThrow())
+                .status(com.example.starter_project_2025.system.project.workspace.domain.WorkspaceStatus.ACTIVE).build());
+        return t;
     }
     ProjectMember member(ProjectTeam team,User user,String role,long days) {
         var cm=new ClassMember();cm.setTrainingClass(team.getTrainingClass());cm.setUser(user);cm.setStatus(ClassMemberStatus.ACTIVE);
@@ -114,7 +126,7 @@ class ProjectAlertIntegrationTest {
             var other=schoolClass(tenantId,102L,202L,null);otherClassId=other.getId();otherTeamId=team(other,null).getId();
             var ma=member(team,a,"DEV",8);aMembershipId=ma.getId();var mb=member(team,b,"QA",9);member(team,leader,"PM",1);
             var sprint=Sprint.builder().teamId(teamId).projectId(projectId).name("Real sprint "+UUID.randomUUID()).startDate(LocalDateTime.now().minusDays(10))
-                    .endDate(LocalDateTime.now().plusDays(3)).build();sprint=sprints.saveAndFlush(sprint);sprintId=sprint.getId();
+                    .endDate(LocalDateTime.now().plusDays(3)).status(SprintStatus.ACTIVE).build();sprint=sprints.saveAndFlush(sprint);sprintId=sprint.getId();
             overdueId=item(sprint,ma.getId(),"Overdue parent item",SprintBacklogStatus.TODO,now.minusSeconds(3600)).getId();
             var pendingBoard=com.example.starter_project_2025.system.project.sprint.Task.builder().teamId(teamId).projectId(projectId)
                     .assigneeProjectMemberId(mb.getId()).title("Unstarted task for member B").code("PENDING-"+UUID.randomUUID()).build();em.persist(pendingBoard);em.flush();
@@ -155,6 +167,113 @@ class ProjectAlertIntegrationTest {
     }
     void unchanged() {assertThat(batches.count()).isEqualTo(oldBatches);assertThat(recipients.count()).isEqualTo(oldRecipients);
         assertThat(audits.count()).isEqualTo(oldAudits);assertThat(outbox.count()).isEqualTo(oldEvents);}
+    ResultActions sentAlerts(String token,Long targetTeam) throws Exception {
+        var workspace=workspaces.findFirstByTeamIdOrderByIdAsc(targetTeam).orElseThrow();
+        var request=get("/api/workspaces/{id}/alerts",workspace.getId());
+        if(token!=null)request.header("Authorization","Bearer "+token);
+        return mvc.perform(request);
+    }
+    @Test void workspaceContainsOnlySentAlertsAndKeepsTheirOriginalSnapshots() throws Exception {
+        sentAlerts(studentToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
+        list("backlog",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1));
+        sentAlerts(studentToken,teamId).andExpect(jsonPath("$.total").value(0));unchanged();
+        send(mentorToken,UUID.randomUUID().toString(),payload("BACKLOG","Please update your overdue work.",overdueId))
+                .andExpect(status().isAccepted()).andExpect(jsonPath("$.status").value("SENT"));
+        sentAlerts(studentToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.content[0].kind").value("BACKLOG"))
+                .andExpect(jsonPath("$.content[0].senderName").value("Mentor Test"))
+                .andExpect(jsonPath("$.content[0].status").value("SENT"))
+                .andExpect(jsonPath("$.content[0].items[0].title").value("Overdue parent item"))
+                .andExpect(jsonPath("$.content[0].items[0].status").value("TODO"))
+                .andExpect(jsonPath("$.content[0].payloadJson").doesNotExist());
+        tx.executeWithoutResult(status->{var item=backlogs.findById(overdueId).orElseThrow();
+            item.setStatus(SprintBacklogStatus.DONE);item.setTitle("Updated title after completing the task");});
+        list("backlog",mentorToken,teamId).andExpect(jsonPath("$.total").value(0));
+        sentAlerts(studentToken,teamId).andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.content[0].items[0].title").value("Overdue parent item"))
+                .andExpect(jsonPath("$.content[0].items[0].status").value("TODO"));
+    }
+    @Test void milestoneWorkspacePostKeepsSixtyPercentAfterCurrentProgressReachesEighty() throws Exception {
+        Long[] extra=new Long[3];
+        tx.executeWithoutResult(status->{var sprint=sprints.findById(sprintId).orElseThrow();
+            extra[0]=item(sprint,aMembershipId,"Done three",SprintBacklogStatus.DONE,null).getId();
+            extra[1]=item(sprint,aMembershipId,"Done four",SprintBacklogStatus.DONE,null).getId();
+            extra[2]=item(sprint,aMembershipId,"Todo five",SprintBacklogStatus.TODO,null).getId();});
+        links(mentorToken,overdueId,doneId,extra[0],extra[1],extra[2]).andExpect(status().isOk());
+        send(mentorToken,UUID.randomUUID().toString(),milestonePayload()).andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.status").value("SENT"));
+        sentAlerts(studentToken,teamId).andExpect(jsonPath("$.content[0].kind").value("MILESTONE"))
+                .andExpect(jsonPath("$.content[0].items[0].percentage").value(60))
+                .andExpect(jsonPath("$.content[0].items[0].done").value(3))
+                .andExpect(jsonPath("$.content[0].items[0].total").value(5));
+        tx.executeWithoutResult(status->backlogs.findById(overdueId).orElseThrow().setStatus(SprintBacklogStatus.DONE));
+        list("milestones",mentorToken,teamId).andExpect(jsonPath("$.total").value(0));
+        sentAlerts(studentToken,teamId).andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.content[0].items[0].percentage").value(60));
+    }
+    @Test void failedSendAndRepeatedSendDoNotCreateExtraWorkspacePosts() throws Exception {
+        send(mentorToken,UUID.randomUUID().toString(),payload("BACKLOG","Not overdue",upcomingId)).andExpect(status().isConflict());
+        sentAlerts(studentToken,teamId).andExpect(jsonPath("$.total").value(0));unchanged();
+        String key=UUID.randomUUID().toString(),body=payload("BACKLOG","One alert",overdueId);
+        send(mentorToken,key,body).andExpect(status().isAccepted());
+        send(mentorToken,key,body).andExpect(status().isAccepted());
+        sentAlerts(studentToken,teamId).andExpect(jsonPath("$.total").value(1));
+        assertThat(batches.count()).isEqualTo(oldBatches+1);
+    }
+    @Test void workspaceAlertReadsRequireSessionCurrentMembershipAndWorkspacePermission() throws Exception {
+        send(mentorToken,UUID.randomUUID().toString(),payload("BACKLOG","Private team alert",overdueId)).andExpect(status().isAccepted());
+        sentAlerts(null,teamId).andExpect(status().isUnauthorized());
+        sentAlerts(studentToken,teamId).andExpect(status().isOk());
+        sentAlerts(studentToken,otherTeamId).andExpect(status().isForbidden());
+        sentAlerts(adminToken,otherTeamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
+        send(studentToken,UUID.randomUUID().toString(),payload("BACKLOG","Student cannot send",overdueId)).andExpect(status().isForbidden());
+        tx.executeWithoutResult(status->members.findById(aMembershipId).orElseThrow().getClassMember().setStatus(ClassMemberStatus.INACTIVE));
+        sentAlerts(studentToken,teamId).andExpect(status().isForbidden());
+        tx.executeWithoutResult(status->{members.findById(aMembershipId).orElseThrow().getClassMember().setStatus(ClassMemberStatus.ACTIVE);
+            var restricted=new Role();restricted.setName("NO-WORKSPACE-"+UUID.randomUUID());restricted.setPermissions(new HashSet<>());
+            users.findById(aId).orElseThrow().setRoles(new HashSet<>(Set.of(roles.saveAndFlush(restricted))));});
+        sentAlerts(studentToken,teamId).andExpect(status().isForbidden());
+    }
+    @Test void workspaceAlertReadsRejectAnotherTenantEvenForAnAdministrator() throws Exception {
+        String foreign=tx.execute(status->{var tenant=tenants.saveAndFlush(Tenant.builder().code("FOREIGN-"+UUID.randomUUID()).name("Foreign tenant").build());
+            return token(user(tenant,roles.findByName("ADMIN").orElseThrow(),"Foreign admin"));});
+        send(mentorToken,UUID.randomUUID().toString(),payload("BACKLOG","Team scoped",overdueId)).andExpect(status().isAccepted());
+        sentAlerts(foreign,teamId).andExpect(status().isForbidden());
+    }
+    @Test void inactiveAlertsAreRetiredAndTheirExistingHistoryIsNotInTheWorkspaceFeed() throws Exception {
+        mvc.perform(get("/api/project-alerts/options").header("Authorization","Bearer "+adminToken))
+                .andExpect(jsonPath("$.permissions.INACTIVE_READ").doesNotExist()).andExpect(jsonPath("$.permissions.INACTIVE_SEND").doesNotExist());
+        list("inactive-members",adminToken,teamId).andExpect(status().isNotFound());
+        send(adminToken,UUID.randomUUID().toString(),memberPayload("Retired",aId)).andExpect(status().isUnprocessableEntity());unchanged();
+        send(mentorToken,UUID.randomUUID().toString(),payload("BACKLOG","Current task alert",overdueId)).andExpect(status().isAccepted());
+        tx.executeWithoutResult(status->{var legacy=new ProjectAlertData.Batch();legacy.setId(UUID.randomUUID());legacy.setTeamId(teamId);
+            legacy.setProjectId(projectId);legacy.setTenantId(tenantId);legacy.setActorId(adminId);legacy.setRequestId(UUID.randomUUID());
+            legacy.setKind(ProjectAlertDtos.Kind.INACTIVE);legacy.setRequestHash("legacy");legacy.setWarningNote("Old inactivity reminder");
+            legacy.setRecipientCount(1);legacy.setCreatedAt(now.plusSeconds(1));legacy.setCorrelationId("old-record");batches.saveAndFlush(legacy);});
+        sentAlerts(studentToken,teamId).andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.content[0].kind").value("BACKLOG"));
+    }
+    @Test void workspaceAlertsSupportTypeFiltersAndStablePagination() throws Exception {
+        send(mentorToken,UUID.randomUUID().toString(),payload("BACKLOG","Task alert",overdueId)).andExpect(status().isAccepted());
+        send(mentorToken,UUID.randomUUID().toString(),milestonePayload()).andExpect(status().isAccepted());
+        Long workspace=workspaces.findFirstByTeamIdOrderByIdAsc(teamId).orElseThrow().getId();
+        mvc.perform(get("/api/workspaces/{id}/alerts",workspace).param("kind","BACKLOG").header("Authorization","Bearer "+studentToken))
+                .andExpect(jsonPath("$.total").value(1)).andExpect(jsonPath("$.content[0].kind").value("BACKLOG"));
+        String first=mvc.perform(get("/api/workspaces/{id}/alerts",workspace).param("size","1").header("Authorization","Bearer "+studentToken))
+                .andExpect(jsonPath("$.total").value(2)).andExpect(jsonPath("$.content.length()").value(1)).andReturn().getResponse().getContentAsString();
+        String second=mvc.perform(get("/api/workspaces/{id}/alerts",workspace).param("size","1").param("page","1").header("Authorization","Bearer "+studentToken))
+                .andExpect(jsonPath("$.content.length()").value(1)).andReturn().getResponse().getContentAsString();
+        assertThat(json.readTree(first).at("/content/0/id")).isNotEqualTo(json.readTree(second).at("/content/0/id"));
+        mvc.perform(get("/api/workspaces/{id}/alerts",workspace).param("kind","INACTIVE").header("Authorization","Bearer "+studentToken))
+                .andExpect(status().isUnprocessableEntity());
+        mvc.perform(get("/api/workspaces/{id}/alerts",workspace).param("size","101").header("Authorization","Bearer "+studentToken))
+                .andExpect(status().isUnprocessableEntity());
+    }
+    @Test void unavailableWorkspaceRejectsSendingWithoutCreatingRecords() throws Exception {
+        tx.executeWithoutResult(status->workspaces.findFirstByTeamIdOrderByIdAsc(teamId).orElseThrow().setIsActive(false));
+        send(mentorToken,UUID.randomUUID().toString(),payload("BACKLOG","Unavailable destination",overdueId)).andExpect(status().isConflict());unchanged();
+        sentAlerts(studentToken,teamId).andExpect(status().isNotFound());
+    }
     @Test void optionsAndCascadingFiltersUseActualAssignedClassAndTeam() throws Exception {
         mvc.perform(get("/api/project-alerts/options").header("Authorization","Bearer "+mentorToken)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.teams.length()").value(1)).andExpect(jsonPath("$.teams[0].id").value(teamId))
@@ -170,10 +289,82 @@ class ProjectAlertIntegrationTest {
         list("backlog",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1))
                 .andExpect(jsonPath("$.content[0].title").value("Overdue parent item")).andExpect(jsonPath("$.content[0].canSend").value(true));unchanged();
     }
-    @Test void queueBacklogAlertWritesOnePendingOutboxAndAuditAndDeduplicatesRecipient() throws Exception {
+    @Test void plannedSprintItemsBecomeAlertableOnlyAfterStart() throws Exception {
+        String body=payload("BACKLOG","Update this overdue task after the sprint starts.",overdueId);
+        String key=UUID.randomUUID().toString();
+        tx.executeWithoutResult(status->sprints.findById(sprintId).orElseThrow().setStatus(SprintStatus.PLANNED));
+
+        list("backlog",adminToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
+        monitor.scan(now,ZoneId.of("Asia/Ho_Chi_Minh"));
+        assertThat(monitor.latest(teamId).orElseThrow().overdueBacklogs()).isEmpty();
+        send(adminToken,key,body).andExpect(status().isConflict());unchanged();
+
+        tx.executeWithoutResult(status->sprints.findById(sprintId).orElseThrow().setStatus(SprintStatus.ACTIVE));
+        list("backlog",adminToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(overdueId.toString()))
+                .andExpect(jsonPath("$.content[0].canSend").value(true));
+        monitor.scan(now,ZoneId.of("Asia/Ho_Chi_Minh"));
+        assertThat(monitor.latest(teamId).orElseThrow().overdueBacklogs()).containsExactly(overdueId);
+        send(adminToken,key,body).andExpect(status().isAccepted());
+        assertThat(batches.count()).isEqualTo(oldBatches+1);assertThat(outbox.count()).isEqualTo(oldEvents+1);
+    }
+    @ParameterizedTest
+    @EnumSource(value=SprintStatus.class,names={"PLANNED","COMPLETED","CANCELLED"})
+    void nonActiveSprintRejectsStaleOverdueAlerts(SprintStatus sprintStatus) throws Exception {
+        list("backlog",adminToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1));
+        String stale=payload("BACKLOG","This selection was made while the sprint was active.",overdueId);
+        tx.executeWithoutResult(status->sprints.findById(sprintId).orElseThrow().setStatus(sprintStatus));
+
+        list("backlog",adminToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
+        monitor.scan(now,ZoneId.of("Asia/Ho_Chi_Minh"));
+        assertThat(monitor.latest(teamId).orElseThrow().overdueBacklogs()).isEmpty();
+        send(adminToken,UUID.randomUUID().toString(),stale).andExpect(status().isConflict());unchanged();
+    }
+    @Test void overdueItemInPlannedSprintRejectsTheWholeMixedBatch() throws Exception {
+        Long plannedItem=tx.execute(status->{
+            var sprint=sprints.saveAndFlush(Sprint.builder().name("Unstarted sprint "+UUID.randomUUID())
+                    .teamId(teamId).projectId(projectId).status(SprintStatus.PLANNED).build());
+            return item(sprint,aMembershipId,"Overdue work in unstarted sprint",SprintBacklogStatus.TODO,now.minusSeconds(1)).getId();
+        });
+        list("backlog",adminToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(overdueId.toString()));
+        send(adminToken,UUID.randomUUID().toString(),payload("BACKLOG","Mixed active and planned sprints",overdueId,plannedItem))
+                .andExpect(status().isConflict());unchanged();
+    }
+    @Test void overdueProductBacklogWithoutSprintRemainsVisibleAndSendable() throws Exception {
+        tx.executeWithoutResult(status->{
+            backlogs.findById(overdueId).orElseThrow().setSprint(null);
+            sprints.findById(sprintId).orElseThrow().setStatus(SprintStatus.PLANNED);
+        });
+        list("backlog",adminToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(overdueId.toString()))
+                .andExpect(jsonPath("$.content[0].canSend").value(true));
+        monitor.scan(now,ZoneId.of("Asia/Ho_Chi_Minh"));
+        assertThat(monitor.latest(teamId).orElseThrow().overdueBacklogs()).containsExactly(overdueId);
+        send(adminToken,UUID.randomUUID().toString(),payload("BACKLOG","Product backlog deadline reminder",overdueId))
+                .andExpect(status().isAccepted());
+    }
+    @Test void plannedSprintFilteringDoesNotChangeMilestoneProgress() throws Exception {
+        tx.executeWithoutResult(status->{
+            sprints.findById(sprintId).orElseThrow().setStatus(SprintStatus.PLANNED);
+            var milestone=milestones.findById(milestoneId).orElseThrow();
+            backlogs.findById(overdueId).orElseThrow().setMilestone(milestone);
+            backlogs.findById(doneId).orElseThrow().setMilestone(milestone);
+        });
+        list("backlog",adminToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
+        list("milestones",adminToken,teamId).andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].progress.total").value(2))
+                .andExpect(jsonPath("$.content[0].progress.percentage").value(50));
+        monitor.scan(now,ZoneId.of("Asia/Ho_Chi_Minh"));
+        var snapshot=monitor.latest(teamId).orElseThrow();
+        assertThat(snapshot.overdueBacklogs()).isEmpty();
+        assertThat(snapshot.milestones()).containsExactly(milestoneId);
+        assertThat(snapshot.inactiveMembers()).isEmpty();unchanged();
+    }
+    @Test void sendBacklogAlertPostsToWorkspaceAndDeduplicatesRecipient() throws Exception {
         tx.executeWithoutResult(status->backlogs.findById(upcomingId).orElseThrow().setEndDate(LocalDateTime.ofInstant(now.minusSeconds(60),ZoneId.of("Asia/Ho_Chi_Minh"))));
         var response=send(mentorToken,UUID.randomUUID().toString(),payload("BACKLOG","Please update the parent items.",overdueId,upcomingId))
-                .andExpect(status().isAccepted()).andExpect(jsonPath("$.recipientCount").value(1)).andExpect(jsonPath("$.status").value("PENDING")).andReturn().getResponse();
+                .andExpect(status().isAccepted()).andExpect(jsonPath("$.recipientCount").value(1)).andExpect(jsonPath("$.status").value("SENT")).andReturn().getResponse();
         UUID eventId=UUID.fromString(json.readTree(response.getContentAsString()).get("eventId").asText());
         var event=outbox.findById(eventId).orElseThrow();assertThat(event.getEventType()).isEqualTo("BACKLOG_OVERDUE_ALERT_BATCH_SENT");
         assertThat(json.readTree(event.getPayloadJson()).get("recipient_user_ids").size()).isEqualTo(1);
@@ -198,35 +389,10 @@ class ProjectAlertIntegrationTest {
         send(mentorToken,key,payload("BACKLOG","Different",overdueId)).andExpect(status().isConflict());
         assertThat(batches.count()).isEqualTo(oldBatches+1);assertThat(outbox.count()).isEqualTo(oldEvents+1);
     }
-    @Test void startingAnyTaskSuppressesInactivityEvenWhenOtherTodoWorkRemains() throws Exception {
-        recordStart(bId,doneId,now.minusSeconds(10));
-        list("inactive-members",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1))
-                .andExpect(jsonPath("$.content[0].id").value(aId.toString()));
-        recordStart(aId,doneId,now.minusSeconds(5));
-        assertThat(backlogs.findById(overdueId).orElseThrow().getStatus()).isEqualTo(SprintBacklogStatus.TODO);
-        list("inactive-members",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));unchanged();
-    }
-    @Test void cooldownIsSharedBetweenMentorAndActualPmAndIsAtomic() throws Exception {
-        String first=memberPayload("Please contribute an update.",aId);
-        send(mentorToken,UUID.randomUUID().toString(),first).andExpect(status().isAccepted());
-        send(leaderToken,UUID.randomUUID().toString(),memberPayload("Another reminder",aId,bId)).andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.cooldownMembers[0].userId").value(aId));
-        assertThat(batches.count()).isEqualTo(oldBatches+1);assertThat(recipients.count()).isEqualTo(oldRecipients+1);
-        list("inactive-members",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(2));
-    }
-    @Test void newlyActiveOrRemovedMemberRejectsAllSelectedRecipients() throws Exception {
-        String body=memberPayload("Reminder",aId,bId);
-        tx.executeWithoutResult(status->members.findById(aMembershipId).orElseThrow().setIsActive(false));
-        send(mentorToken,UUID.randomUUID().toString(),body).andExpect(status().isConflict());unchanged();
-    }
-    @Test void unrelatedAndExternalContributionsDoNotResetTheTaskStartWindow() throws Exception {
-        tx.executeWithoutResult(status->activity.saveAndFlush(ProjectActivityLog.builder().projectId(projectId).actorId(aId).actionType("ALERT_SENT")
-                .entityType("ALERT").entityId(7L).beforeState("{}").afterState("{}").build()));
-        when(external.latest(any(),any(),anySet(),any())).thenReturn(Map.of(aId,now.minusSeconds(10)));
-        list("inactive-members",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(2));
-        recordStart(aId,doneId,now.plusSeconds(10));
-        list("inactive-members",mentorToken,teamId).andExpect(jsonPath("$.total").value(2));unchanged();
-    }
+
+
+
+
     @Test void milestoneAutomaticallyUsesItsOwnBacklogRelationIncludingDoneItems() throws Exception {
         tx.executeWithoutResult(status->{var m=milestones.findById(milestoneId).orElseThrow();
             backlogs.findById(overdueId).orElseThrow().setMilestone(m);backlogs.findById(doneId).orElseThrow().setMilestone(m);});
@@ -278,14 +444,7 @@ class ProjectAlertIntegrationTest {
         var view=milestoneView(mentorToken);assertThat(view.get("progress").get("total").asInt()).isEqualTo(1);
         assertThat(view.get("progress").get("percentage").asInt()).isZero();unchanged();
     }
-    @Test void orphanUuidAuditRowsDoNotPretendThatAStudentStartedWork() throws Exception {
-        UUID alias=UUID.randomUUID();
-        tx.executeWithoutResult(status->{var bridge=new com.example.starter_project_2025.system.project.task.alert.TaskAlertData.ProjectLink();
-            bridge.setId(alias);bridge.setProjectId(projectId);bridge.setTenantId(tenantId);em.persist(bridge);
-            em.persist(com.example.starter_project_2025.system.project.task.audit.TaskAuditLog.builder().taskId(UUID.randomUUID()).projectId(alias)
-                    .actorId(aId).action("STATUS_CHANGED").beforeState("TODO").afterState("IN_PROGRESS").correlationId("orphan").build());});
-        list("inactive-members",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(2));unchanged();
-    }
+
     @Test void missingMilestoneReturns404AndStudentCannotConfigureOrReadOthers() throws Exception {
         links(leaderToken,overdueId).andExpect(status().isForbidden());
         list("backlog",studentToken,teamId).andExpect(status().isForbidden());
@@ -298,16 +457,11 @@ class ProjectAlertIntegrationTest {
         list("backlog",mentorToken,teamId).andExpect(status().isOk());
         send(mentorToken,UUID.randomUUID().toString(),payload("BACKLOG","Reminder",overdueId)).andExpect(status().isForbidden());unchanged();
     }
-    @Test void integrationFailureKeepsCoreActivityAndSensitiveFieldsAreNotReturned() throws Exception {
-        when(external.latest(any(),any(),anySet(),any())).thenThrow(new IllegalStateException("External unavailable"));
-        var response=list("inactive-members",mentorToken,teamId).andExpect(status().isOk()).andReturn().getResponse();
-        var body=json.readTree(response.getContentAsString());
-        for(String field:List.of("password","passwordHash","token","email","phone","draftScore","feedback"))assertThat(body.findValues(field)).isEmpty();
-        unchanged();
-    }
+
     @Test void outboxFailureRollsBackBatchAndAudit() throws Exception {
         doThrow(new IllegalStateException("Outbox unavailable")).when(outbox).saveAndFlush(any(OutboxEvent.class));
         send(mentorToken,UUID.randomUUID().toString(),payload("BACKLOG","Reminder",overdueId)).andExpect(status().isInternalServerError());unchanged();
+        sentAlerts(studentToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
     }
     @Test void existingTeacherAndStudentPmRolesCanMonitorAssignedTeams() throws Exception {
         String teacher=tx.execute(status->{
@@ -323,28 +477,8 @@ class ProjectAlertIntegrationTest {
         send(leaderToken,UUID.randomUUID().toString(),payload("BACKLOG","PM reminder",overdueId)).andExpect(status().isAccepted());
         list("backlog",studentToken,teamId).andExpect(status().isForbidden());
     }
-    @Test void exactSevenDayAndTwentyFourHourBoundariesAreInclusive() throws Exception {
-        jdbc.update("update project_members set created_at=? where id=?",java.sql.Timestamp.from(now.minus(Duration.ofDays(7))),aMembershipId);
-        list("inactive-members",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(2));
-        String body=memberPayload("Please post a progress update.",aId);
-        send(mentorToken,UUID.randomUUID().toString(),body).andExpect(status().isAccepted());
-        when(clock.instant()).thenReturn(now.plus(Duration.ofHours(24)).minusSeconds(1));
-        send(leaderToken,UUID.randomUUID().toString(),body).andExpect(status().isUnprocessableEntity());
-        when(clock.instant()).thenReturn(now.plus(Duration.ofHours(24)));
-        send(leaderToken,UUID.randomUUID().toString(),body).andExpect(status().isAccepted());
-        assertThat(batches.count()).isEqualTo(oldBatches+2);
-    }
-    @Test void recentTransferResetsGracePeriodUsingTeamHistory() throws Exception {
-        tx.executeWithoutResult(status->{
-            var member=members.findById(aMembershipId).orElseThrow();
-            var history=ProjectTeamMemberHistory.builder().classId(classId).allocationSessionId(member.getTeam().getAllocationSession().getId())
-                    .memberId(member.getClassMember().getId()).memberName("Member A").toTeamId(teamId).action("MEMBER_TRANSFERRED")
-                    .actorId(mentorId).actorName("Mentor").build();em.persist(history);em.flush();
-            jdbc.update("update project_team_member_history set created_at=? where id=?",java.sql.Timestamp.from(now.minus(Duration.ofDays(1))),history.getId());
-        });
-        list("inactive-members",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1))
-                .andExpect(jsonPath("$.content[0].id").value(bId.toString()));unchanged();
-    }
+
+
     @Test void foreignTenantAndInactiveTenantNeverExposeOrSendData() throws Exception {
         Long[] foreignTeam=new Long[1];
         tx.executeWithoutResult(status->{
@@ -378,7 +512,7 @@ class ProjectAlertIntegrationTest {
         assertThat(selected).anyMatch(id->id.asLong()==ids[0]);
         JsonNode c=null;for(var row:json.readTree(response).get("classes"))if(row.get("id").asLong()==ids[0])c=row;
         assertThat(c).isNotNull();assertThat(c.get("studentCount").asInt()).isEqualTo(2);assertThat(c.get("teamCount").asInt()).isZero();
-        for(String section:List.of("backlog","milestones","inactive-members"))mvc.perform(get("/api/project-alerts/"+section)
+        for(String section:List.of("backlog","milestones"))mvc.perform(get("/api/project-alerts/"+section)
                 .param("classId",ids[0].toString()).header("Authorization","Bearer "+adminToken))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
         mvc.perform(get("/api/project-alerts/backlog").param("classId",ids[0].toString()).header("Authorization","Bearer "+mentorToken)).andExpect(status().isForbidden());
@@ -392,11 +526,11 @@ class ProjectAlertIntegrationTest {
             var c=schoolClass(tenant.getId(),501L,601L,null);var team=team(c,p);ids[1]=team.getId();ids[2]=c.getId();
             var student=user(tenant,roles.findByName("STUDENT").orElseThrow(),"Managed student");var member=member(team,student,"DEV",8);
             student.setLocked(true);users.saveAndFlush(student);
-            var sprint=sprints.saveAndFlush(Sprint.builder().teamId(team.getId()).projectId(p.getId()).name("Managed sprint")
+            var sprint=sprints.saveAndFlush(Sprint.builder().teamId(team.getId()).projectId(p.getId()).name("Managed sprint").status(SprintStatus.ACTIVE)
                     .startDate(LocalDateTime.now().minusDays(10)).endDate(LocalDateTime.now().plusDays(3)).build());
             var item=item(sprint,member.getId(),"Managed backlog task",SprintBacklogStatus.TODO,now.minusSeconds(3600));ids[3]=item.getId();ids[4]=item.getVersion();
             var m=Milestone.create(tenant.getId(),p.getId(),team.getId(),"Managed milestone",null,now.plusSeconds(3600),true,UUID.randomUUID(),null,
-                    LatePolicyType.NO_LATE,null,null,UUID.randomUUID(),now);m.openForWork(UUID.randomUUID(),now);m=milestones.saveAndFlush(m);mid[0]=m.getId();
+                    LatePolicyType.NO_LATE,null,null,UUID.randomUUID(),now);m.openForWork(UUID.randomUUID(),now);m.start(UUID.randomUUID(),now);m=milestones.saveAndFlush(m);mid[0]=m.getId();
             submissions.saveAndFlush(com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneArtifactSubmission.submit(
                     tenant.getId(),null,team.getId(),m.getId(),UUID.nameUUIDFromBytes(student.getEmail().getBytes(java.nio.charset.StandardCharsets.UTF_8)),
                     1,"https://example.test/repo",null,null,"{}","[]",now.minusSeconds(10),false,null));
@@ -423,21 +557,14 @@ class ProjectAlertIntegrationTest {
     @Test void teamCanBeMonitoredBeforeAProjectExists() throws Exception {
         tx.executeWithoutResult(status->{
             teams.findById(teamId).orElseThrow().setProject(null);
+            workspaces.findFirstByTeamIdOrderByIdAsc(teamId).orElseThrow().setProject(null);
             sprints.findById(sprintId).orElseThrow().setProjectId(null);
         });
         list("backlog",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1))
                 .andExpect(jsonPath("$.content[0].team.projectId").isEmpty());
         send(mentorToken,UUID.randomUUID().toString(),payload("BACKLOG","Reminder",overdueId)).andExpect(status().isAccepted());
     }
-    @Test void simultaneousInactiveRemindersRespectSharedCooldown() throws Exception {
-        String body=memberPayload("Concurrent reminder",aId);var gate=new CountDownLatch(1);
-        try(var executor=Executors.newFixedThreadPool(2)) {
-            Callable<Integer> request=()->{gate.await();return send(mentorToken,UUID.randomUUID().toString(),body).andReturn().getResponse().getStatus();};
-            var a=executor.submit(request);var b=executor.submit(request);gate.countDown();
-            assertThat(List.of(a.get(20,TimeUnit.SECONDS),b.get(20,TimeUnit.SECONDS))).containsExactlyInAnyOrder(202,422);
-        }
-        assertThat(batches.count()).isEqualTo(oldBatches+1);assertThat(outbox.count()).isEqualTo(oldEvents+1);
-    }
+
     ResultActions submitArtifact(String key,String note) throws Exception {
         return mvc.perform(post("/api/teams/{team}/milestones/{milestone}/artifact-draft/submissions",teamId,milestoneId)
                 .header("Authorization","Bearer "+studentToken).header("Idempotency-Key",key).contentType(MediaType.APPLICATION_JSON)
@@ -472,13 +599,11 @@ class ProjectAlertIntegrationTest {
         assertThat(classes.findById(ids[1]).orElseThrow().getTenantId()).isEqualTo(ids[0]);
         assertThat(users.findById(ids[2]).orElseThrow().getTenantId()).isNull();unchanged();
     }
-    @Test void artifactSubmissionDoesNotSuppressAnIndependentMilestoneProgressAlert() throws Exception {
+    @Test void submittedMilestonesLeaveTheInProgressRiskList() throws Exception {
         links(mentorToken,overdueId,doneId).andExpect(status().isOk());
         submitArtifact(UUID.randomUUID().toString(),"On-time hand-in").andExpect(status().isCreated());
-        list("milestones",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.content[0].progress.percentage").value(50))
-                .andExpect(jsonPath("$.content[0].canSend").value(true));
-        list("inactive-members",mentorToken,teamId).andExpect(jsonPath("$.total").value(2));
-        send(mentorToken,UUID.randomUUID().toString(),milestonePayload()).andExpect(status().isAccepted());
+        list("milestones",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
+        send(mentorToken,UUID.randomUUID().toString(),milestonePayload()).andExpect(status().isConflict());
         when(clock.instant()).thenReturn(now.plus(Duration.ofDays(2)));
         list("milestones",mentorToken,teamId).andExpect(jsonPath("$.total").value(0));
     }
@@ -495,44 +620,15 @@ class ProjectAlertIntegrationTest {
         // A fresh submission is only allowed after the reviewer requests changes.
         submitArtifact(UUID.randomUUID().toString(),"Second hand-in").andExpect(status().isConflict());
         assertThat(submissions.count()).isEqualTo(before + 1);
-        list("inactive-members",mentorToken,teamId).andExpect(jsonPath("$.total").value(2));
-        list("milestones",mentorToken,teamId).andExpect(jsonPath("$.content[0].progress.percentage").value(50));
+        list("milestones",mentorToken,teamId).andExpect(jsonPath("$.total").value(0));
+        assertThat(backlogs.findById(overdueId).orElseThrow().getStatus()).isEqualTo(SprintBacklogStatus.TODO);
+        assertThat(backlogs.findById(doneId).orElseThrow().getStatus()).isEqualTo(SprintBacklogStatus.DONE);
         assertThat(milestones.findById(milestoneId).orElseThrow().getStatus()).isEqualTo(MilestoneStatus.OPEN);
         assertThat(projects.findById(projectId).orElseThrow().getStatus()).isEqualTo(ProjectStatus.ACTIVE);
     }
-    @Test void realArtifactDraftEditsDoNotResetTaskStartInactivity() throws Exception {
-        String body=json.writeValueAsString(Map.of("repositoryUrl","https://example.com/repository","releaseNotes","Preparing the submission","checklist",Map.of()));
-        var request=put("/api/teams/{team}/milestones/{milestone}/artifact-draft",teamId,milestoneId)
-                .header("Authorization","Bearer "+studentToken).contentType(MediaType.APPLICATION_JSON).content(body);
-        mvc.perform(request).andExpect(status().isOk());long logs=milestoneAudits.count(),events=outbox.count();
-        mvc.perform(request).andExpect(status().isOk());assertThat(milestoneAudits.count()).isEqualTo(logs);assertThat(outbox.count()).isEqualTo(events);
-        list("inactive-members",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(2));
-        list("milestones",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.content[0].submission").doesNotExist());
-    }
-    @Test void rejectedLateSubmissionDoesNotResetInactivityOrQueueEvents() throws Exception {
-        jdbc.update("UPDATE milestones SET deadline=? WHERE milestone_id=?",now.minus(Duration.ofDays(1)),milestoneId);
-        long count=submissions.count(),logs=milestoneAudits.count();
-        submitArtifact(UUID.randomUUID().toString(),"Too late").andExpect(status().isUnprocessableEntity());
-        assertThat(submissions.count()).isEqualTo(count);assertThat(milestoneAudits.count()).isEqualTo(logs);unchanged();
-        list("inactive-members",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(2));
-        jdbc.update("UPDATE milestones SET late_policy_type='ALLOW_LATE',late_until=?,late_penalty_percent=10 WHERE milestone_id=?",now.plus(Duration.ofDays(1)),milestoneId);
-        submitArtifact(UUID.randomUUID().toString(),"Accepted according to the late policy").andExpect(status().isCreated())
-                .andExpect(jsonPath("$.submittedLate").value(true)).andExpect(jsonPath("$.status").value("SUBMITTED"));
-        list("inactive-members",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(2));
-        list("milestones",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
-        assertThat(projects.findById(projectId).orElseThrow().getStatus()).isEqualTo(ProjectStatus.ACTIVE);
-    }
-    @Test void reviewerEventsAndForeignSubmissionRowsDoNotCountAsStudentContributions() throws Exception {
-        tx.executeWithoutResult(status->{
-            var actor=UUID.nameUUIDFromBytes(users.findById(aId).orElseThrow().getEmail().getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            milestoneAudits.save(com.example.starter_project_2025.system.project.milestone.audit.MilestoneAuditLog.artifactEvent(
-                    milestoneId,projectId,tenantId,actor,"ARTIFACT_REVIEWED","review","{}",now.minusSeconds(5)));
-            submissions.save(com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneArtifactSubmission.submit(
-                    tenantId,projectId,otherTeamId,milestoneId,actor,1,"https://example.com/repository",null,null,"{}","[]",now.minusSeconds(5),false,null));
-        });
-        list("inactive-members",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(2));
-        list("milestones",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.content[0].submission").doesNotExist());
-    }
+
+
+
     @Test void actualRosterProtectsArtifactSubmissionAndReviewerLists() throws Exception {
         mvc.perform(post("/api/teams/{team}/milestones/{milestone}/artifact-draft/submissions",otherTeamId,milestoneId)
                 .header("Authorization","Bearer "+studentToken).header("Idempotency-Key",UUID.randomUUID()).contentType(MediaType.APPLICATION_JSON)
@@ -548,7 +644,7 @@ class ProjectAlertIntegrationTest {
         long events=outbox.count(),count=batches.count();
         for(var state:List.of(ProjectStatus.COMPLETED,ProjectStatus.CANCELLED)) {
             tx.executeWithoutResult(status->projects.findById(projectId).orElseThrow().setStatus(state));
-            for(String kind:List.of("backlog","milestones","inactive-members"))list(kind,mentorToken,teamId)
+            for(String kind:List.of("backlog","milestones"))list(kind,mentorToken,teamId)
                     .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
             send(mentorToken,UUID.randomUUID().toString(),body).andExpect(status().isConflict());
             send(mentorToken,key,body).andExpect(status().isAccepted()).andExpect(content().json(original));
@@ -563,62 +659,13 @@ class ProjectAlertIntegrationTest {
         mvc.perform(post("/api/projects/{project}/milestones/{milestone}/artifact-draft/submissions",projectId,milestoneId)
                 .header("Authorization","Bearer "+studentToken).header("Idempotency-Key",UUID.randomUUID()).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"repositoryUrl\":\"https://example.com/repository\"}")).andExpect(status().isCreated());
-        list("inactive-members",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(2));
-        list("milestones",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.content[0].canSend").value(true));
+        list("milestones",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
         tx.executeWithoutResult(status->projects.findById(projectId).orElseThrow().setStatus(ProjectStatus.PLANNING));
         mvc.perform(post("/api/projects/{project}/milestones/{milestone}/artifact-draft/submissions",projectId,milestoneId)
                 .header("Authorization","Bearer "+studentToken).header("Idempotency-Key",UUID.randomUUID()).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"repositoryUrl\":\"https://example.com/repository\"}")).andExpect(status().isConflict());
     }
-    @Test void actualBoardDescriptionEditsDoNotResetTaskStartInactivity() throws Exception {
-        tx.executeWithoutResult(status->{
-            for(Long userId:List.of(aId,mentorId))em.persist(BoardProjectMember.builder().projectId(projectId).userId(userId)
-                    .projectRole(userId.equals(mentorId)?com.example.starter_project_2025.system.project.team.ProjectRole.MENTOR
-                            :com.example.starter_project_2025.system.project.team.ProjectRole.MEMBER).build());
-        });
-        String created=mvc.perform(post("/api/projects/{project}/sprints/{sprint}/tasks",projectId,sprintId)
-                .header("Authorization","Bearer "+mentorToken).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"title\":\"Real Board task without an assignee\"}"))
-                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
-        Long taskId=json.readTree(created).get("id").asLong();
-        long count=activity.count();
-        // Looking at the Board, and saving exactly the current values, are not contributions.
-        mvc.perform(get("/api/projects/{project}/tasks",projectId).header("Authorization","Bearer "+studentToken))
-                .andExpect(status().isOk());
-        mvc.perform(put("/api/projects/{project}/tasks/{task}",projectId,taskId)
-                .header("Authorization","Bearer "+studentToken).contentType(MediaType.APPLICATION_JSON).content("{}"))
-                .andExpect(status().isOk());
-        assertThat(activity.count()).isEqualTo(count);
-        list("inactive-members",mentorToken,teamId).andExpect(jsonPath("$.total").value(2));
 
-        String edit="{\"description\":\"Student records actual implementation work\"}";
-        mvc.perform(put("/api/projects/{project}/tasks/{task}",projectId,taskId)
-                .header("Authorization","Bearer "+studentToken).contentType(MediaType.APPLICATION_JSON).content(edit))
-                .andExpect(status().isOk());
-        assertThat(activity.count()).isEqualTo(count+1);
-        var audit=activity.findByProjectIdOrderByOccurredAtDesc(projectId,org.springframework.data.domain.PageRequest.of(0,10))
-                .stream().filter(row->"TASK_UPDATED".equals(row.getActionType())).findFirst().orElseThrow();
-        assertThat(audit.getActorId()).isEqualTo(aId);
-        assertThat(json.readTree(audit.getBeforeState()).get("description").isNull()).isTrue();
-        assertThat(json.readTree(audit.getAfterState()).get("description").asText()).contains("actual implementation");
-        mvc.perform(put("/api/projects/{project}/tasks/{task}",projectId,taskId)
-                .header("Authorization","Bearer "+studentToken).contentType(MediaType.APPLICATION_JSON).content(edit))
-                .andExpect(status().isOk());
-        assertThat(activity.count()).isEqualTo(count+1);
-        list("inactive-members",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(2));
-        assertThat(currentMember(aId).get("inactive").asBoolean()).isTrue();
-        // Board tasks are activity evidence, never extra parent items in the deadline list.
-        list("backlog",mentorToken,teamId).andExpect(jsonPath("$.total").value(1));
-        Long version=tx.execute(status->em.find(com.example.starter_project_2025.system.project.sprint.Task.class,taskId).getVersion());
-        mvc.perform(patch("/api/projects/{project}/tasks/{task}/status",projectId,taskId).header("Authorization","Bearer "+studentToken)
-                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("status","IN_PROGRESS","expectedVersion",version))))
-                .andExpect(status().isOk());
-        assertThat(backlogs.findById(overdueId).orElseThrow().getStatus()).isEqualTo(SprintBacklogStatus.TODO);
-        list("inactive-members",mentorToken,teamId).andExpect(jsonPath("$.total").value(1))
-                .andExpect(jsonPath("$.content[0].id").value(bId.toString()));
-        send(mentorToken,UUID.randomUUID().toString(),memberPayload("Stale selection",aId)).andExpect(status().isConflict());
-        assertThat(batches.count()).isEqualTo(oldBatches);
-    }
 
     @Test void completingBacklogsRemovesMilestoneAlertAndEditsDoNotResetTaskStarts() throws Exception {
         links(mentorToken,overdueId,doneId).andExpect(status().isOk());
@@ -631,10 +678,8 @@ class ProjectAlertIntegrationTest {
         mvc.perform(put("/api/sprint-backlogs/{id}",overdueId).header("Authorization","Bearer "+mentorToken)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"DONE\",\"isActive\":true}")).andExpect(status().isOk());
         list("milestones",mentorToken,teamId).andExpect(jsonPath("$.total").value(0));
-        list("inactive-members",mentorToken,teamId).andExpect(jsonPath("$.total").value(2));
         mvc.perform(put("/api/sprint-backlogs/{id}",doneId).header("Authorization","Bearer "+mentorToken)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"description\":\"Updated notes\",\"isActive\":true}")).andExpect(status().isOk());
-        list("inactive-members",mentorToken,teamId).andExpect(jsonPath("$.total").value(2));
         list("milestones",mentorToken,teamId).andExpect(jsonPath("$.total").value(0));unchanged();
     }
 
@@ -654,7 +699,6 @@ class ProjectAlertIntegrationTest {
         list("backlog",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
         var view=milestoneView(mentorToken);
         assertThat(view.get("progress").get("total").asInt()).isZero();
-        list("inactive-members",mentorToken,teamId).andExpect(jsonPath("$.total").value(1));
         send(mentorToken,UUID.randomUUID().toString(),payload("BACKLOG","Wrong project",overdueId)).andExpect(status().isConflict());
         unchanged();
     }
@@ -668,53 +712,13 @@ class ProjectAlertIntegrationTest {
             teams.findById(teamId).orElseThrow().setProject(projects.saveAndFlush(project));
         });
         list("milestones",mentorToken,teamId).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
-        list("inactive-members",mentorToken,teamId).andExpect(jsonPath("$.total").value(0));
         mvc.perform(get("/api/project-alerts/teams/{team}/milestones/{milestone}/backlog-items",teamId,milestoneId)
                 .header("Authorization","Bearer "+mentorToken)).andExpect(status().isNotFound());
         send(mentorToken,UUID.randomUUID().toString(),milestonePayload()).andExpect(status().isNotFound());
         assertThat(outbox.count()).isEqualTo(events);assertThat(batches.count()).isEqualTo(oldBatches);
     }
 
-    @Test void actualUuidTaskApiUsesTheProjectBridgeAndIgnoresTechnicalOnlyAuditChanges() throws Exception {
-        UUID projectAlias=UUID.randomUUID(),memberAlias=UUID.randomUUID();
-        mvc.perform(put("/api/task-alerts/project-links/{alias}",projectAlias).header("Authorization","Bearer "+adminToken)
-                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("projectId",projectId))))
-                .andExpect(status().isOk());
-        mvc.perform(put("/api/task-alerts/member-links/{alias}",memberAlias).header("Authorization","Bearer "+adminToken)
-                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("projectId",projectAlias,
-                        "source","PROJECT_MEMBER","sourceMemberId",aMembershipId)))).andExpect(status().isOk());
-        tx.executeWithoutResult(status->roles.findByName("STUDENT").orElseThrow().getPermissions()
-                .add(permissions.findByName("TASK_UPDATE").orElseThrow()));
-        var created=json.readTree(mvc.perform(post("/api/tasks").header("Authorization","Bearer "+mentorToken)
-                .header("Idempotency-Key",UUID.randomUUID()).contentType(MediaType.APPLICATION_JSON)
-                .content(json.writeValueAsString(Map.of("projectId",projectAlias,"assigneeProjectMemberId",memberAlias,
-                        "title","Shared UUID task","estimatedHours",2,"isActive",true))))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
-        list("inactive-members",mentorToken,teamId).andExpect(jsonPath("$.total").value(2));
-        var unchanged=(com.fasterxml.jackson.databind.node.ObjectNode)created.deepCopy();
-        var saved=json.readTree(mvc.perform(put("/api/tasks/{id}",created.get("id").asText())
-                .header("Authorization","Bearer "+studentToken).header("Idempotency-Key",UUID.randomUUID())
-                .contentType(MediaType.APPLICATION_JSON).content(unchanged.toString()))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
-        // Task CRUD may record a new version/updatedBy even for the same business fields.
-        list("inactive-members",mentorToken,teamId).andExpect(jsonPath("$.total").value(2));
-        var inProgress=json.readTree(mvc.perform(patch("/api/tasks/{id}/status",created.get("id").asText())
-                .header("Authorization","Bearer "+studentToken).header("Idempotency-Key",UUID.randomUUID())
-                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of(
-                        "status","IN_PROGRESS","version",saved.get("version").asLong()))))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
-        list("inactive-members",mentorToken,teamId).andExpect(jsonPath("$.total").value(1))
-                .andExpect(jsonPath("$.content[0].id").value(bId.toString()));
-        var changed=(com.fasterxml.jackson.databind.node.ObjectNode)inProgress.deepCopy();
-        changed.put("description","Student changed the implementation");
-        mvc.perform(put("/api/tasks/{id}",created.get("id").asText())
-                .header("Authorization","Bearer "+studentToken).header("Idempotency-Key",UUID.randomUUID())
-                .contentType(MediaType.APPLICATION_JSON).content(changed.toString())).andExpect(status().isOk());
-        list("inactive-members",mentorToken,teamId).andExpect(jsonPath("$.total").value(1))
-                .andExpect(jsonPath("$.content[0].id").value(bId.toString()));
-        list("backlog",mentorToken,teamId).andExpect(jsonPath("$.total").value(1));
-        assertThat(batches.count()).isEqualTo(oldBatches);
-    }
+
 
     ResultActions memberResults(String token,Long team,Long user) throws Exception {
         var request=get("/api/project-alerts/teams/{team}/members/{user}/work-results",team,user);
@@ -727,88 +731,11 @@ class ProjectAlertIntegrationTest {
         for(var row:json.readTree(body).get("content"))if(row.get("id").asLong()==userId)return row;
         throw new AssertionError("Expected current member "+userId);
     }
-    @Test void workResultsNeverChangeInactivityOrApplyTheTeamRiskThresholdToAnIndividual() throws Exception {
-        var inactive=currentMember(aId);
-        assertThat(inactive.get("inactive").asBoolean()).isTrue();
-        assertThat(inactive.get("workResults").get("assigned").asInt()).isEqualTo(3);
-        assertThat(inactive.get("workResults").get("done").asInt()).isEqualTo(1);
-        assertThat(inactive.get("workResults").get("overdue").asInt()).isEqualTo(1);
-        assertThat(inactive.get("workResults").get("percentage").decimalValue()).isEqualByComparingTo("33.33");
-        recordStart(aId,doneId,now.minusSeconds(5));
-        var active=currentMember(aId);
-        assertThat(active.get("activityStatus").asText()).isEqualTo("ACTIVE");
-        assertThat(active.get("canSend").asBoolean()).isFalse();
-        assertThat(active.get("workResults")).isEqualTo(inactive.get("workResults"));
-        // Low completion still permits no inactivity reminder to this recently active member.
-        send(mentorToken,UUID.randomUUID().toString(),memberPayload("Review work separately",aId)).andExpect(status().isConflict());
-        var empty=currentMember(bId);
-        assertThat(empty.get("inactive").asBoolean()).isTrue();assertThat(empty.get("canSend").asBoolean()).isTrue();
-        assertThat(empty.get("workResults").get("assigned").asInt()).isZero();
-        assertThat(empty.get("workResults").get("percentage").isNull()).isTrue();
-        memberResults(mentorToken,teamId,bId).andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(0))
-                .andExpect(jsonPath("$.summary.percentage").isEmpty());unchanged();
-    }
-    @Test void memberWorkResultsUseCurrentTeamAssignmentsAndSeparateReviewAndUndatedWork() throws Exception {
-        tx.executeWithoutResult(status->{
-            var sprint=sprints.findById(sprintId).orElseThrow();
-            item(sprint,aMembershipId,"Awaiting review",SprintBacklogStatus.REVIEW,now.minusSeconds(3600));
-            item(sprint,aMembershipId,"Unscheduled work",SprintBacklogStatus.TODO,null);
-            item(sprint,aMembershipId,"Deleted work",SprintBacklogStatus.TODO,now.minusSeconds(1)).setIsActive(false);
-            item(sprint,null,"Unassigned work",SprintBacklogStatus.TODO,now.minusSeconds(1));
-            var other=sprints.saveAndFlush(Sprint.builder().teamId(otherTeamId).name("Other team's sprint "+UUID.randomUUID()).build());
-            item(other,aMembershipId,"Work outside the team",SprintBacklogStatus.TODO,now.minusSeconds(1));
-        });
-        String body=memberResults(mentorToken,teamId,aId).andExpect(status().isOk())
-                .andExpect(jsonPath("$.summary.assigned").value(5)).andExpect(jsonPath("$.summary.done").value(1))
-                .andExpect(jsonPath("$.summary.overdue").value(1)).andExpect(jsonPath("$.summary.inReview").value(1))
-                .andExpect(jsonPath("$.summary.withoutDeadline").value(1)).andExpect(jsonPath("$.summary.percentage").value(20))
-                .andExpect(jsonPath("$.items.length()").value(5)).andReturn().getResponse().getContentAsString();
-        assertThat(body).doesNotContain("Deleted work","Unassigned work","Work outside the team");
-        for(String field:List.of("email","password","token","score","feedback"))assertThat(json.readTree(body).findValues(field)).isEmpty();
-        unchanged();
-    }
-    @Test void workResultsRefreshFromBacklogEditsAndReassignmentWithoutChangingActivityRules() throws Exception {
-        Long bMembership=tx.execute(status->members.findByTeam_IdAndClassMember_User_Id(teamId,bId).orElseThrow().getId());
-        memberResults(mentorToken,teamId,aId).andExpect(jsonPath("$.summary.assigned").value(3));
-        for (String nextStatus : List.of("IN_PROGRESS", "REVIEW")) {
-            mvc.perform(put("/api/sprint-backlogs/{id}",overdueId).header("Authorization","Bearer "+mentorToken)
-                    .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("isActive",true,"status",nextStatus))))
-                    .andExpect(status().isOk());
-        }
-        mvc.perform(put("/api/sprint-backlogs/{id}",overdueId).header("Authorization","Bearer "+mentorToken)
-                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("isActive",true,
-                        "status","DONE","assigneeProjectMemberId",bMembership)))).andExpect(status().isOk());
-        memberResults(mentorToken,teamId,aId).andExpect(jsonPath("$.summary.assigned").value(2))
-                .andExpect(jsonPath("$.summary.percentage").value(50));
-        memberResults(mentorToken,teamId,bId).andExpect(jsonPath("$.summary.assigned").value(1))
-                .andExpect(jsonPath("$.summary.done").value(1)).andExpect(jsonPath("$.summary.overdue").value(0))
-                .andExpect(jsonPath("$.summary.percentage").value(100));
-        assertThat(currentMember(bId).get("inactive").asBoolean()).isTrue();unchanged();
-    }
-    @Test void workResultsRequireBothBacklogAndMemberDetailPermissionAndDoNotLeakThroughMemberList() throws Exception {
-        for(String permission:List.of("SPRINT_BACKLOG_READ","WORKSPACE_MEMBER_READ")) {
-            tx.executeWithoutResult(status->roles.findById(mentorRoleId).orElseThrow().getPermissions()
-                    .removeIf(p->permission.equals(p.getName())));
-            assertThat(currentMember(aId).get("workResults").isNull()).isTrue();
-            memberResults(mentorToken,teamId,aId).andExpect(status().isForbidden());
-            tx.executeWithoutResult(status->roles.findById(mentorRoleId).orElseThrow().getPermissions()
-                    .add(permissions.findByName(permission).orElseThrow()));
-        }
-        unchanged();
-    }
-    @Test void memberWorkResultsAreReadOnlyAndCheckSessionTeamScopeAndCurrentRoster() throws Exception {
-        long work=backlogs.count(),roster=members.count(),logs=activity.count();
-        memberResults(null,teamId,aId).andExpect(status().isUnauthorized());
-        memberResults(mentorToken,otherTeamId,aId).andExpect(status().isForbidden());
-        memberResults(mentorToken,teamId,mentorId).andExpect(status().isNotFound());
-        memberResults(mentorToken,teamId,aId).andExpect(status().isOk());
-        memberResults(mentorToken,teamId,aId).andExpect(status().isOk());
-        assertThat(backlogs.count()).isEqualTo(work);assertThat(members.count()).isEqualTo(roster);
-        assertThat(activity.count()).isEqualTo(logs);
-        assertThat(projects.findById(projectId).orElseThrow().getStatus()).isEqualTo(ProjectStatus.ACTIVE);
-        tx.executeWithoutResult(status->members.findById(aMembershipId).orElseThrow().setIsActive(false));
-        memberResults(mentorToken,teamId,aId).andExpect(status().isNotFound());unchanged();
-    }
+
+
+
+
+
 
     @Test void parallelRetriesWithSameKeyQueueOneBatch() throws Exception {
         String key=UUID.randomUUID().toString(),body=payload("BACKLOG","Concurrent",overdueId);var gate=new CountDownLatch(1);
@@ -838,31 +765,20 @@ class ProjectAlertIntegrationTest {
                 .header("Authorization","Bearer "+mentorToken)).andExpect(jsonPath("$.total").value(1));
         jdbc.update("update milestones set deadline=? where milestone_id=?",java.sql.Timestamp.from(now.plus(Duration.ofHours(48)).plusSeconds(1)),milestoneId);
         list("milestones",mentorToken,teamId).andExpect(jsonPath("$.total").value(0));
-        jdbc.update("update milestones set deadline=?,status='CLOSED' where milestone_id=?",java.sql.Timestamp.from(now.plusSeconds(3600)),milestoneId);
+        jdbc.update("update milestones set deadline=? where milestone_id=?",java.sql.Timestamp.from(now.plusSeconds(3600)),milestoneId);
+        tx.executeWithoutResult(status->{var milestone=milestones.findById(milestoneId).orElseThrow();
+            milestone.setExecutionStatus(com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus.REVIEW,UUID.randomUUID(),now);
+            milestone.setExecutionStatus(com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus.DONE,UUID.randomUUID(),now);});
         list("milestones",mentorToken,teamId).andExpect(jsonPath("$.total").value(0));unchanged();
     }
-    @Test void membersWithoutTodoAssignmentsAreNotInactiveAndNewAssignmentsReceiveSevenDays() throws Exception {
-        jdbc.update("update sprint_backlog set created_at=? where sprint_backlog_id=?",java.sql.Timestamp.from(now.minus(Duration.ofDays(7)).plusSeconds(1)),overdueId);
-        assertThat(currentMember(aId).get("inactive").asBoolean()).isFalse();
-        jdbc.update("update sprint_backlog set created_at=? where sprint_backlog_id=?",java.sql.Timestamp.from(now.minus(Duration.ofDays(7))),overdueId);
-        assertThat(currentMember(aId).get("inactive").asBoolean()).isTrue();
-        tx.executeWithoutResult(status->backlogs.findById(overdueId).orElseThrow().setStatus(SprintBacklogStatus.DONE));
-        assertThat(currentMember(aId).get("inactive").asBoolean()).isFalse();
-        send(mentorToken,UUID.randomUUID().toString(),memberPayload("No pending work",aId)).andExpect(status().isConflict());unchanged();
-    }
-    @Test void recentReassignmentOfOldTodoWorkStartsANewGracePeriod() throws Exception {
-        tx.executeWithoutResult(status->{var event=com.example.starter_project_2025.system.project.sprint_backlog.audit.SprintBacklogAuditLog.builder()
-                .sprintBacklogId(overdueId).sprintId(sprintId).actorId(mentorId).action("UPDATE").beforeState("{\"assigneeProjectMemberId\":999999}")
-                .afterState("{\"assigneeProjectMemberId\":"+aMembershipId+"}").correlationId("assignment").build();em.persist(event);em.flush();
-            jdbc.update("update sprint_backlog_audit_log set created_at=? where id=?",java.sql.Timestamp.from(now.minusSeconds(10)),event.getId());});
-        assertThat(currentMember(aId).get("inactive").asBoolean()).isFalse();unchanged();
-    }
-    @Test void backgroundMonitorDetectsAllThreeCategoriesWithoutSendingAnyNotifications() throws Exception {
+
+
+    @Test void backgroundMonitorDetectsOnlyTaskAndMilestoneCandidatesWithoutSending() throws Exception {
         tx.executeWithoutResult(status->{var m=milestones.findById(milestoneId).orElseThrow();backlogs.findById(overdueId).orElseThrow().setMilestone(m);});
         monitor.scan(now,ZoneId.of("Asia/Ho_Chi_Minh"));
         var snapshot=monitor.latest(teamId).orElseThrow();assertThat(snapshot.checkedAt()).isEqualTo(now);
         assertThat(snapshot.overdueBacklogs()).containsExactly(overdueId);assertThat(snapshot.milestones()).containsExactly(milestoneId);
-        assertThat(snapshot.inactiveMembers()).containsExactlyInAnyOrder(aId,bId);unchanged();
+        assertThat(snapshot.inactiveMembers()).isEmpty();unchanged();
         tx.executeWithoutResult(status->backlogs.findById(overdueId).orElseThrow().setStatus(SprintBacklogStatus.DONE));
         monitor.scan(now.plusSeconds(60),ZoneId.of("Asia/Ho_Chi_Minh"));
         var next=monitor.latest(teamId).orElseThrow();assertThat(next.milestones()).isEmpty();assertThat(next.overdueBacklogs()).isEmpty();unchanged();
