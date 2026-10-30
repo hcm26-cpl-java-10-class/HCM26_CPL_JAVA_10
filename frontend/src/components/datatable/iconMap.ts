@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react"
-
+import { ClipboardList } from "lucide-react";
 import {
     Activity,
     AlertTriangle,
@@ -51,13 +51,10 @@ import {
     MessageCircle,
     Mic,
     Minus,
-    Monitor,
     Music,
-    Package,
     Pause,
     Pencil,
     Phone,
-    PieChart,
     Play,
     Plus,
     RefreshCw,
@@ -66,17 +63,15 @@ import {
     Search,
     Server,
     Settings,
+    Share2,
     Shield,
     ShieldAlert,
     ShieldCheck,
-    ShoppingCart,
     Smartphone,
     Star,
     Tag,
-    Tags,
     Terminal,
     Trash2,
-    TrendingDown,
     TrendingUp,
     Unlock,
     Upload,
@@ -168,39 +163,38 @@ export const iconMap = {
     "clipboard-check": ClipboardCheck,
     bookmark: Bookmark,
     tag: Tag,
-    tags: Tags,
-    star: Star,
-    "shopping-cart": ShoppingCart,
+    wallet: Wallet,
     "credit-card": CreditCard,
     "dollar-sign": DollarSign,
-    wallet: Wallet,
-    package: Package,
-    "graduation-cap": GraduationCap,
 
-    // Data / Infra
+    // Media
+    image: Image,
+    camera: Camera,
+    video: Video,
+    music: Music,
+    mic: Mic,
+
+    // Tech / Infrastructure
     database: Database,
     server: Server,
     "hard-drive": HardDrive,
     cloud: Cloud,
     "cloud-upload": CloudUpload,
     "cloud-download": CloudDownload,
-    "bar-chart": BarChart3,
-    "pie-chart": PieChart,
-    activity: Activity,
-    "trending-up": TrendingUp,
-    "trending-down": TrendingDown,
-
-    // Device / Media
-    monitor: Monitor,
     laptop: Laptop,
     smartphone: Smartphone,
-    image: Image,
-    camera: Camera,
-    video: Video,
+
+    // Learning / Education
+    "graduation-cap": GraduationCap,
+
+    // Status / Misc
+    activity: Activity,
+    "bar-chart": BarChart3,
+    "trending-up": TrendingUp,
+    star: Star,
+    share: Share2,
     play: Play,
     pause: Pause,
-    music: Music,
-    mic: Mic,
 
     // Tech / Dev
     settings: Settings,
@@ -209,6 +203,11 @@ export const iconMap = {
     bug: Bug,
     rocket: Rocket,
     cpu: Cpu,
+
+    EnrollmentLogs: ClipboardList,
+    "enrollment-logs": ClipboardList,
+    ClipboardList: ClipboardList,
+    "clipboard-list": ClipboardList,
 } satisfies Record<string, LucideIcon>
 
 export type IconKey = keyof typeof iconMap

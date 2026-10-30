@@ -15,6 +15,8 @@ export type SidebarModuleGroup = ModuleGroupDTO & {
 // Display-only renames for menu group names (DB data is untouched).
 const GROUP_NAME_OVERRIDES: Record<string, string> = {
     "Course Management": "Course Online",
+    "COURSE_ONLINE": "Course Online",
+    "Course Online": "Course Online",
 };
 
 const menuPagination: Pagination = {
