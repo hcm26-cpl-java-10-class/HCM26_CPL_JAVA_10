@@ -457,7 +457,7 @@ export default function TeamArtifactSubmissionPage() {
             )}
 
             {/* Amber Alert ONLY when submission is truly blocked (Fix Bug #29) */}
-            {!canSubmit && (
+            {!canSubmit && !latestSubmission && (
               <Alert className="border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
                 <AlertCircle className="size-4" />
                 <AlertTitle>Chưa mở nộp bài chính thức</AlertTitle>

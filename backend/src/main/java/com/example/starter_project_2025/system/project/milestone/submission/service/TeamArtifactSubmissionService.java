@@ -164,9 +164,13 @@ public class TeamArtifactSubmissionService {
         userRepository.findByTenantIdAndIsActiveTrue(s.tenantId).forEach(user -> {
             UUID id = UUID.nameUUIDFromBytes(user.getEmail().getBytes(StandardCharsets.UTF_8)); actors.put(id, user);
         });
+        // Students can inspect their own history in Workspace; reviewers can inspect the full team queue.
+        List<MilestoneArtifactSubmission> visibleRows = rows.stream()
+                .filter(row -> s.reviewer || Objects.equals(row.getSubmitterId(), s.actorId))
+                .toList();
         Map<UUID, Long> maxVersionByMilestone = new HashMap<>();
-        rows.forEach(row -> maxVersionByMilestone.merge(row.getMilestoneId(), row.getVersion(), Math::max));
-        return rows.stream().map(row -> {
+        visibleRows.forEach(row -> maxVersionByMilestone.merge(row.getMilestoneId(), row.getVersion(), Math::max));
+        return visibleRows.stream().map(row -> {
             var user = actors.get(row.getSubmitterId());
             String name = user == null ? null : (Objects.toString(user.getFirstName(), "") + " " + Objects.toString(user.getLastName(), "")).trim();
             boolean isLatest = row.getVersion() == maxVersionByMilestone.getOrDefault(row.getMilestoneId(), row.getVersion());
@@ -199,25 +203,28 @@ public class TeamArtifactSubmissionService {
         UUID actor = actorProvider.requireCurrentActorId(); Long tenant = tenantProvider.requireCurrentTenantId();
         var milestoneScope = milestoneScopeService.requireTeamScope(null, teamId, tenant);
         scopePort.requireStudentTeamAccess(teamId, actor, tenant);
-        return new Scope(actor, tenant, milestoneScope.projectId());
+        return new Scope(actor, tenant, milestoneScope.projectId(), false);
     }
     private Scope submissionScope(Long teamId) {
         UUID actor = actorProvider.requireCurrentActorId(); Long tenant = tenantProvider.requireCurrentTenantId();
         var milestoneScope = milestoneScopeService.requireTeamScope(null, teamId, tenant);
+        boolean reviewer;
         try {
             scopePort.requireReviewerTeamAccess(teamId, actor, tenant);
+            reviewer = true;
         } catch (AccessDeniedException e) {
             scopePort.requireStudentTeamAccess(teamId, actor, tenant);
+            reviewer = false;
         }
         if (!milestoneRepository.existsByTeamIdAndTenantIdAndActiveTrue(teamId, tenant)) throw new ResourceNotFoundException("Team milestone not found");
-        return new Scope(actor, tenant, milestoneScope.projectId());
+        return new Scope(actor, tenant, milestoneScope.projectId(), reviewer);
     }
     private Scope reviewerScope(Long teamId) {
         UUID actor = actorProvider.requireCurrentActorId(); Long tenant = tenantProvider.requireCurrentTenantId();
         var milestoneScope = milestoneScopeService.requireTeamScope(null, teamId, tenant);
         scopePort.requireReviewerTeamAccess(teamId,actor,tenant);
         if (!milestoneRepository.existsByTeamIdAndTenantIdAndActiveTrue(teamId, tenant)) throw new ResourceNotFoundException("Team milestone not found");
-        return new Scope(actor, tenant, milestoneScope.projectId());
+        return new Scope(actor, tenant, milestoneScope.projectId(), true);
     }
     private void requireActiveTeamWorkspace(Long teamId, Long tenantId) {
         var team = projectTeamRepository
@@ -262,7 +269,7 @@ public class TeamArtifactSubmissionService {
     private String hash(Long team, UUID milestone, UUID actor, Object request) { try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest((team+"|"+milestone+"|"+actor+"|"+objectMapper.writeValueAsString(request)).getBytes(StandardCharsets.UTF_8))); } catch (Exception e) { throw new IllegalStateException(e); } }
     private MilestoneValidationException validation(String f, String m) { return new MilestoneValidationException(Map.of(f, List.of(m))); }
     private String blank(String s) { return s == null || s.isBlank() ? null : s.trim(); }
-    private record Scope(UUID actorId, Long tenantId, Long projectId) { }
+    private record Scope(UUID actorId, Long tenantId, Long projectId, boolean reviewer) { }
     public record TeamSubmissionView(ArtifactSubmissionResponse submission, UUID reviewSubmissionId,
                                      UUID submitterId, String submitterName, String submitterEmail) { }
     public record MyArtifactSubmissionView(ArtifactSubmissionResponse submission, String reviewFeedback,
