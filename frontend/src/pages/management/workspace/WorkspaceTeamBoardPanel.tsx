@@ -324,7 +324,10 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
     if (!canUpdate || savingItemId != null || item.id == null) return;
 
     // Validate status transition before calling API.
-    const currentStatus = (item.status ?? "TODO") as SprintBacklogStatus;
+    // A product-backlog item is outside the sprint workflow. Its persisted
+    // status may be stale from before it was removed from a sprint, so treat
+    // the source as Backlog and start it at TODO when adding it to a sprint.
+    const currentStatus = (item.sprintId == null ? "TODO" : item.status ?? "TODO") as SprintBacklogStatus;
     const isMovingToSprint = item.sprintId !== sprintId && sprintId != null && target !== "BACKLOG";
     if ((target === "BACKLOG" && item.sprintId != null && currentStatus !== "TODO")
         || (isMovingToSprint && (target !== "TODO" || currentStatus !== "TODO"))) {
@@ -360,9 +363,9 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
         }
       } else {
         if (isMovingToSprint) {
-          // Moving from Backlog to a sprint: keep the item's current status so
-          // the backend does not validate an invalid status transition here.
-          await sprintBacklogApi.update(String(item.id), { sprintId } as SprintBacklogDTO);
+          // Backlog has no in-sprint status. Starting a sprint item always
+          // enters the first workflow column, regardless of any stale status.
+          await sprintBacklogApi.update(String(item.id), { sprintId, status: "TODO" } as SprintBacklogDTO);
         } else if (item.status !== target) {
           await sprintBacklogApi.update(String(item.id), { status: target } as SprintBacklogDTO);
         }
