@@ -16,6 +16,7 @@ import { FieldError } from "./FieldError";
 import { getEffectiveRule } from "./validateForm";
 import { FieldHint } from "./FieldHint";
 import { MultiRelationSelect } from "./MultiRelationSelect";
+import { SearchableSingleRelationSelect } from "./SearchableSingleRelationSelect";
 
 // Textarea mặc định có field-sizing: content (tự giãn theo nội dung) -> ép về kích thước cố định, nội dung dài sẽ cuộn.
 const FIXED_TEXTAREA_STYLE = { fieldSizing: "fixed" } as CSSProperties;
@@ -147,6 +148,19 @@ export function FormFieldRenderer({
             errorClass={errorClass}
             onChange={(val) => onChange(field.name, val)}
             fieldErrors={fieldErrors}
+          />
+        );
+      }
+
+      if (rel.searchable) {
+        return (
+          <SearchableSingleRelationSelect
+            field={field}
+            rel={rel}
+            value={value}
+            onChange={(next) => onChange(field.name, next)}
+            fieldErrors={fieldErrors}
+            errorClass={errorClass}
           />
         );
       }

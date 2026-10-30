@@ -12,6 +12,8 @@ public interface CourseRepository extends BaseCrudRepository<Course, Long> {
 
     boolean existsByName(String name);
 
+    boolean existsBySyllabus_Id(Long syllabusId);
+
     boolean existsByCategories_Id(Long categoryId);
 
     @Query("""

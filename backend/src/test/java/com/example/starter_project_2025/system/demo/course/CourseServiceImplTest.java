@@ -6,6 +6,7 @@ import com.example.starter_project_2025.system.demo.category.CategoryRepository;
 import com.example.starter_project_2025.system.demo.curriculum.CurriculumValidator;
 import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
 import com.example.starter_project_2025.system.demo.section.SectionRepository;
+import com.example.starter_project_2025.system.demo.syllabus.SyllabusRepository;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
@@ -35,6 +36,7 @@ class CourseServiceImplTest {
             courseRepository,
             userRepository,
             categoryRepository,
+            mock(SyllabusRepository.class),
             new CurriculumValidator(mock(SectionRepository.class), mock(LessonRepository.class)),
             mock(NotificationService.class)
     );

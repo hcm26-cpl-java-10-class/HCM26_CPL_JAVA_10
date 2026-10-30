@@ -165,6 +165,19 @@ function CourseDetailContent({ course }: { course: CourseDetail }) {
           </p>
         </section>
 
+        {course.syllabus && (
+          <section className="rounded-2xl border bg-card p-6">
+            <h2 className="text-lg font-semibold">Course Syllabus</h2>
+            <p className="mt-2 text-sm font-medium">{course.syllabus.name}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{course.syllabus.code}</p>
+            <Button asChild variant="outline" size="sm" className="mt-4">
+              <Link to={`/student/syllabuses/${course.syllabus.id}?fromCourse=${course.id}`}>
+                View Syllabus
+              </Link>
+            </Button>
+          </section>
+        )}
+
         <section className="rounded-2xl border bg-card p-6">
           <h2 className="text-lg font-semibold">Skills you will achieve</h2>
           {(() => {
@@ -193,7 +206,7 @@ function CourseDetailContent({ course }: { course: CourseDetail }) {
             );
           })()}
         </section>
-        <Syllabus course={course} />
+        <CourseContent course={course} />
       </div>
 
       <aside className="lg:sticky lg:top-4 lg:self-start">
@@ -693,7 +706,7 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
   );
 }
 
-function Syllabus({ course }: { course: CourseDetail }) {
+function CourseContent({ course }: { course: CourseDetail }) {
   const sections = [...course.sections].sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
 
   return (

@@ -42,6 +42,11 @@ public class CourseDTO extends BaseDTO {
 
     List<String> categoryNames;
 
+    Long syllabusId;
+    Boolean clearSyllabus;
+    String syllabusCode;
+    String syllabusName;
+
     CourseStatus status;
 
     Boolean isFree;

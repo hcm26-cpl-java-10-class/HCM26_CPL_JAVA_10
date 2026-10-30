@@ -1,4 +1,5 @@
 import { categoryApi, courseApi, userApi } from "@/api";
+import { courseSyllabusOptionsApi } from "@/api/features/demo/course.api";
 import { usePermissions } from "@/hooks/usePermissions";
 import { AutoCrudPage } from "@/pages/management/AutoCrudPage";
 import {
@@ -64,6 +65,20 @@ const courseSchema: EntitySchema = {
         valueField: "id",
         labelField: "name",
         multiple: true,
+      },
+    },
+    {
+      name: "syllabusId",
+      label: "Syllabus",
+      hint: "Optional. Search by code or name; only Published and Active syllabuses are available.",
+      type: "relation",
+      visible: false,
+      sortable: false,
+      relation: {
+        api: courseSyllabusOptionsApi,
+        valueField: "id",
+        labelField: "name",
+        searchable: true,
       },
     },
     {

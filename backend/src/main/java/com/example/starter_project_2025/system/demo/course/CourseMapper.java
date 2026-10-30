@@ -19,6 +19,7 @@ public interface CourseMapper extends BaseCrudMapper<Course, CourseDTO> {
     @IgnoreAuditFields
     @Mapping(target = "instructorUser", ignore = true)
     @Mapping(target = "categories", ignore = true)
+    @Mapping(target = "syllabus", ignore = true)
     Course toEntity(CourseDTO dto);
 
     @Override
@@ -26,11 +27,16 @@ public interface CourseMapper extends BaseCrudMapper<Course, CourseDTO> {
     @Mapping(target = "categoryIds", expression = "java(mapCategoryIds(entity))")
     @Mapping(target = "categoryNames", expression = "java(mapCategoryNames(entity))")
     @Mapping(target = "clearCategory", ignore = true)
+    @Mapping(target = "clearSyllabus", ignore = true)
+    @Mapping(source = "syllabus.id", target = "syllabusId")
+    @Mapping(source = "syllabus.code", target = "syllabusCode")
+    @Mapping(source = "syllabus.name", target = "syllabusName")
     CourseDTO toResponse(Course entity);
 
     @Override
     @Mapping(target = "instructorUser", ignore = true)
     @Mapping(target = "categories", ignore = true)
+    @Mapping(target = "syllabus", ignore = true)
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     void update(@MappingTarget Course entity, CourseDTO dto);
 

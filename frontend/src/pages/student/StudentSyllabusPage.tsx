@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { toast } from "sonner";
@@ -211,6 +211,10 @@ function DetailLoading() {
 
 export default function StudentSyllabusPage() {
     const { id } = useParams();
+    const [searchParams] = useSearchParams();
+    const fromCourse = Number(searchParams.get("fromCourse"));
+    const validSource = Number.isSafeInteger(fromCourse) && fromCourse > 0;
+    const backPath = validSource ? `/courses/${fromCourse}` : "/student/syllabuses";
 
     const syllabusId = Number(id);
     const validId =
@@ -325,9 +329,9 @@ export default function StudentSyllabusPage() {
                     variant="ghost"
                     className="-ml-3 gap-2"
                 >
-                    <Link to="/student/syllabuses">
+                    <Link to={backPath}>
                         <ArrowLeft className="size-4" />
-                        Back to Syllabuses
+                        {validSource ? "Back to Course" : "Back to Syllabuses"}
                     </Link>
                 </Button>
 
