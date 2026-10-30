@@ -82,7 +82,7 @@ public class DepartmentServiceImpl
             ctx.add("id", "Cannot delete a department that still has child departments");
         }
 
-        if (userRepository.existsByDepartmentsId(department.getId())) {
+        if (userRepository.existsByDepartmentCodeOrName(department.getCode(), department.getName())) {
             ctx.add("id", "Cannot delete a department that still has users assigned");
         }
 

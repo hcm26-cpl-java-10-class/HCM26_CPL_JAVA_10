@@ -19,7 +19,13 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
 
     boolean existsByEmailIgnoreCase(String email);
 
-    boolean existsByDepartmentsId(Long departmentId);
+    /** Profile affiliations are scalar values; accept a department code or display name. */
+    @Query("""
+            select (count(u) > 0) from User u
+            where lower(trim(u.department)) = lower(trim(:code))
+               or lower(trim(u.department)) = lower(trim(:name))
+            """)
+    boolean existsByDepartmentCodeOrName(@Param("code") String code, @Param("name") String name);
 
     Long countByIsActive(Boolean isActive);
 
