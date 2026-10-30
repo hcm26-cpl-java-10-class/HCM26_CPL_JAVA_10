@@ -232,6 +232,10 @@ export const countByStatus = (items: SprintPlanningItem[]) => ({
 /**
  * Sprint Backlog items that are still open. A sprint can only be completed once
  * this list is empty - the backend rejects the transition with 422 otherwise.
+ * <p>
+ * The backend additionally requires every subtask of those items to be Done, so
+ * a sprint whose items are all Done can still be rejected with the subtasks
+ * that are left open (the API message is forwarded to the toast).
  */
 export const unfinishedSprintItems = (items: SprintPlanningItem[]) =>
   items.filter((item) => item.status !== "DONE");
