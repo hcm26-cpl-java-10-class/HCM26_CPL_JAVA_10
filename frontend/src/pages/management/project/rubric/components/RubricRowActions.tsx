@@ -41,25 +41,25 @@ export function RubricRowActions({
       {canEditRubricVersion(rubric.latestStatus) && canUpdate ? (
         <ActionButton
           onClick={() => onEdit(rubric)}
-          tooltip="Edit latest draft"
+          tooltip="Edit draft"
           icon={<Pen size={10} className="text-gray-500" />}
         />
       ) : null}
       {canPublishRubricVersion(rubric.latestStatus) && canUpdate ? (
         <ActionButton
           onClick={() => onPublish(rubric)}
-          tooltip="Publish latest draft"
+          tooltip="Publish draft"
           icon={<Send size={10} className="text-emerald-600" />}
         />
       ) : null}
       {canDeleteRubricVersion(rubric.latestStatus) && canDelete ? (
         <ActionButton
           onClick={() => onDelete(rubric)}
-          tooltip="Delete latest draft"
+          tooltip="Delete draft"
           icon={<Trash2 size={10} className="text-red-500" />}
         />
       ) : null}
-      {canCreateDraftFromVersion(rubric.latestStatus) && canCreate ? (
+      {canCreateDraftFromVersion(rubric.latestStatus) && !rubric.hasDraft && canCreate ? (
         <ActionButton
           onClick={() => onCreateVersion(rubric)}
           tooltip="Create new draft version"

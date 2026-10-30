@@ -47,7 +47,7 @@ public class RubricService {
         int safeSize = Math.min(Math.max(size, 1), 100);
         UUID tenantId = tenantProvider.requireCurrentTenantId();
         List<SortTerm> sortTerms = parseSort(sort);
-        List<RubricListItemResponse> items = new ArrayList<>(rubricRepository
+        List<RubricListItemResponse> items = new ArrayList<>(versionRepository
                 .searchAll(tenantId, normalizeSearch(search), status)
                 .stream()
                 .map(this::toListItem)
@@ -103,7 +103,7 @@ public class RubricService {
             };
             result = result == null ? next : result.thenComparing(next);
         }
-        return result.thenComparing(item -> item.id().toString());
+        return result.thenComparing(item -> item.rowId().toString());
     }
 
     private static Comparator<RubricListItemResponse> comparingText(
@@ -316,13 +316,15 @@ public class RubricService {
                         .map(r -> new RubricVersion.RatingValue(r.level(), r.description())).toList())).toList();
     }
 
-    private RubricListItemResponse toListItem(Rubric rubric) {
-        RubricVersion latest = rubric.getVersions().stream()
-                .max(Comparator.comparingInt(RubricVersion::getVersionNumber)).orElseThrow();
-        long usage = rubric.getVersions().stream().mapToLong(v -> milestoneRepository.countByRubricSnapshotId(v.getId())).sum();
-        return new RubricListItemResponse(rubric.getId(), rubric.getName(), rubric.getDescription(),
-                rubric.getVersions().size(), latest.getId(), latest.getVersionNumber(), latest.getStatus(),
-                latest.getTotalMaxScore(), latest.getCriteria().size(), usage, rubric.getUpdatedAt());
+    private RubricListItemResponse toListItem(RubricVersion version) {
+        Rubric rubric = version.getRubric();
+        boolean hasDraft = rubric.getVersions().stream()
+                .anyMatch(item -> item.getStatus() == RubricVersionStatus.DRAFT);
+        return new RubricListItemResponse(rubric.getId(), version.getId(), version.getNameSnapshot(),
+                version.getDescriptionSnapshot(), rubric.getVersions().size(), hasDraft,
+                version.getId(), version.getVersionNumber(), version.getStatus(),
+                version.getTotalMaxScore(), version.getCriteria().size(),
+                milestoneRepository.countByRubricSnapshotId(version.getId()), version.getUpdatedAt());
     }
 
     private RubricDetailResponse toDetail(Rubric rubric) {

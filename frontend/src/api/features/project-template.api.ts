@@ -1,6 +1,7 @@
 import axiosInstance from "@/api/axios";
 import type { PageResponse, Pagination } from "@/types/common/pageable";
 import type { ProjectTemplateOption } from "@/types/features/team-allocation";
+import type { TemplateCandidate, TemplateCandidateFilter, TemplateCandidatePreview } from "@/types/features/template-candidate";
 import type {
   ProjectTemplateDTO,
   ProjectTemplateFilter,
@@ -19,6 +20,32 @@ import type {
 const path = "/project-templates";
 
 export const projectTemplateApi = {
+  async searchCandidates(classId: number, sessionId: number, teamId: number,
+    filter: TemplateCandidateFilter, signal?: AbortSignal) {
+    const params = new URLSearchParams();
+    params.set("page", String(filter.page));
+    params.set("size", String(filter.size));
+    if (filter.q) params.set("q", filter.q);
+    if (filter.level) params.set("level", filter.level);
+    if (filter.category) params.set("category", filter.category);
+    filter.technologies.forEach((value) => params.append("technology", value));
+    filter.roles.forEach((value) => params.append("role", value));
+    filter.outcomes.forEach((value) => params.append("outcome", value));
+    const response = await axiosInstance.get<PageResponse<TemplateCandidate>>(
+      `/v1/classes/${classId}/allocation-sessions/${sessionId}/teams/${teamId}/project-template-candidates`,
+      { params, signal },
+    );
+    return response.data;
+  },
+
+  async previewCandidate(classId: number, sessionId: number, teamId: number,
+    templateId: number, signal?: AbortSignal) {
+    const response = await axiosInstance.get<TemplateCandidatePreview>(
+      `/v1/classes/${classId}/allocation-sessions/${sessionId}/teams/${teamId}/project-template-candidates/${templateId}`,
+      { signal },
+    );
+    return response.data;
+  },
   async getPage(pagination: Pagination, search?: string, filter?: ProjectTemplateFilter) {
     const params = new URLSearchParams();
     params.set("page", String(pagination.page ?? 0));
@@ -38,16 +65,19 @@ export const projectTemplateApi = {
     return response.data;
   },
 
+  async getCohorts(signal?: AbortSignal) {
+    const response = await axiosInstance.get<Array<{ id: number; name: string }>>(`${path}/cohorts`, { signal });
+    return response.data;
+  },
+
   /**
    * US-10: project templates that can be assigned to a DRAFT team.
    *
-   * The endpoint is intentionally mounted on `/v1/project-templates` (not the
-   * versioned `/project-template-versions` CRUD surface) because it only exposes
-   * the assignable catalogue with the `min_members` / `max_members` window.
+   * Student team-leader options remain separate from the mentor picker API.
    */
   async getAssignableOptions(signal?: AbortSignal): Promise<ProjectTemplateOption[]> {
     const response = await axiosInstance.get<ProjectTemplateOption[]>(
-      "/v1/project-templates/options",
+      "/v1/students/me/draft-teams/template-options",
       { signal },
     );
     return response.data ?? [];

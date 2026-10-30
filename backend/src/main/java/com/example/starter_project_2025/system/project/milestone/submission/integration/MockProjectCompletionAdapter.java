@@ -10,7 +10,7 @@ import java.util.*;
 
 @Slf4j
 @Component
-@Profile("!milestone-real-integrations")
+@Profile({"test", "milestone-mock-completion"})
 public class MockProjectCompletionAdapter implements ProjectCompletionPort {
     private final Set<Long> completed = java.util.concurrent.ConcurrentHashMap.newKeySet();
 

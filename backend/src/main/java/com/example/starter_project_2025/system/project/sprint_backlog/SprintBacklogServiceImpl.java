@@ -452,7 +452,7 @@ public class SprintBacklogServiceImpl
                         milestone.getProjectId(),
                         milestone.getTitle(),
                         milestoneLabel(milestone),
-                        milestone.getStatus() == null ? null : milestone.getStatus().name(),
+                        milestone.lifecycleStatus().name(),
                         milestone.getDeadline(),
                         milestone.isMandatory()
                 ))

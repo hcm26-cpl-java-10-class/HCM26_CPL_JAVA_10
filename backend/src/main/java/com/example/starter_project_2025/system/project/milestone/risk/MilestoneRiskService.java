@@ -55,7 +55,7 @@ public class MilestoneRiskService {
                     Progress progress = evaluator.evaluate(milestone,
                             tasks.countByProjectIdAndMilestoneIdAndIsActiveTrueAndStatus(legacyProjectId, milestone.getId(), TaskStatus.DONE),
                             tasks.countByProjectIdAndMilestoneIdAndIsActiveTrue(legacyProjectId, milestone.getId()), now);
-                    return new Item(milestone.getId(), milestone.getTitle(), milestone.getStatus(), milestone.getDeadline(),
+                    return new Item(milestone.getId(), milestone.getTitle(), milestone.lifecycleStatus(), milestone.getDeadline(),
                             milestone.getVersion(), milestone.isAtRisk(), progress, canSend && progress.eligible());
                 }).filter(item -> !atRiskOnly || item.progress().eligible()).toList();
         return new Page(projectId, access.directory().project(legacyProjectId).getName(), actor.getId(), actor.getTenant().getId(),

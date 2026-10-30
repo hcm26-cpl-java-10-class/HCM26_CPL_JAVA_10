@@ -12,8 +12,12 @@ class ProjectAlertMilestonePolicyTest {
     private final ProjectAlertMilestonePolicy policy=new ProjectAlertMilestonePolicy();
     private final Instant now=Instant.parse("2026-10-28T03:00:00Z");
     private Milestone milestone(Instant due) {
-        return Milestone.create(1L,null,9L,"Release",null,due,true,UUID.randomUUID(),null,
-                LatePolicyType.NO_LATE,null,null,UUID.randomUUID(),now);
+        UUID actor = UUID.randomUUID();
+        Milestone value = Milestone.create(1L,null,9L,"Release",null,due,true,UUID.randomUUID(),null,
+                LatePolicyType.NO_LATE,null,null,actor,now);
+        value.openForWork(actor, now);
+        value.start(actor, now);
+        return value;
     }
     private List<SprintBacklog> items(int done,int total) {
         return Stream.concat(Stream.generate(()->SprintBacklog.builder().status(SprintBacklogStatus.DONE).build()).limit(done),

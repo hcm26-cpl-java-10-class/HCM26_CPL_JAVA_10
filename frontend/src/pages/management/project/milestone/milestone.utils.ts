@@ -12,6 +12,7 @@ export function buildMilestonePayload(values: MilestoneFormValues): CreateMilest
     title: values.title.trim(),
     description: values.description.trim() || undefined,
     deadline: new Date(values.deadline).toISOString(),
+    deadlineOffsetDays: values.deadlineOffsetDays,
     mandatory: values.mandatory,
     checklist: values.checklist.map((item, index) => ({
       content: item.content.trim(),
@@ -122,7 +123,7 @@ export function formatRelativeDeadline(value: string | null | undefined): string
 }
 
 export function isPastDeadline(milestone: MilestoneListItem): boolean {
-  return milestone.status === "OPEN" &&
+  return (milestone.lifecycleStatus === "IN_PROGRESS" || milestone.lifecycleStatus === "CHANGES_REQUESTED") &&
     new Date(milestone.deadline).getTime() < Date.now();
 }
 

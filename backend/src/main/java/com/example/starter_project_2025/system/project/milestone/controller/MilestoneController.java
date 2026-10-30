@@ -13,7 +13,6 @@ import com.example.starter_project_2025.system.project.milestone.service.Milesto
 import com.example.starter_project_2025.system.project.milestone.service.MilestoneQueryService;
 import com.example.starter_project_2025.system.project.milestone.service.MilestoneLifecycleService;
 import com.example.starter_project_2025.system.project.milestone.dto.request.MilestoneDraftRequest;
-import com.example.starter_project_2025.system.project.milestone.dto.request.MilestoneMetadataRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -47,22 +46,38 @@ public class MilestoneController {
         return lifecycle.editDraft(projectId, request.teamId(), milestoneId, request);
     }
 
+    @GetMapping({"/{milestoneId}/draft-revisions", "/{milestoneId}/revisions"})
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('MILESTONE_WRITE')")
+    public List<com.example.starter_project_2025.system.project.milestone.domain.MilestoneDraftRevision> draftRevisions(
+            @PathVariable Long projectId, @PathVariable UUID milestoneId) {
+        return lifecycle.listDraftRevisions(projectId, null, milestoneId);
+    }
+
     @PostMapping("/{milestoneId}/publish")
     @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('MILESTONE_WRITE')")
-    public MilestoneResponse publish(@PathVariable Long projectId, @PathVariable UUID milestoneId, @RequestParam long expectedVersion) {
+    public MilestoneResponse publish(@PathVariable Long projectId, @PathVariable UUID milestoneId,
+            @RequestParam long expectedVersion) {
         return lifecycle.publish(projectId, null, milestoneId, expectedVersion);
+    }
+
+    @PostMapping("/{milestoneId}/open")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('MILESTONE_WRITE')")
+    public MilestoneResponse open(@PathVariable Long projectId, @PathVariable UUID milestoneId) {
+        return lifecycle.open(projectId, null, milestoneId);
     }
 
     @PostMapping("/{milestoneId}/start")
     @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN','ADMINISTRATOR','SUPER_ADMIN','SYSTEM_ADMIN')")
-    public MilestoneResponse start(@PathVariable Long projectId, @PathVariable UUID milestoneId, @RequestParam long expectedVersion) {
+    public MilestoneResponse start(@PathVariable Long projectId, @PathVariable UUID milestoneId,
+            @RequestParam long expectedVersion) {
         return lifecycle.start(projectId, null, milestoneId, expectedVersion);
     }
 
-    @PatchMapping("/{milestoneId}/metadata")
+    @PatchMapping("/{milestoneId}")
     @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('MILESTONE_WRITE')")
-    public MilestoneResponse editMetadata(@PathVariable Long projectId, @PathVariable UUID milestoneId, @RequestBody MilestoneMetadataRequest request) {
-        return lifecycle.editPublished(projectId, null, milestoneId, request);
+    public MilestoneResponse editActive(@PathVariable Long projectId, @PathVariable UUID milestoneId,
+            @RequestBody com.example.starter_project_2025.system.project.milestone.dto.request.MilestoneLifecycleEditRequest request) {
+        return lifecycle.editActive(projectId, null, milestoneId, request);
     }
 
     @DeleteMapping("/{milestoneId}")
@@ -81,13 +96,14 @@ public class MilestoneController {
             @RequestParam(required = false) List<String> sort,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) List<MilestoneStatus> status,
+            @RequestParam(required = false) List<com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus> lifecycleStatus,
             @RequestParam(required = false) Boolean mandatory,
             @RequestParam(required = false) List<LatePolicyType> latePolicyType,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate deadlineFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate deadlineTo
     ) {
         return ResponseEntity.ok(queryService.getList(projectId, new MilestoneListQuery(
-                teamId, page, size, sort, search, status, mandatory, latePolicyType, deadlineFrom, deadlineTo
+                teamId, page, size, sort, search, status, mandatory, latePolicyType, deadlineFrom, deadlineTo, lifecycleStatus
         )));
     }
 
@@ -117,9 +133,4 @@ public class MilestoneController {
         return ResponseEntity.ok(queryService.getDetail(projectId, milestoneId, teamId));
     }
 
-    @PostMapping("/{milestoneId}/open")
-    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('MILESTONE_WRITE')")
-    public ResponseEntity<MilestoneResponse> openForSubmissions(@PathVariable Long projectId, @PathVariable UUID milestoneId) {
-        return ResponseEntity.ok(commandService.openForSubmissions(projectId, null, milestoneId));
-    }
 }

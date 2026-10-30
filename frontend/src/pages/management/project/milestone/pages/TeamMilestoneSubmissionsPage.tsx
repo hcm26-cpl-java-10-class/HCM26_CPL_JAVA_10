@@ -133,7 +133,7 @@ export default function TeamMilestoneSubmissionsPage() {
     navigate(
       workspaceId
         ? `/management/workspaces/${workspaceId}?tab=milestones`
-        : `/teams/${teamId}/milestones`
+        : "/milestones/teams"
     );
   };
 
@@ -226,7 +226,7 @@ export default function TeamMilestoneSubmissionsPage() {
             </Button>
             <Button variant="ghost" onClick={handleBackToWorkspace}>
               <ArrowLeft className="mr-2 size-4" />
-              {workspaceId ? "Back to workspace" : "Back to milestones"}
+              {workspaceId ? "Back to workspace" : "Choose team"}
             </Button>
           </div>
           <Button
@@ -246,7 +246,7 @@ export default function TeamMilestoneSubmissionsPage() {
               <Badge variant="outline">Team milestone</Badge>
               {milestone && (
                 <Badge variant="outline">
-                  <MilestoneStatusBadge status={milestone.status} />
+                  <MilestoneStatusBadge status={milestone.lifecycleStatus} />
                 </Badge>
               )}
               {milestone?.mandatory && <Badge variant="secondary">Mandatory</Badge>}

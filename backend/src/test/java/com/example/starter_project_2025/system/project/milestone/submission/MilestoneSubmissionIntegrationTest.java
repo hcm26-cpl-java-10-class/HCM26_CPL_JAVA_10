@@ -160,6 +160,9 @@ class MilestoneSubmissionIntegrationTest {
                 .andExpect(jsonPath("$.availableActions.createNextVersion").value(true))
                 .andReturn().getResponse().getContentAsString();
         assertEquals(1, objectMapper.readTree(changed).get("currentVersionNumber").asInt());
+        assertEquals(com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus.CHANGES_REQUESTED,
+                milestones.findById(UUID.fromString(detail.get("milestoneId").asText()))
+                        .orElseThrow().lifecycleStatus());
 
         String draft = mockMvc.perform(post("/api/milestone-submissions/{id}/versions", id)
                         .header("Authorization", bearer())
@@ -209,6 +212,13 @@ class MilestoneSubmissionIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"title\":\"Unexpected v3\"}"))
                 .andExpect(status().isConflict());
+
+        mockMvc.perform(post("/api/milestone-submissions/{id}/submit", id)
+                        .header("Authorization", bearer())
+                        .header("Idempotency-Key", "resubmit-v2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUBMITTED"))
+                .andExpect(jsonPath("$.currentVersionNumber").value(2));
     }
 
     @Test
@@ -318,7 +328,7 @@ class MilestoneSubmissionIntegrationTest {
     }
 
     @Test
-    void gradeLockAndWaiverBothReevaluateBrUni12() throws Exception {
+    void gradeLockAndWaiverDoNotCompleteProjectWithoutAcceptedMilestone() throws Exception {
         Instant now = Instant.now();
         UUID actor = UUID.randomUUID();
         Long projectId = 902L;
@@ -344,7 +354,7 @@ class MilestoneSubmissionIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"reason\":\"Approved curriculum exception\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.completed").value(true))
+                .andExpect(jsonPath("$.completed").value(false))
                 .andExpect(jsonPath("$.gradeLocked").value(true));
     }
 

@@ -48,6 +48,7 @@ public class ArtifactUploadService {
     private final ArtifactSubmissionScopePort submissionScope;
     private final MilestoneAccessPolicy accessPolicy;
     private final MilestoneRepository milestoneRepository;
+    private final MilestoneSubmissionWindow submissionWindow;
     private final MilestoneArtifactDraftRepository draftRepository;
     private final ArtifactAttachmentRepository attachmentRepository;
     private final MilestoneAuditRepository auditRepository;
@@ -70,8 +71,7 @@ public class ArtifactUploadService {
         var milestone = milestoneRepository.findByIdAndProjectIdAndTenantId(milestoneId, projectId, tenantId)
                 .filter(com.example.starter_project_2025.system.project.milestone.domain.Milestone::isActive)
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
-        if (milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN
-                || milestone.getExecutionStatus() != com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus.IN_PROGRESS)
+        if (!submissionWindow.canSubmit(milestone))
             throw new ResourceNotFoundException("Milestone not available to students");
         Set<String> allowlist = ArtifactMimePolicy.parse(allowedMimeTypes);
         if (!enabled || maxBytes <= 0 || !ArtifactMimePolicy.isSupported(allowlist)) {
