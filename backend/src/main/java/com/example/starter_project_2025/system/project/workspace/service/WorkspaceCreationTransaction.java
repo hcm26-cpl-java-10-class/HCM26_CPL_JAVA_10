@@ -67,6 +67,7 @@ public class WorkspaceCreationTransaction {
         workspace.setCreatedBy(user.getId());
         workspace.setSections(new ArrayList<>(Arrays.asList(WorkspaceSection.values())));
         workspaces.saveAndFlush(workspace);
+        activateProjectForWorkspace(chosen.project());
         WorkspaceResponse response = response(workspace);
         journal.recordCreation(workspace, user, response, correlationId);
         idempotency.save(tenant.getId(), user.getId(), key, request, response);
@@ -81,6 +82,12 @@ public class WorkspaceCreationTransaction {
                 .taskKeyPrefix(normalizeTaskKeyPrefix(workspace.getTaskKeyPrefix()))
                 .status(workspace.getStatus()).createdBy(workspace.getCreatedBy()).createdAt(workspace.getCreatedAt())
                 .sections(workspace.getSections().stream().map(WorkspaceSection::getKey).toList()).build();
+    }
+
+    private void activateProjectForWorkspace(Project project) {
+        if (project != null && project.getStatus() == com.example.starter_project_2025.system.project.domain.ProjectStatus.PLANNING) {
+            project.setStatus(com.example.starter_project_2025.system.project.domain.ProjectStatus.ACTIVE);
+        }
     }
 
     private String normalizeTaskKeyPrefix(String prefix) {

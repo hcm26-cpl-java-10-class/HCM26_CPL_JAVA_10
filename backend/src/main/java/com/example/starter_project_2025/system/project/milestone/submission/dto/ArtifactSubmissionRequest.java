@@ -9,7 +9,7 @@ import java.util.UUID;
 public record ArtifactSubmissionRequest(
         @Size(max = 2048) String repositoryUrl,
         @Size(max = 2048) String deploymentUrl,
-        @Size(max = 10000) String releaseNotes,
+        String releaseNotes,
         Map<UUID, Boolean> checklist,
         List<UUID> attachmentIds
 ) { }

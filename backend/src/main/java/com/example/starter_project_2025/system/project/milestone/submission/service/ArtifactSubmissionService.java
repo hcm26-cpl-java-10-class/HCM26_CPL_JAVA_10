@@ -68,6 +68,7 @@ public class ArtifactSubmissionService {
     public ArtifactSubmissionResponse submit(Long projectId, UUID milestoneId, String idempotencyKey,
             ArtifactSubmissionRequest request) {
         Scope scope = requireScope(projectId);
+        ReleaseNotesWordLimit.validate(request.releaseNotes());
         contributionLock.lockCurrentActor();
         if (idempotencyKey == null || idempotencyKey.isBlank() || idempotencyKey.length() > 100) {
             throw validation("idempotencyKey", "Idempotency-Key is required and must not exceed 100 characters");

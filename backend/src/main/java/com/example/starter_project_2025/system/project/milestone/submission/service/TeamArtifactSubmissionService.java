@@ -68,7 +68,7 @@ public class TeamArtifactSubmissionService {
         if (milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN
                 || milestone.getExecutionStatus() == com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus.TODO)
             throw new ResourceNotFoundException("Milestone not available to students");
-        var draft = draftRepository.findByMilestoneIdAndTeamIdAndTenantId(milestoneId, teamId, s.tenantId)
+        var draft = findTeamDraft(milestoneId, teamId, s)
                 .map(row -> draftResponse(row, teamId)).orElse(null);
         var latest = submissionRepository.findTopByTenantIdAndTeamIdAndMilestoneIdAndSubmitterIdOrderByVersionDesc(
                 s.tenantId, teamId, milestoneId, s.actorId).map(this::submissionResponse).orElse(null);
@@ -79,6 +79,7 @@ public class TeamArtifactSubmissionService {
     @Transactional
     public ArtifactDraftResponse save(Long teamId, UUID milestoneId, ArtifactDraftRequest request) {
         Scope s = studentScope(teamId);
+        ReleaseNotesWordLimit.validate(request.releaseNotes());
         contributionLock.lockCurrentActor();
         var milestone = milestoneRepository.findByIdAndTeamIdAndTenantId(milestoneId, teamId, s.tenantId)
                 .filter(com.example.starter_project_2025.system.project.milestone.domain.Milestone::isActive)
@@ -88,7 +89,7 @@ public class TeamArtifactSubmissionService {
         validateUrl("repositoryUrl", request.repositoryUrl()); validateUrl("deploymentUrl", request.deploymentUrl());
         Map<UUID, Boolean> checklist = validateChecklist(milestone, request.checklist());
         String json = write(checklist); Instant now = Instant.now();
-        var existing = draftRepository.findByMilestoneIdAndTeamIdAndTenantId(milestoneId, teamId, s.tenantId);
+        var existing = findTeamDraft(milestoneId, teamId, s);
         boolean creating = existing.isEmpty();
         var draft = existing.orElseGet(() -> MilestoneArtifactDraft.create(milestoneId, s.projectId, teamId,
                 s.tenantId, s.actorId, now, json));
@@ -112,6 +113,7 @@ public class TeamArtifactSubmissionService {
     @Transactional
     public ArtifactSubmissionResponse submit(Long teamId, UUID milestoneId, String key, ArtifactSubmissionRequest request) {
         Scope s = studentScope(teamId);
+        ReleaseNotesWordLimit.validate(request.releaseNotes());
         contributionLock.lockCurrentActor();
         if (key == null || key.isBlank() || key.length() > 100) throw validation("idempotencyKey", "Idempotency-Key is required");
         var milestone = milestoneRepository.lockForTeamSubmission(milestoneId, teamId, s.tenantId)
@@ -204,6 +206,12 @@ public class TeamArtifactSubmissionService {
         var milestoneScope = milestoneScopeService.requireTeamScope(null, teamId, tenant);
         scopePort.requireStudentTeamAccess(teamId, actor, tenant);
         return new Scope(actor, tenant, milestoneScope.projectId(), false);
+    }
+    private Optional<MilestoneArtifactDraft> findTeamDraft(UUID milestoneId, Long teamId, Scope scope) {
+        var teamDraft = draftRepository.findByMilestoneIdAndTeamIdAndTenantId(milestoneId, teamId, scope.tenantId);
+        if (teamDraft.isPresent() || scope.projectId == null) return teamDraft;
+        // Project-backed workspace submission uses the same milestone draft row.
+        return draftRepository.findByMilestoneIdAndProjectIdAndTenantId(milestoneId, scope.projectId, scope.tenantId);
     }
     private Scope submissionScope(Long teamId) {
         UUID actor = actorProvider.requireCurrentActorId(); Long tenant = tenantProvider.requireCurrentTenantId();

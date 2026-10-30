@@ -134,6 +134,10 @@ public class TemplateAssignmentProvisioningService {
 
         // ---- Step 3: workspace + generated components
         Workspace workspace = ensureWorkspace(team, project, tenantId, actorId, correlationId);
+        // A newly provisioned project is attached to an active workspace; this is the
+        // same activation trigger used for workspaces created for an existing project.
+        project.setStatus(ProjectStatus.ACTIVE);
+        projects.saveAndFlush(project);
 
         int generatedMilestones = generateMilestones(
                 team, project, tenantId, actorId, now, milestonePlan);

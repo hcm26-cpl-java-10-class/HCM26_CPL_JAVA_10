@@ -50,7 +50,7 @@ public class MilestoneArtifactSubmission {
     @Column(name = "deployment_url", length = 2048, updatable = false)
     private String deploymentUrl;
 
-    @Column(name = "release_notes", length = 10000, updatable = false)
+    @Column(name = "release_notes", columnDefinition = "text", updatable = false)
     private String releaseNotes;
 
     @Column(name = "checklist_json", nullable = false, columnDefinition = "text", updatable = false)

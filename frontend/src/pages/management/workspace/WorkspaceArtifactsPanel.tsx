@@ -217,7 +217,7 @@ export function WorkspaceArtifactsPanel({
                       <div className="flex flex-wrap items-center gap-2">
                         <h4 className="font-semibold text-base text-foreground truncate">{m.title}</h4>
                         <Badge variant="outline" className="text-xs">
-                          {m.status}
+                          {m.lifecycleStatus.replaceAll("_", " ")}
                         </Badge>
                         {m.mandatory && (
                           <Badge variant="secondary" className="text-[11px]">
