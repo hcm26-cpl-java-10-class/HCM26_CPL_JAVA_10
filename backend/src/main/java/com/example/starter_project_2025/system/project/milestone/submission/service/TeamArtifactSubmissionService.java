@@ -72,8 +72,10 @@ public class TeamArtifactSubmissionService {
                 .map(row -> draftResponse(row, teamId)).orElse(null);
         var latest = submissionRepository.findTopByTenantIdAndTeamIdAndMilestoneIdAndSubmitterIdOrderByVersionDesc(
                 s.tenantId, teamId, milestoneId, s.actorId).map(this::submissionResponse).orElse(null);
+        String blockReason = teamSubmissionBlockReason(teamId, s.tenantId);
         return new ArtifactSubmissionWorkspaceResponse(milestoneQueryService.getTeamDetail(teamId, milestoneId), draft,
-                new ArtifactUploadPolicyResponse(false, 0, Set.of()), latest, submissionWindow.canSubmitNow(milestone));
+                new ArtifactUploadPolicyResponse(false, 0, Set.of()), latest,
+                blockReason == null && submissionWindow.canSubmitNow(milestone), blockReason);
     }
 
     @Transactional
@@ -235,6 +237,11 @@ public class TeamArtifactSubmissionService {
         return new Scope(actor, tenant, milestoneScope.projectId(), true);
     }
     private void requireActiveTeamWorkspace(Long teamId, Long tenantId) {
+        String reason = teamSubmissionBlockReason(teamId, tenantId);
+        if (reason != null) throw new MilestoneConflictException(reason);
+    }
+
+    private String teamSubmissionBlockReason(Long teamId, Long tenantId) {
         var team = projectTeamRepository
                 .findByIdAndTrainingClass_TenantId(teamId, tenantId)
                 .orElseThrow(() ->
@@ -242,17 +249,16 @@ public class TeamArtifactSubmissionService {
 
         if (team.getStatus()
                 != com.example.starter_project_2025.system.project.ProjectTeamStatus.ACTIVE) {
-            throw new MilestoneConflictException(
-                    "Team workspace is not active");
+            return "The team is not active. Ask the administrator to activate it before submitting.";
         }
         // Team-only workspaces are valid submission scopes and intentionally have no Project.
         // If the team is linked to a Project, that Project must also be active.
         if (team.getProject() != null
                 && team.getProject().getStatus()
                 != com.example.starter_project_2025.system.project.domain.ProjectStatus.ACTIVE) {
-            throw new MilestoneConflictException(
-                    "The team project is not active");
+            return "The team project is not active. Ask the administrator to activate the project before submitting.";
         }
+        return null;
     }
     private Map<UUID, Boolean> validateChecklist(com.example.starter_project_2025.system.project.milestone.domain.Milestone m, Map<UUID, Boolean> requested) {
         var allowed = m.getChecklistItems().stream().map(x -> x.getId()).collect(java.util.stream.Collectors.toSet());

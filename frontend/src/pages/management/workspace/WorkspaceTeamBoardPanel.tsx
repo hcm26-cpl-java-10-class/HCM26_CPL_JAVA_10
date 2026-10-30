@@ -213,13 +213,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
   const persistedColumns = useMemo(() => {
     if (columnsQuery.data) {
       const configured = columnsQuery.data;
-      const keys = new Set(configured.map((column) => column.key));
-      const defaults = DEFAULT_COLUMNS.filter((column) => !keys.has(column.key))
-        .map((column) => ({ key: column.key, label: column.label, visible: column.visible }));
-      return [
-        ...configured.map((column, index) => columnFor(column.key as BoardColumnKey, column.label, column.visible, index)),
-        ...defaults.map((column) => columnFor(column.key as BoardColumnKey, column.label, column.visible)),
-      ];
+      return configured.map((column, index) => columnFor(column.key as BoardColumnKey, column.label, column.visible, index));
     }
     return DEFAULT_COLUMNS;
   }, [columnsQuery.data]);
@@ -262,7 +256,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
     const workflow = persistedColumns.filter((column) => column.key !== "BACKLOG").map((column) => column.key as SprintBacklogStatus);
     const index = workflow.indexOf(status);
     const adjacent = workflow.filter((_, candidateIndex) => Math.abs(candidateIndex - index) === 1);
-    if (index >= 0 && workflow.some((candidate) => candidate.startsWith("CUSTOM_"))) {
+    if (index >= 0) {
       return [...new Set([...adjacent, ...standard.filter((candidate) => candidate === "BLOCKED")])];
     }
     return standard;
@@ -289,7 +283,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
   const selectedSprint = sprints.find((sprint) => sprint.id === sprintId);
   const allItems = query.data?.items ?? [];
   const isColumnInUse = (key: BoardColumnKey) => key !== "BACKLOG"
-    && allItems.some((item) => item.sprintId != null && item.status === key);
+    && allItems.some((item) => item.sprintId != null && (item.status === key || key === "IN_PROGRESS" && item.status === "BLOCKED"));
   const boardItems = useMemo(() => allItems.filter((item) =>
     item.sprintId === sprintId || item.sprintId == null,
   ), [allItems, sprintId]);
@@ -692,7 +686,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
                 />
               </div>
               <div className="flex items-center gap-2">
-                  {CUSTOM_STATUS_KEYS.includes(col.key) ? <Button type="button" variant="ghost" size="icon" className="size-7 text-muted-foreground" aria-label={`Remove ${col.label}`} title={isColumnInUse(col.key) ? "Move work items out of this status before removing it." : undefined} disabled={saveColumns.isPending || isColumnInUse(col.key)} onClick={() => setBoardColumns((columns) => columns.filter((column) => column.key !== col.key))}><Trash2 className="size-3.5" /></Button> : null}
+                  {!["BACKLOG", "TODO", "DONE"].includes(col.key) ? <Button type="button" variant="ghost" size="icon" className="size-7 text-muted-foreground" aria-label={`Remove ${col.label}`} title={isColumnInUse(col.key) ? "Move work items out of this status before removing it." : undefined} disabled={saveColumns.isPending || isColumnInUse(col.key)} onClick={() => setBoardColumns((columns) => columns.filter((column) => column.key !== col.key))}><Trash2 className="size-3.5" /></Button> : <span className="text-[10px] text-muted-foreground" title="Backlog, To do and Done are required for intake and completion.">Required</span>}
                   <Label htmlFor={"switch-" + col.key} className="text-xs text-muted-foreground">
                   {col.visible ? "Hiện" : "Ẩn"}
                 </Label>

@@ -261,8 +261,24 @@ class MilestoneIntegrationTest {
         openTeamMilestone(milestoneId);
         String base = "/api/teams/" + MockMilestoneData.TEAM_ID + "/milestones/" + milestoneId + "/artifact-draft";
 
+        // A legacy workspace with a planning project must report the same readiness as POST.
+        transactionTemplate.executeWithoutResult(status -> entityManager.find(
+                com.example.starter_project_2025.system.project.ProjectTeam.class, MockMilestoneData.TEAM_ID)
+                .getProject().setStatus(com.example.starter_project_2025.system.project.domain.ProjectStatus.PLANNING));
         mockMvc.perform(get(base).header("Authorization", "Bearer " + studentToken))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.draft").doesNotExist());
+                .andExpect(status().isOk()).andExpect(jsonPath("$.canSubmit").value(false))
+                .andExpect(jsonPath("$.submissionBlockReason").isNotEmpty());
+        mockMvc.perform(post(base + "/submissions").header("Authorization", "Bearer " + studentToken)
+                        .header("Idempotency-Key", "inactive-team-artifact")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"repositoryUrl\":\"https://github.com/demo/team\",\"checklist\":{},\"attachmentIds\":[]}"))
+                .andExpect(status().isConflict());
+        transactionTemplate.executeWithoutResult(status -> entityManager.find(
+                com.example.starter_project_2025.system.project.ProjectTeam.class, MockMilestoneData.TEAM_ID)
+                .getProject().setStatus(com.example.starter_project_2025.system.project.domain.ProjectStatus.ACTIVE));
+        mockMvc.perform(get(base).header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.draft").doesNotExist())
+                .andExpect(jsonPath("$.canSubmit").value(true));
         mockMvc.perform(put(base).header("Authorization", "Bearer " + studentToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"repositoryUrl\":\"https://github.com/demo/team\",\"checklist\":{}}"))

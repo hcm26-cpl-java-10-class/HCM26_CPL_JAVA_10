@@ -149,6 +149,15 @@ export default function TeamArtifactSubmissionPage() {
     onSuccess: (data) => {
       submitKey.current = null;
       setPreviewOpen(false);
+      // Retain the accepted response even if refreshing the workspace fails.
+      qc.setQueryData<Awaited<ReturnType<typeof milestoneApi.getTeamArtifactWorkspace>>>(
+        ["team-artifact-workspace", teamId, milestoneId],
+        (current) => current ? { ...current, latestSubmission: data, canSubmit: false } : current,
+      );
+      void qc.invalidateQueries({ queryKey: ["team-artifact-submissions-workspace", teamId] });
+      void qc.invalidateQueries({ queryKey: ["my-team-milestone-submissions", teamId, milestoneId] });
+      void qc.invalidateQueries({ queryKey: ["student-team-artifact-workspace", teamId, milestoneId] });
+      void qc.invalidateQueries({ queryKey: ["my-milestone-submissions"] });
       toast.success(`Nộp sản phẩm phiên bản ${data.version} thành công!`);
       return qc.invalidateQueries({ queryKey: ["team-artifact-workspace", teamId, milestoneId] });
     },
@@ -485,9 +494,7 @@ export default function TeamArtifactSubmissionPage() {
               <Alert className="border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
                 <AlertCircle className="size-4" />
                 <AlertTitle>Chưa mở nộp bài chính thức</AlertTitle>
-                <AlertDescription className="text-xs mt-1">
-                  Chức năng nộp bài chỉ khả dụng khi milestone đang thực hiện hoặc reviewer yêu cầu nộp lại, trong thời hạn cho phép.
-                </AlertDescription>
+                <AlertDescription className="text-xs mt-1">{query.data.submissionBlockReason ?? "Chức năng nộp bài chỉ khả dụng khi milestone đang thực hiện hoặc reviewer yêu cầu nộp lại, trong thời hạn cho phép."}</AlertDescription>
               </Alert>
             )}
 

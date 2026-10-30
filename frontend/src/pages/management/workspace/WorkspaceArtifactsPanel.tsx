@@ -365,7 +365,7 @@ export function WorkspaceArtifactsPanel({
           )}
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+          <div className="min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain px-4 py-4 sm:px-6">
             {submissionsQuery.isPending ? (
               <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
                 <RotateCw className="size-4 animate-spin" /> Loading submission history…
@@ -384,8 +384,8 @@ export function WorkspaceArtifactsPanel({
                 <p>No submitted versions are available for this milestone.</p>
               </div>
             ) : (
-              <div className="overflow-x-auto rounded-xl border">
-                <Table className="min-w-[850px]">
+              <div className="min-w-0 max-w-full overflow-x-auto rounded-xl border">
+                <Table className="w-full min-w-[850px] table-fixed">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-20">Version</TableHead>
@@ -405,7 +405,7 @@ export function WorkspaceArtifactsPanel({
                             {submission.status.replaceAll("_", " ")}
                           </Badge>
                           {activeRole && normalizeRole(activeRole) === STUDENT_ROLE && activeMilestoneSubmissions.find((item) => item.submission.id === submission.id)?.reviewFeedback ? (
-                            <p className="mt-1 max-w-48 whitespace-pre-wrap text-xs text-muted-foreground">
+                            <p className="mt-1 max-h-24 overflow-y-auto whitespace-pre-wrap text-xs text-muted-foreground [overflow-wrap:anywhere]">
                               {activeMilestoneSubmissions.find((item) => item.submission.id === submission.id)?.reviewFeedback}
                             </p>
                           ) : null}
@@ -450,9 +450,9 @@ export function WorkspaceArtifactsPanel({
                             </div>
                           )}
                         </TableCell>
-                        <TableCell className="max-w-48 whitespace-pre-wrap break-words text-xs text-muted-foreground" title={submission.releaseNotes ?? ""}>
+                        <TableCell className="text-xs text-muted-foreground"><div className="max-h-32 overflow-y-auto whitespace-pre-wrap [overflow-wrap:anywhere]" tabIndex={0} aria-label={`Release notes for version ${submission.version}`}>
                           {submission.releaseNotes || "—"}
-                        </TableCell>
+                        </div></TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -461,7 +461,7 @@ export function WorkspaceArtifactsPanel({
             )}
           </div>
 
-          <DialogFooter className="m-0 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-none border-t bg-muted/20 px-6 py-4 sm:justify-between">
+          <DialogFooter className="m-0 flex min-w-0 shrink-0 flex-col items-stretch gap-3 rounded-none border-t bg-muted/20 px-4 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-6">
             <Button
               variant="ghost"
               size="sm"
@@ -473,11 +473,11 @@ export function WorkspaceArtifactsPanel({
             >
               <ExternalLink className="mr-1.5 size-4" /> Open full submission page
             </Button>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               <Button variant="outline" onClick={() => setHistoryMilestone(null)}>
                 Close
               </Button>
-              {isStudent && historyMilestone && activeMilestoneSubmissions[0]?.submission.status === "CHANGES_REQUESTED" && (
+              {isStudent && hasPermission("ARTIFACT_SUBMIT") && historyMilestone && activeMilestoneSubmissions[0]?.submission.status === "CHANGES_REQUESTED" && (
                 <Button onClick={() => handleOpenSubmit(historyMilestone.id)}>
                   <Send className="mr-1.5 size-4" /> Submit a new version
                 </Button>
