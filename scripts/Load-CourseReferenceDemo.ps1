@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 Previews or creates demo course metadata through the existing authenticated API.
 .DESCRIPTION
@@ -29,6 +29,9 @@ if (-not $ApiBaseUrl.IsAbsoluteUri -or $ApiBaseUrl.UserInfo -or $ApiBaseUrl.Quer
 }
 
 $courses = @(Get-Content -LiteralPath $DataPath -Raw -Encoding UTF8 | ConvertFrom-Json)
+if ($courses.Count -eq 1 -and $courses[0] -is [System.Array]) {
+    $courses = @($courses[0])
+}
 if ($courses.Count -eq 0) { throw 'Dataset contains no courses.' }
 $names = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 foreach ($course in $courses) {
