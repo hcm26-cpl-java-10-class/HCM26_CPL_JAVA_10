@@ -25,13 +25,14 @@ import {
 import { getTemplateError } from "../project-template.utils";
 import { TemplateMilestoneEditor } from "./TemplateMilestoneEditor";
 
-export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubrics, onRefreshRubrics, onSaved }: {
+export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubrics, onRefreshRubrics, onSaved, save }: {
   plan: TemplateMilestonePlan;
   editable: boolean;
   rubrics: MilestoneRubricOption[];
   refreshingRubrics: boolean;
   onRefreshRubrics: () => void;
   onSaved: (plan: TemplateMilestonePlan) => void;
+  save?: (payload: TemplateMilestonePlanPayload) => Promise<TemplateMilestonePlan>;
 }) {
   const [milestones, setMilestones] = useState(() => toMilestoneValues(plan));
   const [lockVersion, setLockVersion] = useState(plan.lockVersion);
@@ -41,7 +42,7 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
   const [removeKey, setRemoveKey] = useState<string | null>(null);
   const submitting = useRef(false);
   const mutation = useMutation({
-    mutationFn: (payload: TemplateMilestonePlanPayload) => projectTemplateApi.saveMilestones(plan.templateId, payload),
+    mutationFn: (payload: TemplateMilestonePlanPayload) => save ? save(payload) : projectTemplateApi.saveMilestones(plan.templateId, payload),
     onSuccess: (saved) => {
       setMilestones(toMilestoneValues(saved));
       setLockVersion(saved.lockVersion);

@@ -6,7 +6,6 @@ import com.example.starter_project_2025.base.dataio.exporter.annotation.ExportFi
 import com.example.starter_project_2025.base.dataio.importer.annotation.ImportField;
 import com.example.starter_project_2025.base.dataio.importer.annotation.PostImport;
 import com.example.starter_project_2025.base.dataio.template.annotation.ImportEntity;
-import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.example.starter_project_2025.system.project.domain.Project;
@@ -79,14 +78,6 @@ import lombok.experimental.SuperBuilder;
 @ImportEntity("project_template_version")
 @ExportEntity(fileName = "project-template-versions", sheetName = "Project Template Versions")
 @ResourcePermission("PROJECT_TEMPLATE_VERSION")
-@ResourceMenu(
-        title = "Project Template Versions",
-        group = "Project Management",
-        icon = "layers",
-        url = "/project-template-versions",
-        order = 4,
-        permission = "PROJECT_TEMPLATE_VERSION_READ"
-)
 public class ProjectTemplateSnapshot extends BaseEntity {
 
     /** Same limit enforced by {@code ProjectTemplateSnapshotServiceImpl}. */

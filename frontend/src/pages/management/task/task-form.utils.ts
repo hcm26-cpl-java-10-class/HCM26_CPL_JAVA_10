@@ -13,6 +13,12 @@ export interface TaskFormValues {
 
 export type TaskFieldErrors = Record<string, string[] | undefined>;
 
+export const maxTaskDescriptionWords = 1000;
+
+export function taskDescriptionWordCount(value: string): number {
+  return value.trim() ? value.trim().split(/\s+/u).length : 0;
+}
+
 export const taskStatusOptions = [
   { value: "TODO", label: "To Do" },
   { value: "IN_PROGRESS", label: "In Progress" },
@@ -20,6 +26,9 @@ export const taskStatusOptions = [
   { value: "DONE", label: "Done" },
   { value: "BLOCKED", label: "Blocked" },
 ] as const;
+
+export const subtaskStatusOptions = taskStatusOptions.filter(option =>
+  option.value === "TODO" || option.value === "IN_PROGRESS" || option.value === "DONE");
 
 export const taskPriorityOptions = [
   { value: "LOW", label: "Low" },
@@ -61,6 +70,9 @@ export function validateTaskForm(values: TaskFormValues): TaskFieldErrors {
   const title = values.title.trim();
   if (!title || title.length > 250) {
     errors.title = ["Task title must contain 1 to 250 characters"];
+  }
+  if (taskDescriptionWordCount(values.description) > maxTaskDescriptionWords) {
+    errors.description = ["Description must not exceed 1000 words"];
   }
   if (values.assigneeProjectMemberId && !isProjectId(values.assigneeProjectMemberId)) {
     errors.assigneeProjectMemberId = ["Please select a valid project member"];

@@ -2,20 +2,20 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import type { EntityCardRendererProps } from "@/types";
-import type { ProjectTemplateDTO } from "@/types/features/project-template";
+import type { ProjectTemplateListItem } from "@/types/features/project-template";
 import { ArrowRight, CalendarDays } from "lucide-react";
 import { templateLevelLabel } from "../project-template.utils";
 import { ProjectTemplateStatusBadge } from "./ProjectTemplateStatusBadge";
 
 export function ProjectTemplateCard({ row, onView, renderRowActions }: EntityCardRendererProps) {
-  const template = row as ProjectTemplateDTO;
+  const template = row as ProjectTemplateListItem;
   return (
     <Card className="h-full min-w-0">
       <CardHeader className="gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <ProjectTemplateStatusBadge status={template.status} />
-            <Badge variant="outline">v{template.templateVersion}</Badge>
+            <Badge variant="outline">{template.versionLabel ?? `v${template.templateVersion}.0`}</Badge>
           </div>
           <div className="flex gap-1">{renderRowActions?.(template)}</div>
         </div>

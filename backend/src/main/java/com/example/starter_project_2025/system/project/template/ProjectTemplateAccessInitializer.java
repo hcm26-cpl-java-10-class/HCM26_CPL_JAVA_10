@@ -17,10 +17,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class ProjectTemplateAccessInitializer implements CommandLineRunner {
     private final PermissionRepository permissions;
     private final RoleRepository roles;
+    private final com.example.starter_project_2025.system.menu.module.ModuleRepository modules;
 
     @Override
     @Transactional
     public void run(String... args) {
+        modules.findByUrl("/project-template-versions").ifPresent(module -> {
+            module.setIsActive(false);
+            modules.save(module);
+        });
         var templatePermissions = new ArrayList<Permission>();
         for (String action : List.of("READ", "CREATE", "UPDATE", "ACTIVATE", "ARCHIVE")) {
             templatePermissions.add(permission(action));

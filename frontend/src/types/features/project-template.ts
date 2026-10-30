@@ -235,6 +235,22 @@ export interface ProjectTemplatePayload {
   lockVersion?: number;
 }
 
+export interface ProjectTemplateListItem extends ProjectTemplateDTO {
+  rowId: string;
+  versionId: number | null;
+  versionLabel: string;
+  latestVersion: boolean;
+  templateStatus: ProjectTemplateStatus;
+}
+
+export interface TemplateVersionListResponse {
+  template: ProjectTemplateDTO;
+  versionId: number | null;
+  versionLabel: string;
+  latestVersion: boolean;
+  templateStatus: ProjectTemplateStatus;
+}
+
 export interface ProjectTemplateFilter {
   status?: ProjectTemplateStatus;
   level?: ProjectTemplateLevel;

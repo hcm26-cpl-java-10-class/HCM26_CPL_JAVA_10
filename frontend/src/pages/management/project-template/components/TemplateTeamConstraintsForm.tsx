@@ -29,19 +29,23 @@ interface TemplateTeamConstraintsFormProps {
   template: ProjectTemplateDTO;
   editable: boolean;
   onSaved: (template: ProjectTemplateDTO) => void;
+  save?: (payload: TemplateTeamConstraintsPayload) => Promise<ProjectTemplateDTO>;
 }
 
-export function TemplateTeamConstraintsForm({ template, editable, onSaved }: TemplateTeamConstraintsFormProps) {
+export function TemplateTeamConstraintsForm({ template, editable, onSaved, save }: TemplateTeamConstraintsFormProps) {
   const [values, setValues] = useState(() => toTeamConstraintsValues(template.teamConstraints));
+  const [savedValues, setSavedValues] = useState(values);
   const [lockVersion, setLockVersion] = useState(template.lockVersion);
   const [errors, setErrors] = useState<TeamConstraintsErrors>({});
   const [submitError, setSubmitError] = useState<ReturnType<typeof getTemplateError> | null>(null);
   const submitting = useRef(false);
   const mutation = useMutation({
     mutationFn: (payload: TemplateTeamConstraintsPayload) =>
-      projectTemplateApi.updateTeamConstraints(template.id, payload),
+      save ? save(payload) : projectTemplateApi.updateTeamConstraints(template.id, payload),
     onSuccess: (saved) => {
-      setValues(toTeamConstraintsValues(saved.teamConstraints));
+      const savedRules = toTeamConstraintsValues(saved.teamConstraints);
+      setValues(savedRules);
+      setSavedValues(savedRules);
       setLockVersion(saved.lockVersion);
       setErrors({});
       setSubmitError(null);
@@ -55,7 +59,9 @@ export function TemplateTeamConstraintsForm({ template, editable, onSaved }: Tem
     },
     onSettled: () => { submitting.current = false; },
   });
-  const disabled = mutation.isPending || !editable;
+  const canEdit = editable && template.status === "DRAFT" && !template.readOnly;
+  const hasChanges = JSON.stringify(values) !== JSON.stringify(savedValues);
+  const disabled = mutation.isPending || !canEdit;
   const total = teamRoleTotal(values);
 
   const changeSize = (field: "minMembers" | "maxMembers", value: string) => {
@@ -68,7 +74,7 @@ export function TemplateTeamConstraintsForm({ template, editable, onSaved }: Tem
   };
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (submitting.current || !editable) return;
+    if (submitting.current || !canEdit || !hasChanges) return;
     setSubmitError(null);
     const nextErrors = validateTeamConstraints(values);
     setErrors(nextErrors);
@@ -112,7 +118,7 @@ export function TemplateTeamConstraintsForm({ template, editable, onSaved }: Tem
           </div>
         </CardHeader>
         <CardContent>
-          {!editable && !template.teamConstraints ? (
+          {!canEdit && !template.teamConstraints ? (
             <p className="py-4 text-sm text-muted-foreground">Team constraints have not been configured.</p>
           ) : (
             <fieldset disabled={disabled} className="grid min-w-0 gap-6">
@@ -176,9 +182,9 @@ export function TemplateTeamConstraintsForm({ template, editable, onSaved }: Tem
           )}
         </CardContent>
       </Card>
-      {editable && (
+      {canEdit && (
         <div className="flex justify-end rounded-xl border bg-background p-3">
-          <Button type="submit" disabled={mutation.isPending}>
+          <Button type="submit" disabled={disabled || !hasChanges}>
             {mutation.isPending ? <Loader2 className="animate-spin" /> : <Save />}
             {mutation.isPending ? "Saving..." : "Save team rules"}
           </Button>

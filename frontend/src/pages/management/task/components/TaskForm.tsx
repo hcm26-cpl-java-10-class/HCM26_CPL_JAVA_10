@@ -21,7 +21,9 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { toast } from "sonner";
 import {
   getTaskError,
+  maxTaskDescriptionWords,
   normalizeTags,
+  taskDescriptionWordCount,
   taskPriorityOptions,
   toTaskFormValues,
   toTaskPayload,
@@ -76,6 +78,9 @@ export function TaskForm({ projectId, backlogItemId, assignees, task, onSaved, o
   const [draftTag, setDraftTag] = useState("");
   const [errors, setErrors] = useState<TaskFieldErrors>({});
   const [submitError, setSubmitError] = useState<ReturnType<typeof getTaskError> | null>(null);
+  const descriptionWords = taskDescriptionWordCount(values.description);
+  const descriptionErrors = descriptionWords > maxTaskDescriptionWords
+    ? ["Description must not exceed 1000 words"] : errors.description;
   const requestRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const submittingRef = useRef(false);
 
@@ -176,17 +181,21 @@ export function TaskForm({ projectId, backlogItemId, assignees, task, onSaved, o
                 {values.title.length}/250 characters
               </span>
             </TaskField>
-            <TaskField name="description" label="Description" errors={errors.description}>
+            <TaskField name="description" label="Description" errors={descriptionErrors}>
               <Textarea
                 id="task-description"
                 value={values.description}
                 rows={10}
-                className="min-h-48 resize-y"
-                aria-invalid={!!errors.description?.length}
-                aria-describedby={errors.description?.length ? "task-description-error" : undefined}
+                className="min-h-48 resize-y whitespace-pre-wrap [overflow-wrap:anywhere]"
+                aria-invalid={!!descriptionErrors?.length}
+                aria-describedby={`task-description-count${descriptionErrors?.length ? " task-description-error" : ""}`}
                 placeholder="Describe the work and expected results..."
                 onChange={(event) => changeField("description", event.target.value)}
               />
+              <span id="task-description-count"
+                className={`text-right text-xs tabular-nums ${descriptionWords > maxTaskDescriptionWords ? "text-destructive" : "text-muted-foreground"}`}>
+                {descriptionWords.toLocaleString("en-US")} / {maxTaskDescriptionWords.toLocaleString("en-US")} words
+              </span>
             </TaskField>
             <TaskField name="tags" label="Tags" errors={errors.tags}>
               <TaskTagsInput

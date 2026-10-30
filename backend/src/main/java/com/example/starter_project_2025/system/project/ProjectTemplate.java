@@ -54,12 +54,6 @@ public class ProjectTemplate extends BaseEntity {
     @Column(name = "estimated_duration_weeks")
     Integer estimatedDurationWeeks;
 
-    /**
-     * US-07: business version of the template, kept aligned with the newest
-     * {@code project_template_version} snapshot ({@code v2.0} -> {@code 2}) by
-     * {@code ProjectTemplateSnapshotServiceImpl}. The column is updatable so the
-     * template row and its version chain can never report different numbers.
-     */
     @Builder.Default
     @Column(name = "template_version", nullable = false, columnDefinition = "integer default 1")
     Integer templateVersion = 1;
@@ -77,13 +71,6 @@ public class ProjectTemplate extends BaseEntity {
     @Column(name = "constraints_json", nullable = false, columnDefinition = "TEXT")
     String constraintsJson = "{}";
 
-    /**
-     * US-07: aligns the template revision with the major number of its newest
-     * snapshot version ({@code v3.0} -> {@code 3}).
-     *
-     * @param major parsed major number of the version label; ignored when
-     *              {@code null} or not positive
-     */
     public void syncVersion(Integer major) {
         if (major != null && major > 0) {
             this.templateVersion = major;

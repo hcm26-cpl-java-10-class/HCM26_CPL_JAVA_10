@@ -100,6 +100,7 @@ public class TemplateAssignmentProvisioningService {
     private final TemplateMilestoneRubrics milestoneRubrics;
     private final TemplateBriefSnapshotWriter briefSnapshots;
     private final ObjectMapper objectMapper;
+    private final jakarta.persistence.EntityManager entityManager;
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void provision(ProjectTeam team, ProjectTemplate template, Long actorId, String correlationId) {
@@ -112,6 +113,7 @@ public class TemplateAssignmentProvisioningService {
 
         Long tenantId = Objects.requireNonNull(team.getTrainingClass().getTenantId(),
                 "The training class must belong to a tenant");
+        entityManager.refresh(template, jakarta.persistence.LockModeType.PESSIMISTIC_READ);
         if (template.getStatus() != ProjectTemplateStatus.ACTIVE || !Boolean.TRUE.equals(template.getIsActive())
                 || template.getTenantId() != null && !tenantId.equals(template.getTenantId())) {
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,

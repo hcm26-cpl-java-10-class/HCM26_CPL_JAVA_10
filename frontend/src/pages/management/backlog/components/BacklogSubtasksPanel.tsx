@@ -9,7 +9,7 @@ import { TaskPriorityBadge } from "@/pages/management/task/components/TaskBadges
 import { TaskDeleteDialog } from "@/pages/management/task/components/TaskDeleteDialog";
 import { TaskForm } from "@/pages/management/task/components/TaskForm";
 import { useTaskWorkflowMutation } from "@/pages/management/task/hooks/useTaskWorkflowMutation";
-import { getTaskError, taskStatusOptions } from "@/pages/management/task/task-form.utils";
+import { getTaskError, subtaskStatusOptions } from "@/pages/management/task/task-form.utils";
 import type { BacklogSubtasks, TaskDTO, TaskStatus, TaskWorkflowDTO } from "@/types/features/task";
 import { useQuery } from "@tanstack/react-query";
 import { History, ListTree, Loader2, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
@@ -44,8 +44,10 @@ function SubtaskRow({ workflow, assignees, onEdit }: {
         <SelectTrigger size="sm" className="h-7 w-36 text-xs" aria-label={`Status of subtask ${task.title}`}>
           {mutation.isPending ? <Loader2 className="size-3 animate-spin" /> : <SelectValue />}
         </SelectTrigger>
-        <SelectContent>{taskStatusOptions.filter(option => option.value === task.status || workflow.allowedTransitions.includes(option.value))
-          .map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+        <SelectContent>{subtaskStatusOptions.map(option => <SelectItem key={option.value} value={option.value}
+          disabled={option.value !== task.status && !workflow.allowedTransitions.includes(option.value)}>
+          {option.label}
+        </SelectItem>)}</SelectContent>
       </Select>
       <TaskPriorityBadge priority={task.priority} />
       <span>{task.assigneeProjectMemberId ? assignee?.displayName ?? "Former team member" : "Unassigned"}</span>
@@ -85,7 +87,7 @@ export function BacklogSubtasksPanel({ backlogId }: { backlogId: number }) {
       {hasPermission("TASK_CREATE") && data && !error && <Button size="sm" variant="outline" onClick={() => setEditing({})}>
         <Plus className="size-3.5" />Add subtask</Button>}
     </div>
-    <p className="text-xs text-muted-foreground">Each subtask has its own status. Backlog status is managed separately.</p>
+    <p className="text-xs text-muted-foreground">To Do ↔ In Progress ↔ Done. Subtask status is managed separately from the backlog item.</p>
     {query.isPending && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />Loading subtasks...</p>}
     {error && <Alert variant="destructive"><AlertDescription>
       {Object.values(error.fieldErrors).flat()[0] ?? error.message}

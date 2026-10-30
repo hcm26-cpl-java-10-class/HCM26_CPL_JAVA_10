@@ -134,7 +134,9 @@ public class ProjectTemplateSnapshotServiceImpl
     ProjectRepository projectRepository;
     ObjectMapper objectMapper;
     TemplateConfigurationService configurations;
+    com.example.starter_project_2025.system.project.template.version.TemplateVersionConfigurationService versionConfigurations;
     ProjectTemplateAccessService templateAccess;
+    TemplateVersionLifecycleService lifecycle;
 
     @Override
     protected BaseCrudRepository<ProjectTemplateSnapshot, Long> getRepository() {
@@ -221,9 +223,8 @@ public class ProjectTemplateSnapshotServiceImpl
 
         ProjectTemplateSnapshot saved = snapshotRepository.save(created);
 
-        // US-07: the Project Template row reports the same revision as its
-        // newest version (v2.0 -> template_version = 2).
         syncTemplateVersion(saved.getTemplateId(), nextVersion);
+        versionConfigurations.synchronizeDraft(saved);
 
         // AC01: the audit trail records that this row was derived from another
         // version (not just "created"), so the lineage can be reviewed later.
@@ -320,13 +321,6 @@ public class ProjectTemplateSnapshotServiceImpl
     // Publish the newest version (US-07)
     // ---------------------------------------------------------------------
 
-    /**
-     * {@inheritDoc}
-     * <p>
-     * Only the newest active version is promoted; every older row is left
-     * untouched, so the snapshots already consumed by workspaces/projects can
-     * never be rewritten by a later revision (AC02).
-     */
     @Override
     public ProjectTemplateSnapshotDTO publishLatestVersion(ProjectTemplate template) {
 
@@ -334,9 +328,9 @@ public class ProjectTemplateSnapshotServiceImpl
             return null;
         }
 
-        ProjectTemplateSnapshot latest = snapshotRepository
-                .findFirstByTemplateIdAndIsActiveTrueOrderByCreatedAtDesc(template.getId())
-                .orElse(null);
+        ProjectTemplateSnapshot latest = snapshotRepository.findByTemplateIdOrderByCreatedAtDesc(template.getId()).stream()
+                .filter(version -> Boolean.TRUE.equals(version.getIsActive()) && lifecycle.isReusable(version))
+                .findFirst().orElse(null);
 
         if (latest == null) {
             return null;
@@ -347,6 +341,9 @@ public class ProjectTemplateSnapshotServiceImpl
         }
 
         Map<String, Object> before = snapshot(latest);
+        lifecycle.archivePublishedVersions(template.getId(), latest.getId(), currentActorEmail());
+        Integer major = majorOf(latest.getVersion());
+        if (major != null) template.syncVersion(major);
 
         // AC01: the version that goes live mirrors the template configuration
         // that is being activated (the baseline was built before the Program
@@ -461,6 +458,8 @@ public class ProjectTemplateSnapshotServiceImpl
 
     @Override
     protected void afterCreate(ProjectTemplateSnapshot saved, ProjectTemplateSnapshotDTO request) {
+        syncTemplateVersion(saved.getTemplateId(), saved.getVersion());
+        versionConfigurations.synchronizeDraft(saved);
 
         Map<String, Object> after = snapshot(saved);
 
@@ -537,8 +536,8 @@ public class ProjectTemplateSnapshotServiceImpl
         // configuration may only be edited while the version is still DRAFT.
         if (snapshot.getStatus() != null
                 && snapshot.getStatus() != ProjectTemplateVersionStatus.DRAFT) {
-            if (status == ProjectTemplateVersionStatus.DRAFT) {
-                errors.put("status", List.of("Published versions cannot be changed back to draft. Create a new version instead"));
+            if (status != snapshot.getStatus()) {
+                errors.put("status", List.of("Active and archived versions are read-only. Create a new draft version instead"));
             }
             if (contentJson != null && !contentJson.equals(snapshot.getContentJson())) {
                 errors.put(CONTENT_JSON_FIELD,
@@ -547,6 +546,12 @@ public class ProjectTemplateSnapshotServiceImpl
             if (version != null && !version.equals(snapshot.getVersion())) {
                 errors.put(VERSION_FIELD,
                         List.of("Không thể đổi nhãn của phiên bản đã công bố; hãy tạo phiên bản mới"));
+            }
+            if (request.getIsActive() != null && !Objects.equals(request.getIsActive(), snapshot.getIsActive())) {
+                errors.put("isActive", List.of("Active and archived versions are read-only"));
+            }
+            if (!Objects.equals(projectId, snapshot.getProjectId()) || !Objects.equals(parentTemplateId, snapshot.getParentTemplateId())) {
+                errors.put("parentTemplateId", List.of("The links of an active or archived version cannot be changed"));
             }
         }
 
@@ -566,13 +571,21 @@ public class ProjectTemplateSnapshotServiceImpl
         request.setTemplateId(templateId);
         request.setProjectId(projectId);
         request.setParentTemplateId(parentTemplateId);
-        request.setStatus(status == null ? ProjectTemplateVersionStatus.DRAFT : status);
+        boolean publish = snapshot.getStatus() == ProjectTemplateVersionStatus.DRAFT && status == ProjectTemplateVersionStatus.PUBLISHED;
+        if (publish) templateAccess.requireUser("ACTIVATE");
+        request.setStatus(publish ? ProjectTemplateVersionStatus.DRAFT : status == null ? ProjectTemplateVersionStatus.DRAFT : status);
         request.setVersion(version);
         request.setContentJson(contentJson);
 
         snapshotMapper.update(snapshot, request);
 
-        ProjectTemplateSnapshot saved = snapshotRepository.save(snapshot);
+        ProjectTemplateSnapshot saved = snapshotRepository.saveAndFlush(snapshot);
+        versionConfigurations.synchronizeDraft(saved);
+        if (publish) {
+            var owner = requireOwnedTemplate(saved.getTemplateId());
+            versionConfigurations.publish(saved.getId(), new com.example.starter_project_2025.system.project.template.TemplateActivationRequest(
+                    java.math.BigDecimal.valueOf(owner.getLockVersion())));
+        }
 
         Map<String, Object> after = snapshot(saved);
 
@@ -603,6 +616,12 @@ public class ProjectTemplateSnapshotServiceImpl
         requireOwnedTemplate(snapshot.getTemplateId());
         requireReusableVersion(snapshot);
 
+        if (snapshot.getStatus() != ProjectTemplateVersionStatus.DRAFT) {
+            throw new ProjectTemplateSnapshotValidationException("id", "Published and archived versions must be kept in the version history");
+        }
+        if (snapshotRepository.existsByParentTemplateId(snapshot.getId())) {
+            throw new ProjectTemplateSnapshotValidationException("id", "This version has derived versions or workspace snapshots and cannot be deleted");
+        }
         Map<String, Object> before = snapshot(snapshot);
 
         snapshotAuditService.record(
@@ -617,6 +636,13 @@ public class ProjectTemplateSnapshotServiceImpl
                 before);
 
         snapshotRepository.delete(snapshot);
+        snapshotRepository.flush();
+        snapshotRepository.findByTemplateIdOrderByCreatedAtDesc(snapshot.getTemplateId()).stream()
+                .filter(this::isTemplateVersion).filter(item -> Boolean.TRUE.equals(item.getIsActive())).findFirst()
+                .ifPresent(remaining -> {
+                    syncTemplateVersion(remaining.getTemplateId(), remaining.getVersion());
+                    versionConfigurations.synchronizeDraft(remaining);
+                });
     }
 
     // ---------------------------------------------------------------------
@@ -765,7 +791,8 @@ public class ProjectTemplateSnapshotServiceImpl
     }
 
     private void requireReusableVersion(ProjectTemplateSnapshot version) {
-        if (version.getProjectId() != null || !isTemplateVersion(version)) {
+        if (version.getProjectId() != null || !isTemplateVersion(version)
+                || projectRepository.existsByTemplateSnapshotIdIn(List.of(version.getId()))) {
             throw new ProjectTemplateSnapshotValidationException("id", "Workspace snapshots cannot be changed or used as template versions");
         }
     }
@@ -1023,10 +1050,6 @@ public class ProjectTemplateSnapshotServiceImpl
         }
     }
 
-    /**
-     * US-07: keeps {@code project_templates.template_version} aligned with the
-     * newest snapshot label ({@code v2.0} -> {@code 2}).
-     */
     private void syncTemplateVersion(Long templateId, String versionLabel) {
 
         Integer major = majorOf(versionLabel);
@@ -1036,7 +1059,7 @@ public class ProjectTemplateSnapshotServiceImpl
         }
 
         projectTemplateRepository.findById(templateId).ifPresent(template -> {
-            if (!Objects.equals(template.getTemplateVersion(), major)) {
+            if (template.getStatus() == ProjectTemplateStatus.DRAFT && !Objects.equals(template.getTemplateVersion(), major)) {
                 template.syncVersion(major);
                 projectTemplateRepository.save(template);
             }

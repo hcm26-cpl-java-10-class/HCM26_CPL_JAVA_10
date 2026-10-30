@@ -19,7 +19,7 @@ export function newBacklogItem(input?: { title: string; description: string | nu
 
 export function toSampleValues(content: TemplateSampleContent): SampleContentValues {
   return {
-    backlogItems: content.backlogItems.map((item) => ({ ...newBacklogItem(item), id: item.id })),
+    backlogItems: content.backlogItems.map((item) => ({ ...newBacklogItem(item), id: item.id ?? undefined })),
   };
 }
 

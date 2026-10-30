@@ -36,12 +36,13 @@ function TemplateField({ name, label, errors, suffix, children }: {
   );
 }
 
-export function ProjectTemplateForm({ template, options, minimumDurationWeeks = 0, onCancel, onSaved }: {
+export function ProjectTemplateForm({ template, options, minimumDurationWeeks = 0, onCancel, onSaved, save }: {
   template?: ProjectTemplateDTO;
   options: ProjectTemplateOptions;
   minimumDurationWeeks?: number;
   onCancel: () => void;
   onSaved: (template: ProjectTemplateDTO) => void;
+  save?: (payload: ProjectTemplatePayload) => Promise<ProjectTemplateDTO>;
 }) {
   const queryClient = useQueryClient();
   const [values, setValues] = useState(() => toTemplateFormValues(template));
@@ -53,7 +54,7 @@ export function ProjectTemplateForm({ template, options, minimumDurationWeeks = 
   const [submitError, setSubmitError] = useState<ReturnType<typeof getTemplateError> | null>(null);
   const submitting = useRef(false);
   const mutation = useMutation({
-    mutationFn: (payload: ProjectTemplatePayload) => template
+    mutationFn: (payload: ProjectTemplatePayload) => save ? save(payload) : template
       ? projectTemplateApi.update(template.id, payload) : projectTemplateApi.create(payload),
     onSuccess: (saved) => {
       void queryClient.invalidateQueries({ queryKey: ["project-templates"] });

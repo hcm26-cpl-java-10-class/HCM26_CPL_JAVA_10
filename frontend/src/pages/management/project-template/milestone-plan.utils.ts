@@ -58,8 +58,8 @@ export function newMilestone(first: boolean): MilestoneValues {
 
 export function toMilestoneValues(plan: TemplateMilestonePlan): MilestoneValues[] {
   return plan.milestones.map((milestone) => ({
-    key: `milestone-${milestone.id}`,
-    id: milestone.id,
+    key: milestone.id == null ? crypto.randomUUID() : `milestone-${milestone.id}`,
+    id: milestone.id ?? undefined,
     title: milestone.title,
     description: milestone.description ?? "",
     dueAfter: String(milestone.dueAfter),
@@ -68,8 +68,8 @@ export function toMilestoneValues(plan: TemplateMilestonePlan): MilestoneValues[
     mandatory: milestone.mandatory,
     rubricVersionId: milestone.rubricVersionId ?? "",
     checklistItems: milestone.checklistItems.map((item) => ({
-      key: `checklist-${item.id}`,
-      id: item.id,
+      key: item.id == null ? crypto.randomUUID() : `checklist-${item.id}`,
+      id: item.id ?? undefined,
       content: item.content,
       mandatory: item.mandatory,
     })),

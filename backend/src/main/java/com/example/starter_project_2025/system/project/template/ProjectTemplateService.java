@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.project.template;
 import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshotService;
+import com.example.starter_project_2025.system.project.project_template_version.TemplateVersionLifecycleService;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneRepository;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneScheduleValidator;
 import com.example.starter_project_2025.system.project.milestone.outbox.OutboxEvent;
@@ -45,6 +46,7 @@ public class ProjectTemplateService {
     private final ObjectMapper objectMapper;
     private final OutboxEventRepository events;
     private final TemplateConfigurationService configurations;
+    private final TemplateVersionLifecycleService versionLifecycle;
     /** US-07: every template owns a version chain, seeded with its v1.0 baseline. */
     private final ProjectTemplateSnapshotService snapshotService;
 
@@ -168,6 +170,7 @@ public class ProjectTemplateService {
             throw ProjectTemplateException.conflict("This template has changed. Reload it before archiving");
         }
         String before = state(template);
+        versionLifecycle.archivePublishedVersions(id, null, user.getEmail());
         template.setStatus(ProjectTemplateStatus.ARCHIVED);
         templates.saveAndFlush(template);
         recordAudit(template, user, "PROJECT_TEMPLATE_ARCHIVED", before);

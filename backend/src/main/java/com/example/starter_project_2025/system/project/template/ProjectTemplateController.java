@@ -5,6 +5,8 @@ import com.example.starter_project_2025.system.project.template.milestone.Templa
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestonePlanResponse;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneService;
 import com.example.starter_project_2025.system.project.template.content.*;
+import com.example.starter_project_2025.system.project.template.version.TemplateVersionListItem;
+import com.example.starter_project_2025.system.project.template.version.TemplateVersionListService;
 import lombok.RequiredArgsConstructor;
 import java.util.List;
 import org.springframework.data.domain.Page;
@@ -38,6 +40,7 @@ public class ProjectTemplateController {
     private final TemplateSampleContentService sampleContentService;
     private final TemplateBacklogImportService backlogImportService;
     private final ProjectTemplateDeletionService deletionService;
+    private final TemplateVersionListService versionListService;
 
     @GetMapping("/options")
     @PreAuthorize("hasAuthority('PROJECT_TEMPLATE_READ')")
@@ -78,6 +81,21 @@ public class ProjectTemplateController {
     @PreAuthorize("hasAuthority('PROJECT_TEMPLATE_READ')")
     public ProjectTemplateResponse getById(@PathVariable Long id) {
         return service.getById(id);
+    }
+
+    @GetMapping("/versions")
+    @PreAuthorize("hasAuthority('PROJECT_TEMPLATE_READ') and hasAuthority('PROJECT_TEMPLATE_VERSION_READ')")
+    public Page<TemplateVersionListItem> getVersions(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) ProjectTemplateStatus status,
+            @RequestParam(required = false) ProjectTemplateLevel level,
+            @RequestParam(required = false) String category,
+            @RequestParam(defaultValue = "0") String page,
+            @RequestParam(defaultValue = "10") String size,
+            Pageable pageable) {
+        Sort sort = pageable.getSort().isSorted() ? pageable.getSort() : Sort.by(Sort.Direction.DESC, "createdAt");
+        return versionListService.getPage(search, status, level, category,
+                PageRequest.of(number(page, "page", 0, Integer.MAX_VALUE), number(size, "size", 1, 100), sort));
     }
 
     @PostMapping

@@ -1,4 +1,5 @@
 import { projectTemplateApi } from "@/api/features/project-template.api";
+import { projectTemplateVersionApi } from "@/api/features/project-template-version.api";
 import { TemplateDeleteDialog } from "../components/TemplateDeleteDialog";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -38,6 +39,17 @@ export function ProjectTemplateDetailPage() {
     refetchOnReconnect: false,
   });
   const template = query.data;
+  const versionId = Number(searchParams.get("version"));
+  const versionQuery = useQuery({
+    queryKey: ["project-template-versions", options.user.email, options.activeRole, "configuration", versionId],
+    queryFn: ({ signal }) => projectTemplateVersionApi.getConfiguration(versionId, signal),
+    enabled: tab === "versions" && Number.isSafeInteger(versionId) && versionId > 0 && options.isSuccess
+      && options.hasPermission("PROJECT_TEMPLATE_VERSION_READ"),
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const displayedTemplate = tab === "versions" && versionQuery.data?.template.id === template?.id
+    ? versionQuery.data?.template : template;
   const canEdit = options.isSuccess && options.data?.canUpdate === true && !query.isError && !!template?.editable
     && options.hasPermission("PROJECT_TEMPLATE_UPDATE");
   const canActivate = options.isSuccess && options.data?.canActivate === true && !query.isError
@@ -61,26 +73,27 @@ export function ProjectTemplateDetailPage() {
         <header className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
           <div>
             <p className="text-sm text-muted-foreground">Project Templates</p>
-            <h1 className="mt-1 text-2xl font-semibold">Template details</h1>
-            {template && options.isSuccess && !query.isError && (
-              <p className="mt-2 break-words text-sm text-muted-foreground">{template.code} · {template.name}</p>
+            <h1 className="mt-1 text-2xl font-semibold">{tab === "versions" ? "Template version details" : "Template details"}</h1>
+            {displayedTemplate && options.isSuccess && !query.isError && (
+              <p className="mt-2 break-words text-sm text-muted-foreground">{displayedTemplate.code} · {displayedTemplate.name}</p>
             )}
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => navigate("/project-templates")}><ArrowLeft /> Back to templates</Button>
+            {tab === "versions" && <Button variant="outline" onClick={() => navigate(`/project-templates/${id}/detail`)}>Current template</Button>}
             {tab === "overview" && canEdit && (
               <Button onClick={() => navigate(`/project-templates/${id}/edit`)}><Pen /> Edit draft</Button>
             )}
-            {template && template.status === "DRAFT" && !template.readOnly && options.data?.canArchive
+            {tab !== "versions" && template && template.status === "DRAFT" && !template.readOnly && options.data?.canArchive
               && options.hasPermission("PROJECT_TEMPLATE_ARCHIVE") && <TemplateDeleteDialog template={template}
                 onDeleted={() => navigate("/project-templates")} />}
-            {canActivate && template && <TemplateActivationDialog template={template}
+            {tab !== "versions" && canActivate && template && <TemplateActivationDialog template={template}
               onOpenSection={selectTab}
               onActivated={(saved) => {
                 queryClient.setQueryData(detailQueryKey, saved);
                 void queryClient.invalidateQueries({ queryKey: ["project-templates"] });
               }} />}
-            {canArchive && template && <TemplateArchiveDialog template={template} onArchived={(saved) => {
+            {tab !== "versions" && canArchive && template && <TemplateArchiveDialog template={template} onArchived={(saved) => {
               queryClient.setQueryData(detailQueryKey, saved);
               void queryClient.invalidateQueries({ queryKey: ["project-templates"] });
             }} />}
@@ -92,15 +105,15 @@ export function ProjectTemplateDetailPage() {
             onRetry={() => { void options.refetch(); void query.refetch(); }} />
           : template && (
             <>
-              {template.status !== "DRAFT" && (
+              {tab !== "versions" && template.status !== "DRAFT" && (
                 <Alert><LockKeyhole /><AlertDescription>{template.status === "ARCHIVED"
                   ? "This template is archived and cannot be selected for new classes or cohorts. Its saved configuration remains available below."
-                  : "This template is active and can be assigned to a team, but its configuration is locked. Duplicate it if you need to change the brief."}</AlertDescription></Alert>
+                  : "This template is active and can be assigned to a team. Use the Versions tab to prepare a new draft without changing the published configuration."}</AlertDescription></Alert>
               )}
               {template.readOnly && (
                 <Alert><LockKeyhole /><AlertDescription>This template comes from the shared catalogue and is read-only. Duplicate it to create an editable draft in your organization.</AlertDescription></Alert>
               )}
-              <Tabs value={tab} onValueChange={selectTab} className="min-w-0 gap-4">
+              {tab === "versions" ? <TemplateVersionsPanel template={template} /> : <Tabs value={tab} onValueChange={selectTab} className="min-w-0 gap-4">
                 <TabsList aria-label="Template configuration"
                   className="grid w-full max-w-3xl grid-cols-2 group-data-[orientation=horizontal]/tabs:h-auto sm:grid-cols-5">
                   <TabsTrigger value="overview" className="h-full min-h-9 whitespace-normal">Overview</TabsTrigger>
@@ -162,10 +175,7 @@ export function ProjectTemplateDetailPage() {
                 <TabsContent value="sample-content">
                   <TemplateSampleContentPanel templateId={template.id} editable={canEdit} />
                 </TabsContent>
-                <TabsContent value="versions">
-                  <TemplateVersionsPanel template={template} />
-                </TabsContent>
-              </Tabs>
+              </Tabs>}
             </>
           )}
       </section>

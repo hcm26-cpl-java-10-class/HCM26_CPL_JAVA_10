@@ -1,4 +1,15 @@
 import type { BaseDTO, BaseFilter } from "@/types/common/base";
+import type { ProjectTemplateDTO, TemplateMilestonePlan, TemplateSampleContent } from "./project-template";
+
+export interface TemplateVersionConfiguration {
+  version: ProjectTemplateVersionDTO;
+  template: ProjectTemplateDTO;
+  milestones: TemplateMilestonePlan;
+  sampleContent: TemplateSampleContent;
+  editable: boolean;
+  canPublish: boolean;
+  legacyContent: boolean;
+}
 
 /**
  * Lifecycle status of a template version (US-07).

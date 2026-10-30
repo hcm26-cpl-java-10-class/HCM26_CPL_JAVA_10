@@ -22,11 +22,19 @@ public class TemplateBacklogImportService {
 
     public byte[] template(Long id) {
         content.requireDraft(id);
+        return templateFile();
+    }
+
+    public byte[] templateFile() {
         return importTemplates.generateTemplate(TemplateBacklogImportRow.class);
     }
 
     public List<TemplateSampleContentRequest.BacklogItem> preview(Long id, MultipartFile file) {
         content.requireDraft(id);
+        return previewFile(file);
+    }
+
+    public List<TemplateSampleContentRequest.BacklogItem> previewFile(MultipartFile file) {
         if (file == null || file.isEmpty() || file.getSize() > policy.maxBytes()) {
             throw invalidFile("Choose a non-empty Excel or CSV file within the upload size limit");
         }
