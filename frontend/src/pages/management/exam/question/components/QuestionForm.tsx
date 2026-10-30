@@ -38,6 +38,8 @@ import React, {
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ImageUrlField } from "./ImageUrlField";
+import { CodeSpecEditor, emptyCodeSpec, validateCodeSpec } from "./CodeSpecEditor";
+import type { CodeSpec } from "@/types/features/exam";
 
 export interface QuestionFormValues {
     content: string;
@@ -49,6 +51,7 @@ export interface QuestionFormValues {
     options: QuestionOptionDTO[];
     gradingCriteria: EssayGradingCriterion[];
     imageUrl?: string;
+    code?: CodeSpec | null;
 }
 
 const defaultInitialQuestionForm: QuestionFormValues = {
@@ -300,6 +303,33 @@ export function QuestionForm({
             toast.error("Content must be at most 2000 characters.");
             return;
         }
+        if (form.type === "CODING") {
+            const problems = validateCodeSpec(form.code);
+            if (problems.length > 0) {
+                toast.error(problems[0]);
+                return;
+            }
+            const spec = form.code as CodeSpec;
+            onSubmit({
+                ...form,
+                content,
+                imageUrl,
+                topic: form.topic.trim(),
+                options: [],
+                gradingCriteria: [],
+                code: {
+                    functionName: spec.functionName.trim(),
+                    returnType: spec.returnType,
+                    params: spec.params.map((p) => ({ name: p.name.trim(), type: p.type })),
+                    tests: spec.tests.map((t) => ({
+                        inputs: t.inputs.map((v) => v.trim()),
+                        expected: t.expected.trim(),
+                        visible: t.visible,
+                    })),
+                },
+            });
+            return;
+        }
         if (form.type === "ESSAY") {
             const criteria = form.gradingCriteria.map((criterion) => ({
                 ...criterion,
@@ -436,8 +466,9 @@ export function QuestionForm({
                                 ...prev,
                                 type: value as QuestionType,
                                 gradingCriteria: value === "ESSAY" ? prev.gradingCriteria : [],
+                                code: value === "CODING" ? prev.code ?? emptyCodeSpec() : null,
                                 options:
-                                    value === "ESSAY"
+                                    value === "ESSAY" || value === "CODING"
                                         ? []
                                         : prev.options.length >= 2
                                             ? prev.options
@@ -451,6 +482,7 @@ export function QuestionForm({
                         <SelectContent>
                             <SelectItem value="MULTIPLE_CHOICE">Multiple Choice</SelectItem>
                             <SelectItem value="ESSAY">Essay</SelectItem>
+                            <SelectItem value="CODING">Coding</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
@@ -584,7 +616,12 @@ export function QuestionForm({
                 )}
             </div>
 
-            {form.type === "ESSAY" ? (
+            {form.type === "CODING" ? (
+                <CodeSpecEditor
+                    value={form.code ?? emptyCodeSpec()}
+                    onChange={(code) => setForm((prev) => ({ ...prev, code }))}
+                />
+            ) : form.type === "ESSAY" ? (
                 <section className="grid gap-3 rounded-md border p-4">
                     <div className="flex items-start justify-between gap-3">
                         <div className="grid gap-1">

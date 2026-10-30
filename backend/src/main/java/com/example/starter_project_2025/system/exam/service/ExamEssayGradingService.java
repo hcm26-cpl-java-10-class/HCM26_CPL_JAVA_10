@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.exam.service;
 import java.math.BigDecimal;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import com.example.starter_project_2025.system.exam.code.CodeJudgeService;
 import com.example.starter_project_2025.system.exam.domain.Exam;
 import com.example.starter_project_2025.system.exam.domain.ExamAttempt;
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptAnswer;
@@ -14,6 +15,8 @@ import com.example.starter_project_2025.system.exam.dto.EssayGradingDTO;
 import com.example.starter_project_2025.system.question.domain.EssayGradingCriterion;
 import com.example.starter_project_2025.system.exam.service.ai.AiEssayGradingClient;
 import com.example.starter_project_2025.system.question.domain.QuestionType;
+import com.example.starter_project_2025.system.question.dto.CodeSpecDTO;
+import com.example.starter_project_2025.system.question.service.CodeSpecSupport;
 import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -29,15 +32,21 @@ public class ExamEssayGradingService {
     static final Set<ExamAttemptStatus> NEEDS_REVIEW =
             Set.of(ExamAttemptStatus.PENDING_REVIEW, ExamAttemptStatus.EXPIRED);
 
+    /** Cac bai da nop: giao vien xem/cham duoc ca bai da cham xong. */
+    static final Set<ExamAttemptStatus> SUBMITTED_STATES =
+            Set.of(ExamAttemptStatus.PENDING_REVIEW, ExamAttemptStatus.EXPIRED, ExamAttemptStatus.SUBMITTED);
+
     private final ExamRepository examRepository;
     private final ExamAttemptRepository attemptRepository;
     private final AiEssayGradingClient aiClient;
     private final AnonymousExamService anonymousExamService;
+    private final CodeJudgeService codeJudgeService;
 
     public List<EssayGradingDTO.Summary> listPending(Long examId) {
         requireExam(examId);
         return attemptRepository
-                .findFinishedWithQuestionType(examId, NEEDS_REVIEW, QuestionType.ESSAY)
+                .findFinishedWithAnyQuestionType(examId, SUBMITTED_STATES,
+                        List.of(QuestionType.ESSAY, QuestionType.CODING))
                 .stream()
                 .map(this::toSummary)
                 .toList();
@@ -72,7 +81,141 @@ public class ExamEssayGradingService {
                 .sorted(Comparator.comparingInt(ExamAttemptQuestion::getDisplayOrder))
                 .map(question -> toEssayItem(attempt, question))
                 .toList());
+        detail.setCodings(attempt.getQuestions().stream()
+                .filter(question -> question.getType() == QuestionType.CODING)
+                .sorted(Comparator.comparingInt(ExamAttemptQuestion::getDisplayOrder))
+                .map(question -> toCodingItem(attempt, question))
+                .toList());
         return detail;
+    }
+
+    /** Chay thu toan bo test (ca an) tren code sinh vien nop; khong luu gi. */
+    public EssayGradingDTO.CodingRunResult runCodingTests(Long examId, Long attemptId, Long questionId) {
+        requireExam(examId);
+        ExamAttempt attempt = requireSubmittedAttempt(examId, attemptId);
+        ExamAttemptQuestion question = requireCodingQuestion(attempt, questionId);
+        CodeSpecDTO spec = requireSpec(question);
+        List<CodeJudgeService.TestResult> results = codeJudgeService.runAll(spec, answerText(attempt, question));
+
+        EssayGradingDTO.CodingRunResult run = new EssayGradingDTO.CodingRunResult();
+        List<EssayGradingDTO.CodingTestResult> items = new ArrayList<>();
+        int passed = 0;
+        for (int i = 0; i < results.size(); i++) {
+            CodeJudgeService.TestResult r = results.get(i);
+            CodeSpecDTO.TestCase t = spec.getTests().get(i);
+            EssayGradingDTO.CodingTestResult item = new EssayGradingDTO.CodingTestResult();
+            item.setIndex(i);
+            item.setVisible(t.isVisible());
+            item.setPassed(r.passed());
+            item.setStatus(r.status());
+            item.setInputs(t.getInputs());
+            item.setExpected(t.getExpected());
+            item.setActual(r.actual());
+            item.setError(r.error());
+            if (r.passed()) passed++;
+            if (r.infraError()) run.setInfraError(true);
+            items.add(item);
+        }
+        run.setPassed(passed);
+        run.setTotal(items.size());
+        run.setTests(items);
+        return run;
+    }
+
+    /** Cham lai mot cau lap trinh bang may cham, luu diem va cap nhat diem bai thi. */
+    @Transactional
+    public EssayGradingDTO.Detail regradeCoding(Long examId, Long attemptId, Long questionId) {
+        requireExam(examId);
+        ExamAttempt attempt = requireSubmittedAttempt(examId, attemptId);
+        ExamAttemptQuestion question = requireCodingQuestion(attempt, questionId);
+        CodeSpecDTO spec = requireSpec(question);
+
+        ExamAttemptAnswer answer = findAnswer(attempt, question);
+        if (answer == null) {
+            answer = new ExamAttemptAnswer();
+            answer.setAttempt(attempt);
+            answer.setQuestion(question);
+            answer.setTextAnswer("");
+            attempt.getAnswers().add(answer);
+        }
+        CodeJudgeService.GradeResult result = codeJudgeService.grade(spec, answer.getTextAnswer());
+        if (result.infraError()) {
+            throw new BadRequestException("Máy chấm code không phản hồi. Hãy kiểm tra Judge0 rồi thử lại.");
+        }
+
+        BigDecimal maxScore = ExamScoring.effectiveMax(attempt.getMaxScore());
+        BigDecimal weight = BigDecimal.valueOf(question.getPoints())
+                .multiply(BigDecimal.valueOf(result.passed()))
+                .divide(BigDecimal.valueOf(result.total()), 8, java.math.RoundingMode.HALF_UP);
+        BigDecimal newScore = ExamScoring.share(maxScore, weight, attempt.getTotalPoints());
+        BigDecimal oldScore = answer.getScore() == null ? BigDecimal.ZERO : answer.getScore();
+        answer.setScore(newScore);
+        answer.setFeedback("Đạt " + result.passed() + "/" + result.total() + " test"
+                + (result.compileError() != null ? " (lỗi biên dịch)" : ""));
+
+        BigDecimal objective = (attempt.getObjectiveScore() == null ? BigDecimal.ZERO : attempt.getObjectiveScore())
+                .add(newScore).subtract(oldScore).max(BigDecimal.ZERO);
+        attempt.setObjectiveScore(objective.setScale(ExamScoring.STORE_SCALE, java.math.RoundingMode.HALF_UP));
+        recomputeFinalScore(attempt, maxScore);
+        attemptRepository.save(attempt);
+        return getDetail(examId, attemptId);
+    }
+
+    private void recomputeFinalScore(ExamAttempt attempt, BigDecimal maxScore) {
+        boolean hasEssay = attempt.getQuestions().stream().anyMatch(q -> q.getType() == QuestionType.ESSAY);
+        boolean codePending = attempt.getQuestions().stream()
+                .filter(q -> q.getType() == QuestionType.CODING)
+                .anyMatch(q -> {
+                    ExamAttemptAnswer a = findAnswer(attempt, q);
+                    return a == null || a.getScore() == null;
+                });
+        BigDecimal essayTotal = attempt.getQuestions().stream()
+                .filter(q -> q.getType() == QuestionType.ESSAY)
+                .map(q -> {
+                    ExamAttemptAnswer a = findAnswer(attempt, q);
+                    return a == null || a.getScore() == null ? BigDecimal.ZERO : a.getScore();
+                })
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal total = attempt.getObjectiveScore().add(essayTotal);
+
+        if (attempt.getFinalScore() != null) {
+            attempt.setFinalScore(ExamScoring.clamp(
+                    ExamScoring.applyPenalty(total, attempt.getLatePenaltyPercentApplied()), maxScore));
+        } else if (!hasEssay && !codePending) {
+            attempt.setFinalScore(ExamScoring.clamp(
+                    ExamScoring.applyPenalty(attempt.getObjectiveScore(), attempt.getLatePenaltyPercentApplied()), maxScore));
+            if (attempt.getStatus() != ExamAttemptStatus.SUBMITTED
+                    && ExamAttemptLifecycle.canTransition(attempt.getStatus(), ExamAttemptStatus.SUBMITTED)) {
+                attempt.setStatus(ExamAttemptStatus.SUBMITTED);
+            }
+        }
+    }
+
+    private ExamAttempt requireSubmittedAttempt(Long examId, Long attemptId) {
+        ExamAttempt attempt = attemptRepository.findById(attemptId)
+                .filter(candidate -> candidate.getExam().getId().equals(examId))
+                .orElseThrow(() -> new ResourceNotFoundException("Exam attempt not found"));
+        if (attempt.getStatus() == ExamAttemptStatus.IN_PROGRESS
+                || attempt.getStatus() == ExamAttemptStatus.NOT_STARTED) {
+            throw new BadRequestException("Bài làm chưa được nộp");
+        }
+        return attempt;
+    }
+
+    private ExamAttemptQuestion requireCodingQuestion(ExamAttempt attempt, Long sourceQuestionId) {
+        return attempt.getQuestions().stream()
+                .filter(q -> q.getType() == QuestionType.CODING
+                        && java.util.Objects.equals(q.getSourceQuestionId(), sourceQuestionId))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Coding question not found in this attempt"));
+    }
+
+    private CodeSpecDTO requireSpec(ExamAttemptQuestion question) {
+        CodeSpecDTO spec = CodeSpecSupport.fromJson(question.getCodeSpec());
+        if (spec == null || spec.getTests() == null || spec.getTests().isEmpty()) {
+            throw new BadRequestException("Câu hỏi chưa có test case");
+        }
+        return spec;
     }
 
     @Transactional
@@ -252,7 +395,31 @@ public class ExamEssayGradingService {
         summary.setEssayAnswered((int) essays.stream()
                 .filter(question -> !answerText(attempt, question).isBlank())
                 .count());
+        List<ExamAttemptQuestion> codings = attempt.getQuestions().stream()
+                .filter(question -> question.getType() == QuestionType.CODING)
+                .toList();
+        summary.setCodingCount(codings.size());
+        summary.setCodingAnswered((int) codings.stream()
+                .filter(question -> !answerText(attempt, question).isBlank())
+                .count());
         return summary;
+    }
+
+    private EssayGradingDTO.CodingItem toCodingItem(ExamAttempt attempt, ExamAttemptQuestion question) {
+        EssayGradingDTO.CodingItem item = new EssayGradingDTO.CodingItem();
+        item.setQuestionId(question.getSourceQuestionId());
+        item.setDisplayOrder(question.getDisplayOrder());
+        item.setContent(question.getContent());
+        item.setPoints(question.getPoints());
+        item.setMaxScore(ExamScoring.gradingCap(ExamScoring.effectiveMax(attempt.getMaxScore()), question.getPoints(), attempt.getTotalPoints()));
+        item.setCode(answerText(attempt, question));
+        item.setSpec(CodeSpecSupport.forTeacher(question.getCodeSpec()));
+        ExamAttemptAnswer answer = findAnswer(attempt, question);
+        if (answer != null) {
+            item.setScore(answer.getScore());
+            item.setFeedback(answer.getFeedback());
+        }
+        return item;
     }
 
     private EssayGradingDTO.EssayItem toEssayItem(ExamAttempt attempt, ExamAttemptQuestion question) {

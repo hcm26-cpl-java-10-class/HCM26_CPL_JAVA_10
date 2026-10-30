@@ -1,4 +1,5 @@
 import {
+    runCode,
     saveExamAnswers,
     sendIntegrityEvents, // NEW (anti-cheat)
     startOrResumeExam,
@@ -13,8 +14,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Save, Star } from 'lucide-react';
+import { Star } from 'lucide-react';
 import { toast } from 'sonner';
+import { CodingWorkspace } from './components/CodingWorkspace';
+import { EssayPopup } from './components/EssayPopup';
 import { ExamIntegrityNotice, useExamIntegrity } from '@/hooks/useExamIntegrity'; // NEW (anti-cheat)
 
 const attemptQueryKey = (examId: number) => ['student-exam-attempt', examId] as const;
@@ -63,6 +66,7 @@ export default function StudentExamTakingPage() {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const essayParam = Number(searchParams.get('essay'));
+    const codeParam = Number(searchParams.get('code'));
     const queryClient = useQueryClient();
     const timerRefs = useRef(new Map<number, number>());
     const autoSubmitStarted = useRef(false);
@@ -365,18 +369,19 @@ export default function StudentExamTakingPage() {
     };
 
     const openEssay = (questionId: number) => setSearchParams({ essay: String(questionId) });
+    const openCode = (questionId: number) => setSearchParams({ code: String(questionId) });
     const closeEssay = () => setSearchParams({});
 
     const hasText = (questionId: number) => (answers[questionId]?.textAnswer ?? '').trim().length > 0;
     const isAnswered = (question: { id: number; type: string }) =>
-        question.type === 'ESSAY'
+        question.type === 'ESSAY' || question.type === 'CODING'
             ? hasText(question.id)
             : (answers[question.id]?.selectedOptionIds.length ?? 0) > 0;
 
     const saveEssay = async (questionId: number) => {
         if (!attempt || attempt.status !== 'IN_PROGRESS') return;
         if (!hasText(questionId)) {
-            toast.error('Please enter your answer content before saving.');
+            toast.error('Please enter your answer before saving.');
             return;
         }
         const timer = timerRefs.current.get(questionId);
@@ -397,7 +402,7 @@ export default function StudentExamTakingPage() {
             return;
         }
         setAnswers((all) => ({ ...all, [questionId]: { ...all[questionId], questionId, saved: true } as ExtendedAnswer }));
-        toast.success('Essay answer saved successfully.');
+        toast.success('Answer saved successfully.');
         closeEssay();
     };
 
@@ -407,7 +412,11 @@ export default function StudentExamTakingPage() {
             openEssay(question.id);
             return;
         }
-        if (essayParam) closeEssay();
+        if (question.type === 'CODING') {
+            openCode(question.id);
+            return;
+        }
+        if (essayParam || codeParam) closeEssay();
         window.setTimeout(() => document.getElementById(`question-card-${question.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
     };
 
@@ -437,13 +446,15 @@ export default function StudentExamTakingPage() {
     }
 
     const isFinished = attempt.status !== 'IN_PROGRESS';
-    const essayQuestions = attempt.questions.filter((q) => q.type === 'ESSAY');
+    const codingQuestions = attempt.questions.filter((q) => q.type === 'CODING');
+    const currentCode = attempt.questions.find((q) => q.id === codeParam && q.type === 'CODING');
     const currentEssay = attempt.questions.find((q) => q.id === essayParam && q.type === 'ESSAY');
     const currentEssayIndex = currentEssay ? attempt.questions.indexOf(currentEssay) : -1;
-    const currentAnswer = currentEssay ? answers[currentEssay.id] : undefined;
+    const currentTextQuestion = currentCode ?? currentEssay;
+    const currentAnswer = currentTextQuestion ? answers[currentTextQuestion.id] : undefined;
     const currentSaved = Boolean(currentAnswer?.saved);
 
-    const activeId = currentEssay ? currentEssay.id : activeQuestionId;
+    const activeId = currentCode ? currentCode.id : currentEssay ? currentEssay.id : activeQuestionId;
 
     const timerBox = (
         <div role="timer" aria-live="polite" className={`pointer-events-auto shrink-0 rounded-lg border bg-card px-4 py-2 font-mono text-xl ${secondsRemaining <= 60 ? 'border-red-500 text-red-500' : ''}`}>
@@ -490,7 +501,7 @@ export default function StudentExamTakingPage() {
                             <button
                                 key={question.id}
                                 type="button"
-                                title={`Question ${index + 1}${question.type === 'ESSAY' ? ' (Essay)' : ''}${isFlagged ? ' · Flagged' : ''}`}
+                                title={`Question ${index + 1}${question.type === 'ESSAY' ? ' (Essay)' : question.type === 'CODING' ? ' (Coding)' : ''}${isFlagged ? ' · Flagged' : ''}`}
                                 aria-label={`Question ${index + 1}: ${isAnswered(question) ? 'Answered' : 'Unanswered'}${isFlagged ? ', Flagged' : ''}`}
                                 aria-current={activeId === question.id ? 'true' : undefined}
                                 onClick={() => jumpToQuestion(question)}
@@ -511,63 +522,25 @@ export default function StudentExamTakingPage() {
         </Button>
     );
 
-    if (!isFinished && currentEssay) {
+    if (!isFinished && currentCode) {
         return (
             <MainLayout pathName={{ exams: 'Exam Schedule', take: 'Take Exam' }}>
-                <main className="flex h-[calc(100dvh-10rem)] w-full flex-col gap-4 overflow-hidden">
-                    <ExamIntegrityNotice config={attempt.integrity} state={integrity} />
-                    <header className="flex shrink-0 flex-wrap items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                            {timerBox}
-                            <Button variant="outline" onClick={closeEssay}>
-                                <ArrowLeft className="mr-1 h-4 w-4" /> Back to Exam
-                            </Button>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            {currentSaved && <span className="font-medium text-green-600">Saved</span>}
-                            {isSaving && <span>Saving...</span>}
-                        </div>
-                        <Button
-                            onClick={() => void saveEssay(currentEssay.id)}
-                            className={currentSaved ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-blue-600 text-white hover:bg-blue-700'}
-                        >
-                            <Save className="mr-1 h-4 w-4" /> {currentSaved ? 'Saved' : 'Save Answer'}
-                        </Button>
-                    </header>
-
-                    {hasSaveError && (
-                        <p role="alert" className="shrink-0 text-sm text-destructive">
-                            Some changes have not been saved to the server.{' '}
-                            <Button variant="outline" size="sm" onClick={() => void flushPendingAnswers(attempt.id)}>Retry Saving</Button>
-                        </p>
-                    )}
-
-                    <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 md:grid-cols-5">
-                        <section className="min-h-0 overflow-auto rounded-xl border p-4 md:col-span-1">
-                            <h2 className="font-semibold">Question Prompt</h2>
-                            <p className="mt-3 whitespace-pre-wrap text-sm">{currentEssay.content}</p>
-                            {currentEssay.imageUrl?.trim() && (
-                                <div className="mt-3">
-                                    <img
-                                        src={currentEssay.imageUrl}
-                                        alt={`Question ${currentEssayIndex + 1} image`}
-                                        className="max-h-64 rounded-md border object-contain shadow-sm"
-                                    />
-                                </div>
-                            )}
-                        </section>
-                        <section className="flex min-h-0 flex-col rounded-xl border p-4 md:col-span-4">
-                            <h2 className="mb-3 shrink-0 font-semibold">Your Answer</h2>
-                            <textarea
-                                aria-label={`Answer for question ${currentEssayIndex + 1}`}
-                                className="min-h-0 w-full flex-1 resize-none overflow-y-auto rounded-md border bg-background p-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                placeholder="Type your answer here..."
-                                value={currentAnswer?.textAnswer ?? ''}
-                                onChange={(event) => updateAnswer(currentEssay.id, { textAnswer: event.target.value })}
-                            />
-                        </section>
-                    </div>
-                </main>
+                <CodingWorkspace
+                    key={currentCode.id}
+                    question={currentCode}
+                    index={attempt.questions.indexOf(currentCode)}
+                    value={currentAnswer?.textAnswer ?? null}
+                    saved={currentSaved}
+                    isSaving={isSaving}
+                    hasSaveError={hasSaveError}
+                    timerBox={timerBox}
+                    notice={<ExamIntegrityNotice config={attempt.integrity} state={integrity} />}
+                    onChange={(code) => updateAnswer(currentCode.id, { textAnswer: code })}
+                    onSave={() => void saveEssay(currentCode.id)}
+                    onBack={closeEssay}
+                    onRetry={() => void flushPendingAnswers(attempt.id)}
+                    onRun={(request) => runCode(attempt.id, request)}
+                />
             </MainLayout>
         );
     }
@@ -577,6 +550,18 @@ export default function StudentExamTakingPage() {
             <main className="flex w-full flex-col gap-5">
                 {!isFinished && pinnedBar}
                 {!isFinished && <ExamIntegrityNotice config={attempt.integrity} state={integrity} />}
+                {!isFinished && currentEssay && (
+                    <EssayPopup
+                        question={currentEssay}
+                        index={currentEssayIndex}
+                        value={currentAnswer?.textAnswer ?? ''}
+                        saved={currentSaved}
+                        isSaving={isSaving}
+                        onChange={(value) => updateAnswer(currentEssay.id, { textAnswer: value })}
+                        onSave={() => void saveEssay(currentEssay.id)}
+                        onClose={closeEssay}
+                    />
+                )}
                 <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
                     <header className="flex flex-wrap items-start justify-between gap-4 border-b pb-4">
                         <div>
@@ -637,11 +622,11 @@ export default function StudentExamTakingPage() {
                         </section>
                     ) : (
                         <>
-                            {essayQuestions.length > 0 && (
+                            {codingQuestions.length > 0 && (
                                 <section className="rounded-xl border p-4">
-                                    <h2 className="mb-3 font-semibold">Essay Questions</h2>
+                                    <h2 className="mb-3 font-semibold">Coding Questions</h2>
                                     <div className="grid gap-2">
-                                        {essayQuestions.map((question) => {
+                                        {codingQuestions.map((question) => {
                                             const saved = Boolean(answers[question.id]?.saved);
                                             return (
                                                 <div key={question.id} className="flex items-center justify-between gap-3 rounded-md border p-3">
@@ -659,7 +644,7 @@ export default function StudentExamTakingPage() {
                                                         <Button
                                                             size="sm"
                                                             className={saved ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-blue-600 text-white hover:bg-blue-700'}
-                                                            onClick={() => openEssay(question.id)}
+                                                            onClick={() => openCode(question.id)}
                                                         >
                                                             {saved ? 'Edit Answer' : hasText(question.id) ? 'Continue' : 'Start Answer'}
                                                         </Button>
@@ -691,6 +676,7 @@ export default function StudentExamTakingPage() {
                             </div>
 
                             {attempt.questions.map((question, index) => {
+                                if (question.type === 'CODING') return null;
                                 const answer = answers[question.id] ?? {
                                     questionId: question.id,
                                     selectedOptionIds: [],

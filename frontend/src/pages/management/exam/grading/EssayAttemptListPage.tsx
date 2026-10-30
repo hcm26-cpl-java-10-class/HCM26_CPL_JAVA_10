@@ -37,10 +37,12 @@ export default function EssayAttemptListPage() {
         queryFn: () => examApi.listEssayAttempts(numericExamId),
         enabled: validId,
     });
-    const rows = attemptsQuery.data ?? [];
+    const rows = [...(attemptsQuery.data ?? [])].sort(
+        (a, b) => Number(a.status === "SUBMITTED") - Number(b.status === "SUBMITTED"),
+    );
 
     return (
-        <MainLayout pathName={{ exams: "Quản lý đề thi", grading: "Essay Grading" }}>
+        <MainLayout pathName={{ exams: "Quản lý đề thi", grading: "Essay & Coding Grading" }}>
             <section className="flex flex-col gap-5">
                 <header className="flex flex-wrap items-end justify-between gap-4 border-b pb-4">
                     <div>
@@ -48,7 +50,7 @@ export default function EssayAttemptListPage() {
                             <ChevronLeft className="size-4" />
                             Back to Exam Management
                         </Button>
-                        <h1 className="text-2xl font-semibold">Essay Submissions Grading</h1>
+                        <h1 className="text-2xl font-semibold">Submissions Grading</h1>
                         <p className="mt-1 text-sm text-muted-foreground">
                             Exam #{examId} · {rows.length} submission(s)
                         </p>
@@ -78,23 +80,24 @@ export default function EssayAttemptListPage() {
                                 <TableHead>Student</TableHead>
                                 <TableHead className="w-24">Attempt</TableHead>
                                 <TableHead className="w-48">Submitted At</TableHead>
-                                <TableHead className="w-44">Answered Essays</TableHead>
+                                <TableHead className="w-32">Essays</TableHead>
+                                <TableHead className="w-32">Coding</TableHead>
                                 <TableHead className="w-48">Status</TableHead>
                                 <TableHead className="w-32 text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {!validId && (
-                                <TableRow><TableCell colSpan={6} className="h-24 text-center text-destructive">Invalid exam ID.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={7} className="h-24 text-center text-destructive">Invalid exam ID.</TableCell></TableRow>
                             )}
                             {attemptsQuery.isLoading && (
-                                <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">Loading submissions...</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={7} className="h-24 text-center text-muted-foreground">Loading submissions...</TableCell></TableRow>
                             )}
                             {attemptsQuery.isError && (
-                                <TableRow><TableCell colSpan={6} className="h-24 text-center text-destructive">Failed to load submissions requiring review.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={7} className="h-24 text-center text-destructive">Failed to load submissions requiring review.</TableCell></TableRow>
                             )}
                             {validId && !attemptsQuery.isLoading && !attemptsQuery.isError && rows.length === 0 && (
-                                <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">No essay submissions currently need review.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={7} className="h-24 text-center text-muted-foreground">No essay or coding submissions yet.</TableCell></TableRow>
                             )}
                             {rows.map((row) => (
                                 <TableRow
@@ -108,7 +111,8 @@ export default function EssayAttemptListPage() {
                                     </TableCell>
                                     <TableCell>{row.attemptNumber}</TableCell>
                                     <TableCell>{formatDateTime(row.submittedAt)}</TableCell>
-                                    <TableCell>{row.essayAnswered} / {row.essayCount}</TableCell>
+                                    <TableCell>{row.essayCount > 0 ? `${row.essayAnswered} / ${row.essayCount}` : "—"}</TableCell>
+                                    <TableCell>{(row.codingCount ?? 0) > 0 ? `${row.codingAnswered ?? 0} / ${row.codingCount}` : "—"}</TableCell>
                                     <TableCell>
                                         <Badge
                                             variant={

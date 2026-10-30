@@ -46,6 +46,10 @@ public class Question extends BaseEntity {
     @Column(nullable = false)
     private int points = 1;
 
+    /** JSON mo ta bai lap trinh (ham + test case), chi dung khi type = CODING. */
+    @Column(name = "code_spec", columnDefinition = "TEXT")
+    private String codeSpec;
+
     @Column(name = "source_question_id")
     private Long sourceQuestionId;
 

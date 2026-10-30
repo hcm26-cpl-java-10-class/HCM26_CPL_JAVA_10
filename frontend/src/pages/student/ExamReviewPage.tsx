@@ -16,7 +16,8 @@ function optionClass(correct: boolean, selected: boolean) {
 }
 
 function QuestionReview({ question, index }: { question: ExamReviewQuestion; index: number }) {
-    const isEssay = question.type === 'ESSAY';
+    const isCoding = question.type === 'CODING';
+    const isEssay = question.type === 'ESSAY' || isCoding;
     return (
         <Card className="border-slate-200 bg-white">
             <CardHeader className="flex flex-row items-start justify-between gap-3">
@@ -24,7 +25,7 @@ function QuestionReview({ question, index }: { question: ExamReviewQuestion; ind
                     Question {index + 1}: {question.content}
                 </CardTitle>
                 {isEssay ? (
-                    <Badge variant="outline">Essay</Badge>
+                    <Badge variant="outline">{isCoding ? 'Coding' : 'Essay'}</Badge>
                 ) : question.correct ? (
                     <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">Correct</Badge>
                 ) : (
@@ -37,7 +38,7 @@ function QuestionReview({ question, index }: { question: ExamReviewQuestion; ind
                 )}
                 {isEssay ? (
                     <div className="space-y-2 text-sm">
-                        <p className="whitespace-pre-wrap rounded border bg-slate-50 p-3">
+                        <p className={`whitespace-pre-wrap rounded border bg-slate-50 p-3 ${isCoding ? 'font-mono text-xs' : ''}`}>
                             {question.textAnswer || 'No answer'}
                         </p>
                         <p className="text-slate-600">

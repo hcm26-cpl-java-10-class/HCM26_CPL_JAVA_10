@@ -8,6 +8,8 @@ import com.example.starter_project_2025.system.exam.domain.AnonymousSessionRepos
 import com.example.starter_project_2025.system.exam.domain.ExamAttempt;
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptRepository;
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus;
+import com.example.starter_project_2025.system.exam.dto.CodeRunRequest;
+import com.example.starter_project_2025.system.exam.dto.CodeRunResponse;
 import com.example.starter_project_2025.system.exam.dto.ExamAttemptDTO;
 import com.example.starter_project_2025.system.exam.dto.IntegrityEventRequest;
 import com.example.starter_project_2025.system.exam.dto.SaveExamAnswerRequest;
@@ -35,6 +37,7 @@ public class AnonymousExamService {
     private final ExamAttemptRepository attemptRepository;
     private final EmailService emailService;
     private final ExamIntegrityService integrityService; // NEW (anti-cheat)
+    private final ExamCodeService examCodeService;
 
     @Transactional(readOnly = true)
     private AnonymousSession requireSession(String sessionToken) {
@@ -73,6 +76,13 @@ public class AnonymousExamService {
         assertAttemptBelongsToSession(session, attemptId);
 
         return attemptService.saveAnswers(attemptId, session.getGuestUserId(), requests);
+    }
+
+    @Transactional(readOnly = true)
+    public CodeRunResponse runCode(String sessionToken, Long attemptId, CodeRunRequest request) {
+        AnonymousSession session = requireSession(sessionToken);
+        assertAttemptBelongsToSession(session, attemptId);
+        return examCodeService.run(attemptId, session.getGuestUserId(), request);
     }
 
     /** NEW (anti-cheat): ghi vi pham cua thi sinh an danh. */

@@ -6,6 +6,7 @@ import com.example.starter_project_2025.system.question.domain.EssayGradingCrite
 import com.example.starter_project_2025.system.question.domain.QuestionOption;
 import com.example.starter_project_2025.system.question.domain.QuestionType;
 import com.example.starter_project_2025.system.question.dto.QuestionDTO;
+import com.example.starter_project_2025.system.question.service.CodeSpecSupport;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -40,6 +41,7 @@ public class QuestionMapper implements BaseCrudMapper<Question, QuestionDTO> {
         d.setTopic(q.getTopic());
         d.setPoints(q.getPoints());
         d.setSourceQuestionId(q.getSourceQuestionId());
+        d.setCode(q.getType() == QuestionType.CODING ? CodeSpecSupport.forTeacher(q.getCodeSpec()) : null);
         d.setGradingCriteria(q.getGradingCriteria().stream().map(criterion -> {
             QuestionDTO.EssayCriterionDTO dto = new QuestionDTO.EssayCriterionDTO();
             dto.setName(criterion.getName());
@@ -92,7 +94,13 @@ public class QuestionMapper implements BaseCrudMapper<Question, QuestionDTO> {
             q.getGradingCriteria().clear();
         }
 
-        if (q.getType() == QuestionType.ESSAY) {
+        if (q.getType() == QuestionType.CODING) {
+            if (d.getCode() != null) q.setCodeSpec(CodeSpecSupport.toJson(d.getCode()));
+        } else {
+            q.setCodeSpec(null);
+        }
+
+        if (q.getType() == QuestionType.ESSAY || q.getType() == QuestionType.CODING) {
             q.getOptions().clear();
         } else if (d.getOptions() != null) {
             Map<Long, QuestionOption> existing = new HashMap<>();

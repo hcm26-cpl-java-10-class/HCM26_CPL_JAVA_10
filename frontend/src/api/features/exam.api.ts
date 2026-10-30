@@ -3,6 +3,7 @@ import axiosInstance from "@/api/axios";
 import type {
   AiGradingRequest,
   AiGradingResponse,
+  CodingRunResult,
   EssayGradingDetail,
   EssayGradingSummary,
   ExamDTO,
@@ -64,6 +65,18 @@ export const examApi = {
     const response = await axiosInstance.post<AiGradingResponse>(
         `/exams/${examId}/grading/attempts/${attemptId}/ai-suggest`,
         payload || {}
+    );
+    return response.data;
+  },
+  runCodingTests: async (examId: number, attemptId: number, questionId: number): Promise<CodingRunResult> => {
+    const response = await axiosInstance.post<CodingRunResult>(
+        `/exams/${examId}/grading/attempts/${attemptId}/coding/${questionId}/run`
+    );
+    return response.data;
+  },
+  regradeCoding: async (examId: number, attemptId: number, questionId: number): Promise<EssayGradingDetail> => {
+    const response = await axiosInstance.post<EssayGradingDetail>(
+        `/exams/${examId}/grading/attempts/${attemptId}/coding/${questionId}/regrade`
     );
     return response.data;
   },

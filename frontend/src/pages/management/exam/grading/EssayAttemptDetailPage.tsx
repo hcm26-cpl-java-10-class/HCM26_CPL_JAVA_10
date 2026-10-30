@@ -31,6 +31,7 @@ import {
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
+import { CodingGradingPanel } from "./CodingGradingPanel";
 import { ESSAY_STATUS_LABEL, formatDateTime } from "./EssayAttemptListPage";
 
 interface DraftGrade {
@@ -64,6 +65,7 @@ export default function EssayAttemptDetailPage() {
     const [aiModelUsed, setAiModelUsed] = useState<string | null>(null);
     const [guidelines, setGuidelines] = useState<Record<number, QuestionGuidelines>>({});
     const [isOverwriteModalOpen, setIsOverwriteModalOpen] = useState(false);
+    const [selectedTab, setSelectedTab] = useState<"essay" | "coding" | null>(null);
 
     const detailQuery = useQuery({
         queryKey: ["essay-attempt", numericExamId, numericAttemptId],
@@ -244,6 +246,9 @@ export default function EssayAttemptDetailPage() {
     };
 
     const hasAiProposals = Object.keys(aiProposals).length > 0;
+    const codings = detail?.codings ?? [];
+    const tab: "essay" | "coding" =
+        selectedTab ?? (detail && detail.essays.length === 0 && codings.length > 0 ? "coding" : "essay");
 
     return (
         <MainLayout pathName={{ exams: "Exam Management", grading: "Essay Grading", detail: "Submission Review" }}>
@@ -254,7 +259,7 @@ export default function EssayAttemptDetailPage() {
                         Back to submissions
                     </Button>
 
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className={`flex flex-wrap items-center gap-2 ${tab === "essay" ? "" : "hidden"}`}>
                         {hasAiProposals && (
                             <Button
                                 variant="secondary"
@@ -337,13 +342,38 @@ export default function EssayAttemptDetailPage() {
                             </div>
                         </header>
 
-                        {detail.essays.length === 0 && (
+                        <div className="flex gap-1 rounded-lg border bg-muted/40 p-1" role="tablist">
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected={tab === "essay"}
+                                onClick={() => setSelectedTab("essay")}
+                                className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition ${tab === "essay" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                            >
+                                Câu hỏi tự luận ({detail.essays.length})
+                            </button>
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected={tab === "coding"}
+                                onClick={() => setSelectedTab("coding")}
+                                className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition ${tab === "coding" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                            >
+                                Câu hỏi coding ({codings.length})
+                            </button>
+                        </div>
+
+                        {tab === "coding" && (
+                            <CodingGradingPanel examId={numericExamId} attemptId={numericAttemptId} codings={codings} />
+                        )}
+
+                        {tab === "essay" && detail.essays.length === 0 && (
                             <p className="rounded-md border p-6 text-center text-muted-foreground">
                                 This exam attempt contains no essay questions.
                             </p>
                         )}
 
-                        {detail.essays.map((essay, index) => {
+                        {tab === "essay" && detail.essays.map((essay, index) => {
                             const draft = draftGrades[essay.questionId] || { score: "", feedback: "" };
                             const proposal = aiProposals[essay.questionId];
                             const guide = guidelines[essay.questionId] || { referenceAnswer: "", rubric: "", isOpen: false };

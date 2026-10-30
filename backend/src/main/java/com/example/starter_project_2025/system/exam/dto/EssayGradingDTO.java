@@ -25,6 +25,8 @@ public class EssayGradingDTO {
         private Instant submittedAt;
         private int essayCount;
         private int essayAnswered;
+        private int codingCount;
+        private int codingAnswered;
     }
 
     @Getter
@@ -46,6 +48,46 @@ public class EssayGradingDTO {
         private BigDecimal finalScore;
         private boolean alreadyGraded;
         private List<EssayItem> essays;
+        private List<CodingItem> codings;
+    }
+
+    @Getter
+    @Setter
+    public static class CodingItem {
+        private Long questionId;
+        private int displayOrder;
+        private String content;
+        private int points;
+        private BigDecimal maxScore;
+        /** Code sinh vien nop. */
+        private String code;
+        private BigDecimal score;
+        private String feedback;
+        /** Khai bao ham + toan bo test (ca test an) cho giao vien. */
+        private com.example.starter_project_2025.system.question.dto.CodeSpecDTO spec;
+    }
+
+    @Getter
+    @Setter
+    public static class CodingTestResult {
+        private int index;
+        private boolean visible;
+        private boolean passed;
+        /** OK, WRONG_ANSWER, COMPILE_ERROR, RUNTIME_ERROR, TIME_LIMIT, INFRA_ERROR, NO_CODE */
+        private String status;
+        private List<String> inputs;
+        private String expected;
+        private String actual;
+        private String error;
+    }
+
+    @Getter
+    @Setter
+    public static class CodingRunResult {
+        private int passed;
+        private int total;
+        private boolean infraError;
+        private List<CodingTestResult> tests;
     }
 
     @Getter

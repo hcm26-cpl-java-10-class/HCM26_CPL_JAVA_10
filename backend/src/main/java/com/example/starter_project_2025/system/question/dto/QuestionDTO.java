@@ -49,6 +49,9 @@ public class QuestionDTO extends BaseDTO {
     @Valid
     private List<EssayCriterionDTO> gradingCriteria;
 
+    /** Chi dung cho cau hoi lap trinh (type = CODING). */
+    private CodeSpecDTO code;
+
     @Getter @Setter
     public static class EssayCriterionDTO {
         @NotBlank(groups = {OnCreate.class, OnUpdate.class})

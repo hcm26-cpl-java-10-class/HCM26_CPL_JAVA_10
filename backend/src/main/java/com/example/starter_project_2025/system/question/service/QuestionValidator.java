@@ -5,6 +5,7 @@ import com.example.starter_project_2025.system.question.domain.Question;
 import com.example.starter_project_2025.system.question.domain.QuestionOption;
 import com.example.starter_project_2025.system.question.domain.QuestionType;
 import com.example.starter_project_2025.system.question.dto.QuestionDTO.EssayCriterionDTO;
+import com.example.starter_project_2025.system.question.dto.CodeSpecDTO;
 import com.example.starter_project_2025.system.question.dto.QuestionDTO;
 import com.example.starter_project_2025.system.question.dto.QuestionDTO.OptionDTO;
 import org.springframework.stereotype.Component;
@@ -21,6 +22,12 @@ public class QuestionValidator {
 
     public void validateForCreate(QuestionDTO r, ValidationContext ctx) {
         validateGradingCriteria(r.getType(), r.getGradingCriteria(), ctx);
+        if (r.getType() == QuestionType.CODING) {
+            rejectOptionsForCoding(r.getOptions(), ctx);
+            validateCode(r.getCode(), ctx);
+            return;
+        }
+        rejectCodeForNonCoding(r.getCode(), ctx);
         if (r.getType() == QuestionType.ESSAY) {
             rejectOptionsForEssay(r.getOptions(), ctx);
             return;
@@ -47,6 +54,21 @@ public class QuestionValidator {
                 ctx.add("points", "Câu hỏi đang nằm trong đề thi, không thể đổi điểm");
             }
         }
+
+        if (type == QuestionType.CODING) {
+            rejectOptionsForCoding(options, ctx);
+            CodeSpecDTO code = r.getCode();
+            if (code != null) {
+                validateCode(code, ctx);
+                if (inUse && !CodeSpecSupport.toJson(code).equals(existing.getCodeSpec())) {
+                    ctx.add("code", "Câu hỏi đang nằm trong đề thi, không thể sửa hàm và test case");
+                }
+            } else if (existing.getType() != QuestionType.CODING) {
+                ctx.add("code", "Cần khai báo hàm và test case cho câu hỏi lập trình");
+            }
+            return;
+        }
+        rejectCodeForNonCoding(r.getCode(), ctx);
 
         if (type == QuestionType.ESSAY) {
             rejectOptionsForEssay(options, ctx);
@@ -139,6 +161,24 @@ public class QuestionValidator {
             if (!content.equals(o.getContent()) || d.isCorrect() != o.isCorrect()) return true;
         }
         return false;
+    }
+
+    private void validateCode(CodeSpecDTO code, ValidationContext ctx) {
+        for (String error : CodeSpecSupport.validate(code)) {
+            ctx.add("code", error);
+        }
+    }
+
+    private void rejectCodeForNonCoding(CodeSpecDTO code, ValidationContext ctx) {
+        if (code != null) {
+            ctx.add("code", "Khai báo hàm và test case chỉ áp dụng cho câu hỏi lập trình");
+        }
+    }
+
+    private void rejectOptionsForCoding(List<OptionDTO> options, ValidationContext ctx) {
+        if (options != null && !options.isEmpty()) {
+            ctx.add("options", "Câu lập trình không có đáp án trắc nghiệm");
+        }
     }
 
     private void rejectOptionsForEssay(List<OptionDTO> options, ValidationContext ctx) {

@@ -128,6 +128,30 @@ class ExamServiceImplTest {
     }
 
     @Test
+    void addQuestionsFailsWhenExamAlreadyStarted() {
+        exam.setStartTime(java.time.LocalDateTime.now().minusMinutes(5));
+        when(examRepository.findById(1L)).thenReturn(Optional.of(exam));
+
+        assertThrows(
+                BadRequestException.class,
+                () -> examService.addQuestions(1L, List.of(10L))
+        );
+        verify(examRepository, never()).save(any(Exam.class));
+    }
+
+    @Test
+    void removeQuestionFailsWhenExamAlreadyStarted() {
+        exam.setStartTime(java.time.LocalDateTime.now().minusMinutes(5));
+        when(examRepository.findById(1L)).thenReturn(Optional.of(exam));
+
+        assertThrows(
+                BadRequestException.class,
+                () -> examService.removeQuestion(1L, 10L)
+        );
+        verify(examRepository, never()).save(any(Exam.class));
+    }
+
+    @Test
     void addQuestionsRejectsUnknownIdsWithoutSavingPartialChanges() {
         when(examRepository.findById(1L)).thenReturn(Optional.of(exam));
         when(questionRepository.findAllById(any())).thenReturn(List.of(question));

@@ -47,6 +47,26 @@ public class ExamGradingController {
         return ResponseEntity.ok(service.submitOfficialGrade(examId, attemptId, request));
     }
 
+    /** Chay thu toan bo test cua mot cau lap trinh tren code sinh vien (khong luu gi). */
+    @PostMapping("/attempts/{attemptId}/coding/{questionId}/run")
+    public ResponseEntity<EssayGradingDTO.CodingRunResult> runCoding(
+            @PathVariable Long examId,
+            @PathVariable Long attemptId,
+            @PathVariable Long questionId
+    ) {
+        return ResponseEntity.ok(service.runCodingTests(examId, attemptId, questionId));
+    }
+
+    /** Cham lai cau lap trinh bang may cham va luu diem. */
+    @PostMapping("/attempts/{attemptId}/coding/{questionId}/regrade")
+    public ResponseEntity<EssayGradingDTO.Detail> regradeCoding(
+            @PathVariable Long examId,
+            @PathVariable Long attemptId,
+            @PathVariable Long questionId
+    ) {
+        return ResponseEntity.ok(service.regradeCoding(examId, attemptId, questionId));
+    }
+
     @PostMapping("/attempts/{attemptId}/ai-suggest")
     public ResponseEntity<EssayGradingDTO.AiGradingResponse> requestAiGrading(
             @PathVariable Long examId,

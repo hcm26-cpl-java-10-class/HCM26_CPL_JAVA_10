@@ -15,6 +15,8 @@ public class QuestionTakerDTO {
     private String imageUrl;
     private boolean multiSelect;
     private List<OptionTakerDTO> options;
+    /** Chi co voi cau lap trinh; khong chua test an. */
+    private CodeSpecDTO code;
 
     @Getter @Setter
     public static class OptionTakerDTO {

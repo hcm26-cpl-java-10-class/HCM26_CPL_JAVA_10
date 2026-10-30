@@ -41,6 +41,10 @@ public class ExamAttemptQuestion extends BaseEntity {
     @Column(nullable = false)
     private int displayOrder;
 
+    /** Ban chup JSON bai lap trinh (ham + test case) tai thoi diem bat dau bai thi. */
+    @Column(name = "code_spec", columnDefinition = "TEXT")
+    private String codeSpec;
+
     @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("displayOrder ASC")
     private List<ExamAttemptOption> options = new ArrayList<>();
