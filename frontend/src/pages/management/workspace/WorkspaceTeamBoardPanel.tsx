@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { SprintBacklogDTO, SprintBacklogStatus, SprintDTO } from "@/types";
 import type { WorkspaceBoardColumn } from "@/types/features/workspace";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Check, ChevronLeft, ChevronRight, Circle, CircleDot, Clock3, LayoutGrid, List, Plus, RefreshCw, Search, SlidersHorizontal, Trash2, UserRound } from "lucide-react";
+import { Activity, Check, ChevronLeft, ChevronRight, Circle, CircleDot, Clock3, LayoutGrid, List, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, Trash2, UserRound } from "lucide-react";
 import { BacklogItemDetailSheet } from "@/pages/management/backlog/components/BacklogItemDetailSheet";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -204,6 +204,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
     retry: false,
   });
   const [columnsDialogOpen, setColumnsDialogOpen] = useState(false);
+  const [editingColumnKey, setEditingColumnKey] = useState<BoardColumnKey | null>(null);
   const [boardColumns, setBoardColumns] = useState<BoardColumnConfig[]>(DEFAULT_COLUMNS);
   const columnsQuery = useQuery({
     queryKey: ["workspace-board-columns", workspaceId],
@@ -222,7 +223,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
     }
     return DEFAULT_COLUMNS;
   }, [columnsQuery.data]);
-  useEffect(() => setBoardColumns(persistedColumns), [persistedColumns]);
+  useEffect(() => { if (!columnsDialogOpen) setBoardColumns(persistedColumns); }, [persistedColumns, columnsDialogOpen]);
 
   const saveColumns = useMutation({
     mutationFn: (columns: BoardColumnConfig[]) => workspaceApi.updateBoardColumns(workspaceId,
@@ -236,7 +237,23 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
     onError: error => toast.error(boardSettingsErrorMessage(error)),
   });
 
-  const saveColumnsConfig = (newCols: BoardColumnConfig[]) => saveColumns.mutate(newCols);
+  const saveColumnsConfig = (newCols: BoardColumnConfig[]) => {
+    const normalized = newCols.map(column => ({ ...column, label: column.label.trim() }));
+    if (normalized.some(column => !column.label)) {
+      toast.error("Tên cột không được để trống.");
+      return;
+    }
+    if (new Set(normalized.map(column => column.label.toLowerCase())).size !== normalized.length) {
+      toast.error("Tên các cột không được trùng nhau.");
+      return;
+    }
+    saveColumns.mutate(normalized);
+  };
+  const openColumnsEditor = (columnKey: BoardColumnKey | null = null) => {
+    setEditingColumnKey(columnKey);
+    setBoardColumns(persistedColumns);
+    setColumnsDialogOpen(true);
+  };
   const visibleColumns = useMemo(() => persistedColumns.filter(c => c.visible), [persistedColumns]);
   const configuredStatusLabel = (status?: string | null) =>
     persistedColumns.find((column) => column.key === status)?.label ?? statusLabel(status);
@@ -480,7 +497,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
             {!sprints.length ? <option value="">Team chưa có Sprint</option> : null}
             {sprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name} · {sprint.status}</option>)}
           </select>
-          {canConfigureColumns && <Button variant="outline" size="sm" onClick={() => { setBoardColumns(persistedColumns); setColumnsDialogOpen(true); }} title="Thêm trạng thái, đổi tên hoặc ẩn/hiện cột workflow">
+          {canConfigureColumns && <Button variant="outline" size="sm" onClick={() => openColumnsEditor()} title="Thêm trạng thái, đổi tên hoặc ẩn/hiện cột workflow">
             <SlidersHorizontal className="mr-1.5 size-4" /> Tùy chỉnh cột
           </Button>}
           <Button variant="outline" size="icon" aria-label="Làm mới Board" onClick={() => void query.refetch()} disabled={query.isFetching}>
@@ -545,7 +562,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
                   className={`flex h-[32rem] min-h-[24rem] max-h-[70vh] flex-col rounded-2xl border border-slate-200 bg-slate-50/70 p-2 ${draggedItem ? "transition-colors" : ""}`}
                   onDragOver={(event) => { if (draggedItem) event.preventDefault(); }}
                   onDrop={(event) => { event.preventDefault(); if (draggedItem) void moveItem(draggedItem, key); }}>
-                  <header className="mb-3 flex items-center justify-between gap-2 px-1"><div className="flex min-w-0 items-center gap-2"><span className={`size-2.5 rounded-full ${color}`} /><h3 className="truncate text-sm font-bold">{label}</h3><Badge variant="secondary">{items.length}</Badge></div><Icon className="size-4 text-slate-400" /></header>
+                  <header className="mb-3 flex items-center justify-between gap-1 px-1"><div className="flex min-w-0 items-center gap-2"><span className={`size-2.5 shrink-0 rounded-full ${color}`} /><h3 className="truncate text-sm font-bold" title={label}>{label}</h3><Badge variant="secondary">{items.length}</Badge></div><div className="flex shrink-0 items-center gap-1">{canConfigureColumns && <Button type="button" variant="ghost" size="icon" className="size-6 text-slate-500 hover:text-primary" title={`Đổi tên cột ${label}`} aria-label={`Rename column ${label}`} disabled={saveColumns.isPending} onClick={() => openColumnsEditor(key)}><Pencil className="size-3" /></Button>}<Icon className="size-4 text-slate-400" /></div></header>
                   <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto overscroll-contain pr-1">
                     {items.map((item) => <article key={item.id} draggable={canUpdate && savingItemId !== item.id}
                       onDragStart={() => setDraggedItem(item)} onDragEnd={() => setDraggedItem(null)}
@@ -620,20 +637,30 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
   
     {/* Customize Columns Dialog (Fix Bug #35 & #36) */}
     <Dialog open={canConfigureColumns && columnsDialogOpen} onOpenChange={(open) => {
+      if (saveColumns.isPending) return;
       setColumnsDialogOpen(open);
       if (!open) setBoardColumns(persistedColumns);
     }}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl" showCloseButton={!saveColumns.isPending} onOpenAutoFocus={event => {
+        if (!editingColumnKey) return;
+        const input = document.getElementById(`board-column-name-${workspaceId}-${editingColumnKey}`);
+        if (input instanceof HTMLInputElement) {
+          event.preventDefault();
+          input.focus();
+          input.select();
+        }
+      }}>
+        <DialogHeader className="shrink-0 border-b p-5 pr-12">
           <DialogTitle className="flex items-center gap-2">
-            <SlidersHorizontal className="size-5 text-primary" /> Tùy chỉnh cột Kanban Board
+            <SlidersHorizontal className="size-5 text-primary" /> {editingColumnKey ? "Đổi tên cột Kanban Board" : "Tùy chỉnh cột Kanban Board"}
           </DialogTitle>
           <DialogDescription>
             Tạo cột trạng thái mới (tối đa 8 cột), đổi tên hoặc ẩn/hiện cột. Cấu hình được lưu cho workspace và dùng chung với thành viên khác.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <div className="min-h-0 space-y-3 overflow-y-auto p-5">
+          <p className="rounded-lg bg-muted/50 p-3 text-xs leading-relaxed text-muted-foreground">Sửa trực tiếp ô tên bên dưới rồi bấm Lưu thay đổi. Đổi tên giữ nguyên task và quy tắc trạng thái; cột Done vẫn được tính là hoàn tất dù đổi tên hiển thị.</p>
           <Button type="button" variant="outline" size="sm" disabled={saveColumns.isPending || boardColumns.length >= 8 || !CUSTOM_STATUS_KEYS.some((key) => !boardColumns.some((column) => column.key === key))}
             onClick={() => {
               const key = CUSTOM_STATUS_KEYS.find((candidate) => !boardColumns.some((column) => column.key === candidate));
@@ -647,11 +674,13 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
             <Plus className="mr-1 size-4" /> Thêm trạng thái
           </Button>
           {boardColumns.map((col, idx) => (
-            <div key={col.key} className="flex items-center justify-between gap-3 rounded-lg border p-3">
-              <div className="flex items-center gap-2 flex-1">
-                <span className={`size-2.5 rounded-full ${col.color}`} />
+            <div key={col.key} className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 ${editingColumnKey === col.key ? "border-primary/40 bg-primary/5" : ""}`}>
+              <div className="min-w-0 flex-1 basis-44 space-y-1.5">
+                <Label htmlFor={`board-column-name-${workspaceId}-${col.key}`} className="text-xs text-muted-foreground"><span className={`size-2 shrink-0 rounded-full ${col.color}`} />Tên hiển thị · {DEFAULT_COLUMNS.find(column => column.key === col.key)?.label ?? "Trạng thái tùy chỉnh"}</Label>
                 <Input
+                  id={`board-column-name-${workspaceId}-${col.key}`}
                   value={col.label}
+                  disabled={saveColumns.isPending}
                   maxLength={32}
                   placeholder="Tên cột"
                   className="h-8 text-sm"
@@ -687,7 +716,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
           ))}
         </div>
 
-        <DialogFooter className="flex items-center justify-between gap-2 sm:justify-between">
+        <DialogFooter className="m-0 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-none border-t p-4 sm:justify-between">
           <Button
             type="button"
             variant="ghost"
