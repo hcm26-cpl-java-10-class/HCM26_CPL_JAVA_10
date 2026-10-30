@@ -27,7 +27,7 @@ class TaskStatusWorkflowTest {
         // Backward / exceptional transitions
         assertTrue(workflow.allows(TaskStatus.IN_PROGRESS, TaskStatus.TODO));      // Pause
         assertTrue(workflow.allows(TaskStatus.REVIEW, TaskStatus.IN_PROGRESS));   // Reject/return
-        assertTrue(workflow.allows(TaskStatus.DONE, TaskStatus.IN_PROGRESS));     // Reopen
+        assertTrue(workflow.allows(TaskStatus.DONE, TaskStatus.REVIEW));          // Adjacent backward step
     }
 
     @Test
@@ -41,7 +41,7 @@ class TaskStatusWorkflowTest {
         assertFalse(workflow.allows(TaskStatus.REVIEW, TaskStatus.TODO));
         assertFalse(workflow.allows(TaskStatus.DONE, TaskStatus.BLOCKED));
         assertFalse(workflow.allows(TaskStatus.DONE, TaskStatus.TODO));
-        assertFalse(workflow.allows(TaskStatus.DONE, TaskStatus.REVIEW));
+        assertFalse(workflow.allows(TaskStatus.DONE, TaskStatus.IN_PROGRESS));
         
         // BLOCKED cannot go to DONE/REVIEW directly
         assertFalse(workflow.allows(TaskStatus.BLOCKED, TaskStatus.DONE));

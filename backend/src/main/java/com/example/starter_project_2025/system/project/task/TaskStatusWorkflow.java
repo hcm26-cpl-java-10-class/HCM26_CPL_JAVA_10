@@ -14,7 +14,7 @@ public class TaskStatusWorkflow {
             TaskStatus.IN_PROGRESS, Set.of(TaskStatus.REVIEW, TaskStatus.BLOCKED, TaskStatus.TODO),
             TaskStatus.REVIEW, Set.of(TaskStatus.DONE, TaskStatus.BLOCKED, TaskStatus.IN_PROGRESS),
             TaskStatus.BLOCKED, Set.of(TaskStatus.TODO, TaskStatus.IN_PROGRESS),
-            TaskStatus.DONE, Set.of(TaskStatus.IN_PROGRESS)
+            TaskStatus.DONE, Set.of(TaskStatus.REVIEW)
     );
 
     public boolean allows(TaskStatus current, TaskStatus requested) {

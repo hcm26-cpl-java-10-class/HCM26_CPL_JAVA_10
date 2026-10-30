@@ -106,6 +106,8 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                     teamId={context.teamId} access={current} />
                 : tab === "sprints" ? <WorkspaceTeamBoardPanel workspaceId={workspaceId} teamId={context.teamId}
                     canUpdate={hasPermission("SPRINT_BACKLOG_UPDATE")}
+                    canMove={hasPermission("SPRINT_UPDATE")}
+                    canDelete={hasPermission("SPRINT_BACKLOG_DELETE")}
                     canConfigureColumns={current.actions.configureBoard === true}
                     onCreateWorkItem={sections.find(item => item.key === "backlog")?.canRead ? () => changeTab("backlog") : undefined} />
                 : tab === "backlog" ? <WorkspaceBacklogPanel projectId={context.projectId}

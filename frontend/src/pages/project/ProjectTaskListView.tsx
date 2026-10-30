@@ -38,7 +38,7 @@ const isValidTransition = (from: BoardTaskStatus, to: BoardTaskStatus): boolean 
     IN_PROGRESS: ["REVIEW", "BLOCKED", "TODO"],
     REVIEW: ["DONE", "BLOCKED", "IN_PROGRESS"],
     BLOCKED: ["TODO", "IN_PROGRESS"],
-    DONE: ["IN_PROGRESS"], // Reopen (exceptional case)
+    DONE: ["REVIEW"],
   };
   return transitions[from]?.includes(to) ?? false;
 };

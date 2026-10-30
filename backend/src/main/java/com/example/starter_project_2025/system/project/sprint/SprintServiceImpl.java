@@ -298,6 +298,17 @@ public class SprintServiceImpl
         List<SprintBacklog> orderedItems = resolveBacklogItems(orderedIds, errors);
 
         validateAssignable(sprint, orderedItems, errors);
+        Set<Long> keptIds = orderedItems.stream().map(SprintBacklog::getId).collect(Collectors.toSet());
+        for (SprintBacklog item : orderedItems) {
+            if (item.getSprint() == null && item.getStatus() != SprintBacklogStatus.TODO) {
+                addError(errors, BACKLOG_IDS_FIELD, "A product backlog item can only enter a sprint as TODO");
+            }
+        }
+        for (SprintBacklog item : sprintBacklogRepository.findBySprintIdOrderByIdAsc(sprintId)) {
+            if (!keptIds.contains(item.getId()) && item.getStatus() != SprintBacklogStatus.TODO) {
+                addError(errors, BACKLOG_IDS_FIELD, "Only TODO work items can move back to the product Backlog");
+            }
+        }
 
         throwIfInvalid(errors);
 

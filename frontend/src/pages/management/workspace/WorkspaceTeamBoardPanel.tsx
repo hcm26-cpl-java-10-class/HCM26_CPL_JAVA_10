@@ -2,6 +2,7 @@ import { teamBacklogApi } from "@/api/features/team-backlog.api";
 import { workspaceApi } from "@/api/features/workspace.api";
 import { sprintBacklogApi } from "@/api/features/sprint_backlog.api";
 import { sprintApi } from "@/api/features/sprint.api";
+import { milestoneApi } from "@/api/features/milestone.api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -183,7 +184,7 @@ function auditSummary(action: string, beforeState?: string | null, afterState?: 
   return { actionLabel, changes: [] as string[] };
 }
 
-export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canConfigureColumns, onCreateWorkItem }: { workspaceId: number; teamId: number; canUpdate: boolean; canConfigureColumns: boolean; onCreateWorkItem?: () => void }) {
+export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMove, canDelete, canConfigureColumns, onCreateWorkItem }: { workspaceId: number; teamId: number; canUpdate: boolean; canMove: boolean; canDelete: boolean; canConfigureColumns: boolean; onCreateWorkItem?: () => void }) {
   const queryClient = useQueryClient();
   const [sprintId, setSprintId] = useState<number>();
   const [memberFilter, setMemberFilter] = useState("ALL");
@@ -196,36 +197,38 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canCon
   const [draggedItem, setDraggedItem] = useState<SprintBacklogDTO | null>(null);
   const [savingItemId, setSavingItemId] = useState<number | null>(null);
   const [detailItem, setDetailItem] = useState<SprintPlanningItem | null>(null);
+  const milestonesQuery = useQuery({
+    queryKey: ["backlog-milestone-options", teamId],
+    queryFn: () => milestoneApi.getBacklogOptions(teamId),
+    enabled: detailItem !== null && teamId > 0,
+    retry: false,
+  });
   const [columnsDialogOpen, setColumnsDialogOpen] = useState(false);
   const [boardColumns, setBoardColumns] = useState<BoardColumnConfig[]>(DEFAULT_COLUMNS);
   const columnsQuery = useQuery({
     queryKey: ["workspace-board-columns", workspaceId],
     queryFn: () => workspaceApi.boardColumns(workspaceId), retry: false,
   });
-  useEffect(() => {
+  const persistedColumns = useMemo(() => {
     if (columnsQuery.data) {
       const configured = columnsQuery.data;
       const keys = new Set(configured.map((column) => column.key));
       const defaults = DEFAULT_COLUMNS.filter((column) => !keys.has(column.key))
         .map((column) => ({ key: column.key, label: column.label, visible: column.visible }));
-      setBoardColumns([
+      return [
         ...configured.map((column, index) => columnFor(column.key as BoardColumnKey, column.label, column.visible, index)),
         ...defaults.map((column) => columnFor(column.key as BoardColumnKey, column.label, column.visible)),
-      ]);
+      ];
     }
+    return DEFAULT_COLUMNS;
   }, [columnsQuery.data]);
+  useEffect(() => setBoardColumns(persistedColumns), [persistedColumns]);
 
   const saveColumns = useMutation({
     mutationFn: (columns: BoardColumnConfig[]) => workspaceApi.updateBoardColumns(workspaceId,
       columns.map(({ key, label, visible }) => ({ key, label, visible }) as WorkspaceBoardColumn)),
     onSuccess: columns => {
-      const configuredKeys = new Set(columns.map((column) => column.key));
-      const defaults = DEFAULT_COLUMNS.filter((column) => !configuredKeys.has(column.key))
-        .map((column) => ({ key: column.key, label: column.label, visible: column.visible }));
-      setBoardColumns([
-        ...columns.map((column, index) => columnFor(column.key as BoardColumnKey, column.label, column.visible, index)),
-        ...defaults.map((column) => columnFor(column.key as BoardColumnKey, column.label, column.visible)),
-      ]);
+      queryClient.setQueryData(["workspace-board-columns", workspaceId], columns);
       void queryClient.invalidateQueries({ queryKey: ["workspace-board-columns", workspaceId] });
       toast.success("Board settings saved for this workspace.");
       setColumnsDialogOpen(false);
@@ -234,17 +237,18 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canCon
   });
 
   const saveColumnsConfig = (newCols: BoardColumnConfig[]) => saveColumns.mutate(newCols);
-  const visibleColumns = useMemo(() => boardColumns.filter(c => c.visible), [boardColumns]);
+  const visibleColumns = useMemo(() => persistedColumns.filter(c => c.visible), [persistedColumns]);
   const configuredStatusLabel = (status?: string | null) =>
-    boardColumns.find((column) => column.key === status)?.label ?? statusLabel(status);
+    persistedColumns.find((column) => column.key === status)?.label ?? statusLabel(status);
   const transitionOptions = (status: SprintBacklogStatus): SprintBacklogStatus[] => {
     const standard = allowedStatusTransitions[status] ?? [];
-    const workflow = boardColumns.filter((column) => column.key !== "BACKLOG").map((column) => column.key as SprintBacklogStatus);
+    const workflow = persistedColumns.filter((column) => column.key !== "BACKLOG").map((column) => column.key as SprintBacklogStatus);
     const index = workflow.indexOf(status);
     const adjacent = workflow.filter((_, candidateIndex) => Math.abs(candidateIndex - index) === 1);
-    if (status.startsWith("CUSTOM_")) return adjacent;
-    const customNeighbors = adjacent.filter((candidate) => CUSTOM_STATUS_KEYS.includes(candidate as BoardColumnKey));
-    return [...new Set([...standard, ...customNeighbors])];
+    if (index >= 0 && workflow.some((candidate) => candidate.startsWith("CUSTOM_"))) {
+      return [...new Set([...adjacent, ...standard.filter((candidate) => candidate === "BLOCKED")])];
+    }
+    return standard;
   };
   const query = useQuery({
     queryKey: ["team-backlog-board", teamId],
@@ -267,6 +271,8 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canCon
 
   const selectedSprint = sprints.find((sprint) => sprint.id === sprintId);
   const allItems = query.data?.items ?? [];
+  const isColumnInUse = (key: BoardColumnKey) => key !== "BACKLOG"
+    && allItems.some((item) => item.sprintId != null && item.status === key);
   const boardItems = useMemo(() => allItems.filter((item) =>
     item.sprintId === sprintId || item.sprintId == null,
   ), [allItems, sprintId]);
@@ -320,6 +326,17 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canCon
     // Validate status transition before calling API.
     const currentStatus = (item.status ?? "TODO") as SprintBacklogStatus;
     const isMovingToSprint = item.sprintId !== sprintId && sprintId != null && target !== "BACKLOG";
+    if ((target === "BACKLOG" && item.sprintId != null && currentStatus !== "TODO")
+        || (isMovingToSprint && (target !== "TODO" || currentStatus !== "TODO"))) {
+      toast.error("Backlog chỉ chuyển qua lại với To do. Hãy chuyển từng cột liền kề.");
+      setDraggedItem(null);
+      return;
+    }
+    if ((target === "BACKLOG" || isMovingToSprint) && !canMove) {
+      toast.error("Sprint update permission is required to move work items between the sprint and Backlog.");
+      setDraggedItem(null);
+      return;
+    }
     if (!isMovingToSprint && target !== "BACKLOG" && target !== currentStatus) {
       const allowed = transitionOptions(currentStatus);
       if (!allowed.includes(target as SprintBacklogStatus)) {
@@ -414,6 +431,28 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canCon
     }
   };
 
+  const openItemDetails = (item: SprintBacklogDTO) => {
+    if (item.id == null) return;
+    setDetailItem({
+      id: item.id,
+      title: item.title ?? "",
+      description: item.description ?? null,
+      status: item.sprintId == null ? "BACKLOG" : item.status === "DONE" ? "DONE"
+        : item.status === "BLOCKED" ? "BLOCKED" : item.status === "REVIEW" ? "REVIEW"
+        : !item.status || item.status === "TODO" ? "SPRINT_BACKLOG" : "IN_PROGRESS",
+      priority: (item.priority as BacklogPriority) ?? "MEDIUM",
+      workType: (item.workType as SprintBacklogWorkType) ?? "TASK",
+      sprintId: item.sprintId ?? null,
+      projectId: item.projectId ?? null,
+      milestoneId: item.milestoneId ?? null,
+      milestoneName: item.milestoneName ?? null,
+      assigneeProjectMemberId: item.assigneeProjectMemberId ?? null,
+      startDate: item.startDate ?? null,
+      endDate: item.endDate ?? null,
+      estimatedHours: item.estimatedHours ?? null,
+    });
+  };
+
   useEffect(() => setListPage(0), [sprintId, memberFilter, searchTerm, sortBy, statusFilter, priorityFilter]);
 
   return <div className="space-y-4">
@@ -438,7 +477,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canCon
             {!sprints.length ? <option value="">Team chưa có Sprint</option> : null}
             {sprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name} · {sprint.status}</option>)}
           </select>
-          {canConfigureColumns && <Button variant="outline" size="sm" onClick={() => setColumnsDialogOpen(true)} title="Đổi tên hoặc ẩn/hiện cột workflow có sẵn">
+          {canConfigureColumns && <Button variant="outline" size="sm" onClick={() => { setBoardColumns(persistedColumns); setColumnsDialogOpen(true); }} title="Thêm trạng thái, đổi tên hoặc ẩn/hiện cột workflow">
             <SlidersHorizontal className="mr-1.5 size-4" /> Tùy chỉnh cột
           </Button>}
           <Button variant="outline" size="icon" aria-label="Làm mới Board" onClick={() => void query.refetch()} disabled={query.isFetching}>
@@ -481,7 +520,11 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canCon
               {viewMode === "list" ? <label className="sr-only" htmlFor="workspace-board-sort">Sắp xếp</label> : null}
               {viewMode === "list" ? <>
                 <label className="sr-only" htmlFor="workspace-board-status">Lọc trạng thái</label>
-                <select id="workspace-board-status" className="h-10 rounded-md border bg-white px-3 text-sm" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="ALL">Mọi trạng thái</option><option value="BACKLOG">Backlog</option><option value="TODO">To do</option><option value="IN_PROGRESS">In progress</option><option value="REVIEW">Review</option><option value="DONE">Done</option><option value="BLOCKED">Blocked</option>{boardColumns.filter((column) => CUSTOM_STATUS_KEYS.includes(column.key)).map((column) => <option key={column.key} value={column.key}>{column.label}</option>)}</select>
+                <select id="workspace-board-status" className="h-10 rounded-md border bg-white px-3 text-sm" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                  <option value="ALL">Mọi trạng thái</option>
+                  {persistedColumns.map((column) => <option key={column.key} value={column.key}>{column.label}</option>)}
+                  <option value="BLOCKED">Blocked</option>
+                </select>
                 <label className="sr-only" htmlFor="workspace-board-priority">Lọc ưu tiên</label>
                 <select id="workspace-board-priority" className="h-10 rounded-md border bg-white px-3 text-sm" value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)}><option value="ALL">All priorities</option><option value="URGENT">Urgent</option><option value="HIGH">High</option><option value="MEDIUM">Medium</option><option value="LOW">Low</option></select>
                 <label className="sr-only" htmlFor="workspace-board-sort">Sắp xếp</label>
@@ -503,27 +546,17 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canCon
                   <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto overscroll-contain pr-1">
                     {items.map((item) => <article key={item.id} draggable={canUpdate && savingItemId !== item.id}
                       onDragStart={() => setDraggedItem(item)} onDragEnd={() => setDraggedItem(null)}
-                      onClick={() => {
-                        setDetailItem({
-                          id: item.id!,
-                          title: item.title ?? "",
-                          description: item.description ?? null,
-                          status: (item.sprintId == null ? "BACKLOG" : item.status === "TODO" ? "SPRINT_BACKLOG" : item.status) as any,
-                          priority: (item.priority as BacklogPriority) ?? "MEDIUM",
-                          workType: (item.workType as SprintBacklogWorkType) ?? "TASK",
-                          sprintId: item.sprintId ?? null,
-                          milestoneId: item.milestoneId ?? null,
-                          milestoneName: item.milestoneName ?? null,
-                          assigneeProjectMemberId: item.assigneeProjectMemberId ?? null,
-                          assigneeDisplayName: item.assigneeDisplayName ?? null,
-                          startDate: item.startDate ?? null,
-                          endDate: item.endDate ?? null,
-                          estimatedHours: item.estimatedHours ?? null,
-                          version: item.version ?? 0,
-                          lockVersion: item.version ?? 0,
-                        } as unknown as SprintPlanningItem);
+                      onClick={() => openItemDetails(item)}
+                      onKeyDown={(event) => {
+                        if (event.target !== event.currentTarget) return;
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          openItemDetails(item);
+                        }
                       }}
-                      className={`cursor-pointer rounded-xl border bg-white p-3 shadow-sm transition-shadow hover:shadow-md hover:border-primary/50 ${savingItemId === item.id ? "opacity-50" : ""}`}>
+                      tabIndex={0}
+                      aria-label={`Open details for ${item.title ?? "work item"}`}
+                      className={`cursor-pointer rounded-xl border bg-white p-3 shadow-sm transition-shadow hover:shadow-md hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${savingItemId === item.id ? "opacity-50" : ""}`}>
                       <p className="font-mono text-[10px] text-muted-foreground">#{item.id ?? "—"}</p>
                       <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
                         {item.workType ? <Badge variant="outline" className={workTypeStyle(item.workType)}>{workTypeLabel(item.workType)}</Badge> : null}
@@ -534,7 +567,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canCon
                       {item.milestoneName ? <p className="mt-2 truncate text-xs text-slate-500">{item.milestoneName}</p> : null}
                       <div className="mt-3 flex items-center justify-between gap-2 border-t pt-2 text-[11px] text-muted-foreground">
                         {canUpdate ? <>
-                        <label className="flex min-w-0 items-center gap-1.5" onMouseDown={(event) => event.stopPropagation()} onDragStart={(event) => event.preventDefault()}>
+                        <label className="flex min-w-0 items-center gap-1.5" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onDragStart={(event) => event.preventDefault()}>
                           <UserRound className="size-3.5 shrink-0" />
                           <select aria-label={`Assign ${item.title ?? "work item"}`} className="max-w-36 truncate bg-transparent" value={item.assigneeProjectMemberId ?? ""} disabled={savingItemId === item.id || query.isFetching}
                             onChange={(event) => void assignItem(item, event.target.value)}>
@@ -583,7 +616,10 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canCon
       </div>}
   
     {/* Customize Columns Dialog (Fix Bug #35 & #36) */}
-    <Dialog open={canConfigureColumns && columnsDialogOpen} onOpenChange={setColumnsDialogOpen}>
+    <Dialog open={canConfigureColumns && columnsDialogOpen} onOpenChange={(open) => {
+      setColumnsDialogOpen(open);
+      if (!open) setBoardColumns(persistedColumns);
+    }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -599,7 +635,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canCon
             onClick={() => {
               const key = CUSTOM_STATUS_KEYS.find((candidate) => !boardColumns.some((column) => column.key === candidate));
               if (!key) return;
-              const created = columnFor(key, "Trạng thái mới", true, boardColumns.length);
+              const created = columnFor(key, `Trạng thái mới ${CUSTOM_STATUS_KEYS.indexOf(key) + 1}`, true, boardColumns.length);
               const doneIndex = boardColumns.findIndex((column) => column.key === "DONE");
               const next = [...boardColumns];
               next.splice(doneIndex < 0 ? next.length : doneIndex, 0, created);
@@ -613,6 +649,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canCon
                 <span className={`size-2.5 rounded-full ${col.color}`} />
                 <Input
                   value={col.label}
+                  maxLength={32}
                   placeholder="Tên cột"
                   className="h-8 text-sm"
                   onChange={(e) => {
@@ -623,13 +660,14 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canCon
                 />
               </div>
               <div className="flex items-center gap-2">
-                  {CUSTOM_STATUS_KEYS.includes(col.key) ? <Button type="button" variant="ghost" size="icon" className="size-7 text-muted-foreground" aria-label={`Remove ${col.label}`} disabled={saveColumns.isPending} onClick={() => setBoardColumns((columns) => columns.filter((column) => column.key !== col.key))}><Trash2 className="size-3.5" /></Button> : null}
+                  {CUSTOM_STATUS_KEYS.includes(col.key) ? <Button type="button" variant="ghost" size="icon" className="size-7 text-muted-foreground" aria-label={`Remove ${col.label}`} title={isColumnInUse(col.key) ? "Move work items out of this status before removing it." : undefined} disabled={saveColumns.isPending || isColumnInUse(col.key)} onClick={() => setBoardColumns((columns) => columns.filter((column) => column.key !== col.key))}><Trash2 className="size-3.5" /></Button> : null}
                   <Label htmlFor={"switch-" + col.key} className="text-xs text-muted-foreground">
                   {col.visible ? "Hiện" : "Ẩn"}
                 </Label>
                 <Switch
                   id={"switch-" + col.key}
                   checked={col.visible}
+                  disabled={saveColumns.isPending}
                   onCheckedChange={(checked) => {
                     const activeCount = boardColumns.filter(c => c.visible).length;
                     if (!checked && activeCount <= 1) {
@@ -660,7 +698,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canCon
             Khôi phục mặc định
           </Button>
           <div className="flex gap-2">
-            <Button type="button" variant="outline" size="sm" disabled={saveColumns.isPending} onClick={() => setColumnsDialogOpen(false)}>
+            <Button type="button" variant="outline" size="sm" disabled={saveColumns.isPending} onClick={() => { setBoardColumns(persistedColumns); setColumnsDialogOpen(false); }}>
               Đóng
             </Button>
             <Button
@@ -682,19 +720,22 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canCon
       onClose={(open) => { if (!open) setDetailItem(null); }}
       item={detailItem}
       itemKey={detailItem ? ("TASK-" + detailItem.id) : undefined}
-      sprintName={selectedSprint?.name ?? null}
+      sprintName={sprints.find((sprint) => sprint.id === detailItem?.sprintId)?.name ?? null}
       sprints={sprints}
+      milestones={milestonesQuery.data ?? []}
       assignees={(query.data?.members ?? []).map(m => ({
         id: m.projectMemberId,
         userId: m.projectMemberId,
         fullName: m.displayName,
         role: "Member",
       }))}
-      workflowStatuses={boardColumns.filter((column) => column.key !== "BACKLOG")
+      workflowStatuses={persistedColumns.filter((column) => column.key !== "BACKLOG")
         .map((column) => ({ value: column.key as SprintBacklogStatus, label: column.label }))}
+      allowedStatusTransitions={transitionOptions}
+      teamId={teamId}
       canEdit={canUpdate}
-      canMove={canUpdate}
-      canDelete={canUpdate}
+      canMove={canMove}
+      canDelete={canDelete}
       onChanged={async () => {
         await query.refetch();
         await queryClient.invalidateQueries({ queryKey: ["sprint-backlog-audit"] });

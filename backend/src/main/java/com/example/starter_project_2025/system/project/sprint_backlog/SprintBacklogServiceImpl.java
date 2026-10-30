@@ -147,6 +147,9 @@ public class SprintBacklogServiceImpl
         Map<String, List<String>> errors = new LinkedHashMap<>();
 
         Sprint sprint = resolveSprint(request.getSprintId(), errors);
+        if (sprint == null && request.getStatus() != null && request.getStatus() != SprintBacklogStatus.TODO) {
+            errors.put(STATUS_FIELD, List.of("A product backlog item must enter a sprint as TODO before changing status"));
+        }
 
         if (request.getStatus() != null && request.getStatus().isCustom()
                 && !isConfiguredCustomStatus(sprint, request.getStatus())) {
@@ -270,6 +273,11 @@ public class SprintBacklogServiceImpl
                 && (sprint == null || !request.getSprintId().equals(sprint.getId()))) {
             sprint = resolveSprint(request.getSprintId(), errors);
         }
+        if (backlog.getSprint() == null
+                && ((request.getSprintId() != null && backlog.getStatus() != SprintBacklogStatus.TODO)
+                    || (request.getStatus() != null && request.getStatus() != SprintBacklogStatus.TODO))) {
+            errors.put(STATUS_FIELD, List.of("A product backlog item can only move to the TODO column"));
+        }
 
         // `null` milestoneId means "keep the current link": removing the link
         // is explicit through `clearMilestone` so a partial update cannot
@@ -306,15 +314,8 @@ public class SprintBacklogServiceImpl
         if (requestedStatus == null) {
             request.setStatus(backlog.getStatus());
         } else if (!requestedStatus.equals(backlog.getStatus())) {
-            boolean allowedTransition;
-            if (requestedStatus.isCustom() || backlog.getStatus().isCustom()) {
-                allowedTransition = isAdjacentWorkspaceStatus(sprint, backlog.getStatus(), requestedStatus);
-            } else {
-                Set<SprintBacklogStatus> allowed = STATUS_TRANSITIONS.getOrDefault(backlog.getStatus(), Set.of());
-                allowedTransition = allowed.contains(requestedStatus);
-            }
-            if (!allowedTransition) {
-                Set<SprintBacklogStatus> allowed = STATUS_TRANSITIONS.getOrDefault(backlog.getStatus(), Set.of());
+            Set<SprintBacklogStatus> allowed = allowedTransitionsFor(sprint, backlog.getStatus());
+            if (!allowed.contains(requestedStatus)) {
                 errors.put("status", java.util.List.of(
                     "Cannot transition from " + backlog.getStatus() + " to " + requestedStatus
                     + ". Allowed next: " + allowed));
@@ -748,8 +749,13 @@ public class SprintBacklogServiceImpl
                 && workspaceBoardColumns(sprint).stream().anyMatch(column -> column.key().equals(status.name()));
     }
 
-    private boolean isAdjacentWorkspaceStatus(Sprint sprint, SprintBacklogStatus current, SprintBacklogStatus target) {
-        List<SprintBacklogStatus> statuses = workspaceBoardColumns(sprint).stream()
+    private Set<SprintBacklogStatus> allowedTransitionsFor(Sprint sprint, SprintBacklogStatus current) {
+        List<BoardColumn> columns = workspaceBoardColumns(sprint);
+        if (current == SprintBacklogStatus.BLOCKED
+                || columns.stream().noneMatch(column -> column.key().startsWith("CUSTOM_"))) {
+            return STATUS_TRANSITIONS.getOrDefault(current, Set.of());
+        }
+        List<SprintBacklogStatus> statuses = columns.stream()
                 .map(BoardColumn::key)
                 .filter(key -> !"BACKLOG".equals(key))
                 .map(key -> {
@@ -759,8 +765,11 @@ public class SprintBacklogServiceImpl
                 .filter(java.util.Objects::nonNull)
                 .toList();
         int currentIndex = statuses.indexOf(current);
-        int targetIndex = statuses.indexOf(target);
-        return currentIndex >= 0 && targetIndex >= 0 && Math.abs(currentIndex - targetIndex) == 1;
+        Set<SprintBacklogStatus> allowed = new java.util.LinkedHashSet<>();
+        if (currentIndex > 0) allowed.add(statuses.get(currentIndex - 1));
+        if (currentIndex >= 0 && currentIndex + 1 < statuses.size()) allowed.add(statuses.get(currentIndex + 1));
+        if (current == SprintBacklogStatus.IN_PROGRESS) allowed.add(SprintBacklogStatus.BLOCKED);
+        return allowed;
     }
 
     private Long sprintIdOf(SprintBacklog backlog) {

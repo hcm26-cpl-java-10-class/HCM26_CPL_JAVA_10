@@ -1,13 +1,10 @@
 package com.example.starter_project_2025.system.project;
 
-import com.example.starter_project_2025.system.project.team.ParticipationStatus;
 import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.domain.ProjectStatus;
-import com.example.starter_project_2025.system.project.team.ParticipationStatus;
-import com.example.starter_project_2025.system.project.team.Team;
-import com.example.starter_project_2025.system.project.team.TeamMember;
-import com.example.starter_project_2025.system.project.team.TeamMemberRepository;
-import com.example.starter_project_2025.system.project.team.TeamRepository;
+import com.example.starter_project_2025.system.project.trainingclass.*;
+import com.example.starter_project_2025.system.project.sprint.*;
+import com.example.starter_project_2025.system.project.sprint_backlog.*;
 import com.example.starter_project_2025.system.project.tenant.Tenant;
 import com.example.starter_project_2025.system.project.tenant.TenantRepository;
 import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceSection;
@@ -55,8 +52,13 @@ class WorkspaceSectionsIntegrationTest {
     @Autowired RoleRepository roles;
     @Autowired PermissionRepository permissions;
     @Autowired ProjectRepository projects;
-    @Autowired TeamRepository teams;
-    @Autowired TeamMemberRepository memberships;
+    @Autowired ProjectTeamRepository teams;
+    @Autowired ProjectMemberRepository memberships;
+    @Autowired TrainingClassRepository classes;
+    @Autowired ClassMemberRepository classMembers;
+    @Autowired TeamAllocationSessionRepository allocationSessions;
+    @Autowired SprintRepository sprints;
+    @Autowired SprintBacklogRepository backlogItems;
     @Autowired ProjectTopicSnapshotRepository snapshots;
     @Autowired UserDetailsService userDetails;
     @Autowired RefreshTokenService tokens;
@@ -85,14 +87,28 @@ class WorkspaceSectionsIntegrationTest {
             var project = new Project();
             project.setCode("PROJECT-" + UUID.randomUUID()); project.setName("Project A");
             project.setDescription("Live project description");
-            project.setTenant(tenant); project.setStatus(ProjectStatus.PLANNING);
+            project.setTenant(tenant); project.setStatus(ProjectStatus.ACTIVE);
             projectId = projects.saveAndFlush(project).getId();
-            var team = new Team();
-            team.setCode("TEAM-" + UUID.randomUUID()); team.setName("Team A");
-            team.setTenant(tenant); team.setProject(project); team.setMentor(user);
+            var trainingClass = new TrainingClass();
+            trainingClass.setCode("US02-" + UUID.randomUUID()); trainingClass.setName("Workspace test class");
+            trainingClass.setTenantId(tenantId); trainingClass.setProgramId(1L);
+            trainingClass.setStatus(TrainingClassStatus.ONGOING);
+            classes.saveAndFlush(trainingClass);
+            var session = new TeamAllocationSession();
+            session.setTrainingClass(trainingClass); session.setMaxMembers(5);
+            session.setStatus(TeamAllocationSessionStatus.PUBLISHED);
+            allocationSessions.saveAndFlush(session);
+            var classMember = new ClassMember();
+            classMember.setTrainingClass(trainingClass); classMember.setUser(user);
+            classMember.setStatus(ClassMemberStatus.ACTIVE);
+            classMembers.saveAndFlush(classMember);
+            var team = new ProjectTeam();
+            team.setTeamName("Team A"); team.setTrainingClass(trainingClass); team.setAllocationSession(session);
+            team.setMaxMembers(5); team.setStatus(ProjectTeamStatus.ACTIVE);
+            team.setProject(project); team.setAssignedMentorId(actorId);
             teamId = teams.saveAndFlush(team).getId();
-            var membership = new TeamMember();
-            membership.setTeam(team); membership.setUser(user);
+            var membership = new ProjectMember();
+            membership.setTeam(team); membership.setClassMember(classMember);
             membershipId = memberships.saveAndFlush(membership).getId();
             var principal = userDetails.loadUserByUsername(user.getEmail());
             token = tokens.generateAccessToken(new UsernamePasswordAuthenticationToken(
@@ -254,8 +270,8 @@ class WorkspaceSectionsIntegrationTest {
                 .header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
         assertThat(read("/sections").get("sections").get(6).get("canRead").asBoolean()).isFalse();
         tx.executeWithoutResult(status -> {
-            teams.findById(teamId).orElseThrow().setMentor(null);
-            memberships.findById(membershipId).orElseThrow().setParticipationStatus(ParticipationStatus.LEFT);
+            teams.findById(teamId).orElseThrow().setAssignedMentorId(null);
+            memberships.findById(membershipId).orElseThrow().getClassMember().setStatus(ClassMemberStatus.INACTIVE);
         });
         mvc.perform(get("/api/workspaces/" + workspaceId + "/sprints")
                 .header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
@@ -314,5 +330,159 @@ class WorkspaceSectionsIntegrationTest {
                 .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"mode\":\"DATA\",\"delayMs\":0}")).andExpect(status().isOk());
         assertThat(read("/milestones").get("items")).hasSize(2);
+    }
+
+    List<WorkspaceSectionDtos.BoardColumn> workflowColumns() {
+        return List.of(new WorkspaceSectionDtos.BoardColumn("BACKLOG", "Backlog", true),
+                new WorkspaceSectionDtos.BoardColumn("TODO", "To do", true),
+                new WorkspaceSectionDtos.BoardColumn("IN_PROGRESS", "In progress", true),
+                new WorkspaceSectionDtos.BoardColumn("REVIEW", "Review", true),
+                new WorkspaceSectionDtos.BoardColumn("CUSTOM_1", "Quality assurance", true),
+                new WorkspaceSectionDtos.BoardColumn("CUSTOM_2", "Staging", true),
+                new WorkspaceSectionDtos.BoardColumn("CUSTOM_3", "Ready for release", true),
+                new WorkspaceSectionDtos.BoardColumn("DONE", "Done", true));
+    }
+
+    void saveColumns(List<WorkspaceSectionDtos.BoardColumn> columns, int expected) throws Exception {
+        mvc.perform(put("/api/workspaces/{id}/board-columns", workspaceId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("columns", columns))))
+                .andExpect(status().is(expected));
+    }
+
+    Long workItem() {
+        return tx.execute(status -> {
+            var sprint = new Sprint();
+            sprint.setName("Workflow regression " + UUID.randomUUID());
+            sprint.setProjectId(projectId); // Project-backed sprints may not carry teamId.
+            sprint.setStatus(SprintStatus.ACTIVE);
+            sprint = sprints.saveAndFlush(sprint);
+            var item = new SprintBacklog();
+            item.setTitle("Open and edit this card"); item.setProjectId(projectId); item.setSprint(sprint);
+            return backlogItems.saveAndFlush(item).getId();
+        });
+    }
+
+    void changeStatus(Long itemId, String next, int expected) throws Exception {
+        mvc.perform(put("/api/sprint-backlogs/{id}", itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("status", next))))
+                .andExpect(status().is(expected));
+    }
+
+    @Test void eightColumnWorkflowPersistsNamesAndRejectsInvalidSettingsWithoutOverwriting() throws Exception {
+        var columns = new ArrayList<>(workflowColumns());
+        saveColumns(columns, 200);
+        assertThat(read("/board-columns").get("columns")).hasSize(8);
+        columns.set(4, new WorkspaceSectionDtos.BoardColumn("CUSTOM_1", "QA approved", true));
+        saveColumns(columns, 200);
+        assertThat(read("/board-columns").at("/columns/4/label").asText()).isEqualTo("QA approved");
+        var tooMany = new ArrayList<>(columns);
+        tooMany.add(new WorkspaceSectionDtos.BoardColumn("CUSTOM_4", "Ninth column", true));
+        saveColumns(tooMany, 422);
+        var duplicateName = new ArrayList<>(columns);
+        duplicateName.set(4, new WorkspaceSectionDtos.BoardColumn("CUSTOM_1", "Review", true));
+        saveColumns(duplicateName, 422);
+        saveColumns(columns.stream().filter(column -> !column.key().equals("REVIEW")).toList(), 422);
+        var nullColumn = new ArrayList<>(columns);
+        nullColumn.set(4, null);
+        saveColumns(nullColumn, 422);
+        assertThat(read("/board-columns").get("columns")).hasSize(8);
+        assertThat(read("/board-columns").at("/columns/4/label").asText()).isEqualTo("QA approved");
+        grant("WORKSPACE_READ", "SPRINT_READ");
+        saveColumns(workflowColumns(), 403);
+        assertThat(read("/board-columns").at("/columns/4/label").asText()).isEqualTo("QA approved");
+    }
+
+    @Test void customStatusesEnforceAdjacentTransitionsAndCannotBeRemovedWhileInUse() throws Exception {
+        saveColumns(workflowColumns(), 200);
+        Long itemId = workItem();
+        changeStatus(itemId, "DONE", 422);
+        changeStatus(itemId, "IN_PROGRESS", 200);
+        changeStatus(itemId, "TODO", 200);
+        changeStatus(itemId, "IN_PROGRESS", 200);
+        changeStatus(itemId, "REVIEW", 200);
+        changeStatus(itemId, "DONE", 422); // Configured custom steps cannot be skipped.
+        changeStatus(itemId, "CUSTOM_1", 200);
+        saveColumns(workflowColumns().stream().filter(column -> !column.key().equals("CUSTOM_1")).toList(), 409);
+        changeStatus(itemId, "CUSTOM_2", 200);
+        changeStatus(itemId, "CUSTOM_3", 200);
+        changeStatus(itemId, "DONE", 200);
+        changeStatus(itemId, "REVIEW", 422);
+        changeStatus(itemId, "IN_PROGRESS", 422);
+        changeStatus(itemId, "CUSTOM_3", 200);
+        mvc.perform(get("/api/sprint-backlogs/{id}", itemId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CUSTOM_3"));
+    }
+
+    @Test void standardWorkflowAllowsBackwardStepsButRejectsSkippedSteps() throws Exception {
+        Long itemId = workItem();
+        changeStatus(itemId, "REVIEW", 422);
+        changeStatus(itemId, "IN_PROGRESS", 200);
+        changeStatus(itemId, "TODO", 200);
+        changeStatus(itemId, "IN_PROGRESS", 200);
+        changeStatus(itemId, "REVIEW", 200);
+        changeStatus(itemId, "DONE", 200);
+        changeStatus(itemId, "IN_PROGRESS", 422);
+        changeStatus(itemId, "REVIEW", 200);
+        changeStatus(itemId, "IN_PROGRESS", 200);
+    }
+
+    @Test void productBacklogOnlyConnectsToTodoAndCannotBypassWorkflowThroughSprintAssignment() throws Exception {
+        Long itemId = workItem();
+        Long sprintId = tx.execute(status -> backlogItems.findById(itemId).orElseThrow().getSprint().getId());
+        changeStatus(itemId, "IN_PROGRESS", 200);
+        mvc.perform(put("/api/sprints/{id}/backlog-items", sprintId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"taskIds\":[]}"))
+                .andExpect(status().isUnprocessableEntity());
+        mvc.perform(get("/api/sprint-backlogs/{id}", itemId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.sprintId").value(sprintId))
+                .andExpect(jsonPath("$.status").value("IN_PROGRESS"));
+        changeStatus(itemId, "TODO", 200);
+        mvc.perform(put("/api/sprints/{id}/backlog-items", sprintId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"taskIds\":[]}"))
+                .andExpect(status().isOk());
+        changeStatus(itemId, "IN_PROGRESS", 422);
+        mvc.perform(put("/api/sprint-backlogs/{id}", itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("sprintId", sprintId, "status", "IN_PROGRESS"))))
+                .andExpect(status().isUnprocessableEntity());
+        mvc.perform(get("/api/sprint-backlogs/{id}", itemId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.sprintId").isEmpty())
+                .andExpect(jsonPath("$.status").value("TODO"));
+        mvc.perform(put("/api/sprints/{id}/backlog-items", sprintId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("taskIds", List.of(itemId)))))
+                .andExpect(status().isOk());
+        changeStatus(itemId, "IN_PROGRESS", 200);
+    }
+
+    @Test void cardDetailEditsAndAssigneeAreReflectedOnTheTeamBoard() throws Exception {
+        Long itemId = workItem();
+        mvc.perform(get("/api/sprint-backlogs/{id}", itemId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.title").value("Open and edit this card"));
+        mvc.perform(put("/api/sprint-backlogs/{id}", itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("title", "Edited from card details",
+                                "description", "Persisted description", "assigneeProjectMemberId", membershipId,
+                                "priority", "HIGH", "estimatedHours", 5))))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/teams/{teamId}/backlog-board", teamId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].title").value("Edited from card details"))
+                .andExpect(jsonPath("$.items[0].description").value("Persisted description"))
+                .andExpect(jsonPath("$.items[0].assigneeProjectMemberId").value(membershipId))
+                .andExpect(jsonPath("$.items[0].assigneeDisplayName").value("Workspace Reader"));
+        grant("WORKSPACE_READ", "SPRINT_READ", "SPRINT_BACKLOG_READ");
+        mvc.perform(get("/api/sprint-backlogs/{id}", itemId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        mvc.perform(put("/api/sprint-backlogs/{id}", itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Forbidden edit\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/sprint-backlogs/{id}", itemId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.title").value("Edited from card details"));
     }
 }
