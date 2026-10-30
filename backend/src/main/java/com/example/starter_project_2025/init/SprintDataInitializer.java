@@ -79,7 +79,7 @@ public class SprintDataInitializer implements CommandLineRunner {
             SprintStatus status
     ) {
 
-        Sprint sprint = sprintRepository.findByName(name)
+        Sprint sprint = sprintRepository.findFirstByProjectIdAndNameOrderByIdAsc(DEMO_PROJECT_ID, name)
                 .orElseGet(Sprint::new);
 
         sprint.setName(name);
