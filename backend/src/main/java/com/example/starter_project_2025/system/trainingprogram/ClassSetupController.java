@@ -32,6 +32,12 @@ public class ClassSetupController {
     private final ClassSetupService service;
     private final ClassImportService classImportService;
 
+    @GetMapping("/classes/setup-overview")
+    @PreAuthorize("hasAuthority('CLASS_READ')")
+    public ResponseEntity<List<ClassSetupOverviewResponse>> getSetupOverview() {
+        return ResponseEntity.ok(service.getSetupOverview());
+    }
+
     @PostMapping(value = "/classes/import", consumes = "multipart/form-data")
     @PreAuthorize("hasAuthority('CLASS_CREATE')")
     public ResponseEntity<ImportResult> importClasses(@RequestParam("file") MultipartFile file) {
@@ -65,10 +71,45 @@ public class ClassSetupController {
         return ResponseEntity.ok(service.assignProgram(classId, request.programId()));
     }
 
+    @DeleteMapping("/classes/{classId}/training-program")
+    @PreAuthorize("hasAuthority('CLASS_UPDATE_PROGRAM')")
+    public ResponseEntity<ClassProgramSubjectsResponse> removeProgram(@PathVariable Long classId) {
+        return ResponseEntity.ok(service.removeProgram(classId));
+    }
+
     @GetMapping("/classes/{classId}/program-subjects")
     @PreAuthorize("hasAuthority('CLASS_READ')")
     public ResponseEntity<ClassProgramSubjectsResponse> getProgramSubjects(@PathVariable Long classId) {
         return ResponseEntity.ok(service.getClassProgramSubjects(classId));
+    }
+
+    @PutMapping("/classes/{classId}/topic-courses")
+    @PreAuthorize("hasAnyAuthority('CLASS_UPDATE_COURSE', 'CLASS_UPDATE_PROGRAM')")
+    public ResponseEntity<ClassTopicCoursesSaveResponse> saveTopicCourses(
+            @PathVariable Long classId,
+            @Valid @RequestBody ClassTopicCourseSaveRequest request) {
+        return ResponseEntity.ok(service.saveTopicCourses(classId, request));
+    }
+
+    @PutMapping("/classes/{classId}/program-subjects/{programSubjectId}/course")
+    @PreAuthorize("hasAnyAuthority('CLASS_UPDATE_COURSE', 'CLASS_UPDATE_PROGRAM')")
+    public ResponseEntity<ClassTopicCoursesSaveResponse> saveSingleTopicCourse(
+            @PathVariable Long classId,
+            @PathVariable Long programSubjectId,
+            @RequestBody SingleTopicCourseRequest request) {
+        return ResponseEntity.ok(service.saveSingleTopicCourse(classId, programSubjectId, request.courseId()));
+    }
+
+    @GetMapping("/classes/{classId}/plan-summary")
+    @PreAuthorize("hasAuthority('CLASS_READ')")
+    public ResponseEntity<ClassPlanSummaryResponse> getPlanSummary(@PathVariable Long classId) {
+        return ResponseEntity.ok(service.getPlanSummary(classId));
+    }
+
+    @GetMapping("/classes/{classId}/subject-options")
+    @PreAuthorize("hasAnyAuthority('CLASS_READ', 'ASSIGNMENT_READ', 'SESSION_READ', 'SCHEDULE_VERSION_READ')")
+    public ResponseEntity<List<ClassSubjectOptionResponse>> getSubjectOptions(@PathVariable Long classId) {
+        return ResponseEntity.ok(service.getSubjectOptions(classId));
     }
 
     @GetMapping("/classes/{classId}/teaching-assignments")

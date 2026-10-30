@@ -41,7 +41,9 @@ public class PermissionInitializer implements CommandLineRunner {
         }
 
         ensurePermission("CLASS_UPDATE_PROGRAM", "CLASS", "UPDATE_PROGRAM",
-                "Assign an active training program to a shared class");
+                "Assign, change or remove an active training program of a class");
+        ensurePermission("CLASS_UPDATE_COURSE", "CLASS", "UPDATE_COURSE",
+                "Link or unlink active LMS courses for class topics");
     }
 
     private void ensurePermission(String name, String resource, String action, String description) {

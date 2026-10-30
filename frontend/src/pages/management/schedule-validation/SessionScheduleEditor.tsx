@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { isAxiosError } from "axios";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,9 @@ import { ScheduleIssues } from "./ScheduleIssues";
 
 export function SessionScheduleEditor() {
     const { id } = useParams<{ id: string }>();
+    const [searchParams] = useSearchParams();
+    const preselectedClassId = searchParams.get("classId");
+    const preselectedSubjectId = searchParams.get("subjectId") ?? searchParams.get("topicId");
     const permissions = usePermissions();
     const cache = useQueryClient();
     const resources = useQuery({ queryKey: ["schedule-validation", "resources"], queryFn: scheduleValidationApi.resources, retry: false });
@@ -34,6 +37,27 @@ export function SessionScheduleEditor() {
             teachingAssignmentId: a?.id, roomId: room?.id, location: room?.name ?? s.location,
             meetingUrl: s.meetingUrl ?? "", title: s.title ?? "", startTime: s.startTime ?? "", endTime: s.endTime ?? "" });
     }, [session.data, resources.data, id]);
+    useEffect(() => {
+        if (id || !resources.data || (!preselectedClassId && !preselectedSubjectId)) return;
+        const refs = resources.data.references;
+        const targetClassId = preselectedClassId ? Number(preselectedClassId) : undefined;
+        const targetTopicId = preselectedSubjectId ? Number(preselectedSubjectId) : undefined;
+        const matchedAssignment = refs.assignments.find(
+            a => a.status === "ACTIVE"
+                && (!targetClassId || a.classId === targetClassId)
+                && (!targetTopicId || a.topicId === targetTopicId),
+        );
+        setForm(current => {
+            if (current.teachingAssignmentId || current.classId || current.topicId) return current;
+            return {
+                ...current,
+                classId: matchedAssignment?.classId ?? targetClassId,
+                topicId: matchedAssignment?.topicId ?? targetTopicId,
+                trainerId: matchedAssignment?.trainerId,
+                teachingAssignmentId: matchedAssignment?.id,
+            };
+        });
+    }, [id, preselectedClassId, preselectedSubjectId, resources.data]);
     const editable = (!id || session.data?.status === "SCHEDULED") && permissions.hasPermission(id || createdId ? "SESSION_UPDATE" : "SESSION_CREATE");
     const ready = !!resources.data && (!id || !!session.data);
     const change = (value: ScheduleCandidate) => { setForm(value); setResult(undefined); setError(""); setSaved(false); };
@@ -59,7 +83,11 @@ export function SessionScheduleEditor() {
     };
     return <MainLayout><div className="mx-auto w-full max-w-4xl space-y-5">
         <h1 className="text-2xl font-semibold">{id ? `Session #${id}` : "Create session"}</h1>
-        <div className="flex gap-5"><Link className="text-blue-600 underline" to="/sessions">Session list</Link><Link className="text-blue-600 underline" to="/schedule-validation">Validate multiple sessions</Link></div>
+        <div className="flex flex-wrap gap-5">
+            {preselectedClassId && <Link className="text-blue-600 underline" to={`/class-setup?classId=${preselectedClassId}`}>← Kế hoạch môn học lớp</Link>}
+            <Link className="text-blue-600 underline" to="/sessions">Session list</Link>
+            <Link className="text-blue-600 underline" to="/schedule-validation">Validate multiple sessions</Link>
+        </div>
         {(resources.isPending || (id && session.isPending)) && <p role="status">Loading scheduling information...</p>}
         {(resources.isError || session.isError) && <div role="alert"><p>Unable to load the session or scheduling information. Please try again.</p><Button onClick={() => { void resources.refetch(); if (id) void session.refetch(); }}>Retry</Button></div>}
         {ready && <>

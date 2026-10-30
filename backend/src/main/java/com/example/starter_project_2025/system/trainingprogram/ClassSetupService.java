@@ -9,6 +9,8 @@ import java.time.LocalDate;
 import java.util.List;
 
 public interface ClassSetupService {
+    List<ClassSetupOverviewResponse> getSetupOverview();
+
     ExternalClassDTO createClass(ExternalClassRequest request);
 
     ExternalClassDTO updateClass(Long classId, ExternalClassRequest request);
@@ -17,7 +19,17 @@ public interface ClassSetupService {
 
     ClassProgramSubjectsResponse assignProgram(Long classId, Long programId);
 
+    ClassProgramSubjectsResponse removeProgram(Long classId);
+
     ClassProgramSubjectsResponse getClassProgramSubjects(Long classId);
+
+    ClassTopicCoursesSaveResponse saveTopicCourses(Long classId, ClassTopicCourseSaveRequest request);
+
+    ClassTopicCoursesSaveResponse saveSingleTopicCourse(Long classId, Long programSubjectId, Long courseId);
+
+    ClassPlanSummaryResponse getPlanSummary(Long classId);
+
+    List<ClassSubjectOptionResponse> getSubjectOptions(Long classId);
 
     List<TeachingAssignmentResponse> getClassAssignments(Long classId);
 

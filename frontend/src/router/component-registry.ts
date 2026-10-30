@@ -13,6 +13,7 @@ import ExamManagementPage from "@/pages/management/exam";
 import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
 import InvitationManagementPage from "@/pages/management/invitation";
 import ScheduleValidationPage from "@/pages/management/schedule-validation";
+import TeachingAssignmentPage from "@/pages/management/teaching-assignment";
 import StudentExamList from "@/pages/student/StudentExamList";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
@@ -32,6 +33,11 @@ export const routes: RouteConfig[] = [
     path: "/class-setup",
     component: ClassSetupPage,
     isModuleDriven: true,
+  },
+  {
+    path: "/teaching-assignments",
+    component: TeachingAssignmentPage,
+    requiredPermission: "ASSIGNMENT_READ",
   },
   {
     path: "/calendar/preview",

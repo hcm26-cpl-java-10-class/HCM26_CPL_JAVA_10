@@ -12,6 +12,7 @@ export interface SharedClass {
   endDate?: string | null;
   status?: string;
   plannedSize?: number | null;
+  enrolledCount?: number | null;
   deliveryType?: string | null;
   traineeType?: string | null;
   formatType?: string | null;
@@ -76,26 +77,152 @@ export interface TeachingAssignment {
   effectiveTo: string | null;
 }
 
+export interface ClassCourseItem {
+  courseId: number;
+  code: string | null;
+  name: string;
+  instructor: string | null;
+  description: string | null;
+  active: boolean;
+}
+
+export interface ClassContextInfo {
+  status: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  site: string | null;
+  location: string | null;
+  formatType: string | null;
+  plannedSize: number | null;
+  enrolledCount: number;
+}
+
+export interface ClassProgramSubjectItem {
+  programSubjectId: number;
+  subjectId: number;
+  subjectCode: string;
+  subjectName: string;
+  subjectVersion: string;
+  technicalGroup?: string | null;
+  durationHours: number;
+  orderIndex: number;
+  course: ClassCourseItem | null;
+  courseChangeLocked: boolean;
+  availableCourses: ClassCourseItem[];
+  assignments: TeachingAssignment[];
+  scheduledSessionCount: number;
+  completedSessionCount: number;
+}
+
 export interface ClassProgramSubjects {
   classId: number;
   classCode: string;
   className: string;
+  classContext: ClassContextInfo;
   program: {
     id: number;
     code: string;
     name: string;
     version: string;
+    region?: string | null;
     status: "DRAFT" | "ACTIVE" | "INACTIVE";
+    totalDurationHours: number;
   } | null;
-  subjects: Array<{
-    programSubjectId: number;
-    subjectId: number;
-    subjectCode: string;
-    subjectName: string;
-    durationHours: number;
-    orderIndex: number;
-    assignments: TeachingAssignment[];
-  }>;
+  programChangeBlocked: boolean;
+  programChangeBlockReasons: string[];
+  courseChangeLockedByEnrollment: boolean;
+  subjects: ClassProgramSubjectItem[];
+}
+
+export interface ClassSetupOverview {
+  classId: number;
+  code: string;
+  name: string;
+  status: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  site: string | null;
+  location: string | null;
+  formatType: string | null;
+  plannedSize: number | null;
+  enrolledCount: number;
+  programId: number | null;
+  programCode: string | null;
+  programName: string | null;
+  programVersion: string | null;
+  totalSubjects: number;
+  coursesAssignedCount: number;
+  subjectsWithTrainerCount: number;
+  subjectsWithScheduleCount: number;
+  scheduledSessionCount: number;
+  missingCourseCount: number;
+  missingTrainerCount: number;
+  missingScheduleCount: number;
+  setupComplete: boolean;
+}
+
+export interface TopicCourseSaveItem {
+  programSubjectId: number;
+  courseId: number | null;
+}
+
+export interface ClassTopicCoursesSaveResponse {
+  classId: number;
+  classCode: string;
+  assignedCount: number;
+  updatedCount: number;
+  removedCount: number;
+  unchangedCount: number;
+  message: string;
+  plan: ClassProgramSubjects;
+}
+
+export interface MissingSubjectSummaryItem {
+  programSubjectId: number;
+  subjectId: number;
+  subjectCode: string;
+  subjectName: string;
+  subjectVersion: string;
+  orderIndex: number;
+  durationHours: number;
+}
+
+export interface ClassPlanSummary {
+  classId: number;
+  classCode: string;
+  className: string;
+  classStatus: string | null;
+  enrolledCount: number;
+  plannedSize: number | null;
+  hasProgram: boolean;
+  programId: number | null;
+  programCode: string | null;
+  programName: string | null;
+  programVersion: string | null;
+  totalSubjects: number;
+  totalDurationHours: number;
+  coursesAssignedCount: number;
+  subjectsWithTrainerCount: number;
+  subjectsWithScheduleCount: number;
+  totalScheduledSessions: number;
+  missingCourses: MissingSubjectSummaryItem[];
+  missingAssignments: MissingSubjectSummaryItem[];
+  missingSchedules: MissingSubjectSummaryItem[];
+  programChangeBlocked: boolean;
+  programChangeBlockReasons: string[];
+}
+
+export interface ClassSubjectOption {
+  programSubjectId: number;
+  subjectId: number;
+  subjectCode: string;
+  subjectName: string;
+  subjectVersion: string;
+  orderIndex: number;
+  durationHours: number;
+  courseId: number | null;
+  courseCode: string | null;
+  courseName: string | null;
 }
 
 interface AssignmentPage<T> {
@@ -111,6 +238,8 @@ export const classSetupApi = {
     (await axiosInstance.get<{ sampleData: boolean }>("/external/data-source")).data,
   getClasses: async () =>
     (await axiosInstance.get<SharedClass[]>("/external/classes", { params: { status: "all" } })).data,
+  getSetupOverview: async () =>
+    (await axiosInstance.get<ClassSetupOverview[]>("/classes/setup-overview")).data,
   createClass: async (request: SharedClassRequest) =>
     (await axiosInstance.post<SharedClass>("/classes", request)).data,
   importClasses: async (file: File) => {
@@ -127,8 +256,21 @@ export const classSetupApi = {
     (await axiosInstance.get<SharedTrainer[]>("/external/trainers", { params: { status: "active" } })).data,
   assignProgram: async (classId: number, programId: number) =>
     (await axiosInstance.put<ClassProgramSubjects>(`/classes/${classId}/training-program`, { programId })).data,
+  removeProgram: async (classId: number) =>
+    (await axiosInstance.delete<ClassProgramSubjects>(`/classes/${classId}/training-program`)).data,
   getProgramSubjects: async (classId: number) =>
     (await axiosInstance.get<ClassProgramSubjects>(`/classes/${classId}/program-subjects`)).data,
+  saveTopicCourses: async (classId: number, items: TopicCourseSaveItem[]) =>
+    (await axiosInstance.put<ClassTopicCoursesSaveResponse>(`/classes/${classId}/topic-courses`, { items })).data,
+  saveSingleTopicCourse: async (classId: number, programSubjectId: number, courseId: number | null) =>
+    (await axiosInstance.put<ClassTopicCoursesSaveResponse>(
+      `/classes/${classId}/program-subjects/${programSubjectId}/course`,
+      { courseId },
+    )).data,
+  getPlanSummary: async (classId: number) =>
+    (await axiosInstance.get<ClassPlanSummary>(`/classes/${classId}/plan-summary`)).data,
+  getSubjectOptions: async (classId: number) =>
+    (await axiosInstance.get<ClassSubjectOption[]>(`/classes/${classId}/subject-options`)).data,
   getAssignments: async (classId: number) =>
     (await axiosInstance.get<TeachingAssignment[]>(`/classes/${classId}/teaching-assignments`)).data,
   getAvailableAssignments: async (classId: number, date: string) =>

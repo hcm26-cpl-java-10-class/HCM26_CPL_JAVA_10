@@ -25,9 +25,24 @@ public class LocalExternalApiService implements ExternalApiService {
     private final AtomicLong classIds = new AtomicLong(3);
 
     public LocalExternalApiService() {
-        classes.put(1L, sampleClass(1L, "LOCAL_JAVA_01", "Lớp Java mẫu 01", "active"));
-        classes.put(2L, sampleClass(2L, "LOCAL_JAVA_02", "Lớp Java mẫu 02", "active"));
-        classes.put(3L, sampleClass(3L, "LOCAL_JAVA_OLD", "Lớp Java mẫu đã kết thúc", "inactive"));
+        classes.put(1L, ExternalClassDTO.builder().id(1L).code("LOCAL_JAVA_01").name("Lớp Java mẫu 01")
+                .startDate("2026-10-01").endDate("2027-01-31").status("active")
+                .plannedSize(25).enrolledCount(18)
+                .deliveryType("Class").traineeType("Fresher").formatType("Offline").skills("Java, Spring Boot")
+                .site("TP. Hồ Chí Minh").location("F-Town 3, Phòng A101").subjectType("IT Technical")
+                .scope("Unit").supplierPartner("SCM").jobRecommendation(false).build());
+        classes.put(2L, ExternalClassDTO.builder().id(2L).code("LOCAL_JAVA_02").name("Lớp Java mẫu 02")
+                .startDate("2026-11-15").endDate("2027-03-15").status("active")
+                .plannedSize(30).enrolledCount(0)
+                .deliveryType("Class").traineeType("Fresher").formatType("Hybrid").skills("Java, React")
+                .site("TP. Hồ Chí Minh").location("QTSC 9, Phòng A102").subjectType("IT Technical")
+                .scope("Unit").supplierPartner("SCM").jobRecommendation(false).build());
+        classes.put(3L, ExternalClassDTO.builder().id(3L).code("LOCAL_JAVA_OLD").name("Lớp Java mẫu đã kết thúc")
+                .startDate("2026-03-01").endDate("2026-07-31").status("inactive")
+                .plannedSize(25).enrolledCount(24)
+                .deliveryType("Class").traineeType("Fresher").formatType("Offline").skills("Java")
+                .site("Hà Nội").location("F-Ville 2, Hòa Lạc").subjectType("IT Technical")
+                .scope("Unit").supplierPartner("SCM").jobRecommendation(false).build());
     }
 
     @Override
@@ -52,7 +67,7 @@ public class LocalExternalApiService implements ExternalApiService {
     public synchronized ExternalClassDTO createClass(ExternalClassRequest request) {
         ensureUniqueCode(request.code(), null);
         long id = classIds.incrementAndGet();
-        ExternalClassDTO classData = toClass(id, request, null);
+        ExternalClassDTO classData = toClass(id, request, null, 0);
         classes.put(id, classData);
         return classData;
     }
@@ -61,7 +76,8 @@ public class LocalExternalApiService implements ExternalApiService {
     public synchronized ExternalClassDTO updateClass(Long id, ExternalClassRequest request) {
         ExternalClassDTO current = fetchClassById(id);
         ensureUniqueCode(request.code(), id);
-        ExternalClassDTO updated = toClass(id, request, current.getProgramId());
+        ExternalClassDTO updated = toClass(id, request, current.getProgramId(),
+                current.getEnrolledCount() == null ? 0 : current.getEnrolledCount());
         classes.put(id, updated);
         return updated;
     }
@@ -86,17 +102,11 @@ public class LocalExternalApiService implements ExternalApiService {
                 new ExternalRoomDTO(2L, "Phòng mẫu A102", 25));
     }
 
-    private ExternalClassDTO sampleClass(Long id, String code, String name, String status) {
-        return ExternalClassDTO.builder().id(id).code(code).name(name).status(status).plannedSize(25)
-                .deliveryType("Class").traineeType("Fresher").formatType("Offline").skills("Java")
-                .site("TP. Ho Chi Minh").location("Center Building, HCM").subjectType("IT Technical")
-                .scope("Unit").supplierPartner("SCM").jobRecommendation(false).build();
-    }
-
-    private ExternalClassDTO toClass(Long id, ExternalClassRequest request, Long programId) {
+    private ExternalClassDTO toClass(Long id, ExternalClassRequest request, Long programId, Integer enrolledCount) {
         return ExternalClassDTO.builder().id(id).code(request.code().trim()).name(request.name().trim())
                 .programId(programId).startDate(blankToNull(request.startDate())).endDate(blankToNull(request.endDate()))
                 .status(request.status().toLowerCase(Locale.ROOT)).plannedSize(request.plannedSize())
+                .enrolledCount(enrolledCount)
                 .deliveryType(request.deliveryType()).traineeType(request.traineeType())
                 .formatType(request.formatType()).skills(request.skills()).site(request.site())
                 .location(request.location()).subjectType(request.subjectType()).scope(request.scope())

@@ -33,13 +33,17 @@ public class CourseServiceImpl
 
     @Override
     protected String[] searchableFields() {
-        return new String[]{"name", "description", "instructor"};
+        return new String[]{"code", "name", "description", "instructor"};
     }
 
     @Override
     protected void beforeCreate(Course course, CourseDTO request, ValidationContext ctx) {
         if (courseRepository.existsByName(request.getName())) {
             ctx.add("name", "Course name already exists");
+        }
+        if (request.getCode() != null && !request.getCode().isBlank()
+                && courseRepository.existsByCode(request.getCode().trim())) {
+            ctx.add("code", "Course code already exists");
         }
     }
 
@@ -49,6 +53,11 @@ public class CourseServiceImpl
                 !request.getName().equals(course.getName()) &&
                 courseRepository.existsByName(request.getName())) {
             ctx.add("name", "Course name already exists");
+        }
+        if (request.getCode() != null && !request.getCode().isBlank()
+                && !request.getCode().trim().equalsIgnoreCase(course.getCode() == null ? "" : course.getCode())
+                && courseRepository.existsByCode(request.getCode().trim())) {
+            ctx.add("code", "Course code already exists");
         }
     }
 }
