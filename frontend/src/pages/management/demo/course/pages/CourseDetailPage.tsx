@@ -1,6 +1,6 @@
 import { PermissionGate } from "@/components/PermissionGate";
 
-import { courseApi, departmentApi, enrollmentApi } from "@/api";
+import { courseApi, departmentApi, enrollmentApi, progressApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -210,6 +210,13 @@ function CourseActionCard({ course }: { course: CourseDetail }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
 
   const enrollment = enrollmentByCourseId.get(course.id);
+  const progressQuery = useQuery({
+    queryKey: ["lesson-progress", enrollment?.id],
+    queryFn: () => progressApi.getByEnrollment(enrollment!.id),
+    enabled: Boolean(enrollment && canCancel),
+  });
+  const progressPercentage = progressQuery.data?.progressPercentage;
+  const cancellationLocked = progressPercentage !== undefined && progressPercentage > 20;
   // Staff (COURSE_UPDATE) xem được nội dung nhưng không ghi danh.
   const isStaffPreview = !course.enrolled && !course.isFree && course.contentUnlocked;
 
@@ -300,14 +307,27 @@ function CourseActionCard({ course }: { course: CourseDetail }) {
       </ul>
 
       {course.enrolled && enrollment && canCancel && (
-        <>
+        <div className="space-y-2 border-t pt-4">
+          <p
+            className={`rounded-lg px-3 py-2 text-xs ${
+              cancellationLocked
+                ? "bg-destructive/10 text-destructive"
+                : "bg-muted text-muted-foreground"
+            }`}
+          >
+            {cancellationLocked
+              ? "Your progress has exceeded the 20% cancellation limit."
+              : "Cancellation policy: You may cancel this course only while your progress is 20% or less."}
+          </p>
           <Button
             variant="ghost"
             size="sm"
             className="w-full text-destructive hover:bg-destructive/5 hover:text-destructive"
+            disabled={progressQuery.isLoading || cancellationLocked}
             onClick={() => setConfirmCancel(true)}
           >
-            Cancel enrollment
+            {cancellationLocked && <Lock className="size-4" />}
+            {cancellationLocked ? "Cancellation unavailable" : "Cancel enrollment"}
           </Button>
           <ConfirmDialog
             open={confirmCancel}
@@ -321,7 +341,7 @@ function CourseActionCard({ course }: { course: CourseDetail }) {
               cancelMutation.mutate(enrollment.id, { onSettled: () => setConfirmCancel(false) })
             }
           />
-        </>
+        </div>
       )}
     </div>
   );

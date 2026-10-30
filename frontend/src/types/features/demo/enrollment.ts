@@ -42,3 +42,29 @@ export interface DepartmentBatchEnrollmentResult {
     totalAlreadyEnrolled: number;
     departments: DepartmentBatchItemResult[];
 }
+
+export interface AuditLogRow {
+    id: string;
+    type: "ENROLLMENT" | "DEPARTMENT";
+    actorName?: string;
+    actorEmail?: string;
+    targetName?: string;
+    targetType?: string;
+    courseName?: string;
+    departmentName?: string;
+    detail?: string;
+    status?: string;
+    source?: string;
+    createdAt?: string;
+}
+
+export interface AuditLogParams {
+    type?: string;
+    search?: string;
+    status?: string;
+    source?: string;
+    fromDate?: string;
+    toDate?: string;
+    page: number;
+    size: number;
+}

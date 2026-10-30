@@ -6,6 +6,7 @@ import type {
     Enrollment,
 } from "@/types";
 import type { DepartmentMemberPage } from "@/types";
+import type { AuditLogRow, AuditLogParams, PageResponse } from "@/types";
 
 interface DepartmentEnrollmentRequest {
     departmentId: number;
@@ -130,6 +131,11 @@ export const enrollmentApi = {
             "/enrollments/students",
             request,
         );
+        return response.data;
+    },
+
+    getAuditLogs: async (params: AuditLogParams): Promise<PageResponse<AuditLogRow>> => {
+        const response = await axiosInstance.get("/audit/enrollments", { params });
         return response.data;
     },
 };

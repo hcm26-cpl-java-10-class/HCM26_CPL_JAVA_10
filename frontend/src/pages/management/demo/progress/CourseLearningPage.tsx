@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { LessonPreview } from "../lesson/components/LessonPreview";
 import { LessonQnA } from "../lesson/components/LessonQnA";
 import { LessonProgressSidebar } from "./LessonProgressSidebar";
+import { useAdminStudentPreview } from "@/pages/student/useAdminStudentPreview";
 
 export function CourseLearningPage() {
   const { id } = useParams();
@@ -21,6 +22,9 @@ export function CourseLearningPage() {
   const requestedLessonId = Number(searchParams.get("lessonId")) || undefined;
   const requestedQuestionId = Number(searchParams.get("questionId")) || undefined;
   const queryClient = useQueryClient();
+  const isAdminStudentPreview = useAdminStudentPreview();
+  const coursesPath = isAdminStudentPreview ? "/courses" : "/enrollments";
+  const coursesLabel = isAdminStudentPreview ? "Courses" : "My courses";
   const [activeLessonId, setActiveLessonId] = useState<number>();
   const [answerDraft, setAnswerDraft] = useState("");
 
@@ -35,8 +39,8 @@ export function CourseLearningPage() {
     onSuccess: (updated: EnrollmentProgress) => {
       queryClient.setQueryData(["lesson-progress", enrollmentId], updated);
     },
-    onError: (error: any) => {
-      toast.error(error?.response?.data?.message || "Could not record lesson access.");
+    onError: () => {
+      toast.error("Could not record lesson access.");
     },
   });
 
@@ -99,11 +103,14 @@ export function CourseLearningPage() {
   };
 
   return (
-    <MainLayout pathName={{ enrollments: "My courses", learn: "Learn" }}>
+    <MainLayout
+      pathName={{ enrollments: coursesLabel, learn: "Learn" }}
+      pathLinks={{ enrollments: coursesPath }}
+    >
       <div className="mx-auto w-full max-w-7xl space-y-5">
         <Button asChild variant="ghost" className="-ml-3">
-          <Link to="/enrollments">
-            <ArrowLeft className="size-4" /> Back to my courses
+          <Link to={coursesPath}>
+            <ArrowLeft className="size-4" /> Back to {coursesLabel.toLowerCase()}
           </Link>
         </Button>
 
