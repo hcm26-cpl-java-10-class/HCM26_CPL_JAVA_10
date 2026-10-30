@@ -90,11 +90,6 @@ public class UserServiceImpl
             validateRoles(request.getRoleIds(), ctx);
         }
 
-        if (request.getDepartmentIds() != null) {
-            validateDepartments(request.getDepartmentIds(), ctx);
-        }
-
-
         if (ctx.hasErrors()) {
             return;
         }
@@ -108,29 +103,8 @@ public class UserServiceImpl
             user.getRoles().addAll(getRoles(request.getRoleIds()));
         }
 
-        if (request.getDepartmentIds() != null) {
-            user.getDepartments().clear();
-            user.getDepartments().addAll(getDepartments(request.getDepartmentIds()));
-        }
-
     }
 
-    @Override
-    protected void beforeDelete(User user) {
-
-        // Còn dữ liệu nghiệp vụ gắn với user thì chặn xóa và báo rõ lý do (thay vì lỗi khóa ngoại).
-        if (courseEnrollmentRepository.existsByUser_Id(user.getId())) {
-            ValidationContext ctx = new ValidationContext();
-            ctx.add("id", "Cannot delete a user who is enrolled in courses");
-            ctx.throwIfErrors();
-        }
-
-        // Token đăng nhập / token một lần chỉ là dữ liệu phiên, xóa cùng user để không vướng khóa ngoại.
-        refreshTokenRepository.deleteAllByUserId(user.getId());
-        oneTimeTokenRepository.deleteAllByUserId(user.getId());
-    }
-
-    /** Trims the input values; a blank password means "not provided". */
     private void normalize(UserDTO request) {
         request.setUsername(trimToNull(request.getUsername()));
         request.setEmployeeCode(trimToNull(request.getEmployeeCode()));

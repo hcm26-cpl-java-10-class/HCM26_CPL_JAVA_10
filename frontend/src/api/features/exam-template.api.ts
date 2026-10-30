@@ -12,7 +12,7 @@ export interface ExamTemplateOptionDTO {
 export interface ExamTemplateQuestionDTO {
     id: number;
     content: string;
-    type: "MULTIPLE_CHOICE" | "ESSAY";
+    type: "MULTIPLE_CHOICE" | "ESSAY" | "CODING";
     difficulty: "EASY" | "MEDIUM" | "HARD";
     topic?: string;
     imageUrl?: string;

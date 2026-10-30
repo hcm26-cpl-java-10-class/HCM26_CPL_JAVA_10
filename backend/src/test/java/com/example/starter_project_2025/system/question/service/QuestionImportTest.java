@@ -99,7 +99,7 @@ class QuestionImportTest {
         assertEquals(0, result.getSuccessCount());
         assertEquals(3, result.getFailureCount());
         assertEquals(3, result.getErrors().size());
-        assertTrue(result.getErrors().get(0).getMessage().contains("không tạo trùng"));
+        assertTrue(result.getErrors().get(0).getMessage().contains("đã tồn tại trong hệ thống"));
         verify(repository, never()).save(any(Question.class));
     }
 
