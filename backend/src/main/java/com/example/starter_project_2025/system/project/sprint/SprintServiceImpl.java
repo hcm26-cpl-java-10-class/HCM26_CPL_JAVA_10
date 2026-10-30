@@ -13,6 +13,7 @@ import com.example.starter_project_2025.system.project.sprint.event.SprintOutbox
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklog;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogRepository;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogStatus;
+import com.example.starter_project_2025.system.project.task.TaskRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -46,7 +47,8 @@ import java.util.stream.Collectors;
  *     <li>a sprint can only be started (Active) when it holds at least one
  *     Sprint Backlog item (422 otherwise)</li>
  *     <li>a sprint can only move to Completed once every Sprint Backlog item of
- *     that sprint is Done (422 otherwise)</li>
+ *     that sprint is Done and every subtask of those items is Done too
+ *     (422 otherwise)</li>
  *     <li>audit log (actor, timestamp, before/after, correlation id) + outbox event (idempotent)</li>
  * </ul>
  * <p>
@@ -87,7 +89,8 @@ public class SprintServiceImpl
     SprintAuditService sprintAuditService;
     SprintOutboxService sprintOutboxService;
     SprintBacklogRepository sprintBacklogRepository;
-    com.example.starter_project_2025.system.project.task.TaskRepository taskRepository;
+    /** Subtasks of the backlog items (own module, read-only usage here). */
+    TaskRepository taskRepository;
 
     @Override
     protected BaseCrudRepository<Sprint, Long> getRepository() {
@@ -622,8 +625,9 @@ public class SprintServiceImpl
 
     /**
      * A sprint may only be completed once every Sprint Backlog item that
-     * belongs to it is {@code Done}; otherwise the transition answers 422 and
-     * lists the items that still have to be finished.
+     * belongs to it is {@code Done} <em>and</em> every subtask of those items
+     * is {@code Done} too; otherwise the transition answers 422 and lists what
+     * still has to be finished.
      */
     private void validateCompletion(Long sprintId,
                                     SprintStatus currentStatus,
@@ -637,25 +641,23 @@ public class SprintServiceImpl
 
         List<SprintBacklog> unfinished = sprintBacklogRepository.findUnfinishedBySprintId(
                 sprintId, List.of(SprintBacklogStatus.DONE));
+        List<String> unfinishedSubtasks = taskRepository.findUnfinishedSubtaskTitlesBySprintId(sprintId);
 
-        if (!unfinished.isEmpty()) {
-            addError(errors, STATUS_FIELD, unfinishedBacklogMessage(unfinished));
+        if (unfinished.isEmpty() && unfinishedSubtasks.isEmpty()) {
             return;
         }
 
-        // Also require every subtask inside the sprint's backlog items to be DONE (Bug 43).
-        List<Long> backlogIds = sprintBacklogRepository
-                .findBySprintIdOrderByIdAsc(sprintId)
-                .stream().map(b -> b.getId()).collect(java.util.stream.Collectors.toList());
-        if (!backlogIds.isEmpty()) {
-            List<com.example.starter_project_2025.system.project.task.Task> unfinishedTasks =
-                    taskRepository.findUnfinishedByBacklogItemIds(backlogIds);
-            if (!unfinishedTasks.isEmpty()) {
-                addError(errors, STATUS_FIELD,
-                    "Cannot complete Sprint: " + unfinishedTasks.size() +
-                    " subtask(s) are not yet DONE.");
-            }
+        List<String> messages = new ArrayList<>();
+
+        if (!unfinished.isEmpty()) {
+            messages.add(unfinishedBacklogMessage(unfinished));
         }
+
+        if (!unfinishedSubtasks.isEmpty()) {
+            messages.add(unfinishedSubtaskMessage(unfinishedSubtasks));
+        }
+
+        addError(errors, STATUS_FIELD, String.join(" ", messages));
     }
 
     private String unfinishedBacklogMessage(List<SprintBacklog> unfinished) {
@@ -675,6 +677,33 @@ public class SprintServiceImpl
             message.append(": ").append(titles);
 
             if (unfinished.size() > MAX_UNFINISHED_TITLES_IN_MESSAGE) {
+                message.append("...");
+            }
+        }
+
+        return message.toString();
+    }
+
+    /**
+     * Subtasks of the sprint backlog items are part of the sprint scope too, so
+     * the completion error quotes the ones that are still open.
+     */
+    private String unfinishedSubtaskMessage(List<String> unfinishedSubtasks) {
+
+        String titles = unfinishedSubtasks.stream()
+                .limit(MAX_UNFINISHED_TITLES_IN_MESSAGE)
+                .filter(title -> title != null && !title.isBlank())
+                .collect(Collectors.joining(", "));
+
+        StringBuilder message = new StringBuilder()
+                .append("Không thể hoàn thành Sprint vì còn ")
+                .append(unfinishedSubtasks.size())
+                .append(" Subtask của Backlog item chưa ở trạng thái Done");
+
+        if (!titles.isEmpty()) {
+            message.append(": ").append(titles);
+
+            if (unfinishedSubtasks.size() > MAX_UNFINISHED_TITLES_IN_MESSAGE) {
                 message.append("...");
             }
         }

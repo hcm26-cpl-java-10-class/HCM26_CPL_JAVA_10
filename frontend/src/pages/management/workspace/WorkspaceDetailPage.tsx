@@ -109,7 +109,8 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                     canConfigureColumns={current.actions.configureBoard === true}
                     onCreateWorkItem={sections.find(item => item.key === "backlog")?.canRead ? () => changeTab("backlog") : undefined} />
                 : tab === "backlog" ? <WorkspaceBacklogPanel projectId={context.projectId}
-                    teamId={context.teamId} taskKeyPrefix={context.taskKeyPrefix} />
+                    teamId={context.teamId} projectName={context.projectName}
+                    taskKeyPrefix={context.taskKeyPrefix} />
                 : tab === "activity" ? <WorkspaceProjectLogsPanel workspaceId={workspaceId} />
                 : <WorkspaceBusinessSectionPanel key={workspaceId + ":" + tab} workspaceId={workspaceId}
                     projectId={context.projectId} teamId={context.teamId} section={tab}
