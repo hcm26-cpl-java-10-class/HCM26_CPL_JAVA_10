@@ -16,6 +16,12 @@
 - Render trực tiếp selector của thẻ Board trong Chrome với dữ liệu thử: thành viên hoạt động hiện đúng tên; thành viên không có trong options hiện tên kèm unavailable; giá trị null hiện Unassigned.
 - Kiểm tra trình duyệt trên dùng fixture riêng, không thay cho kiểm thử toàn bộ ứng dụng với tài khoản thật.
 
+## Tích hợp code nhóm
+
+- Đã tích hợp `origin/feature/project` tại `fdf3eb12`, gồm phần đồng bộ avatar assignee của nhóm. Conflict ở `BacklogRow` được xử lý bằng cách giữ helper tạo initials của nhóm, bổ sung tên đầy đủ và fallback cho thành viên không còn khả dụng. Khi bỏ phân công, avatar cũng phải trở lại biểu tượng người dùng, không giữ initials cũ.
+- Cập nhật nhóm `999793ee` đã bỏ kiểm tra thứ tự trạng thái trong `SprintBacklogServiceImpl`. Theo yêu cầu của người dùng, khôi phục kiểm tra chuyển cột liền kề ở backend: cho phép tiến/lùi một cột; chặn nhảy cột, kể cả workflow có cột tùy chỉnh. Giữ các sửa mới của nhóm về hiển thị trạng thái Review/Blocked và uniqueness tên Sprint theo project/team.
+- Sau tích hợp: 76 integration test pass (WorkspaceSections 23, milestone 38, submission 14, persistence 1); 10 unit test pass (Board service 5, task workflow 2, Release notes 3). Frontend build pass. Không sửa dữ liệu demo hoặc chạy migration trên database đang dùng của người dùng để kiểm thử.
+
 ## Demo
 
 1. Mở Workspace → Backlog, chọn task và đổi Assignee sang thành viên A. Chờ lưu xong.

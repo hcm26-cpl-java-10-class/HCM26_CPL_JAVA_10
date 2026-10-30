@@ -86,7 +86,7 @@ export function BacklogRow({
   const assigneeLabel = workItemAssigneeLabel({
     ...item, assigneeDisplayName: assigneeMember?.fullName || item.assigneeDisplayName,
   });
-  const assigneeInitials = assigneeInitialsOf(assigneeMember?.fullName || item.assigneeDisplayName);
+  const assigneeInitials = assignee == null ? "" : assigneeInitialsOf(assigneeMember?.fullName || item.assigneeDisplayName);
 
   const handleDragStart = (event: DragEvent<HTMLDivElement>) => {
     if (!draggable) {

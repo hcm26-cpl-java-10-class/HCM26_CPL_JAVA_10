@@ -95,6 +95,13 @@ public class SprintBacklogServiceImpl
     static final String EVENT_CREATED = "SPRINT_BACKLOG_ITEM_CREATED";
     static final String EVENT_UPDATED = "SPRINT_BACKLOG_ITEM_UPDATED";
 
+    private static final Map<SprintBacklogStatus, Set<SprintBacklogStatus>> STATUS_TRANSITIONS = Map.of(
+            SprintBacklogStatus.TODO, Set.of(SprintBacklogStatus.IN_PROGRESS),
+            SprintBacklogStatus.IN_PROGRESS, Set.of(SprintBacklogStatus.REVIEW, SprintBacklogStatus.BLOCKED, SprintBacklogStatus.TODO),
+            SprintBacklogStatus.REVIEW, Set.of(SprintBacklogStatus.DONE, SprintBacklogStatus.IN_PROGRESS),
+            SprintBacklogStatus.BLOCKED, Set.of(SprintBacklogStatus.IN_PROGRESS),
+            SprintBacklogStatus.DONE, Set.of(SprintBacklogStatus.REVIEW)
+    );
     static final String MILESTONE_NOT_FOUND_MESSAGE =
             "Milestone không tồn tại hoặc đã bị thay đổi";
 
@@ -309,8 +316,7 @@ public class SprintBacklogServiceImpl
 
         throwIfInvalid(errors);
 
-        // Status is free: the team may move an item to any workflow status
-        // (any direction), so only the sprint scope rules are enforced here.
+        // Validate status transition against allowed matrix (Bug 37/38).
         SprintBacklogStatus requestedStatus = request.getStatus();
         if (movingProductBacklogToSprint) {
             // The product backlog is outside the sprint workflow. Ignore a
@@ -318,6 +324,14 @@ public class SprintBacklogServiceImpl
             request.setStatus(SprintBacklogStatus.TODO);
         } else if (requestedStatus == null) {
             request.setStatus(backlog.getStatus());
+        } else if (!requestedStatus.equals(backlog.getStatus())) {
+            Set<SprintBacklogStatus> allowed = allowedTransitionsFor(sprint, backlog.getStatus());
+            if (!allowed.contains(requestedStatus)) {
+                errors.put("status", java.util.List.of(
+                    "Cannot transition from " + backlog.getStatus() + " to " + requestedStatus
+                    + ". Allowed next: " + allowed));
+                throwIfInvalid(errors);
+            }
         }
 
         Map<String, Object> before = snapshot(backlog);
@@ -744,6 +758,29 @@ public class SprintBacklogServiceImpl
     private boolean isConfiguredCustomStatus(Sprint sprint, SprintBacklogStatus status) {
         return status != null && status.isCustom()
                 && workspaceBoardColumns(sprint).stream().anyMatch(column -> column.key().equals(status.name()));
+    }
+
+    private Set<SprintBacklogStatus> allowedTransitionsFor(Sprint sprint, SprintBacklogStatus current) {
+        List<BoardColumn> columns = workspaceBoardColumns(sprint);
+        if (current == SprintBacklogStatus.BLOCKED
+                || columns.isEmpty()) {
+            return STATUS_TRANSITIONS.getOrDefault(current, Set.of());
+        }
+        List<SprintBacklogStatus> statuses = columns.stream()
+                .map(BoardColumn::key)
+                .filter(key -> !"BACKLOG".equals(key))
+                .map(key -> {
+                    try { return SprintBacklogStatus.valueOf(key); }
+                    catch (IllegalArgumentException ignored) { return null; }
+                })
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        int currentIndex = statuses.indexOf(current);
+        Set<SprintBacklogStatus> allowed = new java.util.LinkedHashSet<>();
+        if (currentIndex > 0) allowed.add(statuses.get(currentIndex - 1));
+        if (currentIndex >= 0 && currentIndex + 1 < statuses.size()) allowed.add(statuses.get(currentIndex + 1));
+        if (current == SprintBacklogStatus.IN_PROGRESS) allowed.add(SprintBacklogStatus.BLOCKED);
+        return allowed;
     }
 
     private Long sprintIdOf(SprintBacklog backlog) {
