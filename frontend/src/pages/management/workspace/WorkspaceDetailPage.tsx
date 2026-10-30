@@ -104,11 +104,12 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                     teamId={context.teamId} access={current} />
                 : tab === "artifacts" ? <WorkspaceArtifactsPanel workspaceId={workspaceId} projectId={context.projectId}
                     teamId={context.teamId} access={current} />
-                : tab === "sprints" ? <WorkspaceTeamBoardPanel teamId={context.teamId}
+                : tab === "sprints" ? <WorkspaceTeamBoardPanel workspaceId={workspaceId} teamId={context.teamId}
                     canUpdate={hasPermission("SPRINT_BACKLOG_UPDATE")}
+                    canConfigureColumns={current.actions.configureBoard === true}
                     onCreateWorkItem={sections.find(item => item.key === "backlog")?.canRead ? () => changeTab("backlog") : undefined} />
                 : tab === "backlog" ? <WorkspaceBacklogPanel projectId={context.projectId}
-                    teamId={context.teamId} />
+                    teamId={context.teamId} taskKeyPrefix={context.taskKeyPrefix} />
                 : tab === "activity" ? <WorkspaceProjectLogsPanel workspaceId={workspaceId} />
                 : <WorkspaceBusinessSectionPanel key={workspaceId + ":" + tab} workspaceId={workspaceId}
                     projectId={context.projectId} teamId={context.teamId} section={tab}

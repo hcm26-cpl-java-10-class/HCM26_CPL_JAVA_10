@@ -49,6 +49,7 @@ public class WorkspaceSectionPolicy {
             case SPRINT -> {
                 actions.put("create", has.test("SPRINT_WRITE"));
                 actions.put("createTask", has.test("SPRINT_WRITE") || has.test("TASK_WRITE"));
+                actions.put("configureBoard", has.test("SPRINT_WRITE") || has.test("SPRINT_BACKLOG_UPDATE"));
                 actions.put("review", has.test("MILESTONE_WRITE"));
             }
             case BACKLOG -> actions.put("createTask", has.test("SPRINT_WRITE") || has.test("TASK_WRITE"));

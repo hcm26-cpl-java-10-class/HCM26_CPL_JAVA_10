@@ -11,6 +11,7 @@ import java.util.Optional;
 
 @Repository
 public interface SprintBacklogRepository extends BaseCrudRepository<SprintBacklog, Long> {
+    boolean existsBySprint_TeamIdAndStatus(Long teamId, SprintBacklogStatus status);
     boolean existsByMilestone_Id(java.util.UUID milestoneId);
 
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)

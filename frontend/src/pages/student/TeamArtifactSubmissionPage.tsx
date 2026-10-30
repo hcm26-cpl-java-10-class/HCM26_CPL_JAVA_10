@@ -401,7 +401,7 @@ export default function TeamArtifactSubmissionPage() {
                 }}
               />
               <p className="text-xs text-muted-foreground">
-                URL tuyệt đối hợp lệ bắt đầu bằng <code>https://</code> hoặc <code>http://</code>.
+                Hệ thống chỉ kiểm tra định dạng URL HTTP(S); reviewer cần xác nhận repository tồn tại và có đúng nội dung.
               </p>
             </div>
 
@@ -420,7 +420,7 @@ export default function TeamArtifactSubmissionPage() {
                 }}
               />
               <p className="text-xs text-muted-foreground">
-                URL tuyệt đối của bản demo hoặc staging có thể truy cập được.
+                Nhập URL HTTP(S) của bản demo hoặc staging. Hệ thống kiểm tra định dạng, không tự truy cập URL này.
               </p>
             </div>
 
@@ -444,6 +444,17 @@ export default function TeamArtifactSubmissionPage() {
                 }}
               />
             </div>
+
+            {/* Rejected Alert (Fix Bug #31) */}
+            {latestSubmission?.status === "REJECTED" && (
+              <Alert variant="destructive">
+                <AlertCircle className="size-4" />
+                <AlertTitle>Bài nộp đã bị từ chối (REJECTED - 0 điểm)</AlertTitle>
+                <AlertDescription className="text-xs mt-1">
+                  Bài nộp cho milestone này đã bị reviewer đánh giá REJECTED (0 điểm). Nhóm không được phép nộp lại hoặc chỉnh sửa bản nháp.
+                </AlertDescription>
+              </Alert>
+            )}
 
             {/* Amber Alert ONLY when submission is truly blocked (Fix Bug #29) */}
             {!canSubmit && (
@@ -482,7 +493,7 @@ export default function TeamArtifactSubmissionPage() {
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <Button
                 variant="outline"
-                disabled={save.isPending || submit.isPending || !canSubmit}
+                disabled={save.isPending || submit.isPending || !canSubmit || latestSubmission?.status === "REJECTED"}
                 onClick={() => save.mutate()}
               >
                 {save.isPending ? (
@@ -497,7 +508,7 @@ export default function TeamArtifactSubmissionPage() {
               </Button>
 
               <Button
-                disabled={submit.isPending || save.isPending || !canSubmit}
+                disabled={submit.isPending || save.isPending || !canSubmit || latestSubmission?.status === "REJECTED"}
                 onClick={handleValidateAndOpenPreview}
               >
                 <Eye className="mr-2 size-4" /> Xem trước & Nộp bài

@@ -60,6 +60,16 @@ export default function StudentTeamMilestoneSubmissionsPage() {
             </CardHeader>
             <CardContent className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground"><Badge variant="outline">{workspaceQuery.data?.milestone.status}</Badge><span className="flex items-center gap-2"><CalendarClock className="size-4" /> Hạn nộp: {workspaceQuery.data?.milestone.deadline ? new Date(workspaceQuery.data.milestone.deadline).toLocaleString("vi-VN") : "—"}</span></CardContent>
           </Card>
+          {latestSubmission?.submission.status === "REJECTED" ? (
+            <Alert variant="destructive">
+              <AlertCircle />
+              <AlertTitle>Bài nộp đã bị từ chối (REJECTED - 0 điểm)</AlertTitle>
+              <AlertDescription>
+                Reviewer đã đánh giá bài nộp là <strong>REJECTED (0 điểm)</strong> và đánh rớt milestone này. Nhóm không được phép nộp lại phiên bản mới.
+                {latestSubmission.reviewFeedback && <p className="mt-2 font-medium">Lý do: {latestSubmission.reviewFeedback}</p>}
+              </AlertDescription>
+            </Alert>
+          ) : null}
           {latestSubmission?.submission.status === "CHANGES_REQUESTED" ? <Alert className="border-amber-400 bg-amber-50 text-amber-950 dark:bg-amber-950/20 dark:text-amber-100">
             <Undo2 /><AlertTitle>Admin/reviewer yêu cầu bạn nộp lại</AlertTitle>
             <AlertDescription className="grid justify-items-start gap-3">

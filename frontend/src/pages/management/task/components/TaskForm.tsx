@@ -206,9 +206,11 @@ export function TaskForm({ projectId, backlogItemId, assignees, task, onSaved, o
                   Unable to load existing tags. You can still enter new tags.
                 </p>
               )}
-              <p className="text-xs text-muted-foreground">
-                Enter a tag and press Enter, or select an existing project tag.
-              </p>
+              <div className="rounded-md border bg-muted/30 p-2.5 text-xs text-muted-foreground space-y-1">
+                <p className="font-medium text-foreground">💡 Giải thích về Tags (Thẻ nhãn):</p>
+                <p>Tags dùng để gắn nhãn phân loại kỹ năng (vd: <code>Frontend</code>, <code>Backend</code>, <code>Database</code>, <code>API</code>, <code>UI/UX</code>) hoặc tính chất công việc để các thành viên trong nhóm dễ dàng tìm kiếm và lọc task.</p>
+                <p>Nhập tên tag và nhấn Enter, hoặc bấm chọn từ các tag đã có sẵn của dự án.</p>
+              </div>
             </TaskField>
           </CardContent>
         </Card>

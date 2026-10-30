@@ -248,18 +248,44 @@ export function WorkspaceArtifactsPanel({
                         Lịch sử nộp ({hasSubmission ? milestoneSubmissions.length : 0})
                       </Button>
 
-                      {/* Resubmit button if already submitted (Fix Bug #26) */}
+                      {/* Action buttons (Fix Bug #26 & Bug #31: REJECTED blocks resubmit) */}
                       {hasSubmission ? (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => handleOpenSubmit(m.id)}
-                          className="font-medium"
-                          title="Nộp lại phiên bản mới tiếp theo"
-                        >
-                          <Send className="mr-1.5 size-4" />
-                          Nộp lại (Resubmit v{latestSub!.submission.version + 1})
-                        </Button>
+                        (() => {
+                          const status = latestSub!.submission.status;
+                          if (status === "REJECTED") {
+                            return (
+                              <Badge variant="destructive" className="px-3 py-1 text-xs" title="Reviewer đánh giá REJECTED (0 điểm). Rớt milestone và không được nộp lại.">
+                                Đã rớt (0 điểm) · Bị từ chối
+                              </Badge>
+                            );
+                          }
+                          if (status === "ACCEPTED") {
+                            return (
+                              <Badge className="bg-emerald-600 text-white px-3 py-1 text-xs">
+                                Đã đạt (ACCEPTED)
+                              </Badge>
+                            );
+                          }
+                          if (status === "CHANGES_REQUESTED") {
+                            return (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => handleOpenSubmit(m.id)}
+                                className="font-medium border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
+                                title="Reviewer yêu cầu nộp lại. Bấm để nộp phiên bản mới tiếp theo"
+                              >
+                                <Send className="mr-1.5 size-4" />
+                                Nộp lại (Resubmit v{latestSub!.submission.version + 1})
+                              </Button>
+                            );
+                          }
+                          return (
+                            <Badge variant="outline" className="border-amber-300 text-amber-700 px-2.5 py-1 text-xs">
+                              Đang chờ chấm bài
+                            </Badge>
+                          );
+                        })()
                       ) : (
                         <Button
                           size="sm"

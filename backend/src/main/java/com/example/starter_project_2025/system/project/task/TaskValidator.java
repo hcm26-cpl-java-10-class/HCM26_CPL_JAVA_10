@@ -18,6 +18,11 @@ public class TaskValidator {
         if (request.getProjectId() == null) {
             errors.put("projectId", List.of("Please select a project"));
         }
+        String description = request.getDescription();
+        if (description != null && !description.isBlank()
+                && description.strip().split("\\s+").length > 1000) {
+            errors.put("description", List.of("Description must not exceed 1000 words"));
+        }
 
         Double hours = request.getEstimatedHours();
         if ((request.getAssigneeProjectMemberId() != null && hours == null)

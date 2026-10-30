@@ -8,6 +8,7 @@ interface WorkspaceBacklogPanelProps {
    * that team instead of every record of the tenant.
    */
   teamId?: number | null;
+  taskKeyPrefix?: string | null;
 }
 
 /**
@@ -23,6 +24,7 @@ interface WorkspaceBacklogPanelProps {
 export function WorkspaceBacklogPanel({
   projectId = null,
   teamId = null,
+  taskKeyPrefix = null,
 }: WorkspaceBacklogPanelProps) {
-  return <BacklogBoard embedded projectId={projectId} teamId={teamId} />;
+  return <BacklogBoard embedded projectId={projectId} teamId={teamId} taskKeyPrefix={taskKeyPrefix} />;
 }

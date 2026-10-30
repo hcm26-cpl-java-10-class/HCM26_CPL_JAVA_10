@@ -6,8 +6,11 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
+import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 
 @org.springframework.core.annotation.Order(org.springframework.core.Ordered.HIGHEST_PRECEDENCE)
+@Slf4j
 @RestControllerAdvice(assignableTypes = {WorkspaceSectionsController.class, WorkspaceMockSectionsController.class})
 public class WorkspaceSectionErrors {
     public record Error(int status, String message, LocalDateTime timestamp, String correlationId) { }
@@ -31,7 +34,16 @@ public class WorkspaceSectionErrors {
             org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class})
     public ResponseEntity<Error> input(Exception exception) { return response(422, "Invalid request"); }
     @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<Error> failed(RuntimeException exception) {
-        return response(500, "The section could not be loaded. Try again.");
+    public ResponseEntity<Error> failed(RuntimeException exception, HttpServletRequest request) {
+        String correlationId = WorkspaceCorrelation.current();
+        log.error("Workspace request failed: method={}, path={}, correlationId={}",
+                request.getMethod(), request.getRequestURI(), correlationId, exception);
+        if ("PUT".equalsIgnoreCase(request.getMethod())
+                && request.getRequestURI().endsWith("/board-columns")) {
+            return response(500, "Board settings could not be saved. Check backend logs using correlation ID "
+                    + (correlationId == null ? "(not assigned)" : correlationId) + ". Existing settings were not changed.");
+        }
+        return response(500, "The section could not be loaded. Try again. Correlation ID: "
+                + (correlationId == null ? "(not assigned)" : correlationId));
     }
 }

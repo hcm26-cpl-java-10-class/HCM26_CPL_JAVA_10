@@ -37,10 +37,20 @@ export const BACKLOG_STATUS_META: Record<
     pill: "border-sky-200 bg-sky-100 text-sky-700 dark:border-sky-800 dark:bg-sky-900/40 dark:text-sky-300",
     dot: "bg-sky-500",
   },
+  REVIEW: {
+    label: "Review",
+    pill: "border-amber-200 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+    dot: "bg-amber-500",
+  },
   DONE: {
     label: "Done",
     pill: "border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
     dot: "bg-emerald-500",
+  },
+  BLOCKED: {
+    label: "Blocked",
+    pill: "border-rose-200 bg-rose-100 text-rose-700 dark:border-rose-800 dark:bg-rose-900/40 dark:text-rose-300",
+    dot: "bg-rose-500",
   },
 };
 
@@ -110,12 +120,17 @@ export const backlogWorkTypeMeta = (
 export const backlogPriorityMeta = (priority?: BacklogPriority | null) =>
   (priority && BACKLOG_PRIORITY_META[priority]) || NO_PRIORITY_META;
 
-/**
- * The team may move a sprint backlog item to any status of the workflow: a
- * work item can go backwards, skip a step (To Do -> Done) or be reopened.
- * Kept in sync with `SprintBacklogServiceImpl`, which no longer enforces a
- * forward-only transition matrix.
- */
+export const NEXT_TASK_STATUS: Record<BacklogStatus, BacklogStatus | null> = {
+  BACKLOG: "SPRINT_BACKLOG",
+  SPRINT_BACKLOG: "IN_PROGRESS",
+  IN_PROGRESS: "REVIEW",
+  REVIEW: "DONE",
+  DONE: null,
+  BLOCKED: "IN_PROGRESS",
+};
+
+export const backlogStatusMeta = (status?: BacklogStatus | null) =>
+  (status && BACKLOG_STATUS_META[status]) || BACKLOG_STATUS_META.BACKLOG;
 export const canMoveToStatus = (
   current: BacklogStatus | null | undefined,
   target: BacklogStatus,
@@ -125,8 +140,7 @@ export const canMoveToStatus = (
   return from === target || TASK_STATUS_ORDER.includes(target);
 };
 
-export const backlogStatusMeta = (status?: BacklogStatus | null) =>
-  (status && BACKLOG_STATUS_META[status]) || BACKLOG_STATUS_META.BACKLOG;
+
 
 /**
  * Words that name the container, not the work it holds: taking them as key
@@ -154,8 +168,15 @@ const GENERIC_KEY_TOKENS = new Set([
  */
 export const projectKeyOf = (
   sprintName?: string | null,
-  fallback = "SB",
+  fallback = "FA",
 ) => {
+  // Bug 44: use workspace task prefix stored in localStorage (set when workspace is opened)
+  const stored = typeof window !== "undefined"
+    ? (localStorage.getItem("workspace_task_prefix") ?? "").replace(/[^A-Za-z0-9]/g, "").toUpperCase()
+    : "";
+  if (stored.length >= 1) return stored;
+
+  // Fallback: derive from sprint name (legacy behaviour)
   const meaningful = (sprintName ?? "")
     .split(/[^A-Za-z0-9]+/)
     .filter(
