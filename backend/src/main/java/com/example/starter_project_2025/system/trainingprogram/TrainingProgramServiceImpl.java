@@ -18,19 +18,26 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
     private final TrainingProgramRepository programRepository;
     private final SubjectRepository subjectRepository;
     private final TeachingAssignmentRepository teachingAssignmentRepository;
+    private final ClassTrainingProgramRepository classTrainingProgramRepository;
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> findRegions() { return programRepository.findDistinctRegions(); }
 
     @Override
     @Transactional(readOnly = true)
     public List<TrainingProgramResponse> findAll(String search, ProgramStatus status, String region) {
-        String q = search == null ? "" : search.trim().toLowerCase(Locale.ROOT);
-        String r = region == null ? "" : region.trim().toLowerCase(Locale.ROOT);
-        return programRepository.findAll().stream()
-                .filter(p -> q.isEmpty() || p.getCode().toLowerCase(Locale.ROOT).contains(q)
-                        || p.getName().toLowerCase(Locale.ROOT).contains(q))
-                .filter(p -> status == null || p.getStatus() == status)
-                .filter(p -> r.isEmpty() || (p.getRegion() != null && p.getRegion().toLowerCase(Locale.ROOT).contains(r)))
-                .sorted(Comparator.comparing(TrainingProgram::getId).reversed())
-                .map(this::toResponse).toList();
+        String q = search == null ? "" : search.trim();
+        String r = region == null ? "" : region.trim();
+        return programRepository.searchAll(q, status, r).stream().map(this::toResponse).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<TrainingProgramResponse> findPage(String search, ProgramStatus status, String region, org.springframework.data.domain.Pageable pageable) {
+        String q = search == null ? "" : search.trim();
+        String r = region == null ? "" : region.trim();
+        return programRepository.searchPage(q, status, r, pageable).map(this::toResponse);
     }
 
     @Override
@@ -50,18 +57,20 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
         p.setName(request.name().trim());
         p.setVersion(request.version().trim());
         p.setRegion(trimToNull(request.region()));
-        p.setStatus(ProgramStatus.DRAFT);
+        p.setStatus(ProgramStatus.ACTIVE);
         programRepository.save(p);
-        if (request.subjects() != null && !request.subjects().isEmpty()) {
-            applySubjects(p, request.subjects());
-        }
+        applySubjects(p, request.subjects());
+        validateProgramSubjects(p);
+        p.setIsActive(true);
         return toResponse(programRepository.save(p));
     }
 
     @Override
     public TrainingProgramResponse update(Long id, TrainingProgramRequest request) {
         TrainingProgram p = getProgram(id);
-        requireDraft(p);
+        if (classTrainingProgramRepository.existsByProgram_Id(id)) {
+            throw new ConflictException("This program version is assigned to a class. Clone a new version to make changes; existing classes must keep the old programId.");
+        }
         validateCodeVersion(request.code(), request.version(), id);
         if (request.subjects() == null || request.subjects().isEmpty()) {
             throw new IllegalArgumentException("A training program must contain at least one subject.");
@@ -71,14 +80,18 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
         p.setVersion(request.version().trim());
         p.setRegion(trimToNull(request.region()));
         if (request.subjects() != null) applySubjects(p, request.subjects());
+        validateProgramSubjects(p);
         return toResponse(programRepository.save(p));
     }
 
     @Override
     public TrainingProgramResponse updateSubjects(Long id, List<ProgramSubjectRequest> subjects) {
         TrainingProgram p = getProgram(id);
-        requireDraft(p);
+        if (classTrainingProgramRepository.existsByProgram_Id(id)) {
+            throw new ConflictException("This program version is assigned to a class. Clone a new version to change its subjects.");
+        }
         applySubjects(p, subjects);
+        validateProgramSubjects(p);
         return toResponse(programRepository.save(p));
     }
 
@@ -92,11 +105,13 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
         copy.setName(source.getName());
         copy.setVersion(newVersion.trim());
         copy.setRegion(source.getRegion());
-        copy.setStatus(ProgramStatus.DRAFT);
+        copy.setStatus(ProgramStatus.ACTIVE);
         programRepository.save(copy);
         List<ProgramSubjectRequest> requests = source.getSubjects().stream()
                 .map(ps -> new ProgramSubjectRequest(ps.getSubject().getId(), ps.getOrderIndex())).toList();
         applySubjects(copy, requests);
+        validateProgramSubjects(copy);
+        copy.setIsActive(true);
         return toResponse(programRepository.save(copy));
     }
 
@@ -123,8 +138,8 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
         TrainingProgram p = getProgram(id);
         if (status == null) throw new IllegalArgumentException("status is required");
         if (status == ProgramStatus.ACTIVE) return activate(id);
-        p.setStatus(status);
-        p.setIsActive(status != ProgramStatus.INACTIVE);
+        p.setStatus(ProgramStatus.INACTIVE);
+        p.setIsActive(false);
         return toResponse(programRepository.save(p));
     }
 
@@ -147,6 +162,7 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
                 }
             }
         }
+        if (requests.isEmpty()) throw new IllegalArgumentException("A training program must contain at least one subject.");
         for (ProgramSubjectRequest req : requests) {
             if (req == null || req.subjectId() == null || req.orderIndex() == null || req.orderIndex() <= 0)
                 throw new IllegalArgumentException("Each subject requires a valid subjectId and positive orderIndex.");
@@ -164,12 +180,32 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
             link.setOrderIndex(req.orderIndex());
             links.add(link);
         }
-        program.replaceSubjects(links);
+        if (orderIndexes.size() != requests.size()) throw new IllegalArgumentException("Subject order must be continuous from 1 to N.");
+        for (int expected = 1; expected <= requests.size(); expected++) {
+            if (!orderIndexes.contains(expected)) throw new IllegalArgumentException("Subject order must be continuous from 1 to N.");
+        }
+        Set<Long> retainedSubjectIds = links.stream().map(link -> link.getSubject().getId()).collect(Collectors.toSet());
+        program.getSubjects().removeIf(existing -> !retainedSubjectIds.contains(existing.getSubject().getId()));
+        Map<Long, ProgramSubject> current = program.getSubjects().stream()
+                .collect(Collectors.toMap(item -> item.getSubject().getId(), item -> item));
+        for (ProgramSubject requested : links) {
+            ProgramSubject existing = current.get(requested.getSubject().getId());
+            if (existing == null) {
+                requested.setProgram(program);
+                program.getSubjects().add(requested);
+            } else {
+                existing.setOrderIndex(requested.getOrderIndex());
+                existing.setSubject(requested.getSubject());
+            }
+        }
     }
 
     private void validateCodeVersion(String code, String version, Long currentId) {
-        boolean exists = programRepository.findByCodeAndVersion(code.trim(), version.trim())
-                .filter(p -> !Objects.equals(p.getId(), currentId)).isPresent();
+        boolean exists = programRepository.findAll().stream()
+                .filter(p -> !Objects.equals(p.getId(), currentId))
+                .anyMatch(p -> p.getCode() != null && p.getVersion() != null
+                        && p.getCode().trim().equalsIgnoreCase(code.trim())
+                        && p.getVersion().trim().equalsIgnoreCase(version.trim()));
         if (exists) throw new IllegalArgumentException("A program with this code and version already exists.");
     }
 
@@ -192,9 +228,25 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
 
     private String trimToNull(String value) { return value == null || value.isBlank() ? null : value.trim(); }
 
-    private void requireDraft(TrainingProgram program) {
-        if (program.getStatus() != ProgramStatus.DRAFT) {
-            throw new IllegalArgumentException("Only DRAFT programs can be edited. Clone a new version first.");
+    private void validateProgramSubjects(TrainingProgram program) {
+        if (program.getSubjects() == null || program.getSubjects().isEmpty())
+            throw new IllegalArgumentException("A training program must contain at least one subject.");
+        for (ProgramSubject link : program.getSubjects()) {
+            Subject subject = link.getSubject();
+            if (!Boolean.TRUE.equals(subject.getIsActive()))
+                throw new IllegalArgumentException("Subject " + subject.getCode() + " is inactive.");
+            if (subject.getDurationHours() == null || subject.getDurationHours() <= 0)
+                throw new IllegalArgumentException("Subject " + subject.getCode() + " must have positive duration.");
         }
+    }
+
+    @Override
+    public void delete(Long id) {
+        TrainingProgram program = getProgram(id);
+        if (classTrainingProgramRepository.existsByProgram_Id(id))
+            throw new ConflictException("Cannot delete a program assigned to a class. Set it INACTIVE instead.");
+        if (program.getSubjects().stream().anyMatch(ps -> teachingAssignmentRepository.existsByProgramSubject_Id(ps.getId())))
+            throw new ConflictException("Cannot delete a program referenced by teaching assignments. Set it INACTIVE instead.");
+        programRepository.delete(program);
     }
 }

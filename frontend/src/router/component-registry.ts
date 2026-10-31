@@ -1,3 +1,4 @@
+
 import { Logout } from "@/components/auth/Logout";
 import { OAuth2RedirectHandler } from "@/components/auth/OAuth2RedirectHandler";
 import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage";
@@ -14,6 +15,7 @@ import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModule
 import InvitationManagementPage from "@/pages/management/invitation";
 import ScheduleValidationPage from "@/pages/management/schedule-validation";
 import TeachingAssignmentPage from "@/pages/management/teaching-assignment";
+import TrainingProgramDetailPage from "@/pages/management/program/TrainingProgramDetail";
 import StudentExamList from "@/pages/student/StudentExamList";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
@@ -29,6 +31,11 @@ export interface RouteConfig {
 }
 
 export const routes: RouteConfig[] = [
+  {
+    path: "/programs/:id/detail",
+    component: TrainingProgramDetailPage,
+    requiredPermission: "PROGRAM_READ",
+  },
   {
     path: "/class-setup",
     component: ClassSetupPage,
@@ -77,7 +84,10 @@ export const routes: RouteConfig[] = [
     requiredPermission: "STUDENT_SCORE_READ",
     isModuleDriven: true,
   },
-  { path: "/schedule-validation", component: ScheduleValidationPage },
+  {
+    path: "/schedule-validation",
+    component: ScheduleValidationPage,
+  },
   {
     path: "/student",
     component: StudentLandingPage,

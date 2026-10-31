@@ -148,18 +148,22 @@ class ClassSubjectPlanIntegrationTest {
         TrainingProgram javaProgram = programRepository.findByCodeAndVersion("LOCAL_JAVA", "1.0").orElseThrow();
         TrainingProgram fullstackProgram = programRepository.findByCodeAndVersion("LOCAL_FULLSTACK", "1.0").orElseThrow();
 
-        // Draft program cannot be assigned -> 400 Bad Request
-        long subjectId = subjectRepository.findByCodeAndVersion("JAVA_CORE", "1.0").orElseThrow().getId();
-        var draftProgram = programService.create(new TrainingProgramRequest(
-                "DRAFT_PRG", "Chương trình nháp", "1.0", "HCM",
-                List.of(new ProgramSubjectRequest(subjectId, 1))
-        ));
-        mvc.perform(put("/api/classes/2/training-program")
-                        .header("Authorization", adminBearer)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"programId\":" + draftProgram.id() + "}"))
-                .andExpect(status().isBadRequest());
+        // INACTIVE program cannot be assigned -> 400 Bad Request
+	long subjectId = subjectRepository.findByCodeAndVersion("JAVA_CORE", "1.0")
+            .orElseThrow().getId();
 
+	var inactiveProgram = programService.create(new TrainingProgramRequest(
+            "INACTIVE_PRG", "Chương trình ngừng hoạt động", "1.0", "HCM",
+            List.of(new ProgramSubjectRequest(subjectId, 1))
+	));
+
+	programService.changeStatus(inactiveProgram.id(), ProgramStatus.INACTIVE);
+
+	mvc.perform(put("/api/classes/2/training-program")
+                    .header("Authorization", adminBearer)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"programId\":" + inactiveProgram.id() + "}"))
+            .andExpect(status().isBadRequest());
         // Assign ACTIVE program to Class 2 (enrolledCount == 0)
         String assignedRaw = mvc.perform(put("/api/classes/2/training-program")
                         .header("Authorization", adminBearer)
