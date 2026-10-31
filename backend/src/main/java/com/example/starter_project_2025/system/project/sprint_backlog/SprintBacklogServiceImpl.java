@@ -7,6 +7,7 @@ import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.project.ProjectMember;
+import com.example.starter_project_2025.system.project.ProjectMemberEligibility;
 import com.example.starter_project_2025.system.project.ProjectMemberRepository;
 import com.example.starter_project_2025.system.project.ProjectTeamRepository;
 import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
@@ -172,7 +173,7 @@ public class SprintBacklogServiceImpl
         validateTitle(backlog.getTitle(), errors);
         validateDescription(backlog.getDescription(), errors);
         validateDates(backlog.getStartDate(), backlog.getEndDate(), errors);
-        validateAssignee(backlog.getAssigneeProjectMemberId(), errors);
+        validateAssignee(backlog.getAssigneeProjectMemberId(), sprint, projectId, errors);
         validateReporter(backlog.getReporterProjectMemberId(), errors);
         validateEstimatedHours(backlog.getEstimatedHours(), errors);
 
@@ -270,7 +271,6 @@ public class SprintBacklogServiceImpl
         validateTitle(title, errors);
         validateDescription(description, errors);
         validateDates(startDate, endDate, errors);
-        validateAssignee(assigneeId, errors);
         validateReporter(reporterId, errors);
         validateEstimatedHours(estimatedHours, errors);
 
@@ -309,6 +309,15 @@ public class SprintBacklogServiceImpl
                 milestone,
                 errors
         );
+
+        // Preserve historical assignments on unrelated edits, but validate every
+        // explicit assignment and any move to another team/project scope.
+        if (request.getAssigneeProjectMemberId() != null
+                || !java.util.Objects.equals(projectId, backlog.getProjectId())
+                || !java.util.Objects.equals(sprint == null ? null : sprint.getTeamId(),
+                        backlog.getSprint() == null ? null : backlog.getSprint().getTeamId())) {
+            validateAssignee(assigneeId, sprint, projectId, errors);
+        }
 
         if (!java.util.Objects.equals(projectId, backlog.getProjectId()) && subtasks.existsByBacklogItem_Id(id)) {
             errors.put(PROJECT_ID_FIELD, List.of("A backlog item with subtasks cannot be moved to another project"));
@@ -498,6 +507,7 @@ public class SprintBacklogServiceImpl
                         com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus.ACTIVE);
 
         return members.stream()
+                .filter(ProjectMemberEligibility::canAssign)
                 .map(member -> new BacklogAssigneeOptionDTO(
                         member.getId(),
                         member.getClassMember().getUser().getId(),
@@ -666,14 +676,16 @@ public class SprintBacklogServiceImpl
         }
     }
 
-    /**
-     * TEMPORARY: the assignee is only checked for a positive identifier because
-     * the project member module (and its lookup) is not implemented yet.
-     */
-    private void validateAssignee(Long assigneeId, Map<String, List<String>> errors) {
-
-        if (assigneeId != null && assigneeId <= 0) {
-            addError(errors, ASSIGNEE_FIELD, "Người phụ trách không hợp lệ");
+    /** Validate the same members offered by the Board and detail pickers. */
+    private void validateAssignee(Long assigneeId, Sprint sprint, Long projectId, Map<String, List<String>> errors) {
+        if (assigneeId == null) return;
+        ProjectMember member = assigneeId <= 0 ? null : projectMemberRepository.findById(assigneeId).orElse(null);
+        boolean inScope = member != null && member.getTeam() != null
+                && (sprint != null && sprint.getTeamId() != null
+                    ? sprint.getTeamId().equals(member.getTeam().getId())
+                    : projectId != null && projectId.equals(member.getTeam().getProjectId()));
+        if (!inScope || !ProjectMemberEligibility.canAssign(member)) {
+            addError(errors, ASSIGNEE_FIELD, "Assignee must be an active, unlocked member of this work item's team or project");
         }
     }
 

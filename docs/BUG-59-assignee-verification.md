@@ -3,17 +3,18 @@
 ## Những chỗ đã sửa
 
 - Sau khi lưu từ chi tiết hoặc chọn assignee ngay trên thẻ, dùng phản hồi API để cập nhật cache chi tiết và các thẻ tương ứng, rồi làm mới dữ liệu Backlog/Board và audit. Bỏ phân công sẽ xóa cả tên cũ trong cache.
-- Giữ option của assignee đã lưu khi người đó không còn trong danh sách thành viên được chọn. Option này bị khóa cho phân công mới và hiển thị `unavailable`; không hiển thị nhầm `Unassigned`.
+- Giữ tên assignee đã lưu khi người đó không còn trong danh sách thành viên được chọn. Không gắn hậu tố `unavailable` vào tên. Option không hợp lệ vẫn bị khóa cho phân công mới, có tooltip giải thích; không hiển thị nhầm `Unassigned`.
 - Backend giữ tên của assignee thuộc team dù thành viên đã chuyển INACTIVE. Danh sách có thể chọn cho phân công mới vẫn chỉ gồm thành viên hợp lệ.
 - Dòng Backlog hiển thị tên/initials và tooltip đầy đủ thay vì chỉ hiển thị ID thành viên. Detail sheet giữ tên được lấy từ dữ liệu Board khi cần hiển thị assignee không còn trong danh sách lựa chọn.
-- Không đổi quyền truy cập, điều kiện phân công, dữ liệu task hiện có hay trạng thái workflow.
+- Board và chi tiết dùng chung điều kiện thành viên còn hoạt động, thuộc phạm vi phù hợp và tài khoản không bị khóa. API tạo/sửa cũng kiểm tra điều kiện này khi phân công mới; vẫn cho sửa nội dung task đang giữ phân công lịch sử. Không đổi quyền truy cập, dữ liệu task hiện có hay trạng thái workflow.
 
 ## Kiểm tra
 
-- `WorkspaceSectionsIntegrationTest`: 23 test pass, bao gồm lưu từ chi tiết rồi đọc Board; lưu từ Board rồi đọc chi tiết; bỏ phân công; giữ tên assignee không còn hoạt động; chặn phân công mới cho thành viên không hợp lệ và giữ nguyên bản ghi.
+- `WorkspaceSectionsIntegrationTest`: 25 test pass sau lần đồng bộ điều kiện phân công, bao gồm lưu từ chi tiết rồi đọc Board; lưu từ Board rồi đọc chi tiết; bỏ phân công; giữ tên assignee không còn hoạt động; chặn phân công mới cho thành viên không hợp lệ và giữ nguyên bản ghi.
+- Kiểm tra danh sách Board/chi tiết thống nhất khi khóa tài khoản, ngừng hoạt động tài khoản, membership bị vô hiệu hóa hoặc trạng thái thành viên lớp INACTIVE; sau kích hoạt lại, thành viên xuất hiện trở lại ở cả hai danh sách. API tạo/sửa từ chối ID không tồn tại hoặc ngoài phạm vi. Request hợp lệ vẫn tạo/sửa thành công. Phân công lịch sử không ngăn sửa nội dung khác của task.
 - Frontend build thành công.
 - Kiểm tra hàm tên/options: 5 trường hợp pass. Kiểm tra cập nhật/xóa cache: 7 assertion pass, có kiểm tra bản ghi không liên quan không bị đổi.
-- Render trực tiếp selector của thẻ Board trong Chrome với dữ liệu thử: thành viên hoạt động hiện đúng tên; thành viên không có trong options hiện tên kèm unavailable; giá trị null hiện Unassigned.
+- Render trực tiếp selector của thẻ Board trong Chrome với dữ liệu thử: thành viên hoạt động hiện đúng tên, không có unavailable; thành viên không có trong options vẫn giữ tên nhưng option bị khóa; giá trị null hiện Unassigned.
 - Kiểm tra trình duyệt trên dùng fixture riêng, không thay cho kiểm thử toàn bộ ứng dụng với tài khoản thật.
 
 ## Tích hợp code nhóm

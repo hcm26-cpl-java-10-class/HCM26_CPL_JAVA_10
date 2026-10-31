@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.project.team;
 
 import com.example.starter_project_2025.system.project.ProjectTeam;
 import com.example.starter_project_2025.system.project.ProjectMember;
+import com.example.starter_project_2025.system.project.ProjectMemberEligibility;
 import com.example.starter_project_2025.system.project.ProjectMemberRepository;
 import com.example.starter_project_2025.system.project.sprint.Sprint;
 import com.example.starter_project_2025.system.project.sprint.SprintMapper;
@@ -162,7 +163,6 @@ public class TeamBacklogService {
     }
 
     private static boolean eligibleMember(ProjectMember member) {
-        var user = member.getClassMember().getUser();
-        return Boolean.TRUE.equals(user.getIsActive()) && !Boolean.TRUE.equals(user.getLocked());
+        return ProjectMemberEligibility.canAssign(member);
     }
 }
