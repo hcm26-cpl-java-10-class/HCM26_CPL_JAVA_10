@@ -19,5 +19,6 @@ export * from "./features/rbac/department";
 export * from "./features/rbac/permission";
 export * from "./features/rbac/role";
 export * from "./features/rbac/user";
+export * from "./features/score-appeal";
 export * from "./features/demo/session";
 export * from "./features/demo/lesson";

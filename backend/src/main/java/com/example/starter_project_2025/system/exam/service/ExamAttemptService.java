@@ -559,12 +559,20 @@ public class ExamAttemptService {
         response.setDurationMinutes(attempt.getDurationMinutes());
         response.setTotalPoints(attempt.getTotalPoints());
         response.setMaxScore(ExamScoring.effectiveMax(attempt.getMaxScore()));
-        response.setObjectiveScore(attempt.getObjectiveScore());
-        response.setFinalScore(attempt.getFinalScore());
-        if (attempt.getStatus() != ExamAttemptStatus.IN_PROGRESS && attempt.getStatus() != ExamAttemptStatus.NOT_STARTED) {
-            response.setProvisionalScore(attempt.getFinalScore() != null
-                    ? attempt.getFinalScore()
-                    : ExamScoring.applyPenalty(attempt.getObjectiveScore(), attempt.getLatePenaltyPercentApplied()));
+
+        // Diem chi duoc cong bo khi giao vien bam "Publish Results".
+        boolean resultPublished = resultAccessService.isResultPublished(attempt.getExam());
+        response.setResultPublished(resultPublished);
+
+        if (resultPublished) {
+            response.setObjectiveScore(attempt.getObjectiveScore());
+            response.setFinalScore(attempt.getFinalScore());
+            if (attempt.getStatus() != ExamAttemptStatus.IN_PROGRESS
+                    && attempt.getStatus() != ExamAttemptStatus.NOT_STARTED) {
+                response.setProvisionalScore(attempt.getFinalScore() != null
+                        ? attempt.getFinalScore()
+                        : ExamScoring.applyPenalty(attempt.getObjectiveScore(), attempt.getLatePenaltyPercentApplied()));
+            }
         }
         response.setStatus(attempt.getStatus());
         response.setStartedAt(attempt.getStartedAt());
@@ -620,8 +628,15 @@ public class ExamAttemptService {
         response.setStatus(attempt.getStatus());
         response.setTotalPoints(attempt.getTotalPoints());
         response.setMaxScore(ExamScoring.effectiveMax(attempt.getMaxScore()));
-        response.setObjectiveScore(attempt.getObjectiveScore());
-        response.setFinalScore(attempt.getFinalScore());
+
+        // Diem chi duoc hien thi khi giao vien da cong bo ket qua.
+        boolean resultPublished = resultAccessService.isResultPublished(attempt.getExam());
+        response.setResultPublished(resultPublished);
+        if (resultPublished) {
+            response.setObjectiveScore(attempt.getObjectiveScore());
+            response.setFinalScore(attempt.getFinalScore());
+        }
+
         response.setStartedAt(attempt.getStartedAt());
         response.setDeadlineAt(deadlineOf(attempt));
         response.setSubmittedAt(attempt.getSubmittedAt());

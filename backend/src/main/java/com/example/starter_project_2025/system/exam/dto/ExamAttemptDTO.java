@@ -22,6 +22,10 @@ public class ExamAttemptDTO {
     private BigDecimal objectiveScore;
     private BigDecimal finalScore;
     private BigDecimal provisionalScore;
+
+    /** Ket qua da duoc giao vien cong bo (Publish Results) hay chua. */
+    private boolean resultPublished;
+
     private ExamAttemptStatus status;
     private Instant startedAt;
     private Instant officialDeadlineAt;

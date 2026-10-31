@@ -26,6 +26,10 @@ export interface PublishedExamScore {
   firstScore: number | null;
   secondScore: number | null;
   submittedAt: string;
+  /** Id của lần làm bài, dùng để định danh khiếu nại điểm. */
+  attemptId: number;
+  /** Kết quả đã được giáo viên công bố hay chưa (chỉ khi công bố mới được khiếu nại). */
+  resultPublished: boolean;
 }
 
 export const examApi = {

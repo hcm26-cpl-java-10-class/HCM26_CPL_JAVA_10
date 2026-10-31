@@ -1,7 +1,6 @@
 import { invitationApi } from "@/api";
 import type {
     AnonymousInvitationRequest,
-    BatchInvitationRequest,
     InvitationCreateRequest,
     InvitationDTO,
     ReminderRequest,
@@ -40,12 +39,6 @@ interface AuthForm {
     expiresAt: string;
 }
 
-interface SelectedStudent {
-    id: string;
-    email: string;
-    fullName: string;
-}
-
 interface AnonForm {
     maxAccessAttempts: string;
 }
@@ -72,14 +65,10 @@ function toIso(value: string) {
 
 function UserPicker({
                         value,
-                        selected,
                         onChange,
-                        onSelectionChange,
                     }: {
     value: string;
-    selected: SelectedStudent[];
     onChange: (id: string) => void;
-    onSelectionChange: (students: SelectedStudent[]) => void;
 }) {
     const [search, setSearch] = useState("");
 
@@ -92,101 +81,9 @@ function UserPicker({
         enabled: search.length >= 2,
     });
 
-    const { data: students, isLoading: isLoadingStudents } = useQuery({
-        queryKey: ["student-list"],
-        queryFn: async () => {
-            const { userApi } = await import("@/api");
-            return userApi.getStudents();
-        },
-    });
-
-    const selectedIds = new Set(selected.map((s) => s.id));
-
-    const toggleStudent = (student: SelectedStudent) => {
-        if (selectedIds.has(student.id)) {
-            onSelectionChange(selected.filter((s) => s.id !== student.id));
-        } else {
-            onSelectionChange([...selected, student]);
-        }
-    };
-
-    const selectAllStudents = () => {
-        if (!students) return;
-        onSelectionChange(
-            students.map((s) => ({ id: String(s.id), email: s.email, fullName: s.fullName })),
-        );
-    };
-
-    const clearSelection = () => onSelectionChange([]);
-
     return (
         <div className="space-y-2">
-            <div className="flex items-center justify-between">
-                <Label>Student</Label>
-                {students && students.length > 0 && (
-                    <div className="flex gap-2">
-                        <Button type="button" variant="outline" size="sm" onClick={selectAllStudents}>
-                            Select all ({students.length})
-                        </Button>
-                        {selected.length > 0 && (
-                            <Button type="button" variant="ghost" size="sm" onClick={clearSelection}>
-                                Clear
-                            </Button>
-                        )}
-                    </div>
-                )}
-            </div>
-
-            {selected.length > 0 && (
-                <div className="rounded-md border border-green-200 bg-green-50 p-2">
-                    <p className="mb-1 text-xs font-medium text-green-800">
-                        Selected {selected.length} student(s)
-                    </p>
-                    <div className="max-h-24 space-y-0.5 overflow-y-auto">
-                        {selected.map((s) => (
-                            <div key={s.id} className="flex items-center justify-between text-xs text-green-800">
-                                <span className="truncate">
-                                    {s.fullName} <span className="text-green-700">({s.email})</span>
-                                </span>
-                                <button
-                                    type="button"
-                                    className="ml-2 text-green-700 hover:text-red-600"
-                                    onClick={() => toggleStudent({ id: s.id, email: s.email, fullName: s.fullName })}
-                                >
-                                    ×
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {isLoadingStudents && <p className="text-sm text-muted-foreground">Loading students...</p>}
-
-            {students && students.length > 0 && (
-                <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border p-2">
-                    {students.map((s) => {
-                        const id = String(s.id);
-                        const isSelected = selectedIds.has(id);
-                        return (
-                            <button
-                                key={s.id}
-                                type="button"
-                                className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-muted ${
-                                    isSelected ? "bg-muted font-medium" : ""
-                                }`}
-                                onClick={() =>
-                                    toggleStudent({ id, email: s.email, fullName: s.fullName })
-                                }
-                            >
-                                <span className="w-4 shrink-0">{isSelected ? "✓" : ""}</span>
-                                <span>{s.fullName}</span>
-                                <span className="text-muted-foreground">({s.email})</span>
-                            </button>
-                        );
-                    })}
-                </div>
-            )}
+            <Label>Student</Label>
 
             <Input
                 placeholder="Type name or email to search (other users)..."
@@ -236,8 +133,6 @@ export function CreateInvitationModal({
 
     const [auth, setAuth] = useState<AuthForm>(DEFAULT_AUTH);
 
-    const [selectedStudents, setSelectedStudents] = useState<SelectedStudent[]>([]);
-
     const [anon, setAnon] = useState<AnonForm>(DEFAULT_ANON);
 
     const [authInvitations, setAuthInvitations] = useState<InvitationDTO[]>([]);
@@ -250,7 +145,6 @@ export function CreateInvitationModal({
         setCustomReminder("");
         setAuthInvitations([]);
         setAnonInvitations(new Map());
-        setSelectedStudents([]);
     };
 
     const createAuthMutation = useMutation({
@@ -284,54 +178,6 @@ export function CreateInvitationModal({
         },
         onError: (error: unknown) => {
             toast.error(getErrorMessage(error, "Failed to create invitation."));
-        },
-    });
-
-    const createBatchMutation = useMutation({
-        mutationFn: async () => {
-            const request: BatchInvitationRequest = {
-                invitations: selectedStudents.map((s) => ({
-                    userId: Number(s.id),
-                    note: auth.note || undefined,
-                    expiresAt: toIso(auth.expiresAt) || undefined,
-                })),
-                sendEmail: true,
-            };
-            return invitationApi.createBatch(examId, request);
-        },
-        onSuccess: async (res) => {
-            if (res.successfulInvitations?.length) {
-                setAuthInvitations((prev) => [...prev, ...res.successfulInvitations!]);
-            }
-            const success = res.successCount ?? res.successfulInvitations?.length ?? 0;
-            const failed = res.failureCount ?? res.errors?.length ?? 0;
-
-            if (failed > 0) {
-                toast.warning(`Created ${success}, failed ${failed}.`, {
-                    description: res.errors?.slice(0, 3).join(" | "),
-                });
-            } else {
-                toast.success(`Created ${success} invitation(s).`);
-            }
-
-            if (reminderType !== "NONE") {
-                const req: ReminderRequest = {
-                    reminderType: reminderType as ReminderType,
-                    scheduledAt: reminderType === "CUSTOM" ? toIso(customReminder) : undefined,
-                };
-                try {
-                    await invitationApi.scheduleReminder(examId, req);
-                } catch {
-                }
-            }
-
-            setSelectedStudents([]);
-            setAuth(DEFAULT_AUTH);
-            onSuccess?.();
-            void queryClient.invalidateQueries({ queryKey: ["exam-invitations", examId] });
-        },
-        onError: (error: unknown) => {
-            toast.error(getErrorMessage(error, "Failed to create invitations."));
         },
     });
 
@@ -399,9 +245,7 @@ export function CreateInvitationModal({
                         >
                             <UserPicker
                                 value={auth.userId}
-                                selected={selectedStudents}
                                 onChange={(id) => setAuth((f) => ({ ...f, userId: id }))}
-                                onSelectionChange={setSelectedStudents}
                             />
 
                             <div className="space-y-2">
@@ -458,26 +302,6 @@ export function CreateInvitationModal({
                             </div>
 
                             <DialogFooter>
-                                {selectedStudents.length > 0 && (
-                                    <Button
-                                        type="button"
-                                        variant="secondary"
-                                        disabled={createBatchMutation.isPending}
-                                        onClick={() => createBatchMutation.mutate()}
-                                    >
-                                        {createBatchMutation.isPending ? (
-                                            <>
-                                                <RefreshCw className="size-4 animate-spin" />
-                                                Creating {selectedStudents.length}...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Users className="size-4" />
-                                                Create for {selectedStudents.length} student(s)
-                                            </>
-                                        )}
-                                    </Button>
-                                )}
                                 <Button
                                     type="submit"
                                     disabled={!canSubmitAuth || createAuthMutation.isPending}

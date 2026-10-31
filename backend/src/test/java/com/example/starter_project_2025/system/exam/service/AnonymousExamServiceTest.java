@@ -64,6 +64,9 @@ class AnonymousExamServiceTest {
     @Mock
     private EmailService emailService;
 
+    @Mock
+    private ExamResultAccessService resultAccessService;
+
     @InjectMocks
     private AnonymousExamService service;
 
@@ -110,6 +113,9 @@ class AnonymousExamServiceTest {
         attempt.setFinalScore(new BigDecimal(7));
         attempt.setTotalPoints(10);
         attempt.setSubmittedAt(Instant.now().minusSeconds(60));
+
+        // Mac dinh: giao vien da cong bo ket qua -> duoc gui diem
+        lenient().when(resultAccessService.isResultPublished(any(Exam.class))).thenReturn(true);
     }
 
     private void givenValidSession() {
@@ -345,6 +351,45 @@ class AnonymousExamServiceTest {
         attempt.getStudent().setIsGuest(false);
         attempt.setFinalScore(new BigDecimal(9));
         when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
+
+        service.sendFinalResultToGuest(ATTEMPT_ID);
+
+        verify(emailService, never()).sendAnonymousExamResult(
+                any(), any(), any(), any(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    @DisplayName("Chưa công bố kết quả thì email xác nhận không kèm điểm")
+    void doesNotIncludeScoreWhenResultNotPublished() {
+        givenValidSession();
+        when(resultAccessService.isResultPublished(any(Exam.class))).thenReturn(false);
+        when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
+        ExamAttemptDTO dto = new ExamAttemptDTO();
+        dto.setId(ATTEMPT_ID);
+        dto.setStatus(ExamAttemptStatus.SUBMITTED);
+        when(attemptService.submit(ATTEMPT_ID, GUEST_ID, List.of())).thenReturn(dto);
+        lenient().when(sessionRepository.save(any(AnonymousSession.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        service.submit(TOKEN, ATTEMPT_ID, List.of());
+
+        verify(emailService, times(1)).sendAnonymousExamResult(
+                eq("sv@example.com"),
+                eq("Nguyen Van A"),
+                eq("Kỳ thi giữa kỳ"),
+                eq(null),
+                eq(BigDecimal.TEN),
+                anyString(),
+                eq(true)
+        );
+    }
+
+    @Test
+    @DisplayName("Chưa công bố kết quả thì không gửi email điểm cuối cho anonymous")
+    void doesNotSendFinalResultToGuestWhenNotPublished() {
+        when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
+        attempt.setFinalScore(new BigDecimal(9));
+        when(resultAccessService.isResultPublished(any(Exam.class))).thenReturn(false);
 
         service.sendFinalResultToGuest(ATTEMPT_ID);
 

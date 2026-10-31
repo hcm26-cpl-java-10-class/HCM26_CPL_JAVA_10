@@ -1,4 +1,5 @@
 import { getAttemptReview, type ExamReviewQuestion } from '@/api/exam.api';
+import { scoreAppealApi } from '@/api/features/score-appeal.api';
 import { formatScore } from '@/utils/examScore';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Badge } from '@/components/ui/badge';
@@ -6,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useQuery } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
-import { ArrowLeft, Lock } from 'lucide-react';
+import { ArrowLeft, Lock, MessageSquareWarning } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 function optionClass(correct: boolean, selected: boolean) {
@@ -83,6 +84,13 @@ export default function ExamReviewPage() {
 
     const status = isAxiosError(error) ? error.response?.status : undefined;
 
+    const myAppealsQuery = useQuery({
+        queryKey: ['my-appeals-for-review'],
+        queryFn: scoreAppealApi.getMyAppeals,
+    });
+
+    const alreadyAppealed = (myAppealsQuery.data ?? []).some((a) => a.attemptId === id);
+
     return (
         <MainLayout pathName={{ exams: 'Exam Schedule', review: 'Review Answers' }}>
             <div className="mx-auto w-full max-w-3xl space-y-4">
@@ -122,6 +130,18 @@ export default function ExamReviewPage() {
                                 Attempt #{data.attemptNumber} · Score: {formatScore(data.finalScore ?? data.objectiveScore)}/
                                 {formatScore(data.maxScore ?? 10)}
                             </p>
+                            {data.finalScore != null && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="mt-2"
+                                    disabled={alreadyAppealed}
+                                    onClick={() => navigate(`/my-appeals?attemptId=${id}`)}
+                                >
+                                    <MessageSquareWarning className="size-4" />
+                                    {alreadyAppealed ? 'Appeal submitted' : 'Appeal this score'}
+                                </Button>
+                            )}
                         </header>
                         {data.questions.map((question, index) => (
                             <QuestionReview key={question.questionId} question={question} index={index} />

@@ -13,6 +13,12 @@ public record PublishedExamScoreDTO(
         BigDecimal firstScore,
         BigDecimal secondScore,
 
-        Instant submittedAt
+        Instant submittedAt,
+
+        /** Id cua lan lam bai, dung de dinh danh khieng nai diem. */
+        Long attemptId,
+
+        /** Ket qua da duoc giao vien cong bo hay chua (chi khi cong bo moi duoc khieng nai). */
+        boolean resultPublished
 ) {
 }

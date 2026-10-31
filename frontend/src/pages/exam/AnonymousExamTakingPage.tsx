@@ -379,6 +379,8 @@ export default function AnonymousExamTakingPage() {
     }
 
     const isFinished = attempt.status !== 'IN_PROGRESS';
+    // Diem chi duoc hien thi khi giao vien da cong bo ket qua (Publish Results).
+    const isResultPublished = attempt.resultPublished !== false;
     const hasText = (questionId: number) =>
         (answers[questionId]?.textAnswer ?? '').trim().length > 0;
     const codingQuestions = attempt.questions.filter((q) => q.type === 'CODING');
@@ -541,14 +543,22 @@ export default function AnonymousExamTakingPage() {
                             {attempt.status === 'PENDING_REVIEW' && 'Đã nộp bài — đang chờ chấm tự luận'}
                             {attempt.status === 'SUBMITTED' && 'Hoàn thành bài thi'}
                         </h2>
-                        <p className="mt-3 text-lg">
-                            {attempt.finalScore === null
-                                ? `Điểm tạm thời: ${formatScore(attempt.provisionalScore ?? attempt.objectiveScore ?? 0)}/${formatScore(attempt.maxScore ?? 10)} (câu tự luận chưa chấm tính 0 điểm)`
-                                : `Điểm: ${formatScore(attempt.finalScore)}/${formatScore(attempt.maxScore ?? 10)}`}
-                        </p>
-                        {attempt.finalScore === null && (
-                            <p className="mt-2 text-sm text-muted-foreground">
-                                Điểm câu tự luận sẽ được gửi bổ sung qua email sau khi giáo viên chấm xong.
+                        {isResultPublished ? (
+                            <>
+                                <p className="mt-3 text-lg">
+                                    {attempt.finalScore === null
+                                        ? `Điểm tạm thời: ${formatScore(attempt.provisionalScore ?? attempt.objectiveScore ?? 0)}/${formatScore(attempt.maxScore ?? 10)} (câu tự luận chưa chấm tính 0 điểm)`
+                                        : `Điểm: ${formatScore(attempt.finalScore)}/${formatScore(attempt.maxScore ?? 10)}`}
+                                </p>
+                                {attempt.finalScore === null && (
+                                    <p className="mt-2 text-sm text-muted-foreground">
+                                        Điểm câu tự luận sẽ được gửi bổ sung qua email sau khi giáo viên chấm xong.
+                                    </p>
+                                )}
+                            </>
+                        ) : (
+                            <p className="mt-3 text-lg text-amber-700">
+                                Đang chờ công bố — giáo viên chưa công bố kết quả bài thi.
                             </p>
                         )}
                         <p className="mt-3 rounded-lg bg-green-50 p-3 text-sm text-green-800">

@@ -86,15 +86,15 @@ class ExamResultAccessServiceTest {
     }
 
     @Test
-    void myScoresAllowsWhenNotPublished() {
+    void myScoresDeniesWhenNotPublished() {
         publication.setPublished(false);
-        assertTrue(service.canStudentSeeScoreOnMyScores(exam));
+        assertFalse(service.canStudentSeeScoreOnMyScores(exam));
     }
 
     @Test
-    void myScoresAllowsWhenNoPublicationConfigured() {
+    void myScoresDeniesWhenNoPublicationConfigured() {
         when(publicationRepository.findByExam_Id(1L)).thenReturn(Optional.empty());
-        assertTrue(service.canStudentSeeScoreOnMyScores(exam));
+        assertFalse(service.canStudentSeeScoreOnMyScores(exam));
     }
 
     @Test
@@ -115,5 +115,24 @@ class ExamResultAccessServiceTest {
     @Test
     void myScoresDeniesWhenExamIsNull() {
         assertFalse(service.canStudentSeeScoreOnMyScores(null));
+    }
+
+    @Test
+    void isResultPublishedOnlyWhenPublishedAndVisible() {
+        publication.setPublished(true);
+        publication.setReleasePolicy(ScoreReleasePolicy.MY_SCORES_ONLY);
+        assertTrue(service.isResultPublished(exam));
+
+        publication.setPublished(false);
+        assertFalse(service.isResultPublished(exam));
+
+        publication.setPublished(true);
+        publication.setReleasePolicy(ScoreReleasePolicy.HIDDEN);
+        assertFalse(service.isResultPublished(exam));
+    }
+
+    @Test
+    void isResultPublishedDeniesWhenExamIsNull() {
+        assertFalse(service.isResultPublished(null));
     }
 }

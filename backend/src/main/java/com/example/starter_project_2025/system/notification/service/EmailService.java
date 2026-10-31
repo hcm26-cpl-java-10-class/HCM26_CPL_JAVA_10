@@ -27,6 +27,9 @@ public class EmailService {
     private static final String EXAM_REVOKED_EMAIL = "email/exam_revoked";
     private static final String EXAM_ACCEPTED_EMAIL = "email/exam_accepted";
     private static final String EXAM_RESULT_EMAIL = "email/exam_result";
+    private static final String SCORE_APPEAL_APPROVED_EMAIL = "email/score_appeal_approved";
+    private static final String SCORE_APPEAL_REJECTED_EMAIL = "email/score_appeal_rejected";
+    private static final String SCORE_APPEAL_SUBMITTED_EMAIL = "email/score_appeal_submitted";
 
     private static final DateTimeFormatter DATE_TIME_FORMATTER =
             DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
@@ -179,7 +182,7 @@ public class EmailService {
         List<Map.Entry<String, Object>> vars = new ArrayList<>();
         vars.add(Map.entry("username", studentName == null || studentName.isBlank() ? "Học sinh" : studentName));
         vars.add(Map.entry("examTitle", examTitle));
-        vars.add(Map.entry("score", score == null ? "Chưa chấm" : score.setScale(2, java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()));
+        vars.add(Map.entry("score", score == null ? "Chưa công bố" : score.setScale(2, java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()));
         vars.add(Map.entry("totalPoints", totalPoints == null ? "10" : totalPoints.stripTrailingZeros().toPlainString()));
         vars.add(Map.entry("submittedAt", submittedAt == null ? "" : submittedAt));
         vars.add(Map.entry("pendingReview", pendingReview ? "true" : "false"));
@@ -189,6 +192,75 @@ public class EmailService {
                 : "Bài thi của bạn đã được chấm xong. Điểm chi tiết sẽ được thông báo sau khi giáo viên công bố."));
 
         send("[Kết quả] " + examTitle, recipientEmail, EXAM_RESULT_EMAIL, vars);
+    }
+
+    /** Gui email cho hoc sinh khi khieng nai diem duoc duyet. */
+    public void sendScoreAppealApproved(
+            String recipientEmail,
+            String studentName,
+            String examTitle,
+            BigDecimal oldScore,
+            BigDecimal newScore,
+            String note) {
+        if (recipientEmail == null || recipientEmail.isBlank()) {
+            return;
+        }
+        List<Map.Entry<String, Object>> vars = new ArrayList<>();
+        vars.add(Map.entry("username", studentName == null || studentName.isBlank() ? "Student" : studentName));
+        vars.add(Map.entry("examTitle", examTitle == null ? "" : examTitle));
+        vars.add(Map.entry("oldScore", formatScore(oldScore)));
+        vars.add(Map.entry("newScore", newScore == null ? "Unchanged" : formatScore(newScore)));
+        vars.add(Map.entry("note", note == null ? "" : note));
+
+        send("[Score Appeal Approved] " + examTitle, recipientEmail, SCORE_APPEAL_APPROVED_EMAIL, vars);
+    }
+
+    /** Gui email cho hoc sinh khi khieng nai diem bi tu choi. */
+    public void sendScoreAppealRejected(
+            String recipientEmail,
+            String studentName,
+            String examTitle,
+            String note) {
+        if (recipientEmail == null || recipientEmail.isBlank()) {
+            return;
+        }
+        List<Map.Entry<String, Object>> vars = new ArrayList<>();
+        vars.add(Map.entry("username", studentName == null || studentName.isBlank() ? "Student" : studentName));
+        vars.add(Map.entry("examTitle", examTitle == null ? "" : examTitle));
+        vars.add(Map.entry("note", note == null ? "" : note));
+
+        send("[Score Appeal Rejected] " + examTitle, recipientEmail, SCORE_APPEAL_REJECTED_EMAIL, vars);
+    }
+
+    /**
+     * Gui email thong bao cho giao vien / admin khi co khieng nai diem moi.
+     */
+    public void sendScoreAppealSubmitted(
+            String recipientEmail,
+            String studentName,
+            String examTitle,
+            BigDecimal oldScore,
+            BigDecimal requestedScore,
+            String reason) {
+        if (recipientEmail == null || recipientEmail.isBlank()) {
+            return;
+        }
+        List<Map.Entry<String, Object>> vars = new ArrayList<>();
+        vars.add(Map.entry("username", studentName == null || studentName.isBlank() ? "Student" : studentName));
+        vars.add(Map.entry("examTitle", examTitle == null ? "" : examTitle));
+        vars.add(Map.entry("oldScore", formatScore(oldScore)));
+        vars.add(Map.entry("requestedScore", requestedScore == null ? "-" : formatScore(requestedScore)));
+        vars.add(Map.entry("reason", reason == null ? "" : reason));
+        vars.add(Map.entry("reviewLink", String.format("%s/exams/appeals", frontendUrl)));
+
+        send("[Score Appeal] " + examTitle, recipientEmail, SCORE_APPEAL_SUBMITTED_EMAIL, vars);
+    }
+
+    private String formatScore(BigDecimal score) {
+        if (score == null) {
+            return "-";
+        }
+        return score.setScale(2, java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString();
     }
 
     private void send(String subject, String to, String template, List<Map.Entry<String, Object>> vars) {

@@ -40,6 +40,10 @@ public class RoleDataInitializer implements CommandLineRunner {
         ensurePermission("EXAM", "TAKE");
         ensurePermission("STUDENT_SCORE", "RELEASE");
         ensurePermission("STUDENT_SCORE", "VIEW_OWN");
+        ensurePermission("SCORE_APPEAL", "CREATE");
+        ensurePermission("SCORE_APPEAL", "VIEW_OWN");
+        ensurePermission("SCORE_APPEAL", "READ");
+        ensurePermission("SCORE_APPEAL", "REVIEW");
         List<Permission> allPermissions = permissionRepository.findAll();
 
         upsertRole(
@@ -62,6 +66,8 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "EXAM_TAKE",
                         "INVITATION_READ",
                         "STUDENT_SCORE_VIEW_OWN",
+                        "SCORE_APPEAL_CREATE",
+                        "SCORE_APPEAL_VIEW_OWN",
                         "EXAM_TAKE"
                 )
         );
@@ -87,6 +93,8 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "INVITATION_READ",
                         "INVITATION_UPDATE",
                         "INVITATION_DELETE",
+                        "SCORE_APPEAL_READ",
+                        "SCORE_APPEAL_REVIEW",
                         "USER_READ",
                         "COURSE_CREATE",
                         "COURSE_READ",

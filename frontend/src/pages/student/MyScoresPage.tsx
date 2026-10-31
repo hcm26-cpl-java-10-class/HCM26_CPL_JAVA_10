@@ -1,11 +1,14 @@
 import { examApi, type PublishedExamScore } from "@/api/features/exam.api";
 import { studentScoreApi } from "@/api/features/demo/student_score.api";
+import { scoreAppealApi } from "@/api/features/score-appeal.api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { StudentScoreColumnDTO, StudentScoreDTO } from "@/types/features/demo/student_score";
 import { formatScore } from "@/utils/examScore";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 
 const toColumns = (score: StudentScoreDTO): StudentScoreColumnDTO[] => {
   if (score.scoreColumns?.length) return score.scoreColumns;
@@ -20,9 +23,20 @@ function formatSubmittedAt(value?: string | null): string {
   return date.toLocaleString();
 }
 
-function ExamScoreCard({ score }: { score: PublishedExamScore }) {
+function ExamScoreCard({
+  score,
+  appealed,
+  onAppeal,
+}: {
+  score: PublishedExamScore;
+  appealed: boolean;
+  onAppeal: () => void;
+}) {
   const isFinalized = score.finalScore != null;
+  const isPublished = score.resultPublished !== false;
   const displayScore = isFinalized ? score.finalScore : score.objectiveScore;
+  // Results are not released yet -> the student cannot appeal (backend also rejects with 400)
+  const canAppeal = isFinalized && isPublished;
 
   return (
     <Card>
@@ -36,10 +50,12 @@ function ExamScoreCard({ score }: { score: PublishedExamScore }) {
         <div className="flex justify-between border-b pb-2 text-base font-semibold">
           <span>{isFinalized ? "Score" : "Provisional score"}</span>
           <span>
-            {formatScore(displayScore ?? 0)}/{formatScore(score.maxScore ?? 10)}
+            {canAppeal
+              ? `${formatScore(displayScore ?? 0)}/${formatScore(score.maxScore ?? 10)}`
+              : "Awaiting publication"}
           </span>
         </div>
-        {score.secondScore != null && (
+        {score.secondScore != null && isPublished && (
           <>
             <div className="flex justify-between text-muted-foreground">
               <span>1st grading</span>
@@ -59,12 +75,41 @@ function ExamScoreCard({ score }: { score: PublishedExamScore }) {
           <span>Submitted at</span>
           <span>{formatSubmittedAt(score.submittedAt)}</span>
         </div>
+        {!isPublished && (
+          <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+            Your result has not been released by the teacher yet. You can appeal once the results are published.
+          </p>
+        )}
+        {isFinalized && (
+          <div className="pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              disabled={appealed || !canAppeal}
+              title={
+                !canAppeal
+                  ? "You can only appeal after the teacher publishes the results"
+                  : undefined
+              }
+              onClick={onAppeal}
+            >
+              {appealed
+                ? "Appeal submitted"
+                : canAppeal
+                  ? "Appeal score"
+                  : "Awaiting publication"}
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
 
 export default function MyScoresPage() {
+  const navigate = useNavigate();
+
   const {
     data: examScores = [],
     isLoading: isExamScoresLoading,
@@ -83,6 +128,15 @@ export default function MyScoresPage() {
     queryFn: studentScoreApi.getMine,
   });
 
+  const myAppealsQuery = useQuery({
+    queryKey: ["my-appeals-for-scores"],
+    queryFn: scoreAppealApi.getMyAppeals,
+  });
+
+  const appealedAttemptIds = new Set(
+    (myAppealsQuery.data ?? []).map((a) => a.attemptId).filter((v): v is number => v != null)
+  );
+
   return (
     <MainLayout pathName={{ "my-scores": "My Scores" }}>
       <div className="space-y-6 p-4">
@@ -98,7 +152,12 @@ export default function MyScoresPage() {
             <p className="text-muted-foreground">No graded exam attempts yet.</p>
           )}
           {examScores.map((score) => (
-            <ExamScoreCard key={`${score.examId}-${score.attemptNumber}`} score={score} />
+            <ExamScoreCard
+              key={`${score.examId}-${score.attemptNumber}`}
+              score={score}
+              appealed={appealedAttemptIds.has(score.attemptId)}
+              onAppeal={() => navigate(`/my-appeals?attemptId=${score.attemptId}`)}
+            />
           ))}
         </section>
 

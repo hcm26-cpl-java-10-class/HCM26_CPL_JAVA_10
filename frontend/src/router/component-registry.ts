@@ -12,6 +12,7 @@ import ResultStatisticsPage from "@/pages/management/exam/ResultStatisticsPage";
 import EssayAttemptListPage from "@/pages/management/exam/grading/EssayAttemptListPage";
 import EssayAttemptDetailPage from "@/pages/management/exam/grading/EssayAttemptDetailPage";
 import ExamSimilarityPage from "@/pages/management/exam/similarity/ExamSimilarityPage";
+import ScoreAppealsPage from "@/pages/management/exam/appeals";
 import InvitationsPage from "@/pages/management/exam/invitation";
 import UnifiedInvitationsPage, {
   StudentInvitationsRedirect,
@@ -21,6 +22,7 @@ import StudentExamList from "@/pages/student/StudentExamList";
 import StudentExamTakingPage from "@/pages/student/StudentExamTakingPage";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import MyScoresPage from "@/pages/student/MyScoresPage";
+import MyAppealsPage from "@/pages/student/MyAppealsPage";
 import ExamReviewPage from "@/pages/student/ExamReviewPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import AnonymousAccessPage from "@/pages/exam/AnonymousAccessPage";
@@ -99,6 +101,12 @@ export const routes: RouteConfig[] = [
   },
 
   {
+    path: "/exams/appeals",
+    component: ScoreAppealsPage,
+    requiredPermission: "SCORE_APPEAL_READ",
+  },
+
+  {
     path: "/topic-marks/gradebook-demo",
     component: TopicMarkGradebookDemoPage,
     requiredPermission: "STUDENT_SCORE_READ",
@@ -131,6 +139,12 @@ export const routes: RouteConfig[] = [
     component: MyScoresPage,
     requiredPermission: "STUDENT_SCORE_VIEW_OWN",
     isModuleDriven: true,
+  },
+
+  {
+    path: "/my-appeals",
+    component: MyAppealsPage,
+    requiredPermission: "SCORE_APPEAL_VIEW_OWN",
   },
 
   { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },

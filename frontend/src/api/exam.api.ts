@@ -71,6 +71,8 @@ export interface ExamAttempt {
     objectiveScore: number | null;
     finalScore: number | null;
     provisionalScore?: number | null;
+    /** Teacher has published the results (Publish Results). */
+    resultPublished?: boolean;
     status: ExamAttemptStatus;
     startedAt: string;
     officialDeadlineAt?: string | null;
@@ -98,6 +100,8 @@ export interface ExamAttemptSummary {
     finalScore: number | null;
     totalPoints: number;
     maxScore?: number;
+    /** Teacher has published the results (Publish Results). */
+    resultPublished?: boolean;
     startedAt: string;
     deadlineAt: string;
     submittedAt: string | null;

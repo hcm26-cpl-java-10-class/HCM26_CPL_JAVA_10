@@ -86,6 +86,8 @@ class ExamAttemptServiceTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(attemptRepository.findAllByExam_IdAndStudent_IdOrderByAttemptNumberAsc(20L, 40L))
                 .thenReturn(List.of(attempt));
+        // Mac dinh: giao vien da cong bo ket qua -> diem duoc tra ve cho hoc sinh
+        lenient().when(resultAccessService.isResultPublished(any(Exam.class))).thenReturn(true);
     }
 
     @Test
@@ -236,6 +238,22 @@ class ExamAttemptServiceTest {
 
         assertScore("0", result.getObjectiveScore());
         assertScore("0", result.getFinalScore());
+    }
+
+    @Test
+    void submitHidesScoreWhenResultNotPublishedYet() {
+        ExamAttemptQuestion question = snapshotQuestion(1L, QuestionType.MULTIPLE_CHOICE, 5);
+        ExamAttemptOption correct = snapshotOption(11L, question, true);
+        attempt.setAnswers(new HashSet<>(List.of(answer(question, correct))));
+        when(resultAccessService.isResultPublished(any(Exam.class))).thenReturn(false);
+
+        var result = service.submit(30L, 40L, List.of());
+
+        assertNull(result.getFinalScore());
+        assertNull(result.getObjectiveScore());
+        assertNull(result.getProvisionalScore());
+        assertEquals(false, result.isResultPublished());
+        assertEquals(ExamAttemptStatus.SUBMITTED, result.getStatus());
     }
 
     @Test

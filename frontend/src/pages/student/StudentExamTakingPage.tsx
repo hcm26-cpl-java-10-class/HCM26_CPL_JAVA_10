@@ -446,6 +446,8 @@ export default function StudentExamTakingPage() {
     }
 
     const isFinished = attempt.status !== 'IN_PROGRESS';
+    // Diem chi duoc hien thi khi giao vien da cong bo ket qua (Publish Results).
+    const isResultPublished = attempt.resultPublished !== false;
     const codingQuestions = attempt.questions.filter((q) => q.type === 'CODING');
     const currentCode = attempt.questions.find((q) => q.id === codeParam && q.type === 'CODING');
     const currentEssay = attempt.questions.find((q) => q.id === essayParam && q.type === 'ESSAY');
@@ -588,19 +590,27 @@ export default function StudentExamTakingPage() {
                                 {attempt.status === 'PENDING_REVIEW' && 'Submitted — Pending essay review'}
                                 {attempt.status === 'SUBMITTED' && 'Exam Completed'}
                             </h2>
-                            <p className="mt-3 text-lg">
-                                {attempt.finalScore == null
-                                    ? `Provisional Score: ${formatScore(attempt.provisionalScore ?? attempt.objectiveScore ?? 0)}/${formatScore(attempt.maxScore ?? 10)} (ungraded essays count as 0)`
-                                    : `Score: ${formatScore(attempt.finalScore)}/${formatScore(attempt.maxScore ?? 10)}`}
-                            </p>
-                            {attempt.status === 'EXPIRED' && (
-                                <p className="mt-2 text-sm text-muted-foreground">
-                                    Exam time has ended. Only answers provided before the deadline were graded.
-                                </p>
-                            )}
-                            {attempt.bestScore != null && (
-                                <p className="mt-2 text-sm font-medium text-emerald-700">
-                                    Highest Score: {formatScore(attempt.bestScore)}/{formatScore(attempt.maxScore ?? 10)}
+                            {isResultPublished ? (
+                                <>
+                                    <p className="mt-3 text-lg">
+                                        {attempt.finalScore == null
+                                            ? `Provisional Score: ${formatScore(attempt.provisionalScore ?? attempt.objectiveScore ?? 0)}/${formatScore(attempt.maxScore ?? 10)} (ungraded essays count as 0)`
+                                            : `Score: ${formatScore(attempt.finalScore)}/${formatScore(attempt.maxScore ?? 10)}`}
+                                    </p>
+                                    {attempt.status === 'EXPIRED' && (
+                                        <p className="mt-2 text-sm text-muted-foreground">
+                                            Exam time has ended. Only answers provided before the deadline were graded.
+                                        </p>
+                                    )}
+                                    {attempt.bestScore != null && (
+                                        <p className="mt-2 text-sm font-medium text-emerald-700">
+                                            Highest Score: {formatScore(attempt.bestScore)}/{formatScore(attempt.maxScore ?? 10)}
+                                        </p>
+                                    )}
+                                </>
+                            ) : (
+                                <p className="mt-3 text-lg text-amber-700">
+                                    Awaiting publication — your teacher has not released the results yet.
                                 </p>
                             )}
                             {attempt.late && (
@@ -611,7 +621,7 @@ export default function StudentExamTakingPage() {
                                         : ''}
                                 </p>
                             )}
-                            {attempt.finalScore === null && attempt.status !== 'SUBMITTED' && (
+                            {isResultPublished && attempt.finalScore === null && attempt.status !== 'SUBMITTED' && (
                                 <p className="mt-2 text-sm text-muted-foreground">
                                     Final score will be updated once your teacher finishes grading the essay questions.
                                 </p>

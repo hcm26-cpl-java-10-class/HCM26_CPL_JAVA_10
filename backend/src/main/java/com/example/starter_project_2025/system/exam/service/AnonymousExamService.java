@@ -38,6 +38,7 @@ public class AnonymousExamService {
     private final EmailService emailService;
     private final ExamIntegrityService integrityService; // NEW (anti-cheat)
     private final ExamCodeService examCodeService;
+    private final ExamResultAccessService resultAccessService;
 
     @Transactional(readOnly = true)
     private AnonymousSession requireSession(String sessionToken) {
@@ -128,11 +129,17 @@ public class AnonymousExamService {
         session.setIsValid(false);
         sessionRepository.save(session);
 
+        // Diem chi duoc gui khi giao vien da cong bo ket qua (Publish Results).
+        // Neu chua cong bo: chi gui email xac nhan da nop bai, khong kem diem.
+        boolean resultPublished = resultAccessService.isResultPublished(attempt.getExam());
         boolean pendingReview = attempt.getFinalScore() == null;
 
-        BigDecimal score = attempt.getFinalScore() != null
-                ? attempt.getFinalScore()
-                : attempt.getObjectiveScore();
+        BigDecimal score = null;
+        if (resultPublished) {
+            score = attempt.getFinalScore() != null
+                    ? attempt.getFinalScore()
+                    : attempt.getObjectiveScore();
+        }
 
         String submittedAt = attempt.getSubmittedAt() == null
                 ? ""
@@ -147,7 +154,7 @@ public class AnonymousExamService {
                     score,
                     ExamScoring.effectiveMax(attempt.getMaxScore()),
                     submittedAt,
-                    pendingReview
+                    pendingReview || !resultPublished
             );
         } catch (Exception e) {
             log.error("Failed to send anonymous exam result email for session {}: {}",
@@ -175,6 +182,11 @@ public class AnonymousExamService {
         }
 
         if (!Boolean.TRUE.equals(attempt.getStudent().getIsGuest())) {
+            return;
+        }
+
+        // Chi gui diem khi giao vien da cong bo ket qua (Publish Results).
+        if (!resultAccessService.isResultPublished(attempt.getExam())) {
             return;
         }
 

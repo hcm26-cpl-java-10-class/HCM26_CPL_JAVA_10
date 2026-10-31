@@ -70,6 +70,10 @@ public class ExamResultAccessService {
                 .orElse(false);
     }
 
+    /**
+     * Ket qua chi duoc hien thi tren "My Scores" khi giao vien da cong bo (Publish Results).
+     * Truoc do hoc sinh chi thay trang thai "cho cong bo", khong thay diem.
+     */
     @Transactional(readOnly = true)
     public boolean canStudentSeeScoreOnMyScores(Exam exam) {
         if (exam == null || exam.getId() == null) {
@@ -78,8 +82,26 @@ public class ExamResultAccessService {
 
         return publicationRepository.findByExam_Id(exam.getId())
                 .map(publication ->
-                        publication.getReleasePolicy() != ScoreReleasePolicy.HIDDEN)
-                .orElse(true);
+                        publication.isPublished()
+                                && publication.getReleasePolicy() != ScoreReleasePolicy.HIDDEN)
+                .orElse(false);
+    }
+
+    /**
+     * Diem co duoc goc cong bo cho hoc sinh xem chua.
+     * Dung cho API tra diem cua attempt (submit / my-attempts) de an diem chua cong bo.
+     */
+    @Transactional(readOnly = true)
+    public boolean isResultPublished(Exam exam) {
+        if (exam == null || exam.getId() == null) {
+            return false;
+        }
+
+        return publicationRepository.findByExam_Id(exam.getId())
+                .map(publication ->
+                        publication.isPublished()
+                                && publication.getReleasePolicy() != ScoreReleasePolicy.HIDDEN)
+                .orElse(false);
     }
 
     private boolean isVisibilitySatisfied(Exam exam) {

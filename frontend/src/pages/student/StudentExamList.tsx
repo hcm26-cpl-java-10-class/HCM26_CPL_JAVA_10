@@ -89,6 +89,8 @@ function ExamCard({
     const afterClose = exam.endTime != null && now >= new Date(exam.endTime).getTime();
     const isInProgress = attempt?.status === 'IN_PROGRESS';
     const hasAttempts = (attempt?.attemptsUsed ?? 0) > 0;
+    // Diem chi duoc hien thi khi giao vien da cong bo ket qua (Publish Results).
+    const isResultPublished = attempt?.resultPublished !== false;
     const outOfAttempts = hasAttempts && (attempt?.attemptsRemaining ?? 0) <= 0 && !isInProgress;
     const disabledBySchedule = (beforeOpen || afterClose) && !isInProgress;
     const isDisabled = externallyDisabled || outOfAttempts || disabledBySchedule;
@@ -130,18 +132,23 @@ function ExamCard({
             </CardHeader>
 
             <CardContent className="flex-1">
-                {attempt?.status === 'PENDING_REVIEW' && (
+                {attempt?.status === 'PENDING_REVIEW' && isResultPublished && (
                     <p className="text-sm text-amber-700">
                         Provisional Score: {formatScore(attempt.objectiveScore ?? 0)}/{formatScore(attempt.maxScore ?? 10)} (ungraded essays count as 0).
                     </p>
                 )}
-                {attempt?.status === 'SUBMITTED' && (
+                {attempt?.status === 'SUBMITTED' && isResultPublished && (
                     <p className="text-sm text-emerald-700">
                         Highest Score: {formatScore(attempt.bestScore ?? attempt.finalScore ?? 0)}/{formatScore(attempt.maxScore ?? 10)}.
                     </p>
                 )}
-                {hasAttempts && attempt?.status !== 'SUBMITTED' && attempt?.bestScore != null && (
+                {hasAttempts && attempt?.status !== 'SUBMITTED' && attempt?.bestScore != null && isResultPublished && (
                     <p className="text-sm text-emerald-700">Highest Score: {formatScore(attempt.bestScore)}/{formatScore(attempt.maxScore ?? 10)}.</p>
+                )}
+                {attempt && !isResultPublished && attempt.status !== 'IN_PROGRESS' && (
+                    <p className="text-sm text-amber-700">
+                        Awaiting publication — your teacher has not released the results yet.
+                    </p>
                 )}
                 {attempt && (
                     <p className="mt-2 text-sm text-slate-600">
