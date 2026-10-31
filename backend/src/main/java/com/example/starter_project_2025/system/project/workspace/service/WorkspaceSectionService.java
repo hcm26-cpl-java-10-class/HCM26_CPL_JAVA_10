@@ -80,18 +80,20 @@ public class WorkspaceSectionService {
                     org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY,
                     "Use each supported board column once and keep at least one column visible");
         Set<String> requestedKeys = columns.stream().map(BoardColumn::key).collect(java.util.stream.Collectors.toSet());
-        if (!requestedKeys.containsAll(Set.of("BACKLOG", "TODO", "IN_PROGRESS", "REVIEW", "DONE"))) {
+        if (!requestedKeys.containsAll(Set.of("BACKLOG", "TODO", "DONE"))) {
             throw new org.springframework.web.server.ResponseStatusException(
                     org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY,
-                    "Keep the standard workflow columns; use visibility to hide a column");
+                    "Keep Backlog, To do and Done as the workflow intake and completion columns");
         }
-        for (String customKey : List.of("CUSTOM_1", "CUSTOM_2", "CUSTOM_3", "CUSTOM_4", "CUSTOM_5")) {
+        for (String customKey : List.of("IN_PROGRESS", "REVIEW", "CUSTOM_1", "CUSTOM_2", "CUSTOM_3", "CUSTOM_4", "CUSTOM_5")) {
             SprintBacklogStatus status = SprintBacklogStatus.valueOf(customKey);
             if (!requestedKeys.contains(customKey)
-                    && sprintBacklogs.existsInWorkspaceStatus(context.scope().teamId(), context.scope().projectId(), status)) {
+                    && (sprintBacklogs.existsInWorkspaceStatus(context.scope().teamId(), context.scope().projectId(), status)
+                    || "IN_PROGRESS".equals(customKey) && sprintBacklogs.existsInWorkspaceStatus(
+                            context.scope().teamId(), context.scope().projectId(), SprintBacklogStatus.BLOCKED))) {
                 throw new org.springframework.web.server.ResponseStatusException(
                         org.springframework.http.HttpStatus.CONFLICT,
-                        "A custom status cannot be removed while work items still use it");
+                        "A status cannot be removed while work items in this workspace still use it");
             }
         }
         try {

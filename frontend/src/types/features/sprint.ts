@@ -41,6 +41,7 @@ export interface SprintPlanningItem {
   /** Owning sprint (`null` = product backlog). */
   sprintId?: number | null;
   assigneeProjectMemberId?: number | null;
+  assigneeDisplayName?: string | null;
   startDate?: string | null;
   /** Due date of the item (the backend `endDate`). */
   endDate?: string | null;

@@ -14,6 +14,8 @@ import { MilestoneRubricCard } from "../components/MilestoneRubricCard";
 import { MilestoneStatusBadge } from "../components/MilestoneStatusBadge";
 import { MilestoneDraftHistory } from "../components/MilestoneDraftHistory";
 import { formatPenalty, formatTenantDateTime, getMilestoneApiError } from "../milestone.utils";
+import { WorkspaceArtifactsPanel } from "@/pages/management/workspace/WorkspaceArtifactsPanel";
+import { usePermissions } from "@/hooks/usePermissions";
 
 function DetailPageSkeleton() {
   return (
@@ -32,6 +34,7 @@ export function MilestoneDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  const { hasPermission } = usePermissions();
   const teamIdParam = searchParams.get("teamId");
   const teamId = teamIdParam ? Number(teamIdParam) : undefined;
   const routeState = location.state as MilestoneDetailRouteState | null;
@@ -87,6 +90,9 @@ export function MilestoneDetailPage() {
             {milestone.description ? <CardDescription className="max-w-3xl whitespace-pre-wrap text-sm">{milestone.description}</CardDescription> : null}
           </CardHeader>
         </Card>
+
+        {milestone.teamId && hasPermission("ARTIFACT_READ") ? <WorkspaceArtifactsPanel teamId={milestone.teamId} milestone={milestone}
+          onRefreshMilestone={() => { void detailQuery.refetch(); }} /> : null}
 
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
           <div className="grid gap-6">

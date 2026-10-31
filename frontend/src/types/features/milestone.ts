@@ -239,6 +239,7 @@ export interface ArtifactSubmissionWorkspace {
   uploadPolicy: { enabled: boolean; maxBytes: number; allowedMimeTypes: string[] };
   latestSubmission: ArtifactSubmission | null;
   canSubmit: boolean;
+  submissionBlockReason?: string | null;
 }
 
 export interface MilestoneApiError {

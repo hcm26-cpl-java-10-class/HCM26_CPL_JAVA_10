@@ -81,7 +81,7 @@ export default function StudentLandingPage() {
                 </Link>
               </Button>
               <Button asChild variant="outline" className="border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100">
-                <Link to="/student/milestone-submissions"><FileCheck2 className="mr-2 size-4" /> Bài nộp của tôi</Link>
+                <Link to="/student/milestone-submissions"><FileCheck2 className="mr-2 size-4" /> My Submissions</Link>
               </Button>
             </div>
           </motion.div>

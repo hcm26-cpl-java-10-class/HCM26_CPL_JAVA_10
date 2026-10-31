@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { MilestoneRubricCard } from "@/pages/management/project/milestone/components/MilestoneRubricCard";
 import { formatTenantDateTime, getMilestoneApiError } from "@/pages/management/project/milestone/milestone.utils";
 import { countReleaseNoteWords, RELEASE_NOTES_MAX_WORDS, releaseNotesWithinLimit } from "@/lib/release-notes";
+import { artifactFormSource } from "@/lib/artifact-form-source";
 import type { ArtifactAttachment, ArtifactDraftRequest, ArtifactSubmission, ArtifactSubmissionRequest } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, ArrowLeft, CheckCircle2, Eye, FileUp, RotateCcw, Save, ShieldCheck } from "lucide-react";
@@ -44,6 +45,7 @@ export default function ArtifactDraftPage() {
   const [submission, setSubmission] = useState<ArtifactSubmission | null>(null);
   const idempotencyKey = useRef<string | undefined>(undefined);
   const pendingSubmission = useRef<PendingArtifactSubmission | null>(null);
+  const initializedFormScope = useRef<string | null>(null);
 
   const pendingStorageKey = projectId && milestoneId
     ? "artifact-submit-pending:" + projectId + ":" + milestoneId
@@ -66,6 +68,8 @@ export default function ArtifactDraftPage() {
 
   useEffect(() => {
     if (!workspaceQuery.data) return;
+    if (initializedFormScope.current === pendingStorageKey) return;
+    initializedFormScope.current = pendingStorageKey;
     const { draft, milestone } = workspaceQuery.data;
     let pending: PendingArtifactSubmission | null = null;
     if (pendingStorageKey) {
@@ -97,12 +101,13 @@ export default function ArtifactDraftPage() {
       return;
     }
     pendingSubmission.current = null;
-    setRepositoryUrl(draft?.repositoryUrl ?? "");
-    setDeploymentUrl(draft?.deploymentUrl ?? "");
-    setReleaseNotes(draft?.releaseNotes ?? "");
+    const source = artifactFormSource(draft, workspaceQuery.data.latestSubmission);
+    setRepositoryUrl(source?.repositoryUrl ?? "");
+    setDeploymentUrl(source?.deploymentUrl ?? "");
+    setReleaseNotes(source?.releaseNotes ?? "");
     setDraftVersion(draft?.version);
     setAttachments(draft?.attachments ?? []);
-    setChecklist(Object.fromEntries(milestone.checklist.map((item) => [item.id, draft?.checklist[item.id] ?? false])));
+    setChecklist(Object.fromEntries(milestone.checklist.map((item) => [item.id, source === draft ? draft?.checklist[item.id] ?? false : false])));
     setSubmission(workspaceQuery.data.latestSubmission);
   }, [workspaceQuery.data, pendingStorageKey]);
 
@@ -216,7 +221,7 @@ export default function ArtifactDraftPage() {
   return <MainLayout pathName={{ projects: "Dự án", [projectId ?? "project"]: milestone.project.name, milestones: "Milestone", [milestone.id]: milestone.title, submit: "Chuẩn bị artifact" }}>
     <main className="mx-auto grid w-full max-w-5xl gap-5">
       {reviewSubmissionQuery.data?.status === "CHANGES_REQUESTED" ? <Alert className="border-amber-400 bg-amber-50 dark:bg-amber-950/20"><RotateCcw /><AlertTitle>Đang chuẩn bị bài nộp lại Version {reviewSubmissionQuery.data.currentVersionNumber + 1}</AlertTitle><AlertDescription><p>{reviewSubmissionQuery.data.reviews[0]?.overallFeedback || "Hãy cập nhật sản phẩm theo feedback của reviewer."}</p><Button className="mt-2" size="sm" variant="outline" onClick={() => navigate(`/student/milestone-submissions/${reviewSubmissionQuery.data?.id}`)}>Xem toàn bộ feedback</Button></AlertDescription></Alert> : null}
-      {!workspaceQuery.data.canSubmit && <Alert><AlertCircle /><AlertTitle>Milestone chưa mở nhận bài</AlertTitle><AlertDescription>Bạn chỉ có thể chuẩn bị và nộp artifact khi milestone đang IN_PROGRESS hoặc được yêu cầu nộp lại và còn trong hạn.</AlertDescription></Alert>}
+      {!workspaceQuery.data.canSubmit && !submission && <Alert><AlertCircle /><AlertTitle>Milestone chưa mở nhận bài</AlertTitle><AlertDescription>Bạn chỉ có thể chuẩn bị và nộp artifact khi milestone đang IN_PROGRESS hoặc được yêu cầu nộp lại và còn trong hạn.</AlertDescription></Alert>}
       <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-background"><CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><span>Trạng thái milestone: {milestone.lifecycleStatus}</span><span>·</span><span>Hạn: {formatTenantDateTime(milestone.deadline, milestone.tenantTimeZone)}</span></div><Button asChild size="sm" variant="outline"><Link to="/student/milestone-submissions"><Eye className="size-4" /> Xem bài nộp của tôi</Link></Button></div>
         <CardTitle className="text-2xl">Chuẩn bị sản phẩm: {milestone.title}</CardTitle><CardDescription>{milestone.description}</CardDescription>

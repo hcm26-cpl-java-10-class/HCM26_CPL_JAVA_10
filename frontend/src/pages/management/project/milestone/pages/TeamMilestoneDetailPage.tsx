@@ -12,6 +12,7 @@ import { MilestoneRubricCard } from "@/pages/management/project/milestone/compon
 import { MilestoneStatusBadge } from "@/pages/management/project/milestone/components/MilestoneStatusBadge";
 import { MilestoneDraftHistory } from "@/pages/management/project/milestone/components/MilestoneDraftHistory";
 import { formatPenalty, formatTenantDateTime } from "@/pages/management/project/milestone/milestone.utils";
+import { WorkspaceArtifactsPanel } from "@/pages/management/workspace/WorkspaceArtifactsPanel";
 
 export function TeamMilestoneDetailPage() {
   const { teamId: teamIdParam, milestoneId } = useParams<{ teamId: string; milestoneId: string }>();
@@ -48,6 +49,10 @@ export function TeamMilestoneDetailPage() {
           {milestone.scheduledStartAt && <p className="text-sm text-muted-foreground">Starts automatically {formatTenantDateTime(milestone.scheduledStartAt, milestone.tenantTimeZone)}</p>}
         </CardHeader>
       </Card>
+
+      {hasPermission("ARTIFACT_READ") && <WorkspaceArtifactsPanel teamId={teamId} milestone={milestone}
+        workspaceId={workspaceId && Number.isSafeInteger(Number(workspaceId)) && Number(workspaceId) > 0 ? Number(workspaceId) : undefined}
+        onRefreshMilestone={() => { void query.refetch(); }} />}
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
         <div className="grid gap-6">

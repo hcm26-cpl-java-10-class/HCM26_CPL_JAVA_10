@@ -236,6 +236,7 @@ export const countByStatus = (items: SprintPlanningItem[]) => ({
     (item) => !item.status || item.status === "BACKLOG" || item.status === "SPRINT_BACKLOG",
   ).length,
   inProgress: items.filter((item) => item.status === "IN_PROGRESS").length,
+  review: items.filter((item) => item.status === "REVIEW").length,
   done: items.filter((item) => item.status === "DONE").length,
 });
 

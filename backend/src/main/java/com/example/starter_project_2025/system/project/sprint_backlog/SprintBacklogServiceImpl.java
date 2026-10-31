@@ -156,6 +156,13 @@ public class SprintBacklogServiceImpl
             errors.put(STATUS_FIELD, List.of("This custom status is not configured for the sprint workspace"));
         }
 
+        var configuredColumns = workspaceBoardColumns(sprint);
+        if (sprint != null && request.getStatus() != null && !configuredColumns.isEmpty()
+                && request.getStatus() != SprintBacklogStatus.BLOCKED
+                && configuredColumns.stream().noneMatch(c -> c.key().equals(request.getStatus().name()))) {
+            errors.put(STATUS_FIELD, List.of("This status is not configured for the sprint workspace"));
+        }
+
         // AC03: a milestone that no longer exists / was cancelled fails the
         // whole request with 404 instead of an inline field error.
         Milestone milestone = resolveMilestone(request.getMilestoneId());
@@ -756,7 +763,7 @@ public class SprintBacklogServiceImpl
     private Set<SprintBacklogStatus> allowedTransitionsFor(Sprint sprint, SprintBacklogStatus current) {
         List<BoardColumn> columns = workspaceBoardColumns(sprint);
         if (current == SprintBacklogStatus.BLOCKED
-                || columns.stream().noneMatch(column -> column.key().startsWith("CUSTOM_"))) {
+                || columns.isEmpty()) {
             return STATUS_TRANSITIONS.getOrDefault(current, Set.of());
         }
         List<SprintBacklogStatus> statuses = columns.stream()

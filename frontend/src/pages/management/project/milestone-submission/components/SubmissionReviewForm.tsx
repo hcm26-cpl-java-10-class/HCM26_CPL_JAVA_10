@@ -59,7 +59,7 @@ export function SubmissionReviewForm({ submission, pending, apiError, onReview }
 
   return (
     <>
-      <Card>
+      <Card className="w-full min-w-0">
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div><CardTitle>Rubric evaluation</CardTitle><CardDescription>{submission.rubric.name} · {submission.rubric.version}. Evaluate every criterion before making a decision.</CardDescription></div>
@@ -73,7 +73,7 @@ export function SubmissionReviewForm({ submission, pending, apiError, onReview }
             const serverFeedback = apiError?.errors?.[`criteria[${index}].feedback`]?.[0];
             const feedbackError = localErrors[`${criterion.id}.feedback`] ?? serverFeedback;
             return (
-              <section id={`criterion-${criterion.id}`} key={criterion.id} className="scroll-mt-24 rounded-xl border p-4">
+              <section id={`criterion-${criterion.id}`} key={criterion.id} className="min-w-0 scroll-mt-24 rounded-xl border p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div><p className="font-semibold">{index + 1}. {criterion.name}</p><p className="mt-1 text-sm text-muted-foreground">{criterion.description || criterion.code}</p></div>
                   <div className="text-right text-sm"><p className="font-medium">{criterion.maxScore} points</p><p className="text-xs text-muted-foreground">{criterion.weight}% weight</p></div>
@@ -106,7 +106,7 @@ export function SubmissionReviewForm({ submission, pending, apiError, onReview }
           })}
           <section className="rounded-xl border p-4">
             <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold">Acceptance checklist</h3><p className="mt-1 text-sm text-muted-foreground">Verify each item against the submitted artifacts. Required items must be checked to accept.</p></div><span className="text-sm font-medium">{Object.values(checklist).filter(Boolean).length}/{submission.currentVersion.checklist.length} checked</span></div>
-            <div className="mt-4 grid gap-3">{submission.currentVersion.checklist.map((item, index) => <label key={item.id ?? index} className="flex cursor-pointer items-start gap-3 rounded-lg border p-3"><Checkbox checked={Boolean(checklist[item.id as string])} disabled={pending || submission.status !== "SUBMITTED" || !item.id} onCheckedChange={(checked) => item.id && setChecklist((current) => ({ ...current, [item.id as string]: checked === true }))} /><span><span className="font-medium">{item.content}</span>{item.mandatory ? <span className="ml-2 text-sm text-muted-foreground">Required</span> : null}</span></label>)}</div>
+            <div className="mt-4 grid gap-3">{submission.currentVersion.checklist.map((item, index) => <label key={item.id ?? index} className="flex min-w-0 cursor-pointer items-start gap-3 rounded-lg border p-3"><Checkbox checked={Boolean(checklist[item.id as string])} disabled={pending || submission.status !== "SUBMITTED" || !item.id} onCheckedChange={(checked) => item.id && setChecklist((current) => ({ ...current, [item.id as string]: checked === true }))} /><span className="min-w-0 break-words"><span className="font-medium">{item.content}</span>{item.mandatory ? <span className="ml-2 text-sm text-muted-foreground">Required</span> : null}</span></label>)}</div>
             {localErrors.checklist || apiError?.errors?.checklist?.[0] ? <p className="mt-3 text-sm text-destructive">{localErrors.checklist ?? apiError?.errors?.checklist?.[0]}</p> : null}
           </section>
           <section className="rounded-xl border p-4">

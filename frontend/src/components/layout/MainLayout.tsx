@@ -35,7 +35,7 @@ export function MainLayout({
     return (
         <SidebarProvider>
             <SidebarMenu />
-            <SidebarInset  className="h-screen flex flex-col overflow-hidden max-h-[calc(100vh-18px)]">
+            <SidebarInset className="h-screen min-w-0 flex flex-col overflow-hidden max-h-[calc(100vh-18px)]">
                 <header className="flex min-h-16 shrink-0 items-center gap-2 py-3">
                     <div className="flex items-center gap-2 px-4 w-full justify-between">
                         <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -46,7 +46,7 @@ export function MainLayout({
                     </div>
                 </header>
 
-                <main className="flex-1 overflow-y-auto min-h-0 flex flex-col px-6 pb-6 pt-6">
+                <main className="min-h-0 min-w-0 flex-1 flex flex-col overflow-x-hidden overflow-y-auto px-6 pb-6 pt-6">
                     {children}
                 </main>
             </SidebarInset>
