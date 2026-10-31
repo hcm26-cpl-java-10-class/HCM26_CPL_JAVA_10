@@ -1,53 +1,61 @@
 # Project Alerts
 
-The three categories have independent eligibility rules. Reading the page or running a background scan never sends a notification. A user explicitly queues an alert, and the backend checks the current conditions again before accepting it.
+Project Alerts has two categories: overdue backlog items/tasks and at-risk milestones. Viewing candidates or running the background scan does not send anything. A manager explicitly selects Send alert.
 
-## Backlog items and tasks
+## Overdue tasks
 
 - Show active top-level backlog items whose deadline has passed and whose status is not `DONE`.
-- Upcoming items do not appear. `REVIEW` is unfinished work and remains eligible when overdue.
-- Sending requires a current assignee in the same team. Subtasks are not added to the top-level deadline list.
+- Items assigned to a sprint are eligible only while that sprint is `ACTIVE`. Items in `PLANNED`, `COMPLETED` or `CANCELLED` sprints are excluded from lists, detection and new sends.
+- Product backlog items without a sprint keep the same deadline rules. Starting a sprint does not change task deadlines.
+- Sending requires a current assignee in the same team. Subtasks are excluded.
+- The backend rechecks status, deadline, sprint, version and team before sending an entire batch. An invalid selection rolls the whole send back.
 
-## Milestones
+## Milestone risks
 
 - Use the actual `SprintBacklog.milestone` relation, including Done and unassigned backlog items in the correct team scope.
-- Progress is `Done backlog items / all active backlog items belonging to the milestone × 100`.
-- A milestone is eligible only while active and `PLANNED` or `OPEN`, with `now < deadline <= now + 48 hours`, and an exact completion ratio below 80%.
-- 3/5 Done (60%) appears; 4/5 (80%) and 5/5 do not. Closed, cancelled, past-deadline and more distant milestones are excluded.
-- A milestone with no backlog has 0% progress. It does not require manual configuration.
-- Submission/review state does not change progress eligibility. These belong to the submission workflow.
-- The alert page has no Link backlog items, Member progress or Submission column. Associate backlog items with a milestone when creating/editing the backlog.
+- Progress is Done backlog items divided by all active linked backlog items.
+- Eligible milestones are active and `IN_PROGRESS`, with `now < deadline <= now + 48 hours` and an exact completion ratio below 80%.
+- 3/5 Done (60%) appears; 4/5 (80%) does not. A milestone with no backlog has 0% progress.
+- Planned, submitted, accepted, rejected, cancelled and past-deadline milestones do not qualify. The Milestone module owns these lifecycle transitions.
+- Send one milestone per alert. Active student members of the team are recorded as recipients.
+- A blank milestone note receives the default deadline/progress warning.
+- Link items through the backlog item form. The legacy linking API continues to write this same relation.
 
-The legacy `/api/project-alerts/teams/{teamId}/milestones/{milestoneId}/backlog-items` endpoints remain for existing API clients. They now read/write the actual backlog relation; they do not maintain a separate selection for the progress calculation.
+## Sent alerts in the workspace
 
-On startup, unambiguous legacy alert selections are copied to the actual relation once. Existing relations are preserved. Ambiguous selections or selections outside the team scope are logged for review, without guessing an owner. A nullable `migrated_at` field on `alert_milestone_backlog_config` records the completed migration so a later intentional unlink is preserved.
+- The workspace tab labelled Alerts occupies the former Feedback tab. The existing internal `feedback` navigation key remains compatible; feedback/review APIs belonging to other modules are unchanged.
+- `GET /api/workspaces/{workspaceId}/alerts` lists only committed task/milestone send batches for that workspace's tenant, team and project. It never lists unsent candidates or legacy inactivity reminders.
+- Workspace access is checked on every request using the existing workspace context. Members need workspace read access, not permission to send or manage alerts.
+- The read endpoint supports `kind=BACKLOG|MILESTONE`, zero-based `page`, and `size` from 1 to 100.
+- Notes, sender, send time, item titles, assignee, deadline and progress are shown. Item details are the immutable snapshots captured at send time.
+- Completing a task or reaching 80% removes a current candidate but preserves the posted alert and its original snapshot.
+- Existing committed task/milestone send history is also visible; no data reset, duplicate post table or database migration is required.
+- The frontend can refresh and polls every 15 seconds while the tab is open.
 
-## Inactive members
+## Send success and delivery status
 
-- A current student must have assigned Todo work to qualify.
-- The member must not have started any task during the last seven days, even if older Todo tasks remain.
-- A start is a real transition from another status to `IN_PROGRESS`, attributed to the member. Description edits, unchanged saves, task creation, submissions, reviews and external contribution timestamps do not count as starts.
-- Read actual status history from Sprint Backlogs, Board tasks and explicitly mapped UUID tasks. Ignore future, orphaned and foreign-tenant records.
-- Allow seven days after joining/transferring to a team or receiving the first currently waiting Todo assignment. Reassigning an old task to a new member starts that member's grace period for that task.
-- If older Todo work already exists, a newly assigned task does not hide that older waiting work. Starting any task resets the member's inactivity window.
-- Members without assigned Todo work do not appear as inactive.
-- `lastTaskStartedAt` replaces `lastContributionAt` in the member API. `pendingSince` identifies the earliest current Todo assignment used for the grace period. Completion percentages do not determine inactivity.
-- Existing recipient checks, permissions, shared reminder cooldown, idempotency and outbox delivery remain in place.
+A committed `project_alert_batches` row is the team's workspace notification. The send transaction also writes its recipients, snapshots and audit. Success returns `SENT` after this transaction commits, so the team can read the notification immediately. The UI uses Send alert, Sending... and Sent. There is no approval step.
 
-## Background detection
+The existing outbox is retained for integration channels. Its internal `PENDING` state is separate from the posted workspace notification; `SENT` confirms workspace posting and does not claim email delivery. An outbox/database failure rolls back the post and audit. Replaying the same request key creates no duplicate workspace post.
 
-`ProjectAlertMonitorJob` runs on the backend, independently of an open browser page. It detects overdue backlog IDs, at-risk milestone IDs and inactive member IDs per team. The latest scan is kept in memory; it is recomputed after a restart. Page reads and sends still evaluate current data, so stale scan results cannot authorize a send.
+A team needs an available matching workspace for a new send. Completed/cancelled projects reject new alerts but keep their sent history.
 
-Defaults:
+## Retired inactivity category
 
-- `PROJECT_ALERT_MONITOR_ENABLED=true`
-- `PROJECT_ALERT_MONITOR_INTERVAL_MS=60000`
-- `PROJECT_ALERT_MONITOR_INITIAL_DELAY_MS=30000`
-- `MEMBER_REMINDER_INACTIVE_DAYS=7`
-- `MEMBER_REMINDER_COOLDOWN_SECONDS=86400`
+Project Alerts no longer offers inactivity options, member results routes or inactivity sending. Its former read routes return 404; a new `INACTIVE` send/filter is rejected. The background monitor only detects tasks and milestones.
 
-The test profile disables the scheduled job; integration tests invoke the monitor explicitly against an isolated in-memory database.
+The `INACTIVE` enum value and old records remain readable internally for historical data compatibility. Shared member, reminder, task and workspace business modules are not removed.
 
-## Verification
+## Verification and demo
 
-Run `ProjectAlertIntegrationTest` and `ProjectAlertMilestonePolicyTest` with Java 21. Coverage includes 3/5 vs 4/5, exact 48-hour and seven-day boundaries, stale sends, real Board/UUID task starts, reassignment grace, independent submission behavior, legacy migration, background scans without notifications, tenant scope, permissions, cooldown and concurrent retries. Run `npm run build` in the frontend for TypeScript and production bundle validation.
+Run `ProjectAlertIntegrationTest`, `ProjectAlertBacklogPolicyTest` and `ProjectAlertMilestonePolicyTest` with Java 21, then `npm run build` in the frontend.
+
+Coverage includes planned/active sprint gates, stale and mixed sends, retry deduplication, rollback, sent-only workspace lists, immutable snapshots after completion, 60%/80% boundaries, pagination, retired inactivity, workspace permissions, roster changes and tenant/team isolation.
+
+Demo sequence:
+
+1. Give an unfinished task a past deadline in a Planned sprint: it is absent from task candidates.
+2. Start the sprint, refresh Alerts and send that task's alert.
+3. Open the same team's workspace and its Alerts tab: the sent note and task snapshot are visible.
+4. Send a milestone risk at 3/5 Done and within 48 hours of deadline.
+5. Complete the overdue task so progress becomes 4/5: current candidates disappear, while both sent notices remain in the workspace.

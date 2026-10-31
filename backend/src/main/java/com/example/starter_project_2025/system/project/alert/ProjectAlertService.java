@@ -6,7 +6,6 @@ import com.example.starter_project_2025.system.project.milestone.domain.*;
 import com.example.starter_project_2025.system.project.milestone.outbox.*;
 import com.example.starter_project_2025.system.project.sprint_backlog.*;
 import com.example.starter_project_2025.system.project.task.*;
-import com.example.starter_project_2025.system.project.task.reminder.MemberReminderSettings;
 import com.example.starter_project_2025.system.rbac.user.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.*;
@@ -25,43 +24,39 @@ import static com.example.starter_project_2025.system.project.alert.ProjectAlert
 public class ProjectAlertService {
     private final ProjectAlertAccess access;
     private final ProjectAlertReadStore store;
-    private final ProjectAlertActivityService activity;
     private final AlertMilestoneProgressSource progressSource;
     private final AlertMilestoneConfigRepository configs;
     private final ProjectTeamRepository teams;
-    private final UserRepository users;
     private final ProjectAlertBatchRepository batches;
     private final ProjectAlertRecipientRepository recipients;
     private final ProjectAlertAuditRepository audits;
     private final OutboxEventRepository outbox;
-    private final MemberReminderSettings reminderSettings;
     private final ObjectMapper json;
     private final Validator validator;
     private final EntityManager em;
     private final ProjectRepository projects;
     private final ProjectAlertMilestonePolicy milestonePolicy;
+    private final ProjectAlertBacklogPolicy backlogPolicy;
     private final ProjectAlertMonitor monitor;
-    private final ProjectAlertWorkResults workResults;
+    private final WorkspaceProjectAlertService workspaceAlerts;
     @Autowired @Qualifier("memberReminderClock") private Clock clock;
     @Value("${app.project-alerts.time-zone:Asia/Ho_Chi_Minh}") private String timeZone;
     private ZoneId zone() {return ZoneId.of(timeZone);}
 
     public Options options() {
         User actor=access.actor();Map<String,Boolean> permissions=new LinkedHashMap<>();
-        for(Kind kind:Kind.values()) {
+        for(Kind kind:List.of(Kind.BACKLOG,Kind.MILESTONE)) {
             permissions.put(kind.name()+"_READ",access.has(actor,access.readPermission(kind)));
             permissions.put(kind.name()+"_SEND",access.has(actor,access.readPermission(kind))&&access.has(actor,access.sendPermission(kind)));
         }
 
         var allowed=access.allowed(actor);
-        return new Options(allowed.stream().map(access::describe).toList(),permissions,timeZone,
-                reminderSettings.inactiveWindow().toHours(),reminderSettings.cooldown().toSeconds(),access.classOptions(actor,allowed));
+        return new Options(allowed.stream().map(access::describe).toList(),permissions,timeZone,access.classOptions(actor,allowed));
     }
     public Page<BacklogRow> backlog(Filter filter) {
         User actor=read(Kind.BACKLOG);Instant now=clock.instant();
         var scope=store.load(access.filter(actor,filter).stream().filter(access::monitoring).toList());
-        var rows=scope.items().stream().filter(this::unfinished)
-                .filter(item->deadline(item)!=null&&deadline(item).isBefore(now))
+        var rows=scope.items().stream().filter(item->backlogPolicy.eligible(item,now,zone()))
                 .filter(item->!"UPCOMING".equals(filter.deadlineStatus()))
                 .map(item->backlogRow(actor,scope,item,now))
                 .sorted(Comparator.comparing(BacklogRow::deadline).thenComparing(BacklogRow::id)).toList();
@@ -76,42 +71,11 @@ public class ProjectAlertService {
                 .sorted(Comparator.comparing(MilestoneRow::deadline).thenComparing(MilestoneRow::id)).toList();
         return page(rows,filter,now);
     }
-    public Page<MemberRow> inactive(Filter filter,boolean inactiveOnly) {
-        User actor=read(Kind.INACTIVE);Instant now=clock.instant();
-        boolean canViewWork=canViewWorkResults(actor);
-        var scope=store.load(access.filter(actor,filter).stream().filter(access::monitoring).toList());List<MemberRow> rows=new ArrayList<>();
-        for(var team:scope.teams().values())for(var row:activity.members(team,scope,now)) {
-            if(inactiveOnly&&!row.inactive())continue;
-            rows.add(new MemberRow(row.id(),row.team(),row.userCode(),row.displayName(),row.projectRole(),row.joinedAt(),
-                    row.lastTaskStartedAt(),row.activityStatus(),row.inactive(),row.lastReminderAt(),row.nextReminderAt(),
-                    row.coolingDown(),row.canSend()&&access.has(actor,access.sendPermission(Kind.INACTIVE)),
-                    canViewWork?workResults.summarize(workResults.assigned(scope,team.getId(),Long.valueOf(row.id())),now,zone()):null,row.pendingSince()));
-        }
-        rows.sort(Comparator.comparing(MemberRow::displayName,String.CASE_INSENSITIVE_ORDER).thenComparing(MemberRow::id));
-        return page(rows,filter,now);
-    }
-    public MemberWorkDetail memberWork(Long teamId,Long userId) {
-        User actor=read(Kind.INACTIVE);
-        access.require(actor,"SPRINT_BACKLOG_READ");access.require(actor,"WORKSPACE_MEMBER_READ");
-        var team=access.team(actor,teamId);var scope=store.load(List.of(team));Instant now=clock.instant();
-        var member=scope.members().values().stream().filter(row->userId.equals(row.getClassMember().getUser().getId()))
-                .filter(row->row.getClassMember().getUser().getRoles().stream().anyMatch(role->Boolean.TRUE.equals(role.getIsActive())
-                        &&Set.of("STUDENT","TRAINEE").contains(role.getName())))
-                .findFirst().orElseThrow(()->new ResourceNotFoundException("Current student member is unavailable in this team"));
-        var assigned=workResults.assigned(scope,teamId,userId);
-        return new MemberWorkDetail(userId,member.getClassMember().getUser().getFullName(),access.describe(team),
-                workResults.summarize(assigned,now,zone()),assigned.stream().map(item->backlogRow(actor,scope,item,now))
-                    .sorted(Comparator.comparing(BacklogRow::deadline,Comparator.nullsLast(Comparator.naturalOrder()))
-                            .thenComparing(BacklogRow::id)).toList());
-    }
-    private boolean canViewWorkResults(User actor) {
-        return access.has(actor,"SPRINT_BACKLOG_READ")&&access.has(actor,"WORKSPACE_MEMBER_READ");
-    }
     public List<History> history(Long teamId,Kind kind) {
         User actor=read(kind);var team=access.team(actor,teamId);
         return batches.findTop100ByTeamIdAndTenantIdAndKindOrderByCreatedAtDesc(teamId,team.getTrainingClass().getTenantId(),kind).stream()
                 .map(batch->new History(batch.getId(),batch.getKind(),batch.getWarningNote(),batch.getRecipientCount(),
-                        status(batch.getId()),batch.getCreatedAt(),batch.getCorrelationId())).toList();
+                        "SENT",batch.getCreatedAt(),batch.getCorrelationId())).toList();
     }
     /** Legacy API compatibility; selections now reflect the backlog milestone relation. */
     @Deprecated
@@ -152,6 +116,7 @@ public class ProjectAlertService {
     @Transactional
     public Result send(UUID key,String correlation,Send request) {
         User actor=access.actor();validate(request);
+        requireSupported(request.kind());
         access.require(actor,access.readPermission(request.kind()));access.require(actor,access.sendPermission(request.kind()));
         access.team(actor,request.teamId());
         if(key==null)throw new TaskValidationException("idempotencyKey","Idempotency-Key is required");
@@ -171,13 +136,6 @@ public class ProjectAlertService {
             if(!hash.equals(previous.get().getRequestHash()))throw conflict("This Idempotency-Key was used with different data");
             return result(previous.get());
         }
-        if(request.kind()==Kind.INACTIVE) {
-            var scope=store.load(List.of(access.team(actor,request.teamId())));
-            Set<Long> currentUsers=new HashSet<>();scope.members().values().forEach(m->currentUsers.add(m.getClassMember().getUser().getId()));
-            var ids=selected.stream().map(s->number(s.id())).toList();
-            if(!currentUsers.containsAll(ids))throw staleMember();
-            if(users.lockForContribution(ids.stream().sorted().toList()).size()!=ids.size())throw staleMember();
-        }
         em.clear();actor=read(request.kind());access.require(actor,access.sendPermission(request.kind()));
         ProjectTeam team=access.team(actor,request.teamId());Instant now=clock.instant();
         lockProjectAndRequireMonitoring(team);
@@ -189,24 +147,14 @@ public class ProjectAlertService {
                 for(var selection:selected) {
                     SprintBacklog item=items.get(number(selection.id()));
                     if(item==null||selection.version()==null||!selection.version().equals(item.getVersion())
-                            ||!unfinished(item)||deadline(item)==null||!deadline(item).isBefore(now))
-                        throw conflict("A selected backlog item changed, is no longer overdue, or left this team. Reload the list.");
+                            ||!backlogPolicy.eligible(item,now,zone()))
+                        throw conflict("A selected backlog item changed, is no longer overdue, its sprint is not active, or it left this team. Reload the list.");
                     var assignee=store.assignee(scope,item);
                     if(assignee==null)throw conflict("Every selected backlog item must have an active assignee in this team");
                     targets.add(assignee.getClassMember().getUser().getId());snapshots.add(backlogRow(actor,scope,item,now));
                 }
             }
-            case INACTIVE -> {
-                var scope=store.load(List.of(team));Map<String,MemberRow> current=new HashMap<>();
-                activity.members(team,scope,now).forEach(member->current.put(member.id(),member));
-                List<CooldownMember> cooling=new ArrayList<>();
-                for(var selection:selected) {
-                    MemberRow row=current.get(selection.id());if(row==null||!row.inactive())throw staleMember();
-                    if(row.coolingDown())cooling.add(new CooldownMember(number(row.id()),row.userCode(),row.displayName(),row.nextReminderAt()));
-                    targets.add(number(row.id()));snapshots.add(row);
-                }
-                if(!cooling.isEmpty())throw new ProjectAlertCooldownException(cooling);
-            }
+            case INACTIVE -> throw new TaskValidationException("kind","Inactive member alerts are no longer available");
             case MILESTONE -> {
                 var selection=selected.getFirst();var milestone=milestone(team,actor,uuid(selection.id()),true);
                 var configured=progressSource.backlogItemIds(milestone.getId(),team.getId(),team.getTrainingClass().getTenantId());
@@ -222,6 +170,7 @@ public class ProjectAlertService {
 
             }
         }
+        workspaceAlerts.requireDestination(team);
         String note=request.warningNote()==null?"":request.warningNote();
         if(request.kind()==Kind.MILESTONE&&note.isBlank())note="Milestone "+((MilestoneRow)snapshots.getFirst()).title()
                 +" is due within 48 hours and has less than 80% of its backlog completed. Please review your progress.";
@@ -244,7 +193,10 @@ public class ProjectAlertService {
         audit.setBeforeState(encode(snapshots));audit.setAfterState(encode(Map.of("event_id",batch.getId(),"status","PENDING","recipient_user_ids",targets)));
         audits.saveAndFlush(audit);return result(batch);
     }
-    private User read(Kind kind) {User actor=access.actor();access.require(actor,access.readPermission(kind));return actor;}
+    private User read(Kind kind) {User actor=access.actor();requireSupported(kind);access.require(actor,access.readPermission(kind));return actor;}
+    private void requireSupported(Kind kind) {
+        if(kind==Kind.INACTIVE)throw new TaskValidationException("kind","Inactive member alerts are no longer available");
+    }
     private void requireConfigure(User user) {access.require(user,"MILESTONE_WRITE");access.require(user,"SPRINT_BACKLOG_READ");}
     private Milestone milestone(ProjectTeam team,User actor,UUID id,boolean lock) {
         var query=em.createQuery("select m from Milestone m where m.id=:id and m.teamId=:team and m.tenantId=:tenant and m.active=true",Milestone.class)
@@ -262,7 +214,7 @@ public class ProjectAlertService {
                 item.getWorkType().name(),item.getStatus().name(),due,deadlineStatus(due,now),item.getVersion(),
                 assignee==null?null:assignee.getClassMember().getUser().getId(),assignee==null?null:assignee.getClassMember().getUser().getFullName(),
                 access.monitoring(store.owner(scope,item))&&access.has(actor,access.sendPermission(Kind.BACKLOG))
-                        &&assignee!=null&&unfinished(item)&&due!=null&&due.isBefore(now));
+                        &&assignee!=null&&backlogPolicy.eligible(item,now,zone()));
     }
     private MilestoneRow milestoneRow(User actor,ProjectAlertReadStore.Scope scope,Milestone milestone,Instant now) {
         var linked=progressSource.backlogItemIds(milestone.getId(),milestone.getTeamId(),milestone.getTenantId()).orElse(Set.of());
@@ -283,7 +235,6 @@ public class ProjectAlertService {
         }
         access.requireMonitoring(team);
     }
-    private boolean unfinished(SprintBacklog item) {return item.getStatus()!=SprintBacklogStatus.DONE;}
     private Instant deadline(SprintBacklog item) {return item.getEndDate()==null?null:item.getEndDate().atZone(zone()).toInstant();}
     private String deadlineStatus(Instant due,Instant now) {return due==null?"NO_DEADLINE":due.isBefore(now)?"OVERDUE":"UPCOMING";}
     private <T> Page<T> page(List<T> rows,Filter filter,Instant now) {
@@ -299,9 +250,7 @@ public class ProjectAlertService {
         catch(NumberFormatException invalid){throw new TaskValidationException("selections","Choose a valid item ID");}}
     private UUID uuid(String value) {try{return UUID.fromString(value);}catch(IllegalArgumentException invalid){throw new TaskValidationException("selections","Choose a valid milestone ID");}}
     private TaskConflictException conflict(String message) {return new TaskConflictException(message);}
-    private TaskConflictException staleMember() {return conflict("A selected member contributed recently or left the team. Reload the member list.");}
-    private String status(UUID id) {return outbox.findById(id).orElseThrow().getStatus().name();}
-    private Result result(ProjectAlertData.Batch batch) {return new Result(batch.getId(),batch.getId(),status(batch.getId()),batch.getRecipientCount(),batch.getCreatedAt(),batch.getCorrelationId());}
+    private Result result(ProjectAlertData.Batch batch) {return new Result(batch.getId(),batch.getId(),"SENT",batch.getRecipientCount(),batch.getCreatedAt(),batch.getCorrelationId());}
     private String encode(Object value) {try{return json.writeValueAsString(value);}catch(com.fasterxml.jackson.core.JsonProcessingException failure){throw new IllegalStateException("Unable to serialize alert",failure);}}
     private String fingerprint(Send request) {try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(encode(request).getBytes(StandardCharsets.UTF_8)));}
         catch(java.security.NoSuchAlgorithmException failure){throw new IllegalStateException(failure);}}

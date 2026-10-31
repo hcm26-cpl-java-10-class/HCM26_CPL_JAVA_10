@@ -8,14 +8,14 @@ import java.util.*;
 
 public final class ProjectAlertDtos {
     private ProjectAlertDtos() { }
+    // Keep INACTIVE readable for historical database rows; new requests reject it.
     public enum Kind { BACKLOG, MILESTONE, INACTIVE }
     public record Filter(Long programId, Long cohortId, Long classId, Long teamId, String teamSearch,
                          String deadlineStatus, int windowHours, int page, int size) { }
     public record TeamInfo(Long id, String code, String name, Long classId, String classCode, String className,
                            Long programId, String programName, Long cohortId, String cohortName,
                            Long projectId, String projectName, String projectStatus) { }
-    public record Options(List<TeamInfo> teams, Map<String,Boolean> permissions, String timeZone,
-                          long inactiveHours, long cooldownSeconds, List<ClassInfo> classes) { }
+    public record Options(List<TeamInfo> teams, Map<String,Boolean> permissions, String timeZone, List<ClassInfo> classes) { }
     public record ClassInfo(Long id, String code, String name, Long programId, String programName,
                             Long cohortId, String cohortName, long studentCount, long teamCount) { }
     public record Page<T>(List<T> content, long total, int page, int size, Instant asOf, String timeZone) { }

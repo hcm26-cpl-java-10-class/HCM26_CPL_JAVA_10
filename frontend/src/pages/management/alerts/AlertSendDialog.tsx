@@ -23,8 +23,9 @@ export function AlertSendDialog({ kind, rows, owner, note, setNote, request, onB
   function changeNote(value: string) { setNote(value); mutation.reset(); try { localStorage.setItem(draftKey, value); } catch { /* Keep the in-memory draft. */ } }
   const mutation = useMutation({
     mutationFn: ({ payload, key }: { payload: AlertPayload; key: string }) => projectAlertApi.send(payload, key),
-    onSuccess: () => { try { localStorage.removeItem(draftKey); } catch { /* The request is already queued. */ }
-      toast.success("Alert queued for the selected recipients."); onSent(); },
+    onSuccess: () => { try { localStorage.removeItem(draftKey); } catch { /* The alert is already sent. */ }
+      void client.invalidateQueries({ queryKey: ["workspace-alerts"] });
+      toast.success("Alert sent to the team's workspace."); onSent(); },
     onError: cause => {
       const status=getAlertError(cause).status;
       if ([401,403].includes(status ?? 0)) {
@@ -49,8 +50,8 @@ export function AlertSendDialog({ kind, rows, owner, note, setNote, request, onB
     finally { pending.current = false; setBusy(false); onBusy(false); }
   }
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}><DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
-    <DialogHeader><DialogTitle>{kind === "INACTIVE" ? "Send inactivity reminders" : kind === "MILESTONE" ? "Send milestone deadline alert" : "Send overdue backlog alert"}</DialogTitle>
-      <DialogDescription>{team?.className} / {team?.name}. Notifications will be queued for delivery.</DialogDescription></DialogHeader>
+    <DialogHeader><DialogTitle>{kind === "MILESTONE" ? "Send milestone deadline alert" : "Send overdue backlog alert"}</DialogTitle>
+      <DialogDescription>{team?.className} / {team?.name}. This alert will appear in the team's workspace.</DialogDescription></DialogHeader>
     <form noValidate className="min-w-0 space-y-4" onSubmit={event => { event.preventDefault(); void submit(); }}>
       <div className="max-h-32 overflow-y-auto rounded border p-3 text-sm">{rows.map(row => <p key={row.id}>{alertRowName(row)}</p>)}</div>
       <div className="space-y-2"><Label htmlFor="project-alert-note">Warning note{kind === "MILESTONE" ? " (optional)" : ""}</Label>
@@ -67,7 +68,7 @@ export function AlertSendDialog({ kind, rows, owner, note, setNote, request, onB
       {denied && <p role="alert" className="text-sm text-destructive">Your access has changed. Reload the page or sign in again.</p>}
       <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={onClose}>Cancel</Button>
         <Button type="submit" disabled={busy || denied || !rows.length || kind !== "MILESTONE" && !note.trim()} aria-busy={busy}>
-          {busy && <Loader2 aria-label="Queuing alert" className="size-4 animate-spin"/>}{busy ? "Queuing..." : "Queue alert"}</Button></div>
+          {busy && <Loader2 aria-label="Sending alert" className="size-4 animate-spin"/>}{busy ? "Sending..." : "Send alert"}</Button></div>
     </form>
   </DialogContent></Dialog>;
 }

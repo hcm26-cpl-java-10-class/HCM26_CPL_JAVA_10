@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { isAxiosError } from "axios";
-import { Activity, CalendarDays, FolderOpen, LayoutDashboard, ListTodo, MessageSquare, PanelsTopLeft, Users, type LucideIcon } from "lucide-react";
+import { Activity, Bell, CalendarDays, FolderOpen, LayoutDashboard, ListTodo, PanelsTopLeft, Users, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import type { WorkspaceCandidateItem } from "@/types/features/workspace";
 
@@ -11,7 +11,7 @@ export const WORKSPACE_SECTIONS = [
   { id: "sprints", label: "Kanban Board", icon: PanelsTopLeft, description: "Sprint plans and team task board" },
   { id: "backlog", label: "Backlog", icon: ListTodo, description: "The team's work items" },
   { id: "artifacts", label: "Artifact", icon: FolderOpen, description: "Documents and deliverables" },
-  { id: "feedback", label: "Feedback", icon: MessageSquare, description: "Project reviews and feedback" },
+  { id: "feedback", label: "Alerts", icon: Bell, description: "Task and milestone alerts sent to this team" },
   { id: "activity", label: "Risks, Decisions & Logs", icon: Activity, description: "Decision logs, risks, meeting notes and audit history" },
 ] as const;
 
