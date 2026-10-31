@@ -9,6 +9,7 @@ import org.hibernate.annotations.ColumnDefault;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -47,11 +48,18 @@ public class Milestone {
     @Column
     private Instant deadline;
 
+    // Retained for the one-time schedule backfill; no new request writes this field.
     @Column(name = "deadline_offset_days")
     private Integer deadlineOffsetDays;
 
     @Column(name = "auto_start_enabled", nullable = false, columnDefinition = "boolean default false")
     private boolean autoStartEnabled;
+
+    @Column(name = "start_date")
+    private LocalDate startDate;
+
+    @Column(name = "scheduled_start_at")
+    private Instant scheduledStartAt;
 
     @Column(name = "is_mandatory", nullable = false)
     private boolean mandatory;
@@ -172,21 +180,26 @@ public class Milestone {
         this.maxSubmissionAttempts = allowed ? maxAttempts : null;
     }
 
-    public void configureAutoStart(Integer offsetDays, boolean enabled) {
-        if (offsetDays != null && (offsetDays < 0 || offsetDays > 365))
-            throw new IllegalArgumentException("deadlineOffsetDays must be between 0 and 365");
-        deadlineOffsetDays = offsetDays;
-        autoStartEnabled = enabled;
+    public void scheduleStart(LocalDate date, Instant instant) {
+        startDate = date;
+        scheduledStartAt = instant;
+        autoStartEnabled = instant != null;
     }
 
     public Instant scheduledStartAt() {
-        return deadline == null || deadlineOffsetDays == null ? null
-                : deadline.minus(Duration.ofDays(deadlineOffsetDays));
+        return scheduledStartAt;
+    }
+
+    public void backfillSchedule(LocalDate date, Instant instant) {
+        if (scheduledStartAt == null && autoStartEnabled && deadlineOffsetDays != null) {
+            startDate = date;
+            scheduledStartAt = instant;
+        }
     }
 
     public void startAutomatically(Instant now) {
         if (!active || !autoStartEnabled || lifecycleStatus() != MilestoneLifecycleStatus.PLANNED
-                || scheduledStartAt() == null || now.isBefore(scheduledStartAt())) return;
+                || scheduledStartAt == null || now.isBefore(scheduledStartAt)) return;
         if (status == MilestoneStatus.PLANNED) openForWork(SCHEDULER_ACTOR_ID, now);
         start(SCHEDULER_ACTOR_ID, now);
     }

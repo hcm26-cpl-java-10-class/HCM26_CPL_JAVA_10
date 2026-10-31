@@ -15,7 +15,7 @@ import { AlertTriangle, CalendarClock, CheckCircle2, Save } from "lucide-react";
 import { MilestoneChecklistEditor } from "./MilestoneChecklistEditor";
 import { MilestoneErrorSummary } from "./MilestoneErrorSummary";
 import { getMilestoneRubricMetrics, MilestoneRubricSelector } from "./MilestoneRubricSelector";
-import { MILESTONE_FORM_LIMITS, milestoneFormSchema, type MilestoneFormValues } from "../milestone-form.schema";
+import { MILESTONE_FORM_LIMITS, milestoneFormSchemaForTenant, tenantToday, type MilestoneFormValues } from "../milestone-form.schema";
 import { toFormFieldPath } from "../milestone.utils";
 
 interface MilestoneFormProps {
@@ -55,7 +55,7 @@ export function MilestoneForm({
     setValue,
     formState: { errors, isDirty },
   } = useForm<MilestoneFormValues>({
-    resolver: zodResolver(milestoneFormSchema),
+    resolver: zodResolver(milestoneFormSchemaForTenant(options.tenantTimeZone)),
     defaultValues,
     mode: "onBlur",
   });
@@ -114,6 +114,8 @@ export function MilestoneForm({
   const minimumDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
     .toISOString()
     .slice(0, 16);
+  const tenantTomorrow = new Date(Date.parse(`${tenantToday(options.tenantTimeZone)}T00:00:00Z`) + 86400_000)
+    .toISOString().slice(0, 10);
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="grid gap-6">
@@ -171,11 +173,11 @@ export function MilestoneForm({
                   <FieldMessage message={errors.deadline?.message} />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="milestone-offset">Open before deadline (days)</Label>
-                  <Input id="milestone-offset" type="number" min={0} max={365} step={1}
-                    {...register("deadlineOffsetDays", { valueAsNumber: true })} />
-                  <p className="text-xs text-muted-foreground">The milestone starts automatically this many days before its deadline.</p>
-                  <FieldMessage message={errors.deadlineOffsetDays?.message} />
+                  <Label htmlFor="milestone-start-date">Start date <span className="text-destructive">*</span></Label>
+                  <Input id="milestone-start-date" type="date" required min={tenantTomorrow}
+                    aria-invalid={!!errors.startDate} {...register("startDate")} />
+                  <p className="text-xs text-muted-foreground">Starts automatically at 00:00 in the tenant time zone ({options.tenantTimeZone}). Choose a future date.</p>
+                  <FieldMessage message={errors.startDate?.message} />
                 </div>
                 <div className="flex items-start justify-between gap-4 rounded-xl border bg-muted/30 p-4">
                   <div>
@@ -312,6 +314,7 @@ export function MilestoneForm({
             <div><p className="text-muted-foreground">Scope</p><p className="mt-1 font-medium">{options.project?.name ?? "Team workspace"}</p></div>
             <div><p className="text-muted-foreground">Milestone</p><p className="mt-1 font-medium">{values.title?.trim() || "Not entered"}</p></div>
             <div><p className="text-muted-foreground">Deadline</p><p className="mt-1 flex items-center gap-2 font-medium"><CalendarClock className="size-4" />{values.deadline ? new Date(values.deadline).toLocaleString("en-GB") : "Not selected"}</p></div>
+            <div><p className="text-muted-foreground">Start date</p><p className="mt-1 font-medium">{values.startDate || "Not selected"} ({options.tenantTimeZone})</p></div>
             <div><p className="text-muted-foreground">Checklist</p><p className="mt-1 font-medium">{values.checklist?.length ?? 0} item(s)</p></div>
             <div>
               <p className="text-muted-foreground">Rubric</p>

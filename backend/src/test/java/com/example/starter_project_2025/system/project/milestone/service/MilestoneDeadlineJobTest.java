@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
@@ -28,13 +29,13 @@ class MilestoneDeadlineJobTest {
         UUID actor = UUID.randomUUID();
         Milestone due = Milestone.create(1L, 1L, 1L, "Due", null, now.plusSeconds(86400), true,
                 UUID.randomUUID(), null, LatePolicyType.NO_LATE, null, null, actor, now.minusSeconds(86400));
-        due.configureAutoStart(1, true);
+        due.scheduleStart(LocalDate.parse("2026-10-29"), now);
         Milestone future = Milestone.create(1L, 1L, 1L, "Future", null, now.plusSeconds(172800), true,
                 UUID.randomUUID(), null, LatePolicyType.NO_LATE, null, null, actor, now);
-        future.configureAutoStart(1, true);
+        future.scheduleStart(LocalDate.parse("2026-10-30"), now.plusSeconds(86400));
         Milestone draft = Milestone.create(1L, 1L, 1L, "Draft", null, now.plusSeconds(86400), true,
                 UUID.randomUUID(), null, LatePolicyType.NO_LATE, null, null, actor, now);
-        draft.configureAutoStart(1, false);
+        draft.scheduleStart(null, null);
         MilestoneRepository repository = mock(MilestoneRepository.class);
         when(repository.findByActiveTrueAndAutoStartEnabledTrueAndLifecycleState(MilestoneLifecycleStatus.PLANNED))
                 .thenReturn(List.of(due, future));

@@ -4,14 +4,14 @@
 
 | State | Entry | Allowed next state | Edit/delete |
 | --- | --- | --- | --- |
-| `PLANNED` | Created or published, before the scheduled opening | `IN_PROGRESS` automatically at `deadline - deadlineOffsetDays` | Full draft edit; delete while no submission; publish validates fields |
-| `IN_PROGRESS` | Scheduled opening | `SUBMITTED` on student submit; `REJECTED` after the maximum submission cutoff without a submission | Description and extension of deadline; delete only without submission records, with UI warning |
+| `PLANNED` | Created, before its start date | `IN_PROGRESS` automatically at 00:00 on `startDate` in the tenant time zone | Full planned edit; delete while no submission |
+| `IN_PROGRESS` | Scheduled start | `SUBMITTED` on student submit; `REJECTED` after the maximum submission cutoff without a submission | Description and extension of deadline; delete only without submission records, with UI warning |
 | `SUBMITTED` | Student submits V1 or a later version | `ACCEPTED`, `CHANGES_REQUESTED`, `REJECTED` through reviewer decision | Neither |
 | `CHANGES_REQUESTED` | Reviewer requests changes with feedback | `SUBMITTED` only when a new version is submitted | Deadline extension only |
 | `ACCEPTED` | Reviewer accepts | Terminal | Neither |
 | `REJECTED` | Reviewer rejects, or system expires an unsubmitted milestone | Terminal | Neither |
 
-The two old `PLANNED` phases remain distinguishable in the compatibility `status` column: `PLANNED` is an unpublished working draft, while `OPEN` with `TODO` means published but not started. Students cannot read unpublished rows. They can see a published planned milestone but cannot submit until its scheduled opening. A complete create request with `deadlineOffsetDays` enables automatic start; an explicit draft must first be published. The UI defaults this field to 7 days. Existing API clients that omit it retain manual `/open` and `/start` behavior. The scheduler checks once per minute and records an audit and outbox event. There is no separate `PUBLISHED` business state.
+New milestones require a future `startDate` and remain `PLANNED` after creation. The date is interpreted in the tenant time zone; `scheduledStartAt` is stored as an instant. The scheduler checks once per minute, opens the milestone and moves it to `IN_PROGRESS` in one transaction, then records an audit and outbox event. The legacy `status` and `execution_status` columns remain for compatibility. Students cannot read a planned milestone while its legacy `status` is `PLANNED`, and cannot submit before `IN_PROGRESS`. Manual start, draft, publish and open milestone commands have been removed.
 
 `CHANGES_REQUESTED` stays in that state while the student prepares a new draft. Submitting the new version changes the milestone directly to `SUBMITTED`. Immutable `submission_versions` and `milestone_reviews` preserve V1, V2, and all review decisions. Rubric snapshot IDs and checklist definitions cannot be edited after Start. A reviewer reject records a final score of zero and emits a `MILESTONE_REJECTED` event with `severity=HIGH`.
 
@@ -24,7 +24,7 @@ Every planned or active edit appends an immutable JSON snapshot in `milestone_dr
 | API / component | New behavior |
 | --- | --- |
 | Project, team and all-milestones GET list/detail | `lifecycleStatus` has exactly the six values above; the `lifecycleStatus` query filter uses the persisted value. Old `status` and `executionStatus` fields remain for compatibility. |
-| `POST /drafts`, `PUT /{id}/draft`, `POST /{id}/publish`, `POST /milestones` | Accept `deadlineOffsetDays` (0–365). A draft is not scheduled until published; a complete create is scheduled immediately. The legacy `status` still distinguishes unpublished and published planned milestones. |
+| `POST /milestones`, `PUT /{id}` for project/team | Require `startDate` (`YYYY-MM-DD`) for creation and planned edits, plus a future deadline. The start date must be after the current tenant date and its 00:00 instant must precede the deadline. Planned edits require `expectedVersion`. Responses include `startDate` and `scheduledStartAt`. |
 | `PATCH /{id}` for project/team | Requires `MILESTONE_WRITE`, `expectedVersion` and a future deadline. In progress permits description plus deadline extension. Changes requested permits deadline extension only. Each success creates a revision and audit row. |
 | `DELETE /{id}` for project/team | Soft deletes planned or in-progress milestones. In progress with submission records is blocked. UI asks for confirmation. |
 | Artifact draft, upload, submission and workspace APIs | Submission is allowed only in `IN_PROGRESS`, or in `CHANGES_REQUESTED` for a team with a prior submission. Terminal states are read-only. The workspace returns `canSubmit`. |
@@ -34,6 +34,6 @@ Every planned or active edit appends an immutable JSON snapshot in `milestone_dr
 
 ## Existing database
 
-Hibernate's configured `ddl-auto=update` adds nullable `milestones.lifecycle_status` and the startup backfill fills existing rows. For team-only workspaces, reviewer submissions can have `project_id=NULL`; the startup schema compatibility step relaxes the old `milestone_submissions.project_id` constraint on H2, MySQL/MariaDB and PostgreSQL when necessary. It does not modify existing submission rows. Back up a deployed database before the first rollout, and run the application migration on one instance before scaling out.
+Hibernate's configured `ddl-auto=update` adds nullable `milestones.lifecycle_status`, `start_date` and `scheduled_start_at`. The startup backfill copies each old enabled schedule's exact `deadline - deadline_offset_days` instant to `scheduled_start_at` and derives `start_date` in the tenant time zone. It is safe to rerun; old milestones without an enabled schedule are left unchanged. Template-generated milestones receive a start date seven days before their deadline. For team-only workspaces, reviewer submissions can have `project_id=NULL`; the startup schema compatibility step relaxes the old `milestone_submissions.project_id` constraint on H2, MySQL/MariaDB and PostgreSQL when necessary. It does not modify existing submission rows. Back up a deployed database before the first rollout, and run the application migration on one instance before scaling out.
 
 Legacy `CLOSED` maps to `ACCEPTED` and `CANCELLED` maps to `REJECTED`. Where a legacy review submission exists, its outcome takes precedence during backfill. Those mappings should be reviewed with owners of historical data before production rollout because the old labels did not necessarily mean a reviewer decision.

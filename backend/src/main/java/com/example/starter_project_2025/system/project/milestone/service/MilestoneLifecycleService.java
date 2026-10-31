@@ -40,93 +40,48 @@ public class MilestoneLifecycleService {
     private final MilestoneAuditRepository audits;
     private final com.example.starter_project_2025.system.project.milestone.outbox.OutboxEventWriter outbox;
     private final Clock milestoneClock;
+    private final TenantSettingsPort tenantSettings;
 
     @Transactional
-    public MilestoneResponse saveDraft(Long projectId, Long teamId, MilestoneDraftRequest request) {
-        Long tenant = tenants.requireCurrentTenantId(); UUID actor = actors.requireCurrentActorId();
-        Long resolvedProject = scopes.requireTeamScope(projectId, teamId, tenant).projectId();
-        if (resolvedProject != null) access.requireAccess(projects.requireProjectForCreation(resolvedProject, actor, tenant));
-        if (request.title() == null || request.title().isBlank() || request.title().length() > 120)
-            throw new MilestoneValidationException(Map.of("title", List.of("Title is required (max 120 characters)")));
-        Instant now = milestoneClock.instant();
-        Milestone value = Milestone.create(tenant, resolvedProject, teamId, request.title().trim(), request.description(),
-                request.deadline(), Boolean.TRUE.equals(request.mandatory()), request.rubricSnapshotId(), null,
-                request.latePolicyType(), request.lateUntil(), request.latePenaltyPercent(), actor, now);
-        value.configureAssessment(request.weight(), null);
-        value.configureAutoStart(request.deadlineOffsetDays(), false);
-        if (request.checklist() != null) value.replaceChecklist(request.checklist());
-        milestones.saveAndFlush(value);
-        captureRevision(value, 1, actor, now);
-        audit(value, actor, "MILESTONE_DRAFT_SAVED", "{}", now);
-        return mapper.toResponse(value);
-    }
-
-    @Transactional
-    public MilestoneResponse editDraft(Long projectId, Long teamId, UUID id, MilestoneDraftRequest request) {
+    public MilestoneResponse editPlanned(Long projectId, Long teamId, UUID id, MilestonePlannedUpdateRequest request) {
         Milestone value = require(projectId, teamId, id);
         checkVersion(value, request.expectedVersion());
         if (value.getStatus() != MilestoneStatus.PLANNED) throw new MilestoneConflictException("Only draft milestones can be edited");
         UUID actor = actors.requireCurrentActorId(); Instant now = milestoneClock.instant();
         if (request.title() == null || request.title().isBlank() || request.title().length() > 120)
             throw new MilestoneValidationException(Map.of("title", List.of("Title is required (max 120 characters)")));
+        if (request.rubricSnapshotId() == null)
+            throw new MilestoneValidationException(Map.of("rubricSnapshotId", List.of("Rubric is required")));
+        if (request.latePolicyType() == null)
+            throw new MilestoneValidationException(Map.of("latePolicyType", List.of("Late policy is required")));
+        if (request.checklist() == null || request.checklist().isEmpty())
+            throw new MilestoneValidationException(Map.of("checklist", List.of("Checklist is required")));
+        var rubric = rubrics.requireAllowedSnapshot(request.rubricSnapshotId(), value.getProjectId(), actor, value.getTenantId());
+        var zone = tenantSettings.requireTimeZone(value.getTenantId());
+        validator.validate(new CreateMilestoneRequest(value.getTeamId(), request.title(), request.description(),
+                request.deadline(), Boolean.TRUE.equals(request.mandatory()), request.checklist(),
+                request.rubricSnapshotId(), null, new LatePolicyRequest(request.latePolicyType(),
+                request.lateUntil(), request.latePenaltyPercent()),
+                new ResubmissionPolicyRequest(Boolean.TRUE.equals(request.allowResubmission()),
+                        request.maxSubmissionAttempts()), request.weight(), request.startDate()), rubric, now, zone);
+        Instant scheduled = request.startDate().equals(value.getStartDate())
+                && value.getDeadlineOffsetDays() != null && value.scheduledStartAt() != null
+                ? value.scheduledStartAt() : request.startDate().atStartOfDay(zone).toInstant();
         var history = revisions.findByMilestoneIdAndTenantIdOrderByRevisionNumberDesc(id, value.getTenantId());
         if (history.isEmpty()) captureRevision(value, 1, value.getUpdatedBy() == null ? actor : value.getUpdatedBy(), value.getUpdatedAt());
         value.editDraft(request.title().trim(), request.description(), request.deadline(), Boolean.TRUE.equals(request.mandatory()),
                 request.rubricSnapshotId(), request.latePolicyType(), request.lateUntil(), request.latePenaltyPercent(),
                 request.weight(), actor, now);
+        // Flush orphan removal before reusing the same (milestone_id, order_index) keys.
+        value.replaceChecklist(null);
+        milestones.saveAndFlush(value);
         value.replaceChecklist(request.checklist());
         value.configureResubmission(Boolean.TRUE.equals(request.allowResubmission()), request.maxSubmissionAttempts());
-        value.configureAutoStart(request.deadlineOffsetDays(), false);
+        value.scheduleStart(request.startDate(), scheduled);
         milestones.saveAndFlush(value);
         captureRevision(value, history.isEmpty() ? 2 : history.getFirst().getRevisionNumber() + 1, actor, now);
-        audit(value, actor, "MILESTONE_DRAFT_UPDATED", "{}", now);
+        audit(value, actor, "MILESTONE_PLANNED_UPDATED", "{}", now);
         return mapper.toResponse(value);
-    }
-
-    @Transactional
-    public MilestoneResponse publish(Long projectId, Long teamId, UUID id, long expectedVersion) {
-        Milestone value = require(projectId, teamId, id);
-        checkVersion(value, expectedVersion);
-        if (value.getStatus() != MilestoneStatus.PLANNED)
-            throw new MilestoneConflictException("Only unpublished planned milestones can be published");
-        Map<String, List<String>> missing = new LinkedHashMap<>();
-        if (value.getDeadline() == null || !value.getDeadline().isAfter(milestoneClock.instant()))
-            missing.put("deadline", List.of("A future deadline is required"));
-        if (value.getRubricSnapshotId() == null) missing.put("rubricSnapshotId", List.of("Rubric is required"));
-        if (value.getLatePolicyType() == null) missing.put("latePolicy", List.of("Late policy is required"));
-        if (value.getChecklistItems().isEmpty()) missing.put("checklist", List.of("Checklist is required"));
-        if (!missing.isEmpty()) throw new MilestoneValidationException(missing);
-        UUID actor = actors.requireCurrentActorId(); Instant now = milestoneClock.instant();
-        rubrics.requireAllowedSnapshot(value.getRubricSnapshotId(), value.getProjectId(), actor, value.getTenantId());
-        value.configureAutoStart(value.getDeadlineOffsetDays(), value.getDeadlineOffsetDays() != null);
-        value.openForWork(actor, now);
-        value.startAutomatically(now);
-        milestones.saveAndFlush(value);
-        audit(value, actor, value.lifecycleStatus() == MilestoneLifecycleStatus.IN_PROGRESS
-                ? "MILESTONE_AUTO_STARTED" : "MILESTONE_PUBLISHED", "{}", now);
-        if (value.lifecycleStatus() == MilestoneLifecycleStatus.IN_PROGRESS) outbox.writeMilestoneStarted(value, now);
-        else outbox.writeMilestoneOpened(value, now);
-        return mapper.toResponse(value);
-    }
-
-    @Transactional
-    public MilestoneResponse start(Long projectId, Long teamId, UUID id, long expectedVersion) {
-        Milestone value = require(projectId, teamId, id); checkVersion(value, expectedVersion);
-        if (value.getStatus() != MilestoneStatus.OPEN || value.lifecycleStatus() != MilestoneLifecycleStatus.PLANNED)
-            throw new MilestoneConflictException("Only a published planned milestone can start");
-        UUID actor = actors.requireCurrentActorId(); Instant now = milestoneClock.instant();
-        value.start(actor, now);
-        milestones.saveAndFlush(value);
-        audit(value, actor, "MILESTONE_STARTED", "{}", now);
-        outbox.writeMilestoneStarted(value, now);
-        return mapper.toResponse(value);
-    }
-
-    @Transactional
-    public MilestoneResponse open(Long projectId, Long teamId, UUID id) {
-        Milestone value = require(projectId, teamId, id);
-        if (value.getStatus() == MilestoneStatus.OPEN) return mapper.toResponse(value);
-        return publish(projectId, teamId, id, value.getVersion());
     }
 
     @Transactional
@@ -210,7 +165,7 @@ public class MilestoneLifecycleService {
                 Map.entry("maxSubmissionAttempts", value.getMaxSubmissionAttempts() == null ? 0 : value.getMaxSubmissionAttempts()),
                 Map.entry("weight", value.getWeight() == null ? "" : value.getWeight().toPlainString()),
                 Map.entry("deadline", value.getDeadline() == null ? "" : value.getDeadline().toString()),
-                Map.entry("deadlineOffsetDays", value.getDeadlineOffsetDays() == null ? 0 : value.getDeadlineOffsetDays()),
+                Map.entry("startDate", value.getStartDate() == null ? "" : value.getStartDate().toString()),
                 Map.entry("rubricSnapshotId", value.getRubricSnapshotId() == null ? "" : value.getRubricSnapshotId().toString()),
                 Map.entry("latePolicyType", value.getLatePolicyType() == null ? "" : value.getLatePolicyType().name()),
                 Map.entry("lateUntil", value.getLateUntil() == null ? "" : value.getLateUntil().toString()),

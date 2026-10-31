@@ -126,7 +126,8 @@ export function MilestoneDetailPage() {
               <CardContent className="grid gap-4 text-sm">
                 <div><p className="text-muted-foreground">Project</p><p className="mt-1 font-medium">{milestone.project.name}</p></div>
                 <div><p className="text-muted-foreground">Deadline</p><p className="mt-1 flex items-start gap-2 font-medium"><CalendarClock className="mt-0.5 size-4 shrink-0" /> {formatTenantDateTime(milestone.deadline, milestone.tenantTimeZone)}</p></div>
-                {milestone.scheduledStartAt && <div><p className="text-muted-foreground">Scheduled opening</p><p className="mt-1 font-medium">{formatTenantDateTime(milestone.scheduledStartAt, milestone.tenantTimeZone)} ({milestone.deadlineOffsetDays} days before deadline)</p></div>}
+                {milestone.startDate && <div><p className="text-muted-foreground">Start date</p><p className="mt-1 font-medium">{milestone.startDate}</p></div>}
+                {milestone.scheduledStartAt && <div><p className="text-muted-foreground">Scheduled start</p><p className="mt-1 font-medium">{formatTenantDateTime(milestone.scheduledStartAt, milestone.tenantTimeZone)}</p></div>}
                 <div><p className="text-muted-foreground">Tenant timezone</p><p className="mt-1 flex items-center gap-2 font-medium"><Globe2 className="size-4" /> {milestone.tenantTimeZone}</p></div>
               </CardContent>
             </Card>

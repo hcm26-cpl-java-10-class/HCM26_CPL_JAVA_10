@@ -44,7 +44,8 @@ export function TeamMilestoneDetailPage() {
           <div className="flex flex-wrap items-center gap-2"><Badge variant="outline">Team milestone</Badge><MilestoneStatusBadge status={milestone.lifecycleStatus} />{milestone.mandatory && <Badge variant="secondary">Mandatory</Badge>}</div>
           <div className="grid gap-2"><CardTitle className="text-2xl md:text-3xl">{milestone.title}</CardTitle><CardDescription className="max-w-3xl whitespace-pre-wrap text-sm leading-6">{milestone.description || "No description provided."}</CardDescription></div>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground"><span className="inline-flex items-center gap-2"><CalendarClock className="size-4" />Due {formatTenantDateTime(milestone.deadline, milestone.tenantTimeZone)}</span><span className="inline-flex items-center gap-2"><Globe2 className="size-4" />{milestone.tenantTimeZone}</span></div>
-          {milestone.scheduledStartAt && <p className="text-sm text-muted-foreground">Opens automatically {formatTenantDateTime(milestone.scheduledStartAt, milestone.tenantTimeZone)} ({milestone.deadlineOffsetDays} days before deadline)</p>}
+          {milestone.startDate && <p className="text-sm text-muted-foreground">Start date: {milestone.startDate}</p>}
+          {milestone.scheduledStartAt && <p className="text-sm text-muted-foreground">Starts automatically {formatTenantDateTime(milestone.scheduledStartAt, milestone.tenantTimeZone)}</p>}
         </CardHeader>
       </Card>
 

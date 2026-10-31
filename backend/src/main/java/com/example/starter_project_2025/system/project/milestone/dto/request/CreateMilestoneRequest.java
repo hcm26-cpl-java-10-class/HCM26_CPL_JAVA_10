@@ -11,6 +11,7 @@ import jakarta.validation.constraints.Digits;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -47,8 +48,8 @@ public record CreateMilestoneRequest(
 
         @DecimalMin("0") @DecimalMax("100") @Digits(integer = 3, fraction = 2)
         BigDecimal weight,
-        @jakarta.validation.constraints.Min(0) @jakarta.validation.constraints.Max(365)
-        Integer deadlineOffsetDays
+        @NotNull(message = "Start date is required")
+        LocalDate startDate
 ) {
     public CreateMilestoneRequest(Long teamId, String title, String description, Instant deadline,
             boolean mandatory, List<ChecklistItemRequest> checklist, UUID rubricSnapshotId,

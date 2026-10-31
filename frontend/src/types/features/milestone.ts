@@ -32,7 +32,7 @@ export interface MilestoneResubmissionPolicyRequest {
 }
 
 export interface CreateMilestoneRequest {
-  deadlineOffsetDays?: number;
+  startDate: string;
   weight?: number;
   teamId?: number;
   title: string;
@@ -69,6 +69,7 @@ export interface MilestoneReviewerOption {
 export interface MilestoneCreateOptions {
   project?: MilestoneProjectOption | null;
   rubrics: MilestoneRubricOption[];
+  tenantTimeZone: string;
 }
 
 export interface MilestoneChecklistItemResponse {
@@ -80,7 +81,7 @@ export interface MilestoneChecklistItemResponse {
 }
 
 export interface MilestoneResponse {
-  deadlineOffsetDays?: number | null;
+  startDate?: string | null;
   scheduledStartAt?: string | null;
   weight?: number | null;
   latePenaltyBasis?: LatePenaltyBasis;
@@ -144,7 +145,7 @@ export interface MilestoneResubmissionPolicyDetail {
 }
 
 export interface MilestoneDetailResponse {
-  deadlineOffsetDays?: number | null;
+  startDate?: string | null;
   scheduledStartAt?: string | null;
   weight?: number | null;
   id: string;
@@ -258,6 +259,8 @@ export interface MilestoneDetailRouteState {
 }
 
 export interface MilestoneListItem {
+  startDate?: string | null;
+  scheduledStartAt?: string | null;
   projectId: number;
   projectName?: string;
   weight?: number | null;

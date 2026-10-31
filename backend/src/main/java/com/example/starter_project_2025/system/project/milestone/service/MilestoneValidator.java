@@ -11,6 +11,8 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.*;
 
 @Component
@@ -18,9 +20,10 @@ public class MilestoneValidator {
 
     private static final BigDecimal ONE_HUNDRED = new BigDecimal("100.00");
 
-    public void validate(CreateMilestoneRequest request, RubricSnapshotData rubric, Instant now) {
+    public void validate(CreateMilestoneRequest request, RubricSnapshotData rubric, Instant now, ZoneId zone) {
         Map<String, List<String>> errors = new LinkedHashMap<>();
         validateDeadline(request.deadline(), now, errors);
+        validateStartDate(request.startDate(), request.deadline(), now, zone, errors);
         validateChecklist(request.checklist(), errors);
         validateRubric(rubric, errors);
         validateLatePolicy(request.latePolicy(), request.deadline(), errors);
@@ -38,6 +41,25 @@ public class MilestoneValidator {
         if (!errors.isEmpty()) {
             throw new MilestoneValidationException(errors);
         }
+    }
+
+    public Instant requireScheduledStart(LocalDate startDate, Instant deadline, Instant now, ZoneId zone) {
+        Map<String, List<String>> errors = new LinkedHashMap<>();
+        validateStartDate(startDate, deadline, now, zone, errors);
+        if (!errors.isEmpty()) throw new MilestoneValidationException(errors);
+        return startDate.atStartOfDay(zone).toInstant();
+    }
+
+    private void validateStartDate(LocalDate startDate, Instant deadline, Instant now, ZoneId zone,
+                                   Map<String, List<String>> errors) {
+        if (startDate == null) {
+            add(errors, "startDate", "Start date is required");
+            return;
+        }
+        if (!startDate.isAfter(LocalDate.ofInstant(now, zone)))
+            add(errors, "startDate", "Start date must be after today in the tenant time zone");
+        if (deadline != null && !startDate.atStartOfDay(zone).toInstant().isBefore(deadline))
+            add(errors, "startDate", "Start date must be before the deadline");
     }
 
     private void validateDeadline(Instant deadline, Instant now, Map<String, List<String>> errors) {

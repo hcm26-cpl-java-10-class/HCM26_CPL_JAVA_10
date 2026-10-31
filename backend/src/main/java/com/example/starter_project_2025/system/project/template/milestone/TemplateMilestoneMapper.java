@@ -6,12 +6,13 @@ import com.example.starter_project_2025.system.project.milestone.dto.request.Che
 import com.example.starter_project_2025.system.project.milestone.dto.request.CreateMilestoneRequest;
 import com.example.starter_project_2025.system.project.milestone.dto.request.LatePolicyRequest;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import org.springframework.stereotype.Component;
 
 @Component
 public class TemplateMilestoneMapper {
-    public TemplateMilestoneCreation forProject(TemplateMilestone milestone, Long teamId, Instant startsAt) {
+    public TemplateMilestoneCreation forProject(TemplateMilestone milestone, Long teamId, Instant startsAt, ZoneId zone) {
         long days = milestone.getDueAfter().longValue() * (milestone.getDueUnit() == TemplateMilestoneTimeUnit.WEEKS ? 7L : 1L);
         Instant deadline = startsAt.plus(days, ChronoUnit.DAYS);
         boolean allowLate = Boolean.TRUE.equals(milestone.getAllowLateSubmission());
@@ -23,6 +24,7 @@ public class TemplateMilestoneMapper {
                 milestone.getTitle(), milestone.getDescription(), deadline, milestone.isMandatory(),
                 milestone.getChecklistItems().stream().map(item -> new ChecklistItemRequest(
                         item.getContent(), item.isMandatory(), item.getOrderIndex())).toList(),
-                milestone.getRubricVersion().getId(), null, policy, milestone.getWeight()));
+                milestone.getRubricVersion().getId(), null, policy, null, milestone.getWeight(),
+                deadline.minus(7, ChronoUnit.DAYS).atZone(zone).toLocalDate()));
     }
 }
