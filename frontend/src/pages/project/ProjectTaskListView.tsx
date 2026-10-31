@@ -28,16 +28,14 @@ const TASK_STATUSES: BoardTaskStatus[] = [
   "IN_PROGRESS",
   "REVIEW",
   "DONE",
-  "BLOCKED",
 ];
 
 // Workflow validation matching backend TaskStatusWorkflow
 const isValidTransition = (from: BoardTaskStatus, to: BoardTaskStatus): boolean => {
   const transitions: Record<BoardTaskStatus, BoardTaskStatus[]> = {
-    TODO: ["IN_PROGRESS", "BLOCKED"],
-    IN_PROGRESS: ["REVIEW", "BLOCKED", "TODO"],
-    REVIEW: ["DONE", "BLOCKED", "IN_PROGRESS"],
-    BLOCKED: ["TODO", "IN_PROGRESS"],
+    TODO: ["IN_PROGRESS"],
+    IN_PROGRESS: ["TODO", "REVIEW"],
+    REVIEW: ["IN_PROGRESS", "DONE"],
     DONE: ["REVIEW"],
   };
   return transitions[from]?.includes(to) ?? false;
@@ -48,7 +46,6 @@ const STATUS_STYLES: Record<BoardTaskStatus, string> = {
   IN_PROGRESS: "bg-violet-100 text-violet-800",
   REVIEW: "bg-amber-100 text-amber-800",
   DONE: "bg-emerald-100 text-emerald-800",
-  BLOCKED: "bg-rose-100 text-rose-800",
 };
 
 type SortField = "code" | "title" | "status" | "priority" | "createdAt" | "updatedAt";

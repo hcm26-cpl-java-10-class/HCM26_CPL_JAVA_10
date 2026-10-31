@@ -9,12 +9,12 @@ import { Bookmark, Bug, SquareCheck, type LucideIcon } from "lucide-react";
 /**
  * Workflow order of a backlog item (UFR-PRJ-003-02).
  * <p>
- * Mirrors the columns of the workspace Kanban board: Backlog, To do, In
- * progress, Review, Done, so both boards report the same statuses.
+ * Mirrors the columns of the workspace Kanban board: To do, In progress,
+ * Review, Done. The product backlog is a grouping of items without a sprint,
+ * not a separate status.
  */
 export const TASK_STATUS_ORDER: BacklogStatus[] = [
-  "BACKLOG",
-  "SPRINT_BACKLOG",
+  "TODO",
   "IN_PROGRESS",
   "REVIEW",
   "DONE",
@@ -22,18 +22,12 @@ export const TASK_STATUS_ORDER: BacklogStatus[] = [
 
 /**
  * Pill colours of the status dropdown shown on every backlog row.
- * `SPRINT_BACKLOG` is displayed as "To Do" to stay closer to the board wording.
  */
 export const BACKLOG_STATUS_META: Record<
   BacklogStatus,
   { label: string; pill: string; dot: string }
 > = {
-  BACKLOG: {
-    label: "Backlog",
-    pill: "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200",
-    dot: "bg-slate-400",
-  },
-  SPRINT_BACKLOG: {
+  TODO: {
     label: "To Do",
     pill: "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300",
     dot: "bg-slate-400",
@@ -52,11 +46,6 @@ export const BACKLOG_STATUS_META: Record<
     label: "Done",
     pill: "border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
     dot: "bg-emerald-500",
-  },
-  BLOCKED: {
-    label: "Blocked",
-    pill: "border-rose-200 bg-rose-100 text-rose-700 dark:border-rose-800 dark:bg-rose-900/40 dark:text-rose-300",
-    dot: "bg-rose-500",
   },
 };
 
@@ -127,21 +116,19 @@ export const backlogPriorityMeta = (priority?: BacklogPriority | null) =>
   (priority && BACKLOG_PRIORITY_META[priority]) || NO_PRIORITY_META;
 
 export const NEXT_TASK_STATUS: Record<BacklogStatus, BacklogStatus | null> = {
-  BACKLOG: "SPRINT_BACKLOG",
-  SPRINT_BACKLOG: "IN_PROGRESS",
+  TODO: "IN_PROGRESS",
   IN_PROGRESS: "REVIEW",
   REVIEW: "DONE",
   DONE: null,
-  BLOCKED: "IN_PROGRESS",
 };
 
 export const backlogStatusMeta = (status?: BacklogStatus | null) =>
-  (status && BACKLOG_STATUS_META[status]) || BACKLOG_STATUS_META.BACKLOG;
+  (status && BACKLOG_STATUS_META[status]) || BACKLOG_STATUS_META.TODO;
 export const canMoveToStatus = (
   current: BacklogStatus | null | undefined,
   target: BacklogStatus,
 ) => {
-  const from = current ?? "BACKLOG";
+  const from = current ?? "TODO";
 
   // Any workflow status can be picked, in any direction (no forward-only
   // matrix): the team owns its board and may move work back and forth.
@@ -242,11 +229,7 @@ export const isOverdue = (value?: string | null) => {
 
 /** Status tallies of the grey counters in the sprint section header. */
 export const statusCounts = (items: SprintPlanningItem[]) => ({
-  todo: items.filter(
-    (item) =>
-      (item.status ?? "BACKLOG") === "BACKLOG" ||
-      item.status === "SPRINT_BACKLOG",
-  ).length,
+  todo: items.filter((item) => !item.status || item.status === "TODO").length,
   inProgress: items.filter((item) => item.status === "IN_PROGRESS").length,
   review: items.filter((item) => item.status === "REVIEW").length,
   done: items.filter((item) => item.status === "DONE").length,

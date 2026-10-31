@@ -61,8 +61,7 @@ public class ProjectBoardServiceImpl implements ProjectBoardService {
             new ColumnDefinition("TODO", "To do", TaskStatus.TODO),
             new ColumnDefinition("IN_PROGRESS", "In progress", TaskStatus.IN_PROGRESS),
             new ColumnDefinition("REVIEW", "Review", TaskStatus.REVIEW),
-            new ColumnDefinition("DONE", "Done", TaskStatus.DONE),
-            new ColumnDefinition("BLOCKED", "Blocked", TaskStatus.BLOCKED)
+            new ColumnDefinition("DONE", "Done", TaskStatus.DONE)
     );
 
     ProjectRepository projectRepository;

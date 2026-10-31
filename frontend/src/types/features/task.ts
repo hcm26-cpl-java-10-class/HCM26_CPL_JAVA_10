@@ -1,6 +1,6 @@
 export type TaskPriority = "HIGH" | "MEDIUM" | "LOW";
 
-export type TaskStatus = "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE" | "BLOCKED";
+export type TaskStatus = "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE";
 
 export interface TaskPayload {
   projectId: string;

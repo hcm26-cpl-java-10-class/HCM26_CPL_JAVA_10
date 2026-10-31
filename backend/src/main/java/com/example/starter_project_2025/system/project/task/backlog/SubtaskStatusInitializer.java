@@ -19,7 +19,7 @@ public class SubtaskStatusInitializer implements CommandLineRunner {
         jdbc.update("""
                 update task
                    set status = 'IN_PROGRESS', version = version + 1, updated_at = current_timestamp
-                 where backlog_item_id is not null and status in ('REVIEW', 'BLOCKED')
+                 where status not in ('TODO', 'IN_PROGRESS', 'REVIEW', 'DONE')
                 """);
     }
 }

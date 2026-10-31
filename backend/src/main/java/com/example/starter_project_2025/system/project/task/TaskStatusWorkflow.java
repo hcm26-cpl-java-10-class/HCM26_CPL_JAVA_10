@@ -10,10 +10,9 @@ import java.util.Set;
 public class TaskStatusWorkflow {
 
     private static final Map<TaskStatus, Set<TaskStatus>> TRANSITIONS = Map.of(
-            TaskStatus.TODO, Set.of(TaskStatus.IN_PROGRESS, TaskStatus.BLOCKED),
-            TaskStatus.IN_PROGRESS, Set.of(TaskStatus.REVIEW, TaskStatus.BLOCKED, TaskStatus.TODO),
-            TaskStatus.REVIEW, Set.of(TaskStatus.DONE, TaskStatus.BLOCKED, TaskStatus.IN_PROGRESS),
-            TaskStatus.BLOCKED, Set.of(TaskStatus.TODO, TaskStatus.IN_PROGRESS),
+            TaskStatus.TODO, Set.of(TaskStatus.IN_PROGRESS),
+            TaskStatus.IN_PROGRESS, Set.of(TaskStatus.TODO, TaskStatus.REVIEW),
+            TaskStatus.REVIEW, Set.of(TaskStatus.IN_PROGRESS, TaskStatus.DONE),
             TaskStatus.DONE, Set.of(TaskStatus.REVIEW)
     );
 

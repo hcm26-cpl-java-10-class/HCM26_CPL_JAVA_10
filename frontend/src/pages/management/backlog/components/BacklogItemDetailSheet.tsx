@@ -1086,17 +1086,4 @@ export function BacklogItemDetailSheet({
 }
 
 /** Backend status -> board status (used for the colour pills only). */
-const statusToBoard = (status: SprintBacklogStatus) => {
-  switch (status) {
-    case "IN_PROGRESS":
-      return "IN_PROGRESS" as const;
-    case "REVIEW":
-      return "REVIEW" as const;
-    case "BLOCKED":
-      return "BLOCKED" as const;
-    case "DONE":
-      return "DONE" as const;
-    default:
-      return "SPRINT_BACKLOG" as const;
-  }
-};
+const statusToBoard = (status: SprintBacklogStatus) => status;
