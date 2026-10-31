@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.project.team;
 
 import com.example.starter_project_2025.system.project.ProjectTeam;
 import com.example.starter_project_2025.system.project.ProjectMember;
+import com.example.starter_project_2025.system.project.ProjectMemberEligibility;
 import com.example.starter_project_2025.system.project.ProjectMemberRepository;
 import com.example.starter_project_2025.system.project.sprint.Sprint;
 import com.example.starter_project_2025.system.project.sprint.SprintMapper;
@@ -93,7 +94,8 @@ public class TeamBacklogService {
                 .findAllByTeam_IdAndClassMember_StatusOrderByIdAsc(teamId, ClassMemberStatus.ACTIVE);
         // Preserve the name on existing assignments even when a member becomes
         // unavailable for new assignments. Only active members remain selectable.
-        Map<Long, String> assigneeNames = projectMembers.findAllByTeam_IdOrderByIdAsc(teamId).stream().collect(Collectors.toMap(
+        Map<Long, String> assigneeNames = projectMembers.findAllByTeam_IdOrderByIdAsc(teamId).stream()
+                .filter(ProjectMemberEligibility::belongsToTeamRoster).collect(Collectors.toMap(
                         ProjectMember::getId,
                         TeamBacklogService::displayName,
                         (first, ignored) -> first
@@ -162,7 +164,6 @@ public class TeamBacklogService {
     }
 
     private static boolean eligibleMember(ProjectMember member) {
-        var user = member.getClassMember().getUser();
-        return Boolean.TRUE.equals(user.getIsActive()) && !Boolean.TRUE.equals(user.getLocked());
+        return ProjectMemberEligibility.canAssign(member);
     }
 }

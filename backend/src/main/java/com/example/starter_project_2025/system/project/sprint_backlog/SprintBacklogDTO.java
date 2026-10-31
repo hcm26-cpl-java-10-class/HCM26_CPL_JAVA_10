@@ -68,7 +68,7 @@ public class SprintBacklogDTO extends BaseDTO {
     Instant milestoneDueDate;
 
     /**
-     * TEMPORARY assignee id (project member module not implemented yet).
+     * Assignee project-member id, validated against active membership and account status.
      */
     Long assigneeProjectMemberId;
 

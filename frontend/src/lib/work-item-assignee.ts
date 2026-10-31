@@ -22,5 +22,5 @@ export function workItemAssigneeLabel(item: AssignedWorkItem, members: WorkItemA
 export function workItemAssigneeOptions(item: AssignedWorkItem, members: WorkItemAssigneeOption[]) {
   const id = item.assigneeProjectMemberId;
   if (id == null || members.some(member => member.projectMemberId === id)) return members;
-  return [...members, { projectMemberId: id, displayName: `${workItemAssigneeLabel(item)} (unavailable)`, disabled: true }];
+  return [...members, { projectMemberId: id, displayName: workItemAssigneeLabel(item), disabled: true }];
 }
