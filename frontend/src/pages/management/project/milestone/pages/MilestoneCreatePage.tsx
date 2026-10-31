@@ -27,6 +27,7 @@ import {
   getMilestoneApiError,
   isNetworkOrTimeoutError,
   stablePayload,
+  toDateTimeLocal,
 } from "../milestone.utils";
 
 interface SubmissionAttempt {
@@ -100,12 +101,12 @@ export function MilestoneCreatePage() {
     ...(existingQuery.data ? {
       title: existingQuery.data.title,
       description: existingQuery.data.description ?? "",
-      deadline: existingQuery.data.deadline ? new Date(existingQuery.data.deadline).toISOString().slice(0, 16) : "",
-      deadlineOffsetDays: existingQuery.data.deadlineOffsetDays ?? 7,
+      deadline: toDateTimeLocal(existingQuery.data.deadline),
+      startDate: existingQuery.data.startDate ?? "",
       mandatory: existingQuery.data.mandatory,
       checklist: existingQuery.data.checklist.map(item => ({ content: item.content, mandatory: item.mandatory })),
       rubricSnapshotId: existingQuery.data.rubric?.snapshotId ?? "",
-      latePolicy: { type: existingQuery.data.latePolicy.type ?? "NO_LATE", lateUntil: existingQuery.data.latePolicy.lateUntil ?? undefined, penaltyPercent: existingQuery.data.latePolicy.penaltyPercent ?? undefined },
+      latePolicy: { type: existingQuery.data.latePolicy.type ?? "NO_LATE", lateUntil: toDateTimeLocal(existingQuery.data.latePolicy.lateUntil) || undefined, penaltyPercent: existingQuery.data.latePolicy.penaltyPercent ?? undefined },
       resubmissionPolicy: { allowed: existingQuery.data.resubmissionPolicy.allowed, maxAttempts: existingQuery.data.resubmissionPolicy.maxAttempts ?? undefined },
     } : {}),
     rubricSnapshotId: existingQuery.data?.rubric?.snapshotId ?? (optionsQuery.data?.rubrics.length === 1 ? optionsQuery.data.rubrics[0].id : ""),
@@ -149,14 +150,14 @@ export function MilestoneCreatePage() {
     },
   });
 
-  const draftMutation = useMutation({
+  const plannedMutation = useMutation({
     mutationFn: (values: MilestoneFormValues) => {
       const parseDate = (value?: string) => value && !Number.isNaN(new Date(value).getTime()) ? new Date(value).toISOString() : null;
       const payload = {
         teamId: scopedTeamId,
         title: values.title.trim(), description: values.description.trim(),
         deadline: parseDate(values.deadline), mandatory: values.mandatory,
-        deadlineOffsetDays: values.deadlineOffsetDays,
+        startDate: values.startDate,
         rubricSnapshotId: values.rubricSnapshotId || null,
         checklist: values.checklist.filter(item => item.content.trim()).map((item, orderIndex) => ({ ...item, content: item.content.trim(), orderIndex })),
         latePolicyType: values.latePolicy.type,
@@ -164,7 +165,7 @@ export function MilestoneCreatePage() {
         allowResubmission: values.resubmissionPolicy.allowed, maxSubmissionAttempts: values.resubmissionPolicy.maxAttempts ?? null,
         expectedVersion: existingQuery.data?.version,
       };
-      return milestoneApi.editDraft(teamScoped ? undefined : projectId, scopedTeamId!, milestoneId!, payload);
+      return milestoneApi.editPlanned(teamScoped ? undefined : projectId, scopedTeamId!, milestoneId!, payload);
     },
     onSuccess: (milestone) => {
       toast.success("Milestone changes saved.");
@@ -292,7 +293,7 @@ export function MilestoneCreatePage() {
               <span className="text-sm text-muted-foreground">{teamScoped ? "Team workspace context" : "Fixed project context"}</span>
             </div>
             <div>
-              <CardTitle className="text-2xl">Create a milestone for {optionsQuery.data.project?.name ?? "this team workspace"}</CardTitle>
+              <CardTitle className="text-2xl">{milestoneId ? "Edit planned milestone" : "Create a milestone"} for {optionsQuery.data.project?.name ?? "this team workspace"}</CardTitle>
               <CardDescription className="mt-2">Define the delivery deadline, acceptance conditions, and evaluation rubric. Reviewers are assigned when submissions are evaluated.</CardDescription>
             </div>
           </CardHeader>
@@ -301,10 +302,10 @@ export function MilestoneCreatePage() {
         <MilestoneForm
           options={optionsQuery.data}
           defaultValues={defaultValues}
-          submitting={createMutation.isPending || draftMutation.isPending}
+          submitting={createMutation.isPending || plannedMutation.isPending}
           apiError={apiError}
           networkUncertain={networkUncertain}
-          onSubmit={milestoneId ? (values) => draftMutation.mutate(values) : handleSubmit}
+          onSubmit={milestoneId ? (values) => plannedMutation.mutate(values) : handleSubmit}
           submitLabel={milestoneId ? "Save changes" : undefined}
           onCancel={requestCancel}
           onDirtyChange={handleDirtyChange}

@@ -50,6 +50,7 @@ public class MilestoneCommandService {
     private final TransactionTemplate transactionTemplate;
     private final Clock milestoneClock;
     private final MilestoneLifecycleService lifecycle;
+    private final TenantSettingsPort tenantSettings;
 
     public MilestoneResponse create(Long projectId, String idempotencyKey, CreateMilestoneRequest request) {
         validateIdempotencyKey(idempotencyKey);
@@ -105,7 +106,8 @@ public class MilestoneCommandService {
         RubricSnapshotData rubric = rubricPort.requireAllowedSnapshot(
                 request.rubricSnapshotId(), projectId, actorId, tenantId);
         Instant now = milestoneClock.instant();
-        validator.validate(request, rubric, now);
+        var tenantZone = tenantSettings.requireTimeZone(tenantId);
+        validator.validate(request, rubric, now, tenantZone);
 
         Milestone milestone = Milestone.create(
                 tenantId,
@@ -123,8 +125,7 @@ public class MilestoneCommandService {
                 actorId,
                 now
         );
-        milestone.configureAutoStart(request.deadlineOffsetDays(), request.deadlineOffsetDays() != null);
-        milestone.startAutomatically(now);
+        milestone.scheduleStart(request.startDate(), request.startDate().atStartOfDay(tenantZone).toInstant());
         if (request.resubmissionPolicy() != null) {
             milestone.configureResubmission(
                     request.resubmissionPolicy().allowed(),

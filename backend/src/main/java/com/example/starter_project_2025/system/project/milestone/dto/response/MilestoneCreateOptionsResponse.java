@@ -4,7 +4,8 @@ import java.util.List;
 
 public record MilestoneCreateOptionsResponse(
         ProjectOptionResponse project,
-        List<RubricOptionResponse> rubrics
+        List<RubricOptionResponse> rubrics,
+        String tenantTimeZone
 ) {
 }
 

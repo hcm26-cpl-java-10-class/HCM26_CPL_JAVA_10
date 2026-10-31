@@ -93,13 +93,9 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                 : tab === "overview" ? <WorkspaceOverviewSection workspaceId={workspaceId} projectId={context.projectId}
                     teamId={context.teamId} canViewMembers={!!members?.canRead} onViewMembers={() => changeTab("members")}
                     onAccessChanged={reloadAccess} />
-                : tab === "members" ? <>
-                    <WorkspaceMembersPanel workspaceId={workspaceId} teamId={context.teamId} canViewMembers
-                      canManageMembers={current.actions.manage} onAccessChanged={reloadAccess} />
-                    <WorkspaceOverviewSection workspaceId={workspaceId} projectId={context.projectId} teamId={context.teamId}
-                      charter canManageMembers={current.actions.manage} canViewMembers onViewMembers={() => changeTab("members")}
-                      onAccessChanged={reloadAccess} />
-                  </>
+                : tab === "members" ? <WorkspaceMembersPanel workspaceId={workspaceId} teamId={context.teamId}
+                    classId={context.classId} allocationSessionId={context.allocationSessionId} canViewMembers
+                    onAccessChanged={reloadAccess} />
                 : tab === "milestones" ? <WorkspaceMilestonesPanel workspaceId={workspaceId} projectId={context.projectId}
                     teamId={context.teamId} access={current} />
                 : tab === "artifacts" ? <WorkspaceArtifactsPanel workspaceId={workspaceId} projectId={context.projectId}

@@ -25,6 +25,9 @@ public interface ProjectTemplateRepository
 
     Optional<ProjectTemplate> findByIdAndTenantIdAndIsActiveTrue(Long id, Long tenantId);
 
+    @Query("select t from ProjectTemplate t where t.id = :rootId or t.versionFamilyId = :rootId order by t.templateVersion desc, t.id desc")
+    List<ProjectTemplate> findVersionFamily(Long rootId);
+
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("select t from ProjectTemplate t where t.id = :id and t.tenantId = :tenantId and t.isActive = true")
     Optional<ProjectTemplate> findForTemplateUpdate(Long id, Long tenantId);

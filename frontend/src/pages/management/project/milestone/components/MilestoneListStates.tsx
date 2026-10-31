@@ -8,12 +8,12 @@ import { Link } from "react-router-dom";
 interface MilestoneEmptyStateProps {
   canCreate: boolean;
   projectActive: boolean;
-  createUrl: string;
+  onCreate: () => void;
   filtered?: boolean;
   onClear?: () => void;
 }
 
-export function MilestoneEmptyState({ canCreate, projectActive, createUrl, filtered = false, onClear }: MilestoneEmptyStateProps) {
+export function MilestoneEmptyState({ canCreate, projectActive, onCreate, filtered = false, onClear }: MilestoneEmptyStateProps) {
   return (
     <div className="flex min-h-80 flex-col items-center justify-center px-6 py-12 text-center">
       <div className="rounded-full bg-primary/10 p-4 text-primary">{filtered ? <SearchX className="size-8" /> : <Flag className="size-8" />}</div>
@@ -28,7 +28,7 @@ export function MilestoneEmptyState({ canCreate, projectActive, createUrl, filte
       {filtered && onClear ? (
         <Button type="button" variant="outline" className="mt-6" onClick={onClear}><RefreshCw /> Clear search and filters</Button>
       ) : canCreate && projectActive ? (
-        <Button asChild className="mt-6"><Link to={createUrl}><Plus /> Create the first milestone</Link></Button>
+        <Button type="button" className="mt-6" onClick={onCreate}><Plus /> Create the first milestone</Button>
       ) : null}
     </div>
   );

@@ -6,6 +6,7 @@ import com.example.starter_project_2025.system.project.milestone.domain.Mileston
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -31,7 +32,7 @@ public record MilestoneResponse(
         LatePenaltyBasis latePenaltyBasis,
         com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus executionStatus,
         @com.fasterxml.jackson.annotation.JsonIgnore com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus canonicalStatus,
-        Integer deadlineOffsetDays,
+        LocalDate startDate,
         Instant scheduledStartAt
 ) {
     @com.fasterxml.jackson.annotation.JsonProperty("lifecycleStatus")

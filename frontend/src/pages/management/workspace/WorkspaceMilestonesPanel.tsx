@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import ConfirmDialog from "@/components/ui/confirmdialog";
 import { MilestoneStatusBadge } from "@/pages/management/project/milestone/components/MilestoneStatusBadge";
-import { OpenTeamMilestoneButton } from "@/pages/management/project/milestone/components/OpenTeamMilestoneButton";
 import { getMilestoneApiError } from "@/pages/management/project/milestone/milestone.utils";
 import type { MilestoneListItem } from "@/types";
 import type { WorkspaceSectionAccess } from "@/types/features/workspace";
@@ -54,7 +53,7 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
       <Plus />Create milestone
     </Button>
   );
-  const rowColumns = "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(160px,0.8fr)_minmax(100px,0.6fr)_220px]";
+  const rowColumns = "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(160px,0.8fr)_minmax(100px,0.6fr)_144px]";
   if (query.error) {
     return (
       <Card>
@@ -88,7 +87,6 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
                 <p className="flex min-w-0 items-center gap-1 whitespace-nowrap text-xs text-muted-foreground"><CalendarClock className="size-3 shrink-0" />{new Date(milestone.deadline).toLocaleString("en-GB")}</p>
                 <Badge variant="outline" className="h-6 w-fit px-2 text-[11px]"><MilestoneStatusBadge status={milestone.lifecycleStatus} /></Badge>
                 <div className="flex min-w-0 flex-wrap items-center gap-1 lg:justify-end">
-                  <OpenTeamMilestoneButton compact teamId={teamId} milestoneId={milestone.id} title={milestone.title} lifecycleStatus={milestone.lifecycleStatus} />
                   {!isStudent && (milestone.lifecycleStatus === "PLANNED" || milestone.lifecycleStatus === "IN_PROGRESS" || milestone.lifecycleStatus === "CHANGES_REQUESTED") && <>
                     <Button size="icon" variant="ghost" className="size-8" title="Edit milestone" aria-label={`Edit ${milestone.title}`} onClick={() => navigate(milestone.lifecycleStatus === "PLANNED"
                       ? projectId ? `/projects/${projectId}/milestones/${milestone.id}/edit?teamId=${teamId}&scope=team&workspaceId=${workspaceId}` : `/teams/${teamId}/milestones/${milestone.id}/edit?workspaceId=${workspaceId}`

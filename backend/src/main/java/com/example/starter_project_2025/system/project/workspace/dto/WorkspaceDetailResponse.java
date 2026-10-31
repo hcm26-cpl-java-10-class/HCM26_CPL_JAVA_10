@@ -24,6 +24,8 @@ public class WorkspaceDetailResponse {
     private String projectName;
     private String projectDescription;
     private ProjectStatus projectStatus;
+    private String projectClassName;
+    private String projectCohortName;
     private Long teamId;
     private String teamCode;
     private String teamName;

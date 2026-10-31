@@ -12,7 +12,7 @@ import com.example.starter_project_2025.system.project.milestone.service.Milesto
 import com.example.starter_project_2025.system.project.milestone.service.MilestoneCreateOptionsService;
 import com.example.starter_project_2025.system.project.milestone.service.MilestoneQueryService;
 import com.example.starter_project_2025.system.project.milestone.service.MilestoneLifecycleService;
-import com.example.starter_project_2025.system.project.milestone.dto.request.MilestoneDraftRequest;
+import com.example.starter_project_2025.system.project.milestone.dto.request.MilestonePlannedUpdateRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -34,16 +34,10 @@ public class MilestoneController {
     private final MilestoneQueryService queryService;
     private final MilestoneLifecycleService lifecycle;
 
-    @PostMapping("/drafts")
+    @PutMapping("/{milestoneId}")
     @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('MILESTONE_WRITE')")
-    public MilestoneResponse saveDraft(@PathVariable Long projectId, @RequestBody MilestoneDraftRequest request) {
-        return lifecycle.saveDraft(projectId, request.teamId(), request);
-    }
-
-    @PutMapping("/{milestoneId}/draft")
-    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('MILESTONE_WRITE')")
-    public MilestoneResponse editDraft(@PathVariable Long projectId, @PathVariable UUID milestoneId, @RequestBody MilestoneDraftRequest request) {
-        return lifecycle.editDraft(projectId, request.teamId(), milestoneId, request);
+    public MilestoneResponse editPlanned(@PathVariable Long projectId, @PathVariable UUID milestoneId, @RequestBody MilestonePlannedUpdateRequest request) {
+        return lifecycle.editPlanned(projectId, request.teamId(), milestoneId, request);
     }
 
     @GetMapping({"/{milestoneId}/draft-revisions", "/{milestoneId}/revisions"})
@@ -51,26 +45,6 @@ public class MilestoneController {
     public List<com.example.starter_project_2025.system.project.milestone.domain.MilestoneDraftRevision> draftRevisions(
             @PathVariable Long projectId, @PathVariable UUID milestoneId) {
         return lifecycle.listDraftRevisions(projectId, null, milestoneId);
-    }
-
-    @PostMapping("/{milestoneId}/publish")
-    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('MILESTONE_WRITE')")
-    public MilestoneResponse publish(@PathVariable Long projectId, @PathVariable UUID milestoneId,
-            @RequestParam long expectedVersion) {
-        return lifecycle.publish(projectId, null, milestoneId, expectedVersion);
-    }
-
-    @PostMapping("/{milestoneId}/open")
-    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('MILESTONE_WRITE')")
-    public MilestoneResponse open(@PathVariable Long projectId, @PathVariable UUID milestoneId) {
-        return lifecycle.open(projectId, null, milestoneId);
-    }
-
-    @PostMapping("/{milestoneId}/start")
-    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN','ADMINISTRATOR','SUPER_ADMIN','SYSTEM_ADMIN')")
-    public MilestoneResponse start(@PathVariable Long projectId, @PathVariable UUID milestoneId,
-            @RequestParam long expectedVersion) {
-        return lifecycle.start(projectId, null, milestoneId, expectedVersion);
     }
 
     @PatchMapping("/{milestoneId}")

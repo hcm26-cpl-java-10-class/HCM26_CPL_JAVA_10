@@ -92,6 +92,9 @@ export function TemplateVersionsPanel({ template }: { template: ProjectTemplateD
       await queryClient.invalidateQueries({ queryKey: ["project-templates"] });
 
       toast.success(`Version ${created?.version ?? "v1.0"} created as a draft.`);
+      if (created?.templateId && created.templateId !== template.id) {
+        navigate(`/project-templates/${created.templateId}/detail`);
+      }
     } catch (error) {
       toast.error(errorMessage(error, "Unable to create a new version."));
     } finally {
