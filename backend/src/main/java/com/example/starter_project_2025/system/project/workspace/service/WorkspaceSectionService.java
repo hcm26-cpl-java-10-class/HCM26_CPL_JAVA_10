@@ -3,8 +3,6 @@ package com.example.starter_project_2025.system.project.workspace.service;
 import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
 import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceSection;
 
-
-
 import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -37,7 +35,6 @@ public class WorkspaceSectionService {
     private final WorkspaceSectionPolicy policy;
     private final WorkspaceSectionDataSource source;
     private final ObjectMapper objectMapper;
-
 
     private Context context(Long id) {
         User user = access.requireUser(false);

@@ -16,7 +16,7 @@
 - API cấu hình: lưu/đọc lại ẩn/hiện; từ chối thêm, bỏ từng cột, đổi tên từng cột, thay key, đảo thứ tự, null và ẩn tất cả; kiểm tra quyền và dữ liệu cũ.
 - API work item: từ chối `CUSTOM_1`, `BLOCKED`, `BACKLOG`; kiểm tra chuyển liền kề và không đổi dữ liệu khi request sai.
 - Kiểm tra hồi quy milestone, submission, draft/workspace persistence, giới hạn Release notes, Board, task workflow và task alerts bằng các test tích hợp/unit hiện có.
-- Popup được render bằng component thực tế với fixture trình duyệt: bốn switch, không có input tên/nút đổi tên; sau khi thử ẩn cả bốn vẫn còn một cột hiển thị.
+- Giao diện cuối cùng đã bỏ nút, popup, query và mutation cấu hình cột. Board dùng trực tiếp bốn cột chuẩn; cờ ẩn cũ không làm mất cột. TypeScript/build kiểm tra cả component và nơi gọi.
 - Frontend: `npm run build`.
 
 ## Demo
