@@ -107,7 +107,7 @@ export interface WorkspaceNavigation {
   projectCode?: string | null; projectName?: string | null;
   teamName: string; projectStatus?: string | null; taskKeyPrefix?: string | null; sections: WorkspaceSectionAccess[];
 }
-  export interface WorkspaceBoardColumn { key: "BACKLOG" | "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE" | "CUSTOM_1" | "CUSTOM_2" | "CUSTOM_3" | "CUSTOM_4" | "CUSTOM_5"; label: string; visible: boolean }
+  export interface WorkspaceBoardColumn { key: "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE"; label: string; visible: boolean }
 export interface WorkspaceSectionItem {
   id: string; title: string; description: string | null; status: string; published: boolean; score?: number; occurredAt?: string;
 }

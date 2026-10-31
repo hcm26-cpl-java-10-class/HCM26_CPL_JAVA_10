@@ -12,15 +12,7 @@ public enum SprintBacklogStatus {
     TODO("To do"),
     IN_PROGRESS("In progress"),
     REVIEW("Review"),
-    DONE("Done"),
-    BLOCKED("Blocked"),
-    // Workspace-configured statuses use stable persisted keys while their
-    // display names remain workspace-specific in boardColumnsConfig.
-    CUSTOM_1("Custom 1"),
-    CUSTOM_2("Custom 2"),
-    CUSTOM_3("Custom 3"),
-    CUSTOM_4("Custom 4"),
-    CUSTOM_5("Custom 5");
+    DONE("Done");
 
     private final String label;
 
@@ -38,9 +30,5 @@ public enum SprintBacklogStatus {
      */
     public boolean isCompleted() {
         return this == DONE;
-    }
-
-    public boolean isCustom() {
-        return name().startsWith("CUSTOM_");
     }
 }

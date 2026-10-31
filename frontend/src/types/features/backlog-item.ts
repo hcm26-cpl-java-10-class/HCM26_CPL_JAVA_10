@@ -1,10 +1,10 @@
 import type { BaseDTO, BaseFilter } from "@/types/common/base";
 
 /**
- * Backlog item lifecycle (UFR-PRJ-003-02):
- * Backlog -> Sprint Backlog -> In Progress -> Done.
+ * Backlog item lifecycle (UFR-PRJ-003-02): To do -> In progress -> Review ->
+ * Done. Product backlog items stay in To do until they join a sprint.
  */
-export type BacklogStatus = "BACKLOG" | "SPRINT_BACKLOG" | "IN_PROGRESS" | "REVIEW" | "DONE" | "BLOCKED";
+export type BacklogStatus = "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE";
 
 export type BacklogPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 

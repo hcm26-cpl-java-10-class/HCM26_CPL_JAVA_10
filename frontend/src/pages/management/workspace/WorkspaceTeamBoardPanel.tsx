@@ -3,7 +3,6 @@ import { workItemAssigneeLabel, workItemAssigneeOptions } from "@/lib/work-item-
 import { teamBacklogApi } from "@/api/features/team-backlog.api";
 import { workspaceApi } from "@/api/features/workspace.api";
 import { sprintBacklogApi } from "@/api/features/sprint_backlog.api";
-import { sprintApi } from "@/api/features/sprint.api";
 import { milestoneApi } from "@/api/features/milestone.api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { SprintBacklogDTO, SprintBacklogStatus, SprintDTO } from "@/types";
 import type { WorkspaceBoardColumn } from "@/types/features/workspace";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Check, ChevronLeft, ChevronRight, Circle, CircleDot, Clock3, LayoutGrid, List, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, Trash2, UserRound } from "lucide-react";
+import { Activity, Check, ChevronLeft, ChevronRight, Circle, CircleDot, Clock3, LayoutGrid, List, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, UserRound } from "lucide-react";
 import { BacklogItemDetailSheet } from "@/pages/management/backlog/components/BacklogItemDetailSheet";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -23,19 +22,15 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import axios from "axios";
 
-type BoardColumnKey = "BACKLOG" | Exclude<SprintBacklogStatus, "BLOCKED">;
+type BoardColumnKey = SprintBacklogStatus;
 const allowedStatusTransitions: Record<SprintBacklogStatus, SprintBacklogStatus[]> = {
   // Keep the UI options identical to SprintBacklogServiceImpl's transition
   // matrix so the board never offers a change that the API will reject.
   TODO: ["IN_PROGRESS"],
-  IN_PROGRESS: ["REVIEW", "BLOCKED", "TODO"],
-  REVIEW: ["DONE", "IN_PROGRESS"],
-  BLOCKED: ["IN_PROGRESS"],
+  IN_PROGRESS: ["TODO", "REVIEW"],
+  REVIEW: ["IN_PROGRESS", "DONE"],
   DONE: ["REVIEW"],
-  CUSTOM_1: [], CUSTOM_2: [], CUSTOM_3: [], CUSTOM_4: [], CUSTOM_5: [],
 };
-const CUSTOM_STATUS_KEYS: BoardColumnKey[] = ["CUSTOM_1", "CUSTOM_2", "CUSTOM_3", "CUSTOM_4", "CUSTOM_5"];
-const CUSTOM_COLORS = ["bg-fuchsia-500", "bg-cyan-500", "bg-lime-600", "bg-orange-500", "bg-indigo-500"];
 export interface BoardColumnConfig {
   key: BoardColumnKey;
   label: string;
@@ -45,7 +40,6 @@ export interface BoardColumnConfig {
 }
 
 const DEFAULT_COLUMNS: BoardColumnConfig[] = [
-  { key: "BACKLOG", label: "Backlog", icon: Circle, color: "bg-slate-400", visible: true },
   { key: "TODO", label: "To do", icon: Circle, color: "bg-sky-500", visible: true },
   { key: "IN_PROGRESS", label: "In progress", icon: CircleDot, color: "bg-violet-500", visible: true },
   { key: "REVIEW", label: "Review", icon: Clock3, color: "bg-amber-500", visible: true },
@@ -125,16 +119,14 @@ function statusLabel(status?: string | null) {
     case "IN_PROGRESS": return "In progress";
     case "REVIEW": return "Review";
     case "DONE": return "Done";
-    case "BLOCKED": return "Blocked";
-    case "BACKLOG": return "Backlog";
     default: return status ?? "—";
   }
 }
 
-function columnFor(key: BoardColumnKey, label: string, visible = true, index = 0): BoardColumnConfig {
+function columnFor(key: BoardColumnKey, label: string, visible = true): BoardColumnConfig {
   const known = DEFAULT_COLUMNS.find((column) => column.key === key);
   return known ? { ...known, label, visible }
-    : { key, label, visible, icon: CircleDot, color: CUSTOM_COLORS[index % CUSTOM_COLORS.length] };
+    : { ...DEFAULT_COLUMNS[0], key, label, visible };
 }
 
 function auditValueLabel(key: string, value: unknown) {
@@ -215,7 +207,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
   const persistedColumns = useMemo(() => {
     if (columnsQuery.data) {
       const configured = columnsQuery.data;
-      return configured.map((column, index) => columnFor(column.key as BoardColumnKey, column.label, column.visible, index));
+      return configured.map((column) => columnFor(column.key as BoardColumnKey, column.label, column.visible));
     }
     return DEFAULT_COLUMNS;
   }, [columnsQuery.data]);
@@ -255,11 +247,11 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
     persistedColumns.find((column) => column.key === status)?.label ?? statusLabel(status);
   const transitionOptions = (status: SprintBacklogStatus): SprintBacklogStatus[] => {
     const standard = allowedStatusTransitions[status] ?? [];
-    const workflow = persistedColumns.filter((column) => column.key !== "BACKLOG").map((column) => column.key as SprintBacklogStatus);
+    const workflow = persistedColumns.map((column) => column.key);
     const index = workflow.indexOf(status);
     const adjacent = workflow.filter((_, candidateIndex) => Math.abs(candidateIndex - index) === 1);
     if (index >= 0) {
-      return [...new Set([...adjacent, ...standard.filter((candidate) => candidate === "BLOCKED")])];
+      return [...new Set([...adjacent, ...standard])];
     }
     return standard;
   };
@@ -284,8 +276,6 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
 
   const selectedSprint = sprints.find((sprint) => sprint.id === sprintId);
   const allItems = query.data?.items ?? [];
-  const isColumnInUse = (key: BoardColumnKey) => key !== "BACKLOG"
-    && allItems.some((item) => item.sprintId != null && (item.status === key || key === "IN_PROGRESS" && item.status === "BLOCKED"));
   const boardItems = useMemo(() => allItems.filter((item) =>
     item.sprintId === sprintId || item.sprintId == null,
   ), [allItems, sprintId]);
@@ -305,14 +295,11 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
     return visibleItems
       .filter((item) => !normalizedSearch || [item.title, item.description, item.milestoneName]
         .some((value) => value?.toLocaleLowerCase().includes(normalizedSearch)))
-      .filter((item) => viewMode !== "list" || statusFilter === "ALL" || (statusFilter === "BACKLOG"
-        ? item.sprintId == null
-        : item.sprintId != null && item.status === statusFilter))
+      .filter((item) => viewMode !== "list" || statusFilter === "ALL" || item.status === statusFilter)
       .filter((item) => viewMode !== "list" || priorityFilter === "ALL" || item.priority === priorityFilter)
       .sort((left, right) => {
         if (sortBy === "priority") return (priorityOrder[left.priority ?? ""] ?? 4) - (priorityOrder[right.priority ?? ""] ?? 4);
-        if (sortBy === "status") return (left.sprintId == null ? "BACKLOG" : left.status ?? "")
-          .localeCompare(right.sprintId == null ? "BACKLOG" : right.status ?? "");
+        if (sortBy === "status") return (left.status ?? "").localeCompare(right.status ?? "");
         return (left.title ?? "").localeCompare(right.title ?? "", "vi");
       });
   }, [visibleItems, searchTerm, sortBy, statusFilter, priorityFilter, viewMode]);
@@ -336,62 +323,32 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
   const moveItem = async (item: SprintBacklogDTO, target: BoardColumnKey) => {
     if (!canUpdate || savingItemId != null || item.id == null) return;
 
-    // Validate status transition before calling API.
-    // A product-backlog item is outside the sprint workflow. Its persisted
-    // status may be stale from before it was removed from a sprint, so treat
-    // the source as Backlog and start it at TODO when adding it to a sprint.
-    const currentStatus = (item.sprintId == null ? "TODO" : item.status ?? "TODO") as SprintBacklogStatus;
-    const isMovingToSprint = item.sprintId !== sprintId && sprintId != null && target !== "BACKLOG";
-    if ((target === "BACKLOG" && item.sprintId != null && currentStatus !== "TODO")
-        || (isMovingToSprint && (target !== "TODO" || currentStatus !== "TODO"))) {
-      toast.error("Backlog chỉ chuyển qua lại với To do. Hãy chuyển từng cột liền kề.");
+    const currentStatus = (item.status ?? "TODO") as SprintBacklogStatus;
+    if (target === currentStatus) return;
+
+    const allowed = transitionOptions(currentStatus);
+    if (!allowed.includes(target)) {
+      const nextStatuses = allowed.map(configuredStatusLabel).join(", ") || "không có";
+      toast.error(
+        `Không thể chuyển từ ${configuredStatusLabel(currentStatus)} sang ${configuredStatusLabel(target)}. ` +
+        `Trạng thái tiếp theo hợp lệ: ${nextStatuses}.`,
+      );
       setDraggedItem(null);
       return;
-    }
-    if ((target === "BACKLOG" || isMovingToSprint) && !canMove) {
-      toast.error("Sprint update permission is required to move work items between the sprint and Backlog.");
-      setDraggedItem(null);
-      return;
-    }
-    if (!isMovingToSprint && target !== "BACKLOG" && target !== currentStatus) {
-      const allowed = transitionOptions(currentStatus);
-      if (!allowed.includes(target as SprintBacklogStatus)) {
-        const nextStatuses = allowed.map(configuredStatusLabel).join(", ") || "không có";
-        toast.error(
-          `Không thể chuyển từ ${configuredStatusLabel(currentStatus)} sang ${configuredStatusLabel(target)}. ` +
-          `Trạng thái tiếp theo hợp lệ: ${nextStatuses}.`,
-        );
-        setDraggedItem(null);
-        return;
-      }
     }
 
     try {
       setSavingItemId(item.id);
-      if (target === "BACKLOG") {
-        if (item.sprintId != null && item.sprintId === sprintId) {
-          await sprintApi.updateBacklog(sprintId, allSprintItems
-            .map((sprintItem) => sprintItem.id)
-            .filter((id): id is number => id != null && id !== item.id));
-        }
-      } else {
-        if (isMovingToSprint) {
-          // Backlog has no in-sprint status. Starting a sprint item always
-          // enters the first workflow column, regardless of any stale status.
-          await sprintBacklogApi.update(String(item.id), { sprintId, status: "TODO" } as SprintBacklogDTO);
-        } else if (item.status !== target) {
-          await sprintBacklogApi.update(String(item.id), { status: target } as SprintBacklogDTO);
-        }
-      }
+      await sprintBacklogApi.update(String(item.id), { status: target } as SprintBacklogDTO);
       await query.refetch();
       await queryClient.invalidateQueries({ queryKey: ["sprint-backlog-audit"] });
-      toast.success("\u0110\u00e3 c\u1eadp nh\u1eadt work item tr\u00ean Board.");
+      toast.success("Đã cập nhật work item trên Board.");
     } catch (error) {
       const msg =
         axios.isAxiosError(error) &&
         typeof (error.response?.data as Record<string, unknown>)?.message === "string"
           ? (error.response!.data as Record<string, string>).message
-          : "Kh\u00f4ng c\u1eadp nh\u1eadt \u0111\u01b0\u1ee3c work item. D\u1eef li\u1ec7u hi\u1ec7n t\u1ea1i v\u1eabn \u0111\u01b0\u1ee3c gi\u1eef nguy\u00ean.";
+          : "Không cập nhật được work item. Dữ liệu hiện tại vẫn được giữ nguyên.";
       toast.error(msg);
     } finally {
       setSavingItemId(null);
@@ -452,9 +409,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
       id: item.id,
       title: item.title ?? "",
       description: item.description ?? null,
-      status: item.sprintId == null ? "BACKLOG" : item.status === "DONE" ? "DONE"
-        : item.status === "BLOCKED" ? "BLOCKED" : item.status === "REVIEW" ? "REVIEW"
-        : !item.status || item.status === "TODO" ? "SPRINT_BACKLOG" : "IN_PROGRESS",
+      status: item.status ?? "TODO",
       priority: (item.priority as BacklogPriority) ?? "MEDIUM",
       workType: (item.workType as SprintBacklogWorkType) ?? "TASK",
       sprintId: item.sprintId ?? null,
@@ -539,7 +494,6 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
                 <select id="workspace-board-status" className="h-10 rounded-md border bg-white px-3 text-sm" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
                   <option value="ALL">Mọi trạng thái</option>
                   {persistedColumns.map((column) => <option key={column.key} value={column.key}>{column.label}</option>)}
-                  <option value="BLOCKED">Blocked</option>
                 </select>
                 <label className="sr-only" htmlFor="workspace-board-priority">Lọc ưu tiên</label>
                 <select id="workspace-board-priority" className="h-10 rounded-md border bg-white px-3 text-sm" value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)}><option value="ALL">All priorities</option><option value="URGENT">Urgent</option><option value="HIGH">High</option><option value="MEDIUM">Medium</option><option value="LOW">Low</option></select>
@@ -552,8 +506,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
           {viewMode === "board" ? <div className="overflow-x-auto pb-2">
             <div className="grid min-w-[1000px] items-stretch gap-2" style={{ gridTemplateColumns: `repeat(${visibleColumns.length}, minmax(0, 1fr))` }}>
               {visibleColumns.map(({ key, label, icon: Icon, color }) => {
-                const items = key === "BACKLOG" ? filteredItems.filter((item) => item.sprintId == null)
-                  : sprintItems.filter((item) => item.status === key);
+                const items = sprintItems.filter((item) => item.status === key);
                 return <section key={key} aria-label={`${label}, ${items.length} work items`}
                   className={`flex h-[32rem] min-h-[24rem] max-h-[70vh] flex-col rounded-2xl border border-slate-200 bg-slate-50/70 p-2 ${draggedItem ? "transition-colors" : ""}`}
                   onDragOver={(event) => { if (draggedItem) event.preventDefault(); }}
@@ -607,7 +560,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
                 <td className="max-w-md px-4 py-3"><p className="text-[10px] font-mono text-muted-foreground">#{item.id ?? "—"}</p><p className="font-medium text-slate-800">{item.title || "Untitled work item"}</p>{item.milestoneName ? <p className="mt-1 truncate text-xs text-muted-foreground">{item.milestoneName}</p> : null}</td>
                 <td className="px-4 py-3">{item.workType ? <Badge variant="outline" className={workTypeStyle(item.workType)}>{workTypeLabel(item.workType)}</Badge> : "—"}</td>
                 <td className="px-4 py-3">{item.priority ? <Badge variant="outline" className={priorityStyle(item.priority)}>{priorityLabel(item.priority)}</Badge> : "—"}</td>
-                <td className="px-4 py-3">{canUpdate && item.sprintId != null ? <select aria-label={`Status for ${item.title ?? "work item"}`} className={`rounded-full border px-2 py-1 text-xs font-medium ${item.status === "BLOCKED" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-slate-200 bg-white text-slate-700"}`} value={item.status ?? "TODO"} disabled={savingItemId === item.id || query.isFetching} onChange={(event) => void updateStatus(item, event.target.value as SprintBacklogStatus)}>{([...new Set([item.status ?? "TODO", ...transitionOptions(item.status ?? "TODO")])] as SprintBacklogStatus[]).map((status) => <option key={status} value={status}>{configuredStatusLabel(status)}</option>)}</select> : <Badge variant="outline" className={item.sprintId == null ? "border-slate-200 bg-slate-100 text-slate-700" : item.status === "BLOCKED" ? "border-rose-200 bg-rose-50 text-rose-700" : item.status === "DONE" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : item.status === "REVIEW" ? "border-amber-200 bg-amber-50 text-amber-800" : item.status === "IN_PROGRESS" ? "border-violet-200 bg-violet-50 text-violet-700" : "border-sky-200 bg-sky-50 text-sky-700"}>{item.sprintId == null ? statusLabel("BACKLOG") : configuredStatusLabel(item.status)}</Badge>}</td>
+                <td className="px-4 py-3">{canUpdate ? <select aria-label={`Status for ${item.title ?? "work item"}`} className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700" value={item.status ?? "TODO"} disabled={savingItemId === item.id || query.isFetching} onChange={(event) => void updateStatus(item, event.target.value as SprintBacklogStatus)}>{([...new Set([item.status ?? "TODO", ...transitionOptions(item.status ?? "TODO")])] as SprintBacklogStatus[]).map((status) => <option key={status} value={status}>{configuredStatusLabel(status)}</option>)}</select> : <Badge variant="outline" className={item.status === "DONE" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : item.status === "REVIEW" ? "border-amber-200 bg-amber-50 text-amber-800" : item.status === "IN_PROGRESS" ? "border-violet-200 bg-violet-50 text-violet-700" : "border-sky-200 bg-sky-50 text-sky-700"}>{configuredStatusLabel(item.status)}</Badge>}</td>
                 <td className="px-4 py-3 text-slate-600">{canUpdate ? <select aria-label={`Assign ${item.title ?? "work item"}`} className="max-w-40 bg-transparent" value={item.assigneeProjectMemberId ?? ""} disabled={savingItemId === item.id || query.isFetching} onChange={(event) => void assignItem(item, event.target.value)}><option value="">Unassigned</option>{workItemAssigneeOptions(item, query.data?.members ?? []).map((member) => <option key={member.projectMemberId} value={member.projectMemberId} disabled={member.disabled} title={member.disabled ? "Not available for new assignments" : undefined}>{member.displayName}</option>)}</select> : workItemAssigneeLabel(item, query.data?.members ?? [])}</td>
                 <td className="px-4 py-3 text-right text-slate-600">{item.estimatedHours != null ? `${item.estimatedHours}h` : "—"}</td>
               </tr>)}</tbody>
@@ -651,28 +604,16 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
             <SlidersHorizontal className="size-5 text-primary" /> {editingColumnKey ? "Đổi tên cột Kanban Board" : "Tùy chỉnh cột Kanban Board"}
           </DialogTitle>
           <DialogDescription>
-            Tạo cột trạng thái mới (tối đa 8 cột), đổi tên hoặc ẩn/hiện cột. Cấu hình được lưu cho workspace và dùng chung với thành viên khác.
+            Bốn cột trạng thái Kanban (To do, In progress, Review, Done) là cố định. Bạn có thể đổi tên hiển thị hoặc ẩn/hiện cột; cấu hình được lưu cho workspace và dùng chung với thành viên khác.
           </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 space-y-3 overflow-y-auto p-5">
           <p className="rounded-lg bg-muted/50 p-3 text-xs leading-relaxed text-muted-foreground">Sửa trực tiếp ô tên bên dưới rồi bấm Lưu thay đổi. Đổi tên giữ nguyên task và quy tắc trạng thái; cột Done vẫn được tính là hoàn tất dù đổi tên hiển thị.</p>
-          <Button type="button" variant="outline" size="sm" disabled={saveColumns.isPending || boardColumns.length >= 8 || !CUSTOM_STATUS_KEYS.some((key) => !boardColumns.some((column) => column.key === key))}
-            onClick={() => {
-              const key = CUSTOM_STATUS_KEYS.find((candidate) => !boardColumns.some((column) => column.key === candidate));
-              if (!key) return;
-              const created = columnFor(key, `Trạng thái mới ${CUSTOM_STATUS_KEYS.indexOf(key) + 1}`, true, boardColumns.length);
-              const doneIndex = boardColumns.findIndex((column) => column.key === "DONE");
-              const next = [...boardColumns];
-              next.splice(doneIndex < 0 ? next.length : doneIndex, 0, created);
-              setBoardColumns(next);
-            }}>
-            <Plus className="mr-1 size-4" /> Thêm trạng thái
-          </Button>
           {boardColumns.map((col, idx) => (
             <div key={col.key} className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 ${editingColumnKey === col.key ? "border-primary/40 bg-primary/5" : ""}`}>
               <div className="min-w-0 flex-1 basis-44 space-y-1.5">
-                <Label htmlFor={`board-column-name-${workspaceId}-${col.key}`} className="text-xs text-muted-foreground"><span className={`size-2 shrink-0 rounded-full ${col.color}`} />Tên hiển thị · {DEFAULT_COLUMNS.find(column => column.key === col.key)?.label ?? "Trạng thái tùy chỉnh"}</Label>
+                <Label htmlFor={`board-column-name-${workspaceId}-${col.key}`} className="text-xs text-muted-foreground"><span className={`size-2 shrink-0 rounded-full ${col.color}`} />Tên hiển thị · {DEFAULT_COLUMNS.find(column => column.key === col.key)?.label ?? col.label}</Label>
                 <Input
                   id={`board-column-name-${workspaceId}-${col.key}`}
                   value={col.label}
@@ -688,7 +629,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
                 />
               </div>
               <div className="flex items-center gap-2">
-                  {!["BACKLOG", "TODO", "DONE"].includes(col.key) ? <Button type="button" variant="ghost" size="icon" className="size-7 text-muted-foreground" aria-label={`Remove ${col.label}`} title={isColumnInUse(col.key) ? "Move work items out of this status before removing it." : undefined} disabled={saveColumns.isPending || isColumnInUse(col.key)} onClick={() => setBoardColumns((columns) => columns.filter((column) => column.key !== col.key))}><Trash2 className="size-3.5" /></Button> : <span className="text-[10px] text-muted-foreground" title="Backlog, To do and Done are required for intake and completion.">Required</span>}
+                  <span className="text-[10px] text-muted-foreground" title="The four workflow statuses are fixed.">Cố định</span>
                   <Label htmlFor={"switch-" + col.key} className="text-xs text-muted-foreground">
                   {col.visible ? "Hiện" : "Ẩn"}
                 </Label>
@@ -700,7 +641,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
                     const activeCount = boardColumns.filter(c => c.visible).length;
                     if (!checked && activeCount <= 1) {
                       toast.error("Phải giữ lại ít nhất 1 cột trên Board.");
-                      return;
+                  <span className="text-[10px] text-muted-foreground" title="The four workflow statuses are fixed.">Cố định</span>
                     }
                     const next = [...boardColumns];
                     next[idx] = { ...next[idx], visible: checked };
@@ -719,8 +660,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
             size="sm"
             disabled={saveColumns.isPending}
             onClick={() => {
-              const custom = boardColumns.filter((column) => CUSTOM_STATUS_KEYS.includes(column.key));
-              saveColumnsConfig([...DEFAULT_COLUMNS.filter((column) => column.key !== "DONE"), ...custom, DEFAULT_COLUMNS.find((column) => column.key === "DONE")!]);
+              saveColumnsConfig(DEFAULT_COLUMNS);
             }}
           >
             Khôi phục mặc định
@@ -757,7 +697,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
         fullName: m.displayName,
         role: "Member",
       }))}
-      workflowStatuses={persistedColumns.filter((column) => column.key !== "BACKLOG")
+      workflowStatuses={persistedColumns
         .map((column) => ({ value: column.key as SprintBacklogStatus, label: column.label }))}
       allowedStatusTransitions={transitionOptions}
       teamId={teamId}

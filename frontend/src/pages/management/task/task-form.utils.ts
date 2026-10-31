@@ -22,7 +22,6 @@ export const taskStatusOptions = [
   { value: "IN_PROGRESS", label: "In Progress" },
   { value: "REVIEW", label: "Review" },
   { value: "DONE", label: "Done" },
-  { value: "BLOCKED", label: "Blocked" },
 ] as const;
 
 export const subtaskStatusOptions = taskStatusOptions.filter(option =>

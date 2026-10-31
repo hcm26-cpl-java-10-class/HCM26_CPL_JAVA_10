@@ -99,7 +99,6 @@ public interface TaskRepository extends BaseCrudRepository<Task, Long> {
             SELECT t FROM Task t
             WHERE t.projectId = :projectId
               AND t.status != 'DONE'
-              AND t.status != 'BLOCKED'
               AND t.assigneeProjectMemberId = :memberId
             """)
     List<Task> findActiveTasksByAssignee(@Param("projectId") Long projectId, @Param("memberId") Long memberId);

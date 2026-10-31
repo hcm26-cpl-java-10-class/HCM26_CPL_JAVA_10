@@ -1,4 +1,4 @@
-export type BoardTaskStatus = "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE" | "BLOCKED";
+export type BoardTaskStatus = "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE";
 
 export type TaskPriority = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 

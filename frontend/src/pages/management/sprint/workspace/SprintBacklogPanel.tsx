@@ -90,7 +90,7 @@ export function SprintBacklogPanel({
       .map((item, index) => ({ item, order: index + 1 }))
       .filter(({ item }) => {
         if (priority !== "ALL" && item.priority !== priority) return false;
-        if (status !== "ALL" && (item.status ?? "BACKLOG") !== status) return false;
+        if (status !== "ALL" && (item.status ?? "TODO") !== status) return false;
 
         if (!normalizedKeyword) return true;
 
@@ -161,9 +161,9 @@ export function SprintBacklogPanel({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="ALL">Status: All</SelectItem>
-            <SelectItem value="BACKLOG">To Do</SelectItem>
-            <SelectItem value="SPRINT_BACKLOG">Sprint Backlog</SelectItem>
+            <SelectItem value="TODO">To do</SelectItem>
             <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+            <SelectItem value="REVIEW">Review</SelectItem>
             <SelectItem value="DONE">Done</SelectItem>
           </SelectContent>
         </Select>

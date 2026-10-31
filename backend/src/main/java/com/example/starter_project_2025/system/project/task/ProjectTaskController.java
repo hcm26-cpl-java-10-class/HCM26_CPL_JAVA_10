@@ -180,7 +180,7 @@ public class ProjectTaskController {
         return ResponseEntity.unprocessableEntity().body(
                 new ValidationErrorResponse(
                         "Task validation failed",
-                        Map.of("status", List.of("Trạng thái phải là TODO, IN_PROGRESS, REVIEW, DONE hoặc BLOCKED"))
+                        Map.of("status", List.of("Trạng thái phải là TODO, IN_PROGRESS, REVIEW hoặc DONE"))
                 )
         );
     }
