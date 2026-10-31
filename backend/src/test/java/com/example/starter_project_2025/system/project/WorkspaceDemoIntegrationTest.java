@@ -168,7 +168,10 @@ class WorkspaceDemoIntegrationTest {
                     .andExpect(jsonPath("$.member_count").value(1)).andExpect(jsonPath("$.can_view_members").value(true));
             mvc.perform(get("/api/workspaces/{id}/members", id).header("Authorization", "Bearer " + accessToken))
                     .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1))
-                    .andExpect(jsonPath("$[0].project_role").value("UNASSIGNED"));
+                    .andExpect(jsonPath("$[0].display_name").isNotEmpty())
+                    .andExpect(jsonPath("$[0].roles").isArray())
+                    .andExpect(jsonPath("$[0].project_role").doesNotExist())
+                    .andExpect(jsonPath("$[0].status").doesNotExist());
         }
         for (String email : List.of("workspace.member.demo@example.com", "workspace.mentor.demo@example.com", "workspace.viewer.demo@example.com"))
             users.findByEmail(email).ifPresent(user -> {

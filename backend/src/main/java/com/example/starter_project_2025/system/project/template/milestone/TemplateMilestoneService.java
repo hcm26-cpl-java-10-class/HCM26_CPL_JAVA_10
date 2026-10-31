@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.project.template.milestone;
 import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
 import com.example.starter_project_2025.system.project.milestone.dto.response.RubricOptionResponse;
+import com.example.starter_project_2025.system.project.milestone.integration.port.TenantSettingsPort;
 import com.example.starter_project_2025.system.project.rubric.service.RubricCatalogService;
 import com.example.starter_project_2025.system.project.template.artifact.TemplateArtifactRequirementRepository;
 import com.example.starter_project_2025.system.project.template.ProjectTemplateAccessService;
@@ -43,6 +44,7 @@ public class TemplateMilestoneService {
     private final RubricCatalogService rubricCatalog;
     private final TemplateMilestoneRubrics rubrics;
     private final TemplateMilestoneMapper mapper;
+    private final TenantSettingsPort milestoneTenantSettings;
     private final TemplateArtifactRequirementRepository artifactRequirements;
     private final com.example.starter_project_2025.system.project.template.TemplateConfigurationService configurations;
 
@@ -60,7 +62,8 @@ public class TemplateMilestoneService {
         validator.validate(request);
         scheduleValidator.validate(request, template.getEstimatedDurationWeeks());
         rubrics.requirePublished(request, tenantOf(template, user));
-        return plan.stream().map(item -> mapper.forProject(item, teamId, startsAt)).toList();
+        var zone = milestoneTenantSettings.requireTimeZone(tenantOf(template, user));
+        return plan.stream().map(item -> mapper.forProject(item, teamId, startsAt, zone)).toList();
     }
 
     public TemplateMilestoneOptions getOptions(Long templateId) {

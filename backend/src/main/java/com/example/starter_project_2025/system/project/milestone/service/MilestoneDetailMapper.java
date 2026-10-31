@@ -55,7 +55,7 @@ public class MilestoneDetailMapper {
                 milestone.getVersion(),
                 milestone.getCreatedAt(),
                 milestone.getCreatedBy(), milestone.getWeight(), milestone.getExecutionStatus(), milestone.lifecycleStatus(),
-                milestone.getDeadlineOffsetDays(), milestone.scheduledStartAt()
+                milestone.getStartDate(), milestone.scheduledStartAt()
         );
     }
 

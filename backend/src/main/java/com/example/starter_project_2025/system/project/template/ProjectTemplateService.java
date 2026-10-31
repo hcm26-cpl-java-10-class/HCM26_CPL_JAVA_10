@@ -140,6 +140,14 @@ public class ProjectTemplateService {
             throw ProjectTemplateException.conflict("This template has changed. Reload it before saving your changes");
         }
         String code = request.code().strip();
+        if (template.getVersionFamilyId() != null && !template.getVersionFamilyId().equals(template.getId())) {
+            ProjectTemplate root = templates.findById(template.getVersionFamilyId())
+                    .orElseThrow(() -> ProjectTemplateException.conflict("Template version family is unavailable"));
+            if (!code.equals(root.getCode())) {
+                throw new ProjectTemplateException(422, "Versions of the same template must use the same code",
+                        Map.of("code", List.of("Keep the code of the original template")));
+            }
+        }
         if (templates.existsByTenantIdAndCodeAndTemplateVersionAndIdNot(
                 template.getTenantId(), code, template.getTemplateVersion(), id)) {
             throw ProjectTemplateException.duplicateCode();
@@ -188,6 +196,7 @@ public class ProjectTemplateService {
         String before = state(template);
         template.setStatus(ProjectTemplateStatus.ARCHIVED);
         templates.saveAndFlush(template);
+        snapshotService.archivePublishedVersion(template);
         recordAudit(template, user, "PROJECT_TEMPLATE_ARCHIVED", before);
         Long tenantId = tenantOf(template, user);
         try {

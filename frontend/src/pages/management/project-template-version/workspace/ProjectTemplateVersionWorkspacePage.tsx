@@ -13,6 +13,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layers, Plus, RefreshCw, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 import { projectTemplateVersionSchema } from "../project-template-version.schema";
 import { CreateVersionDialog } from "./CreateVersionDialog";
 import { DuplicateTemplateDialog } from "./DuplicateTemplateDialog";
@@ -70,12 +71,12 @@ const TAB_ITEMS = [
  * (template, version) rule and the JSON validation.
  */
 export default function ProjectTemplateVersionWorkspacePage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { hasAllPermissions } = usePermissions();
 
   const canCreate = hasAllPermissions(["PROJECT_TEMPLATE_VERSION_CREATE"]);
-  const canUpdate = hasAllPermissions(["PROJECT_TEMPLATE_VERSION_UPDATE"]);
-  const canDelete = hasAllPermissions(["PROJECT_TEMPLATE_VERSION_DELETE"]);
+  const canEditTemplate = hasAllPermissions(["PROJECT_TEMPLATE_UPDATE"]);
 
   const [activeTab, setActiveTab] = useState<string>("overview");
   const [selectedVersionId, setSelectedVersionId] = useState<number | null>(null);
@@ -186,6 +187,7 @@ export default function ProjectTemplateVersionWorkspacePage() {
       if (created?.id != null) {
         setSelectedVersionId(created.id);
         setActiveTab("versions");
+        if (created.templateId) navigate(`/project-templates/${created.templateId}/detail`);
       }
 
       toast.success(
@@ -328,12 +330,16 @@ export default function ProjectTemplateVersionWorkspacePage() {
           onSelectVersion={setSelectedVersionId}
           templateLabel={templateLabel}
           canCreate={canCreate}
-          canUpdate={canUpdate}
-          canDelete={canDelete}
+          canUpdate={canEditTemplate}
+          canDelete={false}
           submitting={submitting}
           onNewVersion={() => setNewVersionOpen(true)}
           onDuplicate={() => setDuplicateOpen(true)}
-          onEditVersion={() => setEditOpen(true)}
+          onEditVersion={() => {
+            if (selectedVersion?.templateId && selectedVersion.status === "DRAFT") {
+              navigate(`/project-templates/${selectedVersion.templateId}/detail`);
+            }
+          }}
           onDeleteVersion={() => setDeleteOpen(true)}
           tabs={
             <TabsList
@@ -404,14 +410,14 @@ export default function ProjectTemplateVersionWorkspacePage() {
               Create the first version to snapshot a project template and keep
               every revision traceable.
             </p>
-            {canCreate && (
+            {hasAllPermissions(["PROJECT_TEMPLATE_CREATE"]) && (
               <Button
                 size="sm"
                 className="mt-2"
-                onClick={() => setCreateOpen(true)}
+                onClick={() => navigate("/project-templates/create")}
               >
                 <Plus className="h-4 w-4" />
-                Create First Version
+                Create Project Template
               </Button>
             )}
           </div>

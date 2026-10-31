@@ -59,6 +59,16 @@ public class TemplateActivationService {
         if (!template.getLockVersion().equals(request.lockVersion().longValueExact())) {
             throw ProjectTemplateException.conflict("This template has changed. Reload it before activating");
         }
+        Long familyId = template.getVersionFamilyId() == null ? template.getId() : template.getVersionFamilyId();
+        templates.findForTemplateUpdate(familyId, user.getTenantId())
+                .orElseThrow(() -> ProjectTemplateException.conflict("Template version family is unavailable"));
+        List<ProjectTemplate> family = templates.findVersionFamily(familyId);
+        int highestActiveVersion = family.stream()
+                .filter(item -> item.getStatus() == ProjectTemplateStatus.ACTIVE)
+                .map(ProjectTemplate::getTemplateVersion).max(Integer::compareTo).orElse(0);
+        if (template.getTemplateVersion() <= highestActiveVersion && !template.getId().equals(familyId)) {
+            throw ProjectTemplateException.conflict("A newer version is already active");
+        }
         List<TemplateMilestone> plan = loadMilestones(id);
         Long tenantId = tenantOf(template, user);
         TemplateActivationChecklist checklist = checklist(template, plan, true, tenantId);
@@ -66,6 +76,18 @@ public class TemplateActivationService {
             Map<String, List<String>> errors = new LinkedHashMap<>();
             checklist.items().forEach(item -> errors.putAll(item.errors()));
             throw new ProjectTemplateException(422, "Complete the required configuration before activating this template", errors);
+        }
+        for (ProjectTemplate previous : family) {
+            if (!previous.getId().equals(template.getId()) && previous.getStatus() == ProjectTemplateStatus.ACTIVE) {
+                List<TemplateMilestone> previousPlan = loadMilestones(previous.getId());
+                String previousState = state(previous, previousPlan, tenantId);
+                previous.setStatus(ProjectTemplateStatus.ARCHIVED);
+                templates.saveAndFlush(previous);
+                snapshotService.archivePublishedVersion(previous);
+                audits.save(new ProjectTemplateAudit(tenantId, previous.getId(), user.getId(),
+                        "PROJECT_TEMPLATE_SUPERSEDED", previousState, state(previous, previousPlan, tenantId),
+                        CorrelationIdFilter.currentId()));
+            }
         }
         String before = state(template, plan, tenantId);
         template.setStatus(ProjectTemplateStatus.ACTIVE);

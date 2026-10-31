@@ -302,6 +302,96 @@ class WorkspaceSectionsIntegrationTest {
         assertThat(jdbc.queryForObject("select count(*) from workspace_activities", Long.class)).isEqualTo(activityCount);
         assertThat(projects.findById(projectId).orElseThrow().getStatus()).isEqualTo(ProjectStatus.ACTIVE);
     }
+    @Test void membersReadCurrentAllocationRosterWithMultipleRoles() throws Exception {
+        tx.executeWithoutResult(status -> memberships.findById(membershipId).orElseThrow().setRole("PM,BA"));
+
+        JsonNode initial = read("/members");
+        assertThat(initial).hasSize(1);
+        assertThat(initial.get(0).get("user_code").asText()).startsWith("MEM-");
+        assertThat(initial.get(0).get("display_name").asText()).isEqualTo("Workspace Reader");
+        assertThat(initial.at("/0/roles/0").asText()).isEqualTo("PM");
+        assertThat(initial.at("/0/roles/1").asText()).isEqualTo("BA");
+        assertThat(initial.get(0).has("project_role")).isFalse();
+        assertThat(initial.get(0).has("status")).isFalse();
+        assertThat(read("").get("member_count").asInt()).isEqualTo(1);
+        JsonNode navigation = read("/sections");
+        assertThat(navigation.get("classId").asLong()).isPositive();
+        assertThat(navigation.get("allocationSessionId").asLong()).isPositive();
+        assertThat(navigation.get("teamId").asLong()).isEqualTo(teamId);
+        for (JsonNode section : navigation.get("sections")) {
+            if ("members".equals(section.get("key").asText())) {
+                assertThat(section.get("actions").has("manage")).isFalse();
+            }
+        }
+
+        Long addedId = tx.execute(status -> {
+            User actor = users.findById(actorId).orElseThrow();
+            var added = new User();
+            added.setEmail(UUID.randomUUID() + "@members.test");
+            added.setFirstName("Added");
+            added.setLastName("Member");
+            added.setUserCode("ADD-" + UUID.randomUUID());
+            added.setPasswordHash("unused-test-password");
+            added.setTenant(actor.getTenant());
+            users.saveAndFlush(added);
+            var classMember = new ClassMember();
+            classMember.setTrainingClass(teams.findById(teamId).orElseThrow().getTrainingClass());
+            classMember.setUser(added);
+            classMember.setStatus(ClassMemberStatus.ACTIVE);
+            classMembers.saveAndFlush(classMember);
+            var assignment = new ProjectMember();
+            assignment.setTeam(teams.findById(teamId).orElseThrow());
+            assignment.setClassMember(classMember);
+            return memberships.saveAndFlush(assignment).getId();
+        });
+
+        JsonNode withNewMember = read("/members");
+        assertThat(withNewMember).hasSize(2);
+        assertThat(withNewMember.get(1).get("roles")).isEmpty();
+        assertThat(read("").get("member_count").asInt()).isEqualTo(2);
+        tx.executeWithoutResult(status -> {
+            var foreignTenant = tenants.saveAndFlush(Tenant.builder()
+                    .code("FOREIGN-" + UUID.randomUUID()).name("Foreign tenant").build());
+            var foreignUser = new User();
+            foreignUser.setEmail(UUID.randomUUID() + "@foreign.test");
+            foreignUser.setFirstName("Foreign");
+            foreignUser.setPasswordHash("unused-test-password");
+            foreignUser.setTenant(foreignTenant);
+            users.saveAndFlush(foreignUser);
+            var foreignClassMember = new ClassMember();
+            foreignClassMember.setTrainingClass(teams.findById(teamId).orElseThrow().getTrainingClass());
+            foreignClassMember.setUser(foreignUser);
+            foreignClassMember.setStatus(ClassMemberStatus.ACTIVE);
+            classMembers.saveAndFlush(foreignClassMember);
+            var foreignAssignment = new ProjectMember();
+            foreignAssignment.setTeam(teams.findById(teamId).orElseThrow());
+            foreignAssignment.setClassMember(foreignClassMember);
+            memberships.saveAndFlush(foreignAssignment);
+        });
+        assertThat(read("/members")).hasSize(2);
+        assertThat(read("").get("member_count").asInt()).isEqualTo(2);
+        tx.executeWithoutResult(status -> memberships.findById(addedId).orElseThrow().setIsActive(false));
+        assertThat(read("/members")).hasSize(1);
+        assertThat(read("").get("member_count").asInt()).isEqualTo(1);
+        tx.executeWithoutResult(status -> memberships.findById(membershipId).orElseThrow()
+                .getClassMember().setStatus(ClassMemberStatus.INACTIVE));
+        assertThat(read("/members")).isEmpty();
+        assertThat(read("").get("member_count").asInt()).isZero();
+    }
+
+    @Test void projectHubCannotModifyAllocationMembership() throws Exception {
+        mvc.perform(get("/api/project-hub/teams/{id}/members", teamId)
+                .header("Authorization", "Bearer " + token)).andExpect(status().isNotFound());
+        mvc.perform(get("/api/project-hub/teams/{id}/member-options", teamId)
+                .header("Authorization", "Bearer " + token)).andExpect(status().isNotFound());
+        mvc.perform(put("/api/project-hub/teams/{id}/members/{userId}", teamId, actorId)
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"projectRole\":\"QA\",\"status\":\"ACTIVE\"}"))
+                .andExpect(status().isNotFound());
+        assertThat(memberships.findById(membershipId).orElseThrow().getRole()).isNull();
+    }
+
     @Test void roleApiCanRevokeAndRestoreReadPermissionWithTheSameToken() throws Exception {
         var response = mvc.perform(get("/api/roles/" + roleId)
                 .header("Authorization", "Bearer " + token)).andExpect(status().isOk()).andReturn();

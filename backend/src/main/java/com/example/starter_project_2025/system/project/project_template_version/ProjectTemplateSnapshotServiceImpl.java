@@ -16,6 +16,10 @@ import com.example.starter_project_2025.system.project.project_template_version.
 import com.example.starter_project_2025.system.project.project_template_version.event.ProjectTemplateSnapshotOutboxService;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestone;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneRepository;
+import com.example.starter_project_2025.system.project.template.TemplateConfigurationService;
+import com.example.starter_project_2025.system.project.template.ProjectTemplateException;
+import com.example.starter_project_2025.system.project.template.ProjectTemplateAccessService;
+import org.springframework.security.access.AccessDeniedException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AccessLevel;
@@ -143,6 +147,8 @@ public class ProjectTemplateSnapshotServiceImpl
     ProjectRepository projectRepository;
     /** Used to derive the baseline snapshot payload from the template plan. */
     TemplateMilestoneRepository templateMilestoneRepository;
+    TemplateConfigurationService configurations;
+    ProjectTemplateAccessService templateAccess;
     ObjectMapper objectMapper;
 
     @Override
@@ -189,9 +195,7 @@ public class ProjectTemplateSnapshotServiceImpl
         // US-07: a version that is created (directly or as a new version of an
         // existing one) always starts as DRAFT. Existing snapshots are never
         // touched, which keeps every derived workspace/project isolated.
-        if (snapshot.getStatus() == null) {
-            snapshot.setStatus(ProjectTemplateVersionStatus.DRAFT);
-        }
+        snapshot.setStatus(ProjectTemplateVersionStatus.DRAFT);
     }
 
     // ---------------------------------------------------------------------
@@ -204,57 +208,29 @@ public class ProjectTemplateSnapshotServiceImpl
         checkPermission(CrudAction.CREATE);
 
         ProjectTemplateSnapshot source = findSnapshot(sourceVersionId);
-
-        Map<String, List<String>> errors = new LinkedHashMap<>();
-
-        validateTemplateId(source.getTemplateId(), errors);
-        validateContentJson(source.getContentJson(), errors);
-
-        throwIfInvalid(errors);
-
-        String nextVersion = nextVersionLabel(source.getTemplateId());
-
-        ProjectTemplateSnapshot created = ProjectTemplateSnapshot.builder()
-                .templateId(source.getTemplateId())
-                .projectId(source.getProjectId())
-                // Traceability: point at the version this one was cloned from.
-                .parentTemplateId(source.getId())
-                .version(nextVersion)
-                // Copy the configuration; strings are immutable so the source
-                // snapshot can never be mutated through the new version.
-                .contentJson(source.getContentJson())
-                .status(ProjectTemplateVersionStatus.DRAFT)
-                .isActive(true)
-                .build();
-
-        ProjectTemplateSnapshot saved = snapshotRepository.save(created);
-
-        // US-07: the Project Template row reports the same revision as its
-        // newest version (v2.0 -> template_version = 2).
-        syncTemplateVersion(saved.getTemplateId(), nextVersion);
-
-        // AC01: the audit trail records that this row was derived from another
-        // version (not just "created"), so the lineage can be reviewed later.
-        // AC02: the source row is only read here - it is never saved, therefore
-        // its content (the snapshot already used by workspaces/projects) stays
-        // byte-for-byte identical.
-        Map<String, Object> after = snapshot(saved);
-        after.put("sourceVersionId", source.getId());
-        after.put("sourceVersion", source.getVersion());
-        after.put("sourceStatus", source.getStatus() == null ? null : source.getStatus().name());
-
-        snapshotAuditService.record(
-                ACTION_NEW_VERSION, saved.getId(), saved.getTemplateId(), saved.getProjectId(), null, after);
-
-        snapshotOutboxService.enqueue(
-                EVENT_CREATED,
-                saved.getId(),
-                saved.getTemplateId(),
-                saved.getProjectId(),
-                currentActorEmail(),
-                after);
-
-        return toResponse(saved);
+        if (source.getProjectId() != null) {
+            throw ProjectTemplateException.conflict("Create a version from a template baseline, not a project snapshot");
+        }
+        ProjectTemplate sourceTemplate = projectTemplateRepository.findById(source.getTemplateId())
+                .orElseThrow(() -> new ResourceNotFoundException("ProjectTemplate", "id", source.getTemplateId()));
+        var actor = templateAccess.requireUser("READ");
+        if (!Objects.equals(sourceTemplate.getTenantId(), actor.getTenantId())) {
+            throw new AccessDeniedException("Template is outside the current tenant");
+        }
+        if (sourceTemplate.getStatus() == com.example.starter_project_2025.system.project.template.ProjectTemplateStatus.ARCHIVED) {
+            throw ProjectTemplateException.conflict("Create a new version from the current template");
+        }
+        Long familyId = sourceTemplate.getVersionFamilyId() == null
+                ? sourceTemplate.getId() : sourceTemplate.getVersionFamilyId();
+        ProjectTemplate root = projectTemplateRepository.findForTemplateUpdate(familyId, sourceTemplate.getTenantId())
+                .orElseThrow(() -> new ResourceNotFoundException("ProjectTemplate", "id", familyId));
+        List<ProjectTemplate> family = projectTemplateRepository.findVersionFamily(root.getId());
+        int nextMajor = family.stream().map(ProjectTemplate::getTemplateVersion)
+                .filter(Objects::nonNull).mapToInt(Integer::intValue).max().orElse(0) + 1;
+        ProjectTemplate draft = configurations.duplicateVersion(sourceTemplate, source, nextMajor, root.getId());
+        ProjectTemplateSnapshotDTO createdVersion = createInitialVersion(draft, source.getId());
+        if (createdVersion == null) throw new IllegalStateException("Unable to create draft version");
+        return createdVersion;
     }
 
     // ---------------------------------------------------------------------
@@ -270,6 +246,11 @@ public class ProjectTemplateSnapshotServiceImpl
      */
     @Override
     public ProjectTemplateSnapshotDTO createInitialVersion(ProjectTemplate template) {
+        return createInitialVersion(template, null);
+    }
+
+    @Override
+    public ProjectTemplateSnapshotDTO createInitialVersion(ProjectTemplate template, Long parentSnapshotId) {
 
         if (template == null || template.getId() == null) {
             return null;
@@ -285,9 +266,9 @@ public class ProjectTemplateSnapshotServiceImpl
                 // A template is a reusable blueprint: it is not bound to a project yet.
                 .projectId(null)
                 // First version of the chain: nothing to trace back to.
-                .parentTemplateId(null)
-                .version(INITIAL_VERSION)
-                .contentJson(initialContentJson(template))
+                .parentTemplateId(parentSnapshotId)
+                .version("v" + (template.getTemplateVersion() == null ? 1 : template.getTemplateVersion()) + ".0")
+                .contentJson(configurations.capture(template))
                 .status(ProjectTemplateVersionStatus.DRAFT)
                 .isActive(true)
                 .build();
@@ -297,9 +278,11 @@ public class ProjectTemplateSnapshotServiceImpl
         Map<String, Object> after = snapshot(saved);
         after.put("sourceTemplateId", template.getId());
         after.put("sourceTemplateCode", template.getCode());
+        if (parentSnapshotId != null) after.put("sourceVersionId", parentSnapshotId);
 
         snapshotAuditService.record(
-                ACTION_INITIAL_VERSION, saved.getId(), saved.getTemplateId(), saved.getProjectId(), null, after);
+                parentSnapshotId == null ? ACTION_INITIAL_VERSION : ACTION_NEW_VERSION,
+                saved.getId(), saved.getTemplateId(), saved.getProjectId(), null, after);
 
         snapshotOutboxService.enqueue(
                 EVENT_CREATED,
@@ -340,16 +323,13 @@ public class ProjectTemplateSnapshotServiceImpl
             return null;
         }
 
+        String label = "v" + template.getTemplateVersion() + ".0";
         ProjectTemplateSnapshot latest = snapshotRepository
-                .findFirstByTemplateIdAndIsActiveTrueOrderByCreatedAtDesc(template.getId())
-                .orElse(null);
-
-        if (latest == null) {
-            return null;
-        }
+                .findFirstByTemplateIdAndVersion(template.getId(), label)
+                .orElseThrow(() -> ProjectTemplateException.conflict("Template has no draft version to publish"));
 
         if (latest.getStatus() != ProjectTemplateVersionStatus.DRAFT) {
-            return toResponse(latest);
+            throw ProjectTemplateException.conflict("Only draft versions can be published");
         }
 
         Map<String, Object> before = snapshot(latest);
@@ -357,7 +337,7 @@ public class ProjectTemplateSnapshotServiceImpl
         // AC01: the version that goes live mirrors the template configuration
         // that is being activated (the baseline was built before the Program
         // Manager filled in milestones / sample content).
-        latest.setContentJson(initialContentJson(template));
+        latest.setContentJson(configurations.capture(template));
         latest.setStatus(ProjectTemplateVersionStatus.PUBLISHED);
 
         ProjectTemplateSnapshot saved = snapshotRepository.save(latest);
@@ -376,6 +356,25 @@ public class ProjectTemplateSnapshotServiceImpl
                 after);
 
         return toResponse(saved);
+    }
+
+    @Override
+    public void archivePublishedVersion(ProjectTemplate template) {
+        snapshotRepository.findByTemplateIdOrderByCreatedAtDesc(template.getId()).stream()
+                .filter(version -> version.getProjectId() == null)
+                .filter(version -> version.getStatus() == ProjectTemplateVersionStatus.PUBLISHED)
+                .filter(version -> Boolean.TRUE.equals(version.getIsActive()))
+                .forEach(version -> {
+                    Map<String, Object> before = snapshot(version);
+                    version.setStatus(ProjectTemplateVersionStatus.ARCHIVED);
+                    version.setIsActive(false);
+                    snapshotRepository.save(version);
+                    Map<String, Object> after = snapshot(version);
+                    snapshotAuditService.record("ARCHIVE", version.getId(), version.getTemplateId(),
+                            null, before, after);
+                    snapshotOutboxService.enqueue(EVENT_UPDATED, version.getId(), version.getTemplateId(),
+                            null, currentActorEmail(), after);
+                });
     }
 
     // ---------------------------------------------------------------------
@@ -543,6 +542,9 @@ public class ProjectTemplateSnapshotServiceImpl
                 : snapshot.getContentJson();
 
         Map<String, List<String>> errors = new LinkedHashMap<>();
+        if (request.getStatus() != null && request.getStatus() != snapshot.getStatus()) {
+            errors.put("status", List.of("Publish and archive versions through the Project Template lifecycle"));
+        }
 
         // US-07 / AC02: a version belongs to the template it was snapshotted
         // from. Moving it to another template would break the per-template
@@ -626,21 +628,10 @@ public class ProjectTemplateSnapshotServiceImpl
         checkPermission(CrudAction.DELETE);
 
         ProjectTemplateSnapshot snapshot = findSnapshot(id);
-
-        Map<String, Object> before = snapshot(snapshot);
-
-        snapshotAuditService.record(
-                "DELETE", id, snapshot.getTemplateId(), snapshot.getProjectId(), before, null);
-
-        snapshotOutboxService.enqueue(
-                EVENT_DELETED,
-                id,
-                snapshot.getTemplateId(),
-                snapshot.getProjectId(),
-                currentActorEmail(),
-                before);
-
-        snapshotRepository.delete(snapshot);
+        if (snapshot.getProjectId() == null) {
+            throw ProjectTemplateException.conflict("Delete draft versions through Project Templates");
+        }
+        throw ProjectTemplateException.conflict("Project brief snapshots cannot be deleted");
     }
 
     // ---------------------------------------------------------------------
@@ -694,10 +685,21 @@ public class ProjectTemplateSnapshotServiceImpl
                     TEMPLATE_ID_FIELD, "Vui lòng chọn Project Template");
         }
 
-        List<ProjectTemplateSnapshotDTO> versions = snapshotRepository
-                .findByTemplateIdOrderByCreatedAtDesc(templateId)
-                .stream()
+        ProjectTemplate template = projectTemplateRepository.findById(templateId)
+                .orElseThrow(() -> new ResourceNotFoundException("ProjectTemplate", "id", templateId));
+        var actor = templateAccess.requireUser("READ");
+        if (template.getTenantId() != null && !Objects.equals(template.getTenantId(), actor.getTenantId())) {
+            throw new AccessDeniedException("Template is outside the current tenant");
+        }
+        Long familyId = template.getVersionFamilyId() == null ? template.getId() : template.getVersionFamilyId();
+        List<Long> familyIds = projectTemplateRepository.findVersionFamily(familyId).stream()
+                .filter(member -> Boolean.TRUE.equals(member.getIsActive()))
+                .map(ProjectTemplate::getId).toList();
+        List<ProjectTemplateSnapshotDTO> versions = familyIds.stream()
+                .flatMap(id -> snapshotRepository.findByTemplateIdOrderByCreatedAtDesc(id).stream())
+                .filter(version -> version.getProjectId() == null)
                 .map(snapshotMapper::toResponse)
+                .sorted((left, right) -> Long.compare(right.getId(), left.getId()))
                 .collect(Collectors.toCollection(ArrayList::new));
 
         enrichOwnerNames(versions);

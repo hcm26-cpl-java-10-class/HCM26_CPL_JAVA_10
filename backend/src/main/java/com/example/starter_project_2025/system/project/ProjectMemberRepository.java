@@ -20,6 +20,13 @@ public interface ProjectMemberRepository
             ClassMemberStatus status);
 
     @EntityGraph(attributePaths = {"classMember", "classMember.user"})
+    List<ProjectMember> findAllByTeam_IdAndIsActiveTrueAndClassMember_TrainingClass_IdAndClassMember_User_Tenant_IdAndClassMember_StatusOrderByIdAsc(
+            Long teamId,
+            Long classId,
+            Long tenantId,
+            ClassMemberStatus status);
+
+    @EntityGraph(attributePaths = {"classMember", "classMember.user"})
     List<ProjectMember> findAllByTeam_IdOrderByIdAsc(Long teamId);
 
     @EntityGraph(attributePaths = {"team", "classMember", "classMember.user"})
@@ -35,6 +42,12 @@ public interface ProjectMemberRepository
             Long teamId,
             Long userId,
             com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus status);
+
+    boolean existsByTeam_IdAndIsActiveTrueAndClassMember_TrainingClass_IdAndClassMember_User_IdAndClassMember_Status(
+            Long teamId,
+            Long classId,
+            Long userId,
+            ClassMemberStatus status);
 
     java.util.Optional<ProjectMember> findByTeam_IdAndClassMember_User_Id(Long teamId, Long userId);
 

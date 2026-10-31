@@ -18,6 +18,7 @@ import com.example.starter_project_2025.system.project.domain.ProjectStatus;
 import com.example.starter_project_2025.system.project.milestone.domain.LatePenaltyBasis;
 import com.example.starter_project_2025.system.project.milestone.domain.LatePolicyType;
 import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
+import com.example.starter_project_2025.system.project.milestone.integration.port.TenantSettingsPort;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshot;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklog;
@@ -90,6 +91,7 @@ public class TemplateAssignmentProvisioningService {
     private final WorkspaceJournalService workspaceJournal;
     private final UserRepository users;
     private final MilestoneRepository milestones;
+    private final TenantSettingsPort milestoneTenantSettings;
     private final SprintBacklogRepository sprintBacklog;
     private final TemplateMilestoneRepository templateMilestones;
     private final TemplateBacklogItemRepository templateBacklogItems;
@@ -316,9 +318,9 @@ public class TemplateAssignmentProvisioningService {
                     actorUuid,
                     now);
 
-            // Template milestones follow the same scheduled PLANNED -> IN_PROGRESS flow
-            // as milestones created directly in a workspace.
-            milestone.configureAutoStart(7, true);
+            var tenantZone = milestoneTenantSettings.requireTimeZone(tenantId);
+            var startDate = deadline.minus(7, ChronoUnit.DAYS).atZone(tenantZone).toLocalDate();
+            milestone.scheduleStart(startDate, startDate.atStartOfDay(tenantZone).toInstant());
 
             milestone.configureAssessment(
                     planMilestone.getWeight(),
