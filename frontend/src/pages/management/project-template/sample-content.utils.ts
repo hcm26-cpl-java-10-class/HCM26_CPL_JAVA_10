@@ -13,13 +13,13 @@ export interface BacklogItemValues {
 export interface SampleContentValues { backlogItems: BacklogItemValues[] }
 export type SampleContentErrors = Record<string, string[] | undefined>;
 
-export function newBacklogItem(input?: { title: string; description: string | null; suggestedRole: TemplateSuggestedRole }): BacklogItemValues {
+export function newBacklogItem(input?: { title: string; description: string | null; suggestedRole?: TemplateSuggestedRole | null }): BacklogItemValues {
   return { key: crypto.randomUUID(), title: input?.title ?? "", description: input?.description ?? "", suggestedRole: input?.suggestedRole ?? "" };
 }
 
 export function toSampleValues(content: TemplateSampleContent): SampleContentValues {
   return {
-    backlogItems: content.backlogItems.map((item) => ({ ...newBacklogItem(item), id: item.id })),
+    backlogItems: content.backlogItems.map((item) => ({ ...newBacklogItem(item), id: item.id ?? undefined })),
   };
 }
 
@@ -32,7 +32,7 @@ export function validateSampleContent(values: SampleContentValues, content: Temp
     const path = `backlogItems[${i}]`;
     if (!item.title.trim() || item.title.trim().length > 200) errors[`${path}.title`] = ["Backlog title must contain 1 to 200 characters"];
     if (item.description.trim().length > 2000) errors[`${path}.description`] = ["Description must not exceed 2000 characters"];
-    if (!item.suggestedRole || !content.roles.includes(item.suggestedRole)) errors[`${path}.suggestedRole`] = ["Select PM, BA, DEV or QA"];
+    if (item.suggestedRole && !content.roles.includes(item.suggestedRole)) errors[`${path}.suggestedRole`] = ["Select PM, BA, DEV or QA"];
   });
   return errors;
 }
@@ -41,6 +41,6 @@ export function toSamplePayload(values: SampleContentValues, lockVersion: number
   return {
     lockVersion,
     backlogItems: values.backlogItems.map((item) => ({ ...(item.id ? { id: item.id } : {}), title: item.title.trim(),
-      description: item.description.trim(), suggestedRole: item.suggestedRole as TemplateSuggestedRole })),
+      description: item.description.trim(), suggestedRole: item.suggestedRole || null })),
   };
 }

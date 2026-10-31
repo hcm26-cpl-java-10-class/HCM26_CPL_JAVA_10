@@ -13,7 +13,6 @@ import com.example.starter_project_2025.system.project.sprint.event.SprintOutbox
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklog;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogRepository;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogStatus;
-import com.example.starter_project_2025.system.project.task.TaskRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -90,7 +89,7 @@ public class SprintServiceImpl
     SprintOutboxService sprintOutboxService;
     SprintBacklogRepository sprintBacklogRepository;
     /** Subtasks of the backlog items (own module, read-only usage here). */
-    TaskRepository taskRepository;
+    SprintSubtaskRepository taskRepository;
 
     @Override
     protected BaseCrudRepository<Sprint, Long> getRepository() {

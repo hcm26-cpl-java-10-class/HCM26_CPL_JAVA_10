@@ -12,8 +12,10 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { getTemplateError } from "../project-template.utils";
 
-export function TemplateBacklogImportDialog({ templateId, remaining, maxImportBytes, disabled, onAppend }: {
+export function TemplateBacklogImportDialog({ templateId, remaining, maxImportBytes, disabled, onAppend, preview, downloadTemplate }: {
   templateId: number; remaining: number; maxImportBytes: number; disabled: boolean; onAppend: (items: TemplateBacklogInput[]) => void;
+  preview?: (file: File) => Promise<TemplateBacklogInput[]>;
+  downloadTemplate?: () => Promise<Blob>;
 }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -23,7 +25,7 @@ export function TemplateBacklogImportDialog({ templateId, remaining, maxImportBy
     if (pending.current || disabled) return;
     pending.current = true; setLoading(true); setResult(null);
     try {
-      const items = await projectTemplateApi.previewBacklogImport(templateId, file);
+      const items = await (preview ? preview(file) : projectTemplateApi.previewBacklogImport(templateId, file));
       if (items.length > remaining) throw new Error(`Only ${remaining} more backlog items can be added to this template`);
       onAppend(items); setOpen(false);
       toast.success(`${items.length} backlog items added to the form. Save sample content to keep them.`);
@@ -44,10 +46,10 @@ export function TemplateBacklogImportDialog({ templateId, remaining, maxImportBy
     <Dialog open={open} onOpenChange={(value) => { if (!loading) setOpen(value); }}>
       <DialogContent showCloseButton={!loading} className="flex max-h-[90vh] min-h-105 flex-col overflow-y-auto sm:max-w-xl">
         <DialogHeader><DialogTitle>Import sample backlog</DialogTitle><DialogDescription>
-          Use Title, Description and SuggestedRole columns. Roles: PM, BA, DEV, QA. All rows must be valid before they are added to the form.
+          Use only Title and Description columns. Title is required; description can be blank. Suggested roles can be set later in the form.
         </DialogDescription></DialogHeader>
         <Tabs defaultValue="import" className="flex flex-1 flex-col"><ImportTab loading={loading} onImport={onImport} maxFileSize={maxImportBytes}
-          onDownloadTemplate={async () => downloadBlob(await projectTemplateApi.getBacklogImportTemplate(templateId), "template-backlog.xlsx")} /></Tabs>
+          onDownloadTemplate={async () => downloadBlob(await (downloadTemplate ? downloadTemplate() : projectTemplateApi.getBacklogImportTemplate(templateId)), "template-backlog.xlsx")} /></Tabs>
         {result && <div className="grid gap-3 border-t pt-4"><p className="text-sm text-muted-foreground">No rows were added. Correct the file and try again.</p><ImportResultContent result={result} /></div>}
         <DialogFooter><Button type="button" variant="outline" disabled={loading} onClick={() => setOpen(false)}>Close</Button></DialogFooter>
       </DialogContent>

@@ -630,7 +630,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
           })}</ol> : <p className="mt-4 rounded-xl border border-dashed p-5 text-center text-xs text-muted-foreground">Chưa có hoạt động được ghi nhận.</p>}
         </aside>
       </div>}
-  
+
     {/* Customize Columns Dialog (Fix Bug #35 & #36) */}
     <Dialog open={canConfigureColumns && columnsDialogOpen} onOpenChange={(open) => {
       if (saveColumns.isPending) return;

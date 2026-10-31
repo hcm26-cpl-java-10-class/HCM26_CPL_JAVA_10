@@ -157,7 +157,7 @@ export function ProjectTemplateVersionWorkspaceHeader({
 
         <div className="flex flex-wrap items-center gap-2">
           {canCreate && (
-            <Button size="sm" onClick={onNewVersion} disabled={!version || version.projectId != null || submitting}>
+            <Button size="sm" onClick={onNewVersion} disabled={!version || submitting}>
               <CopyPlus className="h-4 w-4" />
               Create New Version
             </Button>
@@ -198,11 +198,11 @@ export function ProjectTemplateVersionWorkspaceHeader({
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuLabel>Snapshot</DropdownMenuLabel>
-              <DropdownMenuItem disabled={!canUpdate || version?.status !== "DRAFT" || version?.projectId != null} onSelect={onEditVersion}>
+              <DropdownMenuItem disabled={!canUpdate} onSelect={onEditVersion}>
                 <Pencil className="h-4 w-4" />
-                Edit template draft
+                Edit version
               </DropdownMenuItem>
-              {canDelete && <><DropdownMenuSeparator />
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 variant="destructive"
                 disabled={!canDelete || submitting}
@@ -214,7 +214,7 @@ export function ProjectTemplateVersionWorkspaceHeader({
                   <Trash2 className="h-4 w-4" />
                 )}
                 Delete version
-              </DropdownMenuItem></>}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

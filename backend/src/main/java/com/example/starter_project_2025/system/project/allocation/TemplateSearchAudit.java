@@ -1,4 +1,4 @@
-package com.example.starter_project_2025.system.project.template.assignment;
+package com.example.starter_project_2025.system.project.allocation;
 
 import jakarta.persistence.*;
 import java.time.Instant;

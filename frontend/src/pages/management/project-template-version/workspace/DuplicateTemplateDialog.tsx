@@ -59,7 +59,8 @@ export function DuplicateTemplateDialog({
   const validate = () => {
     const next: FieldErrors = {};
 
-    if (!name.trim()) next.name = "Vui lòng nhập tên Project Template";
+    if (!name.trim()) next.name = "Enter a template name";
+    else if (name.trim().length > 255) next.name = "Template name must not exceed 255 characters";
 
     setErrors(next);
     return Object.keys(next).length === 0;

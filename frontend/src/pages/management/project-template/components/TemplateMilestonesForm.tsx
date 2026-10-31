@@ -25,16 +25,17 @@ import {
 import { getTemplateError } from "../project-template.utils";
 import { TemplateMilestoneEditor } from "./TemplateMilestoneEditor";
 
-export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubrics, onRefreshRubrics, onSaved }: {
+export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubrics, onRefreshRubrics, onSaved, save }: {
   plan: TemplateMilestonePlan;
   editable: boolean;
   rubrics: MilestoneRubricOption[];
   refreshingRubrics: boolean;
   onRefreshRubrics: () => void;
   onSaved: (plan: TemplateMilestonePlan) => void;
+  save?: (payload: TemplateMilestonePlanPayload) => Promise<TemplateMilestonePlan>;
 }) {
   const [milestones, setMilestones] = useState(() => toMilestoneValues(plan));
-  const [savedValues, setSavedValues] = useState(() => JSON.stringify(toMilestonePlanPayload(toMilestoneValues(plan), 0).milestones));
+  const [savedMilestones, setSavedMilestones] = useState(() => JSON.stringify(toMilestonePlanPayload(milestones, 0).milestones));
   const [lockVersion, setLockVersion] = useState(plan.lockVersion);
   const [durationWeeks, setDurationWeeks] = useState(plan.estimatedDurationWeeks);
   const [errors, setErrors] = useState<MilestonePlanErrors>({});
@@ -42,11 +43,11 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
   const [removeKey, setRemoveKey] = useState<string | null>(null);
   const submitting = useRef(false);
   const mutation = useMutation({
-    mutationFn: (payload: TemplateMilestonePlanPayload) => projectTemplateApi.saveMilestones(plan.templateId, payload),
+    mutationFn: (payload: TemplateMilestonePlanPayload) => save ? save(payload) : projectTemplateApi.saveMilestones(plan.templateId, payload),
     onSuccess: (saved) => {
-      const values = toMilestoneValues(saved);
-      setMilestones(values);
-      setSavedValues(JSON.stringify(toMilestonePlanPayload(values, 0).milestones));
+      const savedValues = toMilestoneValues(saved);
+      setMilestones(savedValues);
+      setSavedMilestones(JSON.stringify(toMilestonePlanPayload(savedValues, 0).milestones));
       setLockVersion(saved.lockVersion);
       setDurationWeeks(saved.estimatedDurationWeeks);
       setSubmitError(null);
@@ -62,8 +63,9 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
     onSettled: () => { submitting.current = false; },
   });
   const total = totalWeightHundredths(milestones);
-  const disabled = !editable || mutation.isPending;
-  const hasChanges = JSON.stringify(toMilestonePlanPayload(milestones, 0).milestones) !== savedValues;
+  const canEdit = editable && plan.editable;
+  const hasChanges = JSON.stringify(toMilestonePlanPayload(milestones, 0).milestones) !== savedMilestones;
+  const disabled = !canEdit || mutation.isPending;
   const removing = milestones.find((milestone) => milestone.key === removeKey);
   const rubricOptions = [...rubrics];
   plan.milestones.forEach((milestone) => {
@@ -85,7 +87,7 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
   };
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (submitting.current || !editable || !hasChanges) return;
+    if (submitting.current || !canEdit || !hasChanges) return;
     setSubmitError(null);
     const nextErrors = validateMilestonePlan(milestones, durationWeeks);
     setErrors(nextErrors);
@@ -154,7 +156,7 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
           index={index}
           count={milestones.length}
           disabled={disabled}
-          editable={editable}
+          editable={canEdit}
           errors={errors}
           rubrics={rubricOptions}
           onChange={(patch) => changeMilestone(index, patch)}
@@ -162,7 +164,7 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
           onRemove={() => setRemoveKey(milestone.key)}
         />)}
       </div>
-      {editable && <>
+      {canEdit && <>
         <Button type="button" variant="outline" className="w-full border-dashed" disabled={disabled}
           onClick={() => { setMilestones((current) => [...current, newMilestone(current.length === 0)]); setErrors({}); }}>
           <Plus /> Add milestone

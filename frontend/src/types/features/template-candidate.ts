@@ -8,9 +8,6 @@ export interface TemplateCandidate {
   category: string | null;
   level: "BEGINNER" | "INTERMEDIATE" | "ADVANCED" | null;
   durationWeeks: number | null;
-  technologies: string[];
-  targetRoles: string[];
-  learningOutcomes: string[];
   minMembers: number;
   maxMembers: number;
   capacityMatch: boolean;
@@ -23,11 +20,8 @@ export interface TemplateCandidatePreview {
 
 export interface TemplateCandidateFilter {
   q: string;
-  technologies: string[];
   level: string;
   category: string;
-  roles: string[];
-  outcomes: string[];
   page: number;
   size: number;
 }

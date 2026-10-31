@@ -13,9 +13,10 @@ public interface ProjectTemplateSnapshotService
      * Creates a new version from an existing one (US-07 / AC01).
      * <p>
      * The new row gets the next automatic version label ({@code v1.0 -> v2.0}),
-     * copies the source configuration into a new draft Project Template row,
-     * and links its baseline snapshot to the source version. Existing project
-     * snapshots stay untouched.
+     * copies the source version configuration, is stored as
+     * {@link ProjectTemplateVersionStatus#DRAFT} and keeps
+     * {@code parentTemplateId} pointing at the source version. The source row is
+     * never modified, so already snapshotted workspaces stay untouched.
      */
     ProjectTemplateSnapshotDTO createNewVersion(Long sourceVersionId);
 
@@ -30,8 +31,10 @@ public interface ProjectTemplateSnapshotService
      * source version, while {@code parentTemplateId} stays {@code null} so the
      * copy keeps no version-tree link to the original template.
      * <p>
-     * Branching from US-07: {@link #createNewVersion(Long)} keeps the family
-     * and code, while this method starts a new family.
+     * Branching from US-07: {@link #createNewVersion(Long)} derives a new
+     * version <em>of the same template</em> and therefore keeps
+     * {@code templateId} and links {@code parentTemplateId}; this method
+     * creates a new template instead.
      */
     ProjectTemplateSnapshotDTO duplicateTemplate(Long sourceVersionId, String name);
 
@@ -50,8 +53,6 @@ public interface ProjectTemplateSnapshotService
      * already authorised {@code PROJECT_TEMPLATE_CREATE}.
      */
     ProjectTemplateSnapshotDTO createInitialVersion(ProjectTemplate template);
-
-    ProjectTemplateSnapshotDTO createInitialVersion(ProjectTemplate template, Long parentSnapshotId);
 
     /**
      * Same as {@link #createInitialVersion(ProjectTemplate)} but loads the
@@ -72,8 +73,6 @@ public interface ProjectTemplateSnapshotService
      * workspaces/projects (US-07 / AC02).
      */
     ProjectTemplateSnapshotDTO publishLatestVersion(ProjectTemplate template);
-
-    void archivePublishedVersion(ProjectTemplate template);
 
     /**
      * All versions of a project template, newest first.

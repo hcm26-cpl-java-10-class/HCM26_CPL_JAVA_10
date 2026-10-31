@@ -2,7 +2,7 @@ package com.example.starter_project_2025.system.project;
 
 import jakarta.validation.Valid;
 import com.example.starter_project_2025.system.project.template.ProjectTemplateLevel;
-import com.example.starter_project_2025.system.project.template.assignment.TemplateCandidateService;
+import com.example.starter_project_2025.system.project.allocation.TemplateCandidateService;
 import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.RequestParam;
 import lombok.RequiredArgsConstructor;
@@ -159,16 +159,13 @@ public class TeamAllocationSessionController {
     public Page<TemplateCandidateService.Candidate> searchTemplateCandidates(
             @PathVariable Long classId, @PathVariable Long sessionId, @PathVariable Long teamId,
             @RequestParam(required = false) String q,
-            @RequestParam(required = false) java.util.List<String> technology,
             @RequestParam(required = false) ProjectTemplateLevel level,
             @RequestParam(required = false) String category,
-            @RequestParam(required = false) java.util.List<String> role,
-            @RequestParam(required = false) java.util.List<String> outcome,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "12") int size,
             Authentication authentication) {
         return templateCandidateService.search(classId, sessionId, teamId, authentication,
-                q, technology, level, category, role, outcome, page, size);
+                q, level, category, page, size);
     }
 
     @GetMapping("/{sessionId}/teams/{teamId}/project-template-candidates/{templateId}")

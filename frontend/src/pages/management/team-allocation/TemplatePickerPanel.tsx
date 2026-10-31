@@ -1,4 +1,4 @@
-import { projectTemplateApi } from "@/api/features/project-template.api";
+import { teamTemplateApi } from "@/api/features/team-template.api";
 import { Button } from "@/components/ui/button";
 import { DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -11,10 +11,9 @@ import { Check, ChevronDown, Eye, Info, LoaderCircle, Search, SlidersHorizontal 
 import { useState } from "react";
 
 const emptyFilter: TemplateCandidateFilter = {
-  q: "", technologies: [], level: "", category: "", roles: [], outcomes: [], page: 0, size: 12,
+  q: "", level: "", category: "", page: 0, size: 12,
 };
 
-const splitValues = (value: string) => value.split(",").map((item) => item.trim()).filter(Boolean);
 const briefText = (value: unknown) => typeof value === "string" ? value : "";
 const briefRows = (value: unknown): Record<string, unknown>[] =>
   Array.isArray(value) ? value.filter((row): row is Record<string, unknown> =>
@@ -62,11 +61,6 @@ function CandidateRow({ item, selected, onPreview, onSelect }: {
         <div><p className="font-semibold leading-snug">{item.name}</p>
           <p className="mt-1 text-xs text-muted-foreground">{item.code || "Đề bài dự án"} · {item.version}</p></div>
         <p className="line-clamp-4 text-xs leading-relaxed text-muted-foreground">{item.description || "Chưa có mô tả ngắn."}</p>
-        <div className="space-y-1.5 border-t pt-3 text-xs">
-          <p><span className="text-muted-foreground">Công nghệ:</span> {item.technologies.join(", ") || "Chưa cập nhật"}</p>
-          <p><span className="text-muted-foreground">Vai trò:</span> {item.targetRoles.join(", ") || "Chưa cập nhật"}</p>
-          <p><span className="text-muted-foreground">Chuẩn đầu ra:</span> {item.learningOutcomes.join(", ") || "Chưa cập nhật"}</p>
-        </div>
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Info className="size-3.5" /> Chọn “Xem” để đọc đề bài đầy đủ</p>
       </div>
     </TooltipContent>
@@ -88,10 +82,7 @@ interface Props {
 export function TemplatePickerPanel({ classId, sessionId, teamId, teamName,
   memberCount, active, selectedTemplateId, onBack, onSelect }: Props) {
   const [keyword, setKeyword] = useState("");
-  const [technology, setTechnology] = useState("");
   const [level, setLevel] = useState("");
-  const [role, setRole] = useState("");
-  const [outcome, setOutcome] = useState("");
   const [category, setCategory] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filter, setFilter] = useState<TemplateCandidateFilter>(emptyFilter);
@@ -101,32 +92,30 @@ export function TemplatePickerPanel({ classId, sessionId, teamId, teamName,
   const results = useQuery({
     queryKey: ["template-candidates", identity.user.email, identity.activeRole,
       classId, sessionId, teamId, filter],
-    queryFn: ({ signal }) => projectTemplateApi.searchCandidates(classId, sessionId, teamId, filter, signal),
+    queryFn: ({ signal }) => teamTemplateApi.search(classId, sessionId, teamId, filter, signal),
     enabled: active,
     retry: false,
   });
   const preview = useQuery({
     queryKey: ["template-candidate-preview", identity.user.email, identity.activeRole,
       classId, sessionId, teamId, previewId],
-    queryFn: ({ signal }) => projectTemplateApi.previewCandidate(classId, sessionId, teamId, previewId!, signal),
+    queryFn: ({ signal }) => teamTemplateApi.preview(classId, sessionId, teamId, previewId!, signal),
     enabled: active && previewId !== null,
     retry: false,
   });
 
   const apply = () => {
-    setFilter({ q: keyword.trim(), technologies: splitValues(technology), level,
-      category: category.trim(), roles: splitValues(role), outcomes: splitValues(outcome), page: 0, size: 12 });
+    setFilter({ q: keyword.trim(), level, category: category.trim(), page: 0, size: 12 });
     setPreviewId(null);
     setFiltersOpen(false);
   };
   const clear = () => {
-    setKeyword(""); setTechnology(""); setLevel(""); setRole(""); setOutcome(""); setCategory("");
+    setKeyword(""); setLevel(""); setCategory("");
     setFilter(emptyFilter); setPreviewId(null);
   };
   const errorStatus = axios.isAxiosError(results.error) ? results.error.response?.status : null;
   const items = results.data?.content ?? [];
-  const activeFilterCount = [filter.technologies.length, filter.level, filter.roles.length,
-    filter.outcomes.length, filter.category].filter(Boolean).length;
+  const activeFilterCount = [filter.level, filter.category].filter(Boolean).length;
 
   return <div className={active ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
         <DialogHeader className="shrink-0 border-b px-5 py-4 pr-12">
@@ -147,17 +136,11 @@ export function TemplatePickerPanel({ classId, sessionId, teamId, teamName,
             <ChevronDown className={`size-3.5 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
           </Button>
           {filtersOpen && <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            <Input aria-label="Công nghệ" placeholder="Công nghệ: React, Java" value={technology}
-              onChange={(event) => setTechnology(event.target.value)} className="bg-background" />
             <select aria-label="Độ khó" className="h-9 rounded-md border bg-background px-3 text-sm" value={level}
               onChange={(event) => setLevel(event.target.value)}>
               <option value="">Mọi độ khó</option><option value="BEGINNER">Beginner</option>
               <option value="INTERMEDIATE">Medium</option><option value="ADVANCED">Advanced</option>
             </select>
-            <Input aria-label="Vai trò" placeholder="Vai trò: FULLSTACK" value={role}
-              onChange={(event) => setRole(event.target.value)} className="bg-background" />
-            <Input aria-label="Chuẩn đầu ra" placeholder="Chuẩn đầu ra" value={outcome}
-              onChange={(event) => setOutcome(event.target.value)} className="bg-background" />
             <Input aria-label="Phân loại" placeholder="Phân loại" value={category}
               onChange={(event) => setCategory(event.target.value)} className="bg-background" />
             <div className="flex items-center gap-2">
@@ -175,9 +158,6 @@ export function TemplatePickerPanel({ classId, sessionId, teamId, teamName,
             <h3 className="text-lg font-semibold">{preview.data.template.name} · {preview.data.template.version}</h3>
             <p className="whitespace-pre-wrap text-sm">{briefText(preview.data.brief.description)
               || briefText(preview.data.brief.context) || preview.data.template.description}</p>
-            <div className="text-sm">Công nghệ: {preview.data.template.technologies.join(", ") || "Chưa phân loại"}</div>
-            <div className="text-sm">Vai trò: {preview.data.template.targetRoles.join(", ") || "Chưa phân loại"}</div>
-            <div className="text-sm">Chuẩn đầu ra: {preview.data.template.learningOutcomes.join(", ") || "Chưa phân loại"}</div>
             <div className="text-sm">Quy mô: {preview.data.template.minMembers}–{preview.data.template.maxMembers} thành viên</div>
             {briefRows(preview.data.brief.milestones).length > 0 && <section className="space-y-2">
               <h4 className="font-medium">Các mốc dự án</h4>
@@ -201,7 +181,7 @@ export function TemplatePickerPanel({ classId, sessionId, teamId, teamName,
             {items.length === 0 && <div className="rounded-lg border p-6 text-center">
               <p>Không tìm thấy đề bài mẫu phù hợp</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Danh sách chỉ gồm đề bài ACTIVE thuộc Tenant/Cohort của nhóm và có phiên bản đã công bố.
+                Danh sách chỉ gồm đề bài ACTIVE thuộc Tenant của nhóm và có phiên bản đã công bố.
               </p>
               <Button variant="outline" className="mt-2" onClick={clear}>Xóa bộ lọc</Button>
             </div>}

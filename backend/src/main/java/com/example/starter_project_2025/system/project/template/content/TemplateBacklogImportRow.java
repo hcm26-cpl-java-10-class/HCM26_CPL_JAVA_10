@@ -8,7 +8,4 @@ public class TemplateBacklogImportRow {
 
     @ImportField(name = "Description")
     String description;
-
-    @ImportField(name = "SuggestedRole")
-    String suggestedRole;
 }

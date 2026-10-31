@@ -1,4 +1,4 @@
-package com.example.starter_project_2025.system.project.template.assignment;
+package com.example.starter_project_2025.system.project.allocation;
 
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserPrincipal;
@@ -17,7 +17,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -45,26 +44,25 @@ public class TemplateCandidateService {
 
     public record Candidate(Long templateId, Long versionId, String version, String code, String name,
             String description, String category, ProjectTemplateLevel level, Integer durationWeeks,
-            Set<String> technologies, Set<String> targetRoles, Set<String> learningOutcomes,
             int minMembers, int maxMembers, boolean capacityMatch) {}
 
     public record Preview(Candidate template, JsonNode brief) {}
 
     public Page<Candidate> search(Long classId, Long sessionId, Long teamId, Authentication auth,
-            String q, List<String> technologies, ProjectTemplateLevel level, String category,
-            List<String> roles, List<String> outcomes, int page, int size) {
+            String q, ProjectTemplateLevel level, String category, int page, int size) {
         Context context = requireContext(classId, sessionId, teamId, auth);
         if (page < 0 || size < 1 || size > 50 || (q != null && q.length() > 120)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid pagination or search term");
         }
-        Page<ProjectTemplate> rows = templates.findAll(eligible(context, q, technologies, level, category, roles, outcomes),
+        Page<ProjectTemplate> rows = templates.findAll(eligible(context, q, level, category),
                 PageRequest.of(page, size, Sort.by(Sort.Order.asc("name"), Sort.Order.asc("id"))));
         if (rows.isEmpty()) return rows.map(template -> candidate(template, context.memberCount(), published(template.getId())));
         List<Long> ids = rows.getContent().stream().map(ProjectTemplate::getId).toList();
         Map<Long, ProjectTemplateSnapshot> currentVersions = versions
-                .findByTemplateIdInAndStatusAndIsActiveTrueOrderByCreatedAtDescIdDesc(
-                        ids, ProjectTemplateVersionStatus.PUBLISHED)
-                .stream().collect(Collectors.toMap(ProjectTemplateSnapshot::getTemplateId,
+                .findAllByTemplateIdInAndProjectIdIsNullAndIsActiveTrueOrderByCreatedAtDescIdDesc(
+                        ids)
+                .stream().filter(version -> version.getStatus() == ProjectTemplateVersionStatus.PUBLISHED)
+                .collect(Collectors.toMap(ProjectTemplateSnapshot::getTemplateId,
                         Function.identity(), (first, ignored) -> first));
         return rows.map(template -> candidate(template, context.memberCount(),
                 currentVersions.get(template.getId())));
@@ -72,8 +70,7 @@ public class TemplateCandidateService {
 
     public Preview preview(Long classId, Long sessionId, Long teamId, Long templateId, Authentication auth) {
         Context context = requireContext(classId, sessionId, teamId, auth);
-        ProjectTemplate template = templates.findOne(eligible(context, null, List.of(), null, null,
-                        List.of(), List.of()).and((root, query, cb) -> cb.equal(root.get("id"), templateId)))
+        ProjectTemplate template = templates.findOne(eligible(context, null, null, null).and((root, query, cb) -> cb.equal(root.get("id"), templateId)))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Template is no longer available"));
         ProjectTemplateSnapshot version = published(template.getId());
         try {
@@ -119,13 +116,10 @@ public class TemplateCandidateService {
                 members.countByTeam_Id(team.getId()));
     }
 
-    static Specification<ProjectTemplate> eligible(Context context, String q, List<String> tech,
-            ProjectTemplateLevel level, String category, List<String> roles, List<String> outcomes) {
+    static Specification<ProjectTemplate> eligible(Context context, String q, ProjectTemplateLevel level, String category) {
         return (root, query, cb) -> {
             List<Predicate> all = new ArrayList<>();
             all.add(cb.equal(root.get("tenantId"), context.tenantId()));
-            all.add(cb.or(cb.isNull(root.get("cohortId")),
-                    cb.equal(root.get("cohortId"), context.cohortId() == null ? -1L : context.cohortId())));
             all.add(cb.isTrue(root.get("isActive")));
             all.add(cb.equal(root.get("status"), ProjectTemplateStatus.ACTIVE));
             Subquery<Long> published = query.subquery(Long.class);
@@ -144,28 +138,12 @@ public class TemplateCandidateService {
             if (level != null) all.add(cb.equal(root.get("level"), level));
             if (category != null && !category.isBlank())
                 all.add(cb.equal(cb.lower(root.get("category")), category.strip().toLowerCase(Locale.ROOT)));
-            tagPredicate(all, cb, root.get("technologies"), tech);
-            tagPredicate(all, cb, root.get("targetRoles"), roles);
-            tagPredicate(all, cb, root.get("learningOutcomes"), outcomes);
             return cb.and(all.toArray(Predicate[]::new));
         };
     }
 
-    private static void tagPredicate(List<Predicate> all, jakarta.persistence.criteria.CriteriaBuilder cb,
-            jakarta.persistence.criteria.Expression<java.util.Collection<String>> field, List<String> values) {
-        if (values == null || values.isEmpty()) return;
-        if (values.size() > 20) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Too many filters");
-        List<Predicate> any = new ArrayList<>();
-        for (String value : values) {
-            if (value == null || value.isBlank() || value.length() > 120)
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid filter");
-            any.add(cb.isMember(value.strip().toUpperCase(Locale.ROOT), field));
-        }
-        all.add(cb.or(any.toArray(Predicate[]::new)));
-    }
-
     private ProjectTemplateSnapshot published(Long templateId) {
-        return versions.findFirstByTemplateIdAndStatusAndIsActiveTrueOrderByCreatedAtDescIdDesc(
+        return versions.findFirstByTemplateIdAndStatusAndIsActiveTrueOrderByCreatedAtDesc(
                 templateId, ProjectTemplateVersionStatus.PUBLISHED)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Published version not found"));
     }
@@ -175,8 +153,7 @@ public class TemplateCandidateService {
         var capacity = ProjectTemplateConstraints.parse(mapper, template, null);
         return new Candidate(template.getId(), version.getId(), version.getVersion(), template.getCode(),
                 template.getName(), template.getDescription(), template.getCategory(), template.getLevel(),
-                template.getEstimatedDurationWeeks(), Set.copyOf(template.getTechnologies()),
-                Set.copyOf(template.getTargetRoles()), Set.copyOf(template.getLearningOutcomes()),
+                template.getEstimatedDurationWeeks(),
                 capacity.minMembers(), capacity.maxMembers(), capacity.accepts(count));
     }
 }

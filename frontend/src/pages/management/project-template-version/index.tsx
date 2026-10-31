@@ -1,53 +1,27 @@
-import { projectTemplateVersionApi } from "@/api";
+import { projectTemplateVersionApi } from "@/api/features/project-template-version.api";
 import { usePermissions } from "@/hooks/usePermissions";
-import { AutoCrudPage } from "@/pages/management/AutoCrudPage";
-import type { EntityConfig, ProjectTemplateVersionDTO } from "@/types";
-import { ADMIN_ROLE, normalizeRole } from "@/utils/rbac.utils";
-import { ProjectTemplateVersionCard } from "./components/ProjectTemplateVersionCard";
-import { projectTemplateVersionAdminEntityConfig } from "./project-template-version.admin.config";
+import { ProjectTemplateError, ProjectTemplateLoading } from "@/pages/management/project-template/components/ProjectTemplateState";
+import { useQuery } from "@tanstack/react-query";
+import { Navigate, useSearchParams } from "react-router-dom";
+import type { EntityConfig } from "@/types";
 import { projectTemplateVersionSchema } from "./project-template-version.schema";
-import { CloneTemplateButton } from "./workspace/CloneTemplateButton";
-import { CreateNewVersionButton } from "./workspace/CreateNewVersionButton";
-import ProjectTemplateVersionWorkspacePage from "./workspace/ProjectTemplateVersionWorkspacePage";
-
-/**
- * Project template version route (`/project-template-versions`), rendered per
- * role and cloned from the sprint page (`/sprints`):
- * <ul>
- *   <li><b>Admin</b>: the generic CRUD data table driven by
- *       {@link projectTemplateVersionAdminEntityConfig}.</li>
- *   <li><b>Student</b> (and every other persona): the template version
- *       workspace built by {@link ProjectTemplateVersionWorkspacePage}, with
- *       the version ribbon, the overview KPIs and the version catalogue.</li>
- * </ul>
- * The entity config below keeps the route registered in `buildEntityRoutes`
- * and documents the schema, permissions and browse-mode behaviour of the
- * Project Template Version entity.
- */
-/**
- * Admin table flavour: the generic CRUD table plus the two template lifecycle
- * actions — "Create new version" (US-07) and "Clone template" (US-08) — so the
- * Program Manager can version a template straight from the table.
- */
-const adminEntityConfig: EntityConfig = {
-  ...projectTemplateVersionAdminEntityConfig,
-  extraRowActions: (row) => (
-    <>
-      <CreateNewVersionButton version={row as ProjectTemplateVersionDTO} />
-      <CloneTemplateButton version={row as ProjectTemplateVersionDTO} />
-    </>
-  ),
-};
 
 export default function ProjectTemplateVersionPage() {
-  const { activeRole } = usePermissions();
-  const isAdmin = normalizeRole(activeRole) === ADMIN_ROLE;
-
-  if (isAdmin) {
-    return <AutoCrudPage entity={adminEntityConfig} />;
+  const [params] = useSearchParams();
+  const { user, activeRole } = usePermissions();
+  const templateId = params.get("templateId");
+  const versionId = params.get("versionId") ?? params.get("version");
+  const query = useQuery({ queryKey: ["project-template-versions", user.email, activeRole, "redirect", versionId],
+    queryFn: () => projectTemplateVersionApi.getById(versionId!), enabled: !templateId && !!versionId && /^\d+$/.test(versionId), retry: false });
+  if (templateId && /^\d+$/.test(templateId)) {
+    return <Navigate replace to={`/project-templates/${templateId}/detail?tab=versions${versionId && /^\d+$/.test(versionId) ? `&version=${versionId}` : ""}`} />;
   }
-
-  return <ProjectTemplateVersionWorkspacePage />;
+  if (versionId && /^\d+$/.test(versionId)) {
+    if (query.isError) return <ProjectTemplateError error={query.error} onRetry={() => void query.refetch()} />;
+    if (!query.data) return <ProjectTemplateLoading />;
+    return <Navigate replace to={`/project-templates/${query.data.templateId}/detail?tab=versions&version=${versionId}`} />;
+  }
+  return <Navigate replace to="/project-templates" />;
 }
 
 export const entityConfig: EntityConfig = {
@@ -55,17 +29,4 @@ export const entityConfig: EntityConfig = {
   path: "/project-template-versions",
   api: projectTemplateVersionApi,
   schema: projectTemplateVersionSchema,
-  /**
-   * Versions are rendered as stacked full-width rows so the version label,
-   * template / project ids and creation time stay readable.
-   */
-  cardRenderer: (props) => <ProjectTemplateVersionCard {...props} />,
-  cardLayout: "list",
-  /**
-   * Students browse in the read-only card layout but keep full CRUD on the
-   * versions they can see, gated by the matching
-   * PROJECT_TEMPLATE_VERSION_* permissions.
-   */
-  browseModeCreate: true,
-  browseModeActions: true,
 };

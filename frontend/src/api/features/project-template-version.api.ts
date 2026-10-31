@@ -1,5 +1,7 @@
 import { createBaseApiService } from "@/api/base-service.api";
 import axiosInstance from "@/api/axios";
+import type { TemplateVersionConfiguration } from "@/types/features/project-template-version";
+import type { ProjectTemplatePayload, TemplateTeamConstraintsPayload, TemplateMilestonePlanPayload, TemplateSampleContentPayload, TemplateBacklogInput } from "@/types/features/project-template";
 import type {
   ProjectTemplateVersionAuditLog,
   ProjectTemplateVersionDTO,
@@ -16,6 +18,32 @@ const base = createBaseApiService<
 });
 
 export const projectTemplateVersionApi = Object.assign({}, base, {
+  async getConfiguration(id: number, signal?: AbortSignal): Promise<TemplateVersionConfiguration> {
+    return (await axiosInstance.get<TemplateVersionConfiguration>(`${path}/${id}/configuration`, { signal })).data;
+  },
+  async saveOverview(id: number, payload: ProjectTemplatePayload): Promise<TemplateVersionConfiguration> {
+    return (await axiosInstance.put<TemplateVersionConfiguration>(`${path}/${id}/configuration/overview`, payload)).data;
+  },
+  async saveTeam(id: number, payload: TemplateTeamConstraintsPayload): Promise<TemplateVersionConfiguration> {
+    return (await axiosInstance.put<TemplateVersionConfiguration>(`${path}/${id}/configuration/team-constraints`, payload)).data;
+  },
+  async saveMilestones(id: number, payload: TemplateMilestonePlanPayload): Promise<TemplateVersionConfiguration> {
+    return (await axiosInstance.put<TemplateVersionConfiguration>(`${path}/${id}/configuration/milestones`, payload)).data;
+  },
+  async saveBacklog(id: number, payload: TemplateSampleContentPayload): Promise<TemplateVersionConfiguration> {
+    return (await axiosInstance.put<TemplateVersionConfiguration>(`${path}/${id}/configuration/sample-content`, payload)).data;
+  },
+  async publish(id: number, lockVersion: number): Promise<TemplateVersionConfiguration> {
+    return (await axiosInstance.post<TemplateVersionConfiguration>(`${path}/${id}/publish`, { lockVersion })).data;
+  },
+  async previewBacklogImport(id: number, file: File): Promise<TemplateBacklogInput[]> {
+    const form = new FormData(); form.append("file", file);
+    return (await axiosInstance.post<TemplateBacklogInput[]>(`${path}/${id}/backlog-import-preview`, form,
+      { headers: { "Content-Type": undefined } })).data;
+  },
+  async getBacklogImportTemplate(id: number): Promise<Blob> {
+    return (await axiosInstance.get<Blob>(`${path}/${id}/backlog-import-template`, { responseType: "blob" })).data;
+  },
   /**
    * US-07: seeds the baseline `v1.0` / `DRAFT` version of a template that does
    * not own any version yet (template created before the version chain was

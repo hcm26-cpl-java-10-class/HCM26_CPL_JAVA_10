@@ -104,7 +104,7 @@ export const statusMeta = (status?: ProjectTemplateVersionStatus | null) => {
   switch (status) {
     case "PUBLISHED":
       return {
-        label: "Published",
+    label: "Active",
         badge:
           "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
         dot: "bg-emerald-500",

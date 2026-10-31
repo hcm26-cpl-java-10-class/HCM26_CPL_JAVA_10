@@ -2,7 +2,6 @@ package com.example.starter_project_2025.system.project.template.content;
 
 import com.example.starter_project_2025.base.dataio.importer.parser.ParserFactory;
 import com.example.starter_project_2025.base.dataio.template.service.ImportTemplateService;
-import com.example.starter_project_2025.system.project.ProjectMemberRole;
 import com.example.starter_project_2025.system.project.template.ProjectTemplateException;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
@@ -22,11 +21,19 @@ public class TemplateBacklogImportService {
 
     public byte[] template(Long id) {
         content.requireDraft(id);
+        return templateFile();
+    }
+
+    public byte[] templateFile() {
         return importTemplates.generateTemplate(TemplateBacklogImportRow.class);
     }
 
     public List<TemplateSampleContentRequest.BacklogItem> preview(Long id, MultipartFile file) {
         content.requireDraft(id);
+        return previewFile(file);
+    }
+
+    public List<TemplateSampleContentRequest.BacklogItem> previewFile(MultipartFile file) {
         if (file == null || file.isEmpty() || file.getSize() > policy.maxBytes()) {
             throw invalidFile("Choose a non-empty Excel or CSV file within the upload size limit");
         }
@@ -47,11 +54,11 @@ public class TemplateBacklogImportService {
         Set<String> headers = new HashSet<>();
         for (String raw : rows.getFirst().keySet()) {
             String name = header(raw);
-            if (!Set.of("title", "description", "suggestedrole").contains(name) || !headers.add(name)) {
-                throw invalidFile("Use unique Title, Description and SuggestedRole columns");
+            if (!Set.of("title", "description").contains(name) || !headers.add(name)) {
+                throw invalidFile("Use only unique Title and Description columns");
             }
         }
-        if (!headers.containsAll(Set.of("title", "suggestedrole"))) throw invalidFile("Title and SuggestedRole columns are required");
+        if (!headers.containsAll(Set.of("title", "description"))) throw invalidFile("Title and Description columns are required");
         List<TemplateSampleContentRequest.BacklogItem> items = new ArrayList<>();
         List<Integer> rowNumbers = new ArrayList<>();
         for (int i = 0; i < rows.size(); i++) {
@@ -59,10 +66,7 @@ public class TemplateBacklogImportService {
             if (row.values().stream().allMatch(value -> value == null || value.isBlank())) continue;
             Map<String, String> normalized = new HashMap<>();
             row.forEach((key, value) -> normalized.put(header(key), value == null ? "" : value.strip()));
-            ProjectMemberRole role = null;
-            try { role = ProjectMemberRole.valueOf(normalized.getOrDefault("suggestedrole", "").toUpperCase(Locale.ROOT)); }
-            catch (IllegalArgumentException ignored) { }
-            items.add(new TemplateSampleContentRequest.BacklogItem(null, normalized.get("title"), normalized.get("description"), role));
+            items.add(new TemplateSampleContentRequest.BacklogItem(null, normalized.get("title"), normalized.get("description"), null));
             rowNumbers.add(i + 2);
         }
         if (items.isEmpty()) throw invalidFile("The file does not contain any backlog items");

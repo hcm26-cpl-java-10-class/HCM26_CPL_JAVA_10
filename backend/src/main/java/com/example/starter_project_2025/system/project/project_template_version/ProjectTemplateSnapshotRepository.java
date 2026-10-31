@@ -12,6 +12,11 @@ public interface ProjectTemplateSnapshotRepository
 
     boolean existsByTemplateIdAndProjectIdIsNotNull(Long templateId);
 
+    boolean existsByParentTemplateId(Long parentTemplateId);
+
+    List<ProjectTemplateSnapshot> findAllByTemplateIdInAndProjectIdIsNullAndIsActiveTrueOrderByCreatedAtDescIdDesc(
+            java.util.Collection<Long> templateIds);
+
     @org.springframework.data.jpa.repository.Query("select version from ProjectTemplateSnapshot version where version.templateId = :templateId order by version.createdAt desc, version.id desc")
     List<ProjectTemplateSnapshot> findByTemplateIdOrderByCreatedAtDesc(Long templateId);
 
@@ -24,16 +29,9 @@ public interface ProjectTemplateSnapshotRepository
     Optional<ProjectTemplateSnapshot> findFirstByTemplateIdAndStatusAndIsActiveTrueOrderByCreatedAtDesc(
             Long templateId, ProjectTemplateVersionStatus status);
 
-    Optional<ProjectTemplateSnapshot> findFirstByTemplateIdAndStatusAndIsActiveTrueOrderByCreatedAtDescIdDesc(
-            Long templateId, ProjectTemplateVersionStatus status);
-
-    List<ProjectTemplateSnapshot> findByTemplateIdInAndStatusAndIsActiveTrueOrderByCreatedAtDescIdDesc(
-            List<Long> templateIds, ProjectTemplateVersionStatus status);
-
     /**
      * Used by the sample data seeder to upsert a version per template without
-     * duplicating rows (mirrors
-     * {@code SprintRepository#findFirstByProjectIdAndNameOrderByIdAsc}).
+     * duplicating rows (mirrors {@code SprintRepository#findByName}).
      */
     Optional<ProjectTemplateSnapshot> findFirstByTemplateIdAndVersion(Long templateId, String version);
 

@@ -4,14 +4,18 @@ import axios from "axios";
 export interface TaskFormValues {
   title: string;
   description: string;
-  assigneeProjectMemberId: string;
   estimatedHours: string;
   deadline: string;
   priority: TaskPriority;
-  tags: string[];
 }
 
 export type TaskFieldErrors = Record<string, string[] | undefined>;
+
+export const maxTaskDescriptionWords = 1000;
+
+export function taskDescriptionWordCount(value: string): number {
+  return value.trim() ? value.trim().split(/\s+/u).length : 0;
+}
 
 export const taskStatusOptions = [
   { value: "TODO", label: "To Do" },
@@ -20,6 +24,9 @@ export const taskStatusOptions = [
   { value: "DONE", label: "Done" },
   { value: "BLOCKED", label: "Blocked" },
 ] as const;
+
+export const subtaskStatusOptions = taskStatusOptions.filter(option =>
+  option.value === "TODO" || option.value === "IN_PROGRESS" || option.value === "DONE");
 
 export const taskPriorityOptions = [
   { value: "LOW", label: "Low" },
@@ -38,49 +45,28 @@ export function toTaskFormValues(task?: TaskDTO): TaskFormValues {
   return {
     title: task?.title ?? "",
     description: task?.description ?? "",
-    assigneeProjectMemberId: task?.assigneeProjectMemberId ?? "",
     estimatedHours: task?.estimatedHours == null ? "" : String(task.estimatedHours),
     deadline: task?.deadline ? new Date(new Date(task.deadline).getTime()
       - new Date(task.deadline).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "",
     priority: task?.priority ?? "MEDIUM",
-    tags: task?.tags ?? [],
   };
 }
 
-export function normalizeTags(tags: string[]): string[] {
-  const names = new Map<string, string>();
-  for (const tag of tags) {
-    const name = tag.trim();
-    if (!names.has(name.toLowerCase())) names.set(name.toLowerCase(), name);
-  }
-  return [...names.values()];
-}
-
-export function countWords(text: string): number {
-  const trimmed = text.trim();
-  if (!trimmed) return 0;
-  return trimmed.split(/\s+/).length;
-}
-
-export function validateTaskForm(values: TaskFormValues): TaskFieldErrors {
+export function validateTaskForm(values: TaskFormValues, estimateRequired = false): TaskFieldErrors {
   const errors: TaskFieldErrors = {};
-  const wordCount = countWords(values.description);
-  if (wordCount > 1000) {
-    errors.description = ["Mô tả subtask không được vượt quá 1000 từ (hiện tại: " + wordCount + " từ)"];
-  }
   const title = values.title.trim();
   if (!title || title.length > 250) {
     errors.title = ["Task title must contain 1 to 250 characters"];
   }
-  if (values.assigneeProjectMemberId && !isProjectId(values.assigneeProjectMemberId)) {
-    errors.assigneeProjectMemberId = ["Please select a valid project member"];
+  if (taskDescriptionWordCount(values.description) > maxTaskDescriptionWords) {
+    errors.description = ["Description must not exceed 1000 words"];
   }
   const hours = values.estimatedHours.trim();
   if (values.deadline && Number.isNaN(new Date(values.deadline).getTime())) {
     errors.deadline = ["Please enter a valid deadline"];
   }
   if (
-    (values.assigneeProjectMemberId && !hours) ||
+    (estimateRequired && !hours) ||
     (hours &&
       (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(hours) ||
         !Number.isFinite(Number(hours)) ||
@@ -90,9 +76,6 @@ export function validateTaskForm(values: TaskFormValues): TaskFieldErrors {
   }
   if (!taskPriorityOptions.some((option) => option.value === values.priority)) {
     errors.priority = ["Please select a valid priority"];
-  }
-  if (values.tags.some((tag) => !tag.trim() || tag.trim().length > 100)) {
-    errors.tags = ["Tags must contain 1 to 100 characters"];
   }
   return errors;
 }
@@ -106,13 +89,13 @@ export function toTaskPayload(
     projectId,
     sprintId: task?.sprintId ?? null,
     milestoneId: task?.milestoneId ?? null,
-    assigneeProjectMemberId: values.assigneeProjectMemberId || null,
+    assigneeProjectMemberId: task?.assigneeProjectMemberId ?? null,
     title: values.title.trim(),
     description: values.description.trim() || null,
     estimatedHours: values.estimatedHours.trim() ? Number(values.estimatedHours) : null,
     deadline: values.deadline ? new Date(values.deadline).toISOString() : null,
     priority: values.priority,
-    tags: normalizeTags(values.tags),
+    tags: task?.tags ?? [],
     ...(task ? { version: task.version } : {}),
   };
 }

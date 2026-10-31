@@ -180,7 +180,7 @@ export interface TemplateBacklogItem {
   id: number;
   title: string;
   description: string | null;
-  suggestedRole: TemplateSuggestedRole;
+  suggestedRole: TemplateSuggestedRole | null;
   orderIndex: number;
 }
 
@@ -198,7 +198,7 @@ export interface TemplateBacklogInput {
   id?: number | null;
   title: string;
   description: string;
-  suggestedRole: TemplateSuggestedRole;
+  suggestedRole?: TemplateSuggestedRole | null;
 }
 
 export interface TemplateSampleContentPayload {
@@ -223,10 +223,6 @@ export interface ProjectTemplateDTO {
   editable: boolean;
   /** Shared catalogue row (tenant_id is null): readable by every tenant, never editable. */
   readOnly: boolean;
-  cohortId: number | null;
-  technologies: string[];
-  targetRoles: string[];
-  learningOutcomes: string[];
 }
 
 export interface ProjectTemplatePayload {
@@ -237,10 +233,22 @@ export interface ProjectTemplatePayload {
   level: ProjectTemplateLevel;
   estimatedDurationWeeks: number;
   lockVersion?: number;
-  cohortId?: number | null;
-  technologies?: string[];
-  targetRoles?: string[];
-  learningOutcomes?: string[];
+}
+
+export interface ProjectTemplateListItem extends ProjectTemplateDTO {
+  rowId: string;
+  versionId: number | null;
+  versionLabel: string;
+  latestVersion: boolean;
+  templateStatus: ProjectTemplateStatus;
+}
+
+export interface TemplateVersionListResponse {
+  template: ProjectTemplateDTO;
+  versionId: number | null;
+  versionLabel: string;
+  latestVersion: boolean;
+  templateStatus: ProjectTemplateStatus;
 }
 
 export interface ProjectTemplateFilter {

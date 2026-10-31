@@ -12,10 +12,9 @@ public enum TaskStatus {
     public List<TaskStatus> nextStatuses() {
         return switch (this) {
             case TODO -> List.of(IN_PROGRESS);
-            case IN_PROGRESS -> List.of(REVIEW, BLOCKED);
-            case REVIEW -> List.of(DONE, IN_PROGRESS);
-            case BLOCKED -> List.of(IN_PROGRESS);
-            case DONE -> List.of();
+            case IN_PROGRESS -> List.of(TODO, DONE);
+            case DONE -> List.of(IN_PROGRESS);
+            case REVIEW, BLOCKED -> List.of(IN_PROGRESS);
         };
     }
 }

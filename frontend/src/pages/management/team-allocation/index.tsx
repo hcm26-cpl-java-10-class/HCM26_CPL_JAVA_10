@@ -1,4 +1,5 @@
-import { projectTemplateApi, teamAllocationApi } from "@/api";
+import { teamAllocationApi } from "@/api";
+import { teamTemplateApi } from "@/api/features/team-template.api";
 import { TemplatePickerPanel } from "./TemplatePickerPanel";
 import type { TemplateCandidate } from "@/types/features/template-candidate";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -2896,9 +2897,8 @@ function SavedTeamCard({
   const templatesQuery = useQuery({
     queryKey: ["template-candidates", "quick-options", identity.user.email,
       identity.activeRole, classId, sessionId, team.teamId],
-    queryFn: ({ signal }) => projectTemplateApi.searchCandidates(classId, sessionId,
-      team.teamId, { q: "", technologies: [], level: "", category: "", roles: [],
-        outcomes: [], page: 0, size: 50 }, signal),
+    queryFn: ({ signal }) => teamTemplateApi.search(classId, sessionId,
+      team.teamId, { q: "", level: "", category: "", page: 0, size: 50 }, signal),
     enabled: detailsOpen && team.status === "DRAFT" && canAssignTemplate,
     retry: false,
   });

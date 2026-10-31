@@ -79,13 +79,7 @@ public class ProjectTeamTemplateService {
     @Transactional(readOnly = true)
     public List<ProjectTemplateOptionResponse> getAssignableTemplates() {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
-        Long userId = currentUserId(authentication);
-        boolean leadsDraftTeam = projectMemberRepository.findLeaderTeams(userId,
-                ClassMemberStatus.ACTIVE, ProjectTeamStatus.DRAFT, TEAM_LEADER_ROLE)
-                .stream().anyMatch(member -> Objects.equals(
-                        member.getTeam().getTrainingClass().getTenantId(),
-                        ((UserPrincipal) authentication.getPrincipal()).getUser().getTenantId()));
-        if (!leadsDraftTeam) return List.of();
+        currentUserId(authentication);
         Long tenantId = ((UserPrincipal) authentication.getPrincipal()).getUser().getTenantId();
         return projectTemplateRepository.findAll().stream()
                 .filter(template -> Boolean.TRUE.equals(template.getIsActive()))
@@ -161,11 +155,10 @@ public class ProjectTeamTemplateService {
                 .orElseThrow(() -> new ResourceNotFoundException("ProjectTeam", "id", teamId));
 
         ProjectTemplate template = findActiveTemplate(projectTemplateId, team.getTrainingClass().getTenantId());
-        if (template.getTenantId() == null
-                || (template.getCohortId() != null && !template.getCohortId().equals(team.getTrainingClass().getCohortId()))) {
+        if (template.getTenantId() == null) {
             throw new AccessDeniedException("Template is outside the team scope");
         }
-        var published = versions.findFirstByTemplateIdAndStatusAndIsActiveTrueOrderByCreatedAtDescIdDesc(
+        var published = versions.findFirstByTemplateIdAndStatusAndIsActiveTrueOrderByCreatedAtDesc(
                 template.getId(), ProjectTemplateVersionStatus.PUBLISHED)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
                         "Template has no published version"));
@@ -200,7 +193,7 @@ public class ProjectTeamTemplateService {
         }
 
         ProjectTemplate template = findActiveTemplate(projectTemplateId, team.getTrainingClass().getTenantId());
-        var published = versions.findFirstByTemplateIdAndStatusAndIsActiveTrueOrderByCreatedAtDescIdDesc(
+        var published = versions.findFirstByTemplateIdAndStatusAndIsActiveTrueOrderByCreatedAtDesc(
                 template.getId(), ProjectTemplateVersionStatus.PUBLISHED)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
                         "Template has no published version"));
