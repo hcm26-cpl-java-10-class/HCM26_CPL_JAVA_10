@@ -36,7 +36,7 @@ public class TrainingProgram extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default
-    ProgramStatus status = ProgramStatus.DRAFT;
+    ProgramStatus status = ProgramStatus.ACTIVE;
 
     @OneToMany(mappedBy = "program", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("orderIndex ASC")

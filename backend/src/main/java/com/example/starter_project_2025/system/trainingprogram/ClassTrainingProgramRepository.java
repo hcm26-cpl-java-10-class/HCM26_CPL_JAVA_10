@@ -6,4 +6,6 @@ import java.util.Optional;
 
 public interface ClassTrainingProgramRepository extends JpaRepository<ClassTrainingProgram, Long> {
     Optional<ClassTrainingProgram> findByClassId(Long classId);
+
+    boolean existsByProgram_Id(Long programId);
 }

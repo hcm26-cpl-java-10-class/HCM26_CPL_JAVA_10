@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { AlertCircle, BookOpen, CheckCircle2, Clock3, CopyPlus, LoaderCircle, MapPin, Pencil } from "lucide-react";
+import { AlertCircle, BookOpen, CheckCircle2, Clock3, CopyPlus, LoaderCircle, MapPin } from "lucide-react";
 import type { TrainingProgramResponse } from "@/api/features/program.api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -13,12 +13,11 @@ interface ProgramDetailsProps {
   canCreate: boolean;
   canUpdate: boolean;
   onClose: () => void;
-  onEdit: () => void;
   onClone: () => void;
   onActivate: () => void;
 }
 
-export function ProgramDetails({ program, canCreate, canUpdate, onClose, onEdit, onClone, onActivate }: ProgramDetailsProps) {
+export function ProgramDetails({ program, canCreate, canUpdate, onClose, onClone, onActivate }: ProgramDetailsProps) {
   return <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
     <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto p-0 sm:max-w-2xl">
       <DialogHeader className="space-y-3 px-6 pt-6 pr-12">
@@ -40,12 +39,11 @@ export function ProgramDetails({ program, canCreate, canUpdate, onClose, onEdit,
           </li>)}
           {!program.subjects.length && <li className="py-8 text-center text-muted-foreground">Chưa có môn học trong chương trình.</li>}
         </ol>
-        <p className="text-xs leading-5 text-muted-foreground">{program.status === "DRAFT" ? "Bản nháp có thể chỉnh sửa. Kích hoạt khi chương trình đã sẵn sàng để gán cho lớp." : "Để thay đổi nội dung, hãy tạo phiên bản mới. Phiên bản hiện tại được giữ nguyên."}</p>
+        <p className="text-xs leading-5 text-muted-foreground">{program.status === "ACTIVE" ? "Chương trình đang được sử dụng. Tạo phiên bản mới để thay đổi nội dung mà không ảnh hưởng lớp đã gán." : "Chương trình đã ngừng sử dụng. Có thể kích hoạt lại sau khi kiểm tra các môn học."}</p>
       </div>
       <div className="flex flex-wrap justify-end gap-2 border-t bg-muted/30 p-4">
         <Button variant="outline" onClick={onClose}>Đóng</Button>
         {canCreate && <Button variant="outline" onClick={onClone}><CopyPlus />Tạo phiên bản mới</Button>}
-        {canUpdate && program.status === "DRAFT" && <Button variant="outline" onClick={onEdit}><Pencil />Chỉnh sửa</Button>}
         {canUpdate && program.status !== "ACTIVE" && <Button className={primaryButtonClass} onClick={onActivate}><CheckCircle2 />{program.status === "INACTIVE" ? "Kích hoạt lại" : "Kích hoạt"}</Button>}
       </div>
     </DialogContent>
@@ -78,13 +76,13 @@ export function ProgramActionDialog({ action, programs, onClose, onConfirm }: {
   return <Dialog open onOpenChange={(open) => { if (!open && !saving) onClose(); }}>
     <DialogContent className="sm:max-w-md" showCloseButton={!saving}>
       <DialogHeader><DialogTitle className="text-lg font-semibold">{isClone ? "Tạo phiên bản mới" : "Kích hoạt chương trình?"}</DialogTitle>
-        <DialogDescription>{isClone ? "Sao chép các môn học sang một bản nháp mới để tiếp tục chỉnh sửa." : "Chương trình sẽ sẵn sàng để gán cho lớp. Sau khi kích hoạt, bạn cần tạo phiên bản mới để chỉnh sửa nội dung."}</DialogDescription></DialogHeader>
+        <DialogDescription>{isClone ? "Sao chép đầy đủ thông tin, môn học và thứ tự sang một phiên bản ACTIVE mới." : "Chương trình sẽ sẵn sàng để gán cho lớp. Sau khi kích hoạt, bạn cần tạo phiên bản mới để chỉnh sửa nội dung."}</DialogDescription></DialogHeader>
       <form onSubmit={submit} className="space-y-4">
         <div className="rounded-lg border bg-muted/30 p-3"><p className="font-medium">{action.program.name}</p><p className="mt-1 text-xs text-muted-foreground">{action.program.code} · Phiên bản {action.program.version} · {action.program.subjects.length} môn</p></div>
         {isClone && <div className="space-y-2"><Label htmlFor="clone-version">Phiên bản mới <span className="text-destructive">*</span></Label><Input id="clone-version" required autoFocus maxLength={30} placeholder="VD: 1.1 hoặc 2.0" disabled={saving} value={version} aria-invalid={Boolean(error)} onChange={(event) => { setVersion(event.target.value); setError(""); }} /></div>}
         {error && <Alert variant="destructive"><AlertCircle /><AlertDescription>{error}</AlertDescription></Alert>}
         <div className="flex justify-end gap-2 pt-1"><Button type="button" variant="outline" disabled={saving} onClick={onClose}>Hủy</Button>
-          <Button type="submit" className={primaryButtonClass} disabled={saving}>{saving ? <LoaderCircle className="animate-spin" /> : isClone ? <CopyPlus /> : <CheckCircle2 />}{saving ? "Đang xử lý…" : isClone ? "Tạo bản nháp mới" : "Kích hoạt"}</Button></div>
+          <Button type="submit" className={primaryButtonClass} disabled={saving}>{saving ? <LoaderCircle className="animate-spin" /> : isClone ? <CopyPlus /> : <CheckCircle2 />}{saving ? "Đang xử lý…" : isClone ? "Tạo phiên bản ACTIVE" : "Kích hoạt"}</Button></div>
       </form>
     </DialogContent>
   </Dialog>;

@@ -71,7 +71,7 @@ export function ProgramEditor({ program, subjects, loadingSubjects, subjectsErro
     <DialogContent className="max-h-[calc(100dvh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-3xl" showCloseButton={!saving}>
       <DialogHeader className="border-b px-5 py-5 pr-12 sm:px-6">
         <DialogTitle className="text-xl font-semibold">{program ? "Chỉnh sửa chương trình" : "Tạo chương trình mới"}</DialogTitle>
-        <DialogDescription>Điền thông tin và chọn môn theo thứ tự giảng dạy. Chương trình sẽ được lưu dưới dạng bản nháp.</DialogDescription>
+        <DialogDescription>Điền thông tin và chọn môn theo thứ tự giảng dạy. Chương trình hợp lệ sẽ được lưu và đưa vào sử dụng ngay (ACTIVE).</DialogDescription>
       </DialogHeader>
       <form onSubmit={submit} className="flex min-h-0 flex-col overflow-hidden">
         <div className="min-h-0 space-y-6 overflow-y-auto px-5 py-5 sm:px-6">
@@ -128,7 +128,7 @@ export function ProgramEditor({ program, subjects, loadingSubjects, subjectsErro
           <p className="flex items-center gap-2 text-sm" aria-live="polite"><Clock3 className="size-4 text-muted-foreground" /><strong>{selected.length} môn</strong><span className="text-muted-foreground">·</span><strong>{totalHours} giờ</strong></p>
           <div className="flex gap-2"><Button type="button" variant="outline" disabled={saving} onClick={onClose}>Hủy</Button>
             <Button className={primaryButtonClass} type="submit" disabled={saving || loadingSubjects || Boolean(subjectsError) || unavailable}>
-              {saving ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}{saving ? "Đang lưu…" : "Lưu bản nháp"}
+              {saving ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}{saving ? "Đang lưu…" : "Lưu chương trình"}
             </Button></div>
         </div>
       </form>
