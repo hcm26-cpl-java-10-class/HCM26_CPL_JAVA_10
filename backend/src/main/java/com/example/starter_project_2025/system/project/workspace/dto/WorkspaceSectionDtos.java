@@ -23,7 +23,7 @@ public final class WorkspaceSectionDtos {
                              String projectCode, String projectName, String teamName,
                              ProjectStatus projectStatus, String taskKeyPrefix, List<Access> sections) { }
     public record BoardColumn(@NotBlank String key, @NotBlank @Size(max = 32) String label, boolean visible) { }
-    public record BoardColumns(@NotEmpty @Size(max = 8) List<@NotNull @Valid BoardColumn> columns) { }
+    public record BoardColumns(@NotEmpty @Size(min = 4, max = 4) List<@NotNull @Valid BoardColumn> columns) { }
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Item(String id, String title, String description, String status, boolean published,
                        Double score, java.time.Instant occurredAt) {

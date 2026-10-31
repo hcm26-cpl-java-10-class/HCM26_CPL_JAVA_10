@@ -49,6 +49,7 @@ import {
 } from "../../sprint-backlog/sprintBacklog.constants";
 import { extractErrorMessage } from "../../sprint/hooks/useSprintPlanningBoard";
 import {
+  canMoveToStatus,
   backlogPriorityMeta,
   backlogStatusMeta,
   backlogWorkTypeMeta,
@@ -280,8 +281,9 @@ export function BacklogItemDetailSheet({
         .map((value) => workflowStatuses.find((option) => option.value === value)
           ?? SPRINT_BACKLOG_STATUS_OPTIONS.find((option) => option.value === value))
         .filter((option): option is { value: SprintBacklogStatus; label: string } => option != null)
-    : [...SPRINT_BACKLOG_STATUS_OPTIONS, ...workflowStatuses.filter((custom) => !SPRINT_BACKLOG_STATUS_OPTIONS.some((known) => known.value === custom.value))]
-        .filter((option) => draft?.status !== "DONE" || option.value === "DONE" || option.value === "REVIEW");
+    : SPRINT_BACKLOG_STATUS_OPTIONS.filter(option => currentSprintId == null
+        ? option.value === "TODO"
+        : canMoveToStatus(draft?.status ?? detail?.status ?? "TODO", option.value));
 
   const save = async (patch: Partial<SprintBacklogDTO>) => {
     if (!item || !canEdit) return;

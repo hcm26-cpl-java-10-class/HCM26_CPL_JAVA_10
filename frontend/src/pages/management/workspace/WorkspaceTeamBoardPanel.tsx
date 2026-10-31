@@ -1,7 +1,6 @@
 import { refreshBacklogItem } from "@/lib/refresh-backlog-item";
 import { workItemAssigneeLabel, workItemAssigneeOptions } from "@/lib/work-item-assignee";
 import { teamBacklogApi } from "@/api/features/team-backlog.api";
-import { workspaceApi } from "@/api/features/workspace.api";
 import { sprintBacklogApi } from "@/api/features/sprint_backlog.api";
 import { milestoneApi } from "@/api/features/milestone.api";
 import { Badge } from "@/components/ui/badge";
@@ -10,13 +9,9 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { SprintBacklogDTO, SprintBacklogStatus, SprintDTO } from "@/types";
-import type { WorkspaceBoardColumn } from "@/types/features/workspace";
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Check, ChevronLeft, ChevronRight, Circle, CircleDot, Clock3, LayoutGrid, List, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, UserRound } from "lucide-react";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Activity, Check, ChevronLeft, ChevronRight, Circle, CircleDot, Clock3, LayoutGrid, List, Plus, RefreshCw, Search, UserRound } from "lucide-react";
 import { BacklogItemDetailSheet } from "@/pages/management/backlog/components/BacklogItemDetailSheet";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import type { BacklogPriority, SprintBacklogWorkType, SprintPlanningItem } from "@/types";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -76,21 +71,6 @@ function priorityStyle(priority?: string | null) {
   }
 }
 
-function boardSettingsErrorMessage(error: unknown) {
-  if (axios.isAxiosError(error)) {
-    const status = error.response?.status;
-    const data: unknown = error.response?.data;
-    const message = data && typeof data === "object" && "message" in data
-      ? (data as { message?: unknown }).message
-      : undefined;
-    if (status === 403) return "Bạn không có quyền cấu hình Board. Cần SPRINT_WRITE hoặc SPRINT_BACKLOG_UPDATE.";
-    if (typeof message === "string" && message.trim()) return `Không lưu được cấu hình Board: ${message}`;
-    if (status === 400 || status === 422) return "Cấu hình không hợp lệ. Kiểm tra tên cột, trạng thái trùng và cột đang bật.";
-    if (status === 409) return "Không thể xóa trạng thái đang được work item sử dụng.";
-  }
-  return "Không lưu được cấu hình Board. Hãy kiểm tra kết nối rồi thử lại; cấu hình cũ vẫn được giữ.";
-}
-
 function workTypeStyle(workType?: string | null) {
   switch (workType) {
     case "BUG": return "border-rose-200 bg-rose-50 text-rose-700";
@@ -121,12 +101,6 @@ function statusLabel(status?: string | null) {
     case "DONE": return "Done";
     default: return status ?? "—";
   }
-}
-
-function columnFor(key: BoardColumnKey, label: string, visible = true): BoardColumnConfig {
-  const known = DEFAULT_COLUMNS.find((column) => column.key === key);
-  return known ? { ...known, label, visible }
-    : { ...DEFAULT_COLUMNS[0], key, label, visible };
 }
 
 function auditValueLabel(key: string, value: unknown) {
@@ -178,7 +152,7 @@ function auditSummary(action: string, beforeState?: string | null, afterState?: 
   return { actionLabel, changes: [] as string[] };
 }
 
-export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMove, canDelete, canConfigureColumns, onCreateWorkItem }: { workspaceId: number; teamId: number; canUpdate: boolean; canMove: boolean; canDelete: boolean; canConfigureColumns: boolean; onCreateWorkItem?: () => void }) {
+export function WorkspaceTeamBoardPanel({ teamId, canUpdate, canMove, canDelete, onCreateWorkItem }: { teamId: number; canUpdate: boolean; canMove: boolean; canDelete: boolean; onCreateWorkItem?: () => void }) {
   const queryClient = useQueryClient();
   const [sprintId, setSprintId] = useState<number>();
   const [memberFilter, setMemberFilter] = useState("ALL");
@@ -197,52 +171,8 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
     enabled: detailItem !== null && teamId > 0,
     retry: false,
   });
-  const [columnsDialogOpen, setColumnsDialogOpen] = useState(false);
-  const [editingColumnKey, setEditingColumnKey] = useState<BoardColumnKey | null>(null);
-  const [boardColumns, setBoardColumns] = useState<BoardColumnConfig[]>(DEFAULT_COLUMNS);
-  const columnsQuery = useQuery({
-    queryKey: ["workspace-board-columns", workspaceId],
-    queryFn: () => workspaceApi.boardColumns(workspaceId), retry: false,
-  });
-  const persistedColumns = useMemo(() => {
-    if (columnsQuery.data) {
-      const configured = columnsQuery.data;
-      return configured.map((column) => columnFor(column.key as BoardColumnKey, column.label, column.visible));
-    }
-    return DEFAULT_COLUMNS;
-  }, [columnsQuery.data]);
-  useEffect(() => { if (!columnsDialogOpen) setBoardColumns(persistedColumns); }, [persistedColumns, columnsDialogOpen]);
-
-  const saveColumns = useMutation({
-    mutationFn: (columns: BoardColumnConfig[]) => workspaceApi.updateBoardColumns(workspaceId,
-      columns.map(({ key, label, visible }) => ({ key, label, visible }) as WorkspaceBoardColumn)),
-    onSuccess: columns => {
-      queryClient.setQueryData(["workspace-board-columns", workspaceId], columns);
-      void queryClient.invalidateQueries({ queryKey: ["workspace-board-columns", workspaceId] });
-      toast.success("Board settings saved for this workspace.");
-      setColumnsDialogOpen(false);
-    },
-    onError: error => toast.error(boardSettingsErrorMessage(error)),
-  });
-
-  const saveColumnsConfig = (newCols: BoardColumnConfig[]) => {
-    const normalized = newCols.map(column => ({ ...column, label: column.label.trim() }));
-    if (normalized.some(column => !column.label)) {
-      toast.error("Tên cột không được để trống.");
-      return;
-    }
-    if (new Set(normalized.map(column => column.label.toLowerCase())).size !== normalized.length) {
-      toast.error("Tên các cột không được trùng nhau.");
-      return;
-    }
-    saveColumns.mutate(normalized);
-  };
-  const openColumnsEditor = (columnKey: BoardColumnKey | null = null) => {
-    setEditingColumnKey(columnKey);
-    setBoardColumns(persistedColumns);
-    setColumnsDialogOpen(true);
-  };
-  const visibleColumns = useMemo(() => persistedColumns.filter(c => c.visible), [persistedColumns]);
+  const persistedColumns = DEFAULT_COLUMNS;
+  const visibleColumns = DEFAULT_COLUMNS;
   const configuredStatusLabel = (status?: string | null) =>
     persistedColumns.find((column) => column.key === status)?.label ?? statusLabel(status);
   const transitionOptions = (status: SprintBacklogStatus): SprintBacklogStatus[] => {
@@ -448,9 +378,6 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
             {!sprints.length ? <option value="">Team chưa có Sprint</option> : null}
             {sprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name} · {sprint.status}</option>)}
           </select>
-          {canConfigureColumns && <Button variant="outline" size="sm" onClick={() => openColumnsEditor()} title="Thêm trạng thái, đổi tên hoặc ẩn/hiện cột workflow">
-            <SlidersHorizontal className="mr-1.5 size-4" /> Tùy chỉnh cột
-          </Button>}
           <Button variant="outline" size="icon" aria-label="Làm mới Board" onClick={() => void query.refetch()} disabled={query.isFetching}>
             <RefreshCw className={`size-4 ${query.isFetching ? "animate-spin" : ""}`} />
           </Button>
@@ -511,7 +438,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
                   className={`flex h-[32rem] min-h-[24rem] max-h-[70vh] flex-col rounded-2xl border border-slate-200 bg-slate-50/70 p-2 ${draggedItem ? "transition-colors" : ""}`}
                   onDragOver={(event) => { if (draggedItem) event.preventDefault(); }}
                   onDrop={(event) => { event.preventDefault(); if (draggedItem) void moveItem(draggedItem, key); }}>
-                  <header className="mb-3 flex items-center justify-between gap-1 px-1"><div className="flex min-w-0 items-center gap-2"><span className={`size-2.5 shrink-0 rounded-full ${color}`} /><h3 className="truncate text-sm font-bold" title={label}>{label}</h3><Badge variant="secondary">{items.length}</Badge></div><div className="flex shrink-0 items-center gap-1">{canConfigureColumns && <Button type="button" variant="ghost" size="icon" className="size-6 text-slate-500 hover:text-primary" title={`Đổi tên cột ${label}`} aria-label={`Rename column ${label}`} disabled={saveColumns.isPending} onClick={() => openColumnsEditor(key)}><Pencil className="size-3" /></Button>}<Icon className="size-4 text-slate-400" /></div></header>
+                  <header className="mb-3 flex items-center justify-between gap-1 px-1"><div className="flex min-w-0 items-center gap-2"><span className={`size-2.5 shrink-0 rounded-full ${color}`} /><h3 className="truncate text-sm font-bold" title={label}>{label}</h3><Badge variant="secondary">{items.length}</Badge></div><div className="flex shrink-0 items-center gap-1"><Icon className="size-4 text-slate-400" /></div></header>
                   <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto overscroll-contain pr-1">
                     {items.map((item) => <article key={item.id} draggable={canUpdate && savingItemId !== item.id}
                       onDragStart={() => setDraggedItem(item)} onDragEnd={() => setDraggedItem(null)}
@@ -584,103 +511,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
         </aside>
       </div>}
 
-    {/* Customize Columns Dialog (Fix Bug #35 & #36) */}
-    <Dialog open={canConfigureColumns && columnsDialogOpen} onOpenChange={(open) => {
-      if (saveColumns.isPending) return;
-      setColumnsDialogOpen(open);
-      if (!open) setBoardColumns(persistedColumns);
-    }}>
-      <DialogContent className="flex max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl" showCloseButton={!saveColumns.isPending} onOpenAutoFocus={event => {
-        if (!editingColumnKey) return;
-        const input = document.getElementById(`board-column-name-${workspaceId}-${editingColumnKey}`);
-        if (input instanceof HTMLInputElement) {
-          event.preventDefault();
-          input.focus();
-          input.select();
-        }
-      }}>
-        <DialogHeader className="shrink-0 border-b p-5 pr-12">
-          <DialogTitle className="flex items-center gap-2">
-            <SlidersHorizontal className="size-5 text-primary" /> {editingColumnKey ? "Đổi tên cột Kanban Board" : "Tùy chỉnh cột Kanban Board"}
-          </DialogTitle>
-          <DialogDescription>
-            Bốn cột trạng thái Kanban (To do, In progress, Review, Done) là cố định. Bạn có thể đổi tên hiển thị hoặc ẩn/hiện cột; cấu hình được lưu cho workspace và dùng chung với thành viên khác.
-          </DialogDescription>
-        </DialogHeader>
 
-        <div className="min-h-0 space-y-3 overflow-y-auto p-5">
-          <p className="rounded-lg bg-muted/50 p-3 text-xs leading-relaxed text-muted-foreground">Sửa trực tiếp ô tên bên dưới rồi bấm Lưu thay đổi. Đổi tên giữ nguyên task và quy tắc trạng thái; cột Done vẫn được tính là hoàn tất dù đổi tên hiển thị.</p>
-          {boardColumns.map((col, idx) => (
-            <div key={col.key} className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 ${editingColumnKey === col.key ? "border-primary/40 bg-primary/5" : ""}`}>
-              <div className="min-w-0 flex-1 basis-44 space-y-1.5">
-                <Label htmlFor={`board-column-name-${workspaceId}-${col.key}`} className="text-xs text-muted-foreground"><span className={`size-2 shrink-0 rounded-full ${col.color}`} />Tên hiển thị · {DEFAULT_COLUMNS.find(column => column.key === col.key)?.label ?? col.label}</Label>
-                <Input
-                  id={`board-column-name-${workspaceId}-${col.key}`}
-                  value={col.label}
-                  disabled={saveColumns.isPending}
-                  maxLength={32}
-                  placeholder="Tên cột"
-                  className="h-8 text-sm"
-                  onChange={(e) => {
-                    const next = [...boardColumns];
-                    next[idx] = { ...next[idx], label: e.target.value };
-                    setBoardColumns(next);
-                  }}
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-muted-foreground" title="The four workflow statuses are fixed.">Cố định</span>
-                  <Label htmlFor={"switch-" + col.key} className="text-xs text-muted-foreground">
-                  {col.visible ? "Hiện" : "Ẩn"}
-                </Label>
-                <Switch
-                  id={"switch-" + col.key}
-                  checked={col.visible}
-                  disabled={saveColumns.isPending}
-                  onCheckedChange={(checked) => {
-                    const activeCount = boardColumns.filter(c => c.visible).length;
-                    if (!checked && activeCount <= 1) {
-                      toast.error("Phải giữ lại ít nhất 1 cột trên Board.");
-                  <span className="text-[10px] text-muted-foreground" title="The four workflow statuses are fixed.">Cố định</span>
-                    }
-                    const next = [...boardColumns];
-                    next[idx] = { ...next[idx], visible: checked };
-                    setBoardColumns(next);
-                  }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <DialogFooter className="m-0 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-none border-t p-4 sm:justify-between">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={saveColumns.isPending}
-            onClick={() => {
-              saveColumnsConfig(DEFAULT_COLUMNS);
-            }}
-          >
-            Khôi phục mặc định
-          </Button>
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" size="sm" disabled={saveColumns.isPending} onClick={() => { setBoardColumns(persistedColumns); setColumnsDialogOpen(false); }}>
-              Đóng
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              disabled={saveColumns.isPending}
-              onClick={() => saveColumnsConfig(boardColumns)}
-            >
-              Lưu thay đổi
-            </Button>
-          </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
 
     {/* Backlog Item Detail Sheet for editing on click (Fix Bug #39) */}
     <BacklogItemDetailSheet

@@ -130,9 +130,8 @@ export const canMoveToStatus = (
 ) => {
   const from = current ?? "TODO";
 
-  // Any workflow status can be picked, in any direction (no forward-only
-  // matrix): the team owns its board and may move work back and forth.
-  return from === target || TASK_STATUS_ORDER.includes(target);
+  // Match the API: stay in the current state or move one column at a time.
+  return from === target || Math.abs(TASK_STATUS_ORDER.indexOf(from) - TASK_STATUS_ORDER.indexOf(target)) === 1;
 };
 
 

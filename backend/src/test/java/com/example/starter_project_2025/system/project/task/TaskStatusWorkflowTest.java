@@ -11,18 +11,11 @@ class TaskStatusWorkflowTest {
     private final TaskStatusWorkflow workflow = new TaskStatusWorkflow();
 
     @Test
-    void allowsConfiguredForwardAndBlockedTransitions() {
+    void allowsAdjacentForwardAndBackwardTransitions() {
         // Forward transitions
         assertTrue(workflow.allows(TaskStatus.TODO, TaskStatus.IN_PROGRESS));
         assertTrue(workflow.allows(TaskStatus.IN_PROGRESS, TaskStatus.REVIEW));
         assertTrue(workflow.allows(TaskStatus.REVIEW, TaskStatus.DONE));
-        
-        // Blocked transitions
-        assertTrue(workflow.allows(TaskStatus.TODO, TaskStatus.BLOCKED));
-        assertTrue(workflow.allows(TaskStatus.IN_PROGRESS, TaskStatus.BLOCKED));
-        assertTrue(workflow.allows(TaskStatus.REVIEW, TaskStatus.BLOCKED));
-        assertTrue(workflow.allows(TaskStatus.BLOCKED, TaskStatus.TODO));
-        assertTrue(workflow.allows(TaskStatus.BLOCKED, TaskStatus.IN_PROGRESS));
         
         // Backward / exceptional transitions
         assertTrue(workflow.allows(TaskStatus.IN_PROGRESS, TaskStatus.TODO));      // Pause
@@ -39,12 +32,8 @@ class TaskStatusWorkflowTest {
         
         // Invalid backward
         assertFalse(workflow.allows(TaskStatus.REVIEW, TaskStatus.TODO));
-        assertFalse(workflow.allows(TaskStatus.DONE, TaskStatus.BLOCKED));
         assertFalse(workflow.allows(TaskStatus.DONE, TaskStatus.TODO));
         assertFalse(workflow.allows(TaskStatus.DONE, TaskStatus.IN_PROGRESS));
         
-        // BLOCKED cannot go to DONE/REVIEW directly
-        assertFalse(workflow.allows(TaskStatus.BLOCKED, TaskStatus.DONE));
-        assertFalse(workflow.allows(TaskStatus.BLOCKED, TaskStatus.REVIEW));
     }
 }

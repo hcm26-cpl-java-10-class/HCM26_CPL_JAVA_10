@@ -206,7 +206,7 @@ export function BacklogRow({
               return (
                 <DropdownMenuItem
                   key={value}
-                  disabled={!canMoveToStatus(item.status, value)}
+                  disabled={item.sprintId == null ? value !== "TODO" : !canMoveToStatus(item.status, value)}
                   onClick={() => onStatusChange(item, value)}
                 >
                   <span className={cn("h-2 w-2 rounded-full", option.dot)} />
