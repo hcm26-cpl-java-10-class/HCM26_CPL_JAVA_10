@@ -609,13 +609,17 @@ class WorkspaceSectionsIntegrationTest {
     }
 
     Long additionalAssignee() {
+        return additionalAssignee(tenantId);
+    }
+
+    Long additionalAssignee(Long userTenantId) {
         return tx.execute(status -> {
             var team = teams.findById(teamId).orElseThrow();
             var user = new User();
             user.setEmail(UUID.randomUUID() + "@assignee.test");
             user.setUserCode("ASSIGNEE-" + UUID.randomUUID());
             user.setFirstName("Assigned"); user.setLastName("Member");
-            user.setPasswordHash("unused-test-password"); user.setTenant(tenants.findById(tenantId).orElseThrow());
+            user.setPasswordHash("unused-test-password"); user.setTenant(tenants.findById(userTenantId).orElseThrow());
             users.saveAndFlush(user);
             var cm = new ClassMember(); cm.setTrainingClass(team.getTrainingClass()); cm.setUser(user);
             cm.setStatus(ClassMemberStatus.ACTIVE); classMembers.saveAndFlush(cm);
@@ -696,6 +700,18 @@ class WorkspaceSectionsIntegrationTest {
                         .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(Map.of("assigneeProjectMemberId", assigneeId))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.assigneeProjectMemberId").value(assigneeId));
+    }
+
+    @Test void malformedCrossTenantMembershipIsNotAssignableFromEitherPicker() throws Exception {
+        Long foreignTenantId = tx.execute(status -> tenants.saveAndFlush(Tenant.builder()
+                .code("ASSIGNEE-FOREIGN-" + UUID.randomUUID()).name("Foreign assignee tenant").build()).getId());
+        Long assigneeId = additionalAssignee(foreignTenantId);
+        Long itemId = workItem();
+        assertAssigneeOptionsMatchBoard(assigneeId, false);
+        mvc.perform(put("/api/sprint-backlogs/{id}", itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("assigneeProjectMemberId", assigneeId))))
+                .andExpect(status().isUnprocessableEntity());
     }
 
     @Test void detailAndCreateRejectForeignOrMissingAssigneesWithoutChangingExistingAssignment() throws Exception {
