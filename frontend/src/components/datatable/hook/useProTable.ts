@@ -502,7 +502,7 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
     qc.invalidateQueries({ queryKey: [schema.entityName] });
 
   const handleMutationError = (error: unknown) => {
-    if (axios.isAxiosError(error) && error.response?.status === 400) {
+    if (axios.isAxiosError(error) && error.response && [400, 409].includes(error.response.status)) {
       const body = error.response.data as ValidationErrorResponse;
       if (body?.errors) {
         setFieldErrors(body.errors);

@@ -28,6 +28,56 @@ public class SessionController
 
     SessionService sessionService;
     SessionRepository sessionRepository;
+    com.example.starter_project_2025.base.dataio.importer.parser.ParserFactory parserFactory;
+    com.example.starter_project_2025.base.dataio.importer.mapper.GenericImportMapper importMapper;
+    SessionMapper sessionMapper;
+
+    @Override
+    @org.springframework.web.bind.annotation.GetMapping("/export")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('SESSION_READ')")
+    public void exportFile(
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "EXCEL") com.example.starter_project_2025.base.dataio.common.FileFormat format,
+            jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
+        super.exportFile(format, response);
+    }
+
+    /** Prevent the generic importer from bypassing schedule validation. No partial writes. */
+    @Override
+    @org.springframework.web.bind.annotation.PostMapping(value = "/import", consumes = "multipart/form-data")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('SESSION_CREATE') and hasAuthority('SESSION_READ')")
+    public com.example.starter_project_2025.base.dataio.importer.result.ImportResult importFile(
+            @org.springframework.web.bind.annotation.RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        var result = new com.example.starter_project_2025.base.dataio.importer.result.ImportResult();
+        try (var input = file.getInputStream()) {
+            var rows = parserFactory.getParser(file.getOriginalFilename()).parse(input);
+            var requests = new java.util.ArrayList<SessionDTO>();
+            for (int i = 0; i < rows.size(); i++) {
+                try {
+                    requests.add(sessionMapper.toDto(importMapper.map(rows.get(i), Session.class)));
+                } catch (RuntimeException ex) {
+                    result.getErrors().add(new com.example.starter_project_2025.base.dataio.importer.result.RowError(i + 2, ex.getMessage()));
+                }
+            }
+            if (!result.getErrors().isEmpty()) {
+                result.setFailureCount(rows.size());
+                return result;
+            }
+            try {
+                sessionService.createValidatedBatch(requests);
+                result.setSuccessCount(requests.size());
+            } catch (com.example.starter_project_2025.system.schedule.ScheduleValidationException ex) {
+                result.setFailureCount(rows.size());
+                ex.getResult().issues().forEach(issue -> result.getErrors().add(
+                        new com.example.starter_project_2025.base.dataio.importer.result.RowError(
+                                issue.candidateIndex() < 0 ? 1 : issue.candidateIndex() + 2,
+                                issue.message() + (issue.relatedSessionId() == null ? "" : " (session #" + issue.relatedSessionId() + ")")
+                                + (issue.relatedCandidateIndex() == null ? "" : " (row " + (issue.relatedCandidateIndex() + 2) + ")"))));
+            }
+            return result;
+        } catch (java.io.IOException ex) {
+            throw new IllegalArgumentException("The import file could not be read. Verify the file format and try again.", ex);
+        }
+    }
 
     @Override
     protected BaseCrudService<Long, SessionDTO, SessionFilter> getService() {

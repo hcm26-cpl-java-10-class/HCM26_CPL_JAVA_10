@@ -12,7 +12,7 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class SessionCancelDTO {
 
-    @NotBlank(message = "Cancel reason is required")
-    @Size(max = 255, message = "Cancel reason must not exceed 255 characters")
+    @NotBlank(message = "A cancellation reason is required.")
+    @Size(max = 255, message = "The cancellation reason must not exceed 255 characters.")
     String cancelReason;
 }
