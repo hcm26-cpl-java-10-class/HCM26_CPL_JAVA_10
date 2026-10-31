@@ -10,7 +10,7 @@ public class MilestoneRiskEvaluator {
                 .divide(BigDecimal.valueOf(total), 2, RoundingMode.HALF_UP);
         boolean belowTarget = total == 0 || BigDecimal.valueOf(done).multiply(BigDecimal.valueOf(100))
                 .compareTo(BigDecimal.valueOf(total).multiply(BigDecimal.valueOf(80))) < 0;
-        boolean eligible = milestone.isActive() && milestone.getStatus() == MilestoneStatus.OPEN
+        boolean eligible = milestone.isActive() && milestone.lifecycleStatus() == MilestoneLifecycleStatus.IN_PROGRESS
                 && milestone.getDeadline().isAfter(now) && milestone.getDeadline().isBefore(now.plus(Duration.ofHours(48)))
                 && belowTarget;
         return new MilestoneRiskDtos.Progress(done, total, rate, eligible);

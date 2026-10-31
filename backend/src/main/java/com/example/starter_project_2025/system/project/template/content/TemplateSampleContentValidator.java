@@ -32,7 +32,6 @@ public class TemplateSampleContentValidator {
             id(errors, path + ".id", item.id(), ids, false);
             text(errors, path + ".title", item.title(), 200, "Backlog title");
             description(errors, path + ".description", item.description(), 2000);
-            if (item.suggestedRole() == null) error(errors, path + ".suggestedRole", "Select PM, BA, DEV or QA");
         }
         return errors;
     }

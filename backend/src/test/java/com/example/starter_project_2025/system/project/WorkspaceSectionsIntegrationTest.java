@@ -1,13 +1,10 @@
 package com.example.starter_project_2025.system.project;
 
-import com.example.starter_project_2025.system.project.team.ParticipationStatus;
 import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.domain.ProjectStatus;
-import com.example.starter_project_2025.system.project.team.ParticipationStatus;
-import com.example.starter_project_2025.system.project.team.Team;
-import com.example.starter_project_2025.system.project.team.TeamMember;
-import com.example.starter_project_2025.system.project.team.TeamMemberRepository;
-import com.example.starter_project_2025.system.project.team.TeamRepository;
+import com.example.starter_project_2025.system.project.trainingclass.*;
+import com.example.starter_project_2025.system.project.sprint.*;
+import com.example.starter_project_2025.system.project.sprint_backlog.*;
 import com.example.starter_project_2025.system.project.tenant.Tenant;
 import com.example.starter_project_2025.system.project.tenant.TenantRepository;
 import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceSection;
@@ -55,8 +52,13 @@ class WorkspaceSectionsIntegrationTest {
     @Autowired RoleRepository roles;
     @Autowired PermissionRepository permissions;
     @Autowired ProjectRepository projects;
-    @Autowired TeamRepository teams;
-    @Autowired TeamMemberRepository memberships;
+    @Autowired ProjectTeamRepository teams;
+    @Autowired ProjectMemberRepository memberships;
+    @Autowired TrainingClassRepository classes;
+    @Autowired ClassMemberRepository classMembers;
+    @Autowired TeamAllocationSessionRepository allocationSessions;
+    @Autowired SprintRepository sprints;
+    @Autowired SprintBacklogRepository backlogItems;
     @Autowired ProjectTopicSnapshotRepository snapshots;
     @Autowired UserDetailsService userDetails;
     @Autowired RefreshTokenService tokens;
@@ -85,14 +87,28 @@ class WorkspaceSectionsIntegrationTest {
             var project = new Project();
             project.setCode("PROJECT-" + UUID.randomUUID()); project.setName("Project A");
             project.setDescription("Live project description");
-            project.setTenant(tenant); project.setStatus(ProjectStatus.PLANNING);
+            project.setTenant(tenant); project.setStatus(ProjectStatus.ACTIVE);
             projectId = projects.saveAndFlush(project).getId();
-            var team = new Team();
-            team.setCode("TEAM-" + UUID.randomUUID()); team.setName("Team A");
-            team.setTenant(tenant); team.setProject(project); team.setMentor(user);
+            var trainingClass = new TrainingClass();
+            trainingClass.setCode("US02-" + UUID.randomUUID()); trainingClass.setName("Workspace test class");
+            trainingClass.setTenantId(tenantId); trainingClass.setProgramId(1L);
+            trainingClass.setStatus(TrainingClassStatus.ONGOING);
+            classes.saveAndFlush(trainingClass);
+            var session = new TeamAllocationSession();
+            session.setTrainingClass(trainingClass); session.setMaxMembers(5);
+            session.setStatus(TeamAllocationSessionStatus.PUBLISHED);
+            allocationSessions.saveAndFlush(session);
+            var classMember = new ClassMember();
+            classMember.setTrainingClass(trainingClass); classMember.setUser(user);
+            classMember.setStatus(ClassMemberStatus.ACTIVE);
+            classMembers.saveAndFlush(classMember);
+            var team = new ProjectTeam();
+            team.setTeamName("Team A"); team.setTrainingClass(trainingClass); team.setAllocationSession(session);
+            team.setMaxMembers(5); team.setStatus(ProjectTeamStatus.ACTIVE);
+            team.setProject(project); team.setAssignedMentorId(actorId);
             teamId = teams.saveAndFlush(team).getId();
-            var membership = new TeamMember();
-            membership.setTeam(team); membership.setUser(user);
+            var membership = new ProjectMember();
+            membership.setTeam(team); membership.setClassMember(classMember);
             membershipId = memberships.saveAndFlush(membership).getId();
             var principal = userDetails.loadUserByUsername(user.getEmail());
             token = tokens.generateAccessToken(new UsernamePasswordAuthenticationToken(
@@ -254,8 +270,8 @@ class WorkspaceSectionsIntegrationTest {
                 .header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
         assertThat(read("/sections").get("sections").get(6).get("canRead").asBoolean()).isFalse();
         tx.executeWithoutResult(status -> {
-            teams.findById(teamId).orElseThrow().setMentor(null);
-            memberships.findById(membershipId).orElseThrow().setParticipationStatus(ParticipationStatus.LEFT);
+            teams.findById(teamId).orElseThrow().setAssignedMentorId(null);
+            memberships.findById(membershipId).orElseThrow().getClassMember().setStatus(ClassMemberStatus.INACTIVE);
         });
         mvc.perform(get("/api/workspaces/" + workspaceId + "/sprints")
                 .header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
@@ -286,6 +302,96 @@ class WorkspaceSectionsIntegrationTest {
         assertThat(jdbc.queryForObject("select count(*) from workspace_activities", Long.class)).isEqualTo(activityCount);
         assertThat(projects.findById(projectId).orElseThrow().getStatus()).isEqualTo(ProjectStatus.ACTIVE);
     }
+    @Test void membersReadCurrentAllocationRosterWithMultipleRoles() throws Exception {
+        tx.executeWithoutResult(status -> memberships.findById(membershipId).orElseThrow().setRole("PM,BA"));
+
+        JsonNode initial = read("/members");
+        assertThat(initial).hasSize(1);
+        assertThat(initial.get(0).get("user_code").asText()).startsWith("MEM-");
+        assertThat(initial.get(0).get("display_name").asText()).isEqualTo("Workspace Reader");
+        assertThat(initial.at("/0/roles/0").asText()).isEqualTo("PM");
+        assertThat(initial.at("/0/roles/1").asText()).isEqualTo("BA");
+        assertThat(initial.get(0).has("project_role")).isFalse();
+        assertThat(initial.get(0).has("status")).isFalse();
+        assertThat(read("").get("member_count").asInt()).isEqualTo(1);
+        JsonNode navigation = read("/sections");
+        assertThat(navigation.get("classId").asLong()).isPositive();
+        assertThat(navigation.get("allocationSessionId").asLong()).isPositive();
+        assertThat(navigation.get("teamId").asLong()).isEqualTo(teamId);
+        for (JsonNode section : navigation.get("sections")) {
+            if ("members".equals(section.get("key").asText())) {
+                assertThat(section.get("actions").has("manage")).isFalse();
+            }
+        }
+
+        Long addedId = tx.execute(status -> {
+            User actor = users.findById(actorId).orElseThrow();
+            var added = new User();
+            added.setEmail(UUID.randomUUID() + "@members.test");
+            added.setFirstName("Added");
+            added.setLastName("Member");
+            added.setUserCode("ADD-" + UUID.randomUUID());
+            added.setPasswordHash("unused-test-password");
+            added.setTenant(actor.getTenant());
+            users.saveAndFlush(added);
+            var classMember = new ClassMember();
+            classMember.setTrainingClass(teams.findById(teamId).orElseThrow().getTrainingClass());
+            classMember.setUser(added);
+            classMember.setStatus(ClassMemberStatus.ACTIVE);
+            classMembers.saveAndFlush(classMember);
+            var assignment = new ProjectMember();
+            assignment.setTeam(teams.findById(teamId).orElseThrow());
+            assignment.setClassMember(classMember);
+            return memberships.saveAndFlush(assignment).getId();
+        });
+
+        JsonNode withNewMember = read("/members");
+        assertThat(withNewMember).hasSize(2);
+        assertThat(withNewMember.get(1).get("roles")).isEmpty();
+        assertThat(read("").get("member_count").asInt()).isEqualTo(2);
+        tx.executeWithoutResult(status -> {
+            var foreignTenant = tenants.saveAndFlush(Tenant.builder()
+                    .code("FOREIGN-" + UUID.randomUUID()).name("Foreign tenant").build());
+            var foreignUser = new User();
+            foreignUser.setEmail(UUID.randomUUID() + "@foreign.test");
+            foreignUser.setFirstName("Foreign");
+            foreignUser.setPasswordHash("unused-test-password");
+            foreignUser.setTenant(foreignTenant);
+            users.saveAndFlush(foreignUser);
+            var foreignClassMember = new ClassMember();
+            foreignClassMember.setTrainingClass(teams.findById(teamId).orElseThrow().getTrainingClass());
+            foreignClassMember.setUser(foreignUser);
+            foreignClassMember.setStatus(ClassMemberStatus.ACTIVE);
+            classMembers.saveAndFlush(foreignClassMember);
+            var foreignAssignment = new ProjectMember();
+            foreignAssignment.setTeam(teams.findById(teamId).orElseThrow());
+            foreignAssignment.setClassMember(foreignClassMember);
+            memberships.saveAndFlush(foreignAssignment);
+        });
+        assertThat(read("/members")).hasSize(2);
+        assertThat(read("").get("member_count").asInt()).isEqualTo(2);
+        tx.executeWithoutResult(status -> memberships.findById(addedId).orElseThrow().setIsActive(false));
+        assertThat(read("/members")).hasSize(1);
+        assertThat(read("").get("member_count").asInt()).isEqualTo(1);
+        tx.executeWithoutResult(status -> memberships.findById(membershipId).orElseThrow()
+                .getClassMember().setStatus(ClassMemberStatus.INACTIVE));
+        assertThat(read("/members")).isEmpty();
+        assertThat(read("").get("member_count").asInt()).isZero();
+    }
+
+    @Test void projectHubCannotModifyAllocationMembership() throws Exception {
+        mvc.perform(get("/api/project-hub/teams/{id}/members", teamId)
+                .header("Authorization", "Bearer " + token)).andExpect(status().isNotFound());
+        mvc.perform(get("/api/project-hub/teams/{id}/member-options", teamId)
+                .header("Authorization", "Bearer " + token)).andExpect(status().isNotFound());
+        mvc.perform(put("/api/project-hub/teams/{id}/members/{userId}", teamId, actorId)
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"projectRole\":\"QA\",\"status\":\"ACTIVE\"}"))
+                .andExpect(status().isNotFound());
+        assertThat(memberships.findById(membershipId).orElseThrow().getRole()).isNull();
+    }
+
     @Test void roleApiCanRevokeAndRestoreReadPermissionWithTheSameToken() throws Exception {
         var response = mvc.perform(get("/api/roles/" + roleId)
                 .header("Authorization", "Bearer " + token)).andExpect(status().isOk()).andReturn();
@@ -314,5 +420,256 @@ class WorkspaceSectionsIntegrationTest {
                 .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"mode\":\"DATA\",\"delayMs\":0}")).andExpect(status().isOk());
         assertThat(read("/milestones").get("items")).hasSize(2);
+    }
+
+    List<WorkspaceSectionDtos.BoardColumn> workflowColumns() {
+        return List.of(new WorkspaceSectionDtos.BoardColumn("BACKLOG", "Backlog", true),
+                new WorkspaceSectionDtos.BoardColumn("TODO", "To do", true),
+                new WorkspaceSectionDtos.BoardColumn("IN_PROGRESS", "In progress", true),
+                new WorkspaceSectionDtos.BoardColumn("REVIEW", "Review", true),
+                new WorkspaceSectionDtos.BoardColumn("CUSTOM_1", "Quality assurance", true),
+                new WorkspaceSectionDtos.BoardColumn("CUSTOM_2", "Staging", true),
+                new WorkspaceSectionDtos.BoardColumn("CUSTOM_3", "Ready for release", true),
+                new WorkspaceSectionDtos.BoardColumn("DONE", "Done", true));
+    }
+
+    void saveColumns(List<WorkspaceSectionDtos.BoardColumn> columns, int expected) throws Exception {
+        mvc.perform(put("/api/workspaces/{id}/board-columns", workspaceId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("columns", columns))))
+                .andExpect(status().is(expected));
+    }
+
+    Long workItem() {
+        return tx.execute(status -> {
+            var sprint = new Sprint();
+            sprint.setName("Workflow regression " + UUID.randomUUID());
+            sprint.setProjectId(projectId); // Project-backed sprints may not carry teamId.
+            sprint.setStatus(SprintStatus.ACTIVE);
+            sprint = sprints.saveAndFlush(sprint);
+            var item = new SprintBacklog();
+            item.setTitle("Open and edit this card"); item.setProjectId(projectId); item.setSprint(sprint);
+            return backlogItems.saveAndFlush(item).getId();
+        });
+    }
+
+    void changeStatus(Long itemId, String next, int expected) throws Exception {
+        mvc.perform(put("/api/sprint-backlogs/{id}", itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("status", next))))
+                .andExpect(status().is(expected));
+    }
+
+    @Test void eightColumnWorkflowPersistsNamesAndRejectsInvalidSettingsWithoutOverwriting() throws Exception {
+        var columns = new ArrayList<>(workflowColumns());
+        saveColumns(columns, 200);
+        assertThat(read("/board-columns").get("columns")).hasSize(8);
+        columns.set(4, new WorkspaceSectionDtos.BoardColumn("CUSTOM_1", "QA approved", true));
+        saveColumns(columns, 200);
+        assertThat(read("/board-columns").at("/columns/4/label").asText()).isEqualTo("QA approved");
+        var tooMany = new ArrayList<>(columns);
+        tooMany.add(new WorkspaceSectionDtos.BoardColumn("CUSTOM_4", "Ninth column", true));
+        saveColumns(tooMany, 422);
+        var duplicateName = new ArrayList<>(columns);
+        duplicateName.set(4, new WorkspaceSectionDtos.BoardColumn("CUSTOM_1", "Review", true));
+        saveColumns(duplicateName, 422);
+        saveColumns(columns.stream().filter(column -> !column.key().equals("TODO")).toList(), 422);
+        var nullColumn = new ArrayList<>(columns);
+        nullColumn.set(4, null);
+        saveColumns(nullColumn, 422);
+        assertThat(read("/board-columns").get("columns")).hasSize(8);
+        assertThat(read("/board-columns").at("/columns/4/label").asText()).isEqualTo("QA approved");
+        grant("WORKSPACE_READ", "SPRINT_READ");
+        saveColumns(workflowColumns(), 403);
+        assertThat(read("/board-columns").at("/columns/4/label").asText()).isEqualTo("QA approved");
+    }
+
+    @Test void emptyStandardColumnCanBeDeletedButOccupiedColumnAndAnchorsAreProtected() throws Exception {
+        var columns = workflowColumns().stream().filter(c -> !c.key().startsWith("CUSTOM_")).toList();
+        saveColumns(columns, 200);
+        Long itemId = workItem();
+        changeStatus(itemId, "IN_PROGRESS", 200);
+        saveColumns(columns.stream().filter(c -> !c.key().equals("IN_PROGRESS")).toList(), 409);
+        var withoutReview = columns.stream().filter(c -> !c.key().equals("REVIEW")).toList();
+        saveColumns(withoutReview, 200);
+        assertThat(read("/board-columns").get("columns")).hasSize(4);
+        changeStatus(itemId, "REVIEW", 422);
+        changeStatus(itemId, "DONE", 200);
+        changeStatus(itemId, "IN_PROGRESS", 200);
+        saveColumns(withoutReview.stream().filter(c -> !c.key().equals("DONE")).toList(), 422);
+        assertThat(read("/board-columns").get("columns")).hasSize(4);
+    }
+
+    @Test void customStatusesEnforceAdjacentTransitionsAndCannotBeRemovedWhileInUse() throws Exception {
+        saveColumns(workflowColumns(), 200);
+        Long itemId = workItem();
+        changeStatus(itemId, "DONE", 422);
+        changeStatus(itemId, "IN_PROGRESS", 200);
+        changeStatus(itemId, "TODO", 200);
+        changeStatus(itemId, "IN_PROGRESS", 200);
+        changeStatus(itemId, "REVIEW", 200);
+        changeStatus(itemId, "DONE", 422); // Configured custom steps cannot be skipped.
+        changeStatus(itemId, "CUSTOM_1", 200);
+        saveColumns(workflowColumns().stream().filter(column -> !column.key().equals("CUSTOM_1")).toList(), 409);
+        changeStatus(itemId, "CUSTOM_2", 200);
+        changeStatus(itemId, "CUSTOM_3", 200);
+        changeStatus(itemId, "DONE", 200);
+        changeStatus(itemId, "REVIEW", 422);
+        changeStatus(itemId, "IN_PROGRESS", 422);
+        changeStatus(itemId, "CUSTOM_3", 200);
+        mvc.perform(get("/api/sprint-backlogs/{id}", itemId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CUSTOM_3"));
+    }
+
+    @Test void standardWorkflowAllowsBackwardStepsButRejectsSkippedSteps() throws Exception {
+        Long itemId = workItem();
+        changeStatus(itemId, "REVIEW", 422);
+        changeStatus(itemId, "IN_PROGRESS", 200);
+        changeStatus(itemId, "TODO", 200);
+        changeStatus(itemId, "IN_PROGRESS", 200);
+        changeStatus(itemId, "REVIEW", 200);
+        changeStatus(itemId, "DONE", 200);
+        changeStatus(itemId, "IN_PROGRESS", 422);
+        changeStatus(itemId, "REVIEW", 200);
+        changeStatus(itemId, "IN_PROGRESS", 200);
+    }
+
+    @Test void productBacklogOnlyConnectsToTodoAndCannotBypassWorkflowThroughSprintAssignment() throws Exception {
+        Long itemId = workItem();
+        Long sprintId = tx.execute(status -> backlogItems.findById(itemId).orElseThrow().getSprint().getId());
+        changeStatus(itemId, "IN_PROGRESS", 200);
+        mvc.perform(put("/api/sprints/{id}/backlog-items", sprintId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"taskIds\":[]}"))
+                .andExpect(status().isUnprocessableEntity());
+        mvc.perform(get("/api/sprint-backlogs/{id}", itemId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.sprintId").value(sprintId))
+                .andExpect(jsonPath("$.status").value("IN_PROGRESS"));
+        changeStatus(itemId, "TODO", 200);
+        mvc.perform(put("/api/sprints/{id}/backlog-items", sprintId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"taskIds\":[]}"))
+                .andExpect(status().isOk());
+        changeStatus(itemId, "IN_PROGRESS", 422);
+        mvc.perform(put("/api/sprint-backlogs/{id}", itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("sprintId", sprintId, "status", "IN_PROGRESS"))))
+                .andExpect(status().isUnprocessableEntity());
+        mvc.perform(get("/api/sprint-backlogs/{id}", itemId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.sprintId").isEmpty())
+                .andExpect(jsonPath("$.status").value("TODO"));
+        mvc.perform(put("/api/sprints/{id}/backlog-items", sprintId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("taskIds", List.of(itemId)))))
+                .andExpect(status().isOk());
+        changeStatus(itemId, "IN_PROGRESS", 200);
+    }
+
+    @Test void productBacklogWithStaleStatusCanReenterSprintOnlyAsTodo() throws Exception {
+        Long itemId = workItem();
+        Long sprintId = tx.execute(status -> backlogItems.findById(itemId).orElseThrow().getSprint().getId());
+
+        mvc.perform(put("/api/sprints/{id}/backlog-items", sprintId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"taskIds\":[]}"))
+                .andExpect(status().isOk());
+        tx.executeWithoutResult(status -> backlogItems.findById(itemId).orElseThrow()
+                .setStatus(SprintBacklogStatus.IN_PROGRESS));
+
+        mvc.perform(put("/api/sprint-backlogs/{id}", itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("sprintId", sprintId, "status", "IN_PROGRESS"))))
+                .andExpect(status().isUnprocessableEntity());
+        mvc.perform(put("/api/sprint-backlogs/{id}", itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("sprintId", sprintId, "status", "TODO"))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.sprintId").value(sprintId))
+                .andExpect(jsonPath("$.status").value("TODO"));
+    }
+
+    @Test void boardAssignmentAndClearingMatchTheDetailRecord() throws Exception {
+        Long itemId = workItem();
+        mvc.perform(put("/api/teams/{teamId}/backlog-board/items/{id}/assignee", teamId, itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("projectMemberId", membershipId))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.assigneeProjectMemberId").value(membershipId));
+        mvc.perform(get("/api/sprint-backlogs/{id}", itemId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.assigneeProjectMemberId").value(membershipId));
+        mvc.perform(get("/api/teams/{teamId}/backlog-board", teamId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].assigneeDisplayName").value("Workspace Reader"));
+        mvc.perform(put("/api/teams/{teamId}/backlog-board/items/{id}/assignee", teamId, itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"projectMemberId\":null}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.assigneeProjectMemberId").doesNotExist());
+        mvc.perform(get("/api/sprint-backlogs/{id}", itemId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.assigneeProjectMemberId").doesNotExist());
+        mvc.perform(get("/api/teams/{teamId}/backlog-board", teamId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].assigneeProjectMemberId").doesNotExist())
+                .andExpect(jsonPath("$.items[0].assigneeDisplayName").doesNotExist());
+    }
+
+    @Test void unavailableAssigneeKeepsTheirNameButCannotReceiveNewAssignments() throws Exception {
+        Long assigneeId = tx.execute(status -> {
+            var team = teams.findById(teamId).orElseThrow();
+            var user = new User();
+            user.setEmail(UUID.randomUUID() + "@assignee.test");
+            user.setUserCode("ASSIGNEE-" + UUID.randomUUID());
+            user.setFirstName("Assigned"); user.setLastName("Member");
+            user.setPasswordHash("unused-test-password"); user.setTenant(tenants.findById(tenantId).orElseThrow());
+            users.saveAndFlush(user);
+            var cm = new ClassMember(); cm.setTrainingClass(team.getTrainingClass()); cm.setUser(user);
+            cm.setStatus(ClassMemberStatus.ACTIVE); classMembers.saveAndFlush(cm);
+            var member = new ProjectMember(); member.setTeam(team); member.setClassMember(cm);
+            return memberships.saveAndFlush(member).getId();
+        });
+        Long itemId = workItem();
+        mvc.perform(put("/api/sprint-backlogs/{id}", itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("assigneeProjectMemberId", assigneeId))))
+                .andExpect(status().isOk());
+        tx.executeWithoutResult(status -> memberships.findById(assigneeId).orElseThrow()
+                .getClassMember().setStatus(ClassMemberStatus.INACTIVE));
+        var board = mvc.perform(get("/api/teams/{teamId}/backlog-board", teamId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].assigneeProjectMemberId").value(assigneeId))
+                .andExpect(jsonPath("$.items[0].assigneeDisplayName").value("Assigned Member"))
+                .andReturn();
+        assertThat(json.readTree(board.getResponse().getContentAsString()).get("members").findValuesAsText("projectMemberId"))
+                .doesNotContain(assigneeId.toString());
+        mvc.perform(put("/api/teams/{teamId}/backlog-board/items/{id}/assignee", teamId, itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("projectMemberId", assigneeId))))
+                // This controller uses the existing global validation envelope (400).
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("active member")));
+        mvc.perform(get("/api/sprint-backlogs/{id}", itemId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.assigneeProjectMemberId").value(assigneeId));
+    }
+
+    @Test void cardDetailEditsAndAssigneeAreReflectedOnTheTeamBoard() throws Exception {
+        Long itemId = workItem();
+        mvc.perform(get("/api/sprint-backlogs/{id}", itemId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.title").value("Open and edit this card"));
+        mvc.perform(put("/api/sprint-backlogs/{id}", itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("title", "Edited from card details",
+                                "description", "Persisted description", "assigneeProjectMemberId", membershipId,
+                                "priority", "HIGH", "estimatedHours", 5))))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/teams/{teamId}/backlog-board", teamId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].title").value("Edited from card details"))
+                .andExpect(jsonPath("$.items[0].description").value("Persisted description"))
+                .andExpect(jsonPath("$.items[0].assigneeProjectMemberId").value(membershipId))
+                .andExpect(jsonPath("$.items[0].assigneeDisplayName").value("Workspace Reader"));
+        grant("WORKSPACE_READ", "SPRINT_READ", "SPRINT_BACKLOG_READ");
+        mvc.perform(get("/api/sprint-backlogs/{id}", itemId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        mvc.perform(put("/api/sprint-backlogs/{id}", itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Forbidden edit\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/sprint-backlogs/{id}", itemId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.title").value("Edited from card details"));
     }
 }

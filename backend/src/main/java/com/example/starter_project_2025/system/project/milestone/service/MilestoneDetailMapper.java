@@ -54,7 +54,8 @@ public class MilestoneDetailMapper {
                         milestone.isAllowResubmission(), milestone.getMaxSubmissionAttempts()),
                 milestone.getVersion(),
                 milestone.getCreatedAt(),
-                milestone.getCreatedBy(), milestone.getWeight(), milestone.getExecutionStatus()
+                milestone.getCreatedBy(), milestone.getWeight(), milestone.getExecutionStatus(), milestone.lifecycleStatus(),
+                milestone.getStartDate(), milestone.scheduledStartAt()
         );
     }
 

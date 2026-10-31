@@ -17,15 +17,17 @@ import type { CreateMilestoneRequest, MilestoneApiError, MilestoneDetailRouteSta
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, ArrowLeft, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { MilestoneForm } from "../components/MilestoneForm";
+import { MilestoneActiveEditForm } from "../components/MilestoneActiveEditForm";
 import { milestoneDefaultValues, type MilestoneFormValues } from "../milestone-form.schema";
 import {
   buildMilestonePayload,
   getMilestoneApiError,
   isNetworkOrTimeoutError,
   stablePayload,
+  toDateTimeLocal,
 } from "../milestone.utils";
 
 interface SubmissionAttempt {
@@ -64,7 +66,7 @@ export function MilestoneCreatePage() {
     ? `/management/workspaces/${scopedWorkspaceId}?tab=milestones`
     : projectId
     ? `/projects/${projectId}/milestones${scopedTeamId ? `?teamId=${scopedTeamId}` : ""}`
-    : "/teacher";
+    : teamScoped ? "/milestones/teams" : "/teacher";
   const queryClient = useQueryClient();
   const [isDirty, setDirty] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -73,6 +75,13 @@ export function MilestoneCreatePage() {
   const attemptRef = useRef<SubmissionAttempt | null>(null);
   const completedRef = useRef(false);
 
+  const existingQuery = useQuery({
+    queryKey: ["milestone-edit", projectId, scopedTeamId, milestoneId],
+    queryFn: () => teamScoped || !projectId
+      ? milestoneApi.getTeamDetail(scopedTeamId!, milestoneId!)
+      : milestoneApi.getDetail(projectId, milestoneId!, scopedTeamId),
+    enabled: !!milestoneId && (teamScoped || !!projectId),
+  });
   const optionsQuery = useQuery({
     queryKey: teamScoped
       ? ["teams", scopedTeamId, "milestones", "create-options"]
@@ -80,15 +89,8 @@ export function MilestoneCreatePage() {
     queryFn: () => teamScoped
       ? milestoneApi.getTeamCreateOptions(scopedTeamId!)
       : milestoneApi.getCreateOptions(projectId as string),
-    enabled: teamScoped || !!projectId,
+    enabled: (teamScoped || !!projectId) && (!milestoneId || existingQuery.data?.lifecycleStatus === "PLANNED"),
     retry: false,
-  });
-  const existingQuery = useQuery({
-    queryKey: ["milestone-edit", projectId, scopedTeamId, milestoneId],
-    queryFn: () => teamScoped || !projectId
-      ? milestoneApi.getTeamDetail(scopedTeamId!, milestoneId!)
-      : milestoneApi.getDetail(projectId, milestoneId!, scopedTeamId),
-    enabled: !!milestoneId && (teamScoped || !!projectId),
   });
 
   const defaultValues = useMemo<MilestoneFormValues>(() => ({
@@ -99,11 +101,12 @@ export function MilestoneCreatePage() {
     ...(existingQuery.data ? {
       title: existingQuery.data.title,
       description: existingQuery.data.description ?? "",
-      deadline: existingQuery.data.deadline ? new Date(existingQuery.data.deadline).toISOString().slice(0, 16) : "",
+      deadline: toDateTimeLocal(existingQuery.data.deadline),
+      startDate: existingQuery.data.startDate ?? "",
       mandatory: existingQuery.data.mandatory,
       checklist: existingQuery.data.checklist.map(item => ({ content: item.content, mandatory: item.mandatory })),
       rubricSnapshotId: existingQuery.data.rubric?.snapshotId ?? "",
-      latePolicy: { type: existingQuery.data.latePolicy.type ?? "NO_LATE", lateUntil: existingQuery.data.latePolicy.lateUntil ?? undefined, penaltyPercent: existingQuery.data.latePolicy.penaltyPercent ?? undefined },
+      latePolicy: { type: existingQuery.data.latePolicy.type ?? "NO_LATE", lateUntil: toDateTimeLocal(existingQuery.data.latePolicy.lateUntil) || undefined, penaltyPercent: existingQuery.data.latePolicy.penaltyPercent ?? undefined },
       resubmissionPolicy: { allowed: existingQuery.data.resubmissionPolicy.allowed, maxAttempts: existingQuery.data.resubmissionPolicy.maxAttempts ?? undefined },
     } : {}),
     rubricSnapshotId: existingQuery.data?.rubric?.snapshotId ?? (optionsQuery.data?.rubrics.length === 1 ? optionsQuery.data.rubrics[0].id : ""),
@@ -130,7 +133,7 @@ export function MilestoneCreatePage() {
         returnTo: listUrl,
       };
       toast.success("Milestone created successfully.");
-      navigate(teamScoped && scopedWorkspaceId ? listUrl : teamScoped ? `/teams/${scopedTeamId}/milestones` : `/projects/${projectId}/milestones/${milestone.id}`, { replace: true, state: routeState });
+      navigate(teamScoped ? listUrl : `/projects/${projectId}/milestones/${milestone.id}`, { replace: true, state: routeState });
     },
     onError: async (error: unknown) => {
       const uncertain = isNetworkOrTimeoutError(error);
@@ -147,13 +150,14 @@ export function MilestoneCreatePage() {
     },
   });
 
-  const draftMutation = useMutation({
+  const plannedMutation = useMutation({
     mutationFn: (values: MilestoneFormValues) => {
       const parseDate = (value?: string) => value && !Number.isNaN(new Date(value).getTime()) ? new Date(value).toISOString() : null;
       const payload = {
         teamId: scopedTeamId,
         title: values.title.trim(), description: values.description.trim(),
         deadline: parseDate(values.deadline), mandatory: values.mandatory,
+        startDate: values.startDate,
         rubricSnapshotId: values.rubricSnapshotId || null,
         checklist: values.checklist.filter(item => item.content.trim()).map((item, orderIndex) => ({ ...item, content: item.content.trim(), orderIndex })),
         latePolicyType: values.latePolicy.type,
@@ -161,13 +165,11 @@ export function MilestoneCreatePage() {
         allowResubmission: values.resubmissionPolicy.allowed, maxSubmissionAttempts: values.resubmissionPolicy.maxAttempts ?? null,
         expectedVersion: existingQuery.data?.version,
       };
-      return milestoneId
-        ? milestoneApi.editDraft(teamScoped ? undefined : projectId, scopedTeamId!, milestoneId, payload)
-        : milestoneApi.saveDraft(teamScoped ? undefined : projectId, scopedTeamId!, payload);
+      return milestoneApi.editPlanned(teamScoped ? undefined : projectId, scopedTeamId!, milestoneId!, payload);
     },
     onSuccess: (milestone) => {
-      toast.success("Draft saved.");
-      navigate(teamScoped && scopedWorkspaceId ? listUrl : teamScoped ? `/teams/${scopedTeamId}/milestones` : `/projects/${projectId}/milestones/${milestone.id}`);
+      toast.success("Milestone changes saved.");
+      navigate(teamScoped ? listUrl : `/projects/${projectId}/milestones/${milestone.id}`);
     },
     onError: (error) => setApiError(getMilestoneApiError(error)),
   });
@@ -201,6 +203,18 @@ export function MilestoneCreatePage() {
     if (isDirty) setCancelOpen(true);
     else navigate(listUrl);
   };
+  const discardChangesDialog = <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
+    <DialogContent showCloseButton={!createMutation.isPending}>
+      <DialogHeader>
+        <DialogTitle>Discard changes?</DialogTitle>
+        <DialogDescription>Your unsaved milestone information will be lost.</DialogDescription>
+      </DialogHeader>
+      <DialogFooter>
+        <Button variant="outline" onClick={() => setCancelOpen(false)}>Continue editing</Button>
+        <Button variant="destructive" onClick={() => navigate(listUrl)}>Discard changes</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>;
 
   if (!projectId && !teamScoped) {
     return (
@@ -210,12 +224,47 @@ export function MilestoneCreatePage() {
     );
   }
 
+  if (milestoneId && existingQuery.data && (existingQuery.data.lifecycleStatus === "IN_PROGRESS" || existingQuery.data.lifecycleStatus === "CHANGES_REQUESTED")) {
+    const detailUrl = teamScoped || !projectId
+      ? `/teams/${scopedTeamId}/milestones/${milestoneId}${scopedWorkspaceId ? `?workspaceId=${scopedWorkspaceId}` : ""}`
+      : `/projects/${projectId}/milestones/${milestoneId}${scopedTeamId ? `?teamId=${scopedTeamId}` : ""}`;
+    return <MainLayout pathName={{ milestones: "Milestones", [milestoneId]: existingQuery.data.title, edit: "Edit" }}>
+      <MilestoneActiveEditForm
+        key={existingQuery.data.version}
+        milestone={existingQuery.data}
+        projectId={teamScoped ? undefined : projectId}
+        teamId={scopedTeamId ?? existingQuery.data.teamId ?? 0}
+        onCancel={requestCancel}
+        onDirtyChange={handleDirtyChange}
+        onSaved={() => {
+          completedRef.current = true;
+          void Promise.all([
+            queryClient.invalidateQueries({ queryKey: ["milestone"] }),
+            queryClient.invalidateQueries({ queryKey: ["projects", projectId, "milestones"] }),
+            queryClient.invalidateQueries({ queryKey: ["team-milestone", scopedTeamId] }),
+            queryClient.invalidateQueries({ queryKey: ["workspace-milestones"] }),
+            queryClient.invalidateQueries({ queryKey: ["milestone-edit", projectId, scopedTeamId, milestoneId] }),
+          ]);
+          navigate(detailUrl, { replace: true });
+        }}
+      />
+      {discardChangesDialog}
+    </MainLayout>;
+  }
+
+  if (milestoneId && existingQuery.data && existingQuery.data.lifecycleStatus !== "PLANNED") {
+    const detailUrl = teamScoped || !projectId
+      ? `/teams/${scopedTeamId}/milestones/${milestoneId}${scopedWorkspaceId ? `?workspaceId=${scopedWorkspaceId}` : ""}`
+      : `/projects/${projectId}/milestones/${milestoneId}${scopedTeamId ? `?teamId=${scopedTeamId}` : ""}`;
+    return <Navigate to={detailUrl} replace />;
+  }
+
   if (optionsQuery.isLoading || (milestoneId && existingQuery.isLoading)) {
     return <MainLayout pathName={{ projects: "Projects", milestones: "Milestones", new: "Create" }}><CreatePageSkeleton /></MainLayout>;
   }
 
   if (optionsQuery.isError || !optionsQuery.data || (milestoneId && (existingQuery.isError || !existingQuery.data))) {
-    const error = getMilestoneApiError(optionsQuery.error);
+    const error = getMilestoneApiError(existingQuery.error ?? optionsQuery.error);
     const description = error.status === 403
       ? "You no longer have permission or an active assignment for this project."
       : error.status === 409
@@ -244,7 +293,7 @@ export function MilestoneCreatePage() {
               <span className="text-sm text-muted-foreground">{teamScoped ? "Team workspace context" : "Fixed project context"}</span>
             </div>
             <div>
-              <CardTitle className="text-2xl">Create a milestone for {optionsQuery.data.project?.name ?? "this team workspace"}</CardTitle>
+              <CardTitle className="text-2xl">{milestoneId ? "Edit planned milestone" : "Create a milestone"} for {optionsQuery.data.project?.name ?? "this team workspace"}</CardTitle>
               <CardDescription className="mt-2">Define the delivery deadline, acceptance conditions, and evaluation rubric. Reviewers are assigned when submissions are evaluated.</CardDescription>
             </div>
           </CardHeader>
@@ -253,29 +302,17 @@ export function MilestoneCreatePage() {
         <MilestoneForm
           options={optionsQuery.data}
           defaultValues={defaultValues}
-          submitting={createMutation.isPending || draftMutation.isPending}
+          submitting={createMutation.isPending || plannedMutation.isPending}
           apiError={apiError}
           networkUncertain={networkUncertain}
-          onSubmit={milestoneId ? (values) => draftMutation.mutate(values) : handleSubmit}
-          onSaveDraft={(values) => draftMutation.mutate(values)}
+          onSubmit={milestoneId ? (values) => plannedMutation.mutate(values) : handleSubmit}
           submitLabel={milestoneId ? "Save changes" : undefined}
           onCancel={requestCancel}
           onDirtyChange={handleDirtyChange}
         />
       </div>
 
-      <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
-        <DialogContent showCloseButton={!createMutation.isPending}>
-          <DialogHeader>
-            <DialogTitle>Discard changes?</DialogTitle>
-            <DialogDescription>Your unsaved milestone information will be lost.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCancelOpen(false)}>Continue editing</Button>
-            <Button variant="destructive" onClick={() => navigate(listUrl)}>Discard changes</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {discardChangesDialog}
     </MainLayout>
   );
 }

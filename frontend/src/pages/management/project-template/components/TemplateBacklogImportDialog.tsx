@@ -46,7 +46,7 @@ export function TemplateBacklogImportDialog({ templateId, remaining, maxImportBy
     <Dialog open={open} onOpenChange={(value) => { if (!loading) setOpen(value); }}>
       <DialogContent showCloseButton={!loading} className="flex max-h-[90vh] min-h-105 flex-col overflow-y-auto sm:max-w-xl">
         <DialogHeader><DialogTitle>Import sample backlog</DialogTitle><DialogDescription>
-          Use Title, Description and SuggestedRole columns. Roles: PM, BA, DEV, QA. All rows must be valid before they are added to the form.
+          Use only Title and Description columns. Title is required; description can be blank. Suggested roles can be set later in the form.
         </DialogDescription></DialogHeader>
         <Tabs defaultValue="import" className="flex flex-1 flex-col"><ImportTab loading={loading} onImport={onImport} maxFileSize={maxImportBytes}
           onDownloadTemplate={async () => downloadBlob(await (downloadTemplate ? downloadTemplate() : projectTemplateApi.getBacklogImportTemplate(templateId)), "template-backlog.xlsx")} /></Tabs>

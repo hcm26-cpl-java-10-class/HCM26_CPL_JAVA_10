@@ -6,6 +6,9 @@ import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
 import com.example.starter_project_2025.system.project.trainingclass.ScopeAuthorizationService;
 import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
+import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshotRepository;
+import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateVersionStatus;
+import com.example.starter_project_2025.system.project.template.assignment.TemplateAssignmentProvisioningService;
 import com.example.starter_project_2025.web.CorrelationIdFilter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -54,12 +57,14 @@ public class ProjectTeamTemplateService {
     private static final String TEAM_LEADER_ROLE = "PM";
 
     private final ProjectTemplateRepository projectTemplateRepository;
+    private final ProjectTemplateSnapshotRepository versions;
     private final TeamAllocationSessionRepository sessionRepository;
     private final ProjectTeamRepository teamRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final ProjectTeamAuditRepository auditRepository;
     private final ProjectTeamOutboxRepository outboxRepository;
     private final ScopeAuthorizationService scopeAuthorizationService;
+    private final TemplateAssignmentProvisioningService provisioningService;
     private final ObjectMapper objectMapper;
 
     // ------------------------------------------------------------------
@@ -136,6 +141,7 @@ public class ProjectTeamTemplateService {
             Long sessionId,
             Long teamId,
             Long projectTemplateId,
+            Long versionId,
             Authentication authentication
     ) {
         TeamAllocationSession session = sessionRepository.findByIdForUpdate(sessionId)
@@ -149,7 +155,18 @@ public class ProjectTeamTemplateService {
                 .orElseThrow(() -> new ResourceNotFoundException("ProjectTeam", "id", teamId));
 
         ProjectTemplate template = findActiveTemplate(projectTemplateId, team.getTrainingClass().getTenantId());
-        return applyAssignment(team, template, currentUserId(authentication));
+        if (template.getTenantId() == null) {
+            throw new AccessDeniedException("Template is outside the team scope");
+        }
+        var published = versions.findFirstByTemplateIdAndStatusAndIsActiveTrueOrderByCreatedAtDesc(
+                template.getId(), ProjectTemplateVersionStatus.PUBLISHED)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Template has no published version"));
+        if (versionId != null && !versionId.equals(published.getId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "The published template version has changed. Reload the preview");
+        }
+        return applyAssignment(team, template, currentUserId(authentication), published.getId());
     }
 
     /**
@@ -176,7 +193,11 @@ public class ProjectTeamTemplateService {
         }
 
         ProjectTemplate template = findActiveTemplate(projectTemplateId, team.getTrainingClass().getTenantId());
-        return applyAssignment(team, template, userId);
+        var published = versions.findFirstByTemplateIdAndStatusAndIsActiveTrueOrderByCreatedAtDesc(
+                template.getId(), ProjectTemplateVersionStatus.PUBLISHED)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Template has no published version"));
+        return applyAssignment(team, template, userId, published.getId());
     }
 
     // ------------------------------------------------------------------
@@ -186,7 +207,8 @@ public class ProjectTeamTemplateService {
     private TeamProjectTemplateResponse applyAssignment(
             ProjectTeam team,
             ProjectTemplate template,
-            Long actorId
+            Long actorId,
+            Long versionId
     ) {
         if (team.getStatus() != ProjectTeamStatus.DRAFT) {
             throw new TeamNotDraftException(team.getId(), team.getStatus());
@@ -213,6 +235,7 @@ public class ProjectTeamTemplateService {
         String previousTemplateName = team.getProjectTemplateName();
 
         team.setProjectTemplate(template);
+        team.setProjectTemplateVersionId(versionId);
         // Keep the per-team capacity in sync with the template window so adding
         // members later cannot break the rule that was just validated.
         team.setMaxMembers(capacity.maxMembers());
@@ -222,6 +245,11 @@ public class ProjectTeamTemplateService {
         if (correlationId == null || correlationId.isBlank()) {
             correlationId = UUID.randomUUID().toString();
         }
+
+        // US-13: assigning the brief also activates the workspace creation flow:
+        // snapshot the active template version, insert the project silently and
+        // fan the brief out into workspace components.
+        provisioningService.provision(team, template, actorId, correlationId);
 
         TeamTemplateAuditState before = new TeamTemplateAuditState(
                 team.getId(),

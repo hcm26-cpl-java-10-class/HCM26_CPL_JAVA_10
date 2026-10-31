@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
@@ -73,18 +74,26 @@ public class TeamBacklogService {
                     .filter(item -> item.getSprint() != null)
                     .map(TeamBacklogService::workItemKey)
                     .collect(Collectors.toSet());
+            Set<String> productItemKeys = new HashSet<>();
             backlogs.findProductBacklogByProjectId(projectId).stream()
                     // A product-backlog row can be left behind when its work
                     // item was moved into a sprint. Prefer the sprint row,
                     // which carries the current workflow state and history.
                     .filter(item -> !sprintItemKeys.contains(workItemKey(item)))
+                    // Old demo databases may also contain duplicate product
+                    // backlog rows. Keep the first (lowest-id) copy returned
+                    // by the repository; exact title + description identity
+                    // avoids collapsing distinct work that merely shares a title.
+                    .filter(item -> productItemKeys.add(workItemKey(item)))
                     .forEach(items::add);
         }
         items.sort(Comparator.comparing(SprintBacklog::getId));
 
         List<ProjectMember> activeMembers = projectMembers
                 .findAllByTeam_IdAndClassMember_StatusOrderByIdAsc(teamId, ClassMemberStatus.ACTIVE);
-        Map<Long, String> assigneeNames = activeMembers.stream().collect(Collectors.toMap(
+        // Preserve the name on existing assignments even when a member becomes
+        // unavailable for new assignments. Only active members remain selectable.
+        Map<Long, String> assigneeNames = projectMembers.findAllByTeam_IdOrderByIdAsc(teamId).stream().collect(Collectors.toMap(
                         ProjectMember::getId,
                         TeamBacklogService::displayName,
                         (first, ignored) -> first

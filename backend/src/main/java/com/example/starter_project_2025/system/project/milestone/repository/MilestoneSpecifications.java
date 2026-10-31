@@ -3,6 +3,8 @@ package com.example.starter_project_2025.system.project.milestone.repository;
 import com.example.starter_project_2025.system.project.milestone.domain.LatePolicyType;
 import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
 import com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus;
+import com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus;
+import com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
@@ -28,6 +30,15 @@ public final class MilestoneSpecifications {
             List<LatePolicyType> latePolicyTypes,
             Instant deadlineFrom,
             Instant deadlineToExclusive
+    ) {
+        return matching(tenantId, projectId, teamId, search, statuses, mandatory, latePolicyTypes,
+                deadlineFrom, deadlineToExclusive, null);
+    }
+
+    public static Specification<Milestone> matching(
+            Long tenantId, Long projectId, Long teamId, String search, List<MilestoneStatus> statuses,
+            Boolean mandatory, List<LatePolicyType> latePolicyTypes, Instant deadlineFrom,
+            Instant deadlineToExclusive, List<MilestoneLifecycleStatus> lifecycleStatuses
     ) {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -55,6 +66,27 @@ public final class MilestoneSpecifications {
             if (statuses != null && !statuses.isEmpty()) {
                 predicates.add(root.get("status").in(statuses));
             }
+            if (lifecycleStatuses != null && !lifecycleStatuses.isEmpty()) {
+                List<Predicate> lifecycle = new ArrayList<>();
+                for (MilestoneLifecycleStatus state : lifecycleStatuses) {
+                    Predicate legacyState = switch (state) {
+                        case PLANNED -> criteriaBuilder.or(criteriaBuilder.equal(root.get("status"), MilestoneStatus.PLANNED),
+                                openExecution(root, criteriaBuilder, MilestoneExecutionStatus.TODO));
+                        case IN_PROGRESS -> criteriaBuilder.and(criteriaBuilder.equal(root.get("status"), MilestoneStatus.OPEN),
+                                criteriaBuilder.or(criteriaBuilder.isNull(root.get("executionStatus")),
+                                        criteriaBuilder.equal(root.get("executionStatus"), MilestoneExecutionStatus.IN_PROGRESS)));
+                        case SUBMITTED -> openExecution(root, criteriaBuilder, MilestoneExecutionStatus.REVIEW);
+                        case CHANGES_REQUESTED -> criteriaBuilder.disjunction();
+                        case ACCEPTED -> criteriaBuilder.or(openExecution(root, criteriaBuilder, MilestoneExecutionStatus.DONE),
+                                criteriaBuilder.equal(root.get("status"), MilestoneStatus.CLOSED));
+                        case REJECTED -> criteriaBuilder.or(openExecution(root, criteriaBuilder, MilestoneExecutionStatus.FAILED),
+                                criteriaBuilder.equal(root.get("status"), MilestoneStatus.CANCELLED));
+                    };
+                    lifecycle.add(criteriaBuilder.or(criteriaBuilder.equal(root.get("lifecycleState"), state),
+                            criteriaBuilder.and(criteriaBuilder.isNull(root.get("lifecycleState")), legacyState)));
+                }
+                predicates.add(criteriaBuilder.or(lifecycle.toArray(Predicate[]::new)));
+            }
             if (mandatory != null) {
                 predicates.add(criteriaBuilder.equal(root.get("mandatory"), mandatory));
             }
@@ -70,6 +102,13 @@ public final class MilestoneSpecifications {
 
             return criteriaBuilder.and(predicates.toArray(Predicate[]::new));
         };
+    }
+
+    private static Predicate openExecution(jakarta.persistence.criteria.Root<Milestone> root,
+                                            jakarta.persistence.criteria.CriteriaBuilder cb,
+                                            MilestoneExecutionStatus execution) {
+        return cb.and(cb.equal(root.get("status"), MilestoneStatus.OPEN),
+                cb.equal(root.get("executionStatus"), execution));
     }
 
     private static String escapeLike(String value) {

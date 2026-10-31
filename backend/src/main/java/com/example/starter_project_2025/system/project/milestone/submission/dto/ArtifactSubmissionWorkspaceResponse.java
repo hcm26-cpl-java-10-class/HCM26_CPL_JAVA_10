@@ -6,5 +6,12 @@ public record ArtifactSubmissionWorkspaceResponse(
         MilestoneDetailResponse milestone,
         ArtifactDraftResponse draft,
         ArtifactUploadPolicyResponse uploadPolicy,
-        ArtifactSubmissionResponse latestSubmission
-) { }
+        ArtifactSubmissionResponse latestSubmission,
+        boolean canSubmit,
+        String submissionBlockReason
+) {
+    public ArtifactSubmissionWorkspaceResponse(MilestoneDetailResponse milestone, ArtifactDraftResponse draft,
+            ArtifactUploadPolicyResponse uploadPolicy, ArtifactSubmissionResponse latestSubmission, boolean canSubmit) {
+        this(milestone, draft, uploadPolicy, latestSubmission, canSubmit, null);
+    }
+}

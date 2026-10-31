@@ -37,7 +37,7 @@ export function MilestoneTableCard({
       <CardHeader className="relative gap-3 pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1.5">
-            <MilestoneStatusBadge status={milestone.status} executionStatus={milestone.executionStatus} />
+            <MilestoneStatusBadge status={milestone.lifecycleStatus} />
             <Badge variant={milestone.mandatory ? "secondary" : "outline"}>
               {milestone.mandatory ? "Mandatory" : "Optional"}
             </Badge>

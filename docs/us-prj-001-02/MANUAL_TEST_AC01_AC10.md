@@ -1,6 +1,6 @@
 # Kiểm thử US-PRJ-001-02 — Overview và Members
 
-Cập nhật 24/10/2026. UI dùng English; phần hướng dẫn dùng tiếng Việt. Hãy kiểm thử trên database local của bài làm.
+Cập nhật 30/10/2026. UI dùng English; phần hướng dẫn dùng tiếng Việt. Hãy kiểm thử trên database local của bài làm.
 
 ## 1. Chuẩn bị một lần
 
@@ -12,16 +12,16 @@ Cập nhật 24/10/2026. UI dùng English; phần hướng dẫn dùng tiếng V
 
 | Tài khoản | Quyền Workspace mặc định | Dùng để test |
 | --- | --- | --- |
-| admin@example.com | Toàn bộ quyền; truy cập team trong tenant | Chuẩn bị dữ liệu, xem mọi workspace trong tenant, quản lý thành viên, cấu hình quyền |
-| teacher@example.com | WORKSPACE_READ, WORKSPACE_MEMBER_READ, WORKSPACE_CREATE, TEAM_READ, TEAM_UPDATE | Mentor của Atlas/Nova/Pixel/Horizon, tạo workspace và phân vai trò trong scope |
+| admin@example.com | Toàn bộ quyền; truy cập team trong tenant | Chuẩn bị dữ liệu, xem workspace, quản lý thành viên qua Project Team Allocation |
+| teacher@example.com | WORKSPACE_READ, WORKSPACE_MEMBER_READ, WORKSPACE_CREATE, PEO_TEAM_ALLOCATE hoặc PRJ_WORKSPACE_MANAGE | Xem workspace và quản lý team trong phạm vi được cấp |
 | student@example.com | WORKSPACE_READ, WORKSPACE_MEMBER_READ | Xem Atlas/Pixel nếu membership còn ACTIVE; không tạo workspace, không sửa roster/role |
 
-Project Management chỉ có Workspace. “Manage members” ở Workspace → Open workspace → Members. Tên trang/breadcrumb là Workspace; nút Create workspace vẫn dùng để tạo mới.
+Project Management chỉ có Workspace. Tab Members hiển thị mã, tên và role từ Allocation; các thao tác sửa thành viên/vai trò nằm ở Project Team Allocation.
 
 Đây là hai loại role khác nhau:
 - Role hệ thống ADMIN/STUDENT/TEACHER cấp quyền thao tác.
-- Project role UNASSIGNED/TEAM_LEADER/DEV/FE_DEV/BE_DEV/BA/QA/TESTER mô tả vai trò trong từng team.
-- Đổi Project role không thay Role hệ thống. Một Student chưa được phân vai trò vẫn hiển thị Unassigned role.
+- Project role PM/BA/DEV/QA (có thể kiêm nhiệm nhiều role) được quản lý trong Project Team Allocation.
+- Đổi Project role không thay Role hệ thống; Workspace Members hiển thị role nhưng không sửa trực tiếp.
 
 Các account workspace.viewer.demo / workspace.mentor.demo / workspace.member.demo ngừng được tạo. Nếu đã có dữ liệu cũ, chúng bị khóa/vô hiệu hóa và membership cũ chuyển LEFT; lịch sử được giữ. Không xóa workspace để chuyển tài khoản.
 
@@ -35,9 +35,9 @@ Các account workspace.viewer.demo / workspace.mentor.demo / workspace.member.de
 | Team Horizon | No project; không có member | teacher là mentor; không tạo được workspace khi team rỗng |
 | Team Completed | Project COMPLETED; admin là member | admin kiểm tra; không tạo mới workspace từ project COMPLETED |
 
-Nếu bạn từng tạo workspace/đổi roster, ID và trạng thái hiện tại được giữ lại. Không giả định ID là 5, 7 hay 10. Bộ seed không phục hồi một member bạn đã chuyển LEFT; hãy dùng Manage members để phục hồi trước khi test lại.
+Nếu bạn từng tạo workspace/đổi roster, ID và trạng thái hiện tại được giữ lại. Không giả định ID là 5, 7 hay 10. Bộ seed không phục hồi thành viên đã gỡ; hãy dùng Project Team Allocation để kiểm tra và thêm lại trước khi test.
 
-Để test bắt đầu dễ nhất, dùng Team Pixel. Nếu student không còn ACTIVE: đăng nhập teacher/admin → Pixel → Members → Manage members → chọn Participation = Active cho student → Save → Done.
+Để test bắt đầu dễ nhất, dùng Team Pixel. Nếu student không còn trong team, dùng Project Team Allocation để thêm lại bằng class member tương ứng trước khi test.
 
 Để có workspace B cho AC01/AC09: dùng teacher → Workspace → dòng Team Nova → Create workspace → chọn Team Nova và project của team → Continue → kiểm tra thông tin → Confirm creation. Nếu Nova đã có rồi thì bấm Open workspace. Không tạo lại để “reset”.
 
@@ -50,14 +50,14 @@ Nếu bạn từng tạo workspace/đổi roster, ID và trạng thái hiện t�
 5. Các script tự lưu adminToken, teacherToken, studentToken. Không dán cả JSON hoặc chữ Bearer vào ô token.
 6. Send “Discover Team Pixel IDs”. Script tự lấy workspaceId, teamId, projectId.
 7. Các request sau dùng đúng biến đó. Trong response xem cả HTTP status, Body và Test Results.
-8. Có thể chạy cả Collection trước khi thay roster/quyền. Collection chỉ login và đọc; không tạo workspace. Request Invalid session cố ý trả 401, Missing workspace cố ý trả 404, Student management cố ý trả 403; Test Results vẫn phải PASS.
+8. Có thể chạy cả Collection trước khi thay roster/quyền. Collection chỉ login và đọc; không tạo workspace. Request Invalid session cố ý trả 401, Missing workspace và hai request legacy management cố ý trả 404; Test Results vẫn phải PASS.
 9. Sau đó làm các bước UI/chuẩn bị dữ liệu dưới đây. Collection không tự chứng minh trạng thái loading, thay đổi nguồn đề bài, thu hồi quyền hoặc tenant inactive.
 
 Nếu làm request thủ công:
 - Method GET, URL ví dụ {{baseUrl}}/api/workspaces/{{workspaceId}}.
 - Authorization → Bearer Token → {{teacherToken}} hoặc {{studentToken}}.
 - GET không cần Body.
-- Với PUT, Body → raw → JSON và Content-Type: application/json.
+- Mọi thao tác ghi thành viên và vai trò thực hiện tại Project Team Allocation.
 
 ## AC01 — Đúng workspace, không dùng nhầm dữ liệu cũ
 
@@ -91,48 +91,37 @@ Bằng chứng: AC02-source-v2-and-snapshot-v1.png + AC02-overview-still-v1.png.
 ## AC03 — Danh sách đúng team, đủ trường và không trùng
 
 1. Teacher → Pixel → Members.
-2. Mỗi dòng phải có Member code, Display name, Project role, Status. Student mặc định là John Doe; mã SE... lấy từ User.user_code.
-3. Send GET /api/workspaces/{{workspaceId}}/members bằng teacherToken. Body là mảng, mỗi phần tử chỉ có user_code, display_name, project_role, status.
+2. Mỗi dòng có Member code, Display name và Project roles. Mã thành viên lấy từ User.user_code.
+3. Send GET /api/workspaces/{{workspaceId}}/members bằng teacherToken. Body là mảng, mỗi phần tử chỉ có user_code, display_name và roles.
 4. Đối chiếu số dòng với member_count ở Overview. Chỉ membership ACTIVE còn hiệu lực xuất hiện.
 5. Sang Nova → Members: phải là roster Nova, không tự lấy roster Pixel.
-6. Không bấm Add member để “sửa số lượng” khi chỉ đang xem. Nếu có dòng trùng cùng một member code thì FAIL.
+6. Thử tìm theo tên/mã; kết quả cập nhật ngay. Nút mở Allocation của người có quyền phải dẫn đến đúng team. Tab Members không có bộ lọc role hoặc nút thêm/sửa thành viên trực tiếp.
 
-PASS: đúng roster, đúng bốn trường, không trùng quan hệ thành viên.
-Bằng chứng: UI Members + response tương ứng; Collection có assertion kiểm tra bốn field, ACTIVE và số lượng.
+PASS: đúng roster, đúng ba trường, role kiêm nhiệm hiển thị đủ và không trùng quan hệ thành viên.
+Bằng chứng: UI Members + response tương ứng; Collection có assertion kiểm tra ba field và số lượng.
 
-## AC04 — Vai trò chưa phân công
+## AC04 — Vai trò thuộc Project Team Allocation
 
-1. Teacher/admin → Pixel → Members → Manage members.
-2. Ở student, chọn Project role = Unassigned role → Save → Done.
-3. Members phải hiện Unassigned role. API /members phải có project_role = UNASSIGNED.
-4. Role hệ thống của account vẫn STUDENT; không tự biến thành Developer/Team leader.
-5. Để kiểm tra dropdown hoạt động: đổi sang Frontend developer → Save → Done; refresh tab student và kiểm tra FE_DEV. Cuối cùng đổi về Unassigned role nếu chuẩn bị lại baseline.
+1. Mở Project Team Allocation, chọn lớp và team Pixel (hoặc team ACTIVE đã có workspace).
+2. Đối chiếu role của một thành viên; nếu được phép, cập nhật role qua luồng Allocation và lưu theo quy tắc template.
+3. Refresh Workspace → Members: thành viên vẫn có một dòng với đúng mã/tên và badge role tương ứng; nếu kiêm nhiệm thì có nhiều badge. Không có cột status.
+4. API /members trả `roles` dạng mảng, không trả project_role hoặc status. Role hệ thống của account không thay đổi.
 
-PASS: role dự án lấy từ membership, không suy diễn từ role hệ thống.
-Bằng chứng: ảnh dropdown, UI Unassigned role, response UNASSIGNED.
+PASS: Allocation quản lý role; Workspace hiển thị role chính xác và chỉ đọc.
+Bằng chứng: role trong Allocation và response ba trường của Workspace Members.
 
 ## AC05 — Đồng bộ roster và giữ lịch sử
 
 1. Mở Pixel bằng teacher/admin; ghi lại workspaceId, member_count, danh sách và tab Activity.
-2. Members → Manage members → Add an existing user → chọn admin (hoặc account có sẵn khác chưa ở team) → chọn Developer → Add member → Done.
+2. Tại Project Team Allocation, thêm một class member hợp lệ chưa thuộc team ACTIVE vào Pixel.
 3. Refresh workspace/student tab. Overview count tăng 1; Members có user vừa thêm. workspaceId giữ nguyên.
-4. Teacher/admin → Manage members → ở user vừa thêm, chọn Participation = Left → Save → Done.
-5. Refresh: user đó biến mất khỏi danh sách ACTIVE và count giảm 1. Manage members vẫn giữ dòng LEFT để khôi phục; không tạo bản ghi trùng.
+4. Tại Project Team Allocation, gỡ thành viên vừa thêm khỏi Pixel.
+5. Refresh: thành viên đó biến mất khỏi danh sách và count giảm 1.
 6. Tab Activity vẫn giữ sự kiện và actor cũ. Đổi roster không xóa lịch sử workspace.
-7. Chọn lại Participation = Active để kiểm tra tái tham gia; số dòng không bị nhân đôi. Sau test trả user thêm tạm về Left.
-8. Nếu test cho student LEFT, account student sẽ mất scope và nhận 403 cho workspace đó. Dùng teacher/admin để khôi phục student Active, không tự thêm người đang xem qua GET.
+7. Thêm lại thành viên qua Allocation nếu cần kiểm tra tái tham gia; không tạo dòng trùng. Sau test trả roster về trạng thái ban đầu.
+8. Nếu gỡ student, account student sẽ mất scope và nhận 403 cho workspace đó. Dùng Allocation để thêm lại; GET không tự thêm người xem.
 
-API cập nhật tương ứng (chỉ teacher có scope/admin):
-PUT /api/project-hub/teams/{{teamId}}/members/USER_ID
-
-~~~json
-{
-  "projectRole": "DEV",
-  "status": "ACTIVE"
-}
-~~~
-
-USER_ID lấy từ management roster/member-options; không đoán ID và không dùng member_code thay cho userId. Các trường hợp status hợp lệ: ACTIVE, INACTIVE, LEFT.
+Các endpoint quản lý thành viên cũ dưới `/api/project-hub/teams/{teamId}/members` đã bị gỡ.
 PASS: count/danh sách đồng bộ khi refresh; workspace không tạo lại; lịch sử còn; không trùng membership.
 
 ## AC06 — Chỉ có quyền Overview, thiếu quyền Members
@@ -143,7 +132,7 @@ Không cần tạo account demo mới. Tạm thu hồi WORKSPACE_MEMBER_READ c�
 2. Ghi lại các permission hiện tại. Bỏ chọn duy nhất WORKSPACE_MEMBER_READ; giữ WORKSPACE_READ và các quyền học tập khác → Save.
 3. Student đăng xuất/đăng nhập lại. Postman Send Login student để cập nhật token. Không dùng token admin để test ca này.
 4. Student mở Pixel → Overview: vẫn thấy project/team/snapshot và số lượng thành viên.
-5. Members hiển thị You do not have permission to view member details. Không có Manage members.
+5. Members hiển thị You do not have permission to view member details.
 6. Send GET /api/workspaces/{{workspaceId}}/members bằng studentToken: HTTP 403, không có roster.
 7. GET Overview vẫn HTTP 200, can_view_members=false, member_count vẫn có và không có field members.
 8. Kết thúc: admin cấp lại WORKSPACE_MEMBER_READ cho STUDENT. Student login lại và kiểm tra /members trở về 200.
@@ -161,11 +150,11 @@ Phần A — Mô tả/mục tiêu:
 4. Chạy AC07_EMPTY_INFO_RESTORE.sql để khôi phục đúng nội dung đã backup. Không xóa database.
 
 Phần B — Team không có thành viên hiện tại:
-1. Dùng teacher/admin → Pixel → Members → Manage members.
-2. Chuyển tất cả member hiện có của Pixel sang Left → Save từng dòng → Done. Teacher là mentor nên vẫn mở được workspace.
+1. Dùng người có quyền Project Team Allocation, ghi lại roster Pixel rồi gỡ các thành viên qua Allocation. Teacher là mentor nên vẫn mở được workspace.
+2. Xác nhận Allocation đã lưu roster rỗng.
 3. Refresh: Overview 0 active members, Members No team members.
 4. Reload hoặc Send GET nhiều lần. Team vẫn rỗng; viewer/teacher không tự được thêm vào roster.
-5. Khôi phục student Active; các member thêm tạm có thể giữ Left.
+5. Dùng Allocation thêm lại student và khôi phục roster ban đầu.
 
 Team Horizon rỗng nhưng chưa có workspace, nên không dùng thao tác Create workspace cho AC07. Ca này kiểm tra workspace đã tồn tại sau khi roster thay đổi.
 PASS: rỗng là trạng thái hợp lệ; không tự thêm người xem; sau khi restore dữ liệu bình thường.
@@ -175,7 +164,7 @@ PASS: rỗng là trạng thái hợp lệ; không tự thêm người xem; sau k
 1. Chuẩn bị student ACTIVE ở Pixel và có đủ hai quyền xem.
 2. Đăng nhập Postman bằng student; Send Overview và Members.
 3. Kiểm tra Body: không password/passwordHash/token/accessToken/refreshToken/email/phone; không draftScores hoặc unreleasedFeedback.
-4. Members chỉ bốn field đã chốt. Overview không kèm mảng members.
+4. Members chỉ có ba field đã chốt. Overview không kèm mảng members.
 5. Trong browser student, DevTools → Network → chọn request → Response để đối chiếu. Đừng chỉ nhìn UI.
 6. Collection có kiểm tra đệ quy các tên field bị cấm. Thực hiện thêm với teacher nếu muốn đối chiếu.
 7. Endpoint Login phải trả access token để đăng nhập; token ở response Login không phải lỗi AC08. AC08 áp dụng API dữ liệu Workspace/Members.

@@ -27,6 +27,7 @@ export interface WorkspaceCandidateItem {
 export interface WorkspaceCreateRequest {
   projectId?: number | null;
   teamId: number;
+  taskKeyPrefix?: string;
 }
 
 export interface WorkspaceProjectOption {
@@ -44,6 +45,7 @@ export interface WorkspaceResponse {
   tenantId?: number;
   code?: string;
   name?: string;
+  taskKeyPrefix?: string;
   status?: string;
   createdBy?: number;
   createdAt?: string;
@@ -59,52 +61,53 @@ export interface WorkspaceActivity {
   correlationId: string;
 }
 
-export type ProjectRole = "UNASSIGNED" | "TEAM_LEADER" | "DEV" | "FE_DEV" | "BE_DEV" | "BA" | "QA" | "TESTER";
-export type ParticipationStatus = "ACTIVE" | "INACTIVE" | "LEFT";
-
 export interface WorkspaceMember {
   user_code: string | null;
   display_name: string;
-  project_role: ProjectRole;
-  status: ParticipationStatus;
-}
-
-export interface WorkspaceTopicSnapshot {
-  topic_code: string;
-  topic_title: string;
-  version: string;
-  description: string | null;
-  objectives: string | null;
-  requirements: string[];
-  attachments: { name: string; url: string }[];
+  roles: Array<"PM" | "BA" | "DEV" | "QA">;
 }
 
 export interface WorkspaceDetail extends WorkspaceResponse {
   id: number;
-  projectCode: string;
-  projectName: string;
-  projectDescription?: string;
-  projectStatus: string;
+  projectCode?: string | null;
+  projectName?: string | null;
+  projectDescription?: string | null;
+  projectStatus?: string | null;
+  projectClassName?: string | null;
+  projectCohortName?: string | null;
   teamCode: string;
   teamName: string;
   mentorName?: string;
   charter: TeamCharter;
   cohortId?: number;
   cohortName?: string;
+  topic_snapshot?: {
+    topic_code: string;
+    topic_title: string;
+    version: string;
+    description?: string | null;
+    objectives?: string | null;
+    requirements?: string[] | null;
+    attachments?: Array<{
+      name: string;
+      url: string;
+    }> | null;
+  } | null;
   createdAt?: string;
   createdByName?: string;
   member_count: number;
   can_view_members: boolean;
-  topic_snapshot: WorkspaceTopicSnapshot | null;
   activities: WorkspaceActivity[] | null;
 }
 
 export type WorkspaceSectionKey = "overview" | "members" | "milestones" | "sprints" | "backlog" | "artifacts" | "feedback" | "activity";
 export interface WorkspaceSectionAccess { key: WorkspaceSectionKey; canRead: boolean; actions: Record<string, boolean> }
 export interface WorkspaceNavigation {
-  workspaceId: number; projectId?: number | null; teamId: number; projectCode?: string | null; projectName?: string | null;
-  teamName: string; projectStatus?: string | null; sections: WorkspaceSectionAccess[];
+  workspaceId: number; projectId?: number | null; teamId: number; classId: number; allocationSessionId: number;
+  projectCode?: string | null; projectName?: string | null;
+  teamName: string; projectStatus?: string | null; taskKeyPrefix?: string | null; sections: WorkspaceSectionAccess[];
 }
+  export interface WorkspaceBoardColumn { key: "BACKLOG" | "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE" | "CUSTOM_1" | "CUSTOM_2" | "CUSTOM_3" | "CUSTOM_4" | "CUSTOM_5"; label: string; visible: boolean }
 export interface WorkspaceSectionItem {
   id: string; title: string; description: string | null; status: string; published: boolean; score?: number; occurredAt?: string;
 }

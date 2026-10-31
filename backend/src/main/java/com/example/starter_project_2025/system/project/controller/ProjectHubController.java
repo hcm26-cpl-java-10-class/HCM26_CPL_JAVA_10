@@ -2,7 +2,6 @@ package com.example.starter_project_2025.system.project.controller;
 
 import com.example.starter_project_2025.system.project.dto.ProjectHubDtos;
 import com.example.starter_project_2025.system.project.service.ProjectHubService;
-import com.example.starter_project_2025.system.project.team.TeamMembershipService;
 import com.example.starter_project_2025.system.project.workspace.controller.WorkspaceCorrelation;
 
 import com.example.starter_project_2025.exception.error.ErrorResponse;
@@ -25,22 +24,6 @@ import java.util.List;
 @Slf4j
 public class ProjectHubController {
     private final ProjectHubService service;
-    private final TeamMembershipService membership;
-
-    @GetMapping("/teams/{id}/members")
-    @PreAuthorize("hasAuthority('TEAM_UPDATE') and hasAuthority('WORKSPACE_MEMBER_READ') and hasAnyAuthority('WORKSPACE_READ', 'VIEW_PROJECT_WORKSPACE')")
-    public List<ProjectHubDtos.ManagedMember> members(@PathVariable Long id) { return membership.members(id); }
-
-    @GetMapping("/teams/{id}/member-options")
-    @PreAuthorize("hasAuthority('TEAM_UPDATE') and hasAuthority('WORKSPACE_MEMBER_READ') and hasAnyAuthority('WORKSPACE_READ', 'VIEW_PROJECT_WORKSPACE')")
-    public List<ProjectHubDtos.MemberOption> memberOptions(@PathVariable Long id) { return membership.options(id); }
-
-    @PutMapping("/teams/{id}/members/{userId}")
-    @PreAuthorize("hasAuthority('TEAM_UPDATE') and hasAuthority('WORKSPACE_MEMBER_READ') and hasAnyAuthority('WORKSPACE_READ', 'VIEW_PROJECT_WORKSPACE')")
-    public ProjectHubDtos.ManagedMember updateMember(@PathVariable Long id, @PathVariable Long userId,
-            @Valid @RequestBody ProjectHubDtos.MembershipUpdate request) {
-        return membership.save(id, userId, request);
-    }
     @GetMapping("/teams")
     @PreAuthorize("hasAuthority('TEAM_READ')")
     public List<ProjectHubDtos.TeamView> teams() { return service.getTeams(); }

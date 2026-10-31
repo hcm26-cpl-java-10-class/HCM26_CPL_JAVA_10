@@ -1,4 +1,7 @@
 import { teamAllocationApi } from "@/api";
+import { teamTemplateApi } from "@/api/features/team-template.api";
+import { TemplatePickerPanel } from "./TemplatePickerPanel";
+import type { TemplateCandidate } from "@/types/features/template-candidate";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,7 +18,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useAssignableProjectTemplates } from "@/hooks/useAssignableProjectTemplates";
 import type { TrainingClassDTO } from "@/types/features/training-class";
 import type {
   AllocationApiError,
@@ -26,7 +28,6 @@ import type {
   ClassRosterMember,
   DraftWarning,
   MentorOption,
-  ProjectTemplateOption,
   PublishTeamsResponse,
   SaveDraftRequest,
   TeamMemberRole,
@@ -46,7 +47,6 @@ import {
   ListChecks,
   LoaderCircle,
   Plus,
-  RefreshCw,
   Ban,
   Save,
   Search,
@@ -78,6 +78,7 @@ interface SaveTeamDetailsPayload {
   mentorId: number | null;
   mentorChanged: boolean;
   projectTemplateId: number | null;
+  projectTemplateVersionId?: number;
   templateChanged: boolean;
   rolesChanged: boolean;
   roles: Array<{ memberId: number; roles: TeamMemberRole[] }>;
@@ -283,13 +284,24 @@ export default function TeamAllocationPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const classId = Number(classIdParam);
+  const allocationLink = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const sessionId = Number(params.get("sessionId"));
+    const teamId = Number(params.get("teamId"));
+    return {
+      sessionId: Number.isSafeInteger(sessionId) && sessionId > 0 ? sessionId : null,
+      teamId: Number.isSafeInteger(teamId) && teamId > 0 ? teamId : null,
+    };
+  }, [location.search]);
+  const requestedSessionRef = useRef(allocationLink.sessionId);
   const selectedClass = (location.state as { trainingClass?: TrainingClassDTO } | null)
     ?.trainingClass;
   const queryClient = useQueryClient();
   const initialSession = useMemo(() => {
     const saved = getSavedSession();
-    return saved?.classId === classId ? saved : null;
-  }, [classId]);
+    return saved?.classId === classId &&
+      (allocationLink.sessionId === null || saved.id === allocationLink.sessionId) ? saved : null;
+  }, [classId, allocationLink.sessionId]);
   const [capacityInput, setCapacityInput] = useState(initialSession?.maxMembers.toString() ?? "");
   const [session, setSession] = useState<AllocationSession | null>(initialSession);
   const [createAnotherSession, setCreateAnotherSession] = useState(false);
@@ -375,12 +387,13 @@ export default function TeamAllocationPage() {
     queryFn: () => teamAllocationApi.getClassMentors(classId),
     enabled: Number.isSafeInteger(classId) && classId > 0,
   });
-  // US-10: assignable project templates (min/max capacity window).
-  const templatesQuery = useAssignableProjectTemplates();
 
   useEffect(() => {
     if (!sessionsQuery.data) return;
-    const matchingSession = (session
+    const requestedSession = requestedSessionRef.current;
+    requestedSessionRef.current = null;
+    const matchingSession = (requestedSession === null ? undefined
+      : sessionsQuery.data.find((item) => item.id === requestedSession)) ?? (session
       ? sessionsQuery.data.find((item) => item.id === session.id)
       : undefined) ?? sessionsQuery.data[0];
     if (!matchingSession) {
@@ -828,6 +841,7 @@ export default function TeamAllocationPage() {
           sessionId,
           payload.teamId,
           payload.projectTemplateId,
+          payload.projectTemplateVersionId,
         );
         expectedVersion = assigned.version;
       }
@@ -914,9 +928,11 @@ export default function TeamAllocationPage() {
     mutationFn: ({
       teamId,
       projectTemplateId,
+      versionId,
     }: {
       teamId: number;
       projectTemplateId: number;
+      versionId?: number;
     }) => {
       if (classId === null || sessionId === null) {
         throw new Error("Không có phiên phân nhóm.");
@@ -926,6 +942,7 @@ export default function TeamAllocationPage() {
         sessionId,
         teamId,
         projectTemplateId,
+        versionId,
       );
     },
     onSuccess: async (updated) => {
@@ -1239,7 +1256,7 @@ export default function TeamAllocationPage() {
                 >
                   {sessionsQuery.data.map((item) => (
                     <option key={item.id} value={item.id}>
-                      Phiên #{item.id} · {item.status} · tối đa {item.maxMembers}/nhóm
+                      Phiên #{item.sessionNumber} · {item.status} · tối đa {item.maxMembers}/nhóm
                     </option>
                   ))}
                   {!session && (
@@ -1329,7 +1346,7 @@ export default function TeamAllocationPage() {
                   <Badge variant={session.status === "OPEN" ? "default" : "secondary"}>
                     {session.status}
                   </Badge>
-                  <span className="font-medium">Phiên #{session.id}</span>
+                  <span className="font-medium">Phiên #{session.sessionNumber}</span>
                   <span className="text-muted-foreground">Lớp #{session.classId}</span>
                   {teamsQuery.isLoading && <LoaderCircle className="size-4 animate-spin text-muted-foreground" />}
                 </div>
@@ -1910,8 +1927,11 @@ export default function TeamAllocationPage() {
                     <div className="space-y-3">
                       {savedTeams.map((team) => (
                         <SavedTeamCard
+                          classId={classId!}
+                          sessionId={sessionId!}
                           key={team.teamId}
                           team={team}
+                          openInitially={allocationLink.teamId === team.teamId}
                           memberName={nameForMember}
                           mentors={mentorsQuery.data ?? []}
                           memberOptions={rosterQuery.data ?? []}
@@ -2003,26 +2023,19 @@ export default function TeamAllocationPage() {
                             })
                           }
                           onRoleChange={clearTeamRoleFailure}
-                          templates={templatesQuery.data ?? []}
-                          templatesLoading={templatesQuery.isFetching}
-                          onRefreshTemplates={() => void templatesQuery.refetch()}
-                          templatesError={
-                            templatesQuery.isError
-                              ? "Không tải được danh sách đề bài."
-                              : null
-                          }
                           canAssignTemplate={
                             hasPermission("PEO_TEAM_ALLOCATE") ||
                             hasPermission("PRJ_WORKSPACE_MANAGE")
                           }
                           assignTemplatePending={assignTemplateMutation.isPending}
                           assignTemplateError={templateAssignErrors[team.teamId]}
-                          onAssignTemplate={(projectTemplateId) =>
-                            assignTemplateMutation.mutate({
+                          onAssignTemplate={async (projectTemplateId, versionId) => {
+                            await assignTemplateMutation.mutateAsync({
                               teamId: team.teamId,
                               projectTemplateId,
-                            })
-                          }
+                              versionId,
+                            });
+                          }}
                           onClearAssignTemplateError={() =>
                             clearTemplateAssignError(team.teamId)
                           }
@@ -2796,7 +2809,10 @@ function MemberOption({
 }
 
 function SavedTeamCard({
+  classId,
+  sessionId,
   team,
+  openInitially,
   memberName,
   mentors,
   memberOptions,
@@ -2820,10 +2836,6 @@ function SavedTeamCard({
   onUpdateMentor,
   onUpdateRoles,
   onRoleChange,
-  templates,
-  templatesLoading,
-  onRefreshTemplates,
-  templatesError,
   canAssignTemplate,
   assignTemplatePending,
   assignTemplateError,
@@ -2832,7 +2844,10 @@ function SavedTeamCard({
   canCreateNewSession,
   onCreateNewSession,
 }: {
+  classId: number;
+  sessionId: number;
   team: AllocationTeam;
+  openInitially: boolean;
   memberName: (memberId: number) => string;
   mentors: MentorOption[];
   memberOptions: ClassRosterMember[];
@@ -2860,14 +2875,10 @@ function SavedTeamCard({
     members: Array<{ memberId: number; roles: TeamMemberRole[] }>,
   ) => void;
   onRoleChange: (teamId: number, memberId: number) => void;
-  templates: ProjectTemplateOption[];
-  templatesLoading: boolean;
-  onRefreshTemplates: () => void;
-  templatesError: string | null;
   canAssignTemplate: boolean;
   assignTemplatePending: boolean;
   assignTemplateError?: TeamTemplateApiError;
-  onAssignTemplate: (projectTemplateId: number) => void;
+  onAssignTemplate: (projectTemplateId: number, versionId?: number) => Promise<void>;
   onClearAssignTemplateError: () => void;
   canCreateNewSession: boolean;
   onCreateNewSession: () => void;
@@ -2879,7 +2890,21 @@ function SavedTeamCard({
   const [selectedTemplate, setSelectedTemplate] = useState(
     team.projectTemplateId == null ? "" : String(team.projectTemplateId),
   );
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selectedCandidate, setSelectedCandidate] = useState<TemplateCandidate | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(openInitially);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const identity = usePermissions();
+  const templatesQuery = useQuery({
+    queryKey: ["template-candidates", "quick-options", identity.user.email,
+      identity.activeRole, classId, sessionId, team.teamId],
+    queryFn: ({ signal }) => teamTemplateApi.search(classId, sessionId,
+      team.teamId, { q: "", level: "", category: "", page: 0, size: 50 }, signal),
+    enabled: detailsOpen && team.status === "DRAFT" && canAssignTemplate,
+    retry: false,
+  });
+  const templates = templatesQuery.data?.content ?? [];
+  const templatesLoading = templatesQuery.isLoading;
+  const templatesError = templatesQuery.isError ? "Không tải được danh sách đề bài." : null;
   const allowMultiRole = team.allowMultiRole ?? false;
   const roleQuotas = team.roleQuotas ?? [];
   const [memberRoles, setMemberRoles] = useState<Record<number, TeamMemberRole[]>>(
@@ -2962,6 +2987,7 @@ function SavedTeamCard({
     setSelectedTemplate(
       team.projectTemplateId == null ? "" : String(team.projectTemplateId),
     );
+    setSelectedCandidate(null);
   }, [team.projectTemplateId]);
   useEffect(() => {
     setMemberRoles(Object.fromEntries(
@@ -2990,10 +3016,7 @@ function SavedTeamCard({
         type="button"
         className="flex w-full items-center justify-between gap-3 rounded-xl border p-4 text-left transition-colors hover:bg-muted/40"
         aria-label={`Xem chi tiết ${team.teamName}`}
-        onClick={() => {
-          onRefreshTemplates();
-          setDetailsOpen(true);
-        }}
+        onClick={() => setDetailsOpen(true)}
       >
         <span className="min-w-0">
           <span className="block truncate font-semibold">{team.teamName}</span>
@@ -3019,8 +3042,14 @@ function SavedTeamCard({
           </span>
         </span>
       </button>
-      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+      <Dialog open={detailsOpen} onOpenChange={(value) => {
+        setDetailsOpen(value);
+        if (!value) setPickerOpen(false);
+      }}>
+        <DialogContent className={pickerOpen
+          ? "flex max-h-[min(90vh,850px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl"
+          : "max-h-[85vh] overflow-y-auto sm:max-w-xl"}>
+          <div className={pickerOpen ? "hidden" : "contents"}>
           <DialogHeader>
             <DialogTitle>{team.teamName}</DialogTitle>
             <DialogDescription>
@@ -3072,15 +3101,9 @@ function SavedTeamCard({
             <div className="space-y-2 rounded-lg border bg-background p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-medium">Đề bài dự án</p>
-                <div className="flex items-center gap-2">
-                  <Badge variant={team.projectTemplateId ? "default" : "secondary"}>
-                    {team.projectTemplateId ? "Đã gán" : "Chưa gán"}
-                  </Badge>
-                  {isDraft && <Button type="button" variant="outline" size="icon-sm" disabled={templatesLoading}
-                    aria-label={`Refresh templates for ${team.teamName}`} title="Refresh templates" onClick={onRefreshTemplates}>
-                    <RefreshCw className={templatesLoading ? "size-4 animate-spin" : "size-4"} />
-                  </Button>}
-                </div>
+                <Badge variant={team.projectTemplateId ? "default" : "secondary"}>
+                  {team.projectTemplateId ? "Đã gán" : "Chưa gán"}
+                </Badge>
               </div>
               <p className="text-sm font-medium">
                 {team.projectTemplateName ?? "Chưa gán đề bài"}
@@ -3125,21 +3148,34 @@ function SavedTeamCard({
                     disabled={!canAssignTemplate || assignTemplatePending || templatesLoading}
                     onChange={(event) => {
                       setSelectedTemplate(event.target.value);
+                      setSelectedCandidate(null);
                       onClearAssignTemplateError();
                     }}
                   >
                     <option value="">
                       {templatesLoading ? "Đang tải đề bài..." : "Chọn đề bài"}
                     </option>
-                    {team.projectTemplateId != null && !templates.some(option => option.id === team.projectTemplateId) && (
-                      <option value={team.projectTemplateId} disabled>{team.projectTemplateName ?? "Current template"} (currently assigned)</option>
+                    {team.projectTemplateId != null && !templates.some((option) => option.templateId === team.projectTemplateId) && (
+                      <option value={team.projectTemplateId}>
+                        {team.projectTemplateName ?? `#${team.projectTemplateId}`}
+                      </option>
                     )}
                     {templates.map((option) => (
-                      <option key={option.id} value={option.id}>
+                      <option key={option.templateId} value={option.templateId}>
                         {option.name} ({option.minMembers}–{option.maxMembers} thành viên)
                       </option>
                     ))}
+                    {selectedCandidate && !templates.some((option) => option.templateId === selectedCandidate.templateId) && (
+                      <option value={selectedCandidate.templateId}>
+                        {selectedCandidate.name} ({selectedCandidate.minMembers}–{selectedCandidate.maxMembers} thành viên)
+                      </option>
+                    )}
                   </select>
+                  <Button type="button" size="sm" variant="outline"
+                    disabled={!canAssignTemplate || assignTemplatePending}
+                    onClick={() => setPickerOpen(true)}>
+                    <Search className="size-4" /> Tìm đề bài
+                  </Button>
                   <Button
                     size="sm"
                     disabled={
@@ -3151,7 +3187,11 @@ function SavedTeamCard({
                           ? ""
                           : String(team.projectTemplateId))
                     }
-                    onClick={() => onAssignTemplate(Number(selectedTemplate))}
+                    onClick={() => {
+                      const candidate: TemplateCandidate | undefined = selectedCandidate ?? templates.find(
+                        (option) => option.templateId === Number(selectedTemplate));
+                      void onAssignTemplate(Number(selectedTemplate), candidate?.versionId).catch(() => {});
+                    }}
                   >
                     {assignTemplatePending
                       ? <LoaderCircle className="size-4 animate-spin" />
@@ -3160,8 +3200,10 @@ function SavedTeamCard({
                   </Button>
                 </div>
               )}
-              {isDraft && !templatesLoading && !templatesError && templates.length === 0 && (
-                <p className="text-xs text-muted-foreground">No active templates are available. Activate a template, then refresh this list.</p>
+              {isDraft && selectedCandidate && templateChanged && (
+                <p role="status" className="rounded-md bg-primary/5 px-3 py-2 text-xs text-primary">
+                  Đang chọn “{selectedCandidate.name}” ({selectedCandidate.version}). Bấm Gán đề bài hoặc Lưu để xác nhận.
+                </p>
               )}
               {templatesError && (
                 <p className="text-xs text-destructive">{templatesError}</p>
@@ -3553,6 +3595,7 @@ function SavedTeamCard({
                       projectTemplateId: selectedTemplate
                         ? Number(selectedTemplate)
                         : null,
+                      projectTemplateVersionId: selectedCandidate?.versionId,
                       templateChanged,
                       rolesChanged: memberRolesChanged,
                       roles: rolesPayload,
@@ -3567,6 +3610,18 @@ function SavedTeamCard({
               </>
             )}
           </DialogFooter>
+          </div>
+          <TemplatePickerPanel classId={classId} sessionId={sessionId}
+            teamId={team.teamId} teamName={team.teamName}
+            memberCount={team.memberIds.length} active={pickerOpen}
+            selectedTemplateId={selectedTemplate ? Number(selectedTemplate) : null}
+            onBack={() => setPickerOpen(false)}
+            onSelect={(candidate) => {
+              setSelectedTemplate(String(candidate.templateId));
+              setSelectedCandidate(candidate);
+              onClearAssignTemplateError();
+              setPickerOpen(false);
+            }} />
         </DialogContent>
       </Dialog>
     </>

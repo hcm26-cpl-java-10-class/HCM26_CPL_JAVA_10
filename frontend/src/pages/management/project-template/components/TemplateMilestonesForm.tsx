@@ -35,6 +35,7 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
   save?: (payload: TemplateMilestonePlanPayload) => Promise<TemplateMilestonePlan>;
 }) {
   const [milestones, setMilestones] = useState(() => toMilestoneValues(plan));
+  const [savedMilestones, setSavedMilestones] = useState(() => JSON.stringify(toMilestonePlanPayload(milestones, 0).milestones));
   const [lockVersion, setLockVersion] = useState(plan.lockVersion);
   const [durationWeeks, setDurationWeeks] = useState(plan.estimatedDurationWeeks);
   const [errors, setErrors] = useState<MilestonePlanErrors>({});
@@ -44,7 +45,9 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
   const mutation = useMutation({
     mutationFn: (payload: TemplateMilestonePlanPayload) => save ? save(payload) : projectTemplateApi.saveMilestones(plan.templateId, payload),
     onSuccess: (saved) => {
-      setMilestones(toMilestoneValues(saved));
+      const savedValues = toMilestoneValues(saved);
+      setMilestones(savedValues);
+      setSavedMilestones(JSON.stringify(toMilestonePlanPayload(savedValues, 0).milestones));
       setLockVersion(saved.lockVersion);
       setDurationWeeks(saved.estimatedDurationWeeks);
       setSubmitError(null);
@@ -60,7 +63,9 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
     onSettled: () => { submitting.current = false; },
   });
   const total = totalWeightHundredths(milestones);
-  const disabled = !editable || mutation.isPending;
+  const canEdit = editable && plan.editable;
+  const hasChanges = JSON.stringify(toMilestonePlanPayload(milestones, 0).milestones) !== savedMilestones;
+  const disabled = !canEdit || mutation.isPending;
   const removing = milestones.find((milestone) => milestone.key === removeKey);
   const rubricOptions = [...rubrics];
   plan.milestones.forEach((milestone) => {
@@ -82,7 +87,7 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
   };
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (submitting.current || !editable) return;
+    if (submitting.current || !canEdit || !hasChanges) return;
     setSubmitError(null);
     const nextErrors = validateMilestonePlan(milestones, durationWeeks);
     setErrors(nextErrors);
@@ -151,7 +156,7 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
           index={index}
           count={milestones.length}
           disabled={disabled}
-          editable={editable}
+          editable={canEdit}
           errors={errors}
           rubrics={rubricOptions}
           onChange={(patch) => changeMilestone(index, patch)}
@@ -159,13 +164,13 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
           onRemove={() => setRemoveKey(milestone.key)}
         />)}
       </div>
-      {editable && <>
+      {canEdit && <>
         <Button type="button" variant="outline" className="w-full border-dashed" disabled={disabled}
           onClick={() => { setMilestones((current) => [...current, newMilestone(current.length === 0)]); setErrors({}); }}>
           <Plus /> Add milestone
         </Button>
         <div className="flex justify-end rounded-xl border bg-background p-3">
-          <Button type="submit" disabled={disabled}>
+          <Button type="submit" disabled={disabled || !hasChanges}>
             {mutation.isPending ? <Loader2 className="animate-spin" /> : <Save />}
             {mutation.isPending ? "Saving..." : "Save milestones"}
           </Button>

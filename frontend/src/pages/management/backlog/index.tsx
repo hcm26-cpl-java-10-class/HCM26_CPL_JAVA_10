@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { usePermissions } from "@/hooks/usePermissions";
 import type {
+  BacklogAssigneeOption,
   BacklogPriority,
   BacklogStatus,
   MilestoneOption,
@@ -24,7 +25,7 @@ import type {
   SprintPlanningItem,
   SprintStatus,
 } from "@/types";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import {
   ArrowLeft,
@@ -63,6 +64,8 @@ const MILESTONE_OPTIONS_QUERY_KEY = ["milestones", "backlog-options"] as const;
 const ASSIGNEE_OPTIONS_QUERY_KEY = ["sprint-backlogs", "assignee-options"] as const;
 /** Team-scoped board of a workspace (only its own sprints and items). */
 const TEAM_BOARD_QUERY_KEY = ["team-backlog-board"] as const;
+/** Projects the user can see, used to build the work item key prefix. */
+const PROJECT_NAMES_QUERY_KEY = ["projects", "backlog-key-prefix"] as const;
 
 const MILESTONE_CHANGED_MESSAGE =
   "Milestone không tồn tại hoặc đã bị thay đổi";
@@ -92,15 +95,20 @@ const toDateTimeLocal = (value?: string | null) => {
 };
 
 /**
- * Board buckets map onto the backend lifecycle: "To Do" is `TODO`, ongoing
- * work is `IN_PROGRESS`, finished work is `DONE`.
+ * Board statuses map onto the backend lifecycle: the product backlog is
+ * `TODO`, and the workflow columns are `TODO` (To do), `IN_PROGRESS`,
+ * `REVIEW` and `DONE` - the same statuses the workspace Kanban board uses.
  */
 const toSprintBacklogStatus = (status: BacklogStatus): SprintBacklogStatus => {
   switch (status) {
     case "IN_PROGRESS":
       return "IN_PROGRESS";
+    case "REVIEW":
+      return "REVIEW";
     case "DONE":
       return "DONE";
+    case "BLOCKED":
+      return "BLOCKED";
     default:
       return "TODO";
   }
@@ -109,6 +117,10 @@ const toSprintBacklogStatus = (status: BacklogStatus): SprintBacklogStatus => {
 /**
  * Reverse mapping used when the `/backlogs` page reads the flat list of Sprint
  * Backlog records (the backend has no `BACKLOG` status).
+ * <p>
+ * `REVIEW` is kept as its own column so the Backlogs tab shows the same
+ * statuses as the workspace Kanban board instead of reporting review work as
+ * in progress.
  */
 const toBoardStatus = (
   status: SprintBacklogStatus | null | undefined,
@@ -116,8 +128,11 @@ const toBoardStatus = (
 ): BacklogStatus => {
   switch (status) {
     case "IN_PROGRESS":
-    case "REVIEW":
       return "IN_PROGRESS";
+    case "REVIEW":
+      return "REVIEW";
+    case "BLOCKED":
+      return "BLOCKED";
     case "DONE":
       return "DONE";
     case "TODO":
@@ -136,6 +151,7 @@ const toPlanningItem = (dto: SprintBacklogDTO): SprintPlanningItem => ({
   workType: (dto.workType as SprintBacklogWorkType | null | undefined) ?? "TASK",
   sprintId: dto.sprintId ?? null,
   assigneeProjectMemberId: dto.assigneeProjectMemberId ?? null,
+  assigneeDisplayName: dto.assigneeDisplayName ?? null,
   startDate: dto.startDate ?? null,
   endDate: dto.endDate ?? null,
   projectId: dto.projectId ?? null,
@@ -198,6 +214,8 @@ interface BoardSection {
   sprintId: number | null;
   /** Project of the box, used to scope the milestone picker. */
   projectId: number | null;
+  /** Team owning the sprint of the box (used by the assignee picker). */
+  teamId: number | null;
   title: string;
   meta: string | null;
   prefix: string;
@@ -231,6 +249,19 @@ export interface BacklogBoardProps {
    * (`null` = tenant-wide, the `/backlogs` route page).
    */
   teamId?: number | null;
+  /**
+   * Name of the workspace project. It is the fallback source of the work item
+   * key prefix (`Student Support Portal` -> `SSP`) when the workspace does not
+   * configure one, so the workspace page passes the name it already has
+   * instead of relying on a second lookup.
+   */
+  projectName?: string | null;
+  /**
+   * Key prefix configured for the workspace (`FA` by default). It is the same
+   * prefix the backend numbers the tasks of the workspace with, so it wins
+   * over the project acronym when it is present (`FA-21`).
+   */
+  taskKeyPrefix?: string | null;
 }
 
 /**
@@ -247,6 +278,8 @@ export function BacklogBoard({
   embedded = false,
   projectId = null,
   teamId = null,
+  projectName = null,
+  taskKeyPrefix = null,
 }: BacklogBoardProps) {
   const queryClient = useQueryClient();
   const { hasAllPermissions, user } = usePermissions();
@@ -294,6 +327,18 @@ export function BacklogBoard({
     enabled: teamId != null,
   });
 
+  /**
+   * Names of the projects the user can see. The work item key prefix is taken
+   * from the project of a box (`Student Support Portal` -> `SSP`), so a sprint
+   * name can never leak into the key of its work items.
+   */
+  const projectNamesQuery = useQuery({
+    queryKey: [...PROJECT_NAMES_QUERY_KEY],
+    queryFn: ({ signal }) => milestoneApi.getProjectOptions(signal),
+    staleTime: 60_000,
+    retry: false,
+  });
+
   const sprintsQuery = useQuery({
     queryKey: [...SPRINTS_QUERY_KEY, projectId ?? "all"],
     queryFn: () =>
@@ -329,13 +374,15 @@ export function BacklogBoard({
 
   /**
    * Active members of the workspace team, so the assignee picker of a work
-   * item offers the people of that team instead of a raw member id. The
-   * `/backlogs` route page is not scoped to a team, so it keeps no options.
+   * item offers the people of that team instead of a raw member id. When the
+   * board is not team-scoped (project scoped board or the global `/backlogs`
+   * page) the project is sent too, so the backend resolves the team that owns
+   * it and the picker still lists real members.
    */
   const assigneesQuery = useQuery({
-    queryKey: [...ASSIGNEE_OPTIONS_QUERY_KEY, teamId ?? "none"],
-    queryFn: () => sprintBacklogApi.getAssigneeOptions(teamId),
-    enabled: teamId != null,
+    queryKey: [...ASSIGNEE_OPTIONS_QUERY_KEY, teamId ?? "none", projectId ?? "none"],
+    queryFn: () => sprintBacklogApi.getAssigneeOptions(teamId, projectId),
+    enabled: teamId != null || projectId != null,
     staleTime: 60_000,
   });
 
@@ -354,6 +401,29 @@ export function BacklogBoard({
    * scope comes from the team itself when the workspace has no project.
    */
   const scopedProjectId = projectId ?? teamQuery.data?.projectId ?? null;
+
+  /**
+   * `projectId -> project name` lookup behind the work item key prefix. The
+   * name the workspace page already knows wins over the options response.
+   */
+  const projectNames = useMemo(() => {
+    const names = new Map<number, string>();
+
+    (projectNamesQuery.data ?? []).forEach((option) => {
+      const id = Number(option.id);
+      const name = option.name?.trim();
+
+      if (Number.isFinite(id) && name) {
+        names.set(id, name);
+      }
+    });
+
+    if (projectId != null && projectName?.trim()) {
+      names.set(projectId, projectName.trim());
+    }
+
+    return names;
+  }, [projectId, projectName, projectNamesQuery.data]);
 
   const sprints = useMemo<SprintDTO[]>(
     () =>
@@ -390,12 +460,15 @@ export function BacklogBoard({
           : null;
       const list = grouped.get(key) ?? [];
 
-      list.push(toPlanningItem(dto));
+      const item = toPlanningItem(dto);
+      item.assigneeDisplayName = assignees.find(member => member.id === item.assigneeProjectMemberId)?.fullName
+        || item.assigneeDisplayName;
+      list.push(item);
       grouped.set(key, list);
     });
 
     return grouped;
-  }, [items, sprints]);
+  }, [items, sprints, assignees]);
 
   const itemIdsOf = useCallback(
     (sprintId: number | null) =>
@@ -437,13 +510,26 @@ export function BacklogBoard({
       items: SprintPlanningItem[],
     ): BoardSection => {
       const sprintStatus = sprint?.status ?? null;
-      const prefix = sprint ? projectKeyOf(sprint.name) : "PRJ";
+      const sectionProjectId = sprint?.projectId ?? scopedProjectId ?? null;
+      /**
+       * Work item key prefix of the box: the prefix configured for the
+       * workspace (`FA`) wins, because it is the one the backend numbers the
+       * tasks with; otherwise the acronym of the workspace project
+       * (`Student Support Portal` -> `SSP`). The sprint name is never used, so
+       * two sprints of the same project share the same key prefix.
+       */
+      const prefix =
+        taskKeyPrefix?.trim() ||
+        projectKeyOf(
+          sectionProjectId == null ? null : projectNames.get(sectionProjectId),
+        );
 
       return {
         key: sprint?.id != null ? sprintSectionKey(sprint.id) : BACKLOG_SECTION_KEY,
         sprint,
         sprintId: sprint?.id ?? null,
-        projectId: sprint?.projectId ?? scopedProjectId ?? null,
+        projectId: sectionProjectId,
+        teamId: sprint?.teamId ?? teamId ?? null,
         title:
           sprint?.name?.trim() ||
           (sprint?.id != null ? `Sprint ${sprint.id}` : "Backlog"),
@@ -463,10 +549,55 @@ export function BacklogBoard({
       .map((sprint) => build(sprint, groupedItems.get(sprint.id as number) ?? []));
 
     return [...sprintSections, build(null, groupedItems.get(null) ?? [])];
-  }, [groupedItems, matchesFilters, scopedProjectId, sprints]);
+  }, [
+    groupedItems,
+    matchesFilters,
+    projectNames,
+    scopedProjectId,
+    sprints,
+    taskKeyPrefix,
+  ]);
 
   const allCollapsed =
     sections.length > 0 && sections.every((section) => !!collapsed[section.key]);
+
+  /**
+   * Assignee names of the rows. Boards that are not scoped to a workspace (the
+   * global `/backlogs` page) have no board level team / project, so the query
+   * above stays empty; the members of every project rendered on the board are
+   * then fetched so a row can still show the `NA` initials bubble of its
+   * assignee instead of the raw `project_members.id`.
+   */
+  const boardProjectIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          sections
+            .map((section) => section.projectId)
+            .filter((id): id is number => id != null),
+        ),
+      ),
+    [sections],
+  );
+
+  const projectAssigneeQueries = useQueries({
+    queries: (assignees.length > 0 ? [] : boardProjectIds).map((projectId) => ({
+      queryKey: [...ASSIGNEE_OPTIONS_QUERY_KEY, "project", projectId],
+      queryFn: () => sprintBacklogApi.getAssigneeOptions(null, projectId),
+      staleTime: 60_000,
+    })),
+  });
+
+  const rowAssignees: BacklogAssigneeOption[] =
+    assignees.length > 0
+      ? assignees
+      : Array.from(
+          new Map(
+            projectAssigneeQueries
+              .flatMap((query) => query.data ?? [])
+              .map((member) => [member.id, member] as const),
+          ).values(),
+        );
 
   const refreshBoard = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: BACKLOG_ITEMS_QUERY_KEY });
@@ -697,9 +828,9 @@ export function BacklogBoard({
           ?.projectId ?? null);
 
   /**
-   * The board works with three buckets (`SPRINT_BACKLOG` / `IN_PROGRESS` /
-   * `DONE`); they map onto the four {@link SprintBacklogStatus} values of the
-   * backend.
+   * The board uses the same workflow as the workspace Kanban board:
+   * `SPRINT_BACKLOG` (To do) / `IN_PROGRESS` / `REVIEW` / `DONE`.
+   * Any of them can be picked in any direction - the team owns its board.
    */
   const handleItemStatusChange = async (
     item: SprintPlanningItem,
@@ -707,11 +838,25 @@ export function BacklogBoard({
   ) => {
     if (!canEditTask || item.status === status) return;
 
+    const target = toSprintBacklogStatus(status);
+
+    /**
+     * A product backlog item is outside the sprint workflow: the backend only
+     * lets it sit in To do until it joins a sprint, so the other statuses are
+     * explained instead of letting the API reject them.
+     */
+    if (item.sprintId == null && target !== "TODO") {
+      toast.error(
+        "Công việc trong Backlog cần được thêm vào Sprint trước khi đổi sang trạng thái này.",
+      );
+      return;
+    }
+
     setBusyItemId(item.id);
 
     try {
       await sprintBacklogApi.update(String(item.id), {
-        status: toSprintBacklogStatus(status),
+        status: target,
       } as SprintBacklogDTO);
       await refreshBoard();
 
@@ -1115,6 +1260,8 @@ export function BacklogBoard({
                       creating={creatingKey === section.key}
                       assignees={assignees}
                       milestones={milestonesFor(section.projectId)}
+                      projectId={section.projectId}
+                      teamId={section.teamId}
                       onCreate={(values) =>
                         handleCreateItem(
                           section.key,
@@ -1131,6 +1278,7 @@ export function BacklogBoard({
                       : "The product backlog is empty. Use Create below to add a work item."
                   }
                   dueDate={section.dueDate}
+                  assignees={rowAssignees}
                   draggable={sectionEditable}
                   isDropTarget={dragTarget === section.key}
                   onToggleCollapse={() =>
@@ -1214,6 +1362,7 @@ export function BacklogBoard({
           detailItem?.projectId ?? detailSection?.projectId ?? null,
         )}
         assignees={assignees}
+        teamId={teamId}
         canEdit={canEditTask && !detailSection?.locked}
         canMove={canEditBoard && !detailSection?.locked}
         canDelete={canDelete}

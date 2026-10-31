@@ -1,19 +1,21 @@
 package com.example.starter_project_2025.system.project;
 
-import com.example.starter_project_2025.system.project.team.ParticipationStatus;
-import com.example.starter_project_2025.system.project.team.ProjectRole;
 import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.domain.ProjectStatus;
 import com.example.starter_project_2025.system.project.domain.ProjectTopicSnapshot;
-import com.example.starter_project_2025.system.project.team.ParticipationStatus;
-import com.example.starter_project_2025.system.project.team.ProjectRole;
-import com.example.starter_project_2025.system.project.team.Team;
-import com.example.starter_project_2025.system.project.team.TeamMember;
-import com.example.starter_project_2025.system.project.team.TeamMemberRepository;
-import com.example.starter_project_2025.system.project.team.TeamRepository;
+import com.example.starter_project_2025.system.project.cohort.Cohort;
+import com.example.starter_project_2025.system.project.cohort.CohortRepository;
+import com.example.starter_project_2025.system.project.cohort.CohortStatus;
+import com.example.starter_project_2025.system.project.trainingclass.ClassMember;
+import com.example.starter_project_2025.system.project.trainingclass.ClassMemberRepository;
+import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
+import com.example.starter_project_2025.system.project.trainingclass.TrainingClass;
+import com.example.starter_project_2025.system.project.trainingclass.TrainingClassRepository;
+import com.example.starter_project_2025.system.project.trainingclass.TrainingClassStatus;
 import com.example.starter_project_2025.system.project.tenant.Tenant;
 import com.example.starter_project_2025.system.project.tenant.TenantRepository;
 import com.example.starter_project_2025.system.project.workspace.repository.ProjectTopicSnapshotRepository;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceRepository;
 
 import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenService;
 import com.example.starter_project_2025.system.rbac.permission.PermissionRepository;
@@ -54,9 +56,14 @@ class WorkspaceOverviewIntegrationTest {
     @Autowired RoleRepository roles;
     @Autowired PermissionRepository permissions;
     @Autowired ProjectRepository projects;
-    @Autowired TeamRepository teams;
-    @Autowired TeamMemberRepository memberships;
+    @Autowired ProjectTeamRepository teams;
+    @Autowired ProjectMemberRepository memberships;
+    @Autowired TrainingClassRepository classes;
+    @Autowired CohortRepository cohorts;
+    @Autowired ClassMemberRepository classMembers;
+    @Autowired TeamAllocationSessionRepository allocationSessions;
     @Autowired ProjectTopicSnapshotRepository snapshots;
+    @Autowired WorkspaceRepository workspaces;
     @Autowired UserDetailsService userDetails;
     @Autowired RefreshTokenService tokens;
     Long tenantId, actorId, roleId, projectId, teamId, membershipId, workspaceId;
@@ -88,12 +95,27 @@ class WorkspaceOverviewIntegrationTest {
             project.setDescription("Live project description");
             project.setTenant(tenant); project.setStatus(ProjectStatus.PLANNING);
             projectId = projects.saveAndFlush(project).getId();
-            var team = new Team();
-            team.setCode("TEAM-" + UUID.randomUUID()); team.setName("Team A");
-            team.setTenant(tenant); team.setProject(project); team.setMentor(user);
+            var trainingClass = new TrainingClass();
+            trainingClass.setCode("CLASS-" + UUID.randomUUID()); trainingClass.setName("Workspace test class");
+            trainingClass.setTenantId(tenantId); trainingClass.setProgramId(1L);
+            trainingClass.setStatus(TrainingClassStatus.ONGOING);
+            classes.saveAndFlush(trainingClass);
+            var session = new TeamAllocationSession();
+            session.setTrainingClass(trainingClass); session.setMaxMembers(5);
+            session.setStatus(TeamAllocationSessionStatus.PUBLISHED);
+            allocationSessions.saveAndFlush(session);
+            var classMember = new ClassMember();
+            classMember.setTrainingClass(trainingClass); classMember.setUser(user);
+            classMember.setStatus(ClassMemberStatus.ACTIVE);
+            classMembers.saveAndFlush(classMember);
+            var team = new ProjectTeam();
+            team.setTeamName("Team A"); team.setTrainingClass(trainingClass);
+            team.setAllocationSession(session); team.setMaxMembers(5);
+            team.setStatus(ProjectTeamStatus.ACTIVE);
+            team.setProject(project); team.setAssignedMentorId(actorId);
             teamId = teams.saveAndFlush(team).getId();
-            var membership = new TeamMember();
-            membership.setTeam(team); membership.setUser(user);
+            var membership = new ProjectMember();
+            membership.setTeam(team); membership.setClassMember(classMember);
             membershipId = memberships.saveAndFlush(membership).getId();
             var principal = userDetails.loadUserByUsername(user.getEmail());
             token = tokens.generateAccessToken(new UsernamePasswordAuthenticationToken(
@@ -110,11 +132,6 @@ class WorkspaceOverviewIntegrationTest {
 
     JsonNode overview() throws Exception {
         return json.readTree(mvc.perform(get("/api/workspaces/{id}", workspaceId)
-                .header("Authorization", "Bearer " + token)).andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString());
-    }
-    JsonNode activity() throws Exception {
-        return json.readTree(mvc.perform(get("/api/workspaces/{id}/activity", workspaceId)
                 .header("Authorization", "Bearer " + token)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
     }
@@ -142,30 +159,50 @@ class WorkspaceOverviewIntegrationTest {
         assertThat(result.has("members")).isFalse();
     }
 
-    @Test void ac02SnapshotRemainsFixedWhenLiveProjectContentChanges() throws Exception {
+    @Test void ac02ProjectBriefUsesFieldsFromProject() throws Exception {
         snapshot("[\"Requirement A\"]");
-        tx.executeWithoutResult(status -> projects.findById(projectId).orElseThrow()
-                .setDescription("New content from a later source version"));
+        tx.executeWithoutResult(status -> {
+            var project = projects.findById(projectId).orElseThrow();
+            project.setDescription("New content from a later source version");
+            var projectClass = new TrainingClass();
+            projectClass.setCode("PROJECT-CLASS-" + UUID.randomUUID());
+            projectClass.setName("Project class");
+            projectClass.setTenantId(tenantId); projectClass.setProgramId(1L);
+            projectClass.setStatus(TrainingClassStatus.ONGOING);
+            project.setClassId(classes.saveAndFlush(projectClass).getId());
+            var cohort = new Cohort();
+            cohort.setCode("PROJECT-COHORT-" + UUID.randomUUID());
+            cohort.setName("Project cohort");
+            cohort.setTenant(tenants.findById(tenantId).orElseThrow());
+            cohort.setStatus(CohortStatus.ACTIVE);
+            project.setCohort(cohorts.saveAndFlush(cohort));
+            teams.findById(teamId).orElseThrow().getTrainingClass().setCohortName("Team cohort");
+        });
         var result = overview();
-        assertThat(result.get("projectDescription").asText()).isEqualTo("Frozen description");
+        assertThat(result.get("projectDescription").asText()).isEqualTo("New content from a later source version");
+        assertThat(result.get("projectCode").asText()).startsWith("PROJECT-");
+        assertThat(result.get("projectName").asText()).isEqualTo("Project A");
+        assertThat(result.get("projectStatus").asText()).isEqualTo("ACTIVE");
+        assertThat(result.get("projectClassName").asText()).isEqualTo("Project class");
+        assertThat(result.get("projectCohortName").asText()).isEqualTo("Project cohort");
         assertThat(result.at("/topic_snapshot/version").asText()).isEqualTo("v1.0.0");
         assertThat(result.at("/topic_snapshot/topic_title").asText()).isEqualTo("Fixed topic title");
         assertThat(result.at("/topic_snapshot/objectives").asText()).isEqualTo("Frozen objectives");
         assertThat(result.at("/topic_snapshot/requirements/0").asText()).isEqualTo("Requirement A");
     }
 
-    @Test void ac03MemberResponseHasExactlyFourApprovedFields() throws Exception {
+    @Test void ac03MemberResponseIncludesAllocationRoles() throws Exception {
         tx.executeWithoutResult(status -> memberships.findById(membershipId).orElseThrow()
-                .setProjectRole(ProjectRole.FE_DEV));
+                .setRole("PM,BA"));
         var result = members();
         assertThat(result).hasSize(1);
         var fields = new HashSet<String>();
         result.get(0).fieldNames().forEachRemaining(fields::add);
-        assertThat(fields).containsExactlyInAnyOrder("user_code", "display_name", "project_role", "status");
+        assertThat(fields).containsExactlyInAnyOrder("user_code", "display_name", "roles");
         assertThat(result.at("/0/user_code").asText()).startsWith("MEM-");
         assertThat(result.at("/0/display_name").asText()).isEqualTo("Workspace Reader");
-        assertThat(result.at("/0/project_role").asText()).isEqualTo("FE_DEV");
-        assertThat(result.at("/0/status").asText()).isEqualTo("ACTIVE");
+        assertThat(result.at("/0/roles/0").asText()).isEqualTo("PM");
+        assertThat(result.at("/0/roles/1").asText()).isEqualTo("BA");
     }
 
     @Test void ac03ForeignTenantMembershipIsExcluded() throws Exception {
@@ -175,29 +212,33 @@ class WorkspaceOverviewIntegrationTest {
             user.setEmail(UUID.randomUUID() + "@foreign.test"); user.setFirstName("Foreign");
             user.setPasswordHash("unused"); user.setTenant(foreign);
             users.saveAndFlush(user);
-            var membership = new TeamMember();
-            membership.setUser(user); membership.setTeam(teams.findById(teamId).orElseThrow());
+            var classMember = new ClassMember();
+            classMember.setTrainingClass(teams.findById(teamId).orElseThrow().getTrainingClass());
+            classMember.setUser(user); classMember.setStatus(ClassMemberStatus.ACTIVE);
+            classMembers.saveAndFlush(classMember);
+            var membership = new ProjectMember();
+            membership.setClassMember(classMember); membership.setTeam(teams.findById(teamId).orElseThrow());
             memberships.saveAndFlush(membership);
         });
         assertThat(members()).hasSize(1);
         assertThat(overview().get("member_count").asInt()).isEqualTo(1);
     }
 
-    @Test void ac04ProjectRoleIsNotInferredFromSystemRoles() throws Exception {
+    @Test void ac04SystemRolesDoNotChangeWorkspaceMemberFields() throws Exception {
         tx.executeWithoutResult(status -> users.findById(actorId).orElseThrow().getRoles()
                 .add(roles.findByName("TEACHER").orElseThrow()));
-        assertThat(members().at("/0/project_role").asText()).isEqualTo("UNASSIGNED");
+        assertThat(members().get(0).size()).isEqualTo(3);
     }
 
-    @Test void ac05RosterRefreshExcludesLeftMemberAndRetainsHistory() throws Exception {
-        var oldEvent = activity().at("/items/0/id").asText();
+    @Test void ac05RosterRefreshExcludesInactiveAssignmentAndRetainsHistory() throws Exception {
+        long activityCount = jdbc.queryForObject("SELECT COUNT(*) FROM workspace_activities", Long.class);
         tx.executeWithoutResult(status -> memberships.findById(membershipId).orElseThrow()
-                .setParticipationStatus(ParticipationStatus.LEFT));
+                .setIsActive(false));
         assertThat(members()).isEmpty();
         var result = overview();
         assertThat(result.get("member_count").asInt()).isZero();
-        assertThat(activity().at("/items/0/id").asText()).isEqualTo(oldEvent);
-        assertThat(activity().at("/items/0/description").asText()).isEqualTo("Workspace Reader");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM workspace_activities", Long.class))
+                .isEqualTo(activityCount);
     }
 
     @Test void ac06OverviewOnlyRoleSeesCountButMembersApiIs403() throws Exception {
@@ -214,13 +255,42 @@ class WorkspaceOverviewIntegrationTest {
     @Test void ac07OptionalContentAndEmptyRosterAreNotErrors() throws Exception {
         tx.executeWithoutResult(status -> {
             projects.findById(projectId).orElseThrow().setDescription(null);
-            memberships.findById(membershipId).orElseThrow().setParticipationStatus(ParticipationStatus.INACTIVE);
+            memberships.findById(membershipId).orElseThrow()
+                    .getClassMember().setStatus(ClassMemberStatus.INACTIVE);
         });
         var result = overview();
         assertThat(result.get("projectDescription").isNull()).isTrue();
+        assertThat(result.get("projectClassName").isNull()).isTrue();
+        assertThat(result.get("projectCohortName").isNull()).isTrue();
         assertThat(result.get("topic_snapshot").isNull()).isTrue();
         assertThat(result.get("member_count").asInt()).isZero();
         assertThat(members()).isEmpty();
+    }
+
+    @Test void projectClassMustBelongToProjectTenant() throws Exception {
+        tx.executeWithoutResult(status -> {
+            var foreign = tenants.saveAndFlush(Tenant.builder()
+                    .code("FOREIGN-" + UUID.randomUUID()).name("Foreign tenant").build());
+            var foreignClass = new TrainingClass();
+            foreignClass.setCode("FOREIGN-CLASS-" + UUID.randomUUID());
+            foreignClass.setName("Foreign class");
+            foreignClass.setTenantId(foreign.getId()); foreignClass.setProgramId(1L);
+            foreignClass.setStatus(TrainingClassStatus.ONGOING);
+            projects.findById(projectId).orElseThrow().setClassId(classes.saveAndFlush(foreignClass).getId());
+        });
+        assertThat(overview().get("projectClassName").isNull()).isTrue();
+    }
+
+    @Test void teamOnlyWorkspaceHasNoProjectBriefFields() throws Exception {
+        tx.executeWithoutResult(status -> {
+            workspaces.findById(workspaceId).orElseThrow().setProject(null);
+            teams.findById(teamId).orElseThrow().setProject(null);
+        });
+        var result = overview();
+        for (String field : List.of("projectId", "projectCode", "projectName", "projectDescription",
+                "projectStatus", "projectClassName", "projectCohortName")) {
+            assertThat(result.get(field).isNull()).as(field).isTrue();
+        }
     }
 
     @Test void ac08NeitherResponseContainsRestrictedFields() throws Exception {
@@ -245,10 +315,10 @@ class WorkspaceOverviewIntegrationTest {
                 .header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
     }
 
-    @Test void ac09LeftMemberWithoutMentorAssignmentLosesScope() throws Exception {
+    @Test void ac09InactiveMemberWithoutMentorAssignmentLosesScope() throws Exception {
         tx.executeWithoutResult(status -> {
-            memberships.findById(membershipId).orElseThrow().setParticipationStatus(ParticipationStatus.LEFT);
-            teams.findById(teamId).orElseThrow().setMentor(null);
+            memberships.findById(membershipId).orElseThrow().setIsActive(false);
+            teams.findById(teamId).orElseThrow().setAssignedMentorId(null);
         });
         mvc.perform(get("/api/workspaces/{id}", workspaceId)
                 .header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
@@ -264,7 +334,7 @@ class WorkspaceOverviewIntegrationTest {
 
     @Test void ac10ReadsDoNotWriteOrActivateTheProject() throws Exception {
         tx.executeWithoutResult(status -> projects.findById(projectId).orElseThrow().setStatus(ProjectStatus.PLANNING));
-        var tables = List.of("projects", "teams", "team_members", "workspaces", "workspace_sections",
+        var tables = List.of("projects", "project_teams", "project_members", "workspaces", "workspace_sections",
                 "workspace_activities", "workspace_audits", "workspace_outbox_events",
                 "workspace_creation_requests", "project_topic_snapshots");
         var before = new LinkedHashMap<String, Long>();
@@ -274,7 +344,7 @@ class WorkspaceOverviewIntegrationTest {
                 .as(table).isEqualTo(before.get(table));
         tx.executeWithoutResult(status -> {
             assertThat(projects.findById(projectId).orElseThrow().getStatus()).isEqualTo(ProjectStatus.PLANNING);
-            assertThat(memberships.findById(membershipId).orElseThrow().getParticipationStatus()).isEqualTo(ParticipationStatus.ACTIVE);
+            assertThat(memberships.findById(membershipId).orElseThrow().getIsActive()).isTrue();
         });
     }
 }

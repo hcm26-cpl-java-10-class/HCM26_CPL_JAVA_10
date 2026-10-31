@@ -6,5 +6,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface CohortRepository extends JpaRepository<Cohort, Long> {
     java.util.Optional<Cohort> findByCodeAndTenantId(String code, Long tenantId);
+    java.util.List<Cohort> findAllByTenant_IdAndIsActiveTrueOrderByNameAsc(Long tenantId);
 }
 

@@ -10,14 +10,13 @@ import { TaskDeleteDialog } from "@/pages/management/task/components/TaskDeleteD
 import { TaskForm } from "@/pages/management/task/components/TaskForm";
 import { useTaskWorkflowMutation } from "@/pages/management/task/hooks/useTaskWorkflowMutation";
 import { getTaskError, subtaskStatusOptions } from "@/pages/management/task/task-form.utils";
-import type { BacklogSubtasks, TaskDTO, TaskStatus, TaskWorkflowDTO } from "@/types/features/task";
+import type { TaskDTO, TaskStatus, TaskWorkflowDTO } from "@/types/features/task";
 import { useQuery } from "@tanstack/react-query";
 import { History, ListTree, Loader2, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-function SubtaskRow({ workflow, assignees, onEdit }: {
+function SubtaskRow({ workflow, onEdit }: {
   workflow: TaskWorkflowDTO;
-  assignees: BacklogSubtasks["assignees"];
   onEdit: (task: TaskDTO) => void;
 }) {
   const task = workflow.task;
@@ -25,7 +24,6 @@ function SubtaskRow({ workflow, assignees, onEdit }: {
   const [history, setHistory] = useState(false);
   const mutation = useTaskWorkflowMutation(task.id, () => setDeleting(false),
     (action) => { if (action.kind === "DELETE") setDeleting(false); });
-  const assignee = assignees.find(member => member.id === task.assigneeProjectMemberId);
   return <div className="space-y-3 rounded-lg border p-3">
     <div className="flex items-start gap-2">
       <ListTree className="mt-1 size-4 shrink-0 text-muted-foreground" />
@@ -50,13 +48,10 @@ function SubtaskRow({ workflow, assignees, onEdit }: {
         </SelectItem>)}</SelectContent>
       </Select>
       <TaskPriorityBadge priority={task.priority} />
-      <span>{task.assigneeProjectMemberId ? assignee?.displayName ?? "Former team member" : "Unassigned"}</span>
-      {task.estimatedHours != null && <span>· {task.estimatedHours} h</span>}
+      {task.estimatedHours != null && <span>{task.estimatedHours} h</span>}
       <Button size="icon" variant="ghost" className="ml-auto size-7" aria-label={`Activity of subtask ${task.title}`}
         aria-expanded={history} onClick={() => setHistory(value => !value)}><History className="size-3.5" /></Button>
     </div>
-    {!!task.tags?.length && <div className="flex flex-wrap gap-1">{task.tags.map(tag =>
-      <span key={tag} className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{tag}</span>)}</div>}
     {mutation.error && <Alert variant="destructive"><AlertDescription>
       {Object.values(mutation.error.fieldErrors).flat()[0] ?? mutation.error.message}
     </AlertDescription></Alert>}
@@ -94,7 +89,7 @@ export function BacklogSubtasksPanel({ backlogId }: { backlogId: number }) {
       <Button size="sm" variant="outline" className="mt-2" onClick={() => void query.refetch()}><RefreshCw className="size-3" />Retry</Button>
     </AlertDescription></Alert>}
     {data && !error && (data.items.length ? data.items.map(workflow => <SubtaskRow key={workflow.task.id}
-      workflow={workflow} assignees={data.assignees} onEdit={task => setEditing({ task })} />)
+      workflow={workflow} onEdit={task => setEditing({ task })} />)
       : <p className="rounded-lg border border-dashed p-5 text-center text-sm text-muted-foreground">No subtasks yet.</p>)}
     {editing && data && <Dialog open onOpenChange={open => { if (!open && !saving) setEditing(null); }}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl" showCloseButton={!saving}
@@ -102,7 +97,7 @@ export function BacklogSubtasksPanel({ backlogId }: { backlogId: number }) {
         <DialogHeader><DialogTitle>{editing.task ? "Edit subtask" : "Create subtask"}</DialogTitle>
           <DialogDescription>This subtask belongs to the selected backlog item.</DialogDescription></DialogHeader>
         <TaskForm key={editing.task?.id ?? `new-${backlogId}`} projectId={data.projectId} backlogItemId={backlogId}
-          assignees={data.assignees} task={editing.task} onBusyChange={setSaving}
+          task={editing.task} onBusyChange={setSaving}
           onSaved={() => { setSaving(false); setEditing(null); }} onCancel={() => setEditing(null)} />
       </DialogContent>
     </Dialog>}

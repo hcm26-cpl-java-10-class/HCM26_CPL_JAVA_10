@@ -3,7 +3,7 @@ import { RubricStatusBadge } from "./components/RubricStatusBadge";
 
 export const rubricListSchema: EntitySchema = {
   entityName: "rubric",
-  idField: "id",
+  idField: "rowId",
   fields: [
     {
       name: "name",
@@ -24,7 +24,7 @@ export const rubricListSchema: EntitySchema = {
     },
     {
       name: "latestStatus",
-      label: "Latest version",
+      label: "Version",
       type: "select",
       sortable: true,
       filterable: true,

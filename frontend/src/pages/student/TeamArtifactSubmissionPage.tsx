@@ -33,6 +33,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { MilestoneRubricCard } from "@/pages/management/project/milestone/components/MilestoneRubricCard";
+import { countReleaseNoteWords, RELEASE_NOTES_MAX_WORDS, releaseNotesWithinLimit } from "@/lib/release-notes";
+import { artifactFormSource } from "@/lib/artifact-form-source";
 
 function submissionErrorMessage(error: unknown): string {
   const response = (error as { response?: { status?: number; data?: unknown } } | null)?.response;
@@ -83,6 +85,7 @@ export default function TeamArtifactSubmissionPage() {
   const [clientValidationError, setClientValidationError] = useState<string | null>(null);
 
   const submitKey = useRef<string | null>(null);
+  const initializedFormScope = useRef<string | null>(null);
 
   const query = useQuery({
     queryKey: ["team-artifact-workspace", teamId, milestoneId],
@@ -93,16 +96,20 @@ export default function TeamArtifactSubmissionPage() {
 
   useEffect(() => {
     if (!query.data) return;
+    const scope = `${teamId}:${milestoneId}`;
+    if (initializedFormScope.current === scope) return;
+    initializedFormScope.current = scope;
     const d = query.data.draft;
-    setRepositoryUrl(d?.repositoryUrl ?? "");
-    setDeploymentUrl(d?.deploymentUrl ?? "");
-    setReleaseNotes(d?.releaseNotes ?? "");
+    const source = artifactFormSource(d, query.data.latestSubmission);
+    setRepositoryUrl(source?.repositoryUrl ?? "");
+    setDeploymentUrl(source?.deploymentUrl ?? "");
+    setReleaseNotes(source?.releaseNotes ?? "");
     setChecklist(
       Object.fromEntries(
-        query.data.milestone.checklist.map((x) => [x.id, d?.checklist[x.id] ?? false])
+        query.data.milestone.checklist.map((x) => [x.id, source === d ? d?.checklist[x.id] ?? false : false])
       )
     );
-  }, [query.data]);
+  }, [query.data, teamId, milestoneId]);
 
   const save = useMutation({
     mutationFn: () =>
@@ -117,7 +124,8 @@ export default function TeamArtifactSubmissionPage() {
       const timeStr = new Date().toLocaleTimeString("vi-VN");
       setSaveSuccessTime(timeStr);
       toast.success("Bản nháp đã được lưu thành công!");
-      return qc.invalidateQueries({ queryKey: ["team-artifact-workspace", teamId, milestoneId] });
+      void qc.invalidateQueries({ queryKey: ["team-artifact-workspace", teamId, milestoneId] });
+      navigate(`/student/teams/${teamId}/milestones/${milestoneId}/submissions${workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ""}`);
     },
     onError: () => {
       toast.error("Không thể lưu bản nháp. Vui lòng thử lại.");
@@ -141,6 +149,15 @@ export default function TeamArtifactSubmissionPage() {
     onSuccess: (data) => {
       submitKey.current = null;
       setPreviewOpen(false);
+      // Retain the accepted response even if refreshing the workspace fails.
+      qc.setQueryData<Awaited<ReturnType<typeof milestoneApi.getTeamArtifactWorkspace>>>(
+        ["team-artifact-workspace", teamId, milestoneId],
+        (current) => current ? { ...current, latestSubmission: data, canSubmit: false } : current,
+      );
+      void qc.invalidateQueries({ queryKey: ["team-artifact-submissions-workspace", teamId] });
+      void qc.invalidateQueries({ queryKey: ["my-team-milestone-submissions", teamId, milestoneId] });
+      void qc.invalidateQueries({ queryKey: ["student-team-artifact-workspace", teamId, milestoneId] });
+      void qc.invalidateQueries({ queryKey: ["my-milestone-submissions"] });
       toast.success(`Nộp sản phẩm phiên bản ${data.version} thành công!`);
       return qc.invalidateQueries({ queryKey: ["team-artifact-workspace", teamId, milestoneId] });
     },
@@ -158,6 +175,10 @@ export default function TeamArtifactSubmissionPage() {
 
   const handleValidateAndOpenPreview = () => {
     setClientValidationError(null);
+    if (!releaseNotesWithinLimit(releaseNotes)) {
+      setClientValidationError(`Release notes không được vượt quá ${RELEASE_NOTES_MAX_WORDS} từ.`);
+      return;
+    }
     const repo = repositoryUrl.trim();
     const deploy = deploymentUrl.trim();
 
@@ -231,10 +252,9 @@ export default function TeamArtifactSubmissionPage() {
   const m = query.data.milestone;
   const draft = query.data.draft;
   const latestSubmission = query.data.latestSubmission;
-  const canSubmit = m.status === "OPEN" && m.executionStatus === "IN_PROGRESS";
+  const canSubmit = query.data.canSubmit;
   const deadlineDate = new Date(m.deadline);
   const isPastDeadline = Date.now() > deadlineDate.getTime();
-  const checkedCount = Object.values(checklist).filter(Boolean).length;
 
   return (
     <MainLayout
@@ -252,21 +272,26 @@ export default function TeamArtifactSubmissionPage() {
             {workspaceId ? "Quay lại Workspace" : "Quay lại"}
           </Button>
           <div className="flex items-center gap-2">
-            <Badge variant="outline">{m.status}</Badge>
-            {m.executionStatus && (
-              <Badge variant="secondary">{m.executionStatus}</Badge>
-            )}
+            <Badge variant="outline">{m.lifecycleStatus}</Badge>
           </div>
         </div>
 
         {/* Existing Draft Alert (Fix Bug #25) */}
-        {draft && (
+        {draft && artifactFormSource(draft, latestSubmission) === draft && (
           <Alert className="border-blue-300 bg-blue-50 text-blue-900 dark:bg-blue-950/20 dark:text-blue-200">
             <Info className="size-4" />
             <AlertTitle className="font-semibold">Đang mở bản nháp đã lưu</AlertTitle>
             <AlertDescription className="text-xs mt-1">
               Hệ thống đã tự động nạp bản nháp phiên bản <strong>v{draft.version}</strong> (cập nhật lúc {new Date(draft.updatedAt).toLocaleString("vi-VN")}). Bạn có thể tiếp tục chỉnh sửa, lưu nháp mới hoặc nộp chính thức bên dưới.
             </AlertDescription>
+          </Alert>
+        )}
+
+        {latestSubmission && artifactFormSource(draft, latestSubmission) === latestSubmission && (
+          <Alert className="border-blue-300 bg-blue-50 text-blue-900 dark:bg-blue-950/20 dark:text-blue-200">
+            <Info className="size-4" />
+            <AlertTitle>Đã kế thừa nội dung phiên bản {latestSubmission.version}</AlertTitle>
+            <AlertDescription>Repository URL, Deployment URL và Release notes đã được điền từ bản nộp trước để bạn chỉnh sửa. Bản đã nộp vẫn được giữ nguyên.</AlertDescription>
           </Alert>
         )}
 
@@ -295,9 +320,9 @@ export default function TeamArtifactSubmissionPage() {
                   {latestSubmission.submittedLate ? "Nộp muộn" : "Đúng hạn"}
                 </Badge>
               </p>
-              <p className="text-emerald-800 dark:text-emerald-200">
-                Bạn có thể cập nhật thông tin và <strong>nộp lại phiên bản mới (v{latestSubmission.version + 1})</strong> nếu cần bổ sung hoặc sửa đổi.
-              </p>
+              {canSubmit && <p className="text-emerald-800 dark:text-emerald-200">
+                Bạn có thể nộp phiên bản mới (v{latestSubmission.version + 1}) theo yêu cầu chỉnh sửa của reviewer.
+              </p>}
             </AlertDescription>
           </Alert>
         )}
@@ -330,11 +355,11 @@ export default function TeamArtifactSubmissionPage() {
               <div>
                 <CardTitle className="text-lg">Tiêu chí nghiệm thu (Checklist)</CardTitle>
                 <CardDescription className="text-sm">
-                  Đánh dấu các tiêu chí bạn đã tự kiểm tra và đáp ứng trước khi nộp. Reviewer sẽ đánh giá chính thức dựa trên các tiêu chí này.
+                  Reviewer sẽ đánh giá các tiêu chí này sau khi nộp bài.
                 </CardDescription>
               </div>
               <Badge variant="outline" className="text-xs">
-                {checkedCount}/{m.checklist.length} tiêu chí
+                {m.checklist.length} tiêu chí
               </Badge>
             </div>
           </CardHeader>
@@ -349,17 +374,14 @@ export default function TeamArtifactSubmissionPage() {
                 >
                   <Checkbox
                     id={`check-${item.id}`}
-                    checked={checklist[item.id] ?? false}
-                    onCheckedChange={(checked) => {
-                      edited();
-                      setChecklist((prev) => ({ ...prev, [item.id]: Boolean(checked) }));
-                    }}
+                    disabled
+                    checked={false}
                     className="mt-0.5"
-                    aria-label={item.content}
+                    aria-label={`${item.content} — reviewer assessment`}
                   />
                   <label
                     htmlFor={`check-${item.id}`}
-                    className="flex-1 text-sm cursor-pointer select-none leading-relaxed"
+                    className="flex-1 text-sm leading-relaxed"
                   >
                     {item.content}
                     {item.mandatory && (
@@ -408,7 +430,7 @@ export default function TeamArtifactSubmissionPage() {
                 }}
               />
               <p className="text-xs text-muted-foreground">
-                URL tuyệt đối hợp lệ bắt đầu bằng <code>https://</code> hoặc <code>http://</code>.
+                Hệ thống chỉ kiểm tra định dạng URL HTTP(S); reviewer cần xác nhận repository tồn tại và có đúng nội dung.
               </p>
             </div>
 
@@ -427,7 +449,7 @@ export default function TeamArtifactSubmissionPage() {
                 }}
               />
               <p className="text-xs text-muted-foreground">
-                URL tuyệt đối của bản demo hoặc staging có thể truy cập được.
+                Nhập URL HTTP(S) của bản demo hoặc staging. Hệ thống kiểm tra định dạng, không tự truy cập URL này.
               </p>
             </div>
 
@@ -443,23 +465,36 @@ export default function TeamArtifactSubmissionPage() {
                 placeholder="Mô tả tóm tắt các tính năng đã hoàn thiện trong đợt bàn giao này..."
                 value={releaseNotes}
                 rows={4}
-                maxLength={10000}
-                className="resize-none"
+                className="max-h-40 resize-none overflow-y-auto"
                 onChange={(e) => {
                   edited();
+                  if (!releaseNotesWithinLimit(e.target.value) && countReleaseNoteWords(e.target.value) > countReleaseNoteWords(releaseNotes)) {
+                    setClientValidationError(`Release notes tối đa ${RELEASE_NOTES_MAX_WORDS} từ (${countReleaseNoteWords(releaseNotes)}/${RELEASE_NOTES_MAX_WORDS} đang dùng).`);
+                    return;
+                  }
                   setReleaseNotes(e.target.value);
                 }}
               />
+              <p className="text-xs text-muted-foreground">{countReleaseNoteWords(releaseNotes)}/{RELEASE_NOTES_MAX_WORDS} từ</p>
             </div>
+
+            {/* Rejected Alert (Fix Bug #31) */}
+            {latestSubmission?.status === "REJECTED" && (
+              <Alert variant="destructive">
+                <AlertCircle className="size-4" />
+                <AlertTitle>Bài nộp đã bị từ chối (REJECTED - 0 điểm)</AlertTitle>
+                <AlertDescription className="text-xs mt-1">
+                  Bài nộp cho milestone này đã bị reviewer đánh giá REJECTED (0 điểm). Nhóm không được phép nộp lại hoặc chỉnh sửa bản nháp.
+                </AlertDescription>
+              </Alert>
+            )}
 
             {/* Amber Alert ONLY when submission is truly blocked (Fix Bug #29) */}
             {!canSubmit && !latestSubmission && (
               <Alert className="border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
                 <AlertCircle className="size-4" />
                 <AlertTitle>Chưa mở nộp bài chính thức</AlertTitle>
-                <AlertDescription className="text-xs mt-1">
-                  Chức năng nộp bài chính thức chỉ khả dụng khi milestone ở trạng thái OPEN và tiến độ IN_PROGRESS. Hiện tại bạn vẫn có thể chuẩn bị và lưu bản nháp.
-                </AlertDescription>
+                <AlertDescription className="text-xs mt-1">{query.data.submissionBlockReason ?? "Chức năng nộp bài chỉ khả dụng khi milestone đang thực hiện hoặc reviewer yêu cầu nộp lại, trong thời hạn cho phép."}</AlertDescription>
               </Alert>
             )}
 
@@ -489,7 +524,7 @@ export default function TeamArtifactSubmissionPage() {
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <Button
                 variant="outline"
-                disabled={save.isPending || submit.isPending}
+                disabled={save.isPending || submit.isPending || !canSubmit || !releaseNotesWithinLimit(releaseNotes) || latestSubmission?.status === "REJECTED"}
                 onClick={() => save.mutate()}
               >
                 {save.isPending ? (
@@ -504,7 +539,7 @@ export default function TeamArtifactSubmissionPage() {
               </Button>
 
               <Button
-                disabled={submit.isPending || save.isPending || !canSubmit}
+                disabled={submit.isPending || save.isPending || !canSubmit || !releaseNotesWithinLimit(releaseNotes) || latestSubmission?.status === "REJECTED"}
                 onClick={handleValidateAndOpenPreview}
               >
                 <Eye className="mr-2 size-4" /> Xem trước & Nộp bài
@@ -518,63 +553,56 @@ export default function TeamArtifactSubmissionPage() {
         </Card>
 
         {/* Preview & Confirm Submission Dialog (Fix Bug #24) */}
-        <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-          <DialogContent className="max-w-xl">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <FileCheck2 className="size-5 text-primary" />
-                Xác nhận nộp sản phẩm {latestSubmission ? `(Phiên bản v${latestSubmission.version + 1})` : "(Phiên bản v1)"}
-              </DialogTitle>
-              <DialogDescription>
-                Vui lòng kiểm tra lại thông tin trước khi nộp chính thức cho reviewer.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4 py-2 text-sm">
-              <div className="rounded-lg border p-3 space-y-2 bg-muted/20">
-                <p>
-                  <strong>Milestone:</strong> {m.title}
-                </p>
-                <p>
-                  <strong>Checklist:</strong> Đã đánh dấu {checkedCount}/{m.checklist.length} tiêu chí
-                </p>
-                <p>
-                  <strong>Repository URL:</strong>{" "}
-                  {repositoryUrl.trim() ? (
-                    <a
-                      href={repositoryUrl.trim()}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-primary underline inline-flex items-center gap-1 break-all"
-                    >
-                      {repositoryUrl.trim()} <ExternalLink className="size-3" />
-                    </a>
-                  ) : (
-                    <span className="text-muted-foreground italic">Chưa cung cấp</span>
-                  )}
-                </p>
-                <p>
-                  <strong>Deployment URL:</strong>{" "}
-                  {deploymentUrl.trim() ? (
-                    <a
-                      href={deploymentUrl.trim()}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-primary underline inline-flex items-center gap-1 break-all"
-                    >
-                      {deploymentUrl.trim()} <ExternalLink className="size-3" />
-                    </a>
-                  ) : (
-                    <span className="text-muted-foreground italic">Chưa cung cấp</span>
-                  )}
-                </p>
-                <div>
-                  <strong>Release Notes:</strong>
-                  <div className="mt-1 max-h-32 overflow-y-auto rounded border bg-background p-2 text-xs text-muted-foreground whitespace-pre-wrap">
-                    {releaseNotes.trim() || "Không có ghi chú phát hành"}
-                  </div>
+        <Dialog open={previewOpen} onOpenChange={(open) => { if (!submit.isPending) setPreviewOpen(open); }}>
+          <DialogContent className="flex max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 shadow-xl sm:max-w-2xl" showCloseButton={!submit.isPending}>
+            <DialogHeader className="shrink-0 border-b bg-muted/30 px-5 py-5 pr-12 sm:px-6 sm:pr-12">
+              <div className="flex min-w-0 items-start gap-3">
+                <div className="rounded-xl border bg-background p-2.5 text-primary shadow-sm"><FileCheck2 className="size-5" /></div>
+                <div className="min-w-0 space-y-2">
+                  <DialogTitle className="text-lg font-semibold leading-snug">Xác nhận nộp sản phẩm</DialogTitle>
+                  <Badge variant="secondary" className="w-fit">Phiên bản v{latestSubmission ? latestSubmission.version + 1 : 1}</Badge>
                 </div>
               </div>
+              <DialogDescription className="mt-2 leading-relaxed">Kiểm tra nội dung bên dưới trước khi gửi cho reviewer.</DialogDescription>
+            </DialogHeader>
+
+            <div className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-5 text-sm sm:px-6">
+              <section className="min-w-0 rounded-xl border bg-muted/20 p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Milestone</p>
+                <h3 className="mt-1 break-words font-semibold [overflow-wrap:anywhere]">{m.title}</h3>
+                <p className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"><Clock className="size-3.5" /> Hạn nộp: {deadlineDate.toLocaleString("vi-VN")}</p>
+              </section>
+
+              <section className="min-w-0 rounded-xl border p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="font-semibold">Tiêu chí nghiệm thu</h3>
+                  <Badge variant="outline">{m.checklist.length} tiêu chí</Badge>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">Reviewer sẽ đánh giá các tiêu chí này sau khi nộp.</p>
+                {m.checklist.length > 0 ? <ul className="mt-3 space-y-2">{m.checklist.map((item) => <li key={item.id} className="flex min-w-0 items-start gap-2.5 rounded-lg bg-muted/40 p-2.5"><span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary/60" /><span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">{item.content}{item.mandatory && <span className="ml-2 inline-block text-xs font-medium text-amber-700 dark:text-amber-300">Bắt buộc</span>}</span></li>)}</ul> : <p className="mt-3 text-sm text-muted-foreground">Không có tiêu chí.</p>}
+              </section>
+
+              <section className="min-w-0 rounded-xl border p-4">
+                <h3 className="font-semibold">Liên kết sản phẩm</h3>
+                <div className="mt-3 grid min-w-0 gap-3">
+                  {[
+                    { label: "Repository URL", url: repositoryUrl.trim() },
+                    { label: "Deployment URL", url: deploymentUrl.trim() },
+                  ].map(({ label, url }) => (
+                    <div key={label} className="min-w-0 rounded-lg bg-muted/40 p-3">
+                      <p className="mb-1 text-xs font-medium text-muted-foreground">{label}</p>
+                      {url ? <a href={url} target="_blank" rel="noreferrer" className="flex min-w-0 items-start gap-2 text-primary hover:underline"><span className="min-w-0 flex-1 break-all">{url}</span><ExternalLink className="mt-0.5 size-3.5 shrink-0" /></a> : <p className="text-muted-foreground">Chưa cung cấp</p>}
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="min-w-0 rounded-xl border p-4">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">Release notes</h3><span className="text-xs text-muted-foreground">{countReleaseNoteWords(releaseNotes)}/{RELEASE_NOTES_MAX_WORDS} từ</span></div>
+                <div tabIndex={0} aria-label="Nội dung Release notes" className="max-h-40 min-w-0 overflow-y-auto overscroll-contain whitespace-pre-wrap break-words rounded-lg bg-muted/40 p-3 leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
+                  {releaseNotes.trim() || "Không có ghi chú phát hành"}
+                </div>
+              </section>
 
               {isPastDeadline && (
                 <div className="rounded-md border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
@@ -583,11 +611,12 @@ export default function TeamArtifactSubmissionPage() {
               )}
             </div>
 
-            <DialogFooter className="gap-2 sm:gap-0">
-              <Button variant="outline" onClick={() => setPreviewOpen(false)}>
+            <DialogFooter className="m-0 shrink-0 gap-2 rounded-none border-t px-5 py-4 sm:px-6">
+              <Button className="w-full sm:w-auto" variant="outline" disabled={submit.isPending} onClick={() => setPreviewOpen(false)}>
                 Chỉnh sửa lại
               </Button>
               <Button
+                className="w-full sm:w-auto"
                 disabled={submit.isPending}
                 onClick={handleConfirmSubmit}
               >

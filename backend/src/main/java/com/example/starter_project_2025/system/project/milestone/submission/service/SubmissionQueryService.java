@@ -37,6 +37,7 @@ public class SubmissionQueryService {
     private final MilestoneTenantProvider tenantProvider;
     private final CurrentActorProvider actorProvider;
     private final Clock milestoneClock;
+    private final MilestoneSubmissionWindow submissionWindow;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -131,7 +132,7 @@ public class SubmissionQueryService {
                 value.getExecutionStatus(), value.getCurrentVersionNumber(), value.getSubmissionAttempts(),
                 value.getMilestone().getDeadline(), value.getSubmittedAt(), current != null && current.isLate(),
                 current == null ? java.math.BigDecimal.ZERO : current.getPenaltyPercent(), value.getLockVersion(),
-                checklistCompleted, checklistTotal);
+                checklistCompleted, checklistTotal, value.getMilestone().lifecycleStatus());
     }
 
     private SubmissionDtos.Detail toDetail(MilestoneSubmission value, SubmissionVersion current,
@@ -143,7 +144,8 @@ public class SubmissionQueryService {
         actions.put("reject", value.getStatus() == SubmissionStatus.SUBMITTED);
         actions.put("requestChanges", value.getStatus() == SubmissionStatus.SUBMITTED && requestAllowed);
         actions.put("createNextVersion", value.getStatus() == SubmissionStatus.CHANGES_REQUESTED && requestAllowed);
-        actions.put("submit", value.getStatus() == SubmissionStatus.DRAFT);
+        actions.put("submit", value.getStatus() == SubmissionStatus.DRAFT
+                && submissionWindow.canSubmitNow(value.getMilestone()));
 
         return new SubmissionDtos.Detail(value.getId(), value.getProjectId(), value.getMilestone().getId(),
                 value.getMilestone().getTitle(), value.getMilestone().getDescription(),
@@ -155,7 +157,7 @@ public class SubmissionQueryService {
                 value.getMilestone().getLatePolicyType().name(), value.getMilestone().getLateUntil(),
                 value.getMilestone().getLatePenaltyPercent(), value.getLockVersion(), product(value, current), map(current),
                 versionList.stream().map(this::map).toList(), map(rubric),
-                reviewList.stream().map(this::map).toList(), actions);
+                reviewList.stream().map(this::map).toList(), actions, value.getMilestone().lifecycleStatus());
     }
 
     private SubmissionDtos.ProductInfo product(MilestoneSubmission submission, SubmissionVersion current) {
@@ -188,13 +190,14 @@ public class SubmissionQueryService {
     boolean canRequestChanges(MilestoneSubmission value) {
         var milestone = value.getMilestone();
         if (!milestone.isActive() || milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN) return false;
+        if (milestone.lifecycleStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus.SUBMITTED
+                && milestone.lifecycleStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus.CHANGES_REQUESTED
+                && !(milestone.lifecycleStatus() == com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus.PLANNED
+                    && value.getStatus() == SubmissionStatus.SUBMITTED)) return false;
         if (!milestone.isAllowResubmission()) return false;
         if (milestone.getMaxSubmissionAttempts() != null
                 && value.getSubmissionAttempts() >= milestone.getMaxSubmissionAttempts()) return false;
-        var now = milestoneClock.instant();
-        if (!now.isAfter(milestone.getDeadline())) return true;
-        return milestone.getLatePolicyType().name().equals("ALLOW_LATE")
-                && milestone.getLateUntil() != null && !now.isAfter(milestone.getLateUntil());
+        return true;
     }
 
     private SubmissionDtos.Version map(SubmissionVersion value) {

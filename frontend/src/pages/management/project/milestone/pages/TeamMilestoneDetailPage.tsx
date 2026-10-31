@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, ArrowLeft, CalendarClock, Clock3, Globe2, ListChecks, RotateCw } from "lucide-react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { milestoneApi } from "@/api/features/milestone.api";
@@ -10,18 +10,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { usePermissions } from "@/hooks/usePermissions";
 import { MilestoneRubricCard } from "@/pages/management/project/milestone/components/MilestoneRubricCard";
 import { MilestoneStatusBadge } from "@/pages/management/project/milestone/components/MilestoneStatusBadge";
+import { MilestoneDraftHistory } from "@/pages/management/project/milestone/components/MilestoneDraftHistory";
 import { formatPenalty, formatTenantDateTime } from "@/pages/management/project/milestone/milestone.utils";
-import { ADMIN_ROLE, normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
+import { WorkspaceArtifactsPanel } from "@/pages/management/workspace/WorkspaceArtifactsPanel";
 
 export function TeamMilestoneDetailPage() {
   const { teamId: teamIdParam, milestoneId } = useParams<{ teamId: string; milestoneId: string }>();
   const teamId = Number(teamIdParam);
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const { hasPermission, activeRole } = usePermissions();
-  const queryClient = useQueryClient();
-  const normalizedRole = normalizeRole(activeRole);
-  const canPrepareArtifact = normalizedRole === STUDENT_ROLE || normalizedRole === ADMIN_ROLE;
+  const { hasPermission } = usePermissions();
   const workspaceId = params.get("workspaceId");
   const query = useQuery({
     queryKey: ["team-milestone", teamId, milestoneId],
@@ -29,24 +27,7 @@ export function TeamMilestoneDetailPage() {
     enabled: teamId > 0 && !!milestoneId,
     retry: false,
   });
-  const openMilestone = useMutation({
-    mutationFn: () => milestoneApi.publish(undefined, teamId, milestoneId!, query.data!.version),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-milestone", teamId, milestoneId] }),
-  });
-  const startMilestone = useMutation({
-    mutationFn: () => milestoneApi.start(undefined, teamId, milestoneId!, query.data!.version),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-milestone", teamId, milestoneId] }),
-  });
-  const deleteMilestone = useMutation({
-    mutationFn: () => milestoneApi.deleteDraft(undefined, teamId, milestoneId!, query.data!.version),
-    onSuccess: () => back(),
-  });
-  const editMetadata = useMutation({
-    mutationFn: (payload: {title: string; description: string; deadline: string; expectedVersion: number}) =>
-      milestoneApi.editMetadata(undefined, teamId, milestoneId!, payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-milestone", teamId, milestoneId] }),
-  });
-  const back = () => navigate(workspaceId ? `/management/workspaces/${workspaceId}?tab=milestones` : `/teams/${teamId}/milestones`);
+  const back = () => navigate(workspaceId ? `/management/workspaces/${workspaceId}?tab=milestones` : "/milestones/teams");
 
   if (query.isPending) return <MainLayout pathName={{ milestones: "Milestone" }}>
     <div className="mx-auto grid w-full max-w-6xl gap-6"><Skeleton className="h-40 rounded-xl" /><div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]"><Skeleton className="h-80 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div></div>
@@ -61,11 +42,17 @@ export function TeamMilestoneDetailPage() {
     <main className="mx-auto grid w-full max-w-6xl gap-6">
       <Card className="overflow-hidden border-primary/20 bg-gradient-to-r from-primary/5 via-background to-background">
         <CardHeader className="gap-4 p-6 md:p-8">
-          <div className="flex flex-wrap items-center gap-2"><Badge variant="outline">Team milestone</Badge><MilestoneStatusBadge status={milestone.status} executionStatus={milestone.executionStatus} />{milestone.mandatory && <Badge variant="secondary">Mandatory</Badge>}</div>
+          <div className="flex flex-wrap items-center gap-2"><Badge variant="outline">Team milestone</Badge><MilestoneStatusBadge status={milestone.lifecycleStatus} />{milestone.mandatory && <Badge variant="secondary">Mandatory</Badge>}</div>
           <div className="grid gap-2"><CardTitle className="text-2xl md:text-3xl">{milestone.title}</CardTitle><CardDescription className="max-w-3xl whitespace-pre-wrap text-sm leading-6">{milestone.description || "No description provided."}</CardDescription></div>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground"><span className="inline-flex items-center gap-2"><CalendarClock className="size-4" />Due {formatTenantDateTime(milestone.deadline, milestone.tenantTimeZone)}</span><span className="inline-flex items-center gap-2"><Globe2 className="size-4" />{milestone.tenantTimeZone}</span></div>
+          {milestone.startDate && <p className="text-sm text-muted-foreground">Start date: {milestone.startDate}</p>}
+          {milestone.scheduledStartAt && <p className="text-sm text-muted-foreground">Starts automatically {formatTenantDateTime(milestone.scheduledStartAt, milestone.tenantTimeZone)}</p>}
         </CardHeader>
       </Card>
+
+      {hasPermission("ARTIFACT_READ") && <WorkspaceArtifactsPanel teamId={teamId} milestone={milestone}
+        workspaceId={workspaceId && Number.isSafeInteger(Number(workspaceId)) && Number(workspaceId) > 0 ? Number(workspaceId) : undefined}
+        onRefreshMilestone={() => { void query.refetch(); }} />}
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
         <div className="grid gap-6">
@@ -76,6 +63,7 @@ export function TeamMilestoneDetailPage() {
             </CardContent>
           </Card>
           {milestone.rubric && <MilestoneRubricCard rubric={milestone.rubric} />}
+          {hasPermission("MILESTONE_WRITE") && <MilestoneDraftHistory teamId={teamId} milestoneId={milestone.id} />}
         </div>
 
         <aside className="grid gap-6">
@@ -84,9 +72,8 @@ export function TeamMilestoneDetailPage() {
         </aside>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-        <Button variant="outline" onClick={back}><ArrowLeft />Back to workspace</Button>
-        <div className="flex flex-wrap items-center gap-2">{milestone.status === "PLANNED" && hasPermission("MILESTONE_WRITE") && <><Button variant="outline" onClick={() => navigate(`/teams/${teamId}/milestones/${milestone.id}/edit?workspaceId=${workspaceId ?? ""}`)}>Edit Draft</Button><Button variant="destructive" onClick={() => { if (window.confirm("Delete this draft milestone?")) deleteMilestone.mutate(); }} disabled={deleteMilestone.isPending}>Delete Draft</Button><Button onClick={() => openMilestone.mutate()} disabled={openMilestone.isPending}>Publish</Button></>}{milestone.status === "OPEN" && !["DONE", "FAILED"].includes(milestone.executionStatus ?? "") && hasPermission("MILESTONE_WRITE") && <Button variant="outline" onClick={() => { const title = window.prompt("Title", milestone.title); if (title === null) return; const description = window.prompt("Description", milestone.description ?? ""); if (description === null) return; const deadline = window.prompt("Deadline (ISO 8601)", milestone.deadline); if (deadline === null) return; editMetadata.mutate({ title, description, deadline, expectedVersion: milestone.version }); }}>Edit metadata</Button>}{milestone.executionStatus === "TODO" && normalizedRole === ADMIN_ROLE && <Button onClick={() => startMilestone.mutate()} disabled={startMilestone.isPending}>Start</Button>}{openMilestone.isError && <p className="text-xs text-destructive">Publish failed. Check required fields.</p>}<Button variant="outline" onClick={() => navigate(`/teams/${teamId}/milestones/${milestone.id}/submissions?workspaceId=${workspaceId ?? ""}`)}>Review submissions</Button>{canPrepareArtifact && milestone.status === "OPEN" && milestone.executionStatus !== "TODO" && hasPermission("ARTIFACT_READ") && <Button onClick={() => navigate(`/teams/${teamId}/milestones/${milestone.id}/submit`)}>Prepare artifact</Button>}</div>
+      <div className="border-t pt-4">
+        <Button variant="outline" onClick={back}><ArrowLeft />{workspaceId ? "Back to workspace" : "Choose team"}</Button>
       </div>
     </main>
   </MainLayout>;

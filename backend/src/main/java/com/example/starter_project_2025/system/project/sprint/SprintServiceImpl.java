@@ -37,7 +37,7 @@ import java.util.stream.Collectors;
  * Business rules covered:
  * <ul>
  *     <li>start date &lt; end date (422)</li>
- *     <li>sprint name unique (409)</li>
+ *     <li>sprint name unique inside its project workspace (409)</li>
  *     <li>sprint goal 1..500 characters (422)</li>
  *     <li>a new sprint always starts as Planned (the client cannot pick another
  *     status)</li>
@@ -46,7 +46,8 @@ import java.util.stream.Collectors;
  *     <li>a sprint can only be started (Active) when it holds at least one
  *     Sprint Backlog item (422 otherwise)</li>
  *     <li>a sprint can only move to Completed once every Sprint Backlog item of
- *     that sprint is Done (422 otherwise)</li>
+ *     that sprint is Done and every subtask of those items is Done too
+ *     (422 otherwise)</li>
  *     <li>audit log (actor, timestamp, before/after, correlation id) + outbox event (idempotent)</li>
  * </ul>
  * <p>
@@ -87,6 +88,8 @@ public class SprintServiceImpl
     SprintAuditService sprintAuditService;
     SprintOutboxService sprintOutboxService;
     SprintBacklogRepository sprintBacklogRepository;
+    /** Subtasks of the backlog items (own module, read-only usage here). */
+    SprintSubtaskRepository taskRepository;
 
     @Override
     protected BaseCrudRepository<Sprint, Long> getRepository() {
@@ -120,7 +123,7 @@ public class SprintServiceImpl
 
         throwIfInvalid(errors);
 
-        ensureUniqueName(sprint.getName(), null);
+        ensureUniqueName(sprint.getName(), sprint.getProjectId(), sprint.getTeamId(), null);
 
         // A sprint is always created as Planned: any status sent by the client
         // is ignored so the lifecycle can only be advanced through an update.
@@ -177,7 +180,9 @@ public class SprintServiceImpl
         throwIfInvalid(errors);
 
         if (request.getName() != null) {
-            ensureUniqueName(name, sprint.getId());
+            Long scopeProjectId = request.getProjectId() != null ? request.getProjectId() : sprint.getProjectId();
+            Long scopeTeamId = request.getTeamId() != null ? request.getTeamId() : sprint.getTeamId();
+            ensureUniqueName(name, scopeProjectId, scopeTeamId, sprint.getId());
         }
 
         Map<String, Object> before = snapshot(sprint);
@@ -297,6 +302,17 @@ public class SprintServiceImpl
         List<SprintBacklog> orderedItems = resolveBacklogItems(orderedIds, errors);
 
         validateAssignable(sprint, orderedItems, errors);
+        Set<Long> keptIds = orderedItems.stream().map(SprintBacklog::getId).collect(Collectors.toSet());
+        for (SprintBacklog item : orderedItems) {
+            if (item.getSprint() == null && item.getStatus() != SprintBacklogStatus.TODO) {
+                addError(errors, BACKLOG_IDS_FIELD, "A product backlog item can only enter a sprint as TODO");
+            }
+        }
+        for (SprintBacklog item : sprintBacklogRepository.findBySprintIdOrderByIdAsc(sprintId)) {
+            if (!keptIds.contains(item.getId()) && item.getStatus() != SprintBacklogStatus.TODO) {
+                addError(errors, BACKLOG_IDS_FIELD, "Only TODO work items can move back to the product Backlog");
+            }
+        }
 
         throwIfInvalid(errors);
 
@@ -621,8 +637,9 @@ public class SprintServiceImpl
 
     /**
      * A sprint may only be completed once every Sprint Backlog item that
-     * belongs to it is {@code Done}; otherwise the transition answers 422 and
-     * lists the items that still have to be finished.
+     * belongs to it is {@code Done} <em>and</em> every subtask of those items
+     * is {@code Done} too; otherwise the transition answers 422 and lists what
+     * still has to be finished.
      */
     private void validateCompletion(Long sprintId,
                                     SprintStatus currentStatus,
@@ -636,12 +653,23 @@ public class SprintServiceImpl
 
         List<SprintBacklog> unfinished = sprintBacklogRepository.findUnfinishedBySprintId(
                 sprintId, List.of(SprintBacklogStatus.DONE));
+        List<String> unfinishedSubtasks = taskRepository.findUnfinishedSubtaskTitlesBySprintId(sprintId);
 
-        if (unfinished.isEmpty()) {
+        if (unfinished.isEmpty() && unfinishedSubtasks.isEmpty()) {
             return;
         }
 
-        addError(errors, STATUS_FIELD, unfinishedBacklogMessage(unfinished));
+        List<String> messages = new ArrayList<>();
+
+        if (!unfinished.isEmpty()) {
+            messages.add(unfinishedBacklogMessage(unfinished));
+        }
+
+        if (!unfinishedSubtasks.isEmpty()) {
+            messages.add(unfinishedSubtaskMessage(unfinishedSubtasks));
+        }
+
+        addError(errors, STATUS_FIELD, String.join(" ", messages));
     }
 
     private String unfinishedBacklogMessage(List<SprintBacklog> unfinished) {
@@ -668,11 +696,55 @@ public class SprintServiceImpl
         return message.toString();
     }
 
-    private void ensureUniqueName(String name, Long excludedId) {
+    /**
+     * Subtasks of the sprint backlog items are part of the sprint scope too, so
+     * the completion error quotes the ones that are still open.
+     */
+    private String unfinishedSubtaskMessage(List<String> unfinishedSubtasks) {
 
-        boolean exists = excludedId == null
-                ? sprintRepository.existsByName(name)
-                : sprintRepository.existsByNameAndIdNot(name, excludedId);
+        String titles = unfinishedSubtasks.stream()
+                .limit(MAX_UNFINISHED_TITLES_IN_MESSAGE)
+                .filter(title -> title != null && !title.isBlank())
+                .collect(Collectors.joining(", "));
+
+        StringBuilder message = new StringBuilder()
+                .append("Không thể hoàn thành Sprint vì còn ")
+                .append(unfinishedSubtasks.size())
+                .append(" Subtask của Backlog item chưa ở trạng thái Done");
+
+        if (!titles.isEmpty()) {
+            message.append(": ").append(titles);
+
+            if (unfinishedSubtasks.size() > MAX_UNFINISHED_TITLES_IN_MESSAGE) {
+                message.append("...");
+            }
+        }
+
+        return message.toString();
+    }
+
+    /**
+     * The name only has to be unique inside the workspace that owns the sprint:
+     * the project when the sprint belongs to one, otherwise the team, and only
+     * sprints without either scope fall back to the tenant-wide check.
+     */
+    private void ensureUniqueName(String name, Long projectId, Long teamId, Long excludedId) {
+
+        boolean exists;
+
+        if (projectId != null) {
+            exists = excludedId == null
+                    ? sprintRepository.existsByProjectIdAndName(projectId, name)
+                    : sprintRepository.existsByProjectIdAndNameAndIdNot(projectId, name, excludedId);
+        } else if (teamId != null) {
+            exists = excludedId == null
+                    ? sprintRepository.existsByTeamIdAndName(teamId, name)
+                    : sprintRepository.existsByTeamIdAndNameAndIdNot(teamId, name, excludedId);
+        } else {
+            exists = excludedId == null
+                    ? sprintRepository.existsByName(name)
+                    : sprintRepository.existsByNameAndIdNot(name, excludedId);
+        }
 
         if (exists) {
             throw SprintConflictException.duplicateName();

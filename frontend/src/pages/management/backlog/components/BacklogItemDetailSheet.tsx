@@ -28,7 +28,8 @@ import type {
   SprintDTO,
   SprintPlanningItem,
 } from "@/types";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { refreshBacklogItem } from "@/lib/refresh-backlog-item";
 import {
   Copy,
   Link2,
@@ -56,6 +57,8 @@ import { BacklogSubtasksPanel } from "./BacklogSubtasksPanel";
 
 const NO_SPRINT = "none";
 const NO_MILESTONE = "none";
+/** Sentinel of the assignee picker (Radix forbids an empty SelectItem value). */
+const NO_ASSIGNEE = "none";
 
 /** Business rule of UFR-PRJ-003-02: description <= 2000 characters. */
 const MAX_DESCRIPTION_LENGTH = 2000;
@@ -72,6 +75,16 @@ interface BacklogItemDetailSheetProps {
   milestones?: MilestoneOption[];
   /** Active members of the workspace team (assignee picker). */
   assignees?: BacklogAssigneeOption[];
+  /** Workspace-specific workflow statuses shown in the status selector. */
+  workflowStatuses?: { value: SprintBacklogStatus; label: string }[];
+  /** Optional workspace transition policy; generic backlog keeps its legacy selector. */
+  allowedStatusTransitions?: (status: SprintBacklogStatus) => SprintBacklogStatus[];
+  /**
+   * Team of the open workspace. The panel resolves the assignee options by
+   * project when the board is not scoped to a team (global `/backlogs` page),
+   * so the picker still offers the members of the team that owns the project.
+   */
+  teamId?: number | null;
   /** SPRINT_BACKLOG_UPDATE (title, description, status, priority, dates, estimate). */
   canEdit: boolean;
   /** SPRINT_UPDATE (moving the item to another sprint / back to the backlog). */
@@ -93,6 +106,8 @@ interface Draft {
   milestoneId: string;
   /** `project_members.id` of the assignee, empty when unassigned. */
   assignee: string;
+  /** `project_members.id` of the reporter, empty when not set. */
+  reporter: string;
   /** `yyyy-MM-dd`, converted to ISO date-time when saved. */
   startDate: string;
   endDate: string;
@@ -122,6 +137,10 @@ const toDraft = (detail: SprintBacklogDTO): Draft => ({
   assignee:
     detail.assigneeProjectMemberId != null
       ? String(detail.assigneeProjectMemberId)
+      : "",
+  reporter:
+    detail.reporterProjectMemberId != null
+      ? String(detail.reporterProjectMemberId)
       : "",
   startDate: toDateInput(detail.startDate),
   endDate: toDateInput(detail.endDate),
@@ -181,12 +200,16 @@ export function BacklogItemDetailSheet({
   sprints = [],
   milestones = [],
   assignees = [],
+  workflowStatuses = [],
+  allowedStatusTransitions,
+  teamId = null,
   canEdit,
   canMove,
   canDelete,
   onChanged,
   onDeleted,
 }: BacklogItemDetailSheetProps) {
+  const queryClient = useQueryClient();
   const detailQuery = useQuery({
     queryKey: ["sprint-backlog", "detail", item?.id ?? null],
     queryFn: () => sprintBacklogApi.getById(String(item!.id)),
@@ -196,6 +219,35 @@ export function BacklogItemDetailSheet({
   const detail = detailQuery.data;
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
+
+  /**
+   * Assignee candidates of the item: the team of the open workspace when the
+   * board is team-scoped, otherwise the team of the item's sprint, otherwise
+   * the team that owns the project of the work item.
+   */
+  const projectId = detail?.projectId ?? item?.projectId ?? null;
+  const sprintId = detail?.sprintId ?? item?.sprintId ?? null;
+  const sprintTeamId =
+    sprints.find((sprint) => sprint.id === sprintId)?.teamId ?? null;
+  const resolvedTeamId = teamId ?? sprintTeamId;
+  const assigneeOptionsQuery = useQuery({
+    queryKey: [
+      "sprint-backlog",
+      "assignee-options",
+      resolvedTeamId ?? "none",
+      projectId ?? "none",
+    ],
+    queryFn: () => sprintBacklogApi.getAssigneeOptions(resolvedTeamId, projectId),
+    enabled:
+      open &&
+      item?.id != null &&
+      (resolvedTeamId != null || projectId != null),
+    staleTime: 60_000,
+  });
+
+  /** Members offered by the picker (the board list wins when it is present). */
+  const assigneeOptions =
+    assignees.length > 0 ? assignees : assigneeOptionsQuery.data ?? [];
 
   /** Switching to another item resets the editor until its record is loaded. */
   useEffect(() => {
@@ -223,6 +275,13 @@ export function BacklogItemDetailSheet({
   const workType = backlogWorkTypeMeta(draft?.workType ?? item.workType);
   const WorkTypeIcon = workType.icon;
   const currentSprintId = detail?.sprintId ?? null;
+  const statusOptions = allowedStatusTransitions
+    ? [...new Set([draft?.status ?? detail?.status ?? "TODO", ...allowedStatusTransitions(draft?.status ?? detail?.status ?? "TODO")])]
+        .map((value) => workflowStatuses.find((option) => option.value === value)
+          ?? SPRINT_BACKLOG_STATUS_OPTIONS.find((option) => option.value === value))
+        .filter((option): option is { value: SprintBacklogStatus; label: string } => option != null)
+    : [...SPRINT_BACKLOG_STATUS_OPTIONS, ...workflowStatuses.filter((custom) => !SPRINT_BACKLOG_STATUS_OPTIONS.some((known) => known.value === custom.value))]
+        .filter((option) => draft?.status !== "DONE" || option.value === "DONE" || option.value === "REVIEW");
 
   const save = async (patch: Partial<SprintBacklogDTO>) => {
     if (!item || !canEdit) return;
@@ -230,8 +289,8 @@ export function BacklogItemDetailSheet({
     setSaving(true);
 
     try {
-      await sprintBacklogApi.update(String(item.id), patch as SprintBacklogDTO);
-      await detailQuery.refetch();
+      const saved = await sprintBacklogApi.update(String(item.id), patch as SprintBacklogDTO);
+      await refreshBacklogItem(queryClient, saved);
       await onChanged?.();
     } catch (error) {
       toast.error(extractErrorMessage(error, "Không thể cập nhật công việc."));
@@ -255,6 +314,9 @@ export function BacklogItemDetailSheet({
     void save({ title });
   };
 
+  /**
+   * "Save" of the description editor: persists the typed description.
+   */
   const commitDescription = () => {
     const description = draft?.description ?? "";
 
@@ -274,6 +336,19 @@ export function BacklogItemDetailSheet({
 
     void save({ description: description.trim() });
   };
+
+  /** "Cancel" of the description editor: restores the persisted description. */
+  const cancelDescription = () => {
+    setDraft((previous) =>
+      previous
+        ? { ...previous, description: detail?.description ?? "" }
+        : previous,
+    );
+  };
+
+  /** True while the description holds changes that were not saved yet. */
+  const descriptionDirty =
+    (draft?.description ?? "") !== (detail?.description ?? "");
 
   /**
    * Links / unlinks the milestone of the item (UFR-PRJ-003-02). A 404 from the
@@ -357,9 +432,22 @@ export function BacklogItemDetailSheet({
   /** The assignee is picked from the active members of the workspace team. */
   const commitAssignee = (value: string) => {
     const current = detail?.assigneeProjectMemberId ?? null;
+
+    // "Unassigned" clears the assignee; the backend needs the explicit flag
+    // because a null id otherwise means "keep the current assignee".
+    if (value === "" || value === NO_ASSIGNEE) {
+      if (current == null) return;
+
+      setDraft((previous) =>
+        previous ? { ...previous, assignee: "" } : previous,
+      );
+      void save({ clearAssignee: true } as Partial<SprintBacklogDTO>);
+      return;
+    }
+
     const next = Number(value);
 
-    if (!value || !Number.isFinite(next) || next <= 0 || next === current) {
+    if (!Number.isFinite(next) || next <= 0 || next === current) {
       return;
     }
 
@@ -368,6 +456,36 @@ export function BacklogItemDetailSheet({
     );
 
     void save({ assigneeProjectMemberId: next } as Partial<SprintBacklogDTO>);
+  };
+
+  /**
+   * The reporter is picked from the active members of the team, exactly like
+   * the assignee ("No reporter" clears it with the explicit backend flag).
+   */
+  const commitReporter = (value: string) => {
+    const current = detail?.reporterProjectMemberId ?? null;
+
+    if (value === "" || value === NO_ASSIGNEE) {
+      if (current == null) return;
+
+      setDraft((previous) =>
+        previous ? { ...previous, reporter: "" } : previous,
+      );
+      void save({ clearReporter: true } as Partial<SprintBacklogDTO>);
+      return;
+    }
+
+    const next = Number(value);
+
+    if (!Number.isFinite(next) || next <= 0 || next === current) {
+      return;
+    }
+
+    setDraft((previous) =>
+      previous ? { ...previous, reporter: value } : previous,
+    );
+
+    void save({ reporterProjectMemberId: next } as Partial<SprintBacklogDTO>);
   };
 
   /** Moves the item to another sprint (`null` = product backlog). */
@@ -547,9 +665,17 @@ export function BacklogItemDetailSheet({
         </div>
 
         {!draft ? (
-          <div className="flex flex-1 items-center justify-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading the work item…
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center text-sm text-muted-foreground">
+            {detailQuery.isError ? (
+              <>
+                <p role="alert" className="text-destructive">Could not load this work item. Check your access and connection, then retry.</p>
+                <Button type="button" variant="outline" size="sm" onClick={() => void detailQuery.refetch()} disabled={detailQuery.isFetching}>
+                  {detailQuery.isFetching ? "Retrying…" : "Try again"}
+                </Button>
+              </>
+            ) : (
+              <><Loader2 className="h-4 w-4 animate-spin" />Loading the work item…</>
+            )}
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto">
@@ -577,7 +703,7 @@ export function BacklogItemDetailSheet({
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <Select
                   value={draft.status}
-                  disabled={!canEdit || saving}
+                  disabled={!canEdit || saving || currentSprintId == null}
                   onValueChange={(value) => {
                     setDraft((previous) =>
                       previous
@@ -597,9 +723,9 @@ export function BacklogItemDetailSheet({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {SPRINT_BACKLOG_STATUS_OPTIONS.map((option) => (
+                    {statusOptions.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
-                        {backlogStatusMeta(statusToBoard(option.value)).label}
+                        {option.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -660,18 +786,44 @@ export function BacklogItemDetailSheet({
                       : previous,
                   )
                 }
-                onBlur={commitDescription}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    cancelDescription();
+                  }
+                }}
               />
-              <p
-                className={cn(
-                  "mt-1 text-right text-[10px]",
-                  draft.description.length > MAX_DESCRIPTION_LENGTH
-                    ? "font-semibold text-destructive"
-                    : "text-muted-foreground",
-                )}
-              >
-                {draft.description.length}/{MAX_DESCRIPTION_LENGTH} ký tự
-              </p>
+              <div className="mt-1 flex items-center gap-1">
+                <p
+                  className={cn(
+                    "mr-auto text-right text-[10px]",
+                    draft.description.length > MAX_DESCRIPTION_LENGTH
+                      ? "font-semibold text-destructive"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {draft.description.length}/{MAX_DESCRIPTION_LENGTH} ký tự
+                </p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="h-6 px-2 text-[11px] text-muted-foreground"
+                  disabled={!canEdit || saving || !descriptionDirty}
+                  onClick={cancelDescription}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="xs"
+                  className="h-6 px-2 text-[11px]"
+                  disabled={!canEdit || saving || !descriptionDirty}
+                  onClick={commitDescription}
+                >
+                  Save
+                </Button>
+              </div>
             </div>
 
             <div className="px-5 pb-5">
@@ -715,7 +867,7 @@ export function BacklogItemDetailSheet({
 
                 <DetailRow label="Assignee">
                   <Select
-                    value={draft.assignee || undefined}
+                    value={draft.assignee || NO_ASSIGNEE}
                     disabled={!canEdit || saving}
                     onValueChange={(value) => commitAssignee(value)}
                   >
@@ -723,7 +875,13 @@ export function BacklogItemDetailSheet({
                       <SelectValue placeholder="Unassigned" />
                     </SelectTrigger>
                     <SelectContent>
-                      {assignees.map((member) => (
+                      <SelectItem value={NO_ASSIGNEE}>
+                        <span className="flex items-center gap-2 text-muted-foreground">
+                          <User className="h-4 w-4" />
+                          Unassigned
+                        </span>
+                      </SelectItem>
+                      {assigneeOptions.map((member) => (
                         <SelectItem
                           key={member.id}
                           value={String(member.id)}
@@ -744,13 +902,13 @@ export function BacklogItemDetailSheet({
                       {/* Legacy / out-of-scope id: keep it visible instead of
                           silently dropping the stored assignee. */}
                       {draft.assignee !== "" &&
-                        !assignees.some(
+                        !assigneeOptions.some(
                           (member) => String(member.id) === draft.assignee,
                         ) && (
                           <SelectItem value={draft.assignee}>
                             <span className="flex items-center gap-2">
                               <User className="h-4 w-4" />
-                              Member #{draft.assignee}
+                              {item.assigneeDisplayName || `Member #${draft.assignee}`}
                             </span>
                           </SelectItem>
                         )}
@@ -770,7 +928,7 @@ export function BacklogItemDetailSheet({
                       <SelectValue placeholder="Add sprint" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={NO_SPRINT}>
+                      <SelectItem value={NO_SPRINT} disabled={draft.status !== "TODO"}>
                         Backlog (no sprint)
                       </SelectItem>
                       {sprints
@@ -854,11 +1012,51 @@ export function BacklogItemDetailSheet({
                 </DetailRow>
 
                 <DetailRow label="Reporter">
-                  <span className="px-2 text-sm text-muted-foreground">
-                    {detail?.createdBy != null
-                      ? `Member #${detail.createdBy}`
-                      : "—"}
-                  </span>
+                  <Select
+                    value={draft.reporter || NO_ASSIGNEE}
+                    disabled={!canEdit || saving}
+                    onValueChange={(value) => commitReporter(value)}
+                  >
+                    <SelectTrigger size="sm" className={inlineFieldClass}>
+                      <SelectValue placeholder="No reporter" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_ASSIGNEE}>
+                        <span className="flex items-center gap-2 text-muted-foreground">
+                          <User className="h-4 w-4" />
+                          No reporter
+                        </span>
+                      </SelectItem>
+                      {assigneeOptions.map((member) => (
+                        <SelectItem key={member.id} value={String(member.id)}>
+                          <span className="flex items-center gap-2">
+                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-100 text-[9px] font-semibold text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
+                              {initialsOf(member.fullName)}
+                            </span>
+                            <span className="truncate">{member.fullName}</span>
+                            {member.role && (
+                              <span className="text-xs text-muted-foreground">
+                                {member.role}
+                              </span>
+                            )}
+                          </span>
+                        </SelectItem>
+                      ))}
+                      {/* Legacy / out-of-scope id: keep it visible instead of
+                          silently dropping the stored reporter. */}
+                      {draft.reporter !== "" &&
+                        !assigneeOptions.some(
+                          (member) => String(member.id) === draft.reporter,
+                        ) && (
+                          <SelectItem value={draft.reporter}>
+                            <span className="flex items-center gap-2">
+                              <User className="h-4 w-4" />
+                              Member #{draft.reporter}
+                            </span>
+                          </SelectItem>
+                        )}
+                    </SelectContent>
+                  </Select>
                 </DetailRow>
 
                 <DetailRow label="Board">
@@ -891,8 +1089,11 @@ export function BacklogItemDetailSheet({
 const statusToBoard = (status: SprintBacklogStatus) => {
   switch (status) {
     case "IN_PROGRESS":
-    case "REVIEW":
       return "IN_PROGRESS" as const;
+    case "REVIEW":
+      return "REVIEW" as const;
+    case "BLOCKED":
+      return "BLOCKED" as const;
     case "DONE":
       return "DONE" as const;
     default:

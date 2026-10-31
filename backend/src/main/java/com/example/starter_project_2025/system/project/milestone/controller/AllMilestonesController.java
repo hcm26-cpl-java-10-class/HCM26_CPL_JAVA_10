@@ -31,12 +31,13 @@ public class AllMilestonesController {
             @RequestParam(required = false) List<String> sort,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) List<MilestoneStatus> status,
+            @RequestParam(required = false) List<com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus> lifecycleStatus,
             @RequestParam(required = false) Boolean mandatory,
             @RequestParam(required = false) List<LatePolicyType> latePolicyType,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate deadlineFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate deadlineTo
     ) {
         return queryService.getAllList(new MilestoneListQuery(teamId, page, size, sort, search,
-                status, mandatory, latePolicyType, deadlineFrom, deadlineTo));
+                status, mandatory, latePolicyType, deadlineFrom, deadlineTo, lifecycleStatus));
     }
 }

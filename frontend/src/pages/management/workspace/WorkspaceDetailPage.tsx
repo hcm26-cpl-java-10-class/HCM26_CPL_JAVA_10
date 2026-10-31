@@ -93,22 +93,22 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                 : tab === "overview" ? <WorkspaceOverviewSection workspaceId={workspaceId} projectId={context.projectId}
                     teamId={context.teamId} canViewMembers={!!members?.canRead} onViewMembers={() => changeTab("members")}
                     onAccessChanged={reloadAccess} />
-                : tab === "members" ? <>
-                    <WorkspaceMembersPanel workspaceId={workspaceId} teamId={context.teamId} canViewMembers
-                      canManageMembers={current.actions.manage} onAccessChanged={reloadAccess} />
-                    <WorkspaceOverviewSection workspaceId={workspaceId} projectId={context.projectId} teamId={context.teamId}
-                      charter canManageMembers={current.actions.manage} canViewMembers onViewMembers={() => changeTab("members")}
-                      onAccessChanged={reloadAccess} />
-                  </>
+                : tab === "members" ? <WorkspaceMembersPanel workspaceId={workspaceId} teamId={context.teamId}
+                    classId={context.classId} allocationSessionId={context.allocationSessionId} canViewMembers
+                    onAccessChanged={reloadAccess} />
                 : tab === "milestones" ? <WorkspaceMilestonesPanel workspaceId={workspaceId} projectId={context.projectId}
                     teamId={context.teamId} access={current} />
                 : tab === "artifacts" ? <WorkspaceArtifactsPanel workspaceId={workspaceId} projectId={context.projectId}
                     teamId={context.teamId} access={current} />
-                : tab === "sprints" ? <WorkspaceTeamBoardPanel teamId={context.teamId}
+                : tab === "sprints" ? <WorkspaceTeamBoardPanel workspaceId={workspaceId} teamId={context.teamId}
                     canUpdate={hasPermission("SPRINT_BACKLOG_UPDATE")}
+                    canMove={hasPermission("SPRINT_UPDATE")}
+                    canDelete={hasPermission("SPRINT_BACKLOG_DELETE")}
+                    canConfigureColumns={current.actions.configureBoard === true}
                     onCreateWorkItem={sections.find(item => item.key === "backlog")?.canRead ? () => changeTab("backlog") : undefined} />
                 : tab === "backlog" ? <WorkspaceBacklogPanel projectId={context.projectId}
-                    teamId={context.teamId} />
+                    teamId={context.teamId} projectName={context.projectName}
+                    taskKeyPrefix={context.taskKeyPrefix} />
                 : tab === "activity" ? <WorkspaceProjectLogsPanel workspaceId={workspaceId} />
                 : <WorkspaceBusinessSectionPanel key={workspaceId + ":" + tab} workspaceId={workspaceId}
                     projectId={context.projectId} teamId={context.teamId} section={tab}

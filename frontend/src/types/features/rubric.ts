@@ -60,9 +60,11 @@ export interface RubricDetail {
 
 export interface RubricListItem {
   id: string;
+  rowId: string;
   name: string;
   description?: string | null;
   versionCount: number;
+  hasDraft: boolean;
   latestVersionId: string;
   latestVersionNumber: number;
   latestStatus: RubricVersionStatus;

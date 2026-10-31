@@ -25,6 +25,8 @@ import com.example.starter_project_2025.system.project.milestone.submission.port
 import com.example.starter_project_2025.system.project.milestone.submission.repository.ArtifactAttachmentRepository;
 import com.example.starter_project_2025.system.project.milestone.submission.repository.MilestoneArtifactSubmissionRepository;
 import com.example.starter_project_2025.system.project.milestone.submission.repository.MilestoneArtifactDraftRepository;
+import com.example.starter_project_2025.system.project.milestone.submission.repository.MilestoneSubmissionRepository;
+import com.example.starter_project_2025.system.project.milestone.submission.domain.SubmissionStatus;
 import com.example.starter_project_2025.web.CorrelationIdFilter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -59,11 +61,14 @@ public class ArtifactSubmissionService {
     private final ObjectMapper objectMapper;
     private final ArtifactContributionLock contributionLock;
     private final ArtifactReviewSubmissionSyncService reviewSyncService;
+    private final MilestoneSubmissionWindow submissionWindow;
+    private final MilestoneSubmissionRepository milestoneSubmissionRepository;
 
     @Transactional
     public ArtifactSubmissionResponse submit(Long projectId, UUID milestoneId, String idempotencyKey,
             ArtifactSubmissionRequest request) {
         Scope scope = requireScope(projectId);
+        ReleaseNotesWordLimit.validate(request.releaseNotes());
         contributionLock.lockCurrentActor();
         if (idempotencyKey == null || idempotencyKey.isBlank() || idempotencyKey.length() > 100) {
             throw validation("idempotencyKey", "Idempotency-Key is required and must not exceed 100 characters");
@@ -85,9 +90,19 @@ public class ArtifactSubmissionService {
                     .orElseThrow(() -> new IllegalStateException("Idempotent submission record is missing"));
         }
 
+        // A rejected review is terminal for this milestone/team. Keep this
+        // guard on the project-backed submit path too, before creating an
+        // artifact version that could no longer be reviewed.
+        if (milestone.getTeamId() != null && milestoneSubmissionRepository
+                .findByMilestoneIdAndTeamId(milestoneId, milestone.getTeamId())
+                .map(row -> row.getStatus() == SubmissionStatus.REJECTED)
+                .orElse(false)) {
+            throw new MilestoneConflictException(
+                    "Submission was REJECTED (0 points). Resubmission is not permitted.");
+        }
+
         accessPolicy.requireSubmittableState(scope.project());
-        if (milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN
-                || milestone.getExecutionStatus() != com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus.IN_PROGRESS) {
+        if (!submissionWindow.canSubmit(milestone)) {
             throw new MilestoneConflictException("Milestone must be OPEN before students can submit artifacts");
         }
 

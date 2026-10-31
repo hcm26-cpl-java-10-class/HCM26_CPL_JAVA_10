@@ -12,6 +12,8 @@ import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceMe
 import com.example.starter_project_2025.system.project.workspace.dto.WorkspaceTopicSnapshotResponse;
 import com.example.starter_project_2025.system.project.workspace.repository.ProjectTopicSnapshotRepository;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshotRepository;
+import com.example.starter_project_2025.system.project.trainingclass.TrainingClass;
+import com.example.starter_project_2025.system.project.trainingclass.TrainingClassRepository;
 
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
@@ -37,6 +39,7 @@ public class WorkspaceReadService {
     private final WorkspaceRosterService roster;
     private final ProjectTopicSnapshotRepository snapshots;
     private final ProjectTemplateSnapshotRepository templateSnapshots;
+    private final TrainingClassRepository classes;
     private final UserRepository users;
     private final ObjectMapper json;
 
@@ -46,9 +49,13 @@ public class WorkspaceReadService {
         Project project = workspace.getProject();
         ProjectTeam team = workspace.getTeam();
         var trainingClass = team.getTrainingClass();
-        var snapshot = projectBrief(project);
-        // A blank snapshot description stays blank; do not substitute newer project content.
-        String description = snapshot != null ? snapshot.description() : project == null ? null : project.getDescription();
+        var snapshot = project == null ? null : snapshots.findByProjectId(project.getId()).map(this::snapshotResponse).orElse(null);
+        String description = project == null ? null : project.getDescription();
+        String projectClassName = project == null || project.getClassId() == null ? null
+                : classes.findByIdAndTenantId(project.getClassId(), project.getTenantId())
+                        .map(TrainingClass::getName).orElse(null);
+        String projectCohortName = project == null || project.getCohort() == null ? null
+                : project.getCohort().getName();
         return WorkspaceDetailResponse.builder()
                 .id(workspace.getId()).code(workspace.getCode()).name(workspace.getName())
                 .status(workspace.getStatus())
@@ -56,6 +63,7 @@ public class WorkspaceReadService {
                 .projectCode(project == null ? null : project.getCode())
                 .projectName(project == null ? null : project.getName())
                 .projectDescription(description).projectStatus(project == null ? null : project.getStatus())
+                .projectClassName(projectClassName).projectCohortName(projectCohortName)
                 .teamId(team.getId()).teamCode(team.getCode()).teamName(team.getTeamName())
                 .mentorName(team.getAssignedMentorId() == null ? null :
                         users.findById(team.getAssignedMentorId()).map(User::getFullName).orElse(null))

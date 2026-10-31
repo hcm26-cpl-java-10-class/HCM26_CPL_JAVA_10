@@ -42,6 +42,35 @@ public class ScopeAuthorizationService {
         }
     }
 
+    /** ADMIN is the legacy Program Manager persona and is limited to its tenant. */
+    @Transactional(readOnly = true)
+    public void assertCanSearchProjectTemplates(Authentication authentication, TrainingClass trainingClass) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof UserPrincipal principal)) {
+            throw new AccessDeniedException("Template search is outside the class data scope");
+        }
+        boolean hasPermission = authentication.getAuthorities().stream().anyMatch(authority ->
+                "PEO_TEAM_ALLOCATE".equals(authority.getAuthority())
+                        || "PRJ_WORKSPACE_MANAGE".equals(authority.getAuthority()));
+        Long tenantId = principal.getUser().getTenantId();
+        Long userId = principal.getUser().getId();
+        if (!hasPermission || tenantId == null || !tenantId.equals(trainingClass.getTenantId())) {
+            throw new AccessDeniedException("Template search is outside the class data scope");
+        }
+        boolean tenantAdmin = authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
+        if (tenantAdmin) return;
+        boolean inScope = hasScope(userId, tenantId, UserScopeType.TENANT, tenantId)
+                || hasScope(userId, tenantId, UserScopeType.PROGRAM, trainingClass.getProgramId())
+                || (trainingClass.getCohortId() != null
+                        && hasScope(userId, tenantId, UserScopeType.COHORT, trainingClass.getCohortId()))
+                || hasScope(userId, tenantId, UserScopeType.CLASS, trainingClass.getId())
+                || classStaffAssignmentRepository.existsByTrainingClass_IdAndUser_IdAndRoleTypeAndIsActiveTrue(
+                        trainingClass.getId(), userId, ClassStaffRoleType.MENTOR)
+                || classStaffAssignmentRepository.existsByTrainingClass_IdAndUser_IdAndRoleTypeAndIsActiveTrue(
+                        trainingClass.getId(), userId, ClassStaffRoleType.PROGRAM_MANAGER);
+        if (!inScope) throw new AccessDeniedException("Template search is outside the class data scope");
+    }
+
     @Transactional(readOnly = true)
     public boolean canManageClass(
             Authentication authentication,
@@ -81,11 +110,11 @@ public class ScopeAuthorizationService {
                         || hasScope(userId, tenantId, UserScopeType.CLASS, trainingClass.getId());
 
         boolean assignedToClass =
-                classStaffAssignmentRepository.existsByTrainingClass_IdAndUser_IdAndRoleType(
+                classStaffAssignmentRepository.existsByTrainingClass_IdAndUser_IdAndRoleTypeAndIsActiveTrue(
                         trainingClass.getId(), userId, ClassStaffRoleType.PROGRAM_MANAGER)
-                        || classStaffAssignmentRepository.existsByTrainingClass_IdAndUser_IdAndRoleType(
+                        || classStaffAssignmentRepository.existsByTrainingClass_IdAndUser_IdAndRoleTypeAndIsActiveTrue(
                         trainingClass.getId(), userId, ClassStaffRoleType.CLASS_ADMIN)
-                        || classStaffAssignmentRepository.existsByTrainingClass_IdAndUser_IdAndRoleType(
+                        || classStaffAssignmentRepository.existsByTrainingClass_IdAndUser_IdAndRoleTypeAndIsActiveTrue(
                         trainingClass.getId(), userId, ClassStaffRoleType.MENTOR);
 
         return hasDataScope || assignedToClass;
@@ -97,7 +126,7 @@ public class ScopeAuthorizationService {
             UserScopeType scopeType,
             Long targetId
     ) {
-        return userDataScopeRepository.existsByUser_IdAndTenantIdAndScopeTypeAndTargetId(
+        return userDataScopeRepository.existsByUser_IdAndTenantIdAndScopeTypeAndTargetIdAndIsActiveTrue(
                 userId, tenantId, scopeType, targetId);
     }
 }

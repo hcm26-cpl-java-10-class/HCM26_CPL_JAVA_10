@@ -5,6 +5,7 @@ import { useProTable } from "@/components/datatable/hook/useProTable";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import ConfirmDialog from "@/components/ui/confirmdialog";
 import {
   Select,
   SelectContent,
@@ -18,14 +19,15 @@ import type {
   MilestoneListItem,
   MilestonePageResponse,
   MilestoneProjectOption,
-  MilestoneStatus,
+  MilestoneLifecycleStatus,
   Pagination,
 } from "@/types";
-import { useQuery } from "@tanstack/react-query";
-import { ClipboardCheck, Eye, FolderKanban, Plus, ShieldAlert } from "lucide-react";
-import { useCallback, useEffect, useMemo } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ClipboardCheck, Eye, FolderKanban, Pencil, Plus, ShieldAlert, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { MilestoneEmptyState, MilestoneListError } from "../components/MilestoneListStates";
+import { MilestoneProjectPickerDialog } from "../components/MilestoneProjectPickerDialog";
 import { MilestoneTableCard } from "../components/MilestoneTableCard";
 import { milestoneListSchema } from "../milestone-list.schema";
 import {
@@ -36,7 +38,7 @@ import {
 import { getMilestoneApiError } from "../milestone.utils";
 import { MilestoneRiskPage } from "./MilestoneRiskPage";
 interface MilestoneTableFilters {
-  status?: MilestoneStatus[];
+  lifecycleStatus?: MilestoneLifecycleStatus[];
   mandatory?: boolean;
   latePolicyType?: LatePolicyType[];
   deadline?: { from?: string; to?: string };
@@ -61,10 +63,13 @@ export function MilestoneListPage() {
 }
 
 function MilestoneStandardListPage() {
+  const [pendingDelete, setPendingDelete] = useState<MilestoneListItem | null>(null);
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const { projectId } = useParams<{ projectId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const serializedSearchParams = searchParams.toString();
   const listParams = useMemo(
     () => parseMilestoneListParams(new URLSearchParams(serializedSearchParams)),
@@ -79,7 +84,10 @@ function MilestoneStandardListPage() {
     staleTime: 30_000,
   });
 
-  const projectOptions: MilestoneProjectOption[] = projectOptionsQuery.data ?? [];
+  const projectOptions = useMemo<MilestoneProjectOption[]>(
+    () => projectOptionsQuery.data ?? [],
+    [projectOptionsQuery.data],
+  );
   const selectedProjectOption = useMemo(
     () => projectOptions.find((option) => String(option.id) === String(projectId)),
     [projectId, projectOptions],
@@ -98,7 +106,7 @@ function MilestoneStandardListPage() {
   }, [listParams, navigate, projectId]);
 
   const filters = useMemo<MilestoneTableFilters>(() => ({
-    status: listParams.status,
+    lifecycleStatus: listParams.status,
     mandatory: listParams.mandatory,
     latePolicyType: listParams.latePolicyType,
     deadline: listParams.deadlineFrom || listParams.deadlineTo
@@ -138,7 +146,7 @@ function MilestoneStandardListPage() {
         teamId: listParams.teamId,
         sort: pagination.sort,
         search: normalizedSearch,
-        status: nextFilters?.status,
+        status: nextFilters?.lifecycleStatus,
         mandatory: nextFilters?.mandatory,
         latePolicyType: nextFilters?.latePolicyType,
         deadlineFrom,
@@ -175,7 +183,7 @@ function MilestoneStandardListPage() {
       page: 0,
     }),
     onFiltersChange: (nextFilters: MilestoneTableFilters) => updateListParams({
-      status: nextFilters.status,
+      status: nextFilters.lifecycleStatus,
       mandatory: nextFilters.mandatory,
       latePolicyType: nextFilters.latePolicyType,
       deadlineFrom: nextFilters.deadline?.from,
@@ -183,10 +191,32 @@ function MilestoneStandardListPage() {
       page: 0,
     }),
   });
+  const deleteMilestone = useMutation({
+    mutationFn: (row: MilestoneListItem) => milestoneApi.deleteDraft(String(row.projectId), row.teamId ?? 0, row.id, row.version),
+    onSuccess: () => { setPendingDelete(null); void queryClient.invalidateQueries({ queryKey: ["milestone"] }); },
+  });
 
   const response = table.pageData as MilestonePageResponse | undefined;
-  const projectActive = response?.project?.status === "ACTIVE";
-  const createUrl = `/projects/${projectId}/milestones/new${teamId ? `?teamId=${teamId}` : ""}`;
+  const projectActive = Boolean(selectedProjectOption?.canCreate);
+  const createTeamId = selectedProjectOption?.teamId;
+  const createUrl = `/projects/${projectId}/milestones/new?teamId=${createTeamId}`;
+  const creatableProjects = useMemo(
+    () => projectOptions.filter((option) => option.canCreate && option.teamId != null),
+    [projectOptions],
+  );
+  const canCreateAny = creatableProjects.length > 0;
+  const createAvailable = projectId ? projectActive : canCreateAny;
+  const handleCreate = () => {
+    if (projectId) {
+      navigate(createUrl);
+      return;
+    }
+    setProjectPickerOpen(true);
+  };
+  const handleConfirmCreateProject = (option: MilestoneProjectOption) => {
+    setProjectPickerOpen(false);
+    navigate(`/projects/${option.id}/milestones/new?teamId=${option.teamId}`);
+  };
   const returnTo = `${location.pathname}${location.search}`;
   const filtered = hasMilestoneQuery(listParams);
   const breadcrumbs = response
@@ -221,22 +251,26 @@ function MilestoneStandardListPage() {
 
   const createAction = (
     <div className="flex items-center gap-2">
-      {projectId ? <ActionButton
-        onClick={() => navigate(`/milestone-submissions?projectId=${projectId}`)}
-        tooltip="Open milestone review queue"
+      <ActionButton
+        onClick={() => navigate(projectId ? `/milestone-submissions?projectId=${projectId}` : "/milestone-submissions")}
+        tooltip={projectId ? "Open milestone review queue" : "Open milestone review queue for all projects"}
         title="Review submissions"
         variant="outline"
         icon={<ClipboardCheck size={16} />}
-      /> : null}
-      {projectId && table.permission?.canCreate ? <ActionButton
-      onClick={() => navigate(createUrl)}
-      tooltip={projectActive
-        ? "Create milestone"
-        : `Milestones cannot be created while the project is ${response?.project?.status?.toLowerCase() ?? "unavailable"}.`}
+      />
+      {table.permission?.canCreate ? <ActionButton
+      onClick={handleCreate}
+      tooltip={projectId
+        ? projectActive
+          ? "Create milestone"
+          : "Milestone creation is unavailable for this project or your account."
+        : canCreateAny
+          ? "Choose a project to create a milestone"
+          : "No project is available for milestone creation with your account."}
       title="Create"
       variant="default"
       icon={<Plus size={16} />}
-      disabled={!projectActive}
+      disabled={!createAvailable}
       /> : null}
     </div>
   );
@@ -262,25 +296,35 @@ function MilestoneStandardListPage() {
               <SelectTrigger aria-label="Filter by project" className="w-full bg-background">
                 <SelectValue placeholder={currentProjectName} />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent
+                position="popper"
+                side="bottom"
+                align="start"
+                sideOffset={4}
+                className="w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-1rem)] max-h-[min(20rem,var(--radix-select-content-available-height))]"
+              >
                 <SelectItem value="all">All projects</SelectItem>
-                {projectOptions.length > 0 ? (
+                {projectOptionsQuery.isError ? (
+                  <div className="px-2 py-1.5 text-sm text-destructive">
+                    Could not load projects.
+                  </div>
+                ) : projectOptions.length > 0 ? (
                   projectOptions.map((project) => (
                     <SelectItem key={String(project.id)} value={String(project.id)}>
-                      <span className="flex items-center gap-2">
+                      <span className="flex min-w-0 items-center gap-2">
                         {project.code ? (
-                          <span className="font-mono text-xs text-muted-foreground">
+                          <span className="shrink-0 font-mono text-xs text-muted-foreground">
                             [{project.code}]
                           </span>
                         ) : null}
-                        <span className="font-medium">{project.name}</span>
+                        <span className="min-w-0 truncate font-medium" title={project.name}>{project.name}</span>
                       </span>
                     </SelectItem>
                   ))
                 ) : (
-                  <SelectItem value={String(projectId)}>
-                    {currentProjectName}
-                  </SelectItem>
+                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                    No projects linked to an active workspace.
+                  </div>
                 )}
               </SelectContent>
             </Select>
@@ -306,19 +350,26 @@ function MilestoneStandardListPage() {
         renderCard={(props) => <MilestoneTableCard {...props} />}
         onView={openDetail}
         renderRowActions={(milestone) => (
-          <ActionButton
-            onClick={() => openDetail(milestone)}
-            tooltip="View detail"
-            icon={<Eye size={10} className="text-gray-500" />}
-          />
+          <div className="flex items-center gap-1">
+            <ActionButton onClick={() => openDetail(milestone)} tooltip="View detail" icon={<Eye size={14} />} />
+            {(milestone.lifecycleStatus === "PLANNED" || milestone.lifecycleStatus === "IN_PROGRESS" || milestone.lifecycleStatus === "CHANGES_REQUESTED") ? <ActionButton
+              onClick={() => navigate(`/projects/${milestone.projectId}/milestones/${milestone.id}/edit${milestone.teamId ? `?teamId=${milestone.teamId}` : ""}`)}
+              tooltip="Edit milestone" icon={<Pencil size={14} />}
+            /> : null}
+            {(milestone.lifecycleStatus === "PLANNED" || milestone.lifecycleStatus === "IN_PROGRESS") ? <ActionButton
+              onClick={() => { deleteMilestone.reset(); setPendingDelete(milestone); }}
+              tooltip="Delete milestone" icon={<Trash2 size={14} />}
+              disabled={deleteMilestone.isPending}
+            /> : null}
+          </div>
         )}
         selectable={false}
         autoPageSize
         renderEmpty={(
           <MilestoneEmptyState
             canCreate={Boolean(table.permission?.canCreate)}
-            projectActive={projectActive}
-            createUrl={createUrl}
+            projectActive={createAvailable}
+            onCreate={handleCreate}
             filtered={filtered}
             onClear={clearSearchAndFilters}
           />
@@ -334,6 +385,22 @@ function MilestoneStandardListPage() {
         )}
         showPagination={!table.error && !table.loading && table.total > 0}
       />
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete milestone?"
+        description={<div className="space-y-2"><p><strong>{pendingDelete?.title}</strong> will be removed from the workspace.</p>{pendingDelete?.lifecycleStatus === "IN_PROGRESS" && <p>Students may lose access to drafts and linked work. Milestones with submitted records cannot be deleted.</p>}{deleteMilestone.isError && <p className="text-destructive">{getMilestoneApiError(deleteMilestone.error).message}</p>}</div>}
+        confirmLabel="Delete milestone"
+        loading={deleteMilestone.isPending}
+        onCancel={() => { if (!deleteMilestone.isPending) setPendingDelete(null); }}
+        onConfirm={() => { if (pendingDelete) deleteMilestone.mutate(pendingDelete); }}
+      />
+      {projectPickerOpen ? (
+        <MilestoneProjectPickerDialog
+          options={creatableProjects}
+          onClose={() => setProjectPickerOpen(false)}
+          onConfirm={handleConfirmCreateProject}
+        />
+      ) : null}
     </MainLayout>
   );
 }

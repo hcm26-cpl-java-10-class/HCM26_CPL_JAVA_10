@@ -23,13 +23,3 @@ export interface ProjectTeam {
 }
 
 export interface ProjectMentor { id: number; name: string; email: string }
-
-export interface ManagedTeamMember {
-  userId: number;
-  userCode: string | null;
-  displayName: string;
-  projectRole: import("./workspace").ProjectRole;
-  status: import("./workspace").ParticipationStatus;
-}
-export interface TeamMemberOption { userId: number; userCode: string | null; displayName: string }
-export type TeamMembershipUpdate = Pick<ManagedTeamMember, "projectRole" | "status">;

@@ -11,6 +11,9 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
@@ -23,7 +26,19 @@ class MilestoneValidatorTest {
 
     @Test
     void acceptsValidRequestAndExactOneHundredPercentRubric() {
-        assertDoesNotThrow(() -> validator.validate(validRequest(), rubric("50.00", "50.00"), now));
+        assertDoesNotThrow(() -> validator.validate(validRequest(), rubric("50.00", "50.00"), now, ZoneOffset.UTC));
+    }
+
+    @Test
+    void startDateUsesTenantMidnightAndMustBeFuture() {
+        var zone = ZoneId.of("Asia/Ho_Chi_Minh");
+        assertEquals(Instant.parse("2026-10-23T17:00:00Z"), validator.requireScheduledStart(
+                LocalDate.parse("2026-10-24"), now.plusSeconds(86400), now, zone));
+        assertTrue(assertThrows(MilestoneValidationException.class, () -> validator.requireScheduledStart(
+                LocalDate.parse("2026-10-23"), now.plusSeconds(86400), now, zone)).getErrors().containsKey("startDate"));
+        assertTrue(assertThrows(MilestoneValidationException.class, () -> validator.requireScheduledStart(
+                LocalDate.parse("2026-10-24"), Instant.parse("2026-10-23T17:00:00Z"), now, zone))
+                .getErrors().containsKey("startDate"));
     }
 
     @Test
@@ -35,7 +50,7 @@ class MilestoneValidatorTest {
 
         MilestoneValidationException ex = assertThrows(
                 MilestoneValidationException.class,
-                () -> validator.validate(request, rubric("50.00", "50.00"), now));
+                () -> validator.validate(request, rubric("50.00", "50.00"), now, ZoneOffset.UTC));
         assertTrue(ex.getErrors().containsKey("deadline"));
     }
 
@@ -43,10 +58,10 @@ class MilestoneValidatorTest {
     void rejectsRubricTotalsOfNinetyNinePointNinetyNineAndOneHundredPointZeroOne() {
         MilestoneValidationException below = assertThrows(
                 MilestoneValidationException.class,
-                () -> validator.validate(validRequest(), rubric("50.00", "49.99"), now));
+                () -> validator.validate(validRequest(), rubric("50.00", "49.99"), now, ZoneOffset.UTC));
         MilestoneValidationException above = assertThrows(
                 MilestoneValidationException.class,
-                () -> validator.validate(validRequest(), rubric("50.00", "50.01"), now));
+                () -> validator.validate(validRequest(), rubric("50.00", "50.01"), now, ZoneOffset.UTC));
         assertTrue(below.getErrors().containsKey("rubric.totalWeight"));
         assertTrue(above.getErrors().containsKey("rubric.totalWeight"));
     }
@@ -61,7 +76,7 @@ class MilestoneValidatorTest {
 
         MilestoneValidationException ex = assertThrows(
                 MilestoneValidationException.class,
-                () -> validator.validate(request, rubric("50.00", "50.00"), now));
+                () -> validator.validate(request, rubric("50.00", "50.00"), now, ZoneOffset.UTC));
         assertTrue(ex.getErrors().containsKey("latePolicy.lateUntil"));
         assertTrue(ex.getErrors().containsKey("latePolicy.penaltyPercent"));
     }
@@ -79,7 +94,7 @@ class MilestoneValidatorTest {
 
         MilestoneValidationException ex = assertThrows(
                 MilestoneValidationException.class,
-                () -> validator.validate(request, rubric("50.00", "50.00"), now));
+                () -> validator.validate(request, rubric("50.00", "50.00"), now, ZoneOffset.UTC));
         assertTrue(ex.getErrors().containsKey("checklist[0].content"));
         assertTrue(ex.getErrors().containsKey("checklist[1].orderIndex"));
     }
@@ -90,7 +105,8 @@ class MilestoneValidatorTest {
                 1L, "Sprint delivery", "Description", deadline, true,
                 List.of(new ChecklistItemRequest("Source code", true, 0)),
                 UUID.randomUUID(), UUID.randomUUID(),
-                new LatePolicyRequest(LatePolicyType.ALLOW_LATE, deadline.plusSeconds(3600), new BigDecimal("10.00"))
+                new LatePolicyRequest(LatePolicyType.ALLOW_LATE, deadline.plusSeconds(3600), new BigDecimal("10.00")),
+                null, null, LocalDate.parse("2026-10-24")
         );
     }
 

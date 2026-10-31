@@ -96,7 +96,8 @@ public class TeamAllocationSessionService {
                 .build();
 
         TeamAllocationSession saved = sessionRepository.saveAndFlush(session);
-        return AllocationSessionResponse.from(saved);
+        return AllocationSessionResponse.from(saved,
+                Math.toIntExact(sessionRepository.countByTrainingClass_Id(classId)));
     }
 
     @Transactional(readOnly = true)
@@ -108,9 +109,12 @@ public class TeamAllocationSessionService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "TrainingClass", "id", classId));
         scopeAuthorizationService.assertCanManageTeamMentor(authentication, trainingClass);
-        return sessionRepository.findAllByTrainingClass_IdOrderByCreatedAtDesc(classId)
-                .stream()
-                .map(AllocationSessionResponse::from)
+        List<TeamAllocationSession> sessions =
+                sessionRepository.findAllByTrainingClass_IdOrderByCreatedAtDescIdDesc(classId);
+        int total = sessions.size();
+        return java.util.stream.IntStream.range(0, total)
+                .mapToObj(index -> AllocationSessionResponse.from(
+                        sessions.get(index), total - index))
                 .toList();
     }
 
@@ -171,7 +175,7 @@ public class TeamAllocationSessionService {
                 .status("PENDING")
                 .build());
 
-        return AllocationSessionResponse.from(saved);
+        return responseFor(saved);
     }
 
     private SessionState sessionState(
@@ -255,7 +259,19 @@ public class TeamAllocationSessionService {
                 .forEach(team -> team.setMaxMembers(requestedCapacity));
         teamRepository.saveAllAndFlush(draftTeams);
         TeamAllocationSession saved = sessionRepository.saveAndFlush(session);
-        return AllocationSessionResponse.from(saved);
+        return responseFor(saved);
+    }
+
+    private AllocationSessionResponse responseFor(TeamAllocationSession session) {
+        List<TeamAllocationSession> sessions =
+                sessionRepository.findAllByTrainingClass_IdOrderByCreatedAtDescIdDesc(
+                        session.getTrainingClass().getId());
+        int index = java.util.stream.IntStream.range(0, sessions.size())
+                .filter(position -> sessions.get(position).getId().equals(session.getId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "Saved allocation session was not found in its class session list"));
+        return AllocationSessionResponse.from(session, sessions.size() - index);
     }
 
     private int readMaxMembers(ProjectTemplate template) {

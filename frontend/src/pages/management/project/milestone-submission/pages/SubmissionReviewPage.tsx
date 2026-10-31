@@ -46,7 +46,7 @@ export function SubmissionReviewPage() {
       const parsed = errorOf(error);
       if (parsed.status === 404) { toast.error("The submission does not exist or has changed"); navigate("/milestone-submissions", { replace: true }); }
       else if (parsed.status === 422 && parsed.errors?.decision?.length) {
-        toast.error("Không thể yêu cầu nộp lại do Milestone đã hết hạn theo Late Policy");
+        toast.error("A resubmission cannot be requested because the milestone's late-policy window has closed.");
         void query.refetch();
       }
     },
@@ -67,7 +67,7 @@ export function SubmissionReviewPage() {
 
   return (
     <MainLayout pathName={{ "milestone-submissions": "Milestone reviews", [item.id]: "Review" }}>
-      <div className="mx-auto grid max-w-6xl gap-5">
+      <div className="mx-auto grid w-full min-w-0 max-w-6xl gap-5">
         <Button variant="ghost" className="w-fit" onClick={back}><ArrowLeft className="size-4" /> Back</Button>
         <Card className="border-primary/20">
           <CardHeader>
@@ -85,7 +85,7 @@ export function SubmissionReviewPage() {
           </CardContent>
         </Card>
         {item.status === "SUBMITTED" ? <SubmissionReviewForm key={`${item.id}-${item.currentVersionNumber}`} submission={item} pending={mutation.isPending} apiError={mutation.isError ? errorOf(mutation.error) : null} onReview={review} /> : <Alert><AlertCircle /><AlertTitle>This submission is not awaiting review</AlertTitle><AlertDescription>The review form is read-only because its current status is {item.status.replace("_", " ")}.</AlertDescription></Alert>}
-        {item.status === "SUBMITTED" && !item.availableActions.requestChanges ? <Alert><AlertCircle /><AlertTitle>Không thể yêu cầu nộp lại</AlertTitle><AlertDescription>Không thể yêu cầu nộp lại do Milestone đã hết hạn theo Late Policy</AlertDescription></Alert> : null}
+        {item.status === "SUBMITTED" && !item.availableActions.requestChanges ? <Alert><AlertCircle /><AlertTitle>Resubmission is unavailable</AlertTitle><AlertDescription>The milestone's late-policy window has closed, so the student cannot submit another version.</AlertDescription></Alert> : null}
         <ReviewHistory reviews={item.reviews} />
       </div>
     </MainLayout>

@@ -94,6 +94,7 @@ public class ProjectTaskServiceImpl implements ProjectTaskService {
     @Override
     @Transactional
     public TaskCardResponse createTask(Long projectId, Long sprintId, CreateTaskRequest request) {
+        validateDescriptionWordLimit(request.description());
         User actor = requireAuthenticatedActor();
         Project project = requireProjectScope(projectId, actor);
 
@@ -320,6 +321,9 @@ try {
         if (!task.getVersion().equals(request.expectedVersion())) {
             throw conflict("Task đã được cập nhật bởi thao tác khác", task);
         }
+        if (task.getSprintId() == null) {
+            throw new TaskValidationException("status", "Move the Backlog task to a sprint as TODO before changing status");
+        }
         if (!taskStatusWorkflow.allows(task.getStatus(), request.status())) {
             throw conflict(
                     "Workflow không cho phép chuyển từ " + task.getStatus() + " sang " + request.status(),
@@ -393,6 +397,7 @@ try {
     @Override
     @Transactional
     public TaskCardResponse updateTask(Long projectId, Long taskId, UpdateTaskRequest request) {
+        validateDescriptionWordLimit(request.description());
         User actor = requireAuthenticatedActor();
         requireProjectScope(projectId, actor);
         Task task = taskRepository.findByIdAndProjectIdAndIsActiveTrue(taskId, projectId)
@@ -510,6 +515,11 @@ try {
         }
 
         Long newSprintId = request.sprintId();
+        if (!java.util.Objects.equals(task.getSprintId(), newSprintId)
+                && (task.getSprintId() == null || newSprintId == null)
+                && task.getStatus() != TaskStatus.TODO) {
+            throw new TaskValidationException("status", "Backlog can only move to or from the TODO column");
+        }
         if (newSprintId != null) {
             Sprint sprint = sprintRepository.findById(newSprintId)
                     .filter(candidate -> Boolean.TRUE.equals(candidate.getIsActive()))
@@ -523,8 +533,12 @@ try {
         task = taskRepository.saveAndFlush(task);
 
         String correlationId = SprintCorrelationIds.current();
-        Map<String, Object> beforeState = Map.of("sprintId", previousSprintId, "version", request.expectedVersion());
-        Map<String, Object> afterState = Map.of("sprintId", newSprintId, "version", task.getVersion());
+        Map<String, Object> beforeState = new HashMap<>();
+        beforeState.put("sprintId", previousSprintId);
+        beforeState.put("version", request.expectedVersion());
+        Map<String, Object> afterState = new HashMap<>();
+        afterState.put("sprintId", newSprintId);
+        afterState.put("version", task.getVersion());
         recordActivity(ProjectActivityLog.builder()
                 .projectId(projectId)
                 .actorId(actor.getId())
@@ -771,6 +785,13 @@ try {
     private String normalizeDescription(String description) {
         if (description == null || description.isBlank()) return null;
         return description.trim();
+    }
+
+    private void validateDescriptionWordLimit(String description) {
+        if (description != null && !description.isBlank()
+                && description.strip().split("\\s+").length > 1000) {
+            throw new TaskValidationException("description", "Description must not exceed 1000 words");
+        }
     }
 
     // Keep business fields, including nullable values, so Alerts can distinguish

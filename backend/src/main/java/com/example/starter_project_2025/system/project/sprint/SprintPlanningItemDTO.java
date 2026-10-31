@@ -39,11 +39,12 @@ public record SprintPlanningItemDTO(
 
     /**
      * Translates the {@link SprintBacklogStatus} lifecycle into the board
-     * buckets shared with the UI: {@code SPRINT_BACKLOG} (rendered "To Do"),
-     * {@code IN_PROGRESS} and {@code DONE}.
+     * statuses shared with the UI: {@code SPRINT_BACKLOG} (rendered "To Do"),
+     * {@code IN_PROGRESS}, {@code REVIEW}, {@code BLOCKED} and {@code DONE}.
      * <p>
-     * {@code REVIEW} is still ongoing work, so it is shown as
-     * {@code IN_PROGRESS}.
+     * The statuses match the columns of the workspace Kanban board, so the
+     * Backlog board and the Kanban board never disagree: review work stays
+     * {@code REVIEW} instead of being reported as {@code IN_PROGRESS}.
      */
     public static String toBoardStatus(SprintBacklogStatus status) {
 
@@ -53,9 +54,13 @@ public record SprintPlanningItemDTO(
 
         return switch (status) {
             case TODO -> "SPRINT_BACKLOG";
-            case IN_PROGRESS, REVIEW -> "IN_PROGRESS";
+            case IN_PROGRESS -> "IN_PROGRESS";
+            case REVIEW -> "REVIEW";
             case BLOCKED -> "BLOCKED";
             case DONE -> "DONE";
+            // Workspace-configured statuses have no counterpart on the generic
+            // board, so they keep counting as ongoing work.
+            case CUSTOM_1, CUSTOM_2, CUSTOM_3, CUSTOM_4, CUSTOM_5 -> "IN_PROGRESS";
         };
     }
 

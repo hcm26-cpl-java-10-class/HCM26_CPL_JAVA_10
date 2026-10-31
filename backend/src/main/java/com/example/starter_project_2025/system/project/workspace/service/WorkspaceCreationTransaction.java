@@ -1,7 +1,11 @@
 package com.example.starter_project_2025.system.project.workspace.service;
 
 import com.example.starter_project_2025.system.project.domain.Project;
+import com.example.starter_project_2025.system.project.domain.ProjectStatus;
+import com.example.starter_project_2025.system.project.ProjectRepository;
 import com.example.starter_project_2025.system.project.ProjectTeam;
+import com.example.starter_project_2025.system.project.ProjectTeamRepository;
+import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.example.starter_project_2025.system.project.template.assignment.TemplateAssignmentProvisioningService;
 import com.example.starter_project_2025.system.project.team.Team;
 import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
@@ -28,6 +32,8 @@ public class WorkspaceCreationTransaction {
     private final WorkspaceIdempotencyService idempotency;
     private final WorkspaceJournalService journal;
     private final WorkspaceProjectSelection selection;
+    private final ProjectRepository projects;
+    private final ProjectTeamRepository teams;
     private final TemplateAssignmentProvisioningService provisioning;
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
@@ -52,6 +58,8 @@ public class WorkspaceCreationTransaction {
             provisioning.provision(team, team.getProjectTemplate(), user.getId(), correlationId);
             Workspace workspace = workspaces.findFirstByTeamIdOrderByIdAsc(team.getId())
                     .orElseThrow(() -> new IllegalStateException("The project workspace was not created"));
+            workspace.setTaskKeyPrefix(normalizeTaskKeyPrefix(request.getTaskKeyPrefix()));
+            workspaces.save(workspace);
             WorkspaceResponse response = response(workspace);
             idempotency.save(tenant.getId(), user.getId(), key, request, response);
             return response;
@@ -61,9 +69,11 @@ public class WorkspaceCreationTransaction {
         workspace.setCode("WS-TEAM-" + request.getTeamId());
         workspace.setName("Workspace / " + team.getTeamName());
         workspace.setStatus(WorkspaceStatus.ACTIVE);
+        workspace.setTaskKeyPrefix(normalizeTaskKeyPrefix(request.getTaskKeyPrefix()));
         workspace.setCreatedBy(user.getId());
         workspace.setSections(new ArrayList<>(Arrays.asList(WorkspaceSection.values())));
         workspaces.saveAndFlush(workspace);
+        activateProjectForWorkspace(chosen.project());
         WorkspaceResponse response = response(workspace);
         journal.recordCreation(workspace, user, response, correlationId);
         idempotency.save(tenant.getId(), user.getId(), key, request, response);
@@ -75,7 +85,44 @@ public class WorkspaceCreationTransaction {
                 .id(workspace.getId()).tenantId(workspace.getTenant().getId())
                 .projectId(workspace.getProject() == null ? null : workspace.getProject().getId())
                 .teamId(workspace.getTeam().getId()).code(workspace.getCode()).name(workspace.getName())
+                .taskKeyPrefix(normalizeTaskKeyPrefix(workspace.getTaskKeyPrefix()))
                 .status(workspace.getStatus()).createdBy(workspace.getCreatedBy()).createdAt(workspace.getCreatedAt())
                 .sections(workspace.getSections().stream().map(WorkspaceSection::getKey).toList()).build();
+    }
+
+    private void activateProjectForWorkspace(Project project) {
+        if (project != null && project.getStatus() == ProjectStatus.PLANNING) {
+            project.setStatus(ProjectStatus.ACTIVE);
+        }
+    }
+
+    private Project createProjectForTeam(ProjectTeam team, Long tenantId) {
+        if (team.getProject() != null) {
+            return team.getProject();
+        }
+        ProjectTemplate template = team.getProjectTemplate();
+        if (template == null) {
+            return null;
+        }
+
+        Project project = new Project();
+        project.setCode("TEAM-" + team.getId());
+        project.setName(template.getName());
+        project.setDescription(template.getDescription());
+        project.setTenantId(tenantId);
+        project.setStatus(ProjectStatus.PLANNING);
+        project = projects.saveAndFlush(project);
+        team.setProject(project);
+        teams.saveAndFlush(team);
+        return project;
+    }
+
+    private String normalizeTaskKeyPrefix(String prefix) {
+        if (prefix == null || prefix.isBlank()) return "FA";
+        String normalized = prefix.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!normalized.matches("[A-Z0-9]{1,8}"))
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                    "Task key prefix must contain 1 to 8 letters or digits");
+        return normalized;
     }
 }

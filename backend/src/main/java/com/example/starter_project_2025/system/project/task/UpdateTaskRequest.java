@@ -8,7 +8,7 @@ public record UpdateTaskRequest(
         @Size(max = 255, message = "Tên công việc tối đa 255 ký tự")
         String title,
 
-        @Size(max = 1000, message = "Mô tả tối đa 1000 ký tự")
+        @Size(max = 100000, message = "Description must not exceed 100000 characters")
         String description,
 
         @DecimalMin(value = "0.0", inclusive = false, message = "Estimate phải lớn hơn 0")

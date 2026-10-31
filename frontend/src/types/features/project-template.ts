@@ -180,7 +180,7 @@ export interface TemplateBacklogItem {
   id: number;
   title: string;
   description: string | null;
-  suggestedRole: TemplateSuggestedRole;
+  suggestedRole: TemplateSuggestedRole | null;
   orderIndex: number;
 }
 
@@ -198,7 +198,7 @@ export interface TemplateBacklogInput {
   id?: number | null;
   title: string;
   description: string;
-  suggestedRole: TemplateSuggestedRole;
+  suggestedRole?: TemplateSuggestedRole | null;
 }
 
 export interface TemplateSampleContentPayload {

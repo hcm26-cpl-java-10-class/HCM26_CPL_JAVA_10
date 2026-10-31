@@ -11,6 +11,15 @@ import java.util.Optional;
 
 @Repository
 public interface SprintBacklogRepository extends BaseCrudRepository<SprintBacklog, Long> {
+    @Query("""
+            select case when count(item) > 0 then true else false end
+            from SprintBacklog item left join item.sprint sprint
+            where item.isActive = true and item.status = :status
+              and (sprint.teamId = :teamId
+                   or (:projectId is not null and (item.projectId = :projectId or sprint.projectId = :projectId)))
+            """)
+    boolean existsInWorkspaceStatus(@Param("teamId") Long teamId, @Param("projectId") Long projectId,
+                                   @Param("status") SprintBacklogStatus status);
     boolean existsByMilestone_Id(java.util.UUID milestoneId);
 
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)

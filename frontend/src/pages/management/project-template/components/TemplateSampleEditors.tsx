@@ -44,10 +44,10 @@ export function TemplateBacklogEditor(props: EditorProps & {
       <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem]">
         <Field path={`${path}.title`} label="Backlog title" required errors={errors}><Input {...fieldProps("title")} value={item.title}
           onChange={(event) => onChange({ title: event.target.value })} placeholder="E.g. Design the database" /></Field>
-        <Field path={`${path}.suggestedRole`} label="Suggested role" required errors={errors}>
-          <Select value={item.suggestedRole} disabled={disabled} onValueChange={(value) => onChange({ suggestedRole: value as TemplateSuggestedRole })}>
-            <SelectTrigger {...fieldProps("suggestedRole")} className="w-full"><SelectValue placeholder="Select a role" /></SelectTrigger>
-            <SelectContent>{roles.map((role) => <SelectItem key={role} value={role}>{role}</SelectItem>)}</SelectContent>
+        <Field path={`${path}.suggestedRole`} label="Suggested role (optional)" errors={errors}>
+          <Select value={item.suggestedRole || "none"} disabled={disabled} onValueChange={(value) => onChange({ suggestedRole: value === "none" ? "" : value as TemplateSuggestedRole })}>
+            <SelectTrigger {...fieldProps("suggestedRole")} className="w-full"><SelectValue /></SelectTrigger>
+            <SelectContent><SelectItem value="none">Not specified</SelectItem>{roles.map((role) => <SelectItem key={role} value={role}>{role}</SelectItem>)}</SelectContent>
           </Select>
         </Field>
       </div>

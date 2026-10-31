@@ -13,6 +13,7 @@ export const milestoneFormSchema = z
     title: z.string().trim().min(1, "Milestone name is required").max(MILESTONE_FORM_LIMITS.title, "Milestone name must not exceed 120 characters"),
     description: z.string().max(MILESTONE_FORM_LIMITS.description, "Description must not exceed 1,000 characters"),
     deadline: z.string().min(1, "Deadline is required"),
+    startDate: z.iso.date({ error: "Start date is required" }),
     mandatory: z.boolean(),
     checklist: z
       .array(
@@ -66,10 +67,27 @@ export const milestoneFormSchema = z
 
   });
 
+export function tenantToday(timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+export function milestoneFormSchemaForTenant(timeZone: string) {
+  return milestoneFormSchema.superRefine((value, context) => {
+    if (value.startDate && value.startDate <= tenantToday(timeZone)) {
+      context.addIssue({ code: "custom", path: ["startDate"], message: "Start date must be after today in the tenant time zone" });
+    }
+  });
+}
+
 export interface MilestoneFormValues {
   title: string;
   description: string;
   deadline: string;
+  startDate: string;
   mandatory: boolean;
   checklist: Array<{ content: string; mandatory: boolean }>;
   rubricSnapshotId: string;
@@ -88,6 +106,7 @@ export const milestoneDefaultValues: MilestoneFormValues = {
   title: "",
   description: "",
   deadline: "",
+  startDate: "",
   mandatory: true,
   checklist: [{ content: "", mandatory: true }],
   rubricSnapshotId: "",

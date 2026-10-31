@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.project.milestone.dto.response;
 import com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -26,10 +27,13 @@ public record MilestoneDetailResponse(
         Instant createdAt,
         UUID createdBy,
         BigDecimal weight,
-        com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus executionStatus
+        com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus executionStatus,
+        @com.fasterxml.jackson.annotation.JsonIgnore com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus canonicalStatus,
+        LocalDate startDate,
+        Instant scheduledStartAt
 ) {
     @com.fasterxml.jackson.annotation.JsonProperty("lifecycleStatus")
     public String lifecycleStatus() {
-        return status == MilestoneStatus.PLANNED ? "DRAFT" : executionStatus == null ? status.name() : executionStatus.name();
+        return canonicalStatus.name();
     }
 }

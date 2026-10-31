@@ -11,6 +11,7 @@ import jakarta.validation.constraints.Digits;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -46,8 +47,17 @@ public record CreateMilestoneRequest(
         @Valid ResubmissionPolicyRequest resubmissionPolicy,
 
         @DecimalMin("0") @DecimalMax("100") @Digits(integer = 3, fraction = 2)
-        BigDecimal weight
+        BigDecimal weight,
+        @NotNull(message = "Start date is required")
+        LocalDate startDate
 ) {
+    public CreateMilestoneRequest(Long teamId, String title, String description, Instant deadline,
+            boolean mandatory, List<ChecklistItemRequest> checklist, UUID rubricSnapshotId,
+            UUID reviewerId, LatePolicyRequest latePolicy, ResubmissionPolicyRequest resubmissionPolicy,
+            BigDecimal weight) {
+        this(teamId, title, description, deadline, mandatory, checklist, rubricSnapshotId,
+                reviewerId, latePolicy, resubmissionPolicy, weight, null);
+    }
     public CreateMilestoneRequest(Long teamId, String title, String description, Instant deadline,
                                   boolean mandatory, List<ChecklistItemRequest> checklist,
                                   UUID rubricSnapshotId, UUID reviewerId, LatePolicyRequest latePolicy,

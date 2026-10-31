@@ -24,8 +24,8 @@ function SubmissionVersionHistory({ item }: { item: SubmissionDetail }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Lịch sử phiên bản ({versions.length})</CardTitle>
-        <CardDescription>Mỗi bản nộp được giữ riêng cùng trạng thái và kết quả review của bản đó.</CardDescription>
+        <CardTitle>Version history ({versions.length})</CardTitle>
+        <CardDescription>Each submission version is preserved with its own status and review outcome.</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
         {versions.map((version) => {
@@ -37,8 +37,8 @@ function SubmissionVersionHistory({ item }: { item: SubmissionDetail }) {
                   <h3 className="font-semibold">Version {version.versionNumber}: {version.title}</h3>
                   <p className="text-sm text-muted-foreground">
                     {version.submittedAt
-                      ? `Đã nộp ${new Date(version.submittedAt).toLocaleString("vi-VN")}`
-                      : "Bản nháp chưa nộp"}
+                      ? `Submitted ${new Date(version.submittedAt).toLocaleString()}`
+                      : "Draft · not submitted"}
                     {version.submittedBy ? ` · ${version.submittedBy}` : ""}
                   </p>
                 </div>
@@ -54,16 +54,16 @@ function SubmissionVersionHistory({ item }: { item: SubmissionDetail }) {
                     </li>
                   ))}
                 </ul>
-              ) : <p className="text-sm text-muted-foreground">Không có liên kết artifact.</p>}
+              ) : <p className="text-sm text-muted-foreground">No artifact links.</p>}
               {version.late ? (
-                <p className="text-sm text-amber-700">Nộp muộn · phạt {version.penaltyPercent}%</p>
+                <p className="text-sm text-amber-700">Submitted late · {version.penaltyPercent}% penalty</p>
               ) : null}
               {versionReviews.map((review) => (
                 <div key={review.id} className="rounded-md bg-muted/50 p-3 text-sm">
                   <p className="font-medium">
-                    Review: {review.decision === "ACCEPT" ? "Đã chấp nhận" : review.decision === "REJECT" ? "Đã từ chối" : "Yêu cầu chỉnh sửa"}
+                    Review: {review.decision === "ACCEPT" ? "Accepted" : review.decision === "REJECT" ? "Rejected" : "Changes requested"}
                     {review.reviewerName ? ` · ${review.reviewerName}` : ""}
-                    {review.reviewedAt ? ` · ${new Date(review.reviewedAt).toLocaleString("vi-VN")}` : ""}
+                    {review.reviewedAt ? ` · ${new Date(review.reviewedAt).toLocaleString()}` : ""}
                   </p>
                   {review.overallFeedback ? <p className="mt-1 whitespace-pre-wrap">{review.overallFeedback}</p> : null}
                   {review.evaluations.filter((evaluation) => evaluation.feedback).map((evaluation) => (
@@ -135,19 +135,19 @@ export function StudentSubmissionPage() {
   if (item.status === "CHANGES_REQUESTED") return (
     <MainLayout pathName={{ student: "Student", submission: item.milestoneTitle }}>
       <div className="mx-auto grid max-w-5xl gap-5">
-        <Button variant="ghost" className="w-fit" onClick={() => navigate("/student/milestone-submissions")}><ArrowLeft className="size-4" /> Quay lại bài nộp của tôi</Button>
-        <Alert className="border-amber-400 bg-amber-50 text-amber-950 dark:bg-amber-950/20 dark:text-amber-100"><RotateCcw /><AlertTitle>Reviewer yêu cầu chỉnh sửa</AlertTitle><AlertDescription>Version {item.currentVersionNumber} được giữ nguyên. Hãy đọc feedback và chuẩn bị Version {item.currentVersionNumber + 1} trước khi cửa sổ nộp lại đóng.</AlertDescription></Alert>
-        <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle>{item.milestoneTitle}</CardTitle><CardDescription>{item.teamName} · Version {item.currentVersionNumber}</CardDescription></div><SubmissionStatusBadge status={item.status} /></div></CardHeader><CardContent className="flex flex-wrap gap-4 text-sm text-muted-foreground"><span className="flex items-center gap-2"><CalendarClock className="size-4" /> Deadline: {new Date(item.deadline).toLocaleString("vi-VN")}</span>{item.lateUntil ? <span>Late policy đóng: {new Date(item.lateUntil).toLocaleString("vi-VN")}</span> : null}<span>Lần nộp: {item.submissionAttempts}{item.maxSubmissionAttempts ? `/${item.maxSubmissionAttempts}` : ""}</span></CardContent></Card>
-        {latestFeedback ? <Card className="border-amber-500/40"><CardHeader><CardTitle>Hướng dẫn chỉnh sửa</CardTitle><CardDescription className="whitespace-pre-wrap text-foreground">{latestFeedback.overallFeedback || "Hãy xử lý các feedback theo từng tiêu chí bên dưới."}</CardDescription></CardHeader><CardContent className="grid gap-2">{latestFeedback.evaluations.filter((value) => value.feedback).map((value) => <div key={value.criterionId} className="rounded-lg bg-muted/50 p-3"><p className="font-medium">{value.criterionName}</p><p className="whitespace-pre-wrap text-sm text-muted-foreground">{value.feedback}</p></div>)}</CardContent></Card> : null}
+        <Button variant="ghost" className="w-fit" onClick={() => navigate("/student/milestone-submissions")}><ArrowLeft className="size-4" /> Back to My Submissions</Button>
+        <Alert className="border-amber-400 bg-amber-50 text-amber-950 dark:bg-amber-950/20 dark:text-amber-100"><RotateCcw /><AlertTitle>Changes requested by reviewer</AlertTitle><AlertDescription>Version {item.currentVersionNumber} is preserved. Review the feedback and prepare version {item.currentVersionNumber + 1} before resubmission closes.</AlertDescription></Alert>
+        <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle>{item.milestoneTitle}</CardTitle><CardDescription>{item.teamName} · Version {item.currentVersionNumber}</CardDescription></div><SubmissionStatusBadge status={item.status} /></div></CardHeader><CardContent className="flex flex-wrap gap-4 text-sm text-muted-foreground"><span className="flex items-center gap-2"><CalendarClock className="size-4" /> Deadline: {new Date(item.deadline).toLocaleString()}</span>{item.lateUntil ? <span>Late policy closes: {new Date(item.lateUntil).toLocaleString()}</span> : null}<span>Attempt: {item.submissionAttempts}{item.maxSubmissionAttempts ? `/${item.maxSubmissionAttempts}` : ""}</span></CardContent></Card>
+        {latestFeedback ? <Card className="border-amber-500/40"><CardHeader><CardTitle>Review feedback</CardTitle><CardDescription className="whitespace-pre-wrap text-foreground">{latestFeedback.overallFeedback || "Review the criterion-level feedback below."}</CardDescription></CardHeader><CardContent className="grid gap-2">{latestFeedback.evaluations.filter((value) => value.feedback).map((value) => <div key={value.criterionId} className="rounded-lg bg-muted/50 p-3"><p className="font-medium">{value.criterionName}</p><p className="whitespace-pre-wrap text-sm text-muted-foreground">{value.feedback}</p></div>)}</CardContent></Card> : null}
         <SubmissionVersionHistory item={item} />
-        <Card><CardHeader><CardTitle>Chuẩn bị Version {item.currentVersionNumber + 1}</CardTitle><CardDescription>Form artifact sẽ tạo sản phẩm mới; version đã review không bị thay đổi.</CardDescription></CardHeader><CardContent className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{item.availableActions.createNextVersion ? "Bạn vẫn còn thời gian và lượt nộp lại." : "Cửa sổ nộp lại đã đóng hoặc đã hết số lần nộp."}</p><Button disabled={!item.availableActions.createNextVersion} onClick={() => navigate(artifactPath)}><RotateCcw className="size-4" /> Chuẩn bị bài nộp lại</Button></CardContent></Card>
+        <Card><CardHeader><CardTitle>Prepare version {item.currentVersionNumber + 1}</CardTitle><CardDescription>The artifact form creates a new version and preserves the reviewed version.</CardDescription></CardHeader><CardContent className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{item.availableActions.createNextVersion ? "You can still resubmit within the allowed window and attempt limit." : "The resubmission window is closed or the attempt limit has been reached."}</p><Button disabled={!item.availableActions.createNextVersion} onClick={() => navigate(artifactPath)}><RotateCcw className="size-4" /> Prepare resubmission</Button></CardContent></Card>
       </div>
     </MainLayout>
   );
 
   if (item.status !== "DRAFT" || !form) return (
     <MainLayout pathName={{ student: "Student", submission: item.milestoneTitle }}>
-      <div className="mx-auto grid max-w-5xl gap-5"><Button variant="ghost" className="w-fit" onClick={() => navigate("/student/milestone-submissions")}><ArrowLeft className="size-4" /> Quay lại bài nộp của tôi</Button><Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle>{item.milestoneTitle}</CardTitle><CardDescription>Version {item.currentVersionNumber} chỉ đọc vì đã được nộp.</CardDescription></div><SubmissionStatusBadge status={item.status} /></div></CardHeader><CardContent className="grid gap-4 text-sm"><p className="whitespace-pre-wrap"><strong>Ghi chú:</strong> {item.currentVersion.notes || "—"}</p>{item.product ? <div className="grid gap-2 rounded-lg border p-3"><p><strong>Repository:</strong> {item.product.repositoryUrl ? <a className="text-primary underline" href={item.product.repositoryUrl} target="_blank" rel="noreferrer">{item.product.repositoryUrl} <ExternalLink className="inline size-3" /></a> : "—"}</p><p><strong>Deployment:</strong> {item.product.deploymentUrl ? <a className="text-primary underline" href={item.product.deploymentUrl} target="_blank" rel="noreferrer">{item.product.deploymentUrl} <ExternalLink className="inline size-3" /></a> : "—"}</p><p><strong>Release notes:</strong> {item.product.releaseNotes || "—"}</p><p><strong>Tệp đính kèm:</strong> {item.product.attachments.length}</p></div> : null}</CardContent></Card>{latestFeedback ? <Card><CardHeader><CardTitle>Feedback gần nhất</CardTitle><CardDescription className="whitespace-pre-wrap">{latestFeedback.overallFeedback || "Không có feedback tổng quan."}</CardDescription></CardHeader></Card> : null}<SubmissionVersionHistory item={item} /></div>
+      <div className="mx-auto grid max-w-5xl gap-5"><Button variant="ghost" className="w-fit" onClick={() => navigate("/student/milestone-submissions")}><ArrowLeft className="size-4" /> Back to My Submissions</Button><Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle>{item.milestoneTitle}</CardTitle><CardDescription>Version {item.currentVersionNumber} is read-only because it has been submitted.</CardDescription></div><SubmissionStatusBadge status={item.status} /></div></CardHeader><CardContent className="grid gap-4 text-sm"><p className="whitespace-pre-wrap"><strong>Summary:</strong> {item.currentVersion.notes || "—"}</p>{item.product ? <div className="grid gap-2 rounded-lg border p-3"><p><strong>Repository:</strong> {item.product.repositoryUrl ? <a className="text-primary underline" href={item.product.repositoryUrl} target="_blank" rel="noreferrer">{item.product.repositoryUrl} <ExternalLink className="inline size-3" /></a> : "—"}</p><p><strong>Deployment:</strong> {item.product.deploymentUrl ? <a className="text-primary underline" href={item.product.deploymentUrl} target="_blank" rel="noreferrer">{item.product.deploymentUrl} <ExternalLink className="inline size-3" /></a> : "—"}</p><p><strong>Release notes:</strong> {item.product.releaseNotes || "—"}</p><p><strong>Attachments:</strong> {item.product.attachments.length}</p></div> : null}</CardContent></Card>{latestFeedback ? <Card><CardHeader><CardTitle>Latest feedback</CardTitle><CardDescription className="whitespace-pre-wrap">{latestFeedback.overallFeedback || "No overall feedback was provided."}</CardDescription></CardHeader></Card> : null}<SubmissionVersionHistory item={item} /></div>
     </MainLayout>
   );
 

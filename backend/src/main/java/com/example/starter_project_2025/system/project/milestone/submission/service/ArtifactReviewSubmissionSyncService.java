@@ -35,7 +35,7 @@ public class ArtifactReviewSubmissionSyncService {
     public UUID synchronize(Milestone milestone, MilestoneArtifactSubmission artifact) {
         var alreadyLinked = versions.findByArtifactSubmissionId(artifact.getId());
         if (alreadyLinked.isPresent()) return alreadyLinked.get().getSubmission().getId();
-        if (milestone.getProjectId() == null || artifact.getTeamId() == null) return null;
+        if (artifact.getTeamId() == null) return null;
 
         var team = teams.findByIdAndTrainingClass_TenantId(artifact.getTeamId(), artifact.getTenantId())
                 .orElse(null);
@@ -103,7 +103,7 @@ public class ArtifactReviewSubmissionSyncService {
     public ArtifactReviewState resolveViewState(Milestone milestone,
                                                 MilestoneArtifactSubmission artifact,
                                                 boolean isLatestForMilestone) {
-        if (milestone == null || milestone.getProjectId() == null || artifact.getTeamId() == null) {
+        if (milestone == null || artifact.getTeamId() == null) {
             return new ArtifactReviewState(artifact.getStatus().name(), null);
         }
         if (isLatestForMilestone) {

@@ -1,6 +1,16 @@
 export type LatePolicyType = "NO_LATE" | "ALLOW_LATE";
 export type LatePenaltyBasis = "FIXED" | "PER_DAY";
 export type MilestoneStatus = "PLANNED" | "OPEN" | "CLOSED" | "CANCELLED";
+export type MilestoneLifecycleStatus = "PLANNED" | "IN_PROGRESS" | "SUBMITTED" | "CHANGES_REQUESTED" | "ACCEPTED" | "REJECTED";
+
+export interface MilestoneDraftRevision {
+  id: string;
+  milestoneId: string;
+  revisionNumber: number;
+  snapshotJson: string;
+  createdAt: string;
+  createdBy: string;
+}
 export type MilestoneProjectStatus = "DRAFT" | "PLANNING" | "ACTIVE" | "COMPLETED" | "CANCELLED";
 
 export interface MilestoneChecklistItemRequest {
@@ -22,6 +32,7 @@ export interface MilestoneResubmissionPolicyRequest {
 }
 
 export interface CreateMilestoneRequest {
+  startDate: string;
   weight?: number;
   teamId?: number;
   title: string;
@@ -39,6 +50,8 @@ export interface MilestoneProjectOption {
   code?: string;
   name: string;
   status: MilestoneProjectStatus;
+  teamId?: number | null;
+  canCreate?: boolean;
 }
 
 export interface MilestoneRubricOption {
@@ -56,6 +69,7 @@ export interface MilestoneReviewerOption {
 export interface MilestoneCreateOptions {
   project?: MilestoneProjectOption | null;
   rubrics: MilestoneRubricOption[];
+  tenantTimeZone: string;
 }
 
 export interface MilestoneChecklistItemResponse {
@@ -67,6 +81,8 @@ export interface MilestoneChecklistItemResponse {
 }
 
 export interface MilestoneResponse {
+  startDate?: string | null;
+  scheduledStartAt?: string | null;
   weight?: number | null;
   latePenaltyBasis?: LatePenaltyBasis;
   id: string;
@@ -76,6 +92,7 @@ export interface MilestoneResponse {
   deadline: string;
   mandatory: boolean;
   status: MilestoneStatus;
+  lifecycleStatus: MilestoneLifecycleStatus;
   executionStatus?: "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE" | "FAILED" | null;
   rubricSnapshotId: string;
   reviewerId: string;
@@ -128,6 +145,8 @@ export interface MilestoneResubmissionPolicyDetail {
 }
 
 export interface MilestoneDetailResponse {
+  startDate?: string | null;
+  scheduledStartAt?: string | null;
   weight?: number | null;
   id: string;
   project: MilestoneProjectOption;
@@ -138,6 +157,7 @@ export interface MilestoneDetailResponse {
   tenantTimeZone: string;
   mandatory: boolean;
   status: MilestoneStatus;
+  lifecycleStatus: MilestoneLifecycleStatus;
   executionStatus?: "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE" | "FAILED" | null;
   checklist: MilestoneChecklistItemResponse[];
   rubric: MilestoneRubricDetail;
@@ -218,6 +238,8 @@ export interface ArtifactSubmissionWorkspace {
   draft: ArtifactDraft | null;
   uploadPolicy: { enabled: boolean; maxBytes: number; allowedMimeTypes: string[] };
   latestSubmission: ArtifactSubmission | null;
+  canSubmit: boolean;
+  submissionBlockReason?: string | null;
 }
 
 export interface MilestoneApiError {
@@ -238,6 +260,8 @@ export interface MilestoneDetailRouteState {
 }
 
 export interface MilestoneListItem {
+  startDate?: string | null;
+  scheduledStartAt?: string | null;
   projectId: number;
   projectName?: string;
   weight?: number | null;
@@ -248,6 +272,7 @@ export interface MilestoneListItem {
   description?: string | null;
   deadline: string;
   status: MilestoneStatus;
+  lifecycleStatus: MilestoneLifecycleStatus;
   executionStatus?: "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE" | "FAILED" | null;
   mandatory: boolean;
   rubricSnapshotId: string;
@@ -277,7 +302,7 @@ export interface MilestoneListParams {
   teamId?: number;
   sort?: string | string[];
   search?: string;
-  status?: MilestoneStatus[];
+  status?: MilestoneLifecycleStatus[];
   mandatory?: boolean;
   latePolicyType?: LatePolicyType[];
   deadlineFrom?: string;
@@ -288,11 +313,7 @@ export interface MilestoneListParams {
  * Milestone reference used by the backlog item form / detail panel
  * (UFR-PRJ-003-02). Served by `GET /api/sprint-backlogs/milestone-options`.
  */
-export type BacklogMilestoneStatus =
-  | "PLANNED"
-  | "OPEN"
-  | "CLOSED"
-  | "CANCELLED";
+export type BacklogMilestoneStatus = MilestoneLifecycleStatus;
 
 export interface MilestoneOption {
   /** Milestone UUID, written back in `SprintBacklogDTO.milestoneId`. */

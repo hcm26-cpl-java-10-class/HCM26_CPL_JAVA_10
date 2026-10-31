@@ -6,11 +6,17 @@ import type {
 } from "@/types";
 import { Bookmark, Bug, SquareCheck, type LucideIcon } from "lucide-react";
 
-/** Workflow order of a backlog item (UFR-PRJ-003-02). */
+/**
+ * Workflow order of a backlog item (UFR-PRJ-003-02).
+ * <p>
+ * Mirrors the columns of the workspace Kanban board: Backlog, To do, In
+ * progress, Review, Done, so both boards report the same statuses.
+ */
 export const TASK_STATUS_ORDER: BacklogStatus[] = [
   "BACKLOG",
   "SPRINT_BACKLOG",
   "IN_PROGRESS",
+  "REVIEW",
   "DONE",
 ];
 
@@ -37,10 +43,20 @@ export const BACKLOG_STATUS_META: Record<
     pill: "border-sky-200 bg-sky-100 text-sky-700 dark:border-sky-800 dark:bg-sky-900/40 dark:text-sky-300",
     dot: "bg-sky-500",
   },
+  REVIEW: {
+    label: "Review",
+    pill: "border-amber-200 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+    dot: "bg-amber-500",
+  },
   DONE: {
     label: "Done",
     pill: "border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
     dot: "bg-emerald-500",
+  },
+  BLOCKED: {
+    label: "Blocked",
+    pill: "border-rose-200 bg-rose-100 text-rose-700 dark:border-rose-800 dark:bg-rose-900/40 dark:text-rose-300",
+    dot: "bg-rose-500",
   },
 };
 
@@ -110,72 +126,75 @@ export const backlogWorkTypeMeta = (
 export const backlogPriorityMeta = (priority?: BacklogPriority | null) =>
   (priority && BACKLOG_PRIORITY_META[priority]) || NO_PRIORITY_META;
 
-/** The backend only accepts a one-step forward transition (422 otherwise). */
 export const NEXT_TASK_STATUS: Record<BacklogStatus, BacklogStatus | null> = {
   BACKLOG: "SPRINT_BACKLOG",
   SPRINT_BACKLOG: "IN_PROGRESS",
-  IN_PROGRESS: "DONE",
+  IN_PROGRESS: "REVIEW",
+  REVIEW: "DONE",
   DONE: null,
+  BLOCKED: "IN_PROGRESS",
 };
 
 export const backlogStatusMeta = (status?: BacklogStatus | null) =>
   (status && BACKLOG_STATUS_META[status]) || BACKLOG_STATUS_META.BACKLOG;
-
 export const canMoveToStatus = (
   current: BacklogStatus | null | undefined,
   target: BacklogStatus,
 ) => {
   const from = current ?? "BACKLOG";
 
-  return from === target || NEXT_TASK_STATUS[from] === target;
+  // Any workflow status can be picked, in any direction (no forward-only
+  // matrix): the team owns its board and may move work back and forth.
+  return from === target || TASK_STATUS_ORDER.includes(target);
 };
 
-/**
- * Words that name the container, not the work it holds: taking them as key
- * prefix turned every row into `SPRINT-1`, `SPRINT-2`, ... which reads like a
- * <em>sprint</em> code instead of a work item code.
- */
-const GENERIC_KEY_TOKENS = new Set([
-  "sprint",
-  "sprints",
-  "backlog",
-  "backlogs",
-  "product",
-  "iteration",
-  "phase",
-]);
+
 
 /**
- * Short key prefix of a backlog box, used by the row keys (`DISCOVERY-21`)
+ * Short key prefix of the backlog board, used by the row keys (`SSP-21`)
  * exactly like the Jira project key.
  * <p>
- * `Sprint 1 - Discovery` -> `DISCOVERY`, `Sprint 2 - Design System` ->
- * `DESIGN`. The generic words above and the sprint numbers are skipped so a
- * work item key can never be confused with a sprint code; when nothing is left
- * the `SB` (sprint backlog) fallback is used.
+ * The prefix belongs to the <em>project</em> of the workspace, never to the
+ * sprint: `Student Support Portal` -> `SSP` (first letter of every word), so
+ * every sprint box of the same project numbers its work items with the same
+ * key and a work item can not be mistaken for a sprint code.
+ * <p>
+ * When the project name is unknown (product backlog without a project) the
+ * `SB` (sprint backlog) fallback is used.
  */
 export const projectKeyOf = (
-  sprintName?: string | null,
+  projectName?: string | null,
   fallback = "SB",
 ) => {
-  const meaningful = (sprintName ?? "")
+  const acronym = (projectName ?? "")
     .split(/[^A-Za-z0-9]+/)
-    .filter(
-      (token) =>
-        token !== "" &&
-        !/^\d+$/.test(token) &&
-        !GENERIC_KEY_TOKENS.has(token.toLowerCase()),
-    );
+    .filter((token) => token !== "" && !/^\d+$/.test(token))
+    .map((token) => token.charAt(0))
+    .join("");
 
-  const token = (meaningful[0] ?? "").replace(/[^A-Za-z0-9]/g, "");
-
-  return (token.length >= 2 && token.length <= 10 ? token : fallback).toUpperCase();
+  return acronym.length >= 2
+    ? acronym.slice(0, 10).toUpperCase()
+    : fallback;
 };
 
 export const backlogItemKey = (
   prefix: string,
   item: SprintPlanningItem,
 ) => `${prefix}-${item.id}`;
+
+/**
+ * `Nguyen Van An` -> `NA`, the letters of an assignee avatar bubble (same
+ * bubble the work item panel and the create bar show). Returns an empty string
+ * for a blank name so callers can fall back to another label.
+ */
+export const assigneeInitialsOf = (name?: string | null) =>
+  (name ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter((part) => part !== "")
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join("")
 
 const shortDate = (value?: string | null) => {
   if (!value) return "";
@@ -221,7 +240,7 @@ export const isOverdue = (value?: string | null) => {
   return date.getTime() < today.getTime();
 };
 
-/** Status tallies of the three grey counters in the sprint section header. */
+/** Status tallies of the grey counters in the sprint section header. */
 export const statusCounts = (items: SprintPlanningItem[]) => ({
   todo: items.filter(
     (item) =>
@@ -229,5 +248,6 @@ export const statusCounts = (items: SprintPlanningItem[]) => ({
       item.status === "SPRINT_BACKLOG",
   ).length,
   inProgress: items.filter((item) => item.status === "IN_PROGRESS").length,
+  review: items.filter((item) => item.status === "REVIEW").length,
   done: items.filter((item) => item.status === "DONE").length,
 });

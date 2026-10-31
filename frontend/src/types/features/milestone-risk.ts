@@ -1,6 +1,6 @@
 export interface MilestoneRiskProgress { doneTasks: number; totalTasks: number; completionRate: number; eligible: boolean }
 export interface MilestoneRiskItem {
-  id: string; title: string; status: "PLANNED" | "OPEN" | "CLOSED" | "CANCELLED"; deadline: string; version: number;
+  id: string; title: string; status: "PLANNED" | "IN_PROGRESS" | "SUBMITTED" | "CHANGES_REQUESTED" | "ACCEPTED" | "REJECTED"; deadline: string; version: number;
   atRisk: boolean; progress: MilestoneRiskProgress; canSend: boolean;
 }
 export interface MilestoneRiskPage {

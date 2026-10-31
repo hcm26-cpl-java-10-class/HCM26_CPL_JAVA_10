@@ -1,8 +1,8 @@
-import type { LatePolicyType, MilestoneListParams, MilestoneStatus } from "@/types";
+import type { LatePolicyType, MilestoneListParams, MilestoneLifecycleStatus } from "@/types";
 
 export const DEFAULT_MILESTONE_PAGE = 0;
 export const DEFAULT_MILESTONE_PAGE_SIZE = 20;
-const STATUSES = new Set<MilestoneStatus>(["PLANNED", "OPEN", "CLOSED", "CANCELLED"]);
+const STATUSES = new Set<MilestoneLifecycleStatus>(["PLANNED", "IN_PROGRESS", "SUBMITTED", "CHANGES_REQUESTED", "ACCEPTED", "REJECTED"]);
 const LATE_POLICY_TYPES = new Set<LatePolicyType>(["NO_LATE", "ALLOW_LATE"]);
 
 function parsePage(value: string | null): number {
@@ -43,7 +43,7 @@ export function parseMilestoneListParams(searchParams: URLSearchParams): Milesto
     size: parseSize(searchParams.get("size")),
     teamId: Number.isSafeInteger(teamIdValue) && teamIdValue > 0 ? teamIdValue : undefined,
     search: search || undefined,
-    status: uniqueAllowed(searchParams.getAll("status"), STATUSES),
+    status: uniqueAllowed(searchParams.getAll("lifecycleStatus"), STATUSES),
     mandatory: mandatoryValue === "true" ? true : mandatoryValue === "false" ? false : undefined,
     latePolicyType: uniqueAllowed(searchParams.getAll("latePolicyType"), LATE_POLICY_TYPES),
     deadlineFrom: parseDate(searchParams.get("deadlineFrom")),
@@ -58,7 +58,7 @@ export function serializeMilestoneListParams(params: MilestoneListParams): URLSe
   });
   if (params.teamId !== undefined) searchParams.set("teamId", String(params.teamId));
   if (params.search) searchParams.set("search", params.search);
-  params.status?.forEach((status) => searchParams.append("status", status));
+  params.status?.forEach((status) => searchParams.append("lifecycleStatus", status));
   if (params.mandatory !== undefined) searchParams.set("mandatory", String(params.mandatory));
   params.latePolicyType?.forEach((type) => searchParams.append("latePolicyType", type));
   if (params.deadlineFrom) searchParams.set("deadlineFrom", params.deadlineFrom);

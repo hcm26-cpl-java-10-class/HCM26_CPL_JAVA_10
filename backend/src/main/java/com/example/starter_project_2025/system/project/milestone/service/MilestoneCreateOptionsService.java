@@ -19,6 +19,7 @@ public class MilestoneCreateOptionsService {
     private final RubricCatalogPort rubricPort;
     private final MilestoneAccessPolicy accessPolicy;
     private final WorkspaceMilestoneScopeService scopeService;
+    private final TenantSettingsPort tenantSettings;
 
     @Transactional(readOnly = true)
     public MilestoneCreateOptionsResponse getOptions(Long projectId) {
@@ -41,7 +42,8 @@ public class MilestoneCreateOptionsService {
                                                 c.ratings().stream().map(rating -> new RubricRatingOptionResponse(
                                                         rating.level(), rating.percentage(), rating.description(), rating.orderIndex())).toList()))
                         .toList()))
-                        .toList()
+                        .toList(),
+                tenantSettings.requireTimeZone(tenantId).getId()
         );
     }
 
@@ -69,7 +71,8 @@ public class MilestoneCreateOptionsService {
                                         c.code(), c.name(), c.weight(), c.maxScore(),
                                         c.ratings().stream().map(rating -> new RubricRatingOptionResponse(
                                                 rating.level(), rating.percentage(), rating.description(), rating.orderIndex())).toList())).toList()))
-                        .toList()
+                        .toList(),
+                tenantSettings.requireTimeZone(tenantId).getId()
         );
     }
 }

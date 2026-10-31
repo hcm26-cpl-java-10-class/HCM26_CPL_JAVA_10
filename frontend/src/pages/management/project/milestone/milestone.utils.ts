@@ -12,6 +12,7 @@ export function buildMilestonePayload(values: MilestoneFormValues): CreateMilest
     title: values.title.trim(),
     description: values.description.trim() || undefined,
     deadline: new Date(values.deadline).toISOString(),
+    startDate: values.startDate,
     mandatory: values.mandatory,
     checklist: values.checklist.map((item, index) => ({
       content: item.content.trim(),
@@ -61,6 +62,13 @@ export function toFormFieldPath(path: string): string {
 
 export function stablePayload(value: CreateMilestoneRequest): string {
   return JSON.stringify(value);
+}
+
+export function toDateTimeLocal(value?: string | null): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 }
 
 export function formatDateTime(value?: string | null): string {
@@ -122,7 +130,7 @@ export function formatRelativeDeadline(value: string | null | undefined): string
 }
 
 export function isPastDeadline(milestone: MilestoneListItem): boolean {
-  return milestone.status === "OPEN" &&
+  return (milestone.lifecycleStatus === "IN_PROGRESS" || milestone.lifecycleStatus === "CHANGES_REQUESTED") &&
     new Date(milestone.deadline).getTime() < Date.now();
 }
 
@@ -132,7 +140,7 @@ export function formatPenalty(value?: number | null, basis?: "FIXED" | "PER_DAY"
 }
 
 export function formatMilestoneStatus(status: MilestoneStatus): string {
-  if (status === "PLANNED") return "Draft";
+  if (status === "PLANNED") return "Planned";
   if (status === "OPEN") return "Published";
   return status.charAt(0) + status.slice(1).toLowerCase();
 }

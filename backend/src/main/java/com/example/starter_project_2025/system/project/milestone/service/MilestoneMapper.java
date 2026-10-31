@@ -18,7 +18,8 @@ public class MilestoneMapper {
                 milestone.getLateUntil(), milestone.getLatePenaltyPercent(), milestone.getVersion(),
                 milestone.getCreatedAt(), milestone.getCreatedBy(),
                 milestone.getChecklistItems().stream().map(this::toChecklistResponse).toList(),
-                milestone.getWeight(), milestone.getLatePenaltyBasis(), milestone.getExecutionStatus()
+                milestone.getWeight(), milestone.getLatePenaltyBasis(), milestone.getExecutionStatus(), milestone.lifecycleStatus(),
+                milestone.getStartDate(), milestone.scheduledStartAt()
         );
     }
 
@@ -32,7 +33,8 @@ public class MilestoneMapper {
                 milestone.getStatus(), milestone.isMandatory(), milestone.getRubricSnapshotId(),
                 milestone.getReviewerId(), milestone.getLatePolicyType(), milestone.getLateUntil(),
                 milestone.getLatePenaltyPercent(), milestone.getVersion(), milestone.getCreatedAt(),
-                milestone.getWeight(), milestone.getLatePenaltyBasis(), projectName, milestone.getExecutionStatus()
+                milestone.getWeight(), milestone.getLatePenaltyBasis(), projectName, milestone.getExecutionStatus(), milestone.lifecycleStatus(),
+                milestone.getStartDate(), milestone.scheduledStartAt()
         );
     }
 

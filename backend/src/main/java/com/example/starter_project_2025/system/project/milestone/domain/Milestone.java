@@ -9,6 +9,7 @@ import org.hibernate.annotations.ColumnDefault;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -21,6 +22,8 @@ import java.util.UUID;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Milestone {
+    private static final UUID SCHEDULER_ACTOR_ID = UUID.nameUUIDFromBytes(
+            "milestone-auto-scheduler".getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -45,6 +48,19 @@ public class Milestone {
     @Column
     private Instant deadline;
 
+    // Retained for the one-time schedule backfill; no new request writes this field.
+    @Column(name = "deadline_offset_days")
+    private Integer deadlineOffsetDays;
+
+    @Column(name = "auto_start_enabled", nullable = false, columnDefinition = "boolean default false")
+    private boolean autoStartEnabled;
+
+    @Column(name = "start_date")
+    private LocalDate startDate;
+
+    @Column(name = "scheduled_start_at")
+    private Instant scheduledStartAt;
+
     @Column(name = "is_mandatory", nullable = false)
     private boolean mandatory;
 
@@ -55,6 +71,10 @@ public class Milestone {
     @Enumerated(EnumType.STRING)
     @Column(name = "execution_status", length = 30)
     private com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus executionStatus;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "lifecycle_status", length = 30)
+    private MilestoneLifecycleStatus lifecycleState;
 
     @Column(name = "is_at_risk", nullable = false, columnDefinition = "boolean default false")
     private boolean atRisk;
@@ -140,6 +160,7 @@ public class Milestone {
         milestone.deadline = deadline;
         milestone.mandatory = mandatory;
         milestone.status = MilestoneStatus.PLANNED;
+        milestone.lifecycleState = MilestoneLifecycleStatus.PLANNED;
         milestone.rubricSnapshotId = rubricSnapshotId;
         milestone.reviewerId = reviewerId;
         milestone.latePolicyType = latePolicyType;
@@ -157,6 +178,30 @@ public class Milestone {
     public void configureResubmission(boolean allowed, Integer maxAttempts) {
         this.allowResubmission = allowed;
         this.maxSubmissionAttempts = allowed ? maxAttempts : null;
+    }
+
+    public void scheduleStart(LocalDate date, Instant instant) {
+        startDate = date;
+        scheduledStartAt = instant;
+        autoStartEnabled = instant != null;
+    }
+
+    public Instant scheduledStartAt() {
+        return scheduledStartAt;
+    }
+
+    public void backfillSchedule(LocalDate date, Instant instant) {
+        if (scheduledStartAt == null && autoStartEnabled && deadlineOffsetDays != null) {
+            startDate = date;
+            scheduledStartAt = instant;
+        }
+    }
+
+    public void startAutomatically(Instant now) {
+        if (!active || !autoStartEnabled || lifecycleStatus() != MilestoneLifecycleStatus.PLANNED
+                || scheduledStartAt == null || now.isBefore(scheduledStartAt)) return;
+        if (status == MilestoneStatus.PLANNED) openForWork(SCHEDULER_ACTOR_ID, now);
+        start(SCHEDULER_ACTOR_ID, now);
     }
 
     public void addChecklistItem(String content, boolean mandatory, int orderIndex) {
@@ -188,23 +233,96 @@ public class Milestone {
     }
 
     public void openForWork(UUID actorId, Instant now) {
-        if (status != MilestoneStatus.PLANNED && status != MilestoneStatus.OPEN)
+        if (status != MilestoneStatus.PLANNED)
             throw new IllegalStateException("Only a planned milestone can be opened");
         status = MilestoneStatus.OPEN;
         executionStatus = com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus.TODO;
+        lifecycleState = MilestoneLifecycleStatus.PLANNED;
         updatedBy = actorId; updatedAt = now;
     }
 
+    public MilestoneLifecycleStatus lifecycleStatus() {
+        return lifecycleState == null ? MilestoneLifecycleStatus.of(status, executionStatus) : lifecycleState;
+    }
+
+    public void backfillLifecycle(MilestoneLifecycleStatus state) {
+        if (lifecycleState == null) lifecycleState = state;
+    }
+
     public void start(UUID actorId, Instant now) {
-        if (status != MilestoneStatus.OPEN || executionStatus != com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus.TODO)
-            throw new IllegalStateException("Only a published TODO milestone can start");
+        if (lifecycleStatus() != MilestoneLifecycleStatus.PLANNED || status != MilestoneStatus.OPEN)
+            throw new IllegalStateException("Only a published planned milestone can start");
         executionStatus = com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus.IN_PROGRESS;
+        lifecycleState = MilestoneLifecycleStatus.IN_PROGRESS;
         updatedBy = actorId; updatedAt = now;
     }
 
     public void setExecutionStatus(com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus next, UUID actorId, Instant now) {
         if (status != MilestoneStatus.OPEN) throw new IllegalStateException("Milestone is not published");
+        MilestoneLifecycleStatus current = lifecycleStatus();
+        MilestoneLifecycleStatus target = switch (next) {
+            case TODO -> MilestoneLifecycleStatus.PLANNED;
+            case IN_PROGRESS -> MilestoneLifecycleStatus.IN_PROGRESS;
+            case REVIEW -> MilestoneLifecycleStatus.SUBMITTED;
+            case DONE -> MilestoneLifecycleStatus.ACCEPTED;
+            case FAILED -> MilestoneLifecycleStatus.REJECTED;
+        };
+        boolean valid = switch (target) {
+            case PLANNED -> false;
+            case IN_PROGRESS -> current == MilestoneLifecycleStatus.PLANNED;
+            case SUBMITTED -> current == MilestoneLifecycleStatus.IN_PROGRESS || current == MilestoneLifecycleStatus.CHANGES_REQUESTED;
+            case CHANGES_REQUESTED -> false;
+            case ACCEPTED, REJECTED -> current == MilestoneLifecycleStatus.SUBMITTED;
+        };
+        if (!valid) throw new IllegalStateException("Invalid milestone lifecycle transition: " + current + " -> " + target);
+        lifecycleState = target;
         executionStatus = next; updatedBy = actorId; updatedAt = now;
+    }
+
+    public void requestChanges(UUID actorId, Instant now) {
+        if (lifecycleStatus() != MilestoneLifecycleStatus.SUBMITTED)
+            throw new IllegalStateException("Only a submitted milestone can request changes");
+        lifecycleState = MilestoneLifecycleStatus.CHANGES_REQUESTED;
+        executionStatus = com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus.IN_PROGRESS;
+        updatedBy = actorId; updatedAt = now;
+    }
+
+    public void rejectExpired(UUID actorId, Instant now) {
+        if (lifecycleStatus() != MilestoneLifecycleStatus.IN_PROGRESS)
+            throw new IllegalStateException("Only an in-progress milestone can expire");
+        lifecycleState = MilestoneLifecycleStatus.REJECTED;
+        executionStatus = com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus.FAILED;
+        updatedBy = actorId; updatedAt = now;
+    }
+
+    public void reconcileLegacySubmission(UUID actorId, Instant now) {
+        if (lifecycleStatus() != MilestoneLifecycleStatus.PLANNED || status != MilestoneStatus.OPEN)
+            throw new IllegalStateException("Only a legacy published milestone can be reconciled");
+        lifecycleState = MilestoneLifecycleStatus.SUBMITTED;
+        executionStatus = com.example.starter_project_2025.system.project.milestone.submission.domain.MilestoneExecutionStatus.REVIEW;
+        updatedBy = actorId; updatedAt = now;
+    }
+
+    public void editActive(String description, Instant deadline, UUID actorId, Instant now) {
+        if (lifecycleStatus() != MilestoneLifecycleStatus.IN_PROGRESS || !active)
+            throw new IllegalStateException("Only an in-progress milestone can be edited");
+        description = description == null ? this.description : description;
+        this.description = description;
+        extendDeadline(deadline);
+        updatedBy = actorId; updatedAt = now;
+    }
+
+    public void extendResubmission(Instant deadline, UUID actorId, Instant now) {
+        if (lifecycleStatus() != MilestoneLifecycleStatus.CHANGES_REQUESTED || !active)
+            throw new IllegalStateException("Only a changes-requested milestone can be extended");
+        extendDeadline(deadline);
+        updatedBy = actorId; updatedAt = now;
+    }
+
+    private void extendDeadline(Instant nextDeadline) {
+        if (latePolicyType == LatePolicyType.ALLOW_LATE && lateUntil != null && deadline != null)
+            lateUntil = nextDeadline.plus(Duration.between(deadline, lateUntil));
+        deadline = nextDeadline;
     }
 
     public void editDraft(String title, String description, Instant deadline, boolean mandatory,
@@ -215,12 +333,6 @@ public class Milestone {
         this.mandatory = mandatory; this.rubricSnapshotId = rubricSnapshotId;
         this.latePolicyType = latePolicyType; this.lateUntil = lateUntil;
         this.latePenaltyPercent = latePenaltyPercent; this.weight = weight;
-        this.updatedBy = actorId; this.updatedAt = now;
-    }
-
-    public void editPublishedMetadata(String title, String description, Instant deadline, UUID actorId, Instant now) {
-        if (status != MilestoneStatus.OPEN || !active) throw new IllegalStateException("Only a published milestone can be edited");
-        this.title = title; this.description = description; this.deadline = deadline;
         this.updatedBy = actorId; this.updatedAt = now;
     }
 

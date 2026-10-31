@@ -13,16 +13,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { usePermissions } from "@/hooks/usePermissions";
 import type { TaskDTO, TaskPayload, TaskPriority } from "@/types/features/task";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, FileText, Loader2, Save, SlidersHorizontal } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   getTaskError,
   maxTaskDescriptionWords,
-  normalizeTags,
   taskDescriptionWordCount,
   taskPriorityOptions,
   toTaskFormValues,
@@ -32,12 +30,10 @@ import {
   type TaskFormValues,
 } from "../task-form.utils";
 import { TaskStatusBadge } from "./TaskBadges";
-import { TaskTagsInput } from "./TaskTagsInput";
 
 interface TaskFormProps {
   projectId: string;
   backlogItemId: number;
-  assignees: { id: string; displayName: string }[];
   task?: TaskDTO;
   onSaved: (task: TaskDTO) => void;
   onCancel: () => void;
@@ -71,25 +67,17 @@ function TaskField({
   );
 }
 
-export function TaskForm({ projectId, backlogItemId, assignees, task, onSaved, onCancel, onBusyChange }: TaskFormProps) {
-  const { user, activeRole } = usePermissions();
+export function TaskForm({ projectId, backlogItemId, task, onSaved, onCancel, onBusyChange }: TaskFormProps) {
   const queryClient = useQueryClient();
   const [values, setValues] = useState<TaskFormValues>(() => toTaskFormValues(task));
-  const [draftTag, setDraftTag] = useState("");
   const [errors, setErrors] = useState<TaskFieldErrors>({});
   const [submitError, setSubmitError] = useState<ReturnType<typeof getTaskError> | null>(null);
+  const estimateRequired = Boolean(task?.assigneeProjectMemberId);
   const descriptionWords = taskDescriptionWordCount(values.description);
   const descriptionErrors = descriptionWords > maxTaskDescriptionWords
     ? ["Description must not exceed 1000 words"] : errors.description;
   const requestRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const submittingRef = useRef(false);
-
-  const tagsQuery = useQuery({
-    queryKey: ["tasks", user.email, activeRole, "tags", projectId],
-    queryFn: () => taskApi.getTags(projectId),
-    retry: false,
-  });
-
 
   const saveMutation = useMutation({
     mutationFn: ({ payload, requestId }: { payload: TaskPayload; requestId: string }) =>
@@ -121,11 +109,7 @@ export function TaskForm({ projectId, backlogItemId, assignees, task, onSaved, o
     event.preventDefault();
     if (submittingRef.current) return;
     setSubmitError(null);
-    const submittedValues = {
-      ...values,
-      tags: normalizeTags([...values.tags, ...(draftTag.trim() ? [draftTag] : [])]),
-    };
-    const fieldErrors = validateTaskForm(submittedValues);
+    const fieldErrors = validateTaskForm(values, estimateRequired);
     setErrors(fieldErrors);
     if (Object.keys(fieldErrors).length > 0) {
       requestAnimationFrame(() =>
@@ -133,7 +117,7 @@ export function TaskForm({ projectId, backlogItemId, assignees, task, onSaved, o
       );
       return;
     }
-    const payload = { ...toTaskPayload(submittedValues, projectId, task), backlogItemId };
+    const payload = { ...toTaskPayload(values, projectId, task), backlogItemId };
     const fingerprint = JSON.stringify(payload);
     if (requestRef.current?.fingerprint !== fingerprint) {
       requestRef.current = { fingerprint, key: crypto.randomUUID() };
@@ -197,34 +181,12 @@ export function TaskForm({ projectId, backlogItemId, assignees, task, onSaved, o
                 {descriptionWords.toLocaleString("en-US")} / {maxTaskDescriptionWords.toLocaleString("en-US")} words
               </span>
             </TaskField>
-            <TaskField name="tags" label="Tags" errors={errors.tags}>
-              <TaskTagsInput
-                value={values.tags}
-                draft={draftTag}
-                suggestions={tagsQuery.data ?? []}
-                disabled={saveMutation.isPending}
-                invalid={!!errors.tags?.length}
-                onChange={(tags) => changeField("tags", tags)}
-                onDraftChange={(draft) => {
-                  setDraftTag(draft);
-                  setErrors((current) => ({ ...current, tags: undefined }));
-                }}
-              />
-              {tagsQuery.isError && (
-                <p className="text-xs text-muted-foreground">
-                  Unable to load existing tags. You can still enter new tags.
-                </p>
-              )}
-              <p className="text-xs text-muted-foreground">
-                Enter a tag and press Enter, or select an existing project tag.
-              </p>
-            </TaskField>
           </CardContent>
         </Card>
         <Card className="self-start">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <SlidersHorizontal className="size-4 text-primary" /> Assignment & estimate
+              <SlidersHorizontal className="size-4 text-primary" /> Subtask settings
             </CardTitle>
           </CardHeader>
           <CardContent className="grid gap-5">
@@ -232,31 +194,6 @@ export function TaskForm({ projectId, backlogItemId, assignees, task, onSaved, o
               <span className="text-muted-foreground">Status</span>
               <TaskStatusBadge status={task?.status ?? "TODO"} />
             </div>
-            <TaskField
-              name="assigneeProjectMemberId"
-              label="Assignee"
-              errors={errors.assigneeProjectMemberId}
-            >
-              <Select value={values.assigneeProjectMemberId || "unassigned"}
-                onValueChange={value => changeField("assigneeProjectMemberId", value === "unassigned" ? "" : value)}
-                disabled={saveMutation.isPending}>
-                <SelectTrigger id="task-assigneeProjectMemberId" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="unassigned">Unassigned</SelectItem>
-                  {values.assigneeProjectMemberId && !assignees.some(member => member.id === values.assigneeProjectMemberId) && (
-                    <SelectItem value={values.assigneeProjectMemberId}>
-                      Member {values.assigneeProjectMemberId.slice(0, 8)}
-                    </SelectItem>
-                  )}
-                  {assignees.map(member => <SelectItem key={member.id} value={member.id}>{member.displayName}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Select an active team member.
-              </p>
-            </TaskField>
             <TaskField name="deadline" label="Deadline (local time)" errors={errors.deadline}>
               <Input id="task-deadline" type="datetime-local" value={values.deadline}
                 aria-invalid={!!errors.deadline?.length}
@@ -265,7 +202,7 @@ export function TaskForm({ projectId, backlogItemId, assignees, task, onSaved, o
             <TaskField
               name="estimatedHours"
               label="Estimate (hours)"
-              required={!!values.assigneeProjectMemberId}
+              required={estimateRequired}
               errors={errors.estimatedHours}
             >
               <Input
@@ -281,7 +218,7 @@ export function TaskForm({ projectId, backlogItemId, assignees, task, onSaved, o
                 onChange={(event) => changeField("estimatedHours", event.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                Optional for unassigned tasks. Assigned tasks require an estimate greater than 0.
+                Enter the estimated effort in hours. The value must be greater than 0.
               </p>
             </TaskField>
             <TaskField name="priority" label="Priority" errors={errors.priority}>

@@ -9,6 +9,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { MilestoneRubricCard } from "@/pages/management/project/milestone/components/MilestoneRubricCard";
 import { formatTenantDateTime, getMilestoneApiError } from "@/pages/management/project/milestone/milestone.utils";
+import { countReleaseNoteWords, RELEASE_NOTES_MAX_WORDS, releaseNotesWithinLimit } from "@/lib/release-notes";
+import { artifactFormSource } from "@/lib/artifact-form-source";
 import type { ArtifactAttachment, ArtifactDraftRequest, ArtifactSubmission, ArtifactSubmissionRequest } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, ArrowLeft, CheckCircle2, Eye, FileUp, RotateCcw, Save, ShieldCheck } from "lucide-react";
@@ -29,10 +31,12 @@ export default function ArtifactDraftPage() {
   const { projectId, milestoneId } = useParams<{ projectId: string; milestoneId: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const workspaceId = searchParams.get("workspaceId");
   const queryClient = useQueryClient();
   const [repositoryUrl, setRepositoryUrl] = useState("");
   const [deploymentUrl, setDeploymentUrl] = useState("");
   const [releaseNotes, setReleaseNotes] = useState("");
+  const [releaseNotesWordError, setReleaseNotesWordError] = useState<string | null>(null);
   const [checklist, setChecklist] = useState<Record<string, boolean>>({});
   const [attachments, setAttachments] = useState<ArtifactAttachment[]>([]);
   const [draftVersion, setDraftVersion] = useState<number | undefined>();
@@ -41,6 +45,7 @@ export default function ArtifactDraftPage() {
   const [submission, setSubmission] = useState<ArtifactSubmission | null>(null);
   const idempotencyKey = useRef<string | undefined>(undefined);
   const pendingSubmission = useRef<PendingArtifactSubmission | null>(null);
+  const initializedFormScope = useRef<string | null>(null);
 
   const pendingStorageKey = projectId && milestoneId
     ? "artifact-submit-pending:" + projectId + ":" + milestoneId
@@ -63,6 +68,8 @@ export default function ArtifactDraftPage() {
 
   useEffect(() => {
     if (!workspaceQuery.data) return;
+    if (initializedFormScope.current === pendingStorageKey) return;
+    initializedFormScope.current = pendingStorageKey;
     const { draft, milestone } = workspaceQuery.data;
     let pending: PendingArtifactSubmission | null = null;
     if (pendingStorageKey) {
@@ -94,12 +101,13 @@ export default function ArtifactDraftPage() {
       return;
     }
     pendingSubmission.current = null;
-    setRepositoryUrl(draft?.repositoryUrl ?? "");
-    setDeploymentUrl(draft?.deploymentUrl ?? "");
-    setReleaseNotes(draft?.releaseNotes ?? "");
+    const source = artifactFormSource(draft, workspaceQuery.data.latestSubmission);
+    setRepositoryUrl(source?.repositoryUrl ?? "");
+    setDeploymentUrl(source?.deploymentUrl ?? "");
+    setReleaseNotes(source?.releaseNotes ?? "");
     setDraftVersion(draft?.version);
     setAttachments(draft?.attachments ?? []);
-    setChecklist(Object.fromEntries(milestone.checklist.map((item) => [item.id, draft?.checklist[item.id] ?? false])));
+    setChecklist(Object.fromEntries(milestone.checklist.map((item) => [item.id, source === draft ? draft?.checklist[item.id] ?? false : false])));
     setSubmission(workspaceQuery.data.latestSubmission);
   }, [workspaceQuery.data, pendingStorageKey]);
 
@@ -109,6 +117,10 @@ export default function ArtifactDraftPage() {
       setDraftVersion(draft.version);
       setSaved(true);
       await queryClient.invalidateQueries({ queryKey: ["artifact-submission-workspace", projectId, milestoneId] });
+      const teamId = workspaceQuery.data?.milestone.teamId;
+      if (teamId) {
+        navigate(`/student/teams/${teamId}/milestones/${milestoneId}/submissions${workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ""}`);
+      }
     },
   });
 
@@ -151,12 +163,22 @@ export default function ArtifactDraftPage() {
   }
 
   const submitDraft = () => {
+    if (!releaseNotesWithinLimit(releaseNotes)) {
+      setReleaseNotesWordError(`Release notes không được vượt quá ${RELEASE_NOTES_MAX_WORDS} từ.`);
+      return;
+    }
+    setReleaseNotesWordError(null);
     setSaved(false);
     saveMutation.mutate({ repositoryUrl: repositoryUrl.trim() || undefined, deploymentUrl: deploymentUrl.trim() || undefined,
       releaseNotes: releaseNotes.trim() || undefined, checklist, expectedVersion: draftVersion });
   };
 
   const submitOfficially = () => {
+    if (!releaseNotesWithinLimit(releaseNotes)) {
+      setReleaseNotesWordError(`Release notes không được vượt quá ${RELEASE_NOTES_MAX_WORDS} từ.`);
+      return;
+    }
+    setReleaseNotesWordError(null);
     if (!pendingSubmission.current) {
       const key = idempotencyKey.current ?? crypto.randomUUID();
       idempotencyKey.current = key;
@@ -199,9 +221,9 @@ export default function ArtifactDraftPage() {
   return <MainLayout pathName={{ projects: "Dự án", [projectId ?? "project"]: milestone.project.name, milestones: "Milestone", [milestone.id]: milestone.title, submit: "Chuẩn bị artifact" }}>
     <main className="mx-auto grid w-full max-w-5xl gap-5">
       {reviewSubmissionQuery.data?.status === "CHANGES_REQUESTED" ? <Alert className="border-amber-400 bg-amber-50 dark:bg-amber-950/20"><RotateCcw /><AlertTitle>Đang chuẩn bị bài nộp lại Version {reviewSubmissionQuery.data.currentVersionNumber + 1}</AlertTitle><AlertDescription><p>{reviewSubmissionQuery.data.reviews[0]?.overallFeedback || "Hãy cập nhật sản phẩm theo feedback của reviewer."}</p><Button className="mt-2" size="sm" variant="outline" onClick={() => navigate(`/student/milestone-submissions/${reviewSubmissionQuery.data?.id}`)}>Xem toàn bộ feedback</Button></AlertDescription></Alert> : null}
-      {milestone.status !== "OPEN" && <Alert><AlertCircle /><AlertTitle>Milestone chưa mở nhận bài</AlertTitle><AlertDescription>Bạn vẫn có thể chuẩn bị và lưu nháp. Chỉ có thể Review &amp; submit sau khi người phụ trách mở milestone.</AlertDescription></Alert>}
+      {!workspaceQuery.data.canSubmit && !submission && <Alert><AlertCircle /><AlertTitle>Milestone chưa mở nhận bài</AlertTitle><AlertDescription>Bạn chỉ có thể chuẩn bị và nộp artifact khi milestone đang IN_PROGRESS hoặc được yêu cầu nộp lại và còn trong hạn.</AlertDescription></Alert>}
       <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-background"><CardHeader>
-        <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><span>Trạng thái milestone: {milestone.status}</span><span>·</span><span>Hạn: {formatTenantDateTime(milestone.deadline, milestone.tenantTimeZone)}</span></div><Button asChild size="sm" variant="outline"><Link to="/student/milestone-submissions"><Eye className="size-4" /> Xem bài nộp của tôi</Link></Button></div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><span>Trạng thái milestone: {milestone.lifecycleStatus}</span><span>·</span><span>Hạn: {formatTenantDateTime(milestone.deadline, milestone.tenantTimeZone)}</span></div><Button asChild size="sm" variant="outline"><Link to="/student/milestone-submissions"><Eye className="size-4" /> Xem bài nộp của tôi</Link></Button></div>
         <CardTitle className="text-2xl">Chuẩn bị sản phẩm: {milestone.title}</CardTitle><CardDescription>{milestone.description}</CardDescription>
         <div className="flex items-center gap-2 pt-2 text-xs text-muted-foreground"><ShieldCheck className="size-4 text-emerald-600" /> Dữ liệu được kiểm tra quyền truy cập ở backend</div>
       </CardHeader></Card>
@@ -243,7 +265,7 @@ export default function ArtifactDraftPage() {
         <CardContent className="grid gap-4">
           <label className="grid gap-2 text-sm font-medium">Repository URL<Input disabled={submissionMutation.isPending} type="url" value={repositoryUrl} aria-invalid={Boolean(saveError?.errors?.repositoryUrl)} onChange={(event) => { markSubmissionEdited(); markDraftEdited(); setRepositoryUrl(event.target.value); }} placeholder="https://github.com/..." />{saveError?.errors?.repositoryUrl?.map((message) => <span key={message} className="text-xs font-normal text-destructive">{message}</span>)}</label>
           <label className="grid gap-2 text-sm font-medium">Deployment URL<Input disabled={submissionMutation.isPending} type="url" value={deploymentUrl} aria-invalid={Boolean(saveError?.errors?.deploymentUrl)} onChange={(event) => { markSubmissionEdited(); markDraftEdited(); setDeploymentUrl(event.target.value); }} placeholder="https://..." />{saveError?.errors?.deploymentUrl?.map((message) => <span key={message} className="text-xs font-normal text-destructive">{message}</span>)}</label>
-          <label className="grid gap-2 text-sm font-medium">Release notes<Textarea disabled={submissionMutation.isPending} value={releaseNotes} maxLength={10000} aria-invalid={Boolean(saveError?.errors?.releaseNotes)} onChange={(event) => { markSubmissionEdited(); markDraftEdited(); setReleaseNotes(event.target.value); }} placeholder="Mô tả ngắn nội dung bàn giao" rows={5} className="max-h-48 resize-none overflow-y-auto" />{saveError?.errors?.releaseNotes?.map((message) => <span key={message} className="text-xs font-normal text-destructive">{message}</span>)}</label>
+          <label className="grid gap-2 text-sm font-medium">Release notes<Textarea disabled={submissionMutation.isPending} value={releaseNotes} aria-invalid={Boolean(releaseNotesWordError || saveError?.errors?.releaseNotes)} onChange={(event) => { markSubmissionEdited(); markDraftEdited(); if (!releaseNotesWithinLimit(event.target.value) && countReleaseNoteWords(event.target.value) > countReleaseNoteWords(releaseNotes)) { setReleaseNotesWordError(`Tối đa ${RELEASE_NOTES_MAX_WORDS} từ.`); return; } setReleaseNotesWordError(releaseNotesWithinLimit(event.target.value) ? null : `Tối đa ${RELEASE_NOTES_MAX_WORDS} từ.`); setReleaseNotes(event.target.value); }} placeholder="Mô tả ngắn nội dung bàn giao" rows={5} className="max-h-40 resize-none overflow-y-auto" /><span className="text-xs font-normal text-muted-foreground">{countReleaseNoteWords(releaseNotes)}/{RELEASE_NOTES_MAX_WORDS} từ</span>{releaseNotesWordError && <span className="text-xs font-normal text-destructive">{releaseNotesWordError}</span>}{saveError?.errors?.releaseNotes?.map((message) => <span key={message} className="text-xs font-normal text-destructive">{message}</span>)}</label>
           <div className="grid gap-2 text-sm font-medium">Tệp đính kèm
             <label className={`flex items-center gap-3 rounded-lg border border-dashed p-4 ${workspaceQuery.data.uploadPolicy.enabled ? "cursor-pointer" : "cursor-not-allowed text-muted-foreground"}`}>
               <FileUp className="size-5" /><span>{uploadMutation.isPending ? "Đang kiểm tra và tải tệp…" : workspaceQuery.data.uploadPolicy.enabled ? "Chọn tệp để tải lên" : "Tải tệp đang khóa: policy hoặc scanner chưa được cấu hình."}</span>
@@ -260,15 +282,15 @@ export default function ArtifactDraftPage() {
       </Card>
 
       {reviewing && <Card className="border-primary/30"><CardHeader><CardTitle>Xem lại sản phẩm sẽ nộp</CardTitle><CardDescription>Xác nhận để tạo một phiên bản SUBMITTED mới. Phiên bản đã nộp trước đây sẽ được giữ nguyên.</CardDescription></CardHeader><CardContent className="grid gap-2 text-sm">
-        <p><strong>Repository:</strong> {repositoryUrl || "Chưa cung cấp"}</p><p><strong>Deployment:</strong> {deploymentUrl || "Chưa cung cấp"}</p><p><strong>Tệp:</strong> {attachments.length} tệp đã tải lên và quét sạch</p><p><strong>Checklist:</strong> {Object.values(checklist).filter(Boolean).length}/{milestone.checklist.length} tiêu chí</p>
-        <Button onClick={submitOfficially} disabled={milestone.status !== "OPEN" || submissionMutation.isPending || uploadMutation.isPending}>
+        <p><strong>Repository:</strong> {repositoryUrl || "Chưa cung cấp"}</p><p><strong>Deployment:</strong> {deploymentUrl || "Chưa cung cấp"}</p><p><strong>Tệp:</strong> {attachments.length} tệp đã tải lên và quét sạch</p><div><strong>Checklist ({milestone.checklist.length} tiêu chí, reviewer đánh giá):</strong>{milestone.checklist.length ? <ul className="mt-1 list-disc space-y-1 pl-5">{milestone.checklist.map((item) => <li key={item.id}>{item.content}{item.mandatory ? " (bắt buộc)" : " (không bắt buộc)"}</li>)}</ul> : <span className="ml-1 text-muted-foreground">Không có tiêu chí</span>}</div>
+        <Button onClick={submitOfficially} disabled={!workspaceQuery.data.canSubmit || submissionMutation.isPending || uploadMutation.isPending}>
           {submissionMutation.isPending ? "Đang gửi…" : "Xác nhận nộp"}
         </Button>
       </CardContent></Card>}
 
       <div className="flex flex-wrap justify-between gap-3"><Button variant="outline" onClick={() => navigate(-1)}><ArrowLeft /> Quay lại</Button><div className="flex flex-wrap gap-2">
-        <Button variant="outline" onClick={() => setReviewing((value) => !value)} disabled={milestone.status !== "OPEN" || submissionMutation.isPending}><Eye /> {reviewing ? "Đóng xem trước" : "Review & submit"}</Button>
-        <Button onClick={submitDraft} disabled={saveMutation.isPending || submissionMutation.isPending}><Save /> {saveMutation.isPending ? "Đang lưu…" : "Lưu nháp"}</Button>
+        <Button variant="outline" onClick={() => setReviewing((value) => !value)} disabled={!workspaceQuery.data.canSubmit || !releaseNotesWithinLimit(releaseNotes) || submissionMutation.isPending}><Eye /> {reviewing ? "Đóng xem trước" : "Review & submit"}</Button>
+        <Button onClick={submitDraft} disabled={!workspaceQuery.data.canSubmit || !releaseNotesWithinLimit(releaseNotes) || saveMutation.isPending || submissionMutation.isPending}><Save /> {saveMutation.isPending ? "Đang lưu…" : "Lưu nháp"}</Button>
       </div></div>
     </main>
   </MainLayout>;
