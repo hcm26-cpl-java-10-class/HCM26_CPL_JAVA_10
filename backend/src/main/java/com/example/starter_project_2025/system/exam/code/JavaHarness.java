@@ -15,6 +15,9 @@ public final class JavaHarness {
     private static final Pattern PUBLIC_SOLUTION =
             Pattern.compile("\\bpublic\\s+(final\\s+|abstract\\s+)?class\\s+Solution\\b");
 
+    /** Khai bao package trong code sinh vien se lam hong viec ghep chung file voi Main. */
+    private static final Pattern PACKAGE_DECL = Pattern.compile("(?m)^\\s*package\\s+[\\w.]+\\s*;");
+
     private JavaHarness() {
     }
 
@@ -23,6 +26,7 @@ public final class JavaHarness {
         String code = userCode == null ? "" : userCode;
         // Lop Solution khong duoc public vi nam chung file voi Main.
         code = PUBLIC_SOLUTION.matcher(code).replaceAll("$1class Solution");
+        code = PACKAGE_DECL.matcher(code).replaceFirst("");
         // Dat import tren CUNG dong dau tien de so dong cua loi bien dich khong bi lech.
         return "import java.util.*;import java.io.*;" + code + "\n" + mainClass(spec);
     }
@@ -62,9 +66,13 @@ public final class JavaHarness {
             if (i > 0) call.append(", ");
             call.append('p').append(i);
         }
+        // Nuot moi thu sinh vien in ra (System.out.println debug) de khong lam sai ket qua; chi in ket qua that.
+        sb.append("        PrintStream real = System.out;\n");
+        sb.append("        System.setOut(new PrintStream(OutputStream.nullOutputStream()));\n");
         sb.append("        ").append(spec.getReturnType().trim()).append(" r = Solution.")
           .append(spec.getFunctionName().trim()).append('(').append(call).append(");\n");
-        sb.append("        System.out.println(f(r));\n");
+        sb.append("        real.println(f(r));\n");
+        sb.append("        real.flush();\n");
         sb.append("    }\n");
         sb.append("}\n");
         return sb.toString();

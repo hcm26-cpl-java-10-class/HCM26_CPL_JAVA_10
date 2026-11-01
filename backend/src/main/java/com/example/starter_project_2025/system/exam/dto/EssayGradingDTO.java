@@ -49,6 +49,8 @@ public class EssayGradingDTO {
         private boolean alreadyGraded;
         private List<EssayItem> essays;
         private List<CodingItem> codings;
+        /** Bai da duoc giao vien sua diem tay (co diem 1/diem 2): khong cho cham lai coding tu dong. */
+        private boolean scoreAdjusted;
     }
 
     @Getter
@@ -65,6 +67,8 @@ public class EssayGradingDTO {
         private String feedback;
         /** Khai bao ham + toan bo test (ca test an) cho giao vien. */
         private com.example.starter_project_2025.system.question.dto.CodeSpecDTO spec;
+        /** null = da co diem; PENDING = dang cham nen; RETRYING = may cham loi, se tu thu lai; FAILED = het luot, can cham tay. */
+        private String autoGradeState;
     }
 
     @Getter

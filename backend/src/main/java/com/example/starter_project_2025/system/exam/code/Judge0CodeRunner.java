@@ -4,7 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -31,7 +32,6 @@ public class Judge0CodeRunner implements CodeRunner {
     private final int memoryLimitKb;
 
     public Judge0CodeRunner(
-            RestTemplateBuilder builder,
             @Value("${code.judge.url:http://localhost:2358}") String baseUrl,
             @Value("${code.judge.token:}") String token,
             @Value("${code.judge.language-id:62}") int languageId,
@@ -39,10 +39,12 @@ public class Judge0CodeRunner implements CodeRunner {
             @Value("${code.judge.memory-limit-kb:512000}") int memoryLimitKb,
             @Value("${code.judge.read-timeout-ms:30000}") int readTimeoutMs
     ) {
-        this.restTemplate = builder
-                .setConnectTimeout(Duration.ofSeconds(5))
-                .setReadTimeout(Duration.ofMillis(readTimeoutMs))
-                .build();
+        // Ep dung HTTP/1.1 (HttpURLConnection). Bo gui mac dinh cua JDK gui "Upgrade: h2c" ma Judge0
+        // (Rails/Puma) khong hieu nen doc body thanh rong -> 422 "source_code can't be blank".
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout((int) Duration.ofSeconds(5).toMillis());
+        factory.setReadTimeout(readTimeoutMs);
+        this.restTemplate = new RestTemplate(factory);
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.token = token;
         this.languageId = languageId;
@@ -68,9 +70,12 @@ public class Judge0CodeRunner implements CodeRunner {
         }
 
         try {
+            // Tu serialize ra byte[] de request co Content-Length (khong gui chunked): Judge0 (Rails/Puma)
+            // da doc body chunked thanh rong -> 422 "source_code can't be blank".
+            byte[] payload = mapper.writeValueAsBytes(body);
             String raw = restTemplate.postForObject(
                     baseUrl + "/submissions?base64_encoded=true&wait=true",
-                    new HttpEntity<>(body, headers),
+                    new HttpEntity<>(payload, headers),
                     String.class);
             if (raw == null) {
                 return RunOutcome.infra("Judge0 không trả kết quả");
@@ -84,6 +89,9 @@ public class Judge0CodeRunner implements CodeRunner {
                     d64(n.path("stdout")),
                     d64(n.path("stderr")),
                     d64(n.path("compile_output")));
+        } catch (HttpStatusCodeException e) {
+            log.warn("Judge0 tra loi {}: {}", e.getStatusCode(), e.getResponseBodyAsString());
+            return RunOutcome.infra("Máy chấm code từ chối yêu cầu (" + e.getStatusCode().value() + ")");
         } catch (Exception e) {
             log.warn("Judge0 call failed: {}", e.toString());
             return RunOutcome.infra("Không kết nối được máy chấm code");

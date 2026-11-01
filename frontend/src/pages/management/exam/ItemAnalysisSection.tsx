@@ -21,6 +21,26 @@ type OptionStat = {
     selectedRate: number | null;
 };
 
+type CodeTestStat = {
+    index: number;
+    visible: boolean;
+    inputs: string[] | null;
+    expected: string | null;
+    evaluated: number;
+    passed: number;
+    passRate: number | null;
+    statusCounts: Record<string, number>;
+};
+
+type CodeStat = {
+    graded: number;
+    compileErrors: number;
+    noCode: number;
+    timeouts: number;
+    runtimeErrors: number;
+    tests: CodeTestStat[];
+};
+
 type ItemStat = {
     sourceQuestionId: number;
     order: number;
@@ -38,6 +58,7 @@ type ItemStat = {
     discriminationLevel: "GOOD" | "FAIR" | "POOR" | "NEGATIVE" | null;
     flags: string[];
     options: OptionStat[];
+    code: CodeStat | null;
 };
 
 type ItemAnalysis = {
@@ -70,6 +91,16 @@ const DISCRIMINATION_STYLE: Record<string, string> = {
     FAIR: "bg-amber-100 text-amber-800",
     POOR: "bg-orange-100 text-orange-800",
     NEGATIVE: "bg-red-100 text-red-800",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+    OK: "Passed",
+    WRONG_ANSWER: "Wrong answer",
+    COMPILE_ERROR: "Compile error",
+    RUNTIME_ERROR: "Runtime error",
+    TIME_LIMIT: "Time limit",
+    NO_CODE: "No code",
+    INFRA_ERROR: "Judge error",
 };
 
 const TYPE_LABEL: Record<string, string> = {
@@ -187,7 +218,7 @@ export function ItemAnalysisSection({ examId }: { examId: number }) {
                                 <tbody>
                                     {data.items.map((item) => {
                                         const isOpen = expanded === item.sourceQuestionId;
-                                        const canExpand = item.options.length > 0 || item.flags.length > 0;
+                                        const canExpand = item.options.length > 0 || item.flags.length > 0 || item.code != null;
                                         return (
                                             <Fragment key={item.sourceQuestionId}>
                                                 <tr
@@ -262,6 +293,52 @@ export function ItemAnalysisSection({ examId }: { examId: number }) {
                                                                         <li key={flag}>{FLAG_LABEL[flag] ?? flag}</li>
                                                                     ))}
                                                                 </ul>
+                                                            )}
+                                                            {item.code && (
+                                                                <div className="space-y-2">
+                                                                    {item.code.graded === 0 ? (
+                                                                        <p className="text-xs text-muted-foreground">
+                                                                            No per-test data yet (attempts graded before this feature
+                                                                            was added need to be regraded).
+                                                                        </p>
+                                                                    ) : (
+                                                                        <>
+                                                                            <p className="text-xs text-muted-foreground">
+                                                                                {item.code.graded} graded submission(s): {item.code.compileErrors} compile
+                                                                                error(s), {item.code.runtimeErrors} runtime error(s), {item.code.timeouts} timeout(s),{" "}
+                                                                                {item.code.noCode} without code.
+                                                                            </p>
+                                                                            {item.code.tests.map((test) => {
+                                                                                const failures = Object.entries(test.statusCounts)
+                                                                                    .filter(([status]) => status !== "OK")
+                                                                                    .sort((a, b) => b[1] - a[1]);
+                                                                                return (
+                                                                                    <div key={test.index} className="flex items-center gap-3 text-xs">
+                                                                                        <span className="w-28 shrink-0 font-medium">
+                                                                                            Test {test.index + 1} ({test.visible ? "visible" : "hidden"})
+                                                                                        </span>
+                                                                                        <div className="h-2 w-40 shrink-0 overflow-hidden rounded bg-border">
+                                                                                            <div
+                                                                                                className="h-full bg-green-600"
+                                                                                                style={{ width: `${Math.round((test.passRate ?? 0) * 100)}%` }}
+                                                                                            />
+                                                                                        </div>
+                                                                                        <span className="w-24 shrink-0">
+                                                                                            {test.passed}/{test.evaluated} ({pct(test.passRate)})
+                                                                                        </span>
+                                                                                        <span className="min-w-0 truncate text-muted-foreground">
+                                                                                            {test.inputs?.join(", ")} → {test.expected}
+                                                                                            {failures.length > 0 &&
+                                                                                                `  |  ${failures
+                                                                                                    .map(([status, count]) => `${STATUS_LABEL[status] ?? status}: ${count}`)
+                                                                                                    .join(", ")}`}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                );
+                                                                            })}
+                                                                        </>
+                                                                    )}
+                                                                </div>
                                                             )}
                                                             {item.options.length > 0 && (
                                                                 <div className="space-y-1">

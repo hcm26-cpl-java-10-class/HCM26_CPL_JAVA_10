@@ -33,16 +33,20 @@ public class CodeJudgeService {
     }
 
     /** Ket qua cham tat ca test cua mot cau. */
-    public record GradeResult(int passed, int total, boolean infraError, String compileError) {
+    public record GradeResult(int passed, int total, boolean infraError, String compileError, List<TestResult> tests) {
     }
 
     /** Cham toan bo test (hien thi + an). */
     public GradeResult grade(CodeSpecDTO spec, String code) {
         List<CodeSpecDTO.TestCase> tests = spec.getTests();
         if (code == null || code.isBlank()) {
-            return new GradeResult(0, tests.size(), false, null);
+            List<TestResult> none = tests.stream()
+                    .map(t -> new TestResult(false, false, "NO_CODE", "", "Sinh viên chưa nộp code"))
+                    .toList();
+            return new GradeResult(0, tests.size(), false, null, none);
         }
         List<CompletableFuture<TestResult>> futures = new ArrayList<>();
+        List<TestResult> all = new ArrayList<>();
         for (CodeSpecDTO.TestCase t : tests) {
             futures.add(CompletableFuture.supplyAsync(() -> runOne(spec, code, t.getInputs(), t.getExpected()), pool));
         }
@@ -51,11 +55,12 @@ public class CodeJudgeService {
         String compileError = null;
         for (CompletableFuture<TestResult> f : futures) {
             TestResult r = f.join();
+            all.add(r);
             if (r.passed()) passed++;
             if (r.infraError()) infra = true;
             if (compileError == null && "COMPILE_ERROR".equals(r.status())) compileError = r.error();
         }
-        return new GradeResult(passed, tests.size(), infra, compileError);
+        return new GradeResult(passed, tests.size(), infra, compileError, all);
     }
 
     /** Chay tat ca test theo thu tu (cho giao vien xem lai bai). */

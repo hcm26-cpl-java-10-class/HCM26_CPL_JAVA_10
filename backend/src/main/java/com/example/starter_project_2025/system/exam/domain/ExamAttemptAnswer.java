@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -50,4 +51,15 @@ public class ExamAttemptAnswer extends BaseEntity {
 
     @Column(name = "feedback", columnDefinition = "TEXT")
     private String feedback;
+
+    /** Trang thai tung test cua cau coding luc cham, dang JSON ["OK","WRONG_ANSWER",...]. */
+    @Column(name = "code_result", columnDefinition = "TEXT")
+    private String codeResult;
+
+    /** So lan may cham da loi khi cham nen (toi da CodingGradingService.MAX_AUTO_ATTEMPTS). */
+    @Column(name = "grade_attempts", nullable = false)
+    private int gradeAttempts = 0;
+
+    /** Thoi diem som nhat duoc thu cham lai tu dong. */
+    private Instant nextGradeAt;
 }

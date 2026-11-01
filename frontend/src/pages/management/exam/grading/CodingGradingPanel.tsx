@@ -25,9 +25,22 @@ interface Props {
     examId: number;
     attemptId: number;
     codings: CodingGradingItem[];
+    scoreAdjusted?: boolean;
 }
 
-function CodingCard({ examId, attemptId, item, index }: { examId: number; attemptId: number; item: CodingGradingItem; index: number }) {
+function CodingCard({
+    examId,
+    attemptId,
+    item,
+    index,
+    scoreAdjusted,
+}: {
+    examId: number;
+    attemptId: number;
+    item: CodingGradingItem;
+    index: number;
+    scoreAdjusted: boolean;
+}) {
     const queryClient = useQueryClient();
     const [result, setResult] = useState<CodingRunResult | null>(null);
 
@@ -71,6 +84,12 @@ function CodingCard({ examId, attemptId, item, index }: { examId: number; attemp
                         <Badge>
                             {formatScore(item.score)} / {formatScore(item.maxScore ?? item.points)}
                         </Badge>
+                    ) : item.autoGradeState === "PENDING" ? (
+                        <Badge variant="secondary">Đang chấm tự động...</Badge>
+                    ) : item.autoGradeState === "RETRYING" ? (
+                        <Badge variant="secondary">Máy chấm lỗi, đang tự thử lại</Badge>
+                    ) : item.autoGradeState === "FAILED" ? (
+                        <Badge variant="destructive">Cần chấm lại thủ công</Badge>
                     ) : (
                         <Badge variant="secondary">Chưa có điểm</Badge>
                     )}
@@ -104,12 +123,14 @@ function CodingCard({ examId, attemptId, item, index }: { examId: number; attemp
                     {runMutation.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Play className="mr-2 size-4" />}
                     {runMutation.isPending ? "Đang chạy test..." : "Chạy thử test case"}
                 </Button>
-                <Button type="button" onClick={() => regradeMutation.mutate()} disabled={busy}>
+                <Button type="button" onClick={() => regradeMutation.mutate()} disabled={busy || scoreAdjusted}>
                     {regradeMutation.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />}
                     {regradeMutation.isPending ? "Đang chấm..." : "Chấm lại & lưu điểm"}
                 </Button>
                 <span className="text-xs text-muted-foreground">
-                    "Chạy thử" chỉ xem kết quả, không đổi điểm. "Chấm lại" chạy đủ 10 test và ghi điểm.
+                    {scoreAdjusted
+                        ? "Bài này đã được sửa điểm tay (điểm 1/điểm 2) nên không thể chấm lại coding tự động."
+                        : '"Chạy thử" chỉ xem kết quả, không đổi điểm. "Chấm lại" chạy đủ 10 test và ghi điểm.'}
                 </span>
             </div>
 
@@ -155,7 +176,7 @@ function CodingCard({ examId, attemptId, item, index }: { examId: number; attemp
     );
 }
 
-export function CodingGradingPanel({ examId, attemptId, codings }: Props) {
+export function CodingGradingPanel({ examId, attemptId, codings, scoreAdjusted = false }: Props) {
     if (codings.length === 0) {
         return (
             <p className="rounded-md border p-6 text-center text-muted-foreground">
@@ -166,7 +187,14 @@ export function CodingGradingPanel({ examId, attemptId, codings }: Props) {
     return (
         <>
             {codings.map((item, index) => (
-                <CodingCard key={item.questionId} examId={examId} attemptId={attemptId} item={item} index={index} />
+                <CodingCard
+                    key={item.questionId}
+                    examId={examId}
+                    attemptId={attemptId}
+                    item={item}
+                    index={index}
+                    scoreAdjusted={scoreAdjusted}
+                />
             ))}
         </>
     );

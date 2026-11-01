@@ -75,6 +75,7 @@ public class ExamEssayGradingService {
         detail.setMaxScore(ExamScoring.effectiveMax(attempt.getMaxScore()));
         detail.setObjectiveScore(attempt.getObjectiveScore());
         detail.setFinalScore(attempt.getFinalScore());
+        detail.setScoreAdjusted(attempt.getFirstScore() != null);
         detail.setAlreadyGraded(attempt.getFinalScore() != null || attempt.getStatus() == ExamAttemptStatus.SUBMITTED);
         detail.setEssays(attempt.getQuestions().stream()
                 .filter(question -> question.getType() == QuestionType.ESSAY)
@@ -129,6 +130,10 @@ public class ExamEssayGradingService {
         ExamAttempt attempt = requireSubmittedAttempt(examId, attemptId);
         ExamAttemptQuestion question = requireCodingQuestion(attempt, questionId);
         CodeSpecDTO spec = requireSpec(question);
+        if (attempt.getFirstScore() != null) {
+            throw new BadRequestException("Bài này đã được sửa điểm tay (điểm 1/điểm 2) nên không thể chấm lại "
+                    + "coding tự động, để tránh ghi đè điểm của giáo viên.");
+        }
 
         ExamAttemptAnswer answer = findAnswer(attempt, question);
         if (answer == null) {
@@ -152,6 +157,9 @@ public class ExamEssayGradingService {
         answer.setScore(newScore);
         answer.setFeedback("Đạt " + result.passed() + "/" + result.total() + " test"
                 + (result.compileError() != null ? " (lỗi biên dịch)" : ""));
+        answer.setCodeResult(CodingScoring.statusesJson(result));
+        answer.setGradeAttempts(0);
+        answer.setNextGradeAt(null);
 
         BigDecimal objective = (attempt.getObjectiveScore() == null ? BigDecimal.ZERO : attempt.getObjectiveScore())
                 .add(newScore).subtract(oldScore).max(BigDecimal.ZERO);
@@ -418,6 +426,11 @@ public class ExamEssayGradingService {
         if (answer != null) {
             item.setScore(answer.getScore());
             item.setFeedback(answer.getFeedback());
+            if (answer.getScore() == null) {
+                item.setAutoGradeState(answer.getGradeAttempts() >= CodingGradingService.MAX_AUTO_ATTEMPTS
+                        ? "FAILED"
+                        : (answer.getGradeAttempts() > 0 ? "RETRYING" : "PENDING"));
+            }
         }
         return item;
     }

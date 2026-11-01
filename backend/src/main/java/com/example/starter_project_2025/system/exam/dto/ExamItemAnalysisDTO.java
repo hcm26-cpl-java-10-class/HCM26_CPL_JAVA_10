@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.exam.dto;
 import com.example.starter_project_2025.system.question.domain.QuestionType;
 
 import java.util.List;
+import java.util.Map;
 
 /** Phan tich cau hoi (item analysis) + ty le hoan thanh cua mot ky thi. */
 public record ExamItemAnalysisDTO(
@@ -51,7 +52,34 @@ public record ExamItemAnalysisDTO(
             Double discrimination,
             String discriminationLevel,
             List<String> flags,
-            List<OptionStatDTO> options
+            List<OptionStatDTO> options,
+            /** Chi co voi cau lap trinh. */
+            CodeStatDTO code
+    ) {
+    }
+
+    /** Thong ke cau lap trinh dua tren ket qua tung test luc cham. */
+    public record CodeStatDTO(
+            /** So bai co du lieu ket qua tung test (bai cham truoc khi co tinh nang nay thi khong co). */
+            int graded,
+            int compileErrors,
+            int noCode,
+            int timeouts,
+            int runtimeErrors,
+            List<CodeTestStatDTO> tests
+    ) {
+    }
+
+    public record CodeTestStatDTO(
+            int index,
+            boolean visible,
+            List<String> inputs,
+            String expected,
+            int evaluated,
+            int passed,
+            Double passRate,
+            /** Dem theo trang thai: OK, WRONG_ANSWER, COMPILE_ERROR, RUNTIME_ERROR, TIME_LIMIT, NO_CODE... */
+            Map<String, Integer> statusCounts
     ) {
     }
 

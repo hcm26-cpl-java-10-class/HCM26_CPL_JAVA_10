@@ -44,7 +44,6 @@ public class ExamAttemptService {
     private final QuestionTakerMapper questionTakerMapper;
     private final InvitationRepository invitationRepository;
     private final ExamResultAccessService resultAccessService;
-    private final CodeJudgeService codeJudgeService;
 
     public ExamAttemptDTO startOrResume(Long examId, Long studentId) {
         return startOrResume(examId, studentId, null);
@@ -517,7 +516,7 @@ public class ExamAttemptService {
     private record CodingOutcome(BigDecimal weight, boolean needsReview) {
     }
 
-    /** Cham cau lap trinh: moi test dat duoc tinh theo ty le (10 test => moi test 10% diem cau). */
+    /** Cau lap trinh: tinh diem o nen, o day chi danh dau cho cham (hoac 0 diem neu khong nop code). */
     private CodingOutcome gradeCodingQuestion(ExamAttempt attempt, ExamAttemptQuestion question, BigDecimal maxScore) {
         ExamAttemptAnswer answer = findOrCreateAnswer(attempt, question);
         CodeSpecDTO spec = CodeSpecSupport.fromJson(question.getCodeSpec());
@@ -527,20 +526,22 @@ public class ExamAttemptService {
             return new CodingOutcome(BigDecimal.ZERO, false);
         }
 
-        CodeJudgeService.GradeResult result = codeJudgeService.grade(spec, answer.getTextAnswer());
-        if (result.infraError()) {
-            answer.setScore(null);
-            answer.setFeedback("Chưa chấm được tự động vì máy chấm code không phản hồi, cần chấm lại");
-            return new CodingOutcome(BigDecimal.ZERO, true);
+        String code = answer.getTextAnswer();
+        if (code == null || code.isBlank()) {
+            // Khong nop code: 0 diem ngay, khong can goi may cham.
+            answer.setScore(BigDecimal.ZERO.setScale(ExamScoring.STORE_SCALE));
+            answer.setFeedback("Đạt 0/" + spec.getTests().size() + " test (chưa nộp code)");
+            answer.setCodeResult(CodingScoring.noCodeJson(spec.getTests().size()));
+            return new CodingOutcome(BigDecimal.ZERO, false);
         }
 
-        BigDecimal weight = BigDecimal.valueOf(question.getPoints())
-                .multiply(BigDecimal.valueOf(result.passed()))
-                .divide(BigDecimal.valueOf(result.total()), 8, RoundingMode.HALF_UP);
-        answer.setScore(ExamScoring.share(maxScore, weight, attempt.getTotalPoints()));
-        answer.setFeedback("Đạt " + result.passed() + "/" + result.total() + " test"
-                + (result.compileError() != null ? " (lỗi biên dịch)" : ""));
-        return new CodingOutcome(weight, false);
+        // Cham o nen (CodingGradingJob): nop bai xong ngay, diem cau coding se co sau it phut.
+        answer.setScore(null);
+        answer.setGradeAttempts(0);
+        answer.setNextGradeAt(null);
+        answer.setCodeResult(null);
+        answer.setFeedback("Đang chấm tự động, điểm sẽ có sau ít phút");
+        return new CodingOutcome(BigDecimal.ZERO, true);
     }
 
     private List<Question> activeQuestions(Exam exam) {

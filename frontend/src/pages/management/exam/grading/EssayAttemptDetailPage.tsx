@@ -71,6 +71,13 @@ export default function EssayAttemptDetailPage() {
         queryKey: ["essay-attempt", numericExamId, numericAttemptId],
         queryFn: () => examApi.getEssayAttempt(numericExamId, numericAttemptId),
         enabled: validIds,
+        // Câu coding đang được chấm nền: tự làm mới để thấy điểm khi xong.
+        refetchInterval: (query) =>
+            query.state.data?.codings?.some(
+                (c) => c.autoGradeState === "PENDING" || c.autoGradeState === "RETRYING",
+            )
+                ? 10000
+                : false,
     });
     const detail = detailQuery.data;
 
@@ -364,7 +371,12 @@ export default function EssayAttemptDetailPage() {
                         </div>
 
                         {tab === "coding" && (
-                            <CodingGradingPanel examId={numericExamId} attemptId={numericAttemptId} codings={codings} />
+                            <CodingGradingPanel
+                                examId={numericExamId}
+                                attemptId={numericAttemptId}
+                                codings={codings}
+                                scoreAdjusted={detail?.scoreAdjusted === true}
+                            />
                         )}
 
                         {tab === "essay" && detail.essays.length === 0 && (

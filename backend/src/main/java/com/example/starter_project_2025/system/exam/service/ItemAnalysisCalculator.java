@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.exam.service;
 
+import com.example.starter_project_2025.system.exam.dto.ExamItemAnalysisDTO.CodeStatDTO;
+import com.example.starter_project_2025.system.exam.dto.ExamItemAnalysisDTO.CodeTestStatDTO;
 import com.example.starter_project_2025.system.exam.dto.ExamItemAnalysisDTO.ItemDTO;
 import com.example.starter_project_2025.system.exam.dto.ExamItemAnalysisDTO.OptionStatDTO;
 import com.example.starter_project_2025.system.question.domain.QuestionType;
@@ -28,6 +30,9 @@ public final class ItemAnalysisCalculator {
     public record OptionInfo(long sourceOptionId, String content, boolean correct) {
     }
 
+    public record TestInfo(boolean visible, List<String> inputs, String expected) {
+    }
+
     public record ItemResponse(
             long sourceQuestionId,
             String content,
@@ -36,7 +41,11 @@ public final class ItemAnalysisCalculator {
             List<OptionInfo> options,
             Set<Long> selected,
             boolean answered,
-            Double ratio) {
+            Double ratio,
+            /** Cau coding: thong tin tung test theo thu tu khai bao (null neu khong phai coding). */
+            List<TestInfo> testInfos,
+            /** Cau coding: trang thai tung test luc cham (null/rong neu chua luu). */
+            List<String> testStatuses) {
     }
 
     public record AttemptResponses(long attemptId, List<ItemResponse> items) {
@@ -57,6 +66,15 @@ public final class ItemAnalysisCalculator {
         int lowerCount;
         final Map<Long, OptionInfo> options = new LinkedHashMap<>();
         final Map<Long, Integer> picks = new LinkedHashMap<>();
+        List<TestInfo> testInfos;
+        int[] evaluated;
+        int[] passedTests;
+        List<Map<String, Integer>> statusCounts;
+        int codeGraded;
+        int compileErrors;
+        int noCode;
+        int timeouts;
+        int runtimeErrors;
     }
 
     public static List<ItemDTO> analyze(List<AttemptResponses> attempts) {
@@ -124,6 +142,43 @@ public final class ItemAnalysisCalculator {
                         acc.lowerCount++;
                     }
                 }
+                if (r.type() == QuestionType.CODING && r.testInfos() != null) {
+                    if (acc.testInfos == null) {
+                        acc.testInfos = r.testInfos();
+                        int n = r.testInfos().size();
+                        acc.evaluated = new int[n];
+                        acc.passedTests = new int[n];
+                        acc.statusCounts = new ArrayList<>();
+                        for (int i = 0; i < n; i++) {
+                            acc.statusCounts.add(new LinkedHashMap<>());
+                        }
+                    }
+                    List<String> statuses = r.testStatuses();
+                    if (statuses != null && !statuses.isEmpty()) {
+                        acc.codeGraded++;
+                        int n = Math.min(statuses.size(), acc.testInfos.size());
+                        for (int i = 0; i < n; i++) {
+                            String st = statuses.get(i);
+                            acc.evaluated[i]++;
+                            if ("OK".equals(st)) {
+                                acc.passedTests[i]++;
+                            }
+                            acc.statusCounts.get(i).merge(st, 1, Integer::sum);
+                        }
+                        if (statuses.contains("COMPILE_ERROR")) {
+                            acc.compileErrors++;
+                        }
+                        if (statuses.contains("NO_CODE")) {
+                            acc.noCode++;
+                        }
+                        if (statuses.contains("TIME_LIMIT")) {
+                            acc.timeouts++;
+                        }
+                        if (statuses.contains("RUNTIME_ERROR")) {
+                            acc.runtimeErrors++;
+                        }
+                    }
+                }
                 if (r.type() == QuestionType.MULTIPLE_CHOICE) {
                     for (OptionInfo o : r.options()) {
                         acc.options.putIfAbsent(o.sourceOptionId(), o);
@@ -168,6 +223,19 @@ public final class ItemAnalysisCalculator {
                 flags.add("UNUSED_DISTRACTOR");
             }
 
+            CodeStatDTO code = null;
+            if (a.type == QuestionType.CODING && a.testInfos != null) {
+                List<CodeTestStatDTO> tests = new ArrayList<>();
+                for (int i = 0; i < a.testInfos.size(); i++) {
+                    TestInfo info = a.testInfos.get(i);
+                    tests.add(new CodeTestStatDTO(i, info.visible(), info.inputs(), info.expected(),
+                            a.evaluated[i], a.passedTests[i],
+                            a.evaluated[i] == 0 ? null : round(a.passedTests[i] / (double) a.evaluated[i]),
+                            a.statusCounts.get(i)));
+                }
+                code = new CodeStatDTO(a.codeGraded, a.compileErrors, a.noCode, a.timeouts, a.runtimeErrors, tests);
+            }
+
             result.add(new ItemDTO(
                     e.getKey(), order, a.content, a.type, a.points,
                     a.attempts, a.answered,
@@ -176,7 +244,7 @@ public final class ItemAnalysisCalculator {
                     a.ratioCount == 0 ? null : round(a.fully / (double) a.ratioCount),
                     p == null ? null : round(p), diffLevel,
                     d == null ? null : round(d), discLevel,
-                    flags, options));
+                    flags, options, code));
         }
         return result;
     }

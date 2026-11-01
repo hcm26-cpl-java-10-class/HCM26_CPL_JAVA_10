@@ -165,6 +165,8 @@ export interface EssayGradingDetail {
   objectiveScore: number | null;
   finalScore?: number | null;
   alreadyGraded?: boolean;
+  /** Bài đã được sửa điểm tay: không cho chấm lại coding tự động. */
+  scoreAdjusted?: boolean;
   essays: EssayGradingItem[];
   codings?: CodingGradingItem[];
 }
@@ -179,6 +181,8 @@ export interface CodingGradingItem {
   score?: number | null;
   feedback?: string | null;
   spec?: CodeSpec | null;
+  /** null = đã có điểm; PENDING = đang chấm nền; RETRYING = máy chấm lỗi, tự thử lại; FAILED = hết lượt, cần chấm tay. */
+  autoGradeState?: "PENDING" | "RETRYING" | "FAILED" | null;
 }
 
 export interface CodingTestResult {

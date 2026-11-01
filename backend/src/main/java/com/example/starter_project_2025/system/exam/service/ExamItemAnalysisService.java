@@ -15,7 +15,10 @@ import com.example.starter_project_2025.system.exam.dto.ExamItemAnalysisDTO.Item
 import com.example.starter_project_2025.system.exam.service.ItemAnalysisCalculator.AttemptResponses;
 import com.example.starter_project_2025.system.exam.service.ItemAnalysisCalculator.ItemResponse;
 import com.example.starter_project_2025.system.exam.service.ItemAnalysisCalculator.OptionInfo;
+import com.example.starter_project_2025.system.exam.service.ItemAnalysisCalculator.TestInfo;
 import com.example.starter_project_2025.system.question.domain.QuestionType;
+import com.example.starter_project_2025.system.question.dto.CodeSpecDTO;
+import com.example.starter_project_2025.system.question.service.CodeSpecSupport;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
@@ -191,7 +194,18 @@ public class ExamItemAnalysisService {
         List<OptionInfo> options = q.getOptions().stream()
                 .map(o -> new OptionInfo(o.getSourceOptionId(), o.getContent(), o.isCorrect()))
                 .toList();
+        List<TestInfo> testInfos = null;
+        List<String> testStatuses = null;
+        if (q.getType() == QuestionType.CODING) {
+            CodeSpecDTO spec = CodeSpecSupport.fromJson(q.getCodeSpec());
+            if (spec != null && spec.getTests() != null) {
+                testInfos = spec.getTests().stream()
+                        .map(t -> new TestInfo(t.isVisible(), t.getInputs(), t.getExpected()))
+                        .toList();
+            }
+            testStatuses = answer == null ? null : CodingScoring.statuses(answer.getCodeResult());
+        }
         return new ItemResponse(q.getSourceQuestionId(), q.getContent(), q.getType(),
-                q.getPoints(), options, selected, answered, ratio);
+                q.getPoints(), options, selected, answered, ratio, testInfos, testStatuses);
     }
 }
