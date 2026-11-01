@@ -44,6 +44,7 @@ import {
   CircleAlert,
   ClipboardList,
   ArrowRightLeft,
+  ChevronDown,
   ListChecks,
   LoaderCircle,
   Plus,
@@ -337,6 +338,9 @@ export default function TeamAllocationPage() {
   const [roleAssignmentFailures, setRoleAssignmentFailures] =
     useState<Record<number, ApiFailure>>({});
   const [draftTeams, setDraftTeams] = useState<LocalDraftTeam[]>([]);
+  const [collapsedDraftTeamIds, setCollapsedDraftTeamIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [memberSearch, setMemberSearch] = useState("");
   const [memberPickerTeamId, setMemberPickerTeamId] = useState<string | null>(null);
   const [editingSavedTeamId, setEditingSavedTeamId] = useState<number | null>(null);
@@ -1058,6 +1062,7 @@ export default function TeamAllocationPage() {
       return;
     }
     const localId = crypto.randomUUID();
+    setCollapsedDraftTeamIds(new Set(draftTeams.map((team) => team.localId)));
     setDraftTeams((current) => [
       ...current,
       {
@@ -1071,6 +1076,27 @@ export default function TeamAllocationPage() {
     setMemberPickerTeamId(localId);
     setMemberSearch("");
     setSaveFailure(null);
+  };
+
+  const addDraftTeamWithCapacity = async () => {
+    if (!session) return;
+    if (editingSavedTeamId !== null) {
+      toast.error("Hãy lưu hoặc hủy chỉnh sửa nhóm trước khi thêm nhóm mới.");
+      return;
+    }
+    const maxMembers = Number(capacityInput);
+    if (!Number.isSafeInteger(maxMembers) || maxMembers <= 0) {
+      toast.error("Sức chứa phải là số nguyên dương.");
+      return;
+    }
+    if (maxMembers !== session.maxMembers) {
+      try {
+        await updateCapacityMutation.mutateAsync();
+      } catch {
+        return;
+      }
+    }
+    addDraftTeam();
   };
 
   const toggleMember = (teamId: string, memberId: number, checked: boolean) => {
@@ -1350,35 +1376,10 @@ export default function TeamAllocationPage() {
                   <span className="text-muted-foreground">Lớp #{session.classId}</span>
                   {teamsQuery.isLoading && <LoaderCircle className="size-4 animate-spin text-muted-foreground" />}
                 </div>
-                <div className="flex flex-wrap items-end gap-3">
-                  <label className="block w-full max-w-xs space-y-1.5 text-sm font-medium">
-                    Sức chứa tối đa / nhóm
-                    <Input
-                      inputMode="numeric"
-                      min={1}
-                      type="number"
-                      value={capacityInput}
-                      onChange={(event) => setCapacityInput(event.target.value)}
-                      disabled={session.status !== "OPEN" || !hasPermission("PEO_TEAM_ALLOCATE")}
-                    />
-                  </label>
-                  <Button
-                    variant="outline"
-                    onClick={() => updateCapacityMutation.mutate()}
-                    disabled={
-                      session.status !== "OPEN" ||
-                      !hasPermission("PEO_TEAM_ALLOCATE") ||
-                      updateCapacityMutation.isPending ||
-                      !Number.isSafeInteger(Number(capacityInput)) ||
-                      Number(capacityInput) <= 0 ||
-                      Number(capacityInput) === session.maxMembers
-                    }
-                  >
-                    {updateCapacityMutation.isPending
-                      ? <LoaderCircle className="size-4 animate-spin" />
-                      : null}
-                    Cập nhật sức chứa
-                  </Button>
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  <span className="text-muted-foreground">
+                    Sức chứa hiện tại: <strong className="text-foreground">{session.maxMembers}</strong> học viên/nhóm
+                  </span>
                   {session.status === "OPEN" && (
                     <Button
                       variant="destructive"
@@ -1520,21 +1521,44 @@ export default function TeamAllocationPage() {
 
             <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.7fr)]">
               <Card className={saveFailure?.status === 422 ? "border-destructive" : ""}>
-                <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
+                <CardHeader className="flex flex-col gap-4">
                   <div className="space-y-1.5">
                     <CardTitle>Tạo nhóm nháp</CardTitle>
                     <CardDescription>
-                      Mỗi nhóm cần ít nhất một học viên. Có thể lưu nhiều nhóm trong một lần.
+                      Cấu hình sức chứa và thêm nhóm tại đây. Nhóm đã nhập sẽ tự thu gọn để dễ quản lý.
                     </CardDescription>
                   </div>
-                  <Button
-                    variant="outline"
-                    onClick={addDraftTeam}
-                        disabled={!hasPermission("PEO_TEAM_ALLOCATE") || session.status !== "OPEN"}
-                  >
-                    <Plus className="size-4" />
-                    Thêm nhóm
-                  </Button>
+                  <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/30 p-3">
+                    <label className="block w-full max-w-xs space-y-1.5 text-sm font-medium">
+                      Sức chứa tối đa / nhóm
+                      <Input
+                        inputMode="numeric"
+                        min={1}
+                        type="number"
+                        value={capacityInput}
+                        onChange={(event) => setCapacityInput(event.target.value)}
+                        disabled={session.status !== "OPEN" || !hasPermission("PEO_TEAM_ALLOCATE")}
+                      />
+                    </label>
+                    <Button
+                      onClick={() => void addDraftTeamWithCapacity()}
+                      disabled={
+                        !hasPermission("PEO_TEAM_ALLOCATE") ||
+                        session.status !== "OPEN" ||
+                        updateCapacityMutation.isPending ||
+                        saveDraftMutation.isPending ||
+                        !Number.isSafeInteger(Number(capacityInput)) ||
+                        Number(capacityInput) <= 0
+                      }
+                    >
+                      {updateCapacityMutation.isPending
+                        ? <LoaderCircle className="size-4 animate-spin" />
+                        : <Plus className="size-4" />}
+                      {Number(capacityInput) !== session.maxMembers
+                        ? "Cập nhật & thêm nhóm"
+                        : "Thêm nhóm"}
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {saveFailure && (
@@ -1566,162 +1590,207 @@ export default function TeamAllocationPage() {
                       </Button>
                     </div>
                   ) : (
-                    <div className="space-y-4">
-                      {draftTeams.length === 0 ? (
-                        <div className="rounded-xl border border-dashed px-5 py-10 text-center">
-                          <UsersRound className="mx-auto size-9 text-muted-foreground" />
-                          <p className="mt-3 font-medium">Chưa có nhóm nháp</p>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            Thêm nhóm để bắt đầu chọn học viên.
-                          </p>
-                        </div>
-                      ) : draftTeams.map((team, teamIndex) => (
-                        <article
-                          key={team.localId}
-                          className={`rounded-xl border p-4 ${
-                            saveFailure?.memberId &&
-                            team.memberIds.includes(saveFailure.memberId)
-                              ? "border-destructive bg-destructive/5"
-                              : ""
-                          }`}
-                        >
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                            <label className="min-w-0 flex-1 space-y-1.5 text-sm font-medium">
-                              Tên nhóm
-                              <Input
-                                value={team.teamName}
-                                maxLength={255}
-                                onChange={(event) => {
-                                  setDraftTeams((current) => current.map((item) =>
-                                    item.localId === team.localId
-                                      ? { ...item, teamName: event.target.value }
-                                      : item,
-                                  ));
-                                  setSaveFailure(null);
-                                }}
-                              />
-                            </label>
-                            <div className={`flex items-center gap-2 text-sm ${
-                              team.memberIds.length > session.maxMembers
-                                ? "font-semibold text-destructive"
-                                : "text-muted-foreground"
-                            }`}>
-                              <Users className="size-4" />
-                              {team.memberIds.length}/{session.maxMembers}
-                            </div>
-                            <label className="mt-3 block max-w-md space-y-1.5 text-sm font-medium">
-                              Mentor phụ trách
-                              <select
-                                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                value={team.assignedMentorId ?? ""}
-                                disabled={mentorsQuery.isLoading}
-                                onChange={(event) => setDraftTeams((current) =>
-                                  current.map((item) => item.localId === team.localId
-                                    ? {
-                                        ...item,
-                                        assignedMentorId: event.target.value
-                                          ? Number(event.target.value)
-                                          : null,
-                                      }
-                                    : item),
-                                )}
-                              >
-                                <option value="">Chưa chọn Mentor</option>
-                                {(mentorsQuery.data ?? []).map((mentor) => (
-                                  <option key={mentor.mentorId} value={mentor.mentorId}>
-                                    {mentor.fullName}
-                                    {mentor.defaultMentor ? " · Mentor mặc định của lớp" : ""}
-                                  </option>
-                                ))}
-                              </select>
-                              {mentorsQuery.isError && (
-                                <span className="block text-xs font-normal text-destructive">
-                                  Không tải được danh sách Mentor của lớp.
-                                </span>
-                              )}
-                            </label>
-                          </div>
-                          {team.savedTeamId === undefined && (
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              size="sm"
-                              className="mt-3"
-                              aria-label={`Xóa nhóm nháp ${team.teamName || teamIndex + 1}`}
-                              onClick={() => {
-                                setDraftTeams((current) =>
-                                  current.filter((item) => item.localId !== team.localId),
-                                );
-                                if (memberPickerTeamId === team.localId) {
-                                  setMemberPickerTeamId(null);
-                                }
-                                setSaveFailure(null);
-                              }}
-                            >
-                              <Trash2 className="size-4" />
-                              Xóa nhóm nháp
-                            </Button>
-                          )}
-                          <Button
-                            className="mt-3"
-                            size="sm"
-                            variant={memberPickerTeamId === team.localId ? "default" : "outline"}
-                            onClick={() => {
-                              setMemberPickerTeamId((current) =>
-                                current === team.localId ? null : team.localId,
-                              );
-                              setMemberSearch("");
-                            }}
-                            disabled={!hasPermission("PEO_TEAM_ALLOCATE") || session.status !== "OPEN"}
-                          >
-                            <Users className="size-4" />
-                            {memberPickerTeamId === team.localId
-                              ? "Đang chọn học viên cho nhóm này"
-                              : "Chọn học viên cho nhóm này"}
-                          </Button>
-                          {team.memberIds.length > session.maxMembers && (
-                            <p className="mt-2 text-xs text-destructive">
-                              Vượt sức chứa tối đa {session.maxMembers}; danh sách chọn vẫn được giữ để bạn điều chỉnh.
+                    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(320px,1.1fr)]">
+                      <div className="space-y-3">
+                        {draftTeams.length === 0 ? (
+                          <div className="rounded-xl border border-dashed px-5 py-10 text-center">
+                            <UsersRound className="mx-auto size-9 text-muted-foreground" />
+                            <p className="mt-3 font-medium">Chưa có nhóm nháp</p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              Thêm nhóm để bắt đầu chọn học viên.
                             </p>
-                          )}
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {team.memberIds.length === 0 ? (
-                              <span className="text-xs text-muted-foreground">Chưa chọn học viên</span>
-                            ) : team.memberIds.map((memberId) => (
-                              <Badge
-                                key={memberId}
-                                variant="secondary"
-                                className={saveFailure?.memberId === memberId
-                                  ? "border-destructive text-destructive"
-                                  : ""}
-                              >
-                                {nameForMember(memberId)}
-                                <button
-                                  type="button"
-                                  aria-label={`Bỏ chọn ${nameForMember(memberId)}`}
-                                  className="ml-1 rounded-full hover:text-destructive"
-                                  onClick={() => toggleMember(team.localId, memberId, false)}
-                                >
-                                  <X className="size-3" />
-                                </button>
-                              </Badge>
-                            ))}
                           </div>
-                          {team.savedTeamId !== undefined && (
-                            <Button
-                              className="mt-3"
-                              size="sm"
-                              variant="outline"
-                              onClick={cancelDraftEditing}
+                        ) : draftTeams.map((team, teamIndex) => {
+                          const collapsed = collapsedDraftTeamIds.has(team.localId);
+                          const mentorName = mentorsQuery.data?.find(
+                            (mentor) => mentor.mentorId === team.assignedMentorId,
+                          )?.fullName;
+                          return (
+                            <article
+                              key={team.localId}
+                              className={`rounded-xl border p-3 ${
+                                saveFailure?.memberId &&
+                                team.memberIds.includes(saveFailure.memberId)
+                                  ? "border-destructive bg-destructive/5"
+                                  : ""
+                              }`}
                             >
-                              Hủy chỉnh sửa
-                            </Button>
-                          )}
-                        </article>
-                      ))}
+                              <button
+                                type="button"
+                                className="flex w-full items-center justify-between gap-3 text-left"
+                                aria-expanded={!collapsed}
+                                onClick={() => setCollapsedDraftTeamIds((current) => {
+                                  const next = new Set(current);
+                                  if (next.has(team.localId)) next.delete(team.localId);
+                                  else next.add(team.localId);
+                                  return next;
+                                })}
+                              >
+                                <span className="flex min-w-0 items-center gap-2">
+                                  <ChevronDown className={`size-4 shrink-0 transition-transform ${collapsed ? "-rotate-90" : ""}`} />
+                                  <span className="min-w-0">
+                                    <span className="block truncate text-sm font-semibold">
+                                      {team.teamName || `Nhóm ${teamIndex + 1}`}
+                                    </span>
+                                    <span className="block truncate text-xs text-muted-foreground">
+                                      {team.memberIds.length}/{session.maxMembers} thành viên
+                                      {mentorName ? ` · ${mentorName}` : ""}
+                                    </span>
+                                  </span>
+                                </span>
+                                <span className="shrink-0 text-xs text-muted-foreground">
+                                  {collapsed ? "Mở" : "Thu gọn"}
+                                </span>
+                              </button>
+                              {!collapsed && (
+                                <div className="mt-3 space-y-3 border-t pt-3">
+                                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                                    <label className="min-w-0 flex-1 space-y-1.5 text-sm font-medium">
+                                      Tên nhóm
+                                      <Input
+                                        value={team.teamName}
+                                        maxLength={255}
+                                        onChange={(event) => {
+                                          setDraftTeams((current) => current.map((item) =>
+                                            item.localId === team.localId
+                                              ? { ...item, teamName: event.target.value }
+                                              : item,
+                                          ));
+                                          setSaveFailure(null);
+                                        }}
+                                      />
+                                    </label>
+                                    <span className={`flex items-center gap-2 pb-2 text-sm ${
+                                      team.memberIds.length > session.maxMembers
+                                        ? "font-semibold text-destructive"
+                                        : "text-muted-foreground"
+                                    }`}>
+                                      <Users className="size-4" />
+                                      {team.memberIds.length}/{session.maxMembers}
+                                    </span>
+                                  </div>
+                                  <label className="block space-y-1.5 text-sm font-medium">
+                                    Mentor phụ trách
+                                    <select
+                                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                      value={team.assignedMentorId ?? ""}
+                                      disabled={mentorsQuery.isLoading}
+                                      onChange={(event) => {
+                                        const mentorId = event.target.value
+                                          ? Number(event.target.value)
+                                          : null;
+                                        setDraftTeams((current) => current.map((item, index) =>
+                                          item.localId === team.localId
+                                            ? { ...item, assignedMentorId: mentorId }
+                                            : index > teamIndex &&
+                                                mentorId !== null &&
+                                                item.assignedMentorId === null
+                                              ? { ...item, assignedMentorId: mentorId }
+                                              : item,
+                                        ));
+                                      }}
+                                    >
+                                      <option value="">Chưa chọn Mentor</option>
+                                      {(mentorsQuery.data ?? []).map((mentor) => (
+                                        <option key={mentor.mentorId} value={mentor.mentorId}>
+                                          {mentor.fullName}
+                                          {mentor.defaultMentor ? " · Mentor mặc định của lớp" : ""}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    {mentorsQuery.isError && (
+                                      <span className="block text-xs font-normal text-destructive">
+                                        Không tải được danh sách Mentor của lớp.
+                                      </span>
+                                    )}
+                                  </label>
+                                  <div className="flex flex-wrap gap-2">
+                                    {team.savedTeamId === undefined && (
+                                      <Button
+                                        type="button"
+                                        variant="destructive"
+                                        size="sm"
+                                        aria-label={`Xóa nhóm nháp ${team.teamName || teamIndex + 1}`}
+                                        onClick={() => {
+                                          setDraftTeams((current) =>
+                                            current.filter((item) => item.localId !== team.localId),
+                                          );
+                                          setCollapsedDraftTeamIds((current) => {
+                                            const next = new Set(current);
+                                            next.delete(team.localId);
+                                            return next;
+                                          });
+                                          if (memberPickerTeamId === team.localId) {
+                                            setMemberPickerTeamId(null);
+                                          }
+                                          setSaveFailure(null);
+                                        }}
+                                      >
+                                        <Trash2 className="size-4" />
+                                        Xóa nhóm
+                                      </Button>
+                                    )}
+                                    <Button
+                                      size="sm"
+                                      variant={memberPickerTeamId === team.localId ? "default" : "outline"}
+                                      onClick={() => {
+                                        setMemberPickerTeamId((current) =>
+                                          current === team.localId ? null : team.localId,
+                                        );
+                                        setMemberSearch("");
+                                      }}
+                                      disabled={!hasPermission("PEO_TEAM_ALLOCATE") || session.status !== "OPEN"}
+                                    >
+                                      <Users className="size-4" />
+                                      {memberPickerTeamId === team.localId
+                                        ? "Đang chọn học viên"
+                                        : "Chọn học viên"}
+                                    </Button>
+                                    {team.savedTeamId !== undefined && (
+                                      <Button size="sm" variant="outline" onClick={cancelDraftEditing}>
+                                        Hủy chỉnh sửa
+                                      </Button>
+                                    )}
+                                  </div>
+                                  {team.memberIds.length > session.maxMembers && (
+                                    <p className="text-xs text-destructive">
+                                      Vượt sức chứa tối đa {session.maxMembers}; danh sách chọn vẫn được giữ để bạn điều chỉnh.
+                                    </p>
+                                  )}
+                                  <div className="max-h-24 overflow-y-auto rounded-md border p-2">
+                                    <div className="flex flex-wrap gap-2">
+                                      {team.memberIds.length === 0 ? (
+                                        <span className="text-xs text-muted-foreground">Chưa chọn học viên</span>
+                                      ) : team.memberIds.map((memberId) => (
+                                        <Badge
+                                          key={memberId}
+                                          variant="secondary"
+                                          className={saveFailure?.memberId === memberId
+                                            ? "border-destructive text-destructive"
+                                            : ""}
+                                        >
+                                          {nameForMember(memberId)}
+                                          <button
+                                            type="button"
+                                            aria-label={`Bỏ chọn ${nameForMember(memberId)}`}
+                                            className="ml-1 rounded-full hover:text-destructive"
+                                            onClick={() => toggleMember(team.localId, memberId, false)}
+                                          >
+                                            <X className="size-3" />
+                                          </button>
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </article>
+                          );
+                        })}
+                      </div>
 
-                      {memberPickerTeam && (
-                        <div className="space-y-3 rounded-xl border border-primary/30 bg-muted/20 p-4">
+                      {memberPickerTeam ? (
+                        <div className="min-w-0 space-y-3 rounded-xl border border-primary/30 bg-muted/20 p-4">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div>
                               <h3 className="text-sm font-semibold">
@@ -1757,7 +1826,7 @@ export default function TeamAllocationPage() {
                                 : "Không tìm thấy học viên phù hợp."}
                             </p>
                           ) : (
-                            <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+                            <div className="max-h-[28rem] space-y-2 overflow-y-auto pr-1">
                               {filteredMembers.map((member) => {
                                 const selected = memberPickerTeam.memberIds.includes(member.memberId);
                                 const assignedToAnotherDraft =
@@ -1786,9 +1855,13 @@ export default function TeamAllocationPage() {
                             </div>
                           )}
                         </div>
+                      ) : (
+                        <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+                          Thêm nhóm hoặc chọn “Chọn học viên” ở một nhóm để mở danh sách sinh viên tại đây.
+                        </div>
                       )}
 
-                      <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+                      <div className="col-span-full flex flex-wrap items-center justify-between gap-3 border-t pt-4">
                         <p className="text-xs text-muted-foreground">
                           Nhóm vượt giới hạn sẽ được backend kiểm tra; form không bị xóa nếu phát sinh lỗi.
                         </p>
@@ -3012,9 +3085,16 @@ function SavedTeamCard({
     .join("");
   return (
     <>
+      <div className={team.status === "DRAFT"
+        ? "grid gap-3 rounded-xl border p-3 sm:grid-cols-[minmax(0,1fr)_minmax(220px,0.65fr)]"
+        : ""}>
       <button
         type="button"
-        className="flex w-full items-center justify-between gap-3 rounded-xl border p-4 text-left transition-colors hover:bg-muted/40"
+        className={`flex w-full items-center justify-between gap-3 text-left transition-colors hover:bg-muted/40 ${
+          team.status === "DRAFT"
+            ? "rounded-lg p-2"
+            : "rounded-xl border p-4"
+        }`}
         aria-label={`Xem chi tiết ${team.teamName}`}
         onClick={() => setDetailsOpen(true)}
       >
@@ -3042,6 +3122,25 @@ function SavedTeamCard({
           </span>
         </span>
       </button>
+      {team.status === "DRAFT" && (
+        <div className="min-w-0 rounded-lg border bg-muted/20 px-3 py-2">
+          <p className="mb-1 text-xs font-medium text-muted-foreground">
+            Thành viên ({team.memberIds.length})
+          </p>
+          {team.memberIds.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nhóm chưa có thành viên.</p>
+          ) : (
+            <ul className="max-h-28 divide-y overflow-y-auto pr-1">
+              {team.memberIds.map((memberId) => (
+                <li key={memberId} className="py-1 text-xs">
+                  {memberName(memberId)}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      </div>
       <Dialog open={detailsOpen} onOpenChange={(value) => {
         setDetailsOpen(value);
         if (!value) setPickerOpen(false);
