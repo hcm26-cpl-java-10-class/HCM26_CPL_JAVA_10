@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { USER_STATUS_DOT_CLASS, USER_STATUS_OPTIONS, type FieldSchema, type RelationConfig } from "@/types";
+import { GENDER_OPTIONS, USER_STATUS_DOT_CLASS, USER_STATUS_OPTIONS, type FieldSchema, type RelationConfig } from "@/types";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Save } from "lucide-react";
 import type { FormEvent, ReactNode } from "react";
@@ -115,6 +115,23 @@ export function UserForm({ mode, values, errors, submitting, onChange, onSubmit,
           </Field>
           <Field id="user-phone" label="Số điện thoại" errors={errors.phone}>
             {text("phone", "user-phone", "0901234567", "tel")}
+          </Field>
+          <Field id="user-dateOfBirth" label="Ngày sinh (yyyy-MM-dd)" required={mode === "create"} errors={errors.dateOfBirth}>
+            {text("dateOfBirth", "user-dateOfBirth", "2000-01-31")}
+          </Field>
+          <Field id="user-gender" label="Giới tính" required={mode === "create"} errors={errors.gender}>
+            <Select value={values.gender} onValueChange={(v) => onChange("gender", v as UserFormValues["gender"])}>
+              <SelectTrigger id="user-gender" className="w-full">
+                <SelectValue placeholder="Select gender" />
+              </SelectTrigger>
+              <SelectContent>
+                {GENDER_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
           <Field
             id="user-password"

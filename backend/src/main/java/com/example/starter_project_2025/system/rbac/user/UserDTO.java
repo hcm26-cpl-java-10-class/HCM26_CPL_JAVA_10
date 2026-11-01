@@ -4,10 +4,12 @@ import com.example.starter_project_2025.base.crud.dto.BaseDTO;
 import com.example.starter_project_2025.base.crud.dto.OnCreate;
 import com.example.starter_project_2025.base.crud.dto.OnUpdate;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import jakarta.validation.constraints.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.time.LocalDate;
 import java.util.Set;
 import java.util.UUID;
 
@@ -32,6 +34,14 @@ public class UserDTO extends BaseDTO {
 
     @Size(max = 500, groups = {OnCreate.class, OnUpdate.class}, message = "Description must not exceed 500 characters")
     String description;
+
+    @NotNull(groups = OnCreate.class, message = "Date of birth is required")
+    @Past(groups = {OnCreate.class, OnUpdate.class}, message = "Date of birth must be in the past")
+    @JsonDeserialize(using = FlexibleDateDeserializer.class)
+    LocalDate dateOfBirth;
+
+    @NotNull(groups = OnCreate.class, message = "Gender is required")
+    Gender gender;
 
     /** Initial password set by the administrator (no email is sent). Strength is checked by PasswordPolicy. Blank on update = keep the current password. */
     @NotBlank(groups = OnCreate.class, message = "Password is required")

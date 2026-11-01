@@ -15,6 +15,9 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -86,7 +89,11 @@ public class ExcelParser implements FileParser {
         return rows;
     }
 
-    
+    /**
+     * Text of a cell as the user typed it: numbers without ".0" or exponent notation (a phone number
+     * stored as a number used to come out as "9.01234567E8"), formulas evaluated, text trimmed, date cells as
+     * ISO text.
+     */
     private String getCellValue(Cell cell, DataFormatter formatter, FormulaEvaluator evaluator) {
         if (cell == null) return null;
 
@@ -119,7 +126,16 @@ public class ExcelParser implements FileParser {
 
     private String numberText(Cell cell, double number, DataFormatter formatter) {
         if (DateUtil.isCellDateFormatted(cell)) {
-            return blankToNull(formatter.formatCellValue(cell));
+            if (!DateUtil.isValidExcelDate(number)) {
+                return blankToNull(formatter.formatCellValue(cell));
+            }
+            // ISO text, independent of the cell's display format: yyyy-MM-dd, or yyyy-MM-ddTHH:mm when the
+            // cell has a time of day. The display text ("1/15/00", "15/01/2000") is ambiguous.
+            LocalDateTime dateTime = DateUtil.getJavaDate(number).toInstant()
+                    .atZone(ZoneId.systemDefault()).toLocalDateTime();
+            return dateTime.toLocalTime().equals(LocalTime.MIDNIGHT)
+                    ? dateTime.toLocalDate().toString()
+                    : dateTime.toString();
         }
         return BigDecimal.valueOf(number).stripTrailingZeros().toPlainString();
     }

@@ -1,4 +1,4 @@
-import type { UserDTO } from "@/types";
+import type { Gender, UserDTO } from "@/types";
 
 export type UserFormValues = {
   firstName: string;
@@ -7,6 +7,8 @@ export type UserFormValues = {
   email: string;
   employeeCode: string;
   phone: string;
+  dateOfBirth: string;
+  gender: Gender | "";
   password: string;
   confirmPassword: string;
   description: string;
@@ -24,6 +26,8 @@ export const emptyUserForm: UserFormValues = {
   email: "",
   employeeCode: "",
   phone: "",
+  dateOfBirth: "",
+  gender: "",
   password: "",
   confirmPassword: "",
   description: "",
@@ -41,6 +45,8 @@ export function toFormValues(dto?: UserDTO): UserFormValues {
     email: dto.email ?? "",
     employeeCode: dto.employeeCode ?? "",
     phone: dto.phone ?? "",
+    dateOfBirth: dto.dateOfBirth ?? "",
+    gender: dto.gender ?? "",
     password: "",
     confirmPassword: "",
     description: dto.description ?? "",
@@ -53,6 +59,22 @@ export function toFormValues(dto?: UserDTO): UserFormValues {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const USERNAME_RE = /^[A-Za-z0-9._-]{3,50}$/;
 const PHONE_RE = /^(\+?\d{8,15})$/;
+
+/** True for a real calendar date written as yyyy-MM-dd; month and day may omit the leading zero (2000-1-5). */
+function isValidIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{1,2}-\d{1,2}$/.test(value)) return false;
+  const [y, m, d] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+}
+
+/** 2000-1-5 -> 2000-01-05, the form the backend reads. Anything else is returned as it is. */
+function normalizeIsoDate(value: string): string | undefined {
+  const text = value.trim();
+  if (!text) return undefined;
+  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(text);
+  return m ? `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}` : text;
+}
 
 /** Validate phía client; trả về lỗi theo từng trường (rỗng = hợp lệ). */
 export function validateUserForm(v: UserFormValues, mode: "create" | "edit"): FieldErrors {
@@ -68,6 +90,14 @@ export function validateUserForm(v: UserFormValues, mode: "create" | "edit"): Fi
   if (!v.employeeCode.trim()) add("employeeCode", "Mã nhân viên là bắt buộc");
   if (v.phone.trim() && !PHONE_RE.test(v.phone.replace(/[\s.-]/g, "")))
     add("phone", "Số điện thoại không hợp lệ");
+  // Bắt buộc khi tạo mới. Khi sửa, để trống = giữ nguyên giá trị cũ.
+  const dob = v.dateOfBirth.trim();
+  if (!dob) {
+    if (mode === "create") add("dateOfBirth", "Ngày sinh là bắt buộc");
+  } else if (!isValidIsoDate(dob)) add("dateOfBirth", "Ngày sinh phải theo định dạng yyyy-MM-dd, ví dụ 2000-01-31");
+  else if (normalizeIsoDate(dob)! > new Date().toISOString().slice(0, 10))
+    add("dateOfBirth", "Ngày sinh không được ở tương lai");
+  if (!v.gender && mode === "create") add("gender", "Giới tính là bắt buộc");
 
   if (mode === "create" && !v.password) add("password", "Mật khẩu là bắt buộc");
   if (v.password && v.password.length < 8) add("password", "Mật khẩu tối thiểu 8 ký tự");
@@ -86,6 +116,8 @@ export function toPayload(v: UserFormValues, mode: "create" | "edit"): UserDTO {
     email: v.email.trim(),
     employeeCode: v.employeeCode.trim(),
     phone: v.phone.trim(),
+    dateOfBirth: normalizeIsoDate(v.dateOfBirth),
+    gender: v.gender || undefined,
     description: v.description.trim(),
     status: v.status,
     // INACTIVE mới là isActive=false; LOCKED = isActive true + locked true (BE xử lý theo status).

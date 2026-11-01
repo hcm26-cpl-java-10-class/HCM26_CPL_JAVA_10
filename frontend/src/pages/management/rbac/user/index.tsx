@@ -3,6 +3,7 @@ import { departmentApi } from "@/api/features/rbac/department.api";
 import { roleApi } from "@/api/features/rbac/role.api";
 import {
   auditableFieldsSchema,
+  GENDER_OPTIONS,
   type EntityConfig,
   type EntitySchema,
   type FieldSchema,
@@ -131,6 +132,37 @@ const userSchema: EntitySchema = {
       },
       filterable: true,
       filterType: "select",
+    },
+    {
+      name: "dateOfBirth",
+      label: "Date of Birth",
+      type: "text",
+      visible: false,
+      validation: {
+        requiredOnCreate: true,
+        pattern: /^\d{4}-\d{1,2}-\d{1,2}$/,
+        patternMessage: "Use the format yyyy-MM-dd, for example 2000-01-31.",
+        placeholder: "2000-01-31",
+        validate: (value) => {
+          const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(value ?? "").trim());
+          if (!m) return undefined; // an empty value or a wrong format is reported by the rules above
+          const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+          const date = new Date(Date.UTC(y, mo - 1, d));
+          if (date.getUTCFullYear() !== y || date.getUTCMonth() !== mo - 1 || date.getUTCDate() !== d)
+            return "This date does not exist.";
+          const iso = `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+          if (iso > new Date().toISOString().slice(0, 10)) return "Date of birth cannot be in the future.";
+          return undefined;
+        },
+      },
+    },
+    {
+      name: "gender",
+      label: "Gender",
+      type: "select",
+      options: GENDER_OPTIONS,
+      visible: false,
+      validation: { requiredOnCreate: true },
     },
     {
       name: "description",

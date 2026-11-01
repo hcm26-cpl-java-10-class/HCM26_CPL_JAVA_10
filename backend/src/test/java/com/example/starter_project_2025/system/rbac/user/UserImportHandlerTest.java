@@ -1,8 +1,11 @@
 package com.example.starter_project_2025.system.rbac.user;
 
+import com.example.starter_project_2025.base.dataio.importer.annotation.ImportField;
+import com.example.starter_project_2025.base.dataio.importer.resolver.RelationLookupEngine;
 import com.example.starter_project_2025.base.dataio.importer.result.ImportResult;
 import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenService;
 import com.example.starter_project_2025.system.auth.util.PasswordPolicy;
+import com.example.starter_project_2025.system.rbac.department.Department;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,6 +15,8 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.lang.reflect.Field;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -21,6 +26,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -30,7 +36,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Import rules for users: new/existing account x password filled/empty, duplicates, permissions,
- * and the guarantee that no email contains a password.
+ * changes to roles/departments/profile of existing accounts, and the guarantee that no email
+ * contains a password.
  */
 class UserImportHandlerTest {
 
@@ -49,6 +56,43 @@ class UserImportHandlerTest {
                 throw new IllegalStateException("Authentication failed");
             }
             sent.add("changed:" + user.getEmail());
+        }
+    }
+
+    private static final Map<String, Long> ROLE_IDS = Map.of("STUDENT", 1L, "TEACHER", 2L);
+    private static final Map<String, Long> DEPARTMENT_IDS = Map.of("IT", 10L, "HR", 11L);
+
+    /** Stands in for the database lookup of roles (by name) and departments (by code). */
+    static class FakeRelations extends RelationLookupEngine {
+        FakeRelations() {
+            super(null);
+        }
+
+        @Override
+        public Object resolve(String raw, Field field, ImportField meta) {
+            if (raw == null || raw.isBlank()) {
+                return null;
+            }
+            boolean roles = field.getName().equals("roles");
+            Map<String, Long> known = roles ? ROLE_IDS : DEPARTMENT_IDS;
+
+            Set<Object> result = new HashSet<>();
+            for (String value : raw.split(meta.separator())) {
+                Long id = known.get(value.trim());
+                if (id == null) {
+                    throw new RuntimeException("Not found: " + meta.lookupField() + " = '" + value.trim() + "'");
+                }
+                if (roles) {
+                    Role role = new Role();
+                    role.setId(id);
+                    result.add(role);
+                } else {
+                    Department department = new Department();
+                    department.setId(id);
+                    result.add(department);
+                }
+            }
+            return result;
         }
     }
 
@@ -79,7 +123,7 @@ class UserImportHandlerTest {
                     return null;
                 }));
 
-        handler = new UserImportHandler(users, encoder, mail, sessions);
+        handler = new UserImportHandler(users, encoder, mail, sessions, new FakeRelations());
         grant("USER_CREATE", "USER_UPDATE");
     }
 
@@ -104,6 +148,8 @@ class UserImportHandlerTest {
         row.put("Email", email);
         row.put("First Name", "Test");
         row.put("Roles", "STUDENT");
+        row.put("Date of Birth", "2000-01-31");
+        row.put("Gender", "Male");
         if (password != null) {
             row.put("Password", password);
         }
@@ -114,7 +160,14 @@ class UserImportHandlerTest {
         User user = new User();
         user.setId(7L);
         user.setEmail(email);
-        user.setFirstName("Old");
+        user.setFirstName("Test"); // same as the default row, so a row differs only where a test makes it differ
+        Role student = new Role();
+        student.setId(ROLE_IDS.get("STUDENT"));
+        Set<Role> roles = new HashSet<>();
+        roles.add(student);
+        user.setRoles(roles);
+        user.setDateOfBirth(LocalDate.of(2000, 1, 31)); // same as the default row
+        user.setGender(Gender.MALE);
         user.setPasswordHash(oldHash);
         user.setIsActive(true);
         user.setLocked(false);
@@ -420,5 +473,283 @@ class UserImportHandlerTest {
         assertEquals("HASH:Hoa12345", a.getPasswordHash());
         assertEquals("HASH:Hoa12345", b.getPasswordHash());
         assertEquals("HASH:Hoa12345", c.getPasswordHash());
+    }
+
+    // ---------------------------------------------------------------- existing accounts: other columns
+
+    private static Map<String, String> rowWith(String email, String column, String value) {
+        Map<String, String> row = row(email, null);
+        row.put(column, value);
+        return row;
+    }
+
+    private static Set<Long> roleIds(User user) {
+        return user.getRoles().stream().map(Role::getId).collect(Collectors.toSet());
+    }
+
+    private static Set<Long> departmentIds(User user) {
+        return user.getDepartments().stream().map(Department::getId).collect(Collectors.toSet());
+    }
+
+    @Test
+    void existingAccountWithoutPassword_butDifferentRole_isUpdated_counted_andNoEmail() {
+        User user = existing("old@example.com", "HASH:before");
+
+        ImportResult result = run(rowWith("old@example.com", "Roles", "TEACHER"));
+
+        assertEquals(1, result.getUpdatedCount());
+        assertEquals(1, result.getSuccessCount());
+        assertEquals(0, result.getSkippedCount());
+        assertEquals(Set.of(2L), roleIds(user)); // the file's list replaces the old one
+        assertEquals("HASH:before", user.getPasswordHash()); // the password is untouched
+        assertTrue(mail.sent.isEmpty());
+        assertTrue(revokedSessions.isEmpty());
+    }
+
+    @Test
+    void existingAccountWithDifferentDepartments_isUpdated_andTheSameFileAgainIsUnchanged() {
+        User user = existing("old@example.com", "HASH:before");
+        Map<String, String> row = rowWith("old@example.com", "Departments", "IT,HR");
+
+        ImportResult first = run(row);
+
+        assertEquals(1, first.getUpdatedCount());
+        assertEquals(Set.of(10L, 11L), departmentIds(user));
+
+        ImportResult second = run(rowWith("old@example.com", "Departments", "HR,IT"));
+
+        assertEquals(0, second.getUpdatedCount());
+        assertEquals(1, second.getSkippedCount());
+    }
+
+    @Test
+    void existingAccountWithDifferentProfile_isUpdated() {
+        User user = existing("old@example.com", "HASH:before");
+        Map<String, String> row = row("old@example.com", null);
+        row.put("First Name", "Changed");
+        row.put("Last Name", "Name");
+        row.put("Phone", "090 123 4567");
+        row.put("Date of Birth", "2000-01-31");
+        row.put("Gender", "Female");
+
+        ImportResult result = run(row);
+
+        assertEquals(1, result.getUpdatedCount());
+        assertEquals("Changed", user.getFirstName());
+        assertEquals("Name", user.getLastName());
+        assertEquals("0901234567", user.getPhone());
+        assertEquals(LocalDate.of(2000, 1, 31), user.getDateOfBirth());
+        assertEquals(Gender.FEMALE, user.getGender());
+    }
+
+    @Test
+    void existingAccountWithTheSameDateOfBirthAndGender_isUnchanged() {
+        User user = existing("old@example.com", "HASH:before");
+        user.setDateOfBirth(LocalDate.of(2000, 1, 31));
+        user.setGender(Gender.MALE);
+        Map<String, String> row = row("old@example.com", null);
+        row.put("Date of Birth", "2000-01-31");
+        row.put("Gender", "Male");
+
+        ImportResult result = run(row);
+
+        assertEquals(1, result.getSkippedCount());
+        assertEquals(0, result.getUpdatedCount());
+    }
+
+    @Test
+    void aBlankCell_keepsTheCurrentValue() {
+        User user = existing("old@example.com", "HASH:before");
+        user.setDateOfBirth(LocalDate.of(2000, 1, 31));
+        user.setGender(Gender.MALE);
+        Map<String, String> row = row("old@example.com", null);
+        row.put("Date of Birth", "");
+        row.put("Gender", " ");
+
+        ImportResult result = run(row);
+
+        assertEquals(1, result.getSkippedCount());
+        assertEquals(LocalDate.of(2000, 1, 31), user.getDateOfBirth());
+        assertEquals(Gender.MALE, user.getGender());
+    }
+
+    @Test
+    void withoutUpdatePermission_aChangeToAnExistingAccountIsRejected() {
+        User user = existing("old@example.com", "HASH:before");
+        grant("USER_CREATE");
+
+        ImportResult result = run(rowWith("old@example.com", "Roles", "TEACHER"));
+
+        assertEquals(1, result.getFailureCount());
+        assertTrue(result.getErrors().get(0).getMessage().contains("permission"));
+        assertEquals(Set.of(1L), roleIds(user));
+    }
+
+    @Test
+    void anUnknownRole_rejectsTheRow_andChangesNothing() {
+        User user = existing("old@example.com", "HASH:before");
+
+        ImportResult result = run(rowWith("old@example.com", "Roles", "NOPE"));
+
+        assertEquals(1, result.getFailureCount());
+        assertEquals(0, result.getUpdatedCount());
+        assertTrue(result.getErrors().get(0).getMessage().contains("NOPE"));
+        assertEquals(Set.of(1L), roleIds(user));
+    }
+
+    // ---------------------------------------------------------------- date of birth and gender
+
+    @Test
+    void dateOfBirthAndGender_areNormalisedForTheMapper() {
+        Map<String, String> row = row("new@example.com", "Hoa12345");
+        row.put("Date of Birth", "1999-03-05");
+        row.put("Gender", "male");
+
+        ImportResult result = run(row);
+
+        assertEquals(1, result.getSuccessCount());
+        assertEquals("1999-03-05", row.get("Date of Birth"));
+        assertEquals("MALE", row.get("Gender"));
+    }
+
+    @Test
+    void anIsoDateWithATimePart_isAccepted() {
+        Map<String, String> row = row("new@example.com", "Hoa12345");
+        row.put("Date of Birth", "1999-03-05T00:00");
+
+        ImportResult result = run(row);
+
+        assertEquals(1, result.getSuccessCount());
+        assertEquals("1999-03-05", row.get("Date of Birth"));
+    }
+
+    @Test
+    void anInvalidDateOfBirth_isRejectedOnItsRow() {
+        ImportResult result = run(rowWith("new@example.com", "Date of Birth", "31-13-2000"));
+
+        assertEquals(1, result.getFailureCount());
+        assertTrue(result.getErrors().get(0).getMessage().contains("Date of Birth"));
+    }
+
+    @Test
+    void aDateOfBirthInTheFuture_isRejectedOnItsRow() {
+        ImportResult result = run(rowWith("new@example.com", "Date of Birth",
+                LocalDate.now().plusDays(1).toString()));
+
+        assertEquals(1, result.getFailureCount());
+        assertTrue(result.getErrors().get(0).getMessage().contains("future"));
+    }
+
+    @Test
+    void anInvalidGender_isRejectedOnItsRow() {
+        ImportResult result = run(rowWith("new@example.com", "Gender", "robot"));
+
+        assertEquals(1, result.getFailureCount());
+        assertTrue(result.getErrors().get(0).getMessage().contains("Gender"));
+    }
+
+    @Test
+    void aDayFirstDate_isRejected_theFormatIsYyyyMmDd() {
+        ImportResult result = run(rowWith("new@example.com", "Date of Birth", "31/01/2000"));
+
+        assertEquals(1, result.getFailureCount());
+        assertTrue(result.getErrors().get(0).getMessage().contains("yyyy-MM-dd"));
+    }
+
+    @Test
+    void aVietnameseGenderName_isRejected_genderIsEnglish() {
+        ImportResult result = run(rowWith("new@example.com", "Gender", "Nam"));
+
+        assertEquals(1, result.getFailureCount());
+        assertTrue(result.getErrors().get(0).getMessage().contains("Male, Female or Other"));
+    }
+
+    @Test
+    void genderNames_areEnglishAndNotCaseSensitive() {
+        Map<String, String> female = rowWith("a@example.com", "Gender", "FEMALE");
+        Map<String, String> other = rowWith("b@example.com", "Gender", "other");
+
+        ImportResult result = run(List.of(female, other));
+
+        assertEquals(2, result.getSuccessCount());
+        assertEquals("FEMALE", female.get("Gender"));
+        assertEquals("OTHER", other.get("Gender"));
+    }
+
+    @Test
+    void aLeapDay_isAcceptedOnlyInALeapYear() {
+        Map<String, String> leap = rowWith("a@example.com", "Date of Birth", "2000-02-29");
+
+        ImportResult accepted = run(leap);
+
+        assertEquals(1, accepted.getSuccessCount());
+        assertEquals("2000-02-29", leap.get("Date of Birth"));
+
+        ImportResult rejected = run(rowWith("b@example.com", "Date of Birth", "2001-02-29"));
+
+        assertEquals(1, rejected.getFailureCount());
+    }
+
+    @Test
+    void datesThatDoNotExist_areRejected() {
+        for (String date : List.of("2000-01-32", "2000-02-30", "2000-04-31", "2000-13-01", "1900-02-29")) {
+            ImportResult result = run(rowWith("new@example.com", "Date of Birth", date));
+
+            assertEquals(1, result.getFailureCount(), date);
+            assertTrue(result.getErrors().get(0).getMessage().contains("yyyy-MM-dd"), date);
+        }
+    }
+
+    // ---------------------------------------------------------------- date of birth and gender are required
+
+    @Test
+    void aNewAccountWithoutDateOfBirth_isRejected() {
+        Map<String, String> row = row("new@example.com", "Hoa12345");
+        row.remove("Date of Birth");
+
+        ImportResult result = run(row);
+
+        assertEquals(1, result.getFailureCount());
+        assertEquals("Date of Birth is required", result.getErrors().get(0).getMessage());
+    }
+
+    @Test
+    void aNewAccountWithABlankGender_isRejected() {
+        ImportResult result = run(rowWith("new@example.com", "Gender", " "));
+
+        assertEquals(1, result.getFailureCount());
+        assertEquals("Gender is required", result.getErrors().get(0).getMessage());
+    }
+
+    @Test
+    void anExistingAccount_mayLeaveBothColumnsOutOfTheFile_andKeepsItsValues() {
+        User user = existing("old@example.com", "HASH:before");
+        Map<String, String> row = row("old@example.com", null);
+        row.remove("Date of Birth");
+        row.remove("Gender");
+
+        ImportResult result = run(row);
+
+        assertEquals(1, result.getSkippedCount());
+        assertEquals(0, result.getFailureCount());
+        assertEquals(LocalDate.of(2000, 1, 31), user.getDateOfBirth());
+        assertEquals(Gender.MALE, user.getGender());
+    }
+
+    @Test
+    void aMonthAndDayWithoutTheLeadingZero_areAccepted_andNormalised() {
+        Map<String, String> row = rowWith("new@example.com", "Date of Birth", "2000-1-5");
+
+        ImportResult result = run(row);
+
+        assertEquals(1, result.getSuccessCount());
+        assertEquals("2000-01-05", row.get("Date of Birth"));
+    }
+
+    @Test
+    void tooManyDigitsInTheMonthOrDay_areRejected() {
+        ImportResult result = run(rowWith("new@example.com", "Date of Birth", "2000-001-5"));
+
+        assertEquals(1, result.getFailureCount());
     }
 }

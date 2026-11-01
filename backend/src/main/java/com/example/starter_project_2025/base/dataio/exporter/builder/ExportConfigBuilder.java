@@ -35,7 +35,8 @@ public class ExportConfigBuilder {
         List<ExportColumn<T>> columns = fields.stream()
                 .map(f -> new ExportColumn<T>(
                         f.header(),
-                        obj -> resolver.resolve(obj, f)
+                        obj -> resolver.resolve(obj, f),
+                        f.hint()
                 ))
                 .toList();
 

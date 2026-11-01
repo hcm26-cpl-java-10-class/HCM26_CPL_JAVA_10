@@ -5,12 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { USER_STATUS_HEADER_CLASS, type UserStatus } from "@/types";
+import { GENDER_OPTIONS, USER_STATUS_HEADER_CLASS, type UserStatus } from "@/types";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   AtSign,
   Building2,
+  Cake,
   CalendarDays,
   Clock,
   FileText,
@@ -18,6 +19,7 @@ import {
   Mail,
   PenSquare,
   Phone,
+  UserRound,
   ShieldCheck,
 } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
@@ -198,6 +200,12 @@ export function UserDetailPage() {
                   </InfoRow>
                   <InfoRow icon={Phone} label="Số điện thoại">
                     {user?.phone}
+                  </InfoRow>
+                  <InfoRow icon={Cake} label="Ngày sinh">
+                    {user?.dateOfBirth}
+                  </InfoRow>
+                  <InfoRow icon={UserRound} label="Giới tính">
+                    {GENDER_OPTIONS.find((o) => o.value === user?.gender)?.label}
                   </InfoRow>
                   <InfoRow icon={Building2} label="Phòng ban" className="sm:col-span-2">
                     {deptNames.length > 0 ? <BadgeGroup names={deptNames} /> : null}
