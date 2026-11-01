@@ -85,6 +85,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> {
                     auth.requestMatchers(PUBLIC_ENDPOINTS).permitAll();
                     auth.requestMatchers(HttpMethod.GET, "/api/lesson-audio/**").permitAll();
+                    auth.requestMatchers(HttpMethod.GET, "/api/lesson-documents/**").permitAll();
                     auth.anyRequest().authenticated();
                 })
                 .exceptionHandling(ex -> ex

@@ -16,6 +16,13 @@ export const certificateApi = Object.assign({}, base, {
     return response.data;
   },
 
+  getByEnrollment: async (enrollmentId: number): Promise<CertificateDTO> => {
+    const response = await axiosInstance.get<CertificateDTO>(
+      `${path}/enrollment/${enrollmentId}`
+    );
+    return response.data;
+  },
+
   verify: async (verificationToken: string): Promise<CertificateDTO> => {
     const response = await axiosInstance.get<CertificateDTO>(
       `${path}/verify/${encodeURIComponent(verificationToken)}`

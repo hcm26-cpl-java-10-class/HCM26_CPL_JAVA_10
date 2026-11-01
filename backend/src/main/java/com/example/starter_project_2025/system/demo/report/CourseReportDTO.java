@@ -18,4 +18,12 @@ public class CourseReportDTO {
     private String courseStatus;
     private Long studentCount;
     private List<String> students;
+    private List<String> categories;
+    private String courseLevel;
+    private int averageProgress;
+    private long activeLearners;
+    private long completedLearners;
+    private int completionRate;
+    private long certificatesIssued;
+    private List<CourseLearnerReportDTO> learners;
 }

@@ -14,6 +14,8 @@ interface CourseCardProps {
   isEnrolling: boolean;
   canAssign: boolean;
   onEnroll: (courseId: number) => void;
+  disableNavigation?: boolean;
+  onSelect?: (course: CatalogCourse) => void;
 }
 
 export function CourseCard({
@@ -23,43 +25,97 @@ export function CourseCard({
   isEnrolling,
   canAssign,
   onEnroll,
+  disableNavigation = false,
+  onSelect,
 }: CourseCardProps) {
   const detailPath = `/courses/${course.id}`;
 
+  const handleSelect = () => {
+    if (disableNavigation && onSelect) {
+      onSelect(course);
+    }
+  };
+
+  const cardHeader = (
+    <div
+      className="relative h-44 overflow-hidden bg-gradient-to-br from-blue-100 via-indigo-100 to-violet-100"
+      onClick={disableNavigation ? handleSelect : undefined}
+      role={disableNavigation ? "button" : undefined}
+      tabIndex={disableNavigation ? 0 : undefined}
+      onKeyDown={
+        disableNavigation
+          ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                handleSelect();
+              }
+            }
+          : undefined
+      }
+    >
+      {course.thumbnailUrl ? (
+        <img
+          src={course.thumbnailUrl}
+          alt=""
+          loading="lazy"
+          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+        />
+      ) : (
+        <div className="flex h-full items-center justify-center">
+          <GraduationCap className="size-14 text-blue-900/25" />
+        </div>
+      )}
+      <Badge className="absolute left-3 top-3 bg-white/95 text-slate-800 hover:bg-white">
+        {course.categoryName || "Course"}
+      </Badge>
+      {course.enrolled && (
+        <Badge className="absolute right-3 top-3 bg-emerald-600 text-white hover:bg-emerald-600">
+          <CheckCircle2 className="size-3" /> Enrolled
+        </Badge>
+      )}
+    </div>
+  );
+
+  const titleContent = (
+    <h3
+      className="line-clamp-2 min-h-12 text-lg font-semibold leading-6"
+      onClick={disableNavigation ? handleSelect : undefined}
+      role={disableNavigation ? "button" : undefined}
+      tabIndex={disableNavigation ? 0 : undefined}
+      onKeyDown={
+        disableNavigation
+          ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                handleSelect();
+              }
+            }
+          : undefined
+      }
+    >
+      {course.name || "Untitled course"}
+    </h3>
+  );
+
   return (
     <article className="group flex flex-col overflow-hidden rounded-2xl border bg-card shadow-sm transition-shadow hover:shadow-lg">
-      <Link to={detailPath} className="block" aria-label={`View ${course.name}`}>
-        <div className="relative h-44 overflow-hidden bg-gradient-to-br from-blue-100 via-indigo-100 to-violet-100">
-          {course.thumbnailUrl ? (
-            <img
-              src={course.thumbnailUrl}
-              alt=""
-              loading="lazy"
-              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center">
-              <GraduationCap className="size-14 text-blue-900/25" />
-            </div>
-          )}
-          <Badge className="absolute left-3 top-3 bg-white/95 text-slate-800 hover:bg-white">
-            {course.categoryName || "Course"}
-          </Badge>
-          {course.enrolled && (
-            <Badge className="absolute right-3 top-3 bg-emerald-600 text-white hover:bg-emerald-600">
-              <CheckCircle2 className="size-3" /> Enrolled
-            </Badge>
-          )}
-        </div>
-      </Link>
+      {disableNavigation ? (
+        cardHeader
+      ) : (
+        <Link to={detailPath} className="block" aria-label={`View ${course.name}`}>
+          {cardHeader}
+        </Link>
+      )}
 
       <div className="flex flex-1 flex-col gap-3 p-5">
         <div>
-          <Link to={detailPath} className="hover:underline">
-            <h3 className="line-clamp-2 min-h-12 text-lg font-semibold leading-6">
-              {course.name || "Untitled course"}
-            </h3>
-          </Link>
+          {disableNavigation ? (
+            titleContent
+          ) : (
+            <Link to={detailPath} className="hover:underline">
+              {titleContent}
+            </Link>
+          )}
           <p className="mt-1 text-sm text-muted-foreground">{course.instructor || "Course instructor"}</p>
         </div>
 
@@ -90,9 +146,6 @@ export function CourseCard({
             </Button>
           ) : (
             <>
-              <Button asChild variant="outline" className="flex-1">
-                <Link to={detailPath}>View details</Link>
-              </Button>
               {!course.enrolled && canEnroll && (
                 <Button className="flex-1" disabled={isEnrolling} onClick={() => onEnroll(course.id)}>
                   {isEnrolling ? "Enrolling..." : "Enroll"}

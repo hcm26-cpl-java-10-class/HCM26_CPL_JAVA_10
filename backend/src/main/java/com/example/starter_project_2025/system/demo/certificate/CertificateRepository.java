@@ -14,6 +14,7 @@ import java.util.UUID;
 public interface CertificateRepository extends BaseCrudRepository<Certificate, Long> {
     boolean existsByUser_IdAndCourse_Id(Long userId, Long courseId);
     Optional<Certificate> findByVerificationToken(UUID verificationToken);
+    Optional<Certificate> findByUser_IdAndCourse_Id(Long userId, Long courseId);
     List<Certificate> findAllByUser_Id(Long userId);
 
     @Query("select c.user.id from Certificate c where c.course.id = :courseId")

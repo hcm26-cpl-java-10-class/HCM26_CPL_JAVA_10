@@ -233,7 +233,7 @@ export function CourseEnrollmentAssignmentDialog({
     >
       <DialogTrigger asChild>
         <Button type="button" variant="outline" className="flex-1">
-          Assign
+          Enroll
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">

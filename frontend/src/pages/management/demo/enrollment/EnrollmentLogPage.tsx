@@ -29,6 +29,8 @@ import {
     User,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { Navigate } from "react-router-dom";
+import { useAdminStudentPreview } from "@/pages/student/useAdminStudentPreview";
 
 const getStatusBadge = (status?: string | null) => {
     switch (status?.toUpperCase()) {
@@ -53,6 +55,7 @@ const formatDate = (value?: string | null) => {
 };
 
 export default function EnrollmentLogPage() {
+    const isAdminStudentPreview = useAdminStudentPreview();
     const [activeTab, setActiveTab] = useState<"ENROLLMENT" | "DEPARTMENT">("ENROLLMENT");
     const [search, setSearch] = useState("");
     const [status, setStatus] = useState("ALL");
@@ -119,6 +122,31 @@ export default function EnrollmentLogPage() {
         },
     ], [totalElements, activeTab]);
 
+    const handleExport = async () => {
+        const result = await enrollmentApi.getAuditLogs({
+            type: activeTab,
+            search: search || undefined,
+            status: status === "ALL" ? undefined : status,
+            source: source === "ALL" ? undefined : source,
+            fromDate: fromDate || undefined,
+            toDate: toDate || undefined,
+            page: 0,
+            size: 10_000,
+        });
+        const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+        const headers = ["Type", "Actor", "Actor email", "Target", "Course", "Department", "Source", "Status", "Progress", "Cancellation reason", "Timestamp", "Details"];
+        const lines = (result.content ?? []).map((row) => [row.type, row.actorName, row.actorEmail, row.targetName, row.courseName, row.departmentName, row.source, row.status, row.progressPercentage == null ? "" : `${row.progressPercentage}%`, row.cancellationReason, row.createdAt, row.detail].map(csvCell).join(","));
+        const blob = new Blob([[headers.map(csvCell).join(","), ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "enrollment-logs.csv";
+        link.click();
+        URL.revokeObjectURL(url);
+    };
+
+    if (isAdminStudentPreview) return <Navigate to="/courses" replace />;
+
     return (
         <MainLayout pathName={{ "enrollment-logs": "Enrollment Logs" }}>
             <div className="space-y-6">
@@ -128,7 +156,7 @@ export default function EnrollmentLogPage() {
                         <p className="text-xs font-semibold uppercase tracking-wider text-primary">System Audit Trail</p>
                         <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Enrollment Logs</h1>
                     </div>
-                    <Button variant="outline" className="shadow-sm">
+                    <Button variant="outline" className="shadow-sm" onClick={() => void handleExport()}>
                         <Download className="mr-2 size-4" /> Export CSV
                     </Button>
                 </div>
@@ -410,7 +438,7 @@ export default function EnrollmentLogPage() {
                 </div>
             </div>
 
-            {/* Modal Chi tiết */}
+            {/* Modal Chi tiáº¿t */}
             <Sheet open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
                 <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto p-6">
                     <SheetHeader className="border-b pb-4">
@@ -470,6 +498,16 @@ export default function EnrollmentLogPage() {
                                 <span className="text-xs font-semibold text-foreground">Action Narrative</span>
                                 <p className="text-xs leading-relaxed text-muted-foreground">{selected.detail ?? "No detail logged."}</p>
                             </div>
+
+                            {selected.status === "DROPPED" && (
+                                <div className="rounded-lg border bg-muted/20 p-4 text-xs">
+                                    <p className="font-semibold text-foreground">Cancellation details</p>
+                                    <div className="mt-3 grid grid-cols-2 gap-3">
+                                        <div><span className="text-muted-foreground">Progress at cancellation:</span><p className="mt-0.5 font-medium text-foreground">{selected.progressPercentage ?? 0}%</p></div>
+                                        <div><span className="text-muted-foreground">Reason:</span><p className="mt-0.5 font-medium text-foreground">{selected.cancellationReason || "No reason recorded"}</p></div>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="flex items-center justify-between rounded-lg border p-3 text-xs text-muted-foreground">
                                 <span className="flex items-center gap-1.5">

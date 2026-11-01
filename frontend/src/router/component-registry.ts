@@ -208,7 +208,7 @@ export const routes: RouteConfig[] = [
 
   // COURSE REPORT
   {
-    path: "/course-report",
+    path: "/course-enrollments",
     component: CourseReportPage,
     requiredPermission: "COURSE_REPORT_READ",
     isModuleDriven: true,

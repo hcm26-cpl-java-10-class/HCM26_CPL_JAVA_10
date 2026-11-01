@@ -30,7 +30,10 @@ export function SidebarMenu() {
                 id: group.id ?? group.name ?? "group",
                 name: group.name ?? "Menu",
                 items: group.modules
-                    .filter((module) => !!module.url && module.url.replace(/\/+$/, "") !== "/enrollments")
+                    .filter((module) => {
+                        const url = module.url?.replace(/\/+$/, "") ?? "";
+                        return !!module.url && url !== "/enrollments" && url !== "/departments";
+                    })
                     .map((module) => ({
                         title: module.title ?? "Untitled",
                         url: module.url ?? "#",
