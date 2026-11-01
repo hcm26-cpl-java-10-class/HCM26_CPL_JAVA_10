@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronLeft, FileSpreadsheet, FileText, Download, Lock, Pencil, Search, X } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { IntegrityReportSection } from "./IntegrityReportSection"; // NEW (anti-cheat)
+import { ItemAnalysisSection } from "./ItemAnalysisSection";
 import { downloadBlob, getFilenameFromHeader } from "@/components/datatable/util/dataio.utils";
 
 
@@ -1209,6 +1210,8 @@ export default function ResultStatisticsPage() {
                         </div>
                     </div>
                 </section>
+
+                {validExamId && <ItemAnalysisSection examId={examId} />}
 
                 {/* NEW (anti-cheat): bao cao vi pham tung luot thi */}
                 {validExamId && <IntegrityReportSection examId={examId} />}

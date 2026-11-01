@@ -3,7 +3,9 @@ package com.example.starter_project_2025.system.exam.controller;
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.exam.dto.AdjustScoreRequest;
 import com.example.starter_project_2025.system.exam.dto.ExamAttemptStatisticsDTO;
+import com.example.starter_project_2025.system.exam.dto.ExamItemAnalysisDTO;
 import com.example.starter_project_2025.system.exam.dto.ExamResultStatisticsDTO;
+import com.example.starter_project_2025.system.exam.service.ExamItemAnalysisService;
 import com.example.starter_project_2025.system.exam.service.ExamAttemptStatisticsService;
 import com.example.starter_project_2025.system.exam.service.ExamResultStatisticsService;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +30,7 @@ public class ExamResultStatisticsController {
 
     private final ExamResultStatisticsService statisticsService;
     private final ExamAttemptStatisticsService attemptStatisticsService;
+    private final ExamItemAnalysisService itemAnalysisService;
 
 
     @GetMapping
@@ -37,6 +40,14 @@ public class ExamResultStatisticsController {
         return ResponseEntity.ok(
                 statisticsService.getStatistics(examId)
         );
+    }
+
+    /** EXM-013: ty le hoan thanh + item analysis (do kho, do phan biet, phan tich dap an). */
+    @GetMapping("/item-analysis")
+    public ResponseEntity<ExamItemAnalysisDTO> getItemAnalysis(
+            @PathVariable Long examId
+    ) {
+        return ResponseEntity.ok(itemAnalysisService.analyze(examId));
     }
 
     @GetMapping("/attempts")
