@@ -120,7 +120,7 @@ export function ItemAnalysisSection({ examId }: { examId: number }) {
         <section className="rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
             <h2 className="text-lg font-semibold">Completion &amp; Item Analysis</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-                Difficulty and discrimination per question, based on fully graded attempts.
+                Per student only the best fully graded attempt is counted. Unfinished attempts are auto-submitted when time runs out.
             </p>
 
             {query.isLoading && (
@@ -136,7 +136,7 @@ export function ItemAnalysisSection({ examId }: { examId: number }) {
                         <Card
                             label="Completion rate"
                             value={pct(data.completion.completionRate)}
-                            detail={`${data.completion.submitted} submitted / ${data.completion.started} started`}
+                            detail={`${data.completion.submitted} submitted / ${data.completion.started} students`}
                         />
                         <Card
                             label="Not finished"

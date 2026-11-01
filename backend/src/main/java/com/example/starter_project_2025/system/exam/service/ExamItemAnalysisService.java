@@ -50,10 +50,24 @@ public class ExamItemAnalysisService {
                 .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
 
         List<ExamAttempt> attempts = attemptRepository.findAllByExam_Id(examId);
-        CompletionDTO completion = completion(attempts);
+        // Moi sinh vien chi tinh 1 luot: luot da cham xong co diem cao nhat (hoa thi luot sau).
+        Map<Long, ExamAttempt> bestByStudent = new HashMap<>();
+        Map<Long, ExamAttempt> latestByStudent = new HashMap<>();
+        for (ExamAttempt a : attempts) {
+            Long studentId = a.getStudent() == null ? Long.valueOf(-a.getId()) : a.getStudent().getId();
+            latestByStudent.merge(studentId, a,
+                    (x, y) -> y.getAttemptNumber() >= x.getAttemptNumber() ? y : x);
+            if (readinessService.isFullyGraded(a)) {
+                bestByStudent.merge(studentId, a, ExamItemAnalysisService::better);
+            }
+        }
+        List<ExamAttempt> representatives = new ArrayList<>();
+        for (Map.Entry<Long, ExamAttempt> e : latestByStudent.entrySet()) {
+            representatives.add(bestByStudent.getOrDefault(e.getKey(), e.getValue()));
+        }
+        CompletionDTO completion = completion(representatives);
 
-        Map<Long, ExamAttempt> graded = attempts.stream()
-                .filter(readinessService::isFullyGraded)
+        Map<Long, ExamAttempt> graded = bestByStudent.values().stream()
                 .collect(Collectors.toMap(ExamAttempt::getId, a -> a));
 
         List<ItemDTO> items = List.of();
@@ -78,6 +92,14 @@ public class ExamItemAnalysisService {
                 avgDifficulty,
                 (int) items.stream().filter(i -> !i.flags().isEmpty()).count(),
                 items);
+    }
+
+    private static ExamAttempt better(ExamAttempt x, ExamAttempt y) {
+        int c = x.getFinalScore().compareTo(y.getFinalScore());
+        if (c != 0) {
+            return c > 0 ? x : y;
+        }
+        return y.getAttemptNumber() >= x.getAttemptNumber() ? y : x;
     }
 
     private CompletionDTO completion(List<ExamAttempt> attempts) {
