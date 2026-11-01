@@ -33,7 +33,7 @@ import java.time.LocalDate;
 @ExportEntity(fileName = "students", sheetName = "Students")
 @ImportUpsert(keyField = "studentCode", displayName = "student")
 @ResourcePermission("STUDENT")
-@ResourceMenu(title = "Students", group = "Student Management", icon = "graduation-cap", url = "/students", order = 2, permission = "STUDENT_READ")
+@ResourceMenu(title = "Students", group = "RBAC Management", icon = "graduation-cap", url = "/students", order = 2, permission = "STUDENT_READ")
 public class Student extends BaseEntity {
 
     @Column(unique = true, nullable = false, length = 30)
@@ -52,8 +52,8 @@ public class Student extends BaseEntity {
     String lastName;
 
     @Column(unique = true, length = 255)
-    @ImportField(name = "Email")
-    @ExportField(name = "Email")
+    
+    
     String email;
 
     @Column(length = 30)
@@ -70,9 +70,8 @@ public class Student extends BaseEntity {
     @ExportField(name = "Gender")
     String gender;
 
-    @Column(nullable = false, length = 60)
-    @ImportField(name = "Class Name", required = true)
-    @ExportField(name = "Class Name")
+    @Column(length = 60)
+    
     String className;
 
     @Column(length = 1000)
@@ -82,8 +81,8 @@ public class Student extends BaseEntity {
 
     @lombok.Builder.Default
     @Column(nullable = false, length = 20)
-    @ImportField(name = "Status")
-    @ExportField(name = "Status")
+    
+    
     String status = "ACTIVE";
 
     public String getFullName() {

@@ -15,7 +15,6 @@ public abstract class BaseDTO {
 
     private Long id;
 
-    @NotNull(groups = OnCreate.class, message = "Active status is required")
     private Boolean isActive;
 
     @JsonProperty(access = READ_ONLY)

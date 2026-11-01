@@ -39,11 +39,7 @@ public class StudentDTO extends BaseDTO {
     String lastName;
 
     @NotBlank(groups = OnCreate.class, message = "Student email is required")
-    @Email(message = "Email should be valid")
-    @Pattern(regexp = "^[A-Za-z0-9._%+-]+@gmail\\.com$", flags = Pattern.Flag.CASE_INSENSITIVE, message = "Email must use @gmail.com")
-    @Size(max = 255)
-    String email;
-
+    
     @Size(max = 30)
     String phone;
 
@@ -53,8 +49,7 @@ public class StudentDTO extends BaseDTO {
     String gender;
 
     @NotBlank(groups = OnCreate.class, message = "Class name is required")
-    @Size(max = 60)
-    String className;
+   
 
     @Size(max = 500)
     String address;
