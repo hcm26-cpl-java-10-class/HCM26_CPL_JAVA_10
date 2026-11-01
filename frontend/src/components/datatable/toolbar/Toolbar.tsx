@@ -36,10 +36,8 @@ export function Toolbar({
   const hasSorts = table.sortState?.length > 0;
 
   return (
-    <div
-      className={`grid ${showActions ? "lg:grid-cols-[1fr_auto]" : "grid-cols-1"} items-center gap-2 w-full`}
-    >
-      <div className="flex flex-col lg:flex-row justify-start items-center gap-2">
+    <div className="flex w-full min-w-0 flex-wrap items-center justify-between gap-2">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center justify-start gap-2">
         {viewMode === "card" && showCardColumnToggle && (
           <ColumnToggle
             schema={schema}
@@ -76,7 +74,9 @@ export function Toolbar({
         )}
       </div>
 
-      {showActions && <ToolbarActions table={table} headerActions={headerActions} />}
+      {showActions && (
+        <ToolbarActions table={table} headerActions={headerActions} />
+      )}
     </div>
   );
 }

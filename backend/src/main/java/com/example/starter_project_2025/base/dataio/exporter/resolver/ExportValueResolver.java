@@ -2,12 +2,12 @@ package com.example.starter_project_2025.base.dataio.exporter.resolver;
 
 import com.example.starter_project_2025.base.dataio.exporter.metadata.ExportFieldMeta;
 import lombok.AccessLevel;
+import org.hibernate.Hibernate;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
-import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
 @Component
@@ -31,12 +31,9 @@ public class ExportValueResolver {
         if (value instanceof Enum<?> e)
             return e.name();
 
-        if (!meta.dateFormat().isBlank()) {
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern(meta.dateFormat());
-            if (value instanceof LocalDateTime dt)
-                return dt.format(formatter);
-            if (value instanceof LocalDate date)
-                return date.format(formatter);
+        if (value instanceof LocalDateTime dt &&
+                !meta.dateFormat().isBlank()) {
+            return dt.format(DateTimeFormatter.ofPattern(meta.dateFormat()));
         }
 
         if (!meta.path().isBlank()) {
@@ -48,7 +45,7 @@ public class ExportValueResolver {
 
     private Object readValue(Object source, ExportFieldMeta meta) {
         try {
-            return meta.field().get(source);
+            return meta.field().get(Hibernate.unproxy(source));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

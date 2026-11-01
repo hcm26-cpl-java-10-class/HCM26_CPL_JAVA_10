@@ -23,5 +23,3 @@ export * from "./features/rbac/role";
 export * from "./features/rbac/user";
 export * from "./features/demo/session";
 export * from "./features/demo/lesson";
-
-export * from "./features/student";

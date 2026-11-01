@@ -32,29 +32,16 @@ public class ValueConverter {
 
         if (type.isEnum()) {
             @SuppressWarnings({ "unchecked", "rawtypes" })
-            Enum enumVal = Enum.valueOf((Class<Enum>) type, val);
+            Enum enumVal = Enum.valueOf((Class<Enum>) type,
+                    val.toUpperCase().replace(' ', '_').replace('-', '_'));
             return enumVal;
         }
 
         if (type == java.time.LocalDateTime.class)
             return java.time.LocalDateTime.parse(val);
 
-        if (type == java.time.LocalDate.class) {
-            // Accept ISO format and common Excel date formats.
-            java.time.format.DateTimeFormatter[] formats = {
-                    java.time.format.DateTimeFormatter.ISO_LOCAL_DATE,
-                    java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy"),
-                    java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")
-            };
-            for (java.time.format.DateTimeFormatter format : formats) {
-                try {
-                    return java.time.LocalDate.parse(val, format);
-                } catch (java.time.format.DateTimeParseException ignored) {
-                    // Try the next supported format.
-                }
-            }
-            throw new IllegalArgumentException("Invalid date '" + val + "'. Use yyyy-MM-dd, dd-MM-yyyy, or dd/MM/yyyy.");
-        }
+        if (type == java.time.LocalDate.class)
+            return java.time.LocalDate.parse(val);
 
         return raw;
     }
