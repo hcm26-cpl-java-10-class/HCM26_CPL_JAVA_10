@@ -132,6 +132,9 @@ export function LessonFormModal({
   const [audioUploadStatus, setAudioUploadStatus] = useState<"idle" | "uploading" | "error">("idle");
   const [audioFileName, setAudioFileName] = useState("");
   const audioFileInputRef = useRef<HTMLInputElement>(null);
+  const [documentUploadStatus, setDocumentUploadStatus] = useState<"idle" | "uploading" | "error">("idle");
+  const [documentFileName, setDocumentFileName] = useState("");
+  const documentFileInputRef = useRef<HTMLInputElement>(null);
 
   // Reset form mỗi lần mở modal hoặc đổi bài học đang sửa
   useEffect(() => {
@@ -142,6 +145,8 @@ export function LessonFormModal({
       setAudioDurationStatus("idle");
       setAudioUploadStatus("idle");
       setAudioFileName("");
+      setDocumentUploadStatus("idle");
+      setDocumentFileName("");
     }
   }, [open, lesson, defaultOrderIndex]);
 
@@ -265,7 +270,28 @@ export function LessonFormModal({
     }
   };
 
-  const isBusy = mutation.isPending || audioUploadStatus === "uploading";
+  const handleDocumentFile = async (file?: File) => {
+    if (!file) return;
+    setDocumentFileName(file.name);
+    if (file.size > 25 * 1024 * 1024 || !/\.(pdf|doc|docx|ppt|pptx|xls|xlsx|txt)$/i.test(file.name)) {
+      setDocumentUploadStatus("error");
+      toast.error("Choose a supported document file up to 25 MB.");
+      return;
+    }
+
+    setDocumentUploadStatus("uploading");
+    try {
+      const uploaded = await lessonApi.uploadDocument(file);
+      setField("contentUrl", uploaded.url);
+      setDocumentUploadStatus("idle");
+      toast.success("Document file uploaded.");
+    } catch (error) {
+      setDocumentUploadStatus("error");
+      toast.error(axios.isAxiosError(error) ? error.response?.data?.message || "Could not upload document file." : "Could not upload document file.");
+    }
+  };
+
+  const isBusy = mutation.isPending || audioUploadStatus === "uploading" || documentUploadStatus === "uploading";
 
   return (
     <Dialog open={open} onOpenChange={(next) => !isBusy && onOpenChange(next)}>
@@ -397,6 +423,44 @@ export function LessonFormModal({
                   </div>
                 </>
               )}
+              {form.contentType === "DOCUMENT" && (
+                <>
+                  <Label htmlFor="lesson-document-file">Document file</Label>
+                  <Input
+                    ref={documentFileInputRef}
+                    id="lesson-document-file"
+                    type="file"
+                    accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt"
+                    className="hidden"
+                    disabled={isBusy}
+                    onChange={(event) => void handleDocumentFile(event.target.files?.[0])}
+                  />
+                  <div className="flex min-h-9 items-center gap-3 rounded-md border px-3 py-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isBusy}
+                      onClick={() => documentFileInputRef.current?.click()}
+                    >
+                      Choose document file
+                    </Button>
+                    <span className="truncate text-sm text-muted-foreground">
+                      {documentFileName || "No document file chosen"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground" aria-live="polite">
+                    {documentUploadStatus === "uploading"
+                      ? "Uploading document file..."
+                      : documentUploadStatus === "error"
+                        ? "Upload failed · choose another file or use a URL"
+                        : "PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX or TXT · max 25 MB"}
+                  </p>
+                  <div className="relative my-1 text-center text-xs text-muted-foreground before:absolute before:left-0 before:right-0 before:top-1/2 before:border-t">
+                    <span className="relative bg-background px-2">or use a document URL</span>
+                  </div>
+                </>
+              )}
               <Label htmlFor="lesson-url">
                 {form.contentType === "VIDEO"
                   ? "Video URL"
@@ -475,7 +539,7 @@ export function LessonFormModal({
               Cancel
             </Button>
             <Button type="button" onClick={handleSubmit} disabled={isBusy}>
-              {audioUploadStatus === "uploading" ? "Uploading..." : mutation.isPending ? "Saving..." : isEdit ? "Save changes" : "Create lesson"}
+              {audioUploadStatus === "uploading" || documentUploadStatus === "uploading" ? "Uploading..." : mutation.isPending ? "Saving..." : isEdit ? "Save changes" : "Create lesson"}
             </Button>
           </div>
         </DialogFooter>

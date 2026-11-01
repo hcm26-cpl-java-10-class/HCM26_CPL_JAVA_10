@@ -19,3 +19,5 @@ export * from "./features/student.api";
 export * from "./features/demo/certificate.api";
 export * from "./features/notification.api";
 export * from "./features/demo/qna.api";
+
+export * from "./features/demo/lesson-report.api";

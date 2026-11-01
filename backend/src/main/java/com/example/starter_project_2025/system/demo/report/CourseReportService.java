@@ -4,6 +4,9 @@ import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.demo.course.Course;
 import com.example.starter_project_2025.system.demo.course.CourseStatus;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollment;
+import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
+import com.example.starter_project_2025.system.demo.progress.LessonProgressRepository;
+import com.example.starter_project_2025.system.demo.certificate.CertificateRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -21,6 +24,9 @@ import java.util.List;
 public class CourseReportService {
 
     private final CourseReportRepository courseReportRepository;
+    private final LessonRepository lessonRepository;
+    private final LessonProgressRepository lessonProgressRepository;
+    private final CertificateRepository certificateRepository;
 
     @Transactional(readOnly = true)
     public List<CourseReportDTO> getCourseReport() {
@@ -30,8 +36,31 @@ public class CourseReportService {
         List<CourseReportDTO> result = new ArrayList<>();
 
         for (Course course : courses) {
-            List<CourseEnrollment> enrollments =
-                    courseReportRepository.findByCourseIdWithUser(course.getId());
+            List<CourseEnrollment> enrollments = courseReportRepository.findByCourseIdWithUser(course.getId())
+                    .stream()
+                    .filter(enrollment -> !Boolean.FALSE.equals(enrollment.getIsActive()))
+                    .toList();
+
+            int lessonCount = lessonRepository.findActiveByCourseIdOrdered(course.getId()).size();
+            List<CourseLearnerReportDTO> learners = enrollments.stream()
+                    .map(enrollment -> {
+                        long completedLessons = lessonProgressRepository.findAllByEnrollment_Id(enrollment.getId())
+                                .stream()
+                                .filter(progress -> progress.isCompleted())
+                                .count();
+                        int percentage = lessonCount == 0
+                                ? 0
+                                : (int) Math.round(completedLessons * 100.0 / lessonCount);
+                        return CourseLearnerReportDTO.builder()
+                                .enrollmentId(enrollment.getId())
+                                .studentName(enrollment.getUser().getFullName())
+                                .studentEmail(enrollment.getUser().getEmail())
+                                .progressPercentage(percentage)
+                                .completed(percentage == 100)
+                                .enrolledAt(enrollment.getCreatedAt())
+                                .build();
+                    })
+                    .toList();
 
             List<String> studentNames = enrollments.stream()
                     .map(enrollment -> enrollment.getUser())
@@ -42,6 +71,14 @@ public class CourseReportService {
                     .sorted(String::compareToIgnoreCase)
                     .toList();
 
+            long completedLearners = learners.stream().filter(CourseLearnerReportDTO::isCompleted).count();
+            int averageProgress = learners.isEmpty()
+                    ? 0
+                    : (int) Math.round(learners.stream().mapToInt(CourseLearnerReportDTO::getProgressPercentage).average().orElse(0));
+            int completionRate = learners.isEmpty()
+                    ? 0
+                    : (int) Math.round(completedLearners * 100.0 / learners.size());
+
             result.add(CourseReportDTO.builder()
                     .courseId(course.getId())
                     .courseName(course.getName())
@@ -51,6 +88,18 @@ public class CourseReportService {
                             : CourseStatus.DRAFT.name())
                     .studentCount((long) studentNames.size())
                     .students(studentNames)
+                    .categories(course.getCategories().stream()
+                            .map(category -> category.getName())
+                            .filter(name -> name != null && !name.isBlank())
+                            .sorted(String::compareToIgnoreCase)
+                            .toList())
+                    .courseLevel(course.getLevel() == null ? null : course.getLevel().name())
+                    .averageProgress(averageProgress)
+                    .activeLearners(learners.size() - completedLearners)
+                    .completedLearners(completedLearners)
+                    .completionRate(completionRate)
+                    .certificatesIssued(certificateRepository.findUserIdsByCourseId(course.getId()).size())
+                    .learners(learners)
                     .build());
         }
 

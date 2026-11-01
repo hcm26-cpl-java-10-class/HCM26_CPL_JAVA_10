@@ -19,6 +19,15 @@ export const lessonApi = Object.assign({}, base, {
     return response.data;
   },
 
+  uploadDocument: async (file: File): Promise<{ url: string }> => {
+    const data = new FormData();
+    data.append("file", file);
+    const response = await axiosInstance.post<{ url: string }>("/lesson-documents", data, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data;
+  },
+
   /** Toàn bộ bài học của một section, sắp xếp theo orderIndex tăng dần. */
   getBySection: async (sectionId: number): Promise<LessonDTO[]> => {
     const page = await base.getPage(
