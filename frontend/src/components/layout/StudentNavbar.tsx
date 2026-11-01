@@ -32,6 +32,7 @@ const normalizePath = (path?: string) => {
 };
 
 const SYLLABUS_PATH = "/student/syllabuses";
+const ADMIN_ONLY_STUDENT_PREVIEW_PATHS = new Set(["/course-report", "/enrollment-logs"]);
 
 const navButtonClass =
     "h-9 rounded-[10px] border border-transparent px-3 text-sm " +
@@ -74,7 +75,7 @@ export function StudentNavbar() {
         id: group.id ?? group.name ?? "group",
         name: group.name ?? "Menu",
         items: group.modules
-            .filter((module) => !!module.url)
+            .filter((module) => !!module.url && !ADMIN_ONLY_STUDENT_PREVIEW_PATHS.has(normalizePath(module.url)))
             .map((module) => ({
               id:
                   module.id ??

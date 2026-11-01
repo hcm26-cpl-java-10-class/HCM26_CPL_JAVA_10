@@ -11,4 +11,5 @@ public interface CertificateService
     void issueIfCourseCompleted(CourseEnrollment courseEnrollment);
     CertificateVerificationDTO verify(UUID verificationToken);
     List<CertificateDTO> getMyCertificates(Long userId);
+    CertificateDTO getByEnrollment(Long enrollmentId);
 }

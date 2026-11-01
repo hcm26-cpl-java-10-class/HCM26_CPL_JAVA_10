@@ -9,6 +9,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -37,6 +38,12 @@ public class CertificateController
     public List<CertificateDTO> getMyCertificates(@AuthenticationPrincipal UserPrincipal principal) {
         Long userId = principal.getUser().getId();
         return certificateService.getMyCertificates(userId);
+    }
+
+    @GetMapping("/enrollment/{enrollmentId}")
+    @PreAuthorize("hasAuthority('CERTIFICATE_READ')")
+    public CertificateDTO getByEnrollment(@PathVariable Long enrollmentId) {
+        return certificateService.getByEnrollment(enrollmentId);
     }
 
     @Override

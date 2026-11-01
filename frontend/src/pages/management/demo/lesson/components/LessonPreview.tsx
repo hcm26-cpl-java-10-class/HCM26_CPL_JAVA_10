@@ -157,7 +157,9 @@ function ResourcePreview({ lesson }: { lesson: LessonDTO }) {
   if (!url) return <InvalidContent message="Resource link is missing or invalid." />;
 
   const Icon = lesson.contentType === "DOCUMENT" ? FileText : Link2;
-  const isPdf = /\.pdf$/i.test(url.pathname);
+  const canPreview =
+    lesson.contentType === "DOCUMENT" &&
+    /\/api\/lesson-documents\/[a-f0-9-]+\.pdf$/i.test(url.pathname);
 
   return (
     <div className="space-y-3">
@@ -172,13 +174,17 @@ function ResourcePreview({ lesson }: { lesson: LessonDTO }) {
         </div>
         <OpenLinkButton href={url.toString()} label="Open" />
       </div>
-      {isPdf && (
+      {canPreview ? (
         <iframe
           src={url.toString()}
           title={lesson.title || "Document"}
           className="h-[50vh] w-full rounded-xl border"
         />
-      )}
+      ) : lesson.contentType === "DOCUMENT" ? (
+        <div className="rounded-xl border border-dashed bg-muted/20 p-8 text-center text-sm text-muted-foreground">
+          This document cannot be previewed here. Use Open to view it in a new tab.
+        </div>
+      ) : null}
     </div>
   );
 }
