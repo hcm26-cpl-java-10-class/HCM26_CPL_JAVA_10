@@ -438,7 +438,7 @@ export default function EnrollmentLogPage() {
                 </div>
             </div>
 
-            {/* Modal Chi tiết */}
+            {/* Modal Chi tiáº¿t */}
             <Sheet open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
                 <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto p-6">
                     <SheetHeader className="border-b pb-4">

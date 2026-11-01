@@ -27,11 +27,11 @@ export interface DepartmentBatchItemResult {
     alreadyEnrolled: number;
     newEnrollments: number;
     excludedCount: number;
-    /** Preview: sẽ được enroll. Result: đã được enroll thật. */
+    /** Preview: sáº½ Ä‘Æ°á»£c enroll. Result: Ä‘Ã£ Ä‘Æ°á»£c enroll tháº­t. */
     newMembers: DepartmentMember[];
-    /** Đã enroll từ trước (hoặc qua department khác trong cùng lần assign). */
+    /** ÄÃ£ enroll tá»« trÆ°á»›c (hoáº·c qua department khÃ¡c trong cÃ¹ng láº§n assign). */
     alreadyEnrolledMembers: DepartmentMember[];
-    /** Bị bỏ tick nên không được enroll. */
+    /** Bá»‹ bá» tick nÃªn khÃ´ng Ä‘Æ°á»£c enroll. */
     excludedMembers: DepartmentMember[];
 }
 

@@ -39,7 +39,7 @@ public class EnrollmentAuditService {
 
         List<CourseEnrollment> enrollments = enrollmentRepository.findAll();
 
-        // Tối ưu hóa: Lấy danh sách actor (người thực hiện) trong 1 query để tránh N+1
+        // Tá»‘i Æ°u hÃ³a: Láº¥y danh sÃ¡ch actor (ngÆ°á»i thá»±c hiá»‡n) trong 1 query Ä‘á»ƒ trÃ¡nh N+1
         Set<Long> actorIds = enrollments.stream()
                 .map(CourseEnrollment::getCreatedBy)
                 .filter(Objects::nonNull)
@@ -57,7 +57,7 @@ public class EnrollmentAuditService {
             Course course = e.getCourse();
             Long createdBy = e.getCreatedBy();
 
-            // 1. Tên phòng ban / khoa của sinh viên
+            // 1. TÃªn phÃ²ng ban / khoa cá»§a sinh viÃªn
             String deptName = "-";
             if (student != null && student.getDepartments() != null && !student.getDepartments().isEmpty()) {
                 deptName = student.getDepartments().stream()
@@ -69,7 +69,7 @@ public class EnrollmentAuditService {
                 }
             }
 
-            // 2. Thông tin người thực hiện thao tác (Actor)
+            // 2. ThÃ´ng tin ngÆ°á»i thá»±c hiá»‡n thao tÃ¡c (Actor)
             String actorName = "System";
             String actorEmail = null;
             if (createdBy != null) {
@@ -85,7 +85,7 @@ public class EnrollmentAuditService {
                 }
             }
 
-            // 3. Phân loại nguồn ghi danh (Source)
+            // 3. PhÃ¢n loáº¡i nguá»“n ghi danh (Source)
             String source;
             if (createdBy != null && student != null && createdBy.equals(student.getId())) {
                 source = "SELF_ENROLLED";
@@ -97,10 +97,10 @@ public class EnrollmentAuditService {
                 source = "API";
             }
 
-            // 4. Phân loại ngữ cảnh Type (ENROLLMENT hoặc DEPARTMENT)
+            // 4. PhÃ¢n loáº¡i ngá»¯ cáº£nh Type (ENROLLMENT hoáº·c DEPARTMENT)
             String type = "BATCH_IMPORT".equalsIgnoreCase(source) ? "DEPARTMENT" : "ENROLLMENT";
 
-            // 5. Đối tượng thụ hưởng (Target)
+            // 5. Äá»‘i tÆ°á»£ng thá»¥ hÆ°á»Ÿng (Target)
             String targetName = "Unknown Student";
             if (student != null) {
                 String fullName = student.getFullName();
@@ -110,10 +110,10 @@ public class EnrollmentAuditService {
             }
             String targetType = "STUDENT";
 
-            // 6. Tên khóa học
+            // 6. TÃªn khÃ³a há»c
             String courseName = (course != null && course.getName() != null) ? course.getName() : "-";
 
-            // 7. Trạng thái bản ghi (Status)
+            // 7. Tráº¡ng thÃ¡i báº£n ghi (Status)
             String status = Boolean.FALSE.equals(e.getIsActive()) ? "DROPPED" : "ACTIVE";
 
             Integer progressPercentage = null;
@@ -129,7 +129,7 @@ public class EnrollmentAuditService {
                 cancellationReason = "Student requested cancellation within the allowed progress limit";
             }
 
-            // 8. Mô tả chi tiết hành động (Detail)
+            // 8. MÃ´ táº£ chi tiáº¿t hÃ nh Ä‘á»™ng (Detail)
             String detail;
             if ("DEPARTMENT".equals(type)) {
                 detail = String.format("Assigned %s to course \"%s\" via department (%s)",
@@ -160,7 +160,7 @@ public class EnrollmentAuditService {
                     .build());
         }
 
-        // 1. Lọc theo Type (ENROLLMENT / DEPARTMENT)
+        // 1. Lá»c theo Type (ENROLLMENT / DEPARTMENT)
         String filterType = searchFilter.getType();
         if (filterType != null && !filterType.isBlank() && !"ALL".equalsIgnoreCase(filterType)) {
             allLogs = allLogs.stream()
@@ -168,7 +168,7 @@ public class EnrollmentAuditService {
                     .collect(Collectors.toList());
         }
 
-        // 2. Lọc theo Search keyword
+        // 2. Lá»c theo Search keyword
         String search = searchFilter.getSearch();
         if (search != null && !search.isBlank()) {
             String kw = search.trim().toLowerCase();
@@ -183,7 +183,7 @@ public class EnrollmentAuditService {
                     .collect(Collectors.toList());
         }
 
-        // 3. Lọc theo Status
+        // 3. Lá»c theo Status
         String filterStatus = searchFilter.getStatus();
         if (filterStatus != null && !filterStatus.isBlank() && !"ALL".equalsIgnoreCase(filterStatus)) {
             allLogs = allLogs.stream()
@@ -191,7 +191,7 @@ public class EnrollmentAuditService {
                     .collect(Collectors.toList());
         }
 
-        // 4. Lọc theo Source
+        // 4. Lá»c theo Source
         String filterSource = searchFilter.getSource();
         if (filterSource != null && !filterSource.isBlank() && !"ALL".equalsIgnoreCase(filterSource)) {
             allLogs = allLogs.stream()
@@ -199,7 +199,7 @@ public class EnrollmentAuditService {
                     .collect(Collectors.toList());
         }
 
-        // 5. Lọc theo From Date
+        // 5. Lá»c theo From Date
         LocalDate fromDate = searchFilter.getFromDate();
         if (fromDate != null) {
             allLogs = allLogs.stream()
@@ -207,7 +207,7 @@ public class EnrollmentAuditService {
                     .collect(Collectors.toList());
         }
 
-        // 6. Lọc theo To Date
+        // 6. Lá»c theo To Date
         LocalDate toDate = searchFilter.getToDate();
         if (toDate != null) {
             allLogs = allLogs.stream()
@@ -215,13 +215,13 @@ public class EnrollmentAuditService {
                     .collect(Collectors.toList());
         }
 
-        // 7. Sắp xếp thời gian mới nhất lên đầu (nulls last)
+        // 7. Sáº¯p xáº¿p thá»i gian má»›i nháº¥t lÃªn Ä‘áº§u (nulls last)
         allLogs.sort(Comparator.comparing(
                 AuditLogRowDTO::getCreatedAt,
                 Comparator.nullsLast(Comparator.reverseOrder())
         ));
 
-        // 8. Phân trang
+        // 8. PhÃ¢n trang
         if (pageable == null || pageable.isUnpaged()) {
             return new PageImpl<>(allLogs, pageable != null ? pageable : Pageable.unpaged(), allLogs.size());
         }

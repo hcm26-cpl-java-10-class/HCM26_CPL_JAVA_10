@@ -12,14 +12,14 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class AuditLogRowDTO {
     private String id;
-    private String type;         // "ENROLLMENT" hoặc "DEPARTMENT"
-    private String actorName;    // Người thao tác (Admin/System/Student)
+    private String type;         // "ENROLLMENT" hoáº·c "DEPARTMENT"
+    private String actorName;    // NgÆ°á»i thao tÃ¡c (Admin/System/Student)
     private String actorEmail;
-    private String targetName;   // Tên sinh viên hoặc Tên phòng ban
-    private String targetType;   // "STUDENT" hoặc "DEPARTMENT"
+    private String targetName;   // TÃªn sinh viÃªn hoáº·c TÃªn phÃ²ng ban
+    private String targetType;   // "STUDENT" hoáº·c "DEPARTMENT"
     private String courseName;
     private String departmentName;
-    private String detail;       // Mô tả chi tiết hành động
+    private String detail;       // MÃ´ táº£ chi tiáº¿t hÃ nh Ä‘á»™ng
     private String status;       // "ACTIVE", "COMPLETED", "DROPPED", etc.
     private String source;       // "SELF_ENROLLED", "MANUAL", "BATCH_IMPORT", "API"
     private Integer progressPercentage;
