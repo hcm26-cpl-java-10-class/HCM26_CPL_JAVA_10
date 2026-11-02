@@ -15,6 +15,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
 
+import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -81,6 +82,17 @@ public class User extends BaseEntity {
     @ImportField(name = "Description")
     @ExportField(name = "Description")
     String description;
+
+    @Column(name = "date_of_birth")
+    @ImportField(name = "Date of Birth", required = true)
+    @ExportField(name = "Date of Birth", hint = "Enter a date as yyyy-mm-dd, for example 2000-01-31.")
+    LocalDate dateOfBirth;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    @ImportField(name = "Gender", required = true)
+    @ExportField(name = "Gender")
+    Gender gender;
 
     @Builder.Default
     @Column(nullable = false)
