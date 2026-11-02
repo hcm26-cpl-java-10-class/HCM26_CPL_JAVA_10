@@ -82,8 +82,10 @@ function ExamCard({
     disabled: boolean;
 }) {
     const status = getAttemptStatus(attempt);
-    const canReview = exam.showAnswersAfterExam === true
-        && (attempt?.status === 'SUBMITTED' || attempt?.status === 'PENDING_REVIEW');
+    // De thi "Manually released by teacher": hoc sinh duoc xem bai lam cua minh
+    // ngay sau khi nop, chi thay cau da lam - chua co diem, chua biet dung/sai.
+    const canReview = (attempt?.status === 'SUBMITTED' || attempt?.status === 'PENDING_REVIEW')
+        && (exam.showAnswersAfterExam === true || exam.resultVisibility === 'MANUAL_RELEASE');
     const open = isExamOpen(exam, now);
     const beforeOpen = exam.startTime != null && now < new Date(exam.startTime).getTime();
     const afterClose = exam.endTime != null && now >= new Date(exam.endTime).getTime();
@@ -174,8 +176,17 @@ function ExamCard({
                     <ArrowRight className="size-4" />
                 </Button>
                 {canReview && attempt && (
-                    <Button variant="outline" className="w-full" onClick={() => onReview(attempt.id)}>
-                        View Answers
+                    <Button
+                        variant="outline"
+                        className="w-full"
+                        title={
+                            isResultPublished
+                                ? undefined
+                                : 'Your answers are available for review. Scores are published later.'
+                        }
+                        onClick={() => onReview(attempt.id)}
+                    >
+                        {isResultPublished ? 'View Answers' : 'Review Your Answers'}
                     </Button>
                 )}
             </CardFooter>

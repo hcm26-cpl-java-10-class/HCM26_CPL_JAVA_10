@@ -42,7 +42,7 @@ public class ExamResultAccessService {
 
     @Transactional(readOnly = true)
     public boolean canStudentViewAnswers(Exam exam, ExamAttemptStatus attemptStatus, int attemptsRemaining) {
-        if (exam == null || !Boolean.TRUE.equals(exam.getShowAnswersAfterExam())) {
+        if (exam == null) {
             return false;
         }
         if (attemptStatus == null
@@ -51,6 +51,14 @@ public class ExamResultAccessService {
             return false;
         }
         if (!canStudentViewScore(exam)) {
+            return false;
+        }
+        // De thi "Manually released by teacher": giao vien tu cham va cong bo,
+        // nen sau khi cong bo hoc sinh xem duoc diem + cau dung/sai.
+        if (exam.getResultVisibility() == ResultVisibility.MANUAL_RELEASE) {
+            return true;
+        }
+        if (!Boolean.TRUE.equals(exam.getShowAnswersAfterExam())) {
             return false;
         }
         boolean examClosed = exam.getEndTime() != null && !LocalDateTime.now().isBefore(exam.getEndTime());
@@ -102,6 +110,28 @@ public class ExamResultAccessService {
                         publication.isPublished()
                                 && publication.getReleasePolicy() != ScoreReleasePolicy.HIDDEN)
                 .orElse(false);
+    }
+
+    /**
+     * Hoc sinh duoc xem bai lam cua chinh minh ngay sau khi nop (chi cau da lam),
+     * du chua cong bo ket qua. Chi ap dung khi teacher chon "Manually released".
+     */
+    @Transactional(readOnly = true)
+    public boolean canStudentViewOwnSubmission(Exam exam, ExamAttemptStatus attemptStatus) {
+        if (exam == null || exam.getId() == null) {
+            return false;
+        }
+        if (attemptStatus == null
+                || attemptStatus == ExamAttemptStatus.NOT_STARTED
+                || attemptStatus == ExamAttemptStatus.IN_PROGRESS) {
+            return false;
+        }
+        // De thi teacher tu cham va cong bo sau: cho xem bai lam ngay khi nop.
+        if (exam.getResultVisibility() == ResultVisibility.MANUAL_RELEASE) {
+            return true;
+        }
+        // Cac che do khac: van dung quy tac cua "Show Answers After Exam".
+        return Boolean.TRUE.equals(exam.getShowAnswersAfterExam());
     }
 
     private boolean isVisibilitySatisfied(Exam exam) {

@@ -135,4 +135,57 @@ class ExamResultAccessServiceTest {
     void isResultPublishedDeniesWhenExamIsNull() {
         assertFalse(service.isResultPublished(null));
     }
+
+    // --- canStudentViewOwnSubmission ---
+
+    @Test
+    void ownSubmissionAllowedForManualReleaseAfterSubmit() {
+        exam.setResultVisibility(ResultVisibility.MANUAL_RELEASE);
+        exam.setShowAnswersAfterExam(false);
+        assertTrue(service.canStudentViewOwnSubmission(exam, ExamAttemptStatus.SUBMITTED));
+        assertTrue(service.canStudentViewOwnSubmission(exam, ExamAttemptStatus.PENDING_REVIEW));
+    }
+
+    @Test
+    void ownSubmissionDeniedWhileAttemptStillRunning() {
+        exam.setResultVisibility(ResultVisibility.MANUAL_RELEASE);
+        assertFalse(service.canStudentViewOwnSubmission(exam, ExamAttemptStatus.IN_PROGRESS));
+        assertFalse(service.canStudentViewOwnSubmission(exam, ExamAttemptStatus.NOT_STARTED));
+        assertFalse(service.canStudentViewOwnSubmission(exam, null));
+    }
+
+    @Test
+    void ownSubmissionFallsBackToShowAnswersFlagForOtherVisibilities() {
+        exam.setResultVisibility(ResultVisibility.IMMEDIATE);
+        exam.setShowAnswersAfterExam(true);
+        assertTrue(service.canStudentViewOwnSubmission(exam, ExamAttemptStatus.SUBMITTED));
+
+        exam.setShowAnswersAfterExam(false);
+        assertFalse(service.canStudentViewOwnSubmission(exam, ExamAttemptStatus.SUBMITTED));
+
+        exam.setResultVisibility(ResultVisibility.AFTER_EXAM_CLOSED);
+        assertFalse(service.canStudentViewOwnSubmission(exam, ExamAttemptStatus.SUBMITTED));
+    }
+
+    @Test
+    void ownSubmissionDeniedWhenExamIsNull() {
+        assertFalse(service.canStudentViewOwnSubmission(null, ExamAttemptStatus.SUBMITTED));
+    }
+
+    // --- canStudentViewAnswers voi de thi MANUAL_RELEASE ---
+
+    @Test
+    void answersRevealedForManualReleaseAfterPublication() {
+        exam.setResultVisibility(ResultVisibility.MANUAL_RELEASE);
+        exam.setShowAnswersAfterExam(false);
+        assertTrue(service.canStudentViewAnswers(exam, ExamAttemptStatus.SUBMITTED, 0));
+    }
+
+    @Test
+    void answersNotRevealedForManualReleaseBeforePublication() {
+        exam.setResultVisibility(ResultVisibility.MANUAL_RELEASE);
+        exam.setShowAnswersAfterExam(false);
+        publication.setPublished(false);
+        assertFalse(service.canStudentViewAnswers(exam, ExamAttemptStatus.SUBMITTED, 0));
+    }
 }

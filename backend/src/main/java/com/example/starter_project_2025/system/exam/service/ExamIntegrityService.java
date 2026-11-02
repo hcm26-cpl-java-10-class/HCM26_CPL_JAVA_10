@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.exam.service;
 
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.exam.domain.*;
+import com.example.starter_project_2025.system.exam.dto.AttemptIntegritySummary;
 import com.example.starter_project_2025.system.exam.dto.ExamIntegrityReportDTO;
 import com.example.starter_project_2025.system.exam.dto.IntegrityEventRequest;
 import com.example.starter_project_2025.system.rbac.user.User;
@@ -170,6 +171,18 @@ public class ExamIntegrityService {
         r.setFinalScore(a.getFinalScore());
         r.setMaxScore(ExamScoring.effectiveMax(a.getMaxScore()));
 
+        applyCounts(r, events);
+        if (a.getStartedAt() != null && a.getSubmittedAt() != null) {
+            r.setDurationSeconds(Math.max(0, Duration.between(a.getStartedAt(), a.getSubmittedAt()).getSeconds()));
+        }
+        return r;
+    }
+
+    /**
+     * Dem cac loai vi pham cua 1 luot thi. Dung chung cho bao cao va cho
+     * tom tat trang thai gian lan.
+     */
+    static void applyCounts(ExamIntegrityReportDTO.Row r, List<ExamIntegrityEvent> events) {
         int away = 0;
         Instant last = null;
         for (ExamIntegrityEvent e : events) {
@@ -191,10 +204,37 @@ public class ExamIntegrityService {
         // CHANGED: chi con 1 co duy nhat: luot thi co it nhat 1 vi pham thi bi gan co.
         // Co nay dung de sau nay lam tinh nang sua diem sinh vien bi gan co.
         r.setFlagged(!events.isEmpty());
-        if (a.getStartedAt() != null && a.getSubmittedAt() != null) {
-            r.setDurationSeconds(Math.max(0, Duration.between(a.getStartedAt(), a.getSubmittedAt()).getSeconds()));
-        }
-        return r;
+    }
+
+    /**
+     * Tom tat trang thai gian lan cua 1 luot thi: co bi gan co hay khong va
+     * so luong vi pham theo tung loai.
+     */
+    @Transactional(readOnly = true)
+    public AttemptIntegritySummary summarize(Long attemptId) {
+        ExamAttempt attempt = attemptRepository.findById(attemptId)
+                .orElseThrow(() -> new ResourceNotFoundException("Exam attempt not found"));
+        List<ExamIntegrityEvent> events =
+                eventRepository.findAllByAttemptIdOrderByOccurredAtAsc(attemptId);
+
+        ExamIntegrityReportDTO.Row counter = new ExamIntegrityReportDTO.Row();
+        applyCounts(counter, events);
+
+        AttemptIntegritySummary summary = new AttemptIntegritySummary();
+        summary.setFlagged(counter.isFlagged());
+        summary.setTotalViolations(counter.getTotalViolations());
+        summary.setTabSwitchCount(counter.getTabSwitchCount());
+        summary.setCopyPasteCount(counter.getCopyPasteCount());
+        summary.setFullscreenExitCount(counter.getFullscreenExitCount());
+        summary.setShortcutCount(counter.getShortcutCount());
+        summary.setMultiSessionCount(counter.getMultiSessionCount());
+        summary.setWindowBlurCount(counter.getWindowBlurCount());
+        summary.setContextMenuCount(counter.getContextMenuCount());
+        summary.setTotalAwaySeconds(counter.getTotalAwaySeconds());
+        summary.setLastViolationAt(counter.getLastViolationAt());
+        summary.setAntiCheatEnabled(
+                Boolean.TRUE.equals(attempt.getExam().getAntiCheatEnabled()));
+        return summary;
     }
 
     @Transactional(readOnly = true)
