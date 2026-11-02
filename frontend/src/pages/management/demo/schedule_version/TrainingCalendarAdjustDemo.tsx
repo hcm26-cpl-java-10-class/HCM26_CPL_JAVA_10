@@ -1420,6 +1420,7 @@ export default function TrainingCalendarAdjustDemo({
             <div className="flex items-center gap-1">
               <Input
                 placeholder="Mã lớp khác..."
+                maxLength={30}
                 value={customClassInput}
                 onChange={(e) => setCustomClassInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -1798,6 +1799,7 @@ export default function TrainingCalendarAdjustDemo({
                                     onChange={(e) =>
                                       changeDay(topic.id, day.id, { name: e.target.value })
                                     }
+                                    maxLength={100}
                                     placeholder="Day title"
                                   />
                                 </td>
@@ -1913,6 +1915,7 @@ export default function TrainingCalendarAdjustDemo({
                                                         })
                                                       }
                                                       className="h-9 w-full rounded-lg border-gray-300 text-xs bg-white text-gray-800"
+                                                      maxLength={100}
                                                       placeholder="Activity name"
                                                     />
                                                   </td>
@@ -2251,22 +2254,31 @@ export default function TrainingCalendarAdjustDemo({
 
             <div className="grid grid-cols-3 gap-2">
               <label className="space-y-1 block font-medium col-span-1">
-                Mã môn (Code)
+                <div className="flex justify-between items-center text-xs">
+                  <span>Mã môn (Code)</span>
+                  <span className="text-[10px] text-muted-foreground font-normal">{topicCode.length}/30</span>
+                </div>
                 <Input
-                  maxLength={50}
-                  className="h-8 text-xs font-mono"
+                  maxLength={30}
+                  className="h-8 text-xs font-mono uppercase"
                   value={topicCode}
-                  onChange={(e) => setTopicCode(e.target.value)}
+                  onChange={(e) => {
+                    const cleaned = e.target.value.toUpperCase().replace(/[^A-Z0-9_\-\[\]]/g, "").slice(0, 30);
+                    setTopicCode(cleaned);
+                  }}
                   placeholder="e.g. JAVA_CORE"
                 />
               </label>
               <label className="space-y-1 block font-medium col-span-2">
-                Tên môn học (Name)
+                <div className="flex justify-between items-center text-xs">
+                  <span>Tên môn học (Name)</span>
+                  <span className="text-[10px] text-muted-foreground font-normal">{topicName.length}/100</span>
+                </div>
                 <Input
-                  maxLength={150}
+                  maxLength={100}
                   className="h-8 text-xs"
                   value={topicName}
-                  onChange={(e) => setTopicName(e.target.value)}
+                  onChange={(e) => setTopicName(e.target.value.slice(0, 100))}
                   placeholder="e.g. Java Core & OOP Fundamentals"
                 />
               </label>
@@ -2275,14 +2287,31 @@ export default function TrainingCalendarAdjustDemo({
             {/* Cơ chế 1: Tự động chia buổi theo Duration */}
             <div className="grid grid-cols-2 gap-3 pt-1 border-t border-border/60">
               <label className="space-y-1 block font-medium">
-                Tổng thời lượng môn (giờ)
+                <div className="flex justify-between items-center text-xs">
+                  <span>Tổng thời lượng môn (giờ)</span>
+                  <span className="text-[10px] text-muted-foreground font-normal">Tối đa 300h</span>
+                </div>
                 <Input
                   type="number"
                   min={1}
-                  max={200}
+                  max={300}
                   className="h-8 text-xs font-mono"
-                  value={topicTotalHours}
-                  onChange={(e) => setTopicTotalHours(Number(e.target.value) || 1)}
+                  value={topicTotalHours || ""}
+                  onKeyDown={(e) => {
+                    if (["e", "E", "+", "-", "."].includes(e.key)) {
+                      e.preventDefault();
+                    }
+                  }}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (isNaN(val) || val <= 0) {
+                      setTopicTotalHours(1);
+                    } else if (val > 300) {
+                      setTopicTotalHours(300);
+                    } else {
+                      setTopicTotalHours(val);
+                    }
+                  }}
                 />
               </label>
 
@@ -2371,14 +2400,31 @@ export default function TrainingCalendarAdjustDemo({
           <div className="space-y-3 py-2 text-xs">
             <div className="grid grid-cols-2 gap-3">
               <label className="space-y-1 block font-medium">
-                Tổng thời lượng môn (giờ)
+                <div className="flex justify-between items-center text-xs">
+                  <span>Tổng thời lượng môn (giờ)</span>
+                  <span className="text-[10px] text-muted-foreground font-normal">Tối đa 300h</span>
+                </div>
                 <Input
                   type="number"
                   min={1}
-                  max={200}
+                  max={300}
                   className="h-8 text-xs font-mono"
-                  value={splitTotalHours}
-                  onChange={(e) => setSplitTotalHours(Number(e.target.value) || 1)}
+                  value={splitTotalHours || ""}
+                  onKeyDown={(e) => {
+                    if (["e", "E", "+", "-", "."].includes(e.key)) {
+                      e.preventDefault();
+                    }
+                  }}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (isNaN(val) || val <= 0) {
+                      setSplitTotalHours(1);
+                    } else if (val > 300) {
+                      setSplitTotalHours(300);
+                    } else {
+                      setSplitTotalHours(val);
+                    }
+                  }}
                 />
               </label>
 
