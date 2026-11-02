@@ -108,8 +108,33 @@ public class EssayGradingDTO {
         private BigDecimal score;
         private String feedback;
         private String referenceAnswer;
+        private Instant referenceSubmittedAt;
         private String rubric;
+        private Instant rubricSubmittedAt;
         private List<GradingCriterion> gradingCriteria;
+    }
+
+    @Getter
+    @Setter
+    public static class QuestionGuidelineDTO {
+        private Long examId;
+        private Long questionId;
+        private String referenceAnswer;
+        private Instant referenceSubmittedAt;
+        private String rubric;
+        private Instant rubricSubmittedAt;
+    }
+
+    @Getter
+    @Setter
+    public static class SubmitReferenceRequest {
+        private String referenceAnswer;
+    }
+
+    @Getter
+    @Setter
+    public static class SubmitRubricRequest {
+        private String rubric;
     }
 
     @Getter

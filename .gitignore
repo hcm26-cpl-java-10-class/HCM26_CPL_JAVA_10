@@ -15,6 +15,9 @@ backend/data/
 
 # === Backend .env (secrets) ===
 backend/.env
+backend/.env.local
+backend/.env.*.local
+!backend/.env.example
 
 # === Frontend (Node) ===
 frontend/node_modules/

@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { EXAM_CATEGORY_LABEL, EXAM_CATEGORY_SHOW_ANSWERS_DEFAULT, type ExamCategory, type ExamDTO, type ExamType, type LatePolicy, type QuestionDTO, type QuestionDifficulty, type QuestionFilter, type QuestionType, type ResultVisibility } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowLeft, ArrowRight, BookOpen, Check, CheckCheck, CheckSquare, ClipboardCheck, Dices, Layers, Mail, MoreVertical, Pencil, Plus, Save, Search, BookmarkPlus, Tags, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, BookOpen, Check, CheckCheck, CheckSquare, ClipboardCheck, Dices, Layers, Mail, MoreVertical, Pencil, Plus, Save, Search, BookmarkPlus, ShieldAlert, Tags, Trash2, X } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -890,6 +890,13 @@ export default function ExamManagementPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                  className="cursor-pointer text-purple-700 dark:text-purple-300 focus:text-purple-800"
+                                  onClick={() => exam.id && navigate(`/exams/${exam.id}/grading/similarity`)}
+                              >
+                                <ShieldAlert className="mr-2 size-4 text-purple-600" />
+                                AI Similarity Check
+                              </DropdownMenuItem>
                               <DropdownMenuItem
                                   className="cursor-pointer"
                                   onClick={() => openSaveAsTemplate(exam)}

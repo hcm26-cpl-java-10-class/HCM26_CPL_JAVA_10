@@ -223,6 +223,16 @@ export function CodingWorkspace({
                                     </div>
                                 ))}
                             </div>
+                            {spec.mainCode && (
+                                <details className="mt-5 rounded-md border p-2">
+                                    <summary className="cursor-pointer text-sm font-semibold">Main function (read-only)</summary>
+                                    <p className="mt-2 text-xs text-muted-foreground">
+                                        Your <code>Solution</code> class is run by this <code>Main</code>, with{" "}
+                                        <code>import java.util.*; import java.io.*;</code> added in front. You do not need to write it.
+                                    </p>
+                                    <pre className="mt-2 max-h-72 overflow-auto rounded bg-muted p-3 text-xs">{spec.mainCode}</pre>
+                                </details>
+                            )}
                         </>
                     )}
                 </section>

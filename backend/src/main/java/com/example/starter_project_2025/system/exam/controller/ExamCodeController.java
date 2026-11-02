@@ -45,6 +45,13 @@ public class ExamCodeController {
         return ResponseEntity.ok(verifyService.verify(principal.getUser().getId(), request));
     }
 
+    /** Xem lop Main he thong tu sinh cho mot khai bao ham (giao vien dang soan cau hoi). */
+    @PostMapping("/code/main-preview")
+    @PreAuthorize("hasAnyAuthority('QUESTION_CREATE','QUESTION_UPDATE','EXAM_UPDATE')")
+    public ResponseEntity<java.util.Map<String, String>> mainPreview(@RequestBody CodeVerifyRequest request) {
+        return ResponseEntity.ok(java.util.Map.of("main", verifyService.mainPreview(request == null ? null : request.getSpec())));
+    }
+
     /** Thi an danh. */
     @PostMapping("/anonymous/attempts/{attemptId}/code/run")
     public ResponseEntity<CodeRunResponse> runAnonymous(

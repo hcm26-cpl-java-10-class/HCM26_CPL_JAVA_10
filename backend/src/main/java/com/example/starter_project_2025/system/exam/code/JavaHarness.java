@@ -28,7 +28,18 @@ public final class JavaHarness {
         code = PUBLIC_SOLUTION.matcher(code).replaceAll("$1class Solution");
         code = PACKAGE_DECL.matcher(code).replaceFirst("");
         // Dat import tren CUNG dong dau tien de so dong cua loi bien dich khong bi lech.
-        return "import java.util.*;import java.io.*;" + code + "\n" + mainClass(spec);
+        return "import java.util.*;import java.io.*;" + code + "\n" + mainFor(spec);
+    }
+
+    /** Lop Main do he thong tu sinh theo khai bao ham (de hien thi / lam diem xuat phat de sua). */
+    public static String generatedMain(CodeSpecDTO spec) {
+        return mainClass(spec);
+    }
+
+    /** Lop Main thuc su duoc dung: ban giao vien tu viet neu co, nguoc lai ban tu sinh. */
+    public static String mainFor(CodeSpecDTO spec) {
+        String custom = spec.getMainCode();
+        return spec.isCustomMain() && custom != null && !custom.isBlank() ? custom : mainClass(spec);
     }
 
     /** stdin: moi tham so mot dong. */
@@ -40,47 +51,115 @@ public final class JavaHarness {
         return sb.toString();
     }
 
+    /** Ten bien trong main khong duoc trung ten tham so (them dau _ neu trung). */
+    private static final java.util.Set<String> MAIN_LOCALS = java.util.Set.of("args", "br", "lines", "out", "result");
+
     private static String mainClass(CodeSpecDTO spec) {
+        int n = spec.getParams().size();
+        String ret = spec.getReturnType().trim();
+
+        // Chi sinh cac ham phu that su can dung (theo kieu tham so / kieu tra ve).
+        java.util.Set<String> parsers = new java.util.LinkedHashSet<>();
+        java.util.Set<String> joiners = new java.util.LinkedHashSet<>();
+        for (CodeSpecDTO.Param p : spec.getParams()) {
+            String t = p.getType().trim();
+            if (isArray(t)) parsers.add(t);
+        }
+        if (isArray(ret)) joiners.add(ret);
+
         StringBuilder sb = new StringBuilder();
         sb.append("class Main {\n");
-        sb.append("    static int[] ia(String s) { s = s.trim(); if (s.isEmpty()) return new int[0];")
-          .append(" String[] t = s.split(\",\", -1); int[] r = new int[t.length];")
-          .append(" for (int i = 0; i < t.length; i++) r[i] = Integer.parseInt(t[i].trim()); return r; }\n");
-        sb.append("    static String[] sa(String s) { s = s.trim(); if (s.isEmpty()) return new String[0];")
-          .append(" String[] t = s.split(\",\", -1); for (int i = 0; i < t.length; i++) t[i] = t[i].trim(); return t; }\n");
-        sb.append("    static String f(Object o) { return o == null ? \"\" : o.toString(); }\n");
-        sb.append("    static String f(int[] a) { StringBuilder b = new StringBuilder();")
-          .append(" for (int i = 0; i < a.length; i++) { if (i > 0) b.append(','); b.append(a[i]); } return b.toString(); }\n");
-        sb.append("    static String f(String[] a) { StringBuilder b = new StringBuilder();")
-          .append(" for (int i = 0; i < a.length; i++) { if (i > 0) b.append(','); b.append(a[i]); } return b.toString(); }\n");
-        sb.append("    static boolean[] ba(String s) { s = s.trim(); if (s.isEmpty()) return new boolean[0];")
-          .append(" String[] t = s.split(\",\", -1); boolean[] r = new boolean[t.length];")
-          .append(" for (int i = 0; i < t.length; i++) r[i] = Boolean.parseBoolean(t[i].trim()); return r; }\n");
-        sb.append("    static String f(boolean[] a) { StringBuilder b = new StringBuilder();")
-          .append(" for (int i = 0; i < a.length; i++) { if (i > 0) b.append(','); b.append(a[i]); } return b.toString(); }\n");
         sb.append("    public static void main(String[] args) throws Exception {\n");
         sb.append("        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));\n");
-        int n = spec.getParams().size();
-        sb.append("        String[] L = new String[").append(n).append("];\n");
-        sb.append("        for (int i = 0; i < L.length; i++) { String s = br.readLine(); L[i] = s == null ? \"\" : s; }\n");
+        sb.append("        // Each parameter is on its own line of stdin, in declaration order.\n");
+        sb.append("        String[] lines = new String[").append(n).append("];\n");
+        sb.append("        for (int i = 0; i < lines.length; i++) {\n");
+        sb.append("            String line = br.readLine();\n");
+        sb.append("            lines[i] = line == null ? \"\" : line;\n");
+        sb.append("        }\n");
         StringBuilder call = new StringBuilder();
         for (int i = 0; i < n; i++) {
             CodeSpecDTO.Param p = spec.getParams().get(i);
             String type = p.getType().trim();
-            sb.append("        ").append(type).append(" p").append(i).append(" = ").append(parse(type, "L[" + i + "]")).append(";\n");
+            String name = mainVar(p.getName().trim());
+            sb.append("        ").append(type).append(' ').append(name).append(" = ")
+              .append(parse(type, "lines[" + i + "]")).append(";\n");
             if (i > 0) call.append(", ");
-            call.append('p').append(i);
+            call.append(name);
         }
-        // Nuot moi thu sinh vien in ra (System.out.println debug) de khong lam sai ket qua; chi in ket qua that.
-        sb.append("        PrintStream real = System.out;\n");
+        sb.append("\n");
+        sb.append("        // Hide anything the student prints, so only the result below is written to stdout.\n");
+        sb.append("        PrintStream out = System.out;\n");
         sb.append("        System.setOut(new PrintStream(OutputStream.nullOutputStream()));\n");
-        sb.append("        ").append(spec.getReturnType().trim()).append(" r = Solution.")
-          .append(spec.getFunctionName().trim()).append('(').append(call).append(");\n");
-        sb.append("        real.println(f(r));\n");
-        sb.append("        real.flush();\n");
+        sb.append("        ").append(ret).append(" result = Solution.").append(spec.getFunctionName().trim())
+          .append('(').append(call).append(");\n");
+        sb.append("        out.println(").append(printExpr(ret)).append(");\n");
+        sb.append("        out.flush();\n");
         sb.append("    }\n");
+
+        for (String t : parsers) {
+            sb.append("\n");
+            sb.append(parserMethod(t));
+        }
+        for (String t : joiners) {
+            sb.append("\n");
+            sb.append(joinMethod(t));
+        }
         sb.append("}\n");
         return sb.toString();
+    }
+
+    private static boolean isArray(String type) {
+        return type.equals("int[]") || type.equals("boolean[]") || type.equals("String[]");
+    }
+
+    private static String mainVar(String name) {
+        return MAIN_LOCALS.contains(name) ? name + "_" : name;
+    }
+
+    private static String printExpr(String ret) {
+        if (ret.equals("String")) return "result == null ? \"\" : result";
+        if (isArray(ret)) return "join(result)";
+        return "result";
+    }
+
+    private static String parserMethod(String type) {
+        return switch (type) {
+            case "int[]" -> "    static int[] parseInts(String s) {\n"
+                    + "        s = s.trim();\n"
+                    + "        if (s.isEmpty()) return new int[0];\n"
+                    + "        String[] parts = s.split(\",\", -1);\n"
+                    + "        int[] result = new int[parts.length];\n"
+                    + "        for (int i = 0; i < parts.length; i++) result[i] = Integer.parseInt(parts[i].trim());\n"
+                    + "        return result;\n"
+                    + "    }\n";
+            case "boolean[]" -> "    static boolean[] parseBooleans(String s) {\n"
+                    + "        s = s.trim();\n"
+                    + "        if (s.isEmpty()) return new boolean[0];\n"
+                    + "        String[] parts = s.split(\",\", -1);\n"
+                    + "        boolean[] result = new boolean[parts.length];\n"
+                    + "        for (int i = 0; i < parts.length; i++) result[i] = Boolean.parseBoolean(parts[i].trim());\n"
+                    + "        return result;\n"
+                    + "    }\n";
+            default -> "    static String[] parseStrings(String s) {\n"
+                    + "        s = s.trim();\n"
+                    + "        if (s.isEmpty()) return new String[0];\n"
+                    + "        String[] parts = s.split(\",\", -1);\n"
+                    + "        for (int i = 0; i < parts.length; i++) parts[i] = parts[i].trim();\n"
+                    + "        return parts;\n"
+                    + "    }\n";
+        };
+    }
+
+    private static String joinMethod(String type) {
+        return "    static String join(" + type + " values) {\n"
+                + "        StringBuilder sb = new StringBuilder();\n"
+                + "        for (int i = 0; i < values.length; i++) {\n"
+                + "            if (i > 0) sb.append(',');\n"
+                + "            sb.append(values[i]);\n"
+                + "        }\n"
+                + "        return sb.toString();\n"
+                + "    }\n";
     }
 
     private static String parse(String type, String expr) {
@@ -89,10 +168,10 @@ public final class JavaHarness {
             case "long" -> "Long.parseLong(" + expr + ".trim())";
             case "double" -> "Double.parseDouble(" + expr + ".trim())";
             case "boolean" -> "Boolean.parseBoolean(" + expr + ".trim())";
-            case "char" -> "(" + expr + ".isEmpty() ? ' ' : " + expr + ".charAt(0))";
-            case "int[]" -> "ia(" + expr + ")";
-            case "boolean[]" -> "ba(" + expr + ")";
-            case "String[]" -> "sa(" + expr + ")";
+            case "char" -> expr + ".isEmpty() ? ' ' : " + expr + ".charAt(0)";
+            case "int[]" -> "parseInts(" + expr + ")";
+            case "boolean[]" -> "parseBooleans(" + expr + ")";
+            case "String[]" -> "parseStrings(" + expr + ")";
             default -> expr;
         };
     }

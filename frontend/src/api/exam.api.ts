@@ -267,6 +267,12 @@ export const verifyCodeSpec = async (spec: CodeSpec, code: string) => {
     return response.data;
 };
 
+/** Teacher: the Main class the system generates for a function declaration. */
+export const previewMain = async (spec: CodeSpec) => {
+    const response = await api.post<{ main: string }>('/exams/code/main-preview', { spec });
+    return response.data.main;
+};
+
 export const SESSION_TOKEN_KEY = 'anonymous_session_token';
 export const SESSION_EMAIL_KEY = 'anonymous_student_email';
 export const SESSION_NAME_KEY = 'anonymous_student_name';

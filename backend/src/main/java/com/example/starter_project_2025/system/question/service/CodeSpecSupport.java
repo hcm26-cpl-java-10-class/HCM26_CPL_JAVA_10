@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.question.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.starter_project_2025.system.exam.code.JavaHarness;
 import com.example.starter_project_2025.system.question.dto.CodeSpecDTO;
 
 import java.util.ArrayList;
@@ -17,6 +18,7 @@ public final class CodeSpecSupport {
     public static final int TOTAL_TESTS = VISIBLE_TESTS + HIDDEN_TESTS;
     public static final int MAX_PARAMS = 6;
     public static final int MAX_VALUE_LENGTH = 1000;
+    public static final int MAX_MAIN_LENGTH = 20000;
     public static final int DEFAULT_TIME_LIMIT_SECONDS = 5;
     public static final int MIN_TIME_LIMIT_SECONDS = 1;
     public static final int MAX_TIME_LIMIT_SECONDS = 10;
@@ -33,6 +35,9 @@ public final class CodeSpecSupport {
             "super", "switch", "synchronized", "this", "throw", "throws", "transient", "try", "void",
             "volatile", "while", "true", "false", "null", "var", "record", "yield", "_");
 
+    private static final Pattern MAIN_CLASS = Pattern.compile("\\bclass\\s+Main\\b");
+    private static final Pattern MAIN_METHOD = Pattern.compile("\\bstatic\\s+void\\s+main\\s*\\(");
+
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private CodeSpecSupport() {
@@ -47,6 +52,8 @@ public final class CodeSpecSupport {
             copy.setFunctionName(spec.getFunctionName() == null ? null : spec.getFunctionName().trim());
             copy.setReturnType(spec.getReturnType() == null ? null : spec.getReturnType().trim());
             copy.setTimeLimitSeconds(spec.getTimeLimitSeconds());
+            copy.setCustomMain(spec.isCustomMain());
+            copy.setMainCode(spec.isCustomMain() ? spec.getMainCode() : null);
             for (CodeSpecDTO.Param p : spec.getParams() == null ? List.<CodeSpecDTO.Param>of() : spec.getParams()) {
                 CodeSpecDTO.Param c = new CodeSpecDTO.Param();
                 c.setName(p.getName() == null ? null : p.getName().trim());
@@ -81,6 +88,7 @@ public final class CodeSpecSupport {
         if (spec != null) {
             spec.setStarterCode(starterCode(spec));
             spec.setTimeLimitSeconds(effectiveTimeLimit(spec));
+            attachMain(spec);
         }
         return spec;
     }
@@ -95,10 +103,25 @@ public final class CodeSpecSupport {
         out.setParams(spec.getParams());
         out.setTimeLimitSeconds(effectiveTimeLimit(spec));
         out.setStarterCode(starterCode(spec));
+        out.setCustomMain(spec.isCustomMain());
+        out.setMainCode(spec.getMainCode());
+        attachMain(out);
         for (CodeSpecDTO.TestCase t : spec.getTests()) {
             if (t.isVisible()) out.getTests().add(t);
         }
         return out;
+    }
+
+    /** Dam bao mainCode luon co gia tri de hien thi: ban tu viet neu co, nguoc lai ban he thong tu sinh. */
+    private static void attachMain(CodeSpecDTO spec) {
+        String custom = spec.getMainCode();
+        if (spec.isCustomMain() && custom != null && !custom.isBlank()) return;
+        spec.setCustomMain(false);
+        try {
+            spec.setMainCode(JavaHarness.generatedMain(spec));
+        } catch (RuntimeException e) {
+            spec.setMainCode(null);
+        }
     }
 
     /** Gioi han thoi gian (giay) dang ap dung, luon nam trong [1, 10]. */
@@ -178,6 +201,16 @@ public final class CodeSpecSupport {
             }
             if (!TYPES.contains(type)) {
                 errors.add("Kiểu tham số '" + name + "' không được hỗ trợ");
+            }
+        }
+        if (spec.isCustomMain()) {
+            String main = spec.getMainCode() == null ? "" : spec.getMainCode();
+            if (main.isBlank()) {
+                errors.add("Hàm main tự viết đang trống");
+            } else if (main.length() > MAX_MAIN_LENGTH) {
+                errors.add("Hàm main quá dài (tối đa " + MAX_MAIN_LENGTH + " ký tự)");
+            } else if (!MAIN_CLASS.matcher(main).find() || !MAIN_METHOD.matcher(main).find()) {
+                errors.add("Hàm main phải nằm trong lớp Main và có dạng public static void main(String[] args)");
             }
         }
         return errors;
