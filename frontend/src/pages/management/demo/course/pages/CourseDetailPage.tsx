@@ -37,7 +37,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useCourseEnrollment } from "../hooks/useCourseEnrollment.ts";
 import {
@@ -58,6 +58,11 @@ const CONTENT_ICON: Record<LessonContentType, LucideIcon> = {
 
 export function CourseDetailPage() {
   const { id } = useParams();
+  const { pathname } = useLocation();
+  // Mở từ trang Enrollments (/course-enrollments/:id) -> giữ ngữ cảnh Enrollments (menu, breadcrumb, nút quay lại).
+  const fromEnrollments = pathname.startsWith("/course-enrollments/");
+  const backPath = fromEnrollments ? "/course-enrollments" : "/courses";
+  const backLabel = fromEnrollments ? "Back to enrollments" : "Back to courses";
   const courseId = Number(id);
   const validId = Number.isInteger(courseId) && courseId > 0;
 
@@ -69,15 +74,17 @@ export function CourseDetailPage() {
   });
 
   const course = detailQuery.data;
-  const breadcrumbTitles: Record<string, string> = { courses: "Courses" };
+  const breadcrumbTitles: Record<string, string> = fromEnrollments
+    ? { "course-enrollments": "Enrollments" }
+    : { courses: "Courses" };
   if (id && course?.name) breadcrumbTitles[id] = course.name;
 
   return (
     <MainLayout pathName={breadcrumbTitles}>
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <Button asChild variant="ghost" className="-ml-3">
-          <Link to="/courses">
-            <ArrowLeft className="size-4" /> Back to courses
+          <Link to={backPath}>
+            <ArrowLeft className="size-4" /> {backLabel}
           </Link>
         </Button>
 
@@ -108,56 +115,61 @@ export function CourseDetailPage() {
   );
 }
 
-function CourseDetailContent({ course }: { course: CourseDetail }) {
-  return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-      <div className="space-y-6">
-        <section className="overflow-hidden rounded-2xl border bg-card">
-          <div className="relative h-56 bg-gradient-to-br from-blue-100 via-indigo-100 to-violet-100 sm:h-72">
-            {course.thumbnailUrl ? (
-              <img src={course.thumbnailUrl} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex h-full items-center justify-center">
-                <GraduationCap className="size-20 text-blue-900/25" />
-              </div>
+/**
+ * Nội dung chi tiết khóa học dùng chung cho trang /courses/:id và Sheet ở trang Enrollments.
+ * stacked = true: xếp 1 cột (hero -> nút hành động -> mô tả -> giáo trình), phù hợp khung hẹp như Sheet.
+ */
+export function CourseDetailContent({ course, stacked = false }: { course: CourseDetail; stacked?: boolean }) {
+  const hero = (
+      <section className="overflow-hidden rounded-2xl border bg-card">
+        <div className="relative h-56 bg-gradient-to-br from-blue-100 via-indigo-100 to-violet-100 sm:h-72">
+          {course.thumbnailUrl ? (
+            <img src={course.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              <GraduationCap className="size-20 text-blue-900/25" />
+            </div>
+          )}
+        </div>
+        <div className="space-y-4 p-6">
+          <div className="flex flex-wrap items-center gap-2">
+            {(course.categoryNames?.length
+              ? course.categoryNames
+              : course.categoryName
+                ? [course.categoryName]
+                : []
+            ).map((name) => (
+              <Badge key={name} variant="outline">
+                {name}
+              </Badge>
+            ))}
+            {course.level && (
+              <Badge variant="secondary" className={LEVEL_BADGE_CLASS[course.level]}>
+                {LEVEL_LABEL[course.level]}
+              </Badge>
             )}
           </div>
-          <div className="space-y-4 p-6">
-            <div className="flex flex-wrap items-center gap-2">
-              {(course.categoryNames?.length
-                ? course.categoryNames
-                : course.categoryName
-                  ? [course.categoryName]
-                  : []
-              ).map((name) => (
-                <Badge key={name} variant="outline">
-                  {name}
-                </Badge>
-              ))}
-              {course.level && (
-                <Badge variant="secondary" className={LEVEL_BADGE_CLASS[course.level]}>
-                  {LEVEL_LABEL[course.level]}
-                </Badge>
-              )}
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{course.name}</h1>
-            <p className="text-sm text-muted-foreground">
-              Instructor: <span className="font-medium text-foreground">{course.instructor || "—"}</span>
-            </p>
-            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5">
-                <Layers className="size-4" /> {course.sections.length} sections
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <BookOpen className="size-4" /> {course.lessonCount} lessons
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <Clock className="size-4" /> {formatTotalDuration(course.totalDuration)}
-              </span>
-            </div>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{course.name}</h1>
+          <p className="text-sm text-muted-foreground">
+            Instructor: <span className="font-medium text-foreground">{course.instructor || "—"}</span>
+          </p>
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <Layers className="size-4" /> {course.sections.length} sections
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <BookOpen className="size-4" /> {course.lessonCount} lessons
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <Clock className="size-4" /> {formatTotalDuration(course.totalDuration)}
+            </span>
           </div>
-        </section>
+        </div>
+      </section>
+  );
 
+  const rest = (
+    <>
         <section className="rounded-2xl border bg-card p-6">
           <h2 className="text-lg font-semibold">About this course</h2>
           <p className="mt-2 whitespace-pre-line text-sm leading-6 text-muted-foreground">
@@ -194,6 +206,24 @@ function CourseDetailContent({ course }: { course: CourseDetail }) {
           })()}
         </section>
         <Syllabus course={course} />
+    </>
+  );
+
+  if (stacked) {
+    return (
+      <div className="space-y-6">
+        {hero}
+        <CourseActionCard course={course} />
+        {rest}
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="space-y-6">
+        {hero}
+        {rest}
       </div>
 
       <aside className="lg:sticky lg:top-4 lg:self-start">
@@ -818,9 +848,13 @@ function StateCard({ title, text, action }: { title: string; text: string; actio
   );
 }
 
-function DetailSkeleton() {
+export function DetailSkeleton({ stacked = false }: { stacked?: boolean }) {
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]" role="status" aria-label="Loading course">
+    <div
+      className={stacked ? "space-y-6" : "grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]"}
+      role="status"
+      aria-label="Loading course"
+    >
       <div className="space-y-6">
         <div className="h-96 animate-pulse rounded-2xl bg-muted" />
         <div className="h-32 animate-pulse rounded-2xl bg-muted" />

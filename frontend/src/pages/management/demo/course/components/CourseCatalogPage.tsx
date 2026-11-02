@@ -14,31 +14,17 @@ import {
 import {
   COURSE_LEVEL_OPTIONS,
   type CatalogSort,
-  type CatalogCourse,
   type CategoryTreeDTO,
   type CourseLevel,
 } from "@/types";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import {
-  ArrowLeft,
-  BookOpen,
-  Clock,
-  GraduationCap,
-  Layers,
-  PlayCircle,
-  Search,
-  SearchX,
-  X,
-} from "lucide-react";
+import { GraduationCap, Search, SearchX, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useCourseEnrollment } from "../hooks/useCourseEnrollment.ts";
 import { useDebouncedValue } from "../hooks/useDebouncedValue.ts";
 import { CatalogPagination } from "./CatalogPagination.tsx";
 import { CourseCard, CourseCardSkeleton } from "./CourseCard.tsx";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { Link } from "react-router-dom";
-import { formatTotalDuration, LEVEL_BADGE_CLASS, LEVEL_LABEL } from "../utils/course.utils.ts";
 
 const PAGE_SIZE = 12;
 const ALL = "all";
@@ -182,7 +168,6 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
 
   const showSkeleton = coursesQuery.isLoading;
   const enrollingCourseId = enrollMutation.isPending ? enrollMutation.variables : undefined;
-  const [selectedCourse, setSelectedCourse] = useState<CatalogCourse | null>(null);
 
   const content = (
     <div className={embedded ? "space-y-5" : "mx-auto w-full max-w-7xl space-y-8"}>
@@ -342,8 +327,7 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
                 isEnrolling={enrollingCourseId === course.id}
                 canAssign={canAssignToStudents}
                 onEnroll={(courseId) => enrollMutation.mutate(courseId)}
-                disableNavigation={embedded}
-                onSelect={embedded ? setSelectedCourse : undefined}
+                detailPath={embedded ? `/course-enrollments/${course.id}` : undefined}
               />
             ))}
           </div>
@@ -358,109 +342,10 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
         )}
       </section>
 
-      {embedded && (
-        <EmbeddedCourseDetailSheet
-          course={selectedCourse}
-          open={Boolean(selectedCourse)}
-          onOpenChange={(open) => !open && setSelectedCourse(null)}
-          canEnroll={canEnroll}
-          enrollMutation={enrollMutation}
-          enrollmentByCourseId={enrollmentByCourseId}
-        />
-      )}
     </div>
   );
 
   if (embedded) return content;
 
   return <MainLayout pathName={{ courses: "Courses" }}>{content}</MainLayout>;
-}
-
-function EmbeddedCourseDetailSheet({
-  course,
-  open,
-  onOpenChange,
-  canEnroll,
-  enrollMutation,
-  enrollmentByCourseId,
-}: {
-  course: CatalogCourse | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  canEnroll: boolean;
-  enrollMutation: ReturnType<typeof useCourseEnrollment>["enrollMutation"];
-  enrollmentByCourseId: Map<number, { id: number; courseId: number; [key: string]: unknown }>;
-}) {
-  if (!course) return null;
-
-  const enrollmentId = enrollmentByCourseId.get(course.id)?.id;
-
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full overflow-y-auto p-0 sm:max-w-3xl">
-        <div className="space-y-6 p-6">
-          <Button asChild variant="ghost" className="-ml-3">
-            <Link to="/course-enrollments">
-              <ArrowLeft className="size-4" /> Back to enrollments
-            </Link>
-          </Button>
-
-          <div className="overflow-hidden rounded-2xl border bg-card">
-            <div className="relative h-56 bg-gradient-to-br from-blue-100 via-indigo-100 to-violet-100 sm:h-72">
-              {course.thumbnailUrl ? (
-                <img src={course.thumbnailUrl} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full items-center justify-center">
-                  <GraduationCap className="size-20 text-blue-900/25" />
-                </div>
-              )}
-            </div>
-            <div className="space-y-4 p-6">
-              <div className="flex flex-wrap items-center gap-2">
-                {course.categoryName && <Badge variant="outline">{course.categoryName}</Badge>}
-                {course.level && (
-                  <Badge variant="secondary" className={LEVEL_BADGE_CLASS[course.level]}>
-                    {LEVEL_LABEL[course.level]}
-                  </Badge>
-                )}
-              </div>
-              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{course.name}</h1>
-              <p className="text-sm text-muted-foreground">
-                Instructor: <span className="font-medium text-foreground">{course.instructor || "—"}</span>
-              </p>
-              <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
-                <span className="inline-flex items-center gap-1.5"><Layers className="size-4" /> {course.lessonCount} lessons</span>
-                <span className="inline-flex items-center gap-1.5"><BookOpen className="size-4" /> {formatTotalDuration(course.totalDuration)}</span>
-                <span className="inline-flex items-center gap-1.5"><Clock className="size-4" /> {course.isFree ? "Free" : "Paid"}</span>
-              </div>
-            </div>
-          </div>
-
-          <section className="rounded-2xl border bg-card p-6">
-            <h2 className="text-lg font-semibold">About this course</h2>
-            <p className="mt-2 whitespace-pre-line text-sm leading-6 text-muted-foreground">
-              {course.description || "The instructor has not added a description yet."}
-            </p>
-          </section>
-
-          <div className="rounded-2xl border bg-card p-4">
-            <div className="flex flex-wrap gap-2">
-              {course.enrolled && enrollmentId !== undefined ? (
-                <Button asChild className="flex-1 min-w-52">
-                  <Link to={`/enrollments/${enrollmentId}/learn`}>
-                    <PlayCircle className="size-4" /> Continue learning
-                  </Link>
-                </Button>
-              ) : null}
-              {!course.enrolled && canEnroll && (
-                <Button className="flex-1 min-w-52" onClick={() => enrollMutation.mutate(course.id)} disabled={enrollMutation.isPending}>
-                  {enrollMutation.isPending ? "Enrolling..." : "Enroll"}
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
 }
