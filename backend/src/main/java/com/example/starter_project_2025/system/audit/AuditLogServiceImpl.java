@@ -44,10 +44,10 @@ public class AuditLogServiceImpl implements AuditLogService {
     public void logLoginFailure(String email, String correlationId) {
         AuditLog auditLog = AuditLog.builder()
                 .actorId(null)
-                .actorEmail("SYSTEM")
+                .actorEmail(email)
                 .action("LOGIN")
                 .entityType("AUTH")
-                .entityId(email)
+                .entityId(null)
                 .oldValue(null)
                 .newValue(null)
                 .correlationId(correlationId)

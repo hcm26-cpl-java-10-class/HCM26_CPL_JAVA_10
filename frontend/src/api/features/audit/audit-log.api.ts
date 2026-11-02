@@ -55,6 +55,20 @@ export const auditLogApi = {
         return response.data;
     },
 
+    getEntityHistory: async (
+        entityType: string,
+        entityId: string | number,
+        page = 0,
+        size = 20,
+    ): Promise<AuditLogPage> => {
+        const response = await axiosInstance.get<AuditLogPage>(
+            `/audit-logs/entity/${encodeURIComponent(entityType)}/${encodeURIComponent(String(entityId))}`,
+            { params: { page, size } },
+        );
+
+        return response.data;
+    },
+
     getAll: async (
         filter: AuditLogFilter = {},
     ): Promise<AuditLogDTO[]> => {

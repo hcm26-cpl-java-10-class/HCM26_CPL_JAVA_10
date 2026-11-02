@@ -51,7 +51,7 @@ public class AuditLogAspect {
                         null,
                         null,
                         MDC.get(CorrelationIdFilter.MDC_KEY),
-                        "FAILED"
+                        "FAILURE"
                 );
             }
             throw ex;
@@ -120,7 +120,7 @@ public class AuditLogAspect {
                     oldValue,
                     null,
                     MDC.get(CorrelationIdFilter.MDC_KEY),
-                    "FAILED"
+                    "FAILURE"
             );
 
             throw ex;
@@ -167,7 +167,7 @@ public class AuditLogAspect {
                     oldValue,
                     null,
                     MDC.get(CorrelationIdFilter.MDC_KEY),
-                    "FAILED"
+                    "FAILURE"
             );
 
             throw ex;

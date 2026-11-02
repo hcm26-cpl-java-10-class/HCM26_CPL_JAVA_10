@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import ExcelJS from "exceljs";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { AnimatePresence, motion } from "framer-motion";
 import { SearchInput } from "@/components/datatable/toolbar/SearchInput";
 import { FilterPopover } from "@/components/datatable/toolbar/filter/FilterPopover";
 import { Pagination } from "@/components/datatable/table/Pagination";
+import { EntityHistoryDialog } from "@/components/audit/EntityHistoryDialog";
 import type { FieldSchema } from "@/types";
 import {
-  auditLogApi,
-  type AuditLogDTO,
-  type AuditLogFilter,
+    auditLogApi,
+    type AuditLogDTO,
+    type AuditLogFilter,
 } from "@/api";
 
 
@@ -20,89 +21,93 @@ const PAGE_SIZE = 20;
 type Period = "7days" | "30days" | "thisMonth" | "all";
 
 function getDateRange(period: Period) {
-  if (period === "all") {
-    return { fromDate: undefined, toDate: undefined };
-  }
+    if (period === "all") {
+        return { fromDate: undefined, toDate: undefined };
+    }
 
-  const now = new Date();
-  const end = new Date(now);
-  const start = new Date(now);
+    const now = new Date();
+    const end = new Date(now);
+    const start = new Date(now);
 
-  if (period === "7days") {
-    start.setDate(start.getDate() - 6);
-  } else if (period === "30days") {
-    start.setDate(start.getDate() - 29);
-  } else {
-    start.setDate(1);
-  }
+    if (period === "7days") {
+        start.setDate(start.getDate() - 6);
+    } else if (period === "30days") {
+        start.setDate(start.getDate() - 29);
+    } else {
+        start.setDate(1);
+    }
 
-  const format = (date: Date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  };
+    const format = (date: Date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+    };
 
-  return {
-    fromDate: format(start),
-    toDate: format(end),
-  };
+    return {
+        fromDate: format(start),
+        toDate: format(end),
+    };
 }
 
 function formatDate(value: string) {
-  if (!value) return "-";
+    if (!value) return "-";
 
-  const date = new Date(value);
+    const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) return value;
+    if (Number.isNaN(date.getTime())) return value;
 
-  return date.toLocaleString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+    return date.toLocaleString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
 }
 
 function formatValue(value: string | null) {
-  if (!value) return "Không có dữ liệu";
+    if (!value) return "Không có dữ liệu";
 
-  try {
-    return JSON.stringify(JSON.parse(value), null, 2);
-  } catch {
-    return value;
-  }
+    try {
+        return JSON.stringify(JSON.parse(value), null, 2);
+    } catch {
+        return value;
+    }
 }
 
 function getActionLabel(action: string) {
-  const labels: Record<string, string> = {
-    CREATE: "Create",
-    UPDATE: "Update",
-    DELETE: "Delete",
-  };
+    const labels: Record<string, string> = {
+        CREATE: "Create",
+        UPDATE: "Update",
+        DELETE: "Delete",
+        LOGIN: "Login",
+        LOGOUT: "Logout",
+    };
 
-  return labels[action?.toUpperCase()] ?? action ?? "Unknown";
+    return labels[action?.toUpperCase()] ?? action ?? "Unknown";
 }
 
 function ActionBadge({ action }: { action: string }) {
-  const normalized = action?.toUpperCase();
+    const normalized = action?.toUpperCase();
 
-  const classes: Record<string, string> = {
-    CREATE: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
-    UPDATE: "bg-blue-50 text-blue-700 ring-blue-600/20",
-    DELETE: "bg-red-50 text-red-700 ring-red-600/20",
-  };
+    const classes: Record<string, string> = {
+        CREATE: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
+        UPDATE: "bg-blue-50 text-blue-700 ring-blue-600/20",
+        DELETE: "bg-red-50 text-red-700 ring-red-600/20",
+        LOGIN: "bg-violet-50 text-violet-700 ring-violet-600/20",
+        LOGOUT: "bg-slate-100 text-slate-700 ring-slate-500/20",
+    };
 
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${
-    classes[normalized] ?? "bg-gray-100 text-gray-700 ring-gray-500/20"
-}`}
-    >
+    return (
+        <span
+            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${
+                classes[normalized] ?? "bg-gray-100 text-gray-700 ring-gray-500/20"
+            }`}
+        >
       {getActionLabel(action)}
     </span>
-  );
+    );
 }
 
 function ResultBadge({ result }: { result: string | null }) {
@@ -189,56 +194,56 @@ function AuditLogDetails({ log }: { log: AuditLogDTO }) {
 
 
 function downloadCsv(logs: AuditLogDTO[]) {
-  if (logs.length === 0) return;
+    if (logs.length === 0) return;
 
-  const headers = [
-    "Time",
-    "Actor",
-    "Actor ID",
-    "Action",
-    "Object",
-    "Object ID",
-    "Result",
-    "Old Value",
-    "New Value",
-    "Correlation ID",
-  ];
+    const headers = [
+        "Time",
+        "Actor",
+        "Actor ID",
+        "Action",
+        "Object",
+        "Object ID",
+        "Result",
+        "Old Value",
+        "New Value",
+        "Correlation ID",
+    ];
 
-  const escapeCsv = (value: unknown): string =>
-    `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const escapeCsv = (value: unknown): string =>
+        `"${String(value ?? "").replace(/"/g, '""')}"`;
 
-const rows = logs.map((log: AuditLogDTO) => [
-    log.createdAt,
-    log.actorEmail || "Unknown",
-    log.actorId ?? "",
-    log.action,
-    log.entityType || "",
-    log.entityId || "",
-    log.result || "Unknown",
-    log.oldValue || "",
-    log.newValue || "",
-    log.correlationId || "",
-]);
+    const rows = logs.map((log: AuditLogDTO) => [
+        log.createdAt,
+        log.actorEmail || "Unknown",
+        log.actorId ?? "",
+        log.action,
+        log.entityType || "",
+        log.entityId || "",
+        log.result || "Unknown",
+        log.oldValue || "",
+        log.newValue || "",
+        log.correlationId || "",
+    ]);
 
-const csv = [headers, ...rows]
-    .map((row) => row.map(escapeCsv).join(","))
-    .join("\r\n");
+    const csv = [headers, ...rows]
+        .map((row) => row.map(escapeCsv).join(","))
+        .join("\r\n");
 
-const blob = new Blob(["\uFEFF", csv], {
-    type: "text/csv;charset=utf-8;",
-});
+    const blob = new Blob(["\uFEFF", csv], {
+        type: "text/csv;charset=utf-8;",
+    });
 
-const url = URL.createObjectURL(blob);
-const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
 
-link.href = url;
-link.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.href = url;
+    link.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
 
-document.body.appendChild(link);
-link.click();
-link.remove();
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
 
-URL.revokeObjectURL(url);
+    URL.revokeObjectURL(url);
 }
 
 async function downloadExcel(logs: AuditLogDTO[]) {
@@ -340,35 +345,35 @@ async function downloadExcel(logs: AuditLogDTO[]) {
     // Header của bảng ở dòng 5
 
 // Header của bảng ở dòng 5
-const headerRow = worksheet.getRow(5);
-headerRow.values = headers;
-headerRow.height = 30;
+    const headerRow = worksheet.getRow(5);
+    headerRow.values = headers;
+    headerRow.height = 30;
 
-headerRow.font = {
-    name: "Arial",
-    size: 10,
-    bold: true,
-    color: { argb: "FFFFFFFF" },
-};
-
-headerRow.alignment = {
-    horizontal: "center",
-    vertical: "middle",
-    wrapText: true,
-};
-
-// Chỉ định dạng đúng 10 cột A:J, không tô màu cả hàng
-for (let columnNumber = 1; columnNumber <= 10; columnNumber++) {
-    const cell = headerRow.getCell(columnNumber);
-
-    cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FF1E293B" },
+    headerRow.font = {
+        name: "Arial",
+        size: 10,
+        bold: true,
+        color: { argb: "FFFFFFFF" },
     };
 
-    cell.border = borderStyle;
-}
+    headerRow.alignment = {
+        horizontal: "center",
+        vertical: "middle",
+        wrapText: true,
+    };
+
+// Chỉ định dạng đúng 10 cột A:J, không tô màu cả hàng
+    for (let columnNumber = 1; columnNumber <= 10; columnNumber++) {
+        const cell = headerRow.getCell(columnNumber);
+
+        cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FF1E293B" },
+        };
+
+        cell.border = borderStyle;
+    }
 
 
     // Dữ liệu bắt đầu từ dòng 6
@@ -562,6 +567,10 @@ export default function AuditLogPage() {
     const [search, setSearch] = useState("");
     const [filters, setFilters] = useState<Record<string, unknown>>({});
     const [selectedLog, setSelectedLog] = useState<AuditLogDTO | null>(null)
+    const [historyTarget, setHistoryTarget] = useState<{
+        entityType: string;
+        entityId: string;
+    } | null>(null);
 
     const auditSchema = useMemo(
         () => ({
@@ -671,6 +680,8 @@ export default function AuditLogPage() {
     const auditQuery = useQuery({
         queryKey: ["audit-logs", queryFilter],
         queryFn: () => auditLogApi.getPage(queryFilter),
+        // keep the table (and the pagination bar) mounted while the next page loads
+        placeholderData: keepPreviousData,
     });
 
     const logs = auditQuery.data?.content ?? [];
@@ -715,35 +726,56 @@ export default function AuditLogPage() {
         >
             <div className="min-h-full bg-slate-50/70 px-4 py-4 md:px-6 lg:px-7">
                 <div className="mx-auto max-w-none space-y-4">
-                    {/* Page heading */}
-                    <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                            <div className="mb-2 flex items-center gap-2 text-sm text-slate-500">
-                                <span>Administration</span>
-                                <span className="text-slate-300">/</span>
-                                <span className="font-semibold text-slate-800">
-                  Audit Log
-                </span>
+                    {/* Filters and audit table */}
+                    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+
+                        <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 p-4 md:px-5">
+                            {/* 1. Search */}
+                            <div className="w-full shrink-0 lg:w-[420px]">
+                                <SearchInput
+                                    search={search}
+                                    onSearchChange={(value: string) => {
+                                        setSearch(value);
+                                        setPage(0);
+                                    }}
+                                />
                             </div>
 
-                            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-                                Audit Log
-                            </h1>
+                            {/* 2. Filters */}
+                            <FilterPopover
+                                table={auditTableAdapter}
+                                hasFilters={auditSchema.fields.some(
+                                    (field) => field.filterable,
+                                )}
+                                activeFilterCount={
+                                    Object.values(filters).filter(
+                                        (value) => value !== undefined && value !== "",
+                                    ).length
+                                }
+                            />
 
-                            <p className="mt-1.5 text-sm text-slate-500">
-                                Trace permission, grade, deadline, export and configuration
-                                changes.
-                            </p>
-                        </div>
+                            {/* 3. Preset date range */}
+                            <select
+                                value={period}
+                                onChange={(event) => {
+                                    setPeriod(event.target.value as Period);
+                                    setPage(0);
+                                }}
+                                className="h-9 min-w-[150px] rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                aria-label="Filter by period"
+                            >
+                                <option value="7days">Last 7 days</option>
+                                <option value="30days">Last 30 days</option>
+                                <option value="thisMonth">This month</option>
+                                <option value="all">All time</option>
+                            </select>
 
-
-
-                        <div className="flex flex-wrap gap-2">
+                            {/* 4. Export (same row, pushed to the right) */}
                             <button
                                 type="button"
                                 onClick={() => setShowExportModal(true)}
                                 disabled={logs.length === 0 || auditQuery.isPending}
-                                className="inline-flex min-h-10 items-center justify-center gap-2 self-start rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="ml-auto inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 <svg
                                     viewBox="0 0 24 24"
@@ -761,55 +793,6 @@ export default function AuditLogPage() {
                                 </svg>
                                 Export
                             </button>
-                        </div>
-
-                    </header>
-
-                    {/* Filters and audit table */}
-                    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-
-                        <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 p-4 md:px-5">
-                            {/* 1. Search */}
-                            <div className="min-w-[200px] flex-1">
-                                <SearchInput
-                                    search={search}
-                                    onSearchChange={(value: string) => {
-                                        setSearch(value);
-                                        setPage(0);
-                                    }}
-                                />
-                            </div>
-
-                            {/* 2. Preset date range */}
-                            <select
-                                value={period}
-                                onChange={(event) => {
-                                    setPeriod(event.target.value as Period);
-                                    setPage(0);
-                                }}
-                                className="h-9 min-w-[150px] rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                                aria-label="Filter by period"
-                            >
-                                <option value="7days">Last 7 days</option>
-                                <option value="30days">Last 30 days</option>
-                                <option value="thisMonth">This month</option>
-                                <option value="all">All time</option>
-                            </select>
-
-
-                            {/* 3. Filters */}
-                            <FilterPopover
-                                table={auditTableAdapter}
-                                hasFilters={auditSchema.fields.some(
-                                    (field) => field.filterable,
-                                )}
-                                activeFilterCount={
-                                    Object.values(filters).filter(
-                                        (value) => value !== undefined && value !== "",
-                                    ).length
-                                }
-                            />
-
                         </div>
 
                         <div className="border-t border-slate-200">
@@ -932,6 +915,12 @@ export default function AuditLogPage() {
                                                     key={log.id}
                                                     log={log}
                                                     onViewDetails={() => setSelectedLog(log)}
+                                                    onViewHistory={() =>
+                                                        setHistoryTarget({
+                                                            entityType: log.entityType,
+                                                            entityId: String(log.entityId),
+                                                        })
+                                                    }
                                                 />
                                             ))}
                                             </tbody>
@@ -941,10 +930,12 @@ export default function AuditLogPage() {
                                     <div className="border-t border-slate-200 px-4 py-4 md:px-5">
                                         <Pagination
                                             table={paginationTable}
+                                            isAutoSize={false}
+                                            showSelectionSummary={false}
                                             onPageSizeChange={(value) => {
-                                                if (value === "auto") return;
-
-                                                const newSize = Number(value);
+                                                // "Auto" is not supported on this page: fall back to the default size
+                                                const newSize =
+                                                    value === "auto" ? PAGE_SIZE : Number(value);
 
                                                 if (Number.isInteger(newSize) && newSize > 0) {
                                                     setSize(newSize);
@@ -1221,6 +1212,12 @@ export default function AuditLogPage() {
                 </div>
             )}
 
+            <EntityHistoryDialog
+                open={!!historyTarget}
+                entityType={historyTarget?.entityType ?? ""}
+                entityId={historyTarget?.entityId ?? null}
+                onClose={() => setHistoryTarget(null)}
+            />
         </MainLayout>
     );
 }
@@ -1228,9 +1225,11 @@ export default function AuditLogPage() {
 function AuditLogRow({
                          log,
                          onViewDetails,
+                         onViewHistory,
                      }: {
     log: AuditLogDTO;
     onViewDetails: () => void;
+    onViewHistory: () => void;
 }) {
     const objectName = log.entityType || "Unknown object";
     const objectId = log.entityId ? `#${log.entityId}` : "";
@@ -1263,6 +1262,16 @@ function AuditLogRow({
                     <div className="mt-1 text-xs text-slate-400">
                         {objectId}
                     </div>
+                )}
+
+                {log.entityId && log.entityType !== "AUTH" && (
+                    <button
+                        type="button"
+                        onClick={onViewHistory}
+                        className="mt-1 text-xs font-medium text-blue-600 hover:underline"
+                    >
+                        View history
+                    </button>
                 )}
             </td>
 
