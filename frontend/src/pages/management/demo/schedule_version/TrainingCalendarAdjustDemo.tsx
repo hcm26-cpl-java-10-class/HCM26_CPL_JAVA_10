@@ -37,6 +37,7 @@ import type { ScheduleVersionDTO, SubjectDTO, SessionDTO } from "@/types";
 import { scheduleVersionApi } from "@/api/features/demo/schedule_version.api";
 import { subjectApi } from "@/api/features/subject.api";
 import { sessionApi } from "@/api/features/demo/session.api";
+import { classSetupApi, type SharedClass, type SharedTrainer } from "@/api/features/class-setup.api";
 
 export type Activity = {
   id: string;
@@ -153,13 +154,7 @@ export const SLOTS = [
   { id: "4", name: "Slot 4 · 15:00–17:15", start: "15:00", end: "17:15" },
 ];
 
-export const STANDARD_TOPIC_PRESETS = [
-  { code: "JAVA_CORE", name: "Java Core & OOP Fundamentals", durationHours: 20 },
-  { code: "DATABASE_SQL", name: "Relational Database & SQL Design", durationHours: 16 },
-  { code: "SPRING_BOOT", name: "Spring Boot Enterprise Backend", durationHours: 24 },
-  { code: "REACT_FRONTEND", name: "React & TypeScript Modern Web", durationHours: 20 },
-  { code: "FINAL_PROJECT", name: "Final Capstone Project", durationHours: 32 },
-];
+export const STANDARD_TOPIC_PRESETS: Array<{ code: string; name: string; durationHours: number }> = [];
 
 export function calculateEndTime(startTime: string, durationHours: number): string {
   const [h, m] = (startTime || "08:00").split(":").map(Number);
@@ -409,236 +404,6 @@ function newActivity(
   };
 }
 
-function makeDefaultTopics(): TrainingTopic[] {
-  return [
-    {
-      id: "topic-java-se",
-      code: "[L2_JA_JS] [NFP]",
-      name: "Java SE/Java Language Programing (1.0)",
-      trainer: "NgaTTT45",
-      mentor: "",
-      prerequisite: "",
-      location: "[HCM] [FTOWN-1] Full Time 2026",
-      defaultSection: "Section 1",
-      slot: "1",
-      durationHours: 28,
-      sessionHours: 4,
-      days: [
-        {
-          id: "day-1",
-          dayNo: 1,
-          name: "Java Fundamentals & Basic Programming",
-          date: "2026-05-14",
-          activities: [
-            {
-              id: "act-1",
-              name: "Java Fundamentals & Basic Programming",
-              pic: "NgaTTT45",
-              contribution: "Lecture",
-              format: "Self Learning",
-              duration: "4h",
-              section: "1 (08h00 - 12h00)",
-              start: "08:00",
-              end: "12:00",
-            },
-            {
-              id: "act-2",
-              name: "Assignment",
-              pic: "",
-              contribution: "Assignment",
-              format: "Offline",
-              duration: "4h",
-              section: "2 (13h00 - 17h00)",
-              start: "13:00",
-              end: "17:00",
-            },
-          ],
-        },
-        {
-          id: "day-2",
-          dayNo: 2,
-          name: "Object-Oriented Programming (OOP)",
-          date: "2026-05-15",
-          activities: [
-            {
-              id: "act-3",
-              name: "Object-Oriented Programming (OOP)",
-              pic: "NgaTTT45",
-              contribution: "Lecture",
-              format: "Offline",
-              duration: "4h",
-              section: "1 (08h00 - 12h00)",
-              start: "08:00",
-              end: "12:00",
-            },
-            {
-              id: "act-4",
-              name: "Assignment",
-              pic: "",
-              contribution: "Assignment",
-              format: "Offline",
-              duration: "4h",
-              section: "2 (13h00 - 17h00)",
-              start: "13:00",
-              end: "17:00",
-            },
-          ],
-        },
-        {
-          id: "day-3",
-          dayNo: 3,
-          name: "Collections Framework, String, Exception Handling & File I/O",
-          date: "2026-05-18",
-          activities: [
-            {
-              id: "act-5",
-              name: "Collections Framework, String, Exception Handling & File I/O",
-              pic: "NgaTTT45",
-              contribution: "Lecture",
-              format: "Offline",
-              duration: "4h",
-              section: "1 (08h00 - 12h00)",
-              start: "08:00",
-              end: "12:00",
-            },
-            {
-              id: "act-6",
-              name: "Assignment",
-              pic: "",
-              contribution: "Assignment",
-              format: "Offline",
-              duration: "4h",
-              section: "2 (13h00 - 17h00)",
-              start: "13:00",
-              end: "17:00",
-            },
-          ],
-        },
-        {
-          id: "day-4",
-          dayNo: 4,
-          name: "Introduction to Thread in Java",
-          date: "2026-05-19",
-          activities: [
-            {
-              id: "act-7",
-              name: "Introduction to Thread in Java",
-              pic: "NgaTTT45",
-              contribution: "Lecture",
-              format: "Offline",
-              duration: "4h",
-              section: "1 (08h00 - 12h00)",
-              start: "08:00",
-              end: "12:00",
-            },
-            {
-              id: "act-8",
-              name: "Assignment",
-              pic: "",
-              contribution: "Assignment",
-              format: "Offline",
-              duration: "4h",
-              section: "2 (13h00 - 17h00)",
-              start: "13:00",
-              end: "17:00",
-            },
-          ],
-        },
-        {
-          id: "day-5",
-          dayNo: 5,
-          name: "Database Connectivity (JDBC)",
-          date: "2026-05-20",
-          activities: [
-            {
-              id: "act-9",
-              name: "Database Connectivity (JDBC)",
-              pic: "NgaTTT45",
-              contribution: "Lecture",
-              format: "Offline",
-              duration: "4h",
-              section: "1 (08h00 - 12h00)",
-              start: "08:00",
-              end: "12:00",
-            },
-            {
-              id: "act-10",
-              name: "Assignment",
-              pic: "",
-              contribution: "Assignment",
-              format: "Offline",
-              duration: "4h",
-              section: "2 (13h00 - 17h00)",
-              start: "13:00",
-              end: "17:00",
-            },
-          ],
-        },
-        {
-          id: "day-6",
-          dayNo: 6,
-          name: "Review ôn tập",
-          date: "2026-05-21",
-          activities: [
-            {
-              id: "act-11",
-              name: "Review ôn tập & Q&A",
-              pic: "NgaTTT45",
-              contribution: "Practice",
-              format: "Offline",
-              duration: "4h",
-              section: "1 (08h00 - 12h00)",
-              start: "08:00",
-              end: "12:00",
-            },
-            {
-              id: "act-12",
-              name: "Assignment",
-              pic: "",
-              contribution: "Assignment",
-              format: "Self Learning",
-              duration: "4h",
-              section: "2 (13h00 - 17h00)",
-              start: "13:00",
-              end: "17:00",
-            },
-          ],
-        },
-        {
-          id: "day-7",
-          dayNo: 7,
-          name: "Final Assessment & Project Evaluation",
-          date: "2026-05-22",
-          activities: [
-            {
-              id: "act-13",
-              name: "Final Examination",
-              pic: "NgaTTT45",
-              contribution: "Assessment",
-              format: "Offline",
-              duration: "4h",
-              section: "1 (08h00 - 12h00)",
-              start: "08:00",
-              end: "12:00",
-            },
-            {
-              id: "act-14",
-              name: "Wrap-up & Evaluation",
-              pic: "NgaTTT45",
-              contribution: "Assessment",
-              format: "Offline",
-              duration: "4h",
-              section: "2 (13h00 - 17h00)",
-              start: "13:00",
-              end: "17:00",
-            },
-          ],
-        },
-      ],
-    },
-  ];
-}
-
 function durationMinutes(start: string, end: string): number | null {
   if (!/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end)) return null;
   const toMinutes = (timeStr: string) =>
@@ -747,21 +512,62 @@ export default function TrainingCalendarAdjustDemo({
   }, [initialVersion, selectedClassId]);
 
   const isReadOnly = false;
-  const [topics, setTopics] = useState<TrainingTopic[]>(makeDefaultTopics);
-  const [classStart, setClassStart] = useState("2026-05-14");
-  const [learningStart, setLearningStart] = useState("2026-05-14");
+  const [topics, setTopics] = useState<TrainingTopic[]>([]);
+  const [classStart, setClassStart] = useState("2026-11-02");
+  const [learningStart, setLearningStart] = useState("2026-11-02");
   const [selectedDayIds, setSelectedDayIds] = useState<string[]>([]);
   const [collapsedTopics, setCollapsedTopics] = useState<string[]>([]);
-  const [collapsedDays, setCollapsedDays] = useState<string[]>([
-    "day-1",
-    "day-2",
-    "day-3",
-    "day-4",
-    "day-5",
-    "day-6",
-    "day-7",
-  ]);
+  const [collapsedDays, setCollapsedDays] = useState<string[]>([]);
   const [dirty, setDirty] = useState(false);
+  const [realClasses, setRealClasses] = useState<SharedClass[]>([]);
+  const [realTrainers, setRealTrainers] = useState<SharedTrainer[]>([]);
+  const [realRooms, setRealRooms] = useState<Array<{ id: number; name: string }>>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    Promise.allSettled([
+      classSetupApi.getActiveClasses(),
+      classSetupApi.getActiveTrainers(),
+      classSetupApi.getRooms(),
+    ]).then(([classesRes, trainersRes, roomsRes]) => {
+      if (!isMounted) return;
+      if (classesRes.status === "fulfilled" && classesRes.value && classesRes.value.length > 0) {
+        setRealClasses(classesRes.value);
+      }
+      if (trainersRes.status === "fulfilled" && trainersRes.value && trainersRes.value.length > 0) {
+        setRealTrainers(trainersRes.value);
+      }
+      if (roomsRes.status === "fulfilled" && roomsRes.value && roomsRes.value.length > 0) {
+        setRealRooms(roomsRes.value);
+      }
+    });
+    return () => { isMounted = false; };
+  }, []);
+
+  const classOptions = useMemo(() => {
+    if (realClasses.length > 0) {
+      return realClasses.map((c) => ({
+        id: c.code || String(c.id),
+        name: `[${c.code}] ${c.name}`,
+        startDate: c.startDate,
+      }));
+    }
+    return PRESET_CLASSES;
+  }, [realClasses]);
+
+  const trainerOptions = useMemo(() => {
+    if (realTrainers.length > 0) {
+      return realTrainers.map((t) => t.name || t.email || `Trainer #${t.id}`);
+    }
+    return PIC_OPTIONS;
+  }, [realTrainers]);
+
+  const locationOptions = useMemo(() => {
+    if (realRooms.length > 0) {
+      return realRooms.map((r) => r.name);
+    }
+    return LOCATION_OPTIONS;
+  }, [realRooms]);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [removal, setRemoval] = useState<Removal | null>(null);
 
@@ -1098,10 +904,17 @@ export default function TrainingCalendarAdjustDemo({
 
           if (topicMap.size > 0) {
             setTopics(Array.from(topicMap.values()));
+          } else {
+            setTopics([]);
           }
+        } else if (isMounted) {
+          setTopics([]);
         }
-      } catch {
-        // Fallback giữ nguyên mock default
+      } catch (err) {
+        console.warn("Could not load sessions for class:", err);
+        if (isMounted) {
+          setTopics([]);
+        }
       }
     };
     void loadSavedSessions();
@@ -1308,7 +1121,8 @@ export default function TrainingCalendarAdjustDemo({
     }
 
     if (sourceList.length === 0) {
-      sourceList = STANDARD_TOPIC_PRESETS;
+      toast.warning("Chưa có môn học nào trong hệ thống. Vui lòng tạo môn học trong mục Quản lý môn học trước.");
+      return;
     }
 
     let curStartDate = learningStart;
@@ -1592,7 +1406,7 @@ export default function TrainingCalendarAdjustDemo({
                 onChange={(e) => handleSelectClass(e.target.value)}
                 className="h-7 rounded-md border-0 bg-transparent text-xs font-semibold focus-visible:outline-none"
               >
-                {PRESET_CLASSES.map((cls) => (
+                {classOptions.map((cls) => (
                   <option key={cls.id} value={cls.id}>
                     {cls.name}
                   </option>
@@ -1844,7 +1658,7 @@ export default function TrainingCalendarAdjustDemo({
                     onChange={(e) => changeTopic(topic.id, { location: e.target.value })}
                     className="h-9 w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium truncate"
                   >
-                    {LOCATION_OPTIONS.map((loc) => (
+                    {locationOptions.map((loc) => (
                       <option key={loc} value={loc}>
                         {loc}
                       </option>
@@ -1898,7 +1712,7 @@ export default function TrainingCalendarAdjustDemo({
                     onChange={(e) => changeTopic(topic.id, { trainer: e.target.value })}
                     className="h-9 w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
                   >
-                    {PIC_OPTIONS.map((pic) => (
+                    {trainerOptions.map((pic) => (
                       <option key={pic} value={pic}>
                         {pic}
                       </option>
@@ -1916,7 +1730,7 @@ export default function TrainingCalendarAdjustDemo({
                     className="h-9 w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
                   >
                     <option value=""> </option>
-                    {PIC_OPTIONS.map((pic) => (
+                    {trainerOptions.map((pic) => (
                       <option key={pic} value={pic}>
                         {pic}
                       </option>
@@ -2114,7 +1928,7 @@ export default function TrainingCalendarAdjustDemo({
                                                       className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs text-gray-800 focus:ring-2 focus:ring-indigo-500"
                                                     >
                                                       <option value=""> </option>
-                                                      {PIC_OPTIONS.map((pic) => (
+                                                      {trainerOptions.map((pic) => (
                                                         <option key={pic} value={pic}>
                                                           {pic}
                                                         </option>
