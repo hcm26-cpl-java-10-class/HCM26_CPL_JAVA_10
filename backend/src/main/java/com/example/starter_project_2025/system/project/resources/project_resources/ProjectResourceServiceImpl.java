@@ -4,17 +4,24 @@ import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.project.ProjectRepository;
 import com.example.starter_project_2025.system.project.domain.Project;
+import com.example.starter_project_2025.system.project.resources.ProjectResourceAccessGuard;
 import com.example.starter_project_2025.system.project.resources.ResourceKind;
 import com.example.starter_project_2025.system.project.resources.project_resource_files.ProjectResourceFileRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Locale;
 
 /**
  * CRUD use case of {@link ProjectResource}.
@@ -53,6 +60,7 @@ public class ProjectResourceServiceImpl
     ProjectResourceRepository projectResourceRepository;
     ProjectRepository projectRepository;
     ProjectResourceFileRepository projectResourceFileRepository;
+    ProjectResourceAccessGuard resourceAccessGuard;
 
     @Override
     protected BaseCrudRepository<ProjectResource, Long> getRepository() {
@@ -131,12 +139,93 @@ public class ProjectResourceServiceImpl
     public List<ProjectResourceDTO> getByProject(Long projectId) {
 
         check("PROJECT_RESOURCE_READ");
+        resourceAccessGuard.requireProject(projectId);
 
         return projectResourceRepository
                 .findAllByProjectIdAndIsActiveTrueOrderByOrderIndexAscIdAsc(projectId)
                 .stream()
                 .map(projectResourceMapper::toResponse)
                 .toList();
+    }
+
+    /**
+     * The generic list endpoint must respect the same team data scope: a
+     * trainee can only list resources of projects they belong to (AC04).
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProjectResourceDTO> getAll(Pageable pageable, String search, ProjectResourceFilter filter) {
+
+        check("PROJECT_RESOURCE_READ");
+
+        if (resourceAccessGuard.isPrivileged()) {
+            return super.getAll(pageable, search, filter);
+        }
+
+        ProjectResourceFilter safe = filter == null ? new ProjectResourceFilter() : filter;
+        List<Long> projectIds = resourceAccessGuard.accessibleProjectIds();
+
+        if (safe.getProjectId() != null) {
+            if (!projectIds.contains(safe.getProjectId())) {
+                throw new AccessDeniedException(
+                        "These project resources are outside your team data scope");
+            }
+            projectIds = List.of(safe.getProjectId());
+        }
+
+        if (projectIds.isEmpty()) {
+            return Page.empty(pageable);
+        }
+
+        List<Long> scopedProjectIds = projectIds;
+        Specification<ProjectResource> spec = (root, query, cb) ->
+                root.get("projectId").in(scopedProjectIds);
+
+        if (search != null && !search.isBlank()) {
+            String pattern = "%" + search.trim().toLowerCase(Locale.ROOT) + "%";
+            spec = spec.and((root, query, cb) -> cb.or(
+                    cb.like(cb.lower(root.get("title")), pattern),
+                    cb.like(cb.lower(root.get("description")), pattern),
+                    cb.like(cb.lower(root.get("category")), pattern)));
+        }
+
+        if (safe.getKind() != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("kind"), safe.getKind()));
+        }
+
+        if (safe.getCategory() != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("category"), safe.getCategory()));
+        }
+
+        if (safe.getTitle() != null && !safe.getTitle().isBlank()) {
+            String pattern = "%" + safe.getTitle().trim().toLowerCase(Locale.ROOT) + "%";
+            spec = spec.and((root, query, cb) -> cb.like(cb.lower(root.get("title")), pattern));
+        }
+
+        if (safe.getIsActive() != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("isActive"), safe.getIsActive()));
+        }
+
+        if (safe.getIds() != null && !safe.getIds().isEmpty()) {
+            spec = spec.and((root, query, cb) -> root.get("id").in(safe.getIds()));
+        }
+
+        return projectResourceRepository.findAll(spec, pageable)
+                .map(projectResourceMapper::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProjectResourceDTO getById(Long id) {
+
+        check("PROJECT_RESOURCE_READ");
+
+        ProjectResource entity = projectResourceRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Entity not found"));
+
+        resourceAccessGuard.requireProject(entity.getProjectId());
+
+        return projectResourceMapper.toResponse(entity);
     }
 
     // ---------------------------------------------------------------------

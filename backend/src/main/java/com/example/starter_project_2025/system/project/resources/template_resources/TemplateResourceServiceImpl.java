@@ -6,6 +6,8 @@ import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
+import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshot;
+import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshotRepository;
 import com.example.starter_project_2025.system.project.resources.ResourceKind;
 import com.example.starter_project_2025.system.project.resources.template_resource_files.TemplateResourceFileRepository;
 import lombok.AccessLevel;
@@ -50,10 +52,12 @@ public class TemplateResourceServiceImpl
     static final String CATEGORY_FIELD = "category";
     static final String ORDER_INDEX_FIELD = "orderIndex";
     static final String TEMPLATE_ID_FIELD = "templateId";
+    static final String TEMPLATE_VERSION_ID_FIELD = "templateVersionId";
 
     TemplateResourceMapper templateResourceMapper;
     TemplateResourceRepository templateResourceRepository;
     ProjectTemplateRepository projectTemplateRepository;
+    ProjectTemplateSnapshotRepository projectTemplateSnapshotRepository;
     TemplateResourceFileRepository templateResourceFileRepository;
 
     @Override
@@ -139,6 +143,19 @@ public class TemplateResourceServiceImpl
                 .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<TemplateResourceDTO> getByVersion(Long templateVersionId) {
+
+        check("PROJECT_TEMPLATE_RESOURCE_READ");
+
+        return templateResourceRepository
+                .findAllByTemplateVersionIdOrderByOrderIndexAscIdAsc(templateVersionId)
+                .stream()
+                .map(templateResourceMapper::toResponse)
+                .toList();
+    }
+
     // ---------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------
@@ -171,6 +188,26 @@ public class TemplateResourceServiceImpl
     }
 
     private void resolveTemplate(TemplateResource entity, ValidationContext ctx) {
+
+        if (entity.getTemplateVersionId() != null) {
+
+            ProjectTemplateSnapshot version =
+                    projectTemplateSnapshotRepository.findById(entity.getTemplateVersionId()).orElse(null);
+
+            if (version == null) {
+                ctx.add(TEMPLATE_VERSION_ID_FIELD,
+                        "Template version not found: " + entity.getTemplateVersionId());
+                return;
+            }
+
+            if (entity.getTemplateId() == null) {
+                entity.setTemplateId(version.getTemplateId());
+            } else if (!entity.getTemplateId().equals(version.getTemplateId())) {
+                ctx.add(TEMPLATE_VERSION_ID_FIELD,
+                        "Template version does not belong to the selected template");
+                return;
+            }
+        }
 
         if (entity.getTemplateId() == null) {
             ctx.add(TEMPLATE_ID_FIELD, "Project template is required");

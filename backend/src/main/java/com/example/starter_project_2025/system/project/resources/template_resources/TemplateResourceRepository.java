@@ -10,5 +10,9 @@ public interface TemplateResourceRepository extends BaseCrudRepository<TemplateR
 
     List<TemplateResource> findAllByTemplateIdOrderByOrderIndexAscIdAsc(Long templateId);
 
+    List<TemplateResource> findAllByTemplateVersionIdOrderByOrderIndexAscIdAsc(Long templateVersionId);
+
+    long countByTemplateVersionId(Long templateVersionId);
+
     long countByTemplateId(Long templateId);
 }

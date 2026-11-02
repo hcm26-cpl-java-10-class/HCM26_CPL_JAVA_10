@@ -20,6 +20,7 @@ import com.example.starter_project_2025.system.project.milestone.domain.LatePoli
 import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshot;
+import com.example.starter_project_2025.system.project.resources.project_resources.ProjectResourceProvisioningService;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklog;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogPriority;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogRepository;
@@ -99,6 +100,7 @@ public class TemplateAssignmentProvisioningService {
     private final TemplateMilestoneScheduleValidator scheduleValidator;
     private final TemplateMilestoneRubrics milestoneRubrics;
     private final TemplateBriefSnapshotWriter briefSnapshots;
+    private final ProjectResourceProvisioningService projectResourceProvisioning;
     private final ObjectMapper objectMapper;
     private final jakarta.persistence.EntityManager entityManager;
 
@@ -143,11 +145,14 @@ public class TemplateAssignmentProvisioningService {
         int generatedMilestones = generateMilestones(
                 team, project, tenantId, actorId, now, milestonePlan);
         int generatedBacklogItems = generateSampleBacklog(project, template);
+        // US-RES-001: the project inherits the resource set of the version it
+        // was assigned from. The copies stay independent from the template.
+        int inheritedResources = projectResourceProvisioning.provision(snapshot, project.getId(), tenantId);
 
         recordActivity(workspace, tenantId, actorId, correlationId, ACTIVITY_WORKSPACE_GENERATED);
 
         recordProvisioning(team, project, template, snapshot, workspace,
-                generatedMilestones, generatedBacklogItems, actorId, correlationId);
+                generatedMilestones, generatedBacklogItems, inheritedResources, actorId, correlationId);
     }
 
     // ------------------------------------------------------------------
@@ -381,6 +386,7 @@ public class TemplateAssignmentProvisioningService {
                                     Workspace workspace,
                                     int milestoneCount,
                                     int backlogItemCount,
+                                    int resourceCount,
                                     Long actorId,
                                     String correlationId) {
 
@@ -397,6 +403,7 @@ public class TemplateAssignmentProvisioningService {
         state.put("workspaceId", workspace.getId());
         state.put("milestones", milestoneCount);
         state.put("backlogItems", backlogItemCount);
+        state.put("resources", resourceCount);
         state.put("members", roster(team));
 
         String payload;

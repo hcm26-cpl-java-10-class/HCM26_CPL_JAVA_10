@@ -24,7 +24,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Slf4j
 @RestControllerAdvice(assignableTypes = {ProjectTemplateController.class,
         com.example.starter_project_2025.system.project.template.version.TemplateVersionConfigurationController.class,
-        com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshotController.class})
+        com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshotController.class,
+        com.example.starter_project_2025.system.project.resources.template_resources.TemplateResourceVersionController.class})
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class ProjectTemplateExceptionHandler {
     @ExceptionHandler(ProjectTemplateException.class)

@@ -4,10 +4,15 @@ import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import com.example.starter_project_2025.system.project.resources.ProjectResourceAccessGuard;
+import com.example.starter_project_2025.system.project.resources.project_resources.ProjectResource;
 import com.example.starter_project_2025.system.project.resources.project_resources.ProjectResourceRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,6 +51,7 @@ public class ProjectResourceFileServiceImpl
     ProjectResourceFileMapper projectResourceFileMapper;
     ProjectResourceFileRepository projectResourceFileRepository;
     ProjectResourceRepository projectResourceRepository;
+    ProjectResourceAccessGuard resourceAccessGuard;
 
     @Override
     protected BaseCrudRepository<ProjectResourceFile, Long> getRepository() {
@@ -103,11 +109,68 @@ public class ProjectResourceFileServiceImpl
     public List<ProjectResourceFileDTO> getByResource(Long resourceId) {
 
         check("PROJECT_RESOURCE_FILE_READ");
+        requireResourceScope(resourceId);
 
         return projectResourceFileRepository.findAllByResourceIdOrderByIdAsc(resourceId)
                 .stream()
                 .map(projectResourceFileMapper::toResponse)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProjectResourceFileDTO> getAll(Pageable pageable,
+                                               String search,
+                                               ProjectResourceFileFilter filter) {
+
+        check("PROJECT_RESOURCE_FILE_READ");
+
+        if (resourceAccessGuard.isPrivileged()) {
+            return super.getAll(pageable, search, filter);
+        }
+
+        ProjectResourceFileFilter safe = filter == null ? new ProjectResourceFileFilter() : filter;
+
+        if (safe.getResourceId() == null) {
+            return Page.empty(pageable);
+        }
+
+        requireResourceScope(safe.getResourceId());
+
+        ProjectResourceFileFilter scoped = new ProjectResourceFileFilter();
+        scoped.setResourceId(safe.getResourceId());
+        scoped.setOriginalName(safe.getOriginalName());
+        scoped.setContentType(safe.getContentType());
+        scoped.setIds(safe.getIds());
+        scoped.setIsActive(safe.getIsActive());
+        scoped.setCreatedRange(safe.getCreatedRange());
+        scoped.setUpdatedRange(safe.getUpdatedRange());
+        scoped.setCreatedBy(safe.getCreatedBy());
+        scoped.setUpdatedBy(safe.getUpdatedBy());
+
+        return super.getAll(pageable, search, scoped);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProjectResourceFileDTO getById(Long id) {
+
+        check("PROJECT_RESOURCE_FILE_READ");
+
+        ProjectResourceFile entity = projectResourceFileRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Entity not found"));
+
+        requireResourceScope(entity.getResourceId());
+
+        return projectResourceFileMapper.toResponse(entity);
+    }
+
+    private void requireResourceScope(Long resourceId) {
+
+        ProjectResource resource = projectResourceRepository.findById(resourceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Entity not found"));
+
+        resourceAccessGuard.requireProject(resource.getProjectId());
     }
 
     private void normalize(ProjectResourceFile entity) {

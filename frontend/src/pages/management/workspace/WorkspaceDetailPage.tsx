@@ -21,6 +21,7 @@ import { sectionAccess } from "./workspace.section-access";
 import { WorkspaceTeamBoardPanel } from "./WorkspaceTeamBoardPanel";
 import { WorkspaceBacklogPanel } from "./WorkspaceBacklogPanel";
 import { WorkspaceProjectLogsPanel } from "./WorkspaceProjectLogsPanel";
+import { WorkspaceResourcesPanel } from "./WorkspaceResourcesPanel";
 import { WorkspaceAlertsPanel } from "@/pages/management/alerts/WorkspaceAlertsPanel";
 
 export default function WorkspaceDetailPage() {
@@ -96,6 +97,8 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                 : tab === "members" ? <WorkspaceMembersPanel workspaceId={workspaceId} teamId={context.teamId}
                     classId={context.classId} allocationSessionId={context.allocationSessionId} canViewMembers
                     onAccessChanged={reloadAccess} />
+                : tab === "resources" ? <WorkspaceResourcesPanel workspaceId={workspaceId} projectId={context.projectId}
+                    teamId={context.teamId} onAccessChanged={reloadAccess} />
                 : tab === "milestones" ? <WorkspaceMilestonesPanel workspaceId={workspaceId} projectId={context.projectId}
                     teamId={context.teamId} access={current} />
                 : tab === "artifacts" ? <WorkspaceArtifactsPanel workspaceId={workspaceId} projectId={context.projectId}

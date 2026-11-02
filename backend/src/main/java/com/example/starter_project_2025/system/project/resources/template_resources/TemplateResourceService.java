@@ -11,4 +11,7 @@ public interface TemplateResourceService
      * Ordered resources defined on one template version source.
      */
     List<TemplateResourceDTO> getByTemplate(Long templateId);
+
+    /** Ordered resources attached to one template version (snapshot). */
+    List<TemplateResourceDTO> getByVersion(Long templateVersionId);
 }

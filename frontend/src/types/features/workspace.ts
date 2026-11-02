@@ -100,7 +100,7 @@ export interface WorkspaceDetail extends WorkspaceResponse {
   activities: WorkspaceActivity[] | null;
 }
 
-export type WorkspaceSectionKey = "overview" | "members" | "milestones" | "sprints" | "backlog" | "artifacts" | "feedback" | "activity";
+export type WorkspaceSectionKey = "overview" | "resources" | "members" | "milestones" | "sprints" | "backlog" | "artifacts" | "feedback" | "activity";
 export interface WorkspaceSectionAccess { key: WorkspaceSectionKey; canRead: boolean; actions: Record<string, boolean> }
 export interface WorkspaceNavigation {
   workspaceId: number; projectId?: number | null; teamId: number; classId: number; allocationSessionId: number;

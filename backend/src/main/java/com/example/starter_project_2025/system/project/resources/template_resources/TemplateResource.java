@@ -45,6 +45,7 @@ import lombok.experimental.SuperBuilder;
         name = "project_template_resources",
         indexes = {
                 @Index(name = "idx_template_resource_template", columnList = "template_id"),
+                @Index(name = "idx_template_resource_version", columnList = "template_version_id"),
                 @Index(name = "idx_template_resource_tenant", columnList = "tenant_id")
         }
 )
@@ -58,6 +59,19 @@ public class TemplateResource extends BaseEntity {
     @ImportField(name = "Template Id", required = true)
     @ExportField(name = "Template Id")
     Long templateId;
+
+    /**
+     * Version (snapshot) the resource belongs to.
+     * <p>
+     * Resources are version-scoped: the Resources tab edits the draft
+     * version, and a published version keeps the exact list it was published
+     * with. Rows created before version scoping existed carry {@code null}
+     * and are treated as template-level defaults.
+     */
+    @Column(name = "template_version_id", updatable = false)
+    @ImportField(name = "Template Version Id")
+    @ExportField(name = "Template Version Id")
+    Long templateVersionId;
 
     /** Owning tenant, derived from the template by the service. */
     @Column(name = "tenant_id", updatable = false)

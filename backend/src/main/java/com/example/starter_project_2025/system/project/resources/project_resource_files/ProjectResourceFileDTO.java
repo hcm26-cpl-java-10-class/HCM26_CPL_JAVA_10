@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.project.resources.project_resource_files;
 
 import com.example.starter_project_2025.base.crud.dto.BaseDTO;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -20,6 +21,8 @@ public class ProjectResourceFileDTO extends BaseDTO {
     /** Owning project resource; immutable once the file exists. */
     Long resourceId;
 
+    /** Accepted on write but never serialised: the raw object path stays private. */
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     String storageKey;
 
     String originalName;

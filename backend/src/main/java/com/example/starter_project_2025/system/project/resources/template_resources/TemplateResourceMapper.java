@@ -16,6 +16,7 @@ public interface TemplateResourceMapper extends BaseCrudMapper<TemplateResource,
 
     @Override
     @Mapping(target = "templateId", ignore = true)
+    @Mapping(target = "templateVersionId", ignore = true)
     @Mapping(target = "tenantId", ignore = true)
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     void update(@MappingTarget TemplateResource entity, TemplateResourceDTO request);

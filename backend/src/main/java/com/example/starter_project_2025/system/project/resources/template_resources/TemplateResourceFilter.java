@@ -14,6 +14,9 @@ public class TemplateResourceFilter extends BaseFilter {
     @FilterField(entityField = "templateId", operator = FilterOperator.EQUAL)
     Long templateId;
 
+    @FilterField(entityField = "templateVersionId", operator = FilterOperator.EQUAL)
+    Long templateVersionId;
+
     @FilterField(entityField = "tenantId", operator = FilterOperator.EQUAL)
     Long tenantId;
 

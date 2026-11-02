@@ -22,6 +22,9 @@ public class TemplateResourceDTO extends BaseDTO {
     /** Owning template; immutable once the resource exists. */
     Long templateId;
 
+    /** Owning template version (snapshot); immutable once the resource exists. */
+    Long templateVersionId;
+
     /** Derived from the template, read-only for clients. */
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     Long tenantId;

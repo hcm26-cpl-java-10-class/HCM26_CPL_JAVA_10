@@ -46,4 +46,10 @@ public class TemplateResourceController
     public ResponseEntity<List<TemplateResourceDTO>> getByTemplate(@PathVariable Long templateId) {
         return ResponseEntity.ok(templateResourceService.getByTemplate(templateId));
     }
+
+    /** Ordered resources attached to one template version. */
+    @GetMapping("/by-version/{versionId}")
+    public ResponseEntity<List<TemplateResourceDTO>> getByVersion(@PathVariable Long versionId) {
+        return ResponseEntity.ok(templateResourceService.getByVersion(versionId));
+    }
 }
