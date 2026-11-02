@@ -2,15 +2,17 @@ import type { WorkspaceDetail } from "@/types/features/workspace";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { WorkspaceStatusBadge } from "./workspace.shared";
+import { WorkspaceResourcesPanel } from "./WorkspaceResourcesPanel";
 
 function information(value?: string | null) {
   return value?.trim() || "No information available";
 }
 
-export function WorkspaceOverviewPanel({ workspace, canViewMembers, onViewMembers }: {
+export function WorkspaceOverviewPanel({ workspace, canViewMembers, onViewMembers, onAccessChanged }: {
   workspace: WorkspaceDetail;
   canViewMembers: boolean;
   onViewMembers: () => void;
+  onAccessChanged: () => void;
 }) {
   return <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
     <div className="space-y-5">
@@ -30,6 +32,8 @@ export function WorkspaceOverviewPanel({ workspace, canViewMembers, onViewMember
             </div>}
         </CardContent>
       </Card>
+      <WorkspaceResourcesPanel key={workspace.id} workspaceId={workspace.id} projectId={workspace.projectId}
+        teamId={workspace.teamId} onAccessChanged={onAccessChanged} />
     </div>
     <div className="space-y-5">
       <Card><CardHeader><CardTitle>{workspace.teamName}</CardTitle></CardHeader>

@@ -99,10 +99,13 @@ public class ProjectTemplateService {
         validator.validate(request, false);
         requireCategory(request.category(), user.getTenantId());
         String code = request.code().strip();
-        if (templates.existsByTenantIdAndCodeAndTemplateVersion(user.getTenantId(), code, 1)) {
-            throw ProjectTemplateException.duplicateCode();
+        ProjectTemplate parent = parent(request.parentTemplateId(), user);
+        Long scope = parent == null ? 0L : parent.getId();
+        if (parent == null ? templates.existsByTenantIdAndCodeScopeIdAndCodeAndTemplateVersion(user.getTenantId(), scope, code, 1)
+                : templates.existsByTenantIdAndCodeScopeIdAndCode(user.getTenantId(), scope, code)) {
+            throw ProjectTemplateException.duplicateCode(parent != null);
         }
-        ProjectTemplate template = ProjectTemplate.builder().tenantId(user.getTenantId()).build();
+        ProjectTemplate template = ProjectTemplate.builder().tenantId(user.getTenantId()).parentTemplate(parent).build();
         apply(template, request);
         template = templates.saveAndFlush(template);
         recordAudit(template, user, "PROJECT_TEMPLATE_CREATED", null);
@@ -124,9 +127,13 @@ public class ProjectTemplateService {
             throw ProjectTemplateException.conflict("This template has changed. Reload it before saving your changes");
         }
         String code = request.code().strip();
-        if (templates.existsByTenantIdAndCodeAndTemplateVersionAndIdNot(
-                template.getTenantId(), code, template.getTemplateVersion(), id)) {
-            throw ProjectTemplateException.duplicateCode();
+        if (request.parentTemplateId() != null && !request.parentTemplateId().equals(template.getParentTemplateId())) {
+            throw new ProjectTemplateException(422, "The parent of an existing module cannot be changed", Map.of());
+        }
+        if (template.getParentTemplateId() == null ? templates.existsByTenantIdAndCodeScopeIdAndCodeAndTemplateVersionAndIdNot(
+                template.getTenantId(), template.getCodeScopeId(), code, template.getTemplateVersion(), id)
+                : templates.existsByTenantIdAndCodeScopeIdAndCodeAndIdNot(template.getTenantId(), template.getCodeScopeId(), code, id)) {
+            throw ProjectTemplateException.duplicateCode(template.getParentTemplateId() != null);
         }
         scheduleValidator.validateDuration(request.estimatedDurationWeeks().intValueExact(),
                 milestones.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(id));
@@ -233,6 +240,17 @@ public class ProjectTemplateService {
         template.setCategory(request.category().strip());
         template.setLevel(request.level());
         template.setEstimatedDurationWeeks(request.estimatedDurationWeeks().intValueExact());
+        if (request.technologyStack() != null) template.setTechnologyStack(request.technologyStack().strip());
+    }
+
+    private ProjectTemplate parent(Long id, User user) {
+        if (id == null) return null;
+        ProjectTemplate parent = templates.findForTemplateUpdate(id, user.getTenantId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Parent template was not found"));
+        if (parent.getStatus() == ProjectTemplateStatus.ARCHIVED) {
+            throw ProjectTemplateException.conflict("Archived templates cannot receive new modules");
+        }
+        return parent;
     }
 
     private void recordAudit(ProjectTemplate template, User user, String action, String beforeState) {

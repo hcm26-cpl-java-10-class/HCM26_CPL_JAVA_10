@@ -39,13 +39,13 @@ public class ProjectTemplateSchemaInitializer implements CommandLineRunner {
                 }
             }
         }
-        Set<String> expected = Set.of("tenant_id", "code", "template_version");
-        if (indexes.values().stream().anyMatch(columns -> columns.size() == 3 && Set.copyOf(columns).equals(expected))) {
+        Set<String> expected = Set.of("tenant_id", "code_scope_id", "code", "template_version");
+        if (indexes.values().stream().anyMatch(columns -> columns.size() == 4 && Set.copyOf(columns).equals(expected))) {
             return;
         }
         try (var statement = connection.createStatement()) {
-            statement.execute("ALTER TABLE project_templates ADD CONSTRAINT uk_template_tenant_code_version "
-                    + "UNIQUE (tenant_id, code, template_version)");
+            statement.execute("ALTER TABLE project_templates ADD CONSTRAINT uk_template_code_scope_version "
+                    + "UNIQUE (tenant_id, code_scope_id, code, template_version)");
         }
     }
 
@@ -54,7 +54,9 @@ public class ProjectTemplateSchemaInitializer implements CommandLineRunner {
         if (schema == null) schema = connection.getCatalog();
         String sql = "SELECT constraint_name FROM information_schema.key_column_usage "
                 + "WHERE table_schema = ? AND LOWER(table_name) = 'project_templates' "
-                + "GROUP BY constraint_name HAVING COUNT(*) = 1 AND LOWER(MIN(column_name)) = 'code'";
+                + "GROUP BY constraint_name HAVING (COUNT(*) = 1 AND LOWER(MIN(column_name)) = 'code') "
+                + "OR (COUNT(*) = 3 AND SUM(CASE WHEN LOWER(column_name) IN "
+                + "('tenant_id', 'code', 'template_version') THEN 1 ELSE 0 END) = 3)";
         var names = new ArrayList<String>();
         try (var query = connection.prepareStatement(sql)) {
             query.setString(1, schema);

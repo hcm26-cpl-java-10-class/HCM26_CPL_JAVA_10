@@ -41,7 +41,9 @@ public class ProjectTemplateExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<?> integrity(DataIntegrityViolationException exception) {
         String cause = exception.getMostSpecificCause().getMessage();
-        if (cause != null && cause.toLowerCase(java.util.Locale.ROOT).contains("uk_template_tenant_code_version")) {
+        String detail = cause == null ? "" : cause.toLowerCase(java.util.Locale.ROOT);
+        if (detail.contains("uk_template_module_code")) return business(ProjectTemplateException.duplicateCode(true));
+        if (detail.contains("uk_template_tenant_code_version") || detail.contains("uk_template_code_scope_version")) {
             return business(ProjectTemplateException.duplicateCode());
         }
         return error(409, "The template could not be saved because its data has changed. Please reload and try again");

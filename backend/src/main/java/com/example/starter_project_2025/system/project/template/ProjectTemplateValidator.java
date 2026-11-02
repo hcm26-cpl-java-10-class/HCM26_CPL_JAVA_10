@@ -21,6 +21,12 @@ public class ProjectTemplateValidator {
             errors.put("description", List.of("Description must not exceed 1000 words"));
         }
         text(errors, "category", request.category(), 255);
+        if (request.technologyStack() != null && request.technologyStack().strip().length() > 2000) {
+            errors.put("technologyStack", List.of("Technical stack must not exceed 2000 characters"));
+        }
+        if (request.parentTemplateId() != null && request.parentTemplateId() <= 0) {
+            errors.put("parentTemplateId", List.of("Select an existing parent template"));
+        }
         if (request.level() == null) {
             errors.put("level", List.of("Select Beginner, Intermediate or Advanced"));
         }

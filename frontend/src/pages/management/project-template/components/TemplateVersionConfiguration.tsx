@@ -19,6 +19,8 @@ import { TemplateMilestonesForm } from "./TemplateMilestonesForm";
 import { TemplateSampleContentForm } from "./TemplateSampleContentForm";
 import { TemplateTeamConstraintsForm } from "./TemplateTeamConstraintsForm";
 import { ProjectTemplateStatusBadge } from "./ProjectTemplateStatusBadge";
+import { TemplateModulesPanel } from "./TemplateModulesPanel";
+import { TemplateResourcesPanel } from "./TemplateResourcesPanel";
 
 export function TemplateVersionConfiguration({ versionId, editOverview = false, onChanged }: { versionId: number; editOverview?: boolean; onChanged: () => void }) {
   const { user, activeRole, hasPermission } = usePermissions();
@@ -76,9 +78,10 @@ export function TemplateVersionConfiguration({ versionId, editOverview = false, 
       This version uses a legacy configuration format. Its original content is preserved. Duplicate it to prepare a complete editable template.
     </AlertDescription></Alert>}
     <Tabs value={tab} onValueChange={value => { setTab(value); setEditingOverview(false); }}>
-      <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-5" aria-label="Version configuration">
+      <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-7" aria-label="Version configuration">
         <TabsTrigger value="overview">Overview</TabsTrigger><TabsTrigger value="team-constraints">Team constraints</TabsTrigger>
         <TabsTrigger value="milestones">Milestones</TabsTrigger><TabsTrigger value="backlog">Backlog</TabsTrigger>
+        <TabsTrigger value="modules">Modules</TabsTrigger><TabsTrigger value="resources">Resources</TabsTrigger>
         <TabsTrigger value="activity"><History />Activity</TabsTrigger>
       </TabsList>
       <TabsContent value="overview">
@@ -90,6 +93,7 @@ export function TemplateVersionConfiguration({ versionId, editOverview = false, 
             {editable && <Button variant="outline" disabled={!options.data} onClick={() => setEditingOverview(true)}><Pen />Edit version overview</Button>}</div></CardHeader>
             <CardContent className="grid min-w-0 gap-5"><p className="whitespace-pre-wrap text-sm leading-7 [overflow-wrap:anywhere]">{template.description || "No description"}</p>
               <dl className="grid gap-4 text-sm sm:grid-cols-3">{[["Code", template.code], ["Category", template.category], ["Level", templateLevelLabel(template.level)],
+                ["Technical stack", template.technologyStack || "Not specified"],
                 ["Duration", template.estimatedDurationWeeks == null ? "—" : `${template.estimatedDurationWeeks} weeks`]].map(([label, value]) =>
                   <div key={label}><dt className="text-muted-foreground">{label}</dt><dd className="mt-1 break-words font-medium">{value || "—"}</dd></div>)}</dl>
             </CardContent></Card>}
@@ -109,6 +113,9 @@ export function TemplateVersionConfiguration({ versionId, editOverview = false, 
           {!audit.data?.length ? <p className="text-sm text-muted-foreground">No recorded activity.</p> : <ul className="divide-y">{audit.data.map(item => <li key={item.id} className="grid gap-1 py-3 text-sm">
             <span className="font-medium">{item.action?.replaceAll("_", " ")}</span><span className="text-muted-foreground">{item.actorEmail ?? "System"} · {item.createdAt ? new Date(item.createdAt).toLocaleString("en-GB") : "—"}</span>
           </li>)}</ul>}</CardContent></Card>}</TabsContent>
+      <TabsContent value="modules"><TemplateModulesPanel templateId={template.id} versionId={versionId}
+        historical={!editable} canCreate={editable && !!options.data?.canCreate} /></TabsContent>
+      <TabsContent value="resources"><TemplateResourcesPanel templateId={template.id} versionId={versionId} editable={editable} /></TabsContent>
     </Tabs>
     <Dialog open={publishOpen} onOpenChange={value => { if (!publishing) setPublishOpen(value); }}>
       <DialogContent showCloseButton={!publishing}><DialogHeader><DialogTitle>Publish {version.version}?</DialogTitle><DialogDescription>

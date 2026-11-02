@@ -11,6 +11,8 @@ import com.example.starter_project_2025.system.project.template.*;
 import com.example.starter_project_2025.system.project.template.assignment.TemplateBriefSnapshotWriter;
 import com.example.starter_project_2025.system.project.template.content.*;
 import com.example.starter_project_2025.system.project.template.milestone.*;
+import com.example.starter_project_2025.system.project.template.resources.TemplateResource;
+import com.example.starter_project_2025.system.project.template.resources.TemplateResourceRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.web.CorrelationIdFilter;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -52,6 +54,8 @@ public class TemplateVersionConfigurationService {
     private final ObjectMapper json;
     private final EntityManager entityManager;
     private final TemplateVersionLifecycleService lifecycle;
+    private final TemplateHierarchyService hierarchy;
+    private final TemplateResourceRepository resources;
 
     public TemplateVersionConfigurationResponse get(Long id) {
         User user = access.requireUser("READ");
@@ -80,6 +84,8 @@ public class TemplateVersionConfigurationService {
         } catch (ProjectTemplateException exception) {
             validContent = false;
             view = ProjectTemplate.builder().id(owner.getId()).tenantId(owner.getTenantId())
+                    .parentTemplate(owner.getParentTemplate()).codeScopeId(owner.getCodeScopeId())
+                    .technologyStack(owner.getTechnologyStack())
                     .code(owner.getCode()).name(owner.getName()).description(owner.getDescription())
                     .category(owner.getCategory()).level(owner.getLevel()).estimatedDurationWeeks(owner.getEstimatedDurationWeeks())
                     .templateVersion(owner.getTemplateVersion()).constraintsJson(owner.getConstraintsJson())
@@ -108,12 +114,16 @@ public class TemplateVersionConfigurationService {
         var context = editable(id, request.lockVersion());
         overviewValidator.validate(request, true);
         requireCategory(request.category(), context.user().getTenantId());
-        if (templates.existsByTenantIdAndCodeAndTemplateVersionAndIdNot(context.user().getTenantId(), request.code().strip(),
-                context.owner().getTemplateVersion(), context.owner().getId())) throw ProjectTemplateException.duplicateCode();
+        if (context.owner().getParentTemplateId() == null ? templates.existsByTenantIdAndCodeScopeIdAndCodeAndTemplateVersionAndIdNot(
+                context.user().getTenantId(), context.owner().getCodeScopeId(), request.code().strip(),
+                context.owner().getTemplateVersion(), context.owner().getId())
+                : templates.existsByTenantIdAndCodeScopeIdAndCodeAndIdNot(context.user().getTenantId(), context.owner().getCodeScopeId(),
+                request.code().strip(), context.owner().getId())) throw ProjectTemplateException.duplicateCode(context.owner().getParentTemplateId() != null);
         var content = configurations.read(context.version().getContentJson());
         content.put("code", request.code().strip());
         content.put("name", request.name().strip());
         content.put("description", request.description().strip());
+        if (request.technologyStack() != null) content.put("technologyStack", request.technologyStack().strip());
         content.put("category", request.category().strip());
         content.put("level", request.level().name());
         content.put("estimatedDurationWeeks", request.estimatedDurationWeeks().intValueExact());
@@ -133,7 +143,7 @@ public class TemplateVersionConfigurationService {
     @Transactional
     public TemplateVersionConfigurationResponse saveMilestones(Long id, TemplateMilestonePlanRequest request) {
         var context = editable(id, request.lockVersion());
-        milestoneValidator.validate(request);
+        milestoneValidator.validate(request, context.owner().getParentTemplateId() == null);
         var content = configurations.read(context.version().getContentJson());
         scheduleValidator.validate(request, duration(content));
         rubrics.requirePublished(request, context.user().getTenantId());
@@ -163,11 +173,24 @@ public class TemplateVersionConfigurationService {
     }
 
     @Transactional
+    public TemplateVersionConfigurationResponse saveResources(Long id, BigDecimal revision, List<Long> ids) {
+        var context = editable(id, revision);
+        var selected = resources.findAllByTemplate_IdAndIdInOrderByIdAsc(context.owner().getId(), ids);
+        if (selected.size() != ids.size()) {
+            throw new AccessDeniedException("The selected resource does not belong to this template");
+        }
+        var content = configurations.read(context.version().getContentJson());
+        content.set("resources", json.valueToTree(selected.stream().map(TemplateResource::snapshot).toList()));
+        return save(context, content);
+    }
+
+    @Transactional
     public TemplateVersionConfigurationResponse publish(Long id, TemplateActivationRequest request) {
         User actor = access.requireUser("ACTIVATE");
         var context = editable(id, request.lockVersion(), actor);
         ObjectNode content = configurations.read(context.version().getContentJson());
-        validate(content, request.lockVersion(), context.user().getTenantId(), true);
+        validate(content, request.lockVersion(), context.user().getTenantId(), true, context.owner().getParentTemplateId() == null);
+        hierarchy.requirePublishedModules(context.owner());
         String beforeTemplate = configurations.capture(context.owner());
         Map<String, Object> beforeVersion = state(context.version());
         lifecycle.archivePublishedVersions(context.owner().getId(), context.version().getId(), actor.getEmail());
@@ -193,7 +216,7 @@ public class TemplateVersionConfigurationService {
         if (version.getStatus() != ProjectTemplateVersionStatus.DRAFT) return;
         ObjectNode content = configurations.read(version.getContentJson());
         if (!canonical(content)) return;
-        validate(content, BigDecimal.valueOf(owner.getLockVersion()), user.getTenantId(), false);
+        validate(content, BigDecimal.valueOf(owner.getLockVersion()), user.getTenantId(), false, owner.getParentTemplateId() == null);
         if (owner.getStatus() == ProjectTemplateStatus.DRAFT && latest(owner, version)) {
             configurations.apply(owner, content);
             version.setContentJson(configurations.capture(owner));
@@ -218,7 +241,7 @@ public class TemplateVersionConfigurationService {
         return response(context.owner(), context.version(), context.user());
     }
 
-    private void validate(ObjectNode content, BigDecimal revision, Long tenantId, boolean complete) {
+    private void validate(ObjectNode content, BigDecimal revision, Long tenantId, boolean complete, boolean weighted) {
         Map<String, List<String>> errors = new LinkedHashMap<>();
         check(errors, () -> overviewValidator.validate(overview(content, revision), true));
         if (complete || content.path("constraints").hasNonNull("min_members")) {
@@ -226,7 +249,7 @@ public class TemplateVersionConfigurationService {
         }
         var plan = plan(content, revision);
         if (complete || plan.milestones() != null && !plan.milestones().isEmpty()) {
-            check(errors, () -> milestoneValidator.validate(plan));
+            check(errors, () -> milestoneValidator.validate(plan, weighted));
             check(errors, () -> scheduleValidator.validate(plan, duration(content)));
             if (complete && errors.isEmpty()) check(errors, () -> rubrics.requirePublished(plan, tenantId));
         }

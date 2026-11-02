@@ -68,6 +68,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import com.example.starter_project_2025.system.project.resources.ProjectResourceSnapshotService;
 
 @Slf4j
 @Service
@@ -99,6 +100,8 @@ public class TemplateAssignmentProvisioningService {
     private final TemplateMilestoneScheduleValidator scheduleValidator;
     private final TemplateMilestoneRubrics milestoneRubrics;
     private final TemplateBriefSnapshotWriter briefSnapshots;
+    private final ProjectResourceSnapshotService resourceSnapshots;
+    private final TemplateAssignmentResourceWriter assignmentResources;
     private final ObjectMapper objectMapper;
     private final jakarta.persistence.EntityManager entityManager;
 
@@ -123,7 +126,7 @@ public class TemplateAssignmentProvisioningService {
         List<TemplateMilestone> milestonePlan =
                 templateMilestones.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId());
         var planRequest = TemplateMilestonePlanRequest.from(template.getLockVersion(), milestonePlan);
-        milestoneValidator.validate(planRequest);
+        milestoneValidator.validate(planRequest, template.getParentTemplateId() == null);
         scheduleValidator.validate(planRequest, template.getEstimatedDurationWeeks());
         milestoneRubrics.requirePublished(planRequest, tenantId);
 
@@ -139,6 +142,8 @@ public class TemplateAssignmentProvisioningService {
 
         // ---- Step 3: workspace + generated components
         Workspace workspace = ensureWorkspace(team, project, tenantId, actorId, correlationId);
+        assignmentResources.copy(project, template, snapshot);
+        resourceSnapshots.capture(workspace);
 
         int generatedMilestones = generateMilestones(
                 team, project, tenantId, actorId, now, milestonePlan);

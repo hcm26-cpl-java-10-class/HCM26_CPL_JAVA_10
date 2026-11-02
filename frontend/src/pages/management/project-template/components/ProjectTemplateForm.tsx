@@ -17,17 +17,18 @@ import { getTemplateError, templateLevelOptions, toTemplateFormValues, validateT
   descriptionWordCount, maxDescriptionWords,
   type TemplateFieldErrors, type TemplateFormValues } from "../project-template.utils";
 
-function TemplateField({ name, label, errors, suffix, children }: {
+function TemplateField({ name, label, errors, suffix, children, required = true }: {
   name: string;
   label: string;
   errors?: string[];
   suffix?: ReactNode;
   children: ReactNode;
+  required?: boolean;
 }) {
   return (
     <div className="grid min-w-0 content-start gap-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Label htmlFor={`template-${name}`}>{label} <span className="text-destructive">*</span></Label>
+        <Label htmlFor={`template-${name}`}>{label} {required && <span className="text-destructive">*</span>}</Label>
         {suffix}
       </div>
       {children}
@@ -36,8 +37,9 @@ function TemplateField({ name, label, errors, suffix, children }: {
   );
 }
 
-export function ProjectTemplateForm({ template, options, minimumDurationWeeks = 0, onCancel, onSaved, save }: {
+export function ProjectTemplateForm({ template, parentTemplate, options, minimumDurationWeeks = 0, onCancel, onSaved, save }: {
   template?: ProjectTemplateDTO;
+  parentTemplate?: ProjectTemplateDTO;
   options: ProjectTemplateOptions;
   minimumDurationWeeks?: number;
   onCancel: () => void;
@@ -45,7 +47,9 @@ export function ProjectTemplateForm({ template, options, minimumDurationWeeks = 
   save?: (payload: ProjectTemplatePayload) => Promise<ProjectTemplateDTO>;
 }) {
   const queryClient = useQueryClient();
-  const [values, setValues] = useState(() => toTemplateFormValues(template));
+  const [values, setValues] = useState(() => ({ ...toTemplateFormValues(template),
+    ...(!template && parentTemplate ? { category: parentTemplate.category, level: parentTemplate.level,
+      estimatedDurationWeeks: String(parentTemplate.estimatedDurationWeeks), technologyStack: parentTemplate.technologyStack ?? "" } : {}) }));
   const wordCount = descriptionWordCount(values.description);
   const categories = [...new Set([...options.categories, ...(template?.category ? [template.category] : [])])];
   const [lockVersion] = useState(template?.lockVersion);
@@ -87,6 +91,8 @@ export function ProjectTemplateForm({ template, options, minimumDurationWeeks = 
       code: values.code.trim(),
       name: values.name.trim(),
       description: values.description.trim(),
+      technologyStack: values.technologyStack.trim(),
+      ...(template?.parentTemplateId || parentTemplate?.id ? { parentTemplateId: template?.parentTemplateId ?? parentTemplate?.id } : {}),
       category: values.category.trim(),
       level: values.level as ProjectTemplateLevel,
       estimatedDurationWeeks: Number(values.estimatedDurationWeeks),
@@ -123,7 +129,9 @@ export function ProjectTemplateForm({ template, options, minimumDurationWeeks = 
             <div className="grid gap-5 md:grid-cols-2">
               <TemplateField name="code" label="Code" errors={errors.code}>
                 <Input {...inputProps("code")} value={values.code} onChange={(event) => change("code", event.target.value)} placeholder="E.g. PRJ-WEB-01" autoComplete="off" />
-                <p className="text-xs text-muted-foreground">Unique for this version in {options.tenantName}. Up to 100 characters.</p>
+                <p className="text-xs text-muted-foreground">{template?.parentTemplateId || parentTemplate
+                  ? "Unique within the parent template. Up to 100 characters."
+                  : `Unique for this version in ${options.tenantName}. Up to 100 characters.`}</p>
               </TemplateField>
               <TemplateField name="name" label="Name" errors={errors.name}>
                 <Input {...inputProps("name")} value={values.name} onChange={(event) => change("name", event.target.value)} placeholder="E.g. Learning Resource Portal" />
@@ -139,6 +147,11 @@ export function ProjectTemplateForm({ template, options, minimumDurationWeeks = 
                 className="min-w-0 max-w-full resize-y whitespace-pre-wrap [field-sizing:fixed] [overflow-wrap:anywhere]"
                 value={values.description} onChange={(event) => change("description", event.target.value)}
                 placeholder="Describe the project background, objectives and expected scope." />
+            </TemplateField>
+            <TemplateField name="technologyStack" label="Technical stack" errors={errors.technologyStack} required={false}>
+              <Textarea {...inputProps("technologyStack")} rows={2} value={values.technologyStack}
+                onChange={(event) => change("technologyStack", event.target.value)}
+                placeholder="E.g. Java Spring Boot, ReactJS, PostgreSQL" />
             </TemplateField>
             <div className="grid gap-5 md:grid-cols-3">
               <TemplateField name="category" label="Domain / category" errors={errors.category}>

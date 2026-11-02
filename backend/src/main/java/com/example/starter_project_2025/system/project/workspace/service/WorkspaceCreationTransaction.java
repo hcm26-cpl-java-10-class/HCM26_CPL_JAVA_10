@@ -7,6 +7,7 @@ import com.example.starter_project_2025.system.project.ProjectTeam;
 import com.example.starter_project_2025.system.project.ProjectTeamRepository;
 import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.example.starter_project_2025.system.project.template.assignment.TemplateAssignmentProvisioningService;
+import com.example.starter_project_2025.system.project.resources.ProjectResourceSnapshotService;
 import com.example.starter_project_2025.system.project.team.Team;
 import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
 import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceSection;
@@ -35,6 +36,7 @@ public class WorkspaceCreationTransaction {
     private final ProjectRepository projects;
     private final ProjectTeamRepository teams;
     private final TemplateAssignmentProvisioningService provisioning;
+    private final ProjectResourceSnapshotService resourceSnapshots;
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public WorkspaceResponse create(String key, WorkspaceCreateRequest request, String correlationId) {
@@ -73,6 +75,7 @@ public class WorkspaceCreationTransaction {
         workspace.setCreatedBy(user.getId());
         workspace.setSections(new ArrayList<>(Arrays.asList(WorkspaceSection.values())));
         workspaces.saveAndFlush(workspace);
+        resourceSnapshots.capture(workspace);
         activateProjectForWorkspace(chosen.project());
         WorkspaceResponse response = response(workspace);
         journal.recordCreation(workspace, user, response, correlationId);

@@ -41,6 +41,13 @@ public class ProjectTemplateController {
     private final TemplateBacklogImportService backlogImportService;
     private final ProjectTemplateDeletionService deletionService;
     private final TemplateVersionListService versionListService;
+    private final TemplateHierarchyService hierarchy;
+
+    @GetMapping("/{id}/hierarchy")
+    @PreAuthorize("hasAuthority('PROJECT_TEMPLATE_READ')")
+    public TemplateHierarchyService.Node hierarchy(@PathVariable Long id, @RequestParam(required = false) Long versionId) {
+        return hierarchy.get(id, versionId);
+    }
 
     @GetMapping("/options")
     @PreAuthorize("hasAuthority('PROJECT_TEMPLATE_READ')")

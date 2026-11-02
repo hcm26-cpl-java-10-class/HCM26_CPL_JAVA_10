@@ -9,6 +9,12 @@ public record ProjectTemplateRequest(
         String category,
         ProjectTemplateLevel level,
         BigDecimal estimatedDurationWeeks,
-        BigDecimal lockVersion
+        BigDecimal lockVersion,
+        Long parentTemplateId,
+        String technologyStack
 ) {
+    public ProjectTemplateRequest(String code, String name, String description, String category,
+            ProjectTemplateLevel level, BigDecimal estimatedDurationWeeks, BigDecimal lockVersion) {
+        this(code, name, description, category, level, estimatedDurationWeeks, lockVersion, null, null);
+    }
 }

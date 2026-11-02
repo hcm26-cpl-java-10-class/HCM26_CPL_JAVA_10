@@ -25,5 +25,6 @@ export function WorkspaceOverviewSection({ workspaceId, projectId, teamId, canVi
   if (!workspace || workspace.id !== workspaceId || workspace.teamId !== teamId || workspace.projectId !== projectId)
     return <WorkspaceSectionState error={new Error("Overview context does not match this workspace.")} retry={() => void query.refetch()} />;
   return <WorkspaceOverviewPanel workspace={workspace}
-    canViewMembers={canViewMembers && workspace.can_view_members} onViewMembers={onViewMembers} />;
+    canViewMembers={canViewMembers && workspace.can_view_members} onViewMembers={onViewMembers}
+    onAccessChanged={onAccessChanged} />;
 }

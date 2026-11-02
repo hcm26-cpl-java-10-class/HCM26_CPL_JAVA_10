@@ -17,6 +17,8 @@ import { TemplateMilestonesPanel } from "../components/TemplateMilestonesPanel";
 import { TemplateActivationDialog } from "../components/TemplateActivationDialog";
 import { TemplateArchiveDialog } from "../components/TemplateArchiveDialog";
 import { TemplateSampleContentPanel } from "../components/TemplateSampleContentPanel";
+import { TemplateModulesPanel } from "../components/TemplateModulesPanel";
+import { TemplateResourcesPanel } from "../components/TemplateResourcesPanel";
 import { TemplateVersionsPanel } from "../components/TemplateVersionsPanel";
 import { useProjectTemplateOptions } from "../hooks/useProjectTemplateOptions";
 import { descriptionWordCount, maxDescriptionWords, templateLevelLabel } from "../project-template.utils";
@@ -28,7 +30,8 @@ export function ProjectTemplateDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const options = useProjectTemplateOptions();
   const requestedTab = searchParams.get("tab");
-  const tab = requestedTab === "team-constraints" || requestedTab === "milestones" || requestedTab === "sample-content" || requestedTab === "versions" ? requestedTab : "overview";
+  const tab = requestedTab === "team-constraints" || requestedTab === "milestones" || requestedTab === "sample-content"
+    || requestedTab === "versions" || requestedTab === "modules" || requestedTab === "resources" ? requestedTab : "overview";
   const detailQueryKey = ["project-templates", options.user.email, options.activeRole, "detail", id];
   const query = useQuery({
     queryKey: detailQueryKey,
@@ -80,13 +83,15 @@ export function ProjectTemplateDetailPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => navigate("/project-templates")}><ArrowLeft /> Back to templates</Button>
+            {template?.parentTemplateId && <Button variant="outline" onClick={() => navigate(`/project-templates/${template.parentTemplateId}/detail?tab=modules`)}>
+              <ArrowLeft />Parent template</Button>}
             {tab === "versions" && <Button variant="outline" onClick={() => navigate(`/project-templates/${id}/detail`)}>Current template</Button>}
             {tab === "overview" && canEdit && (
               <Button onClick={() => navigate(`/project-templates/${id}/edit`)}><Pen /> Edit draft</Button>
             )}
-            {tab !== "versions" && template && template.status === "DRAFT" && !template.readOnly && options.data?.canArchive
+            {tab !== "versions" && template && !template.removed && (template.status === "DRAFT" || template.parentTemplateId != null) && !template.readOnly && options.data?.canArchive
               && options.hasPermission("PROJECT_TEMPLATE_ARCHIVE") && <TemplateDeleteDialog template={template}
-                onDeleted={() => navigate("/project-templates")} />}
+                onDeleted={() => navigate(template.parentTemplateId ? `/project-templates/${template.parentTemplateId}/detail?tab=modules` : "/project-templates")} />}
             {tab !== "versions" && canActivate && template && <TemplateActivationDialog template={template}
               onOpenSection={selectTab}
               onActivated={(saved) => {
@@ -115,11 +120,13 @@ export function ProjectTemplateDetailPage() {
               )}
               {tab === "versions" ? <TemplateVersionsPanel template={template} /> : <Tabs value={tab} onValueChange={selectTab} className="min-w-0 gap-4">
                 <TabsList aria-label="Template configuration"
-                  className="grid w-full max-w-3xl grid-cols-2 group-data-[orientation=horizontal]/tabs:h-auto sm:grid-cols-5">
+                  className="grid w-full grid-cols-2 group-data-[orientation=horizontal]/tabs:h-auto sm:grid-cols-4 lg:grid-cols-7">
                   <TabsTrigger value="overview" className="h-full min-h-9 whitespace-normal">Overview</TabsTrigger>
                   <TabsTrigger value="team-constraints" className="h-full min-h-9 whitespace-normal">Team constraints</TabsTrigger>
                   <TabsTrigger value="milestones" className="h-full min-h-9 whitespace-normal">Milestones</TabsTrigger>
                   <TabsTrigger value="sample-content" className="h-full min-h-9 whitespace-normal">Backlog</TabsTrigger>
+                  <TabsTrigger value="modules" className="h-full min-h-9 whitespace-normal">Modules</TabsTrigger>
+                  <TabsTrigger value="resources" className="h-full min-h-9 whitespace-normal">Resources</TabsTrigger>
                   <TabsTrigger value="versions" className="h-full min-h-9 whitespace-normal">Versions</TabsTrigger>
                 </TabsList>
                 <TabsContent value="overview">
@@ -147,6 +154,7 @@ export function ProjectTemplateDetailPage() {
                         {[
                           ["Domain / category", template.category],
                           ["Level", templateLevelLabel(template.level)],
+                          ["Technical stack", template.technologyStack || "Not specified"],
                           ["Estimated duration", template.estimatedDurationWeeks == null ? "—" : `${template.estimatedDurationWeeks} weeks`],
                           ["Tenant", options.data?.tenantName],
                           ["Created at", formatDate(template.createdAt)],
@@ -175,6 +183,9 @@ export function ProjectTemplateDetailPage() {
                 <TabsContent value="sample-content">
                   <TemplateSampleContentPanel templateId={template.id} editable={canEdit} />
                 </TabsContent>
+                <TabsContent value="modules"><TemplateModulesPanel templateId={template.id}
+                  canCreate={!!options.data?.canCreate && !template.readOnly && template.status !== "ARCHIVED"} /></TabsContent>
+                <TabsContent value="resources"><TemplateResourcesPanel templateId={template.id} editable={canEdit} /></TabsContent>
               </Tabs>}
             </>
           )}

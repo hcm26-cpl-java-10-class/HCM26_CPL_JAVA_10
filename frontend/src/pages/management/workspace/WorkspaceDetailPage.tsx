@@ -64,7 +64,7 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
   const validContext = context && Number.isSafeInteger(context.teamId);
   async function refresh() {
     await navigation.refetch();
-    await Promise.all(["workspace-detail", "workspace-members", "workspace-section"].map(key =>
+    await Promise.all(["workspace-detail", "workspace-members", "workspace-section", "workspace-resources"].map(key =>
       queryClient.invalidateQueries({ queryKey: [key, workspaceId] })));
   }
   return <MainLayout pathName={{ management: "Management", workspaces: "Workspace",
