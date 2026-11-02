@@ -1,3 +1,4 @@
+
 package com.example.starter_project_2025.system.management.student;
 
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
@@ -14,42 +15,78 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-public class StudentServiceImpl extends BaseCrudServiceImpl<Student, Long, StudentDTO, StudentFilter> implements StudentService {
+public class StudentServiceImpl extends BaseCrudServiceImpl<Student, Long, StudentDTO, StudentFilter>
+        implements StudentService {
+
     StudentMapper studentMapper;
     StudentRepository studentRepository;
 
     @Override
-    protected BaseCrudRepository<Student, Long> getRepository() { return studentRepository; }
+    protected BaseCrudRepository<Student, Long> getRepository() {
+        return studentRepository;
+    }
 
     @Override
-    protected BaseCrudMapper<Student, StudentDTO> getMapper() { return studentMapper; }
+    protected BaseCrudMapper<Student, StudentDTO> getMapper() {
+        return studentMapper;
+    }
 
     @Override
     protected String[] searchableFields() {
-        return new String[]{"studentCode", "firstName", "lastName", "email", "className"};
+        return new String[]{"studentCode", "firstName", "lastName"};
     }
 
     @Override
-    protected void beforeCreate(Student student, StudentDTO request, ValidationContext ctx) {
+    protected void beforeCreate(
+            Student student,
+            StudentDTO request,
+            ValidationContext ctx
+    ) {
+        // Kiểm tra mã sinh viên trùng
         if (studentRepository.existsByStudentCode(request.getStudentCode())) {
             ctx.add("studentCode", "Student code already exists");
         }
-        if (request.getEmail() != null && !request.getEmail().isBlank() && studentRepository.existsByEmail(request.getEmail())) {
-            ctx.add("email", "Email already exists");
+
+        // Mặc định kích hoạt sinh viên
+        if (student.getIsActive() == null) {
+            student.setIsActive(true);
         }
-        if (student.getStatus() == null || student.getStatus().isBlank()) student.setStatus("ACTIVE");
+
+        // Mặc định lớp
+        if (student.getClassName() == null || student.getClassName().isBlank()) {
+            student.setClassName("Chưa phân lớp");
+        }
+
+        // Mặc định trạng thái
+        if (student.getStatus() == null || student.getStatus().isBlank()) {
+            student.setStatus("ACTIVE");
+        }
     }
 
     @Override
-    protected void beforeUpdate(Student student, StudentDTO request, ValidationContext ctx) {
-        if (request.getStudentCode() != null && !request.getStudentCode().equals(student.getStudentCode())
+    protected void beforeUpdate(
+            Student student,
+            StudentDTO request,
+            ValidationContext ctx
+    ) {
+        // Kiểm tra mã sinh viên trùng
+        if (request.getStudentCode() != null
+                && !request.getStudentCode().equals(student.getStudentCode())
                 && studentRepository.existsByStudentCode(request.getStudentCode())) {
             ctx.add("studentCode", "Student code already exists");
         }
-        if (request.getEmail() != null && !request.getEmail().isBlank() && !request.getEmail().equals(student.getEmail())
-                && studentRepository.existsByEmail(request.getEmail())) {
-            ctx.add("email", "Email already exists");
+
+        // Giữ giá trị mặc định nếu thiếu
+        if (student.getIsActive() == null) {
+            student.setIsActive(true);
         }
-        if (request.getStatus() != null && !request.getStatus().isBlank()) student.setStatus(request.getStatus());
+
+        if (student.getClassName() == null || student.getClassName().isBlank()) {
+            student.setClassName("Chưa phân lớp");
+        }
+
+        if (student.getStatus() == null || student.getStatus().isBlank()) {
+            student.setStatus("ACTIVE");
+        }
     }
 }

@@ -1,11 +1,5 @@
 import type { RootState } from "@/store/store";
-import {
-  ADMIN_ROLE,
-  STUDENT_ROLE,
-  TEACHER_ROLE,
-  normalizeRole,
-  uniqueRoles,
-} from "@/utils/rbac.utils";
+import { normalizeRole, uniqueRoles } from "@/utils/rbac.utils";
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 
@@ -47,16 +41,6 @@ export const RoleSwitchProvider: React.FC<{ children: React.ReactNode }> = ({
       ],
       primaryRole,
     );
-
-    if (primaryRole === ADMIN_ROLE) {
-      if (!roleCandidates.includes(STUDENT_ROLE)) {
-        roleCandidates.push(STUDENT_ROLE);
-      }
-
-      if (!roleCandidates.includes(TEACHER_ROLE)) {
-        roleCandidates.push(TEACHER_ROLE);
-      }
-    }
 
     return roleCandidates;
   }, [primaryRole, rolePermissions, roles]);

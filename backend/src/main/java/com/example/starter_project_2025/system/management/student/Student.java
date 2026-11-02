@@ -4,7 +4,6 @@ import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.base.dataio.exporter.annotation.ExportEntity;
 import com.example.starter_project_2025.base.dataio.exporter.annotation.ExportField;
 import com.example.starter_project_2025.base.dataio.importer.annotation.ImportField;
-import com.example.starter_project_2025.base.dataio.importer.annotation.ImportUpsert;
 import com.example.starter_project_2025.base.dataio.template.annotation.ImportEntity;
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
@@ -31,9 +30,8 @@ import java.time.LocalDate;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ImportEntity("student")
 @ExportEntity(fileName = "students", sheetName = "Students")
-@ImportUpsert(keyField = "studentCode", displayName = "student")
 @ResourcePermission("STUDENT")
-@ResourceMenu(title = "Students", group = "Student Management", icon = "graduation-cap", url = "/students", order = 2, permission = "STUDENT_READ")
+@ResourceMenu(title = "Students", group = "RBAC Management", icon = "graduation-cap", url = "/students", order = 2, permission = "STUDENT_READ")
 public class Student extends BaseEntity {
 
     @Column(unique = true, nullable = false, length = 30)
@@ -51,9 +49,8 @@ public class Student extends BaseEntity {
     @ExportField(name = "Last Name")
     String lastName;
 
-    @Column(unique = true, length = 255)
-    @ImportField(name = "Email")
-    @ExportField(name = "Email")
+    @Column(unique = true, length = 100)
+
     String email;
 
     @Column(length = 30)
@@ -70,20 +67,16 @@ public class Student extends BaseEntity {
     @ExportField(name = "Gender")
     String gender;
 
-    @Column(nullable = false, length = 60)
-    @ImportField(name = "Class Name", required = true)
-    @ExportField(name = "Class Name")
+    @Column(length = 50)
     String className;
 
-    @Column(length = 1000)
+    @Column(length = 500)
     @ImportField(name = "Address")
     @ExportField(name = "Address")
     String address;
 
     @lombok.Builder.Default
     @Column(nullable = false, length = 20)
-    @ImportField(name = "Status")
-    @ExportField(name = "Status")
     String status = "ACTIVE";
 
     public String getFullName() {

@@ -3,21 +3,24 @@ package com.example.starter_project_2025.system.rbac.role;
 import com.example.starter_project_2025.base.crud.controller.BaseCrudDataIoController;
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.service.BaseCrudService;
+import com.example.starter_project_2025.base.dataio.importer.result.ImportResult;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.Set;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/roles")
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Tag(name = "Role", description = "APIs for managing roles")
-public class RoleController extends BaseCrudDataIoController<Role, Long, RoleDTO, RoleFilter> {
+public class RoleController
+        extends BaseCrudDataIoController<Role, Long, RoleDTO, RoleFilter> {
 
     RoleService roleService;
     RoleRepository roleRepository;
@@ -37,23 +40,9 @@ public class RoleController extends BaseCrudDataIoController<Role, Long, RoleDTO
         return Role.class;
     }
 
-    @GetMapping("/{id}/permissions")
-    public ResponseEntity<Set<Long>> getRolePermissionIds(@PathVariable Long id) {
-        return ResponseEntity.ok(roleService.getPermissionIds(id));
-    }
-
-    @PutMapping("/{id}/permissions")
-    public ResponseEntity<RoleDTO> updateRolePermissions(
-            @PathVariable Long id,
-            @RequestBody Set<Long> permissionIds) {
-        return ResponseEntity.ok(roleService.updatePermissions(id, permissionIds));
-    }
-
-    /** Toggle the system-role flag through a dedicated, permission-checked endpoint. */
-    @PatchMapping("/{id}/system-role")
-    public ResponseEntity<RoleDTO> setSystemRole(
-            @PathVariable Long id,
-            @RequestParam boolean isSystem) {
-        return ResponseEntity.ok(roleService.setSystemRole(id, isSystem));
+    @Override
+    @PostMapping(value = "/import", consumes = "multipart/form-data")
+    public ImportResult importFile(@RequestParam("file") MultipartFile file) {
+        return roleService.importRoles(file);
     }
 }

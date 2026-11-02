@@ -124,6 +124,23 @@ export function CellRenderer({
     );
   }
 
+  if (
+    field.type === "select" &&
+    field.options &&
+    value !== undefined &&
+    value !== null &&
+    value !== ""
+  ) {
+    const label =
+      field.options.find((o) => o.value?.toString() === value?.toString())
+        ?.label ?? String(value);
+    return (
+      <TableCell>
+        <TruncatedText content={label} bold={field.bold} />
+      </TableCell>
+    );
+  }
+
   // Handle arrays (like question options)
   if (Array.isArray(value)) {
     if (value.length === 0) {
@@ -166,23 +183,10 @@ export function CellRenderer({
   }
 
   const displayValue = value ?? "—";
-
-  // Ngày sinh là ngày lịch, không phải timestamp: không hiển thị giờ 07:00.
-  const displayStr = field.name === "dateOfBirth" && value
-    ? (() => {
-        const raw = String(value);
-        const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
-        if (match) return `${match[3]}/${match[2]}/${match[1]}`;
-        const parsed = new Date(raw);
-        return Number.isNaN(parsed.getTime())
-          ? raw
-          : parsed.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
-      })()
-    : field.type === "select" && value != null
-      ? String(field.options?.find((option) => String(option.value) === String(value))?.label ?? displayValue)
-      : field.type === "date" && value
-        ? formatDateValue(value, dateFormat)
-        : String(displayValue);
+  const displayStr =
+    field.type === "date" && value
+      ? formatDateValue(value, dateFormat)
+      : String(displayValue);
 
   return (
     <TableCell>
