@@ -23,7 +23,7 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
 
     Long countByIsActive(Boolean isActive);
 
-    
+    /** Number of ACTIVE accounts: active and not locked. */
     Long countByIsActiveAndLocked(Boolean isActive, Boolean locked);
 
     long countByRolesId(Long roleId);
