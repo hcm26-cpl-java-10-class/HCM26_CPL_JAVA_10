@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import ConfirmDialog from "@/components/ui/confirmdialog";
 import { usePermissions } from "@/hooks/usePermissions";
+import { normalizeExternalUrl } from "@/lib/utils";
 import type {
   TemplateResource,
   TemplateResourceCollection,
@@ -235,10 +236,10 @@ export function TemplateResourcesPanel({ versionId, editable }: { versionId: num
                       {resource.description && (
                         <p className="mt-1 whitespace-pre-wrap break-words text-sm text-muted-foreground">{resource.description}</p>
                       )}
-                      {resource.kind === "LINK" && resource.url && (
-                        <a href={resource.url} target="_blank" rel="noreferrer noopener"
+                      {resource.kind === "LINK" && normalizeExternalUrl(resource.url) && (
+                        <a href={normalizeExternalUrl(resource.url)} target="_blank" rel="noreferrer noopener"
                           className="mt-1 inline-flex max-w-full items-center gap-1 break-all text-sm text-primary hover:underline">
-                          <ExternalLink className="size-3.5 shrink-0" />{resource.url}
+                          <ExternalLink className="size-3.5 shrink-0" />{normalizeExternalUrl(resource.url)}
                         </a>
                       )}
                     </div>

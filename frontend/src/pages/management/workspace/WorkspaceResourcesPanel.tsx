@@ -17,6 +17,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
+import { normalizeExternalUrl } from "@/lib/utils";
 import { WorkspaceEmptyState, getWorkspaceError } from "./workspace.shared";
 import { WorkspaceSectionState, sectionForbidden } from "./WorkspaceSectionState";
 
@@ -229,28 +230,31 @@ export function WorkspaceResourcesPanel({
                   No external links have been shared yet.
                 </p>
               ) : (
-                links.map((resource) => (
-                  <a
-                    key={resource.id}
-                    href={resource.url ?? "#"}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block rounded-lg border p-4 transition-colors hover:bg-muted/50"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <span className="flex min-w-0 items-center gap-2 font-medium">
-                        {categoryLabel(resource).toLowerCase() === "git" ? <Link2 className="size-4 shrink-0" /> : <ExternalLink className="size-4 shrink-0" />}
-                        <span className="break-all">{resource.title}</span>
-                      </span>
-                      <Badge variant="secondary">{categoryLabel(resource)}</Badge>
-                    </div>
-                    {resource.description && (
-                      <p className="mt-1 break-words text-sm text-muted-foreground">{resource.description}</p>
-                    )}
-                    <p className="mt-2 break-all text-xs text-primary">{resource.url}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">Updated {formatDate(resource.updatedAt)}</p>
-                  </a>
-                ))
+                links.map((resource) => {
+                  const href = normalizeExternalUrl(resource.url);
+                  return (
+                    <a
+                      key={resource.id}
+                      href={href ?? "#"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block rounded-lg border p-4 transition-colors hover:bg-muted/50"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <span className="flex min-w-0 items-center gap-2 font-medium">
+                          {categoryLabel(resource).toLowerCase() === "git" ? <Link2 className="size-4 shrink-0" /> : <ExternalLink className="size-4 shrink-0" />}
+                          <span className="break-all">{resource.title}</span>
+                        </span>
+                        <Badge variant="secondary">{categoryLabel(resource)}</Badge>
+                      </div>
+                      {resource.description && (
+                        <p className="mt-1 break-words text-sm text-muted-foreground">{resource.description}</p>
+                      )}
+                      <p className="mt-2 break-all text-xs text-primary">{href ?? resource.url}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Updated {formatDate(resource.updatedAt)}</p>
+                    </a>
+                  );
+                })
               )}
             </CardContent>
           </Card>
