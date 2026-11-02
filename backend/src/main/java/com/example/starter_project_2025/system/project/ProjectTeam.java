@@ -83,6 +83,10 @@ public class ProjectTeam extends BaseEntity {
     @Column(name = "assigned_mentor_id")
     Long assignedMentorId;
 
+    /** Class member selected as leader while the team is a draft. */
+    @Column(name = "leader_member_id")
+    Long leaderMemberId;
+
     @Column(name = "max_members", nullable = false)
     Integer maxMembers;
 

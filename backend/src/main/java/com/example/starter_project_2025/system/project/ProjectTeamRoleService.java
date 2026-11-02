@@ -199,6 +199,20 @@ public class ProjectTeamRoleService {
         }
 
         validateTemplatePolicy(team, requestedRoles, requiredLeaderMemberId);
+        Long leaderId = team.getLeaderMemberId();
+        if (leaderId == null) {
+            List<Long> legacyPmIds = assignments.stream()
+                    .filter(row -> ProjectMemberRole.hasRole(row.getRole(), "PM"))
+                    .map(row -> row.getClassMember().getId()).toList();
+            if (legacyPmIds.size() == 1) leaderId = legacyPmIds.get(0);
+        }
+        List<Long> pmIds = requestedRoles.entrySet().stream()
+                .filter(entry -> entry.getValue().contains("PM"))
+                .map(Map.Entry::getKey).toList();
+        if (pmIds.size() > 1 || (leaderId == null && !pmIds.isEmpty())
+                || (leaderId != null && !pmIds.equals(List.of(leaderId)))) {
+            throw new BadRequestException("Chỉ định hoặc đổi PM bằng thao tác Chỉ định làm Leader");
+        }
 
         List<ProjectMember> changedAssignments = assignments.stream()
                 .filter(assignment -> !equalsRoleSpec(

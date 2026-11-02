@@ -35,6 +35,7 @@ public class TeamAllocationSessionController {
     private final ProjectTeamMembershipService membershipService;
     private final ProjectTeamMentorService mentorService;
     private final ProjectTeamRoleService roleService;
+    private final ProjectTeamLeaderService leaderService;
     private final ProjectTeamTemplateService teamTemplateService;
     private final TemplateCandidateService templateCandidateService;
     private final AllocationReadinessService readinessService;
@@ -226,6 +227,15 @@ public class TeamAllocationSessionController {
     ) {
         roleService.updateRoles(
                 classId, sessionId, teamId, request, authentication);
+    }
+
+    @PutMapping("/{sessionId}/teams/{teamId}/leader")
+    @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
+    public java.util.Map<String, Long> assignTeamLeader(@PathVariable Long classId,
+            @PathVariable Long sessionId, @PathVariable Long teamId,
+            @Valid @RequestBody AssignTeamLeaderRequest request, Authentication authentication) {
+        return java.util.Map.of("leaderMemberId", leaderService.assign(
+                classId, sessionId, teamId, request, authentication));
     }
 
     @PostMapping("/{sessionId}/teams/{teamId}/members")

@@ -19,6 +19,13 @@ import type {
 const classPath = (classId: number) => `/v1/classes/${classId}`;
 
 export const teamAllocationApi = {
+  async assignLeader(classId: number, sessionId: number, teamId: number,
+    memberId: number, expectedVersion: number, confirmReplacement: boolean): Promise<void> {
+    await axiosInstance.put(
+      `${classPath(classId)}/allocation-sessions/${sessionId}/teams/${teamId}/leader`,
+      { memberId, expectedVersion, confirmReplacement },
+    );
+  },
   async previewAutoAllocation(classId: number, sessionId: number): Promise<AutoAllocationPreview> {
     const response = await axiosInstance.post<AutoAllocationPreview>(
       `${classPath(classId)}/allocation-sessions/${sessionId}/auto-allocation/preview`,
